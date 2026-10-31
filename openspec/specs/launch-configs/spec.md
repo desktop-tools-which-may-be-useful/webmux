@@ -251,7 +251,6 @@ TOML `[[presets]]` SHALL 继续作为只读的内置预设，经现有 `GET /api
 
 - Claude Code：`--dangerously-skip-permissions`
 - Codex CLI：`--dangerously-bypass-approvals-and-sandbox`
-- Gemini CLI：`--yolo`
 - OpenCode：`--auto`
 - omp：`--auto-approve`
 
@@ -260,7 +259,7 @@ Shell 配置 SHALL 不变。已存在的 `launch-configs.json` SHALL NOT 被改�
 #### Scenario: 新安装的预置配置
 
 - **WHEN** 服务首次启动且 `launch-configs.json` 不存在
-- **THEN** 预置的 omp 配置 argv 为 `["bash","-ic","exec -- \"$@\"","webmux","omp","--auto-approve"]`，`hybrid` 为 `true`，`hybridSupport` 为 `{supported: true, agent: "omp"}`；OpenCode 配置同样为混合配置；Claude Code、Codex CLI、Gemini CLI 带自动批准参数且 `hybrid` 为 `false`
+- **THEN** 预置的 omp 配置 argv 为 `["bash","-ic","exec -- \"$@\"","webmux","omp","--auto-approve"]`，`hybrid` 为 `true`，`hybridSupport` 为 `{supported: true, agent: "omp"}`；OpenCode 配置同样为混合配置；Claude Code、Codex CLI 带自动批准参数且 `hybrid` 为 `false`；不预置 Gemini CLI 配置
 
 #### Scenario: 已有安装不改写
 

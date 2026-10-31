@@ -197,9 +197,9 @@ jq -nc --arg seq "$seq" '{terminalSequence: $seq}'
 - **已有工作树**：在已登记仓库的某个工作树（或其子目录）中启动；仓库和工作树均使用与启动命令相同主题的下拉框，显示名称与路径，不使用浏览器原生菜单。
 - **新工作树**：先创建 Git worktree，再启动会话。
 
-“启动命令”通过两个 Tab 区分命令来源，两者都只使用自定义命令；新安装首次启动会预置 Shell、Claude Code、Codex CLI、Gemini CLI、Open Code、omp 等启动配置，可在设置页编辑或删除。
+“启动命令”通过两个 Tab 区分命令来源，两者都只使用自定义命令；新安装首次启动会预置 Shell、Claude Code、Codex CLI、Open Code、omp 等启动配置，可在设置页编辑或删除。Gemini CLI 已停止服务个人账号，不再预置；需要时可自行保存 `gemini` 命令，图标仍可选 Gemini CLI。
 
-预置的 agent 配置默认自动批准工具调用，不再逐次询问：Claude Code `--dangerously-skip-permissions`、Codex CLI `--dangerously-bypass-approvals-and-sandbox`（同时关闭 Codex 沙箱）、Gemini CLI `--yolo`、Open Code `--auto`、omp `--auto-approve`；需要逐次批准时在设置页删掉对应参数。
+预置的 agent 配置默认自动批准工具调用，不再逐次询问：Claude Code `--dangerously-skip-permissions`、Codex CLI `--dangerously-bypass-approvals-and-sandbox`（同时关闭 Codex 沙箱）、Open Code `--auto`、omp `--auto-approve`；需要逐次批准时在设置页删掉对应参数。
 
 Open Code 与 omp 预置配置默认开启[混合模式](hybrid-sessions.md)。已有安装的 `launch-configs.json` 不会被改写：
 

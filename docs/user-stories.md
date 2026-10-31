@@ -18,6 +18,8 @@
 
 本次局部核对（2026-10-25）：新建会话以 Tab 组织启动位置和命令来源，保存的启动配置使用同时展示名称与命令的下拉选择器，对应 US-B01–US-B03、US-B06；不改变启动配置存储和会话创建协议，未重新核对其余功能组。
 
+本次局部核对（2026-10-31）：Gemini CLI 已停止服务个人账号，新安装不再预置 Gemini CLI 启动配置，只写入 Shell、Claude Code、Codex CLI、Open Code、omp；`geminicli` 图标与已有配置保持可用，对应 US-B01、US-B08；已运行 `internal/launch` 单元测试与真实二进制空状态目录烟测，未重新核对其余功能组。
+
 本次局部核对（2026-10-25）：新安装首次创建 `launch-configs.json` 时写入 Shell、Claude Code、Codex CLI、Gemini CLI、Open Code、omp 预设，对应 US-B01、US-B08、US-K04；已运行 `internal/launch` 单元测试与真实二进制空状态目录烟测，未重新核对其余功能组。
 
 本次局部核对（2026-10-25）：Pullfrog workflow 显式选择 OpenCode Go 的 DeepSeek V4.1 Flash，并固定 `effort: high` 推理等级，对应 US-L07；本次仅核对配置与密钥名称，不代表已发起远程模型调用，未重新核对其余功能组。

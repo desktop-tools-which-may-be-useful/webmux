@@ -13,7 +13,6 @@ func Presets(shell string) []Input {
 		{Name: "Shell", Icon: "terminal", Cmd: []string{shell, "-l", "-i"}},
 		{Name: "Claude Code", Icon: "claudecode", Cmd: bashrcCommand("claude", "--dangerously-skip-permissions")},
 		{Name: "Codex CLI", Icon: "codex", Cmd: bashrcCommand("codex", "--dangerously-bypass-approvals-and-sandbox")},
-		{Name: "Gemini CLI", Icon: "geminicli", Cmd: bashrcCommand("gemini", "--yolo")},
 		{Name: "Open Code", Icon: "opencode", Cmd: bashrcCommand("opencode", "--auto"), Hybrid: true},
 		{Name: "omp", Icon: "pi", Cmd: bashrcCommand("omp", "--auto-approve"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}, Hybrid: true},
 	}
