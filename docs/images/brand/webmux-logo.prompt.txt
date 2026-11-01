@@ -1,0 +1,13 @@
+Generator: built-in image_gen.imagegen
+Output: webmux-logo.png
+Use: approved logo design. The SVG variants trace this image's outlines.
+Application icon source: ../../../web/public/icon.svg
+README variants: webmux-logo-light.svg and webmux-logo-dark.svg
+
+Use case: logo-brand.
+Create one finished, original logo for "WebMux", a browser terminal application for persistent shell and coding-agent sessions and multiplexed connections.
+Design intent: synthesize the terminal prompt with a compact, unmistakable geometric W/M monogram. Two interlocking angular stream-like strokes should feel like terminal chevrons and multiple sessions joining, with thoughtful negative space. Strong distinctive silhouette, restrained geometry, optical balance, recognizable at favicon size. Prefer a clever simple mark to literal terminal-window clip art.
+Asset type: primary horizontal brand logo, generous clean transparent canvas, symbol on the left and exact wordmark "WebMux" on the right. Symbol large enough to also function alone as an app icon. Wordmark uses a refined medium-weight geometric sans, subtle technical character, precise kerning, uppercase W and M, all other letters lowercase. No tagline or other text.
+Color palette derives from the current product UI: forest green #217346, near-black green #111814, pale mint #85d9a5. A dark forest / near-black green rounded-square app tile may hold the mint monogram, with a near-black green wordmark outside. Flat solid colors only.
+Composition: wide horizontal layout, visually centered, ample transparent margin, wordmark optically aligned with the icon. Crisp vector-like edges and coherent stroke weights, production-quality identity asset.
+Constraints: actual transparent background including all canvas margins; ONE logo lockup only, no brand board, no repeated marks, no mockups, no dimensions or annotations. No gradients, gloss, glow, shadows, 3D effects, textures, circuit-board ornament, padlocks, mascots or watermark. The design should be minimal, confident and useful for a serious open-source developer tool.

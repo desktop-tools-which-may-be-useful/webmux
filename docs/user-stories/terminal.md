@@ -106,9 +106,12 @@
 | US-H08 窄屏紧凑顶栏       | 作为在手机或主屏幕 Web App 中查看 agent 的使用者，我希望顶栏只保留常用操作，以便看清会话名称并把高度留给终端。           | 窄于 640px 时顶栏单行，只常驻返回、标题、状态点、分屏、快捷指令入口（按既有规则）、草稿、终端/代码切换和终端菜单；全屏、上传文件、滚动到最新位置在终端菜单中，名称与禁用条件不变；320px 下无横向溢出，393px 下完整显示较短标题；宽屏保留既有按钮并增加分屏菜单；状态点紧随标题，右侧按“聊天 \| 终端”、图标操作（上传、滚动到最新）、快捷指令、草稿、代码、全屏、分屏、菜单排列；返回按钮始终可用。                                                                                                                                                                                                                                                                                                                                          |
 | US-H09 安装为应用         | 作为在手机或桌面常用 WebMux 的使用者，我希望知道当前地址能否安装并一键安装，以便像本地应用一样打开且不被地址栏占用空间。 | 设置页“安装应用”分区显示正以应用方式运行、本页刚完成安装，或在浏览器提供安装提示时显示未安装；没有提示时不断言未安装（已安装应用的普通标签页同样收不到提示），只说明未以应用方式打开；Chromium 在安全上下文提供安装提示时显示“安装 WebMux”按钮并调用浏览器提示，提示只用一次，取消后说明可从浏览器菜单安装，安装后隐藏按钮；没有提示时说明 Chrome、Edge 与 macOS Safari 的菜单入口；iOS / iPadOS 显示“分享 → 添加到主屏幕”与重新输入 Token 的步骤，HTTP 地址可添加但推送仍需 HTTPS；非安全上下文（既非 HTTPS 也非本机回环地址）明确提示“当前地址不能提供完整 PWA 能力”并指向 HTTPS 入口；manifest 声明 `id`、`lang`，以 `application/manifest+json` 提供，192/512 图标尺寸与声明一致；不提供离线启动，Service Worker 仍只在开启推送时注册。 |
 
+US-H09 图标验收：应用图标与页头标志一致。maskable 版本为系统裁切保留安全边距，Apple 主屏幕图标交由系统裁圆角。
+
 依据：
 
 - [安装状态](../../web/src/install.svelte.ts)、[安装卡片](../../web/src/components/InstallSettings.svelte)、[安装卡片用例](../../web/test/browser/InstallSettings.test.ts)
+- [主屏幕图标](../../web/public/icon-512.png)、[maskable 图标](../../web/public/icon-maskable.svg)、[Apple 主屏幕图标](../../web/public/apple-touch-icon.png)
 - [Manifest](../../web/public/manifest.webmanifest)、[Manifest 与图标用例](../../internal/api/static_test.go)、[软键栏](../../web/src/components/SoftKeys.svelte)
 - [触摸手势](../../web/src/hooks/touch.ts)
 - [触摸检测](../../web/src/touchInput.ts)、[视口与键盘可见性](../../web/src/hooks/viewport.svelte.ts)、[终端输入与键盘切换](../../web/src/hooks/terminal.svelte.ts)

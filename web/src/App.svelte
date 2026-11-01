@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Brand from "./components/Brand.svelte";
   import { startSettings, stopSettings } from "./settings.svelte";
   import { errorMessage } from "./error";
   import { onMount, tick } from "svelte";
@@ -88,7 +89,7 @@
   <main class="flex min-h-dvh items-center justify-center p-6">
     <Card.Root class="w-full max-w-md">
       <Card.Header>
-        <p class="brand mb-6"><span class="brand-mark">WM</span> WebMux</p>
+        <p class="brand mb-6"><Brand /></p>
         <Card.Title class="text-2xl">你的终端，始终在线。</Card.Title>
         <Card.Description>在可信内网中连接这台机器。</Card.Description>
       </Card.Header>

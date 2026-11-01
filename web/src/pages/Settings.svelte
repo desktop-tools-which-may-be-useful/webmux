@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Brand from "../components/Brand.svelte";
   import AppearanceSettings from "../components/AppearanceSettings.svelte";
   import ArtifactPromptSetting from "../components/ArtifactPromptSetting.svelte";
   import ChatIdleSleepSetting from "../components/ChatIdleSleepSetting.svelte";
@@ -192,7 +193,7 @@
     <div
       class="mx-auto flex min-h-(--app-header-height) max-w-6xl items-center justify-between gap-3 px-4 py-1 sm:px-8"
     >
-      <a class="brand" href="/"><span class="brand-mark">WM</span> WebMux</a>
+      <a class="brand" href="/"><Brand /></a>
       {#if sessionId}
         <Button variant="outline" onclick={() => navigate(`/s/${sessionId}`)}
           >返回终端</Button

@@ -1,6 +1,11 @@
 <div align="center">
 
-# WebMux
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/webmux-logo-dark.svg">
+    <img src="docs/images/brand/webmux-logo-light.svg" alt="WebMux" width="420" height="140">
+  </picture>
+</h1>
 
 **在浏览器里持续运行的终端 —— 为远程遥控 Claude Code、Codex 等 CLI agent 而生**
 

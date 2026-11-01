@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Brand from "./Brand.svelte";
   import { onMount } from "svelte";
   import IconMoon from "~icons/tabler/moon";
   import IconSettings from "~icons/tabler/settings";
@@ -48,7 +49,7 @@
   <div
     class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-0.5 sm:px-8"
   >
-    <a class="brand" href="/"><span class="brand-mark">WM</span> WebMux</a>
+    <a class="brand" href="/"><Brand /></a>
     <div
       class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-2"
     >

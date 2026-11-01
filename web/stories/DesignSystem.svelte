@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Brand from "../src/components/Brand.svelte";
   import {
     IconArrowRight,
     IconPlus,
@@ -135,7 +136,7 @@
 >
   <header class="space-y-4 border-b pb-6">
     <div class="brand flex-wrap">
-      <span class="brand-mark">WM</span> WebMux
+      <Brand />
       <span
         class="ml-2 text-xs font-normal tracking-normal text-muted-foreground"
         >Design system</span

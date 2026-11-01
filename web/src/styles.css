@@ -83,15 +83,10 @@
   letter-spacing: -0.03em;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex-shrink: 0;
   width: 1.75rem;
   height: 1.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font: 700 0.75rem var(--font-mono);
 }
 .status-dot {
   display: inline-block;
