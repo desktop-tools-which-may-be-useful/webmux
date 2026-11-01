@@ -1,12 +1,22 @@
 import { describe, expect, test } from "vitest";
 import {
+  connectorMissingText,
+  connectorNoticeText,
   eligibilityText,
   hybridSideLabel,
   hybridSupportReason,
+  outdatedText,
   shortId,
   switchSteps,
   switchTarget,
 } from "../src/hybrid";
+
+const connector = {
+  executable: "codex-acp",
+  title: "Codex ACP 适配器",
+  installCommand: "npm install -g @agentclientprotocol/codex-acp",
+  docsUrl: "https://github.com/agentclientprotocol/codex-acp",
+};
 
 const hybrid = {
   side: "acp" as const,
@@ -41,6 +51,29 @@ describe("hybrid labels", () => {
       "future",
     );
     expect(eligibilityText({ available: false })).toBe("暂时不能切到聊天");
+  });
+
+  test("Codex reasons name the connector and the other client", () => {
+    expect(
+      hybridSupportReason({ supported: false, reason: "session_arg" }),
+    ).toBe("该参数打开已有会话，混合配置请不要指定会话");
+    expect(connectorMissingText(connector)).toBe(
+      "未安装 Codex ACP 适配器（codex-acp）",
+    );
+    expect(connectorNoticeText(connector)).toBe("聊天端需要另外安装 codex-acp");
+    expect(
+      eligibilityText({
+        available: false,
+        reason: "connector_missing",
+        connector,
+      }),
+    ).toBe("未安装 Codex ACP 适配器（codex-acp）");
+    expect(
+      eligibilityText({ available: false, reason: "occupied_external" }),
+    ).toBe("该会话正被另一个 Codex 客户端使用");
+    expect(
+      outdatedText({ name: "codex-acp", version: "2.4.0", verified: "2.5.0" }),
+    ).toBe("codex-acp 2.4.0 低于已验证版本 2.5.0，部分功能可能不可用");
   });
 
   test("short IDs keep short ones whole", () => {

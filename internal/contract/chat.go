@@ -43,8 +43,6 @@ type ChatState struct {
 	Phase          HybridPhase     `json:"phase,omitempty"`
 	Dormant        bool            `json:"dormant"`
 	Agent          string          `json:"agent"`
-	AgentVersion   string          `json:"agentVersion,omitempty"`
-	VerifiedBelow  string          `json:"verifiedBelow,omitempty"`
 	AgentSessionID *string         `json:"agentSessionId"`
 	Eligibility    ChatEligibility `json:"eligibility"`
 	Turn           ChatTurn        `json:"turn"`
@@ -65,14 +63,30 @@ type ChatState struct {
 	IDChange           *ChatIDChange      `json:"idChange"`
 	QueueLost          int                `json:"queueLost,omitempty"`
 	Recovery           *ChatRecoveryTip   `json:"recovery"`
+	// Outdated lists the programs older than the release their profile was
+	// verified with: the agent, and a connector when it has one.
+	Outdated []ChatOutdated `json:"outdated"`
+	// ConnectorMissing is set while the chat side cannot start because the
+	// profile's connector is not installed (wake, reconnect, rollback).
+	ConnectorMissing *AgentConnector `json:"connectorMissing,omitempty"`
+}
+
+// ChatOutdated is one program below its verified version; the chat view
+// shows a notice and keeps working.
+type ChatOutdated struct {
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Verified string `json:"verified"`
 }
 
 // ChatEligibility says whether switching to chat is possible from the
 // terminal side. Reason is a stable code when Available is false:
-// unknown_agent, not_root, no_session_id, not_listed, occupied, checking.
+// unknown_agent, connector_missing, not_root, no_session_id, not_listed,
+// occupied, checking. Connector names the missing connector.
 type ChatEligibility struct {
-	Available bool   `json:"available"`
-	Reason    string `json:"reason,omitempty"`
+	Available bool            `json:"available"`
+	Reason    string          `json:"reason,omitempty"`
+	Connector *AgentConnector `json:"connector,omitempty"`
 }
 
 // PromptCapabilities is what the agent accepts in a prompt besides text.

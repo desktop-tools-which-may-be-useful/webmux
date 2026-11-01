@@ -18,11 +18,13 @@ import {
   type SwitchStep,
   type SwitchTarget,
 } from "../hybrid";
-import { loadRecord } from "../recoverable";
+import { hybridConflict, loadRecord } from "../recoverable";
 import {
   SessionInfoSchema,
+  type AgentConnector,
   type ChatEvent,
   type ChatState,
+  type HybridCandidate,
   type HybridRecord,
   type SessionInfo,
 } from "../schemas";
@@ -63,6 +65,12 @@ export type HybridNotice = {
 /** A switch that waits for the user to confirm interrupting a turn. */
 type HybridConfirm = { to: SwitchTarget; title: string; body: string };
 
+/** A switch to chat that found several agent sessions to continue. */
+type HybridAmbiguous = {
+  message: string;
+  candidates: HybridCandidate[];
+};
+
 export interface HybridSession {
   /** The session is (or was) a hybrid session. */
   readonly known: boolean;
@@ -87,10 +95,18 @@ export interface HybridSession {
   readonly recoverable: HybridRecord | undefined;
   /** Neither the session nor a record exists: its drafts can go. */
   readonly missing: boolean;
+  /** The chat side's connector is not installed; undefined once dismissed. */
+  readonly connector: AgentConnector | undefined;
+  /** A switch to chat waiting for the user to pick the agent session. */
+  readonly ambiguous: HybridAmbiguous | null;
   request(to: SwitchTarget): void;
   confirm(): void;
   cancelConfirm(): void;
   choose(choice: "wait" | "force" | "cancel"): Promise<void>;
+  /** Switches to chat continuing the picked agent session. */
+  pick(agentSessionId: string): void;
+  cancelPick(): void;
+  dismissConnector(): void;
   dismiss(key: string): void;
 }
 
@@ -133,6 +149,11 @@ export function useHybrid(
   let notice = $state("");
   let dropped = $state.raw<string[]>([]);
   const dismissed = new SvelteSet<string>();
+  let ambiguous = $state.raw<HybridAmbiguous | null>(null);
+  // The connector a switch to chat reported missing.
+  let switchConnector = $state.raw<AgentConnector>();
+  // The install banner was closed on this page view.
+  let connectorDismissed = $state(false);
   // The side before the current switch, for a switch first seen mid-way.
   let settled: SwitchTarget | undefined;
   // The state that last reattached the terminal; one try per state.
@@ -336,18 +357,28 @@ export function useHybrid(
     notice = "排队的消息已退回到本机草稿，不会自动发送。";
   }
 
-  async function run(to: SwitchTarget) {
+  async function run(to: SwitchTarget, agentSessionId?: string) {
     requesting = to;
     error = "";
     dropped = [];
+    ambiguous = null;
     for (const key of dismissed)
       if (key.startsWith("failure:")) dismissed.delete(key);
     try {
-      const result = await switchSide(id, to);
+      const result = await switchSide(id, to, agentSessionId);
       if (result.draft) returnDraft(result.draft);
       dropped = result.dropped;
     } catch (err) {
-      error = errorMessage(err);
+      const conflict = hybridConflict(err);
+      if (conflict?.reason === "session_ambiguous" && conflict.candidates)
+        ambiguous = {
+          message: conflict.error,
+          candidates: conflict.candidates,
+        };
+      else if (conflict?.reason === "connector_missing" && conflict.connector) {
+        switchConnector = conflict.connector;
+        connectorDismissed = false;
+      } else error = errorMessage(err);
     } finally {
       requesting = null;
     }
@@ -370,6 +401,13 @@ export function useHybrid(
         ? eligibilityText(state.eligibility)
         : "正在连接聊天通道",
   );
+  const connector = $derived.by(() => {
+    if (connectorDismissed) return undefined;
+    const eligibility = state?.eligibility;
+    if (side === "tui" && eligibility?.reason === "connector_missing")
+      return eligibility.connector ?? switchConnector;
+    return switchConnector;
+  });
 
   const notices = $derived.by(() => {
     const list: HybridNotice[] = [];
@@ -442,6 +480,12 @@ export function useHybrid(
     get missing() {
       return terminal.connection === "missing" && lookup === "absent";
     },
+    get connector() {
+      return connector;
+    },
+    get ambiguous() {
+      return ambiguous;
+    },
     request(to) {
       if (requesting || view === "switching" || !side || to === side) return;
       notice = "";
@@ -473,6 +517,16 @@ export function useHybrid(
       } finally {
         answering = false;
       }
+    },
+    pick(agentSessionId) {
+      if (requesting || !agentSessionId) return;
+      void run("acp", agentSessionId);
+    },
+    cancelPick() {
+      ambiguous = null;
+    },
+    dismissConnector() {
+      connectorDismissed = true;
     },
     dismiss(key) {
       if (key.startsWith("notice:")) notice = "";

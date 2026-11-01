@@ -59,12 +59,31 @@ func openStore(dir, mode, profile string) (*store, error) {
 }
 
 func (s *store) newID() string {
+	switch s.profile {
+	case "opencode":
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			panic(err)
+		}
+		return "ses_" + hex.EncodeToString(b[:])
+	case "codex":
+		// Codex thread IDs are UUIDv7.
+		var b [16]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			panic(err)
+		}
+		ms := uint64(time.Now().UnixMilli())
+		for i := range 6 {
+			b[i] = byte(ms >> (40 - 8*i))
+		}
+		b[6] = 0x70 | b[6]&0x0f
+		b[8] = 0x80 | b[8]&0x3f
+		h := hex.EncodeToString(b[:])
+		return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
+	}
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		panic(err)
-	}
-	if s.profile == "opencode" {
-		return "ses_" + hex.EncodeToString(b[:])
 	}
 	return hex.EncodeToString(b[:])
 }
@@ -79,10 +98,8 @@ func (s *store) create(cwd string) (*session, error) {
 // draft is a session not yet on disk. Like the real TUIs, a session started
 // in the terminal is only saved, and so listed, once it has a message.
 func (s *store) draft(cwd string) *session {
-	return &session{ID: s.newID(), Cwd: cwd, Messages: []message{}, Config: defaultConfig()}
+	return &session{ID: s.newID(), Cwd: cwd, Messages: []message{}, Config: defaultConfig(s.profile)}
 }
-
-func defaultConfig() map[string]string { return map[string]string{"mode": "code", "model": "fast"} }
 
 func (s *store) load(id string) (*session, error) {
 	if id == "" || strings.ContainsAny(id, `/\`) {
@@ -97,7 +114,7 @@ func (s *store) load(id string) (*session, error) {
 		return nil, fmt.Errorf("store: %s: %w", id, err)
 	}
 	if ss.Config == nil {
-		ss.Config = defaultConfig()
+		ss.Config = defaultConfig(s.profile)
 	}
 	return &ss, nil
 }

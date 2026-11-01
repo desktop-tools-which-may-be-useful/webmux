@@ -419,7 +419,7 @@
           uploads={chatUploads}
           {actions}
           onreview={() => (codeShown = true)}
-          onlogin={() => hybrid.request("tui")}
+          onterminal={() => hybrid.request("tui")}
         />
       {:else if view === "switching"}
         <SwitchProgress

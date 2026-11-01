@@ -48,7 +48,7 @@ func fakeAgentPath(t testing.TB, profile string) string {
 		}
 		// A separate file per profile, not a hard link: macOS reports a
 		// hard-linked executable under either name, breaking the root check.
-		for _, name := range []string{agentprofile.OMP, agentprofile.OpenCode} {
+		for _, name := range []string{agentprofile.OMP, agentprofile.OpenCode, agentprofile.Codex, "codex-acp"} {
 			build := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent")
 			build.Env = fakeAgent.env
 			if out, err := build.CombinedOutput(); err != nil {

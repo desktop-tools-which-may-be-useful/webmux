@@ -43,6 +43,8 @@ const (
 	ReasonDirectoryArg Reason = "directory_arg"
 	// ReasonNonInteractive: an option or subcommand starts no interactive UI.
 	ReasonNonInteractive Reason = "non_interactive"
+	// ReasonSessionArg: a subcommand opens an existing session.
+	ReasonSessionArg Reason = "session_arg"
 )
 
 // Message is the user-facing explanation of r, used in API errors.
@@ -56,8 +58,10 @@ func (r Reason) Message() string {
 		return "请在新建会话时选择目录，不要在命令中写目录"
 	case ReasonNonInteractive:
 		return "该参数不启动交互界面"
+	case ReasonSessionArg:
+		return "该参数打开已有会话，混合配置请不要指定会话"
 	default:
-		return "未识别到支持的 Agent，当前版本只支持 OpenCode 与 omp"
+		return "未识别到支持的 Agent，当前版本只支持 OpenCode、omp 与 Codex CLI"
 	}
 }
 
@@ -76,10 +80,12 @@ func (e *UnsupportedError) Error() string {
 }
 
 // Support is the hybrid capability of a command, as reported to clients.
+// Connector is the profile's ACP connector, whether or not it is installed.
 type Support struct {
 	Supported bool
 	Agent     string
 	Reason    Reason
+	Connector *Connector
 }
 
 // Check reports whether argv can run as a hybrid session.
@@ -88,7 +94,29 @@ func Check(argv []string) Support {
 	if err != nil {
 		return Support{Reason: err.(*UnsupportedError).Reason}
 	}
-	return Support{Supported: true, Agent: cmd.Profile.Name}
+	return Support{Supported: true, Agent: cmd.Profile.Name, Connector: cmd.Profile.Connector}
+}
+
+// Seed is a chat-side config value derived from the launch arguments: the
+// option ConfigID set to Value, because of argument Arg as written.
+type Seed struct {
+	ConfigID string
+	Value    string
+	Arg      string
+}
+
+// keptOption is one kept option: its name, value (empty without one) and
+// the argument as written, an option and its value joined by a space.
+type keptOption struct {
+	name, value, token string
+}
+
+// canonical maps long option names to the short ones in aliases.
+func (o keptOption) canonical(aliases map[string]string) string {
+	if short, ok := aliases[o.name]; ok {
+		return short
+	}
+	return o.name
 }
 
 // Command is a parsed launch command for a built-in agent.
@@ -99,6 +127,7 @@ type Command struct {
 	Executable string
 	args       []string
 	kept       []string
+	keptOpts   []keptOption
 	dropped    []string
 }
 
@@ -154,14 +183,19 @@ func (c *Command) classify() error {
 			if p.positional == positionalDirectory {
 				return &UnsupportedError{Reason: ReasonDirectoryArg, Arg: token}
 			}
-			if !positionalSeen && !optionsDone && p.subcommands[token] {
-				return &UnsupportedError{Reason: ReasonNonInteractive, Arg: token}
+			if !positionalSeen && !optionsDone {
+				if p.sessionSubcommands[token] {
+					return &UnsupportedError{Reason: ReasonSessionArg, Arg: token}
+				}
+				if p.subcommands[token] || hasAnyPrefix(token, p.subcommandPrefixes) {
+					return &UnsupportedError{Reason: ReasonNonInteractive, Arg: token}
+				}
 			}
 			positionalSeen = true
 			c.dropped = append(c.dropped, token)
 			continue
 		}
-		name, _, inline := strings.Cut(token, "=")
+		name, inlineValue, inline := strings.Cut(token, "=")
 		opt, known := p.options[name]
 		taken := []string{token}
 		if known && !inline {
@@ -182,6 +216,11 @@ func (c *Command) classify() error {
 		switch opt.class {
 		case argKeep:
 			c.kept = append(c.kept, taken...)
+			kept := keptOption{name: name, value: inlineValue, token: strings.Join(taken, " ")}
+			if len(taken) > 1 {
+				kept.value = taken[1]
+			}
+			c.keptOpts = append(c.keptOpts, kept)
 		case argDrop:
 			c.dropped = append(c.dropped, strings.Join(taken, " "))
 		case argStore:
@@ -195,12 +234,43 @@ func (c *Command) classify() error {
 	return nil
 }
 
-func (c Command) wrap(script string, args ...string) []string {
-	if c.Form == FormBashrc {
-		return append([]string{"bash", "-ic", script, bashrcName, c.Executable}, args...)
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
 	}
-	return append([]string{c.Executable}, args...)
+	return false
 }
+
+func (c Command) wrap(script string, args ...string) []string {
+	return c.wrapExec(script, c.Executable, args...)
+}
+
+// wrapExec runs executable in the command's form.
+func (c Command) wrapExec(script, executable string, args ...string) []string {
+	if c.Form == FormBashrc {
+		return append([]string{"bash", "-ic", script, bashrcName, executable}, args...)
+	}
+	return append([]string{executable}, args...)
+}
+
+// Lookup runs `command -v` for each name in the command's form, so a
+// bashrc form sees the PATH ~/.bashrc sets up: its output ends with a line
+// of the marker followed by the first name's path, or nothing when that is
+// not found, then one such line per further name. Startup-file output
+// comes before the marker lines. FormDirect returns nil: the caller looks
+// names up in the session's PATH itself.
+func (c Command) Lookup(names ...string) []string {
+	if c.Form != FormBashrc {
+		return nil
+	}
+	script := `for n in "$@"; do printf '\n` + LookupMarker + `%s' "$(command -v -- "$n" 2>/dev/null)"; done; printf '\n'`
+	return append([]string{"bash", "-ic", script, bashrcName}, names...)
+}
+
+// LookupMarker starts each answer line of a Lookup command.
+const LookupMarker = "\x01webmux-path:"
 
 // injected returns the profile's TUI options that args does not already hold.
 func (c Command) injected(args []string) []string {
@@ -228,21 +298,30 @@ func (c Command) ResumeArgv(agentSessionID string) (argv, dropped []string) {
 	return c.wrap(bashrcScript, args...), slices.Clone(c.dropped)
 }
 
-// ACPArgv starts the agent's ACP server in the original form. A bashrc
+// ACPArgv starts the agent's ACP server in the original form: the agent's
+// acp subcommand, or the profile's connector without arguments. A bashrc
 // form writes ACP to fd 3, which the caller must connect to the protocol
 // pipe (ProtocolOnFD3). Unsupported lists kept options that change
-// behaviour but have no ACP equivalent, for the user to be told.
+// behaviour but do not reach the chat side, for the user to be told.
 func (c Command) ACPArgv() (argv, unsupported []string) {
+	_, unsupported = c.ChatConfig()
+	if connector := c.Profile.Connector; connector != nil {
+		return c.wrapExec(bashrcACPScript, connector.Executable), unsupported
+	}
 	args := []string{"acp"}
 	if c.Profile.passToACP {
 		args = append(args, c.kept...)
 	}
-	for _, token := range c.kept {
-		if c.Profile.acpNotice[token] {
-			unsupported = append(unsupported, token)
-		}
-	}
 	return c.wrap(bashrcACPScript, args...), unsupported
+}
+
+// ChatConfig derives chat-side config values from the kept options, and
+// lists the kept options the chat side cannot apply.
+func (c Command) ChatConfig() (seeds []Seed, unsupported []string) {
+	if c.Profile.chatSide == nil {
+		return nil, nil
+	}
+	return c.Profile.chatSide(c.keptOpts)
 }
 
 // ProtocolOnFD3 reports that ACPArgv's process writes the protocol to fd 3.

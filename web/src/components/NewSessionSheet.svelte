@@ -12,6 +12,9 @@
     stored,
   } from "../api";
   import { launchConfigIcon, type LaunchConfigsState } from "../launchConfigs";
+  import { connectorNoticeText } from "../hybrid";
+  import { hybridConflict } from "../recoverable";
+  import ConnectorInstallHint from "./ConnectorInstallHint.svelte";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import {
     CreateSessionRequestSchema,
@@ -19,6 +22,7 @@
     NoContentSchema,
     SessionInfoSchema,
     WorktreeSchema,
+    type AgentConnector,
     type Repository,
     type Worktree,
   } from "../schemas";
@@ -77,6 +81,8 @@
   // mounted after first use so closing animations and focus restoration run.
   let mkdirMounted = $state(false);
   let error = $state("");
+  // Starting on the chat side failed: its connector is not installed.
+  let missingConnector = $state.raw<AgentConnector>();
   let busy = $state(false);
   const configs = $derived(
     launchConfigs.status === "ready" ? launchConfigs.configs : [],
@@ -155,6 +161,7 @@
     }
     busy = true;
     error = "";
+    missingConnector = undefined;
     try {
       // Paint the pending state before a fast local response can immediately
       // start loading and mounting the terminal in the same interaction.
@@ -230,6 +237,7 @@
       navigate("/s/" + session.id);
     } catch (err) {
       if (mode !== "direct") onchange();
+      const conflict = hybridConflict(err);
       if (
         mode === "direct" &&
         !makeDirectory &&
@@ -240,7 +248,9 @@
       ) {
         mkdirMounted = true;
         mkdirOpen = true;
-      } else error = errorMessage(err);
+      } else if (conflict?.reason === "connector_missing" && conflict.connector)
+        missingConnector = conflict.connector;
+      else error = errorMessage(err);
     } finally {
       busy = false;
     }
@@ -513,7 +523,10 @@
                   </Tabs.List>
                 </Tabs.Root>
                 <p class="text-xs text-muted-foreground">
-                  混合会话可以随时在聊天视图与终端之间切换。
+                  混合会话可以随时在聊天视图与终端之间切换。{#if chosenConfig.hybridSupport.connector}
+                    {connectorNoticeText(
+                      chosenConfig.hybridSupport.connector,
+                    )}。{/if}
                 </p>
               {/if}
             {/if}
@@ -554,6 +567,20 @@
         {/if}
       </div>
       {#if error}<p role="alert" class="text-destructive">{error}</p>{/if}
+      {#if missingConnector}
+        <ConnectorInstallHint connector={missingConnector}>
+          {#snippet actions()}<Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onclick={() => {
+                startSide = "tui";
+                void create();
+              }}>改为从终端开始</Button
+            >{/snippet}
+        </ConnectorInstallHint>
+      {/if}
       <div class="flex flex-wrap justify-end gap-2 pt-2">
         <Button
           type="button"

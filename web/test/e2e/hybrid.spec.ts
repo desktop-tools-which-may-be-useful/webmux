@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { join } from "node:path";
 import type { APIRequestContext, Page } from "@playwright/test";
 import {
   expect,
@@ -10,16 +11,17 @@ import {
 import type { E2EServer } from "./server.mjs";
 
 // Hybrid sessions run the fake agent (internal/acp/testdata/fakeagent), which
-// global-setup puts first on every backend's PATH as omp and opencode. Its
-// TUI does not echo typing: a line shows up as "> text" when a later run
-// replays the stored conversation, and replies stream as "< echo: text".
-// Its ACP side answers "echo: text" after a thought and a "Read file" tool
-// call. FAKEAGENT_TURN_DELAY paces every streamed piece (TUI: every word).
+// global-setup puts first on every backend's PATH as omp, opencode, codex and
+// codex-acp. Its TUI does not echo typing: a line shows up as "> text" when a
+// later run replays the stored conversation, and replies stream as
+// "< echo: text". Its ACP side answers "echo: text" after a thought and a
+// "Read file" tool call. FAKEAGENT_TURN_DELAY paces every streamed piece
+// (TUI: every word).
 
 type Side = "tui" | "acp";
 type Options = {
   name?: string;
-  agent?: "omp" | "opencode";
+  agent?: "omp" | "opencode" | "codex";
   env?: Record<string, string>;
 };
 
@@ -472,6 +474,77 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expectTerminalLine(page, "> kept-in-tui");
     await expectTerminalLine(page, "< echo: kept-in-tui");
     await tuiTurn(page, "after-restart");
+  });
+
+  test("a Codex conversation round-trips through the codex-acp connector", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    test.slow();
+    const id = await createHybrid(request, workDir, "tui", {
+      name: "E2E Codex",
+      agent: "codex",
+    });
+    await openHybrid(page, id, "tui");
+    await tuiTurn(page, "codex-one");
+    await switchTo(page, "acp");
+    await expect(conversation(page)).toContainText("codex-one");
+    await chatTurn(page, "codex-two");
+    await switchTo(page, "tui");
+    await expectTerminalLine(page, "> codex-two");
+  });
+
+  test("a Codex session without codex-acp starts on the terminal and shows how to install it", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const name = "E2E Codex without connector";
+    // The fake codex is named by its path; the config's PATH has no
+    // codex-acp.
+    const response = await request.post("/api/launch-configs", {
+      data: {
+        name,
+        cmd: [join(process.env.WEBMUX_E2E_AGENTS!, "codex")],
+        env: { PATH: "/usr/bin:/bin" },
+        hybrid: true,
+      },
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    await page.goto("/");
+    await page
+      .locator("header")
+      .getByRole("button", { name: "＋ 新建会话", exact: true })
+      .click();
+    await page.getByRole("tab", { name: "预先输入", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "选择启动配置", exact: true })
+      .click();
+    await page.getByRole("option", { name, exact: true }).click();
+    await expect(page.getByText("聊天端需要另外安装 codex-acp")).toBeVisible();
+    await page
+      .getByRole("tablist", { name: "起始端", exact: true })
+      .getByRole("tab", { name: "从聊天开始", exact: true })
+      .click();
+    await page.getByLabel("工作目录", { exact: true }).fill(workDir);
+    await page
+      .getByRole("button", { name: "创建并进入 →", exact: true })
+      .click();
+    await expect(
+      page.getByText("未安装 Codex ACP 适配器（codex-acp）"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("npm install -g @agentclientprotocol/codex-acp"),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "改为从终端开始", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
+    await expectSide(page, "tui");
+    await expectTerminalLine(page, "prompt>");
+    await expect(sideTab(page, "acp")).toBeDisabled({ timeout: 20_000 });
+    await expect(page.getByText("安装后会自动重新检测")).toBeVisible();
   });
 
   test("webmux attach detaches when the session moves to chat and refuses it there", async ({

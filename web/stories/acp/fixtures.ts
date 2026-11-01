@@ -22,7 +22,8 @@ export type Scenario =
   | "compaction"
   | "switching"
   | "awaiting-choice"
-  | "terminal";
+  | "terminal"
+  | "connector-missing";
 
 const at = "2026-01-01T11:59:00Z";
 type EventBody = ChatEvent extends infer E
@@ -250,7 +251,12 @@ export const sessionIds: Record<Agent, { current: string; previous: string }> =
 
 /** The chat channel of one scenario: its timeline and its latest state. */
 export function chatFixture(scenario: Scenario, agent: Agent) {
-  const running = !["commands", "cancelled", "terminal"].includes(scenario);
+  const running = ![
+    "commands",
+    "cancelled",
+    "terminal",
+    "connector-missing",
+  ].includes(scenario);
   const events = [...history];
   if (scenario === "compaction") events.push(...compaction);
   if (scenario === "permission")
@@ -321,17 +327,27 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
     },
     idChange:
       scenario === "terminal" ? { from: ids.previous, to: ids.current } : null,
+    connectorMissing:
+      scenario === "connector-missing" ? codexConnector : undefined,
   } satisfies ChatState);
   return { model, state };
 }
+
+// The third-party connector Codex CLI's chat side runs through.
+const codexConnector = {
+  executable: "codex-acp",
+  title: "Codex ACP 适配器",
+  installCommand: "npm install -g @agentclientprotocol/codex-acp",
+  docsUrl: "https://github.com/agentclientprotocol/codex-acp",
+};
 
 function baseState(agent: Agent): ChatState {
   return {
     side: "acp",
     dormant: false,
     agent,
-    agentVersion: agent === "omp" ? "13.4.0" : "1.2.3",
     agentSessionId: sessionIds[agent].current,
+    outdated: [],
     eligibility: { available: true },
     turn: { running: false },
     requests: [],

@@ -1,0 +1,162 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"syscall"
+
+	"github.com/rainchan/webmux/internal/acp"
+)
+
+// codexLockPath is the thread's writer lock, which Codex keeps open and
+// locked while a client writes the thread.
+func codexLockPath(id string) (string, error) {
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		user, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		home = filepath.Join(user, ".codex")
+	}
+	return filepath.Join(home, "thread-writer-locks", id+".lock"), nil
+}
+
+// errThreadActive: another live Codex client writes the thread.
+var errThreadActive = errors.New("this Codex session is in use by another Codex client")
+
+// holdCodexLock opens and locks the thread's writer lock; the caller keeps
+// the file open for as long as it writes the thread.
+func holdCodexLock(id string) (*os.File, error) {
+	p, err := codexLockPath(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("thread %s: %w", id, errThreadActive)
+		}
+		return nil, err
+	}
+	return f, nil
+}
+
+// codexLockHeld reports whether another process holds the thread's writer
+// lock. The lock dies with its holder, so only a live writer counts.
+func codexLockHeld(id string) (bool, error) {
+	p, err := codexLockPath(id)
+	if err != nil {
+		return false, err
+	}
+	f, err := os.Open(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	switch err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); {
+	case err == nil:
+		return false, syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	case errors.Is(err, syscall.EWOULDBLOCK):
+		return true, nil
+	default:
+		return false, err
+	}
+}
+
+// threadActiveWriter is codex-acp's refusal to load or resume a thread
+// another Codex client writes.
+func threadActiveWriter(id string) error {
+	data, err := json.Marshal(map[string]string{"reason": "thread_active_writer", "threadId": id})
+	if err != nil {
+		panic(err)
+	}
+	return &acp.RPCError{Code: acp.CodeInvalidRequest, Message: "Invalid request: This Codex session is in use by another Codex client", Data: data}
+}
+
+// selectOption is one select config option of a profile.
+type selectOption struct {
+	id, name, category, def string
+	values                  []acp.ConfigSelectOption
+}
+
+var (
+	defaultOptions = []selectOption{
+		{id: "mode", name: "Mode", category: "mode", def: "code", values: []acp.ConfigSelectOption{
+			{Value: "code", Name: "Code"}, {Value: "plan", Name: "Plan"},
+		}},
+		{id: "model", name: "Model", category: "model", def: "fast", values: []acp.ConfigSelectOption{
+			{Value: "fast", Name: "Fast", Group: "builtin", GroupName: "Built-in"},
+			{Value: "smart", Name: "Smart", Group: "builtin", GroupName: "Built-in"},
+		}},
+	}
+	// codexOptions are codex-acp's options; it opens every loaded or
+	// resumed thread at these defaults.
+	codexOptions = []selectOption{
+		{id: "mode", name: "Approval Preset", category: "mode", def: "agent", values: []acp.ConfigSelectOption{
+			{Value: "read-only", Name: "Read Only"},
+			{Value: "workspace-write", Name: "Workspace Write"},
+			{Value: "agent", Name: "Agent"},
+			{Value: "agent-full-access", Name: "Agent (full access)"},
+		}},
+		{id: "model", name: "Model", category: "model", def: "gpt-a", values: []acp.ConfigSelectOption{
+			{Value: "gpt-a", Name: "GPT A"}, {Value: "gpt-b", Name: "GPT B"},
+		}},
+		{id: "reasoning_effort", name: "Reasoning Effort", category: "thought_level", def: "medium", values: []acp.ConfigSelectOption{
+			{Value: "low", Name: "Low"}, {Value: "medium", Name: "Medium"}, {Value: "high", Name: "High"},
+		}},
+	}
+)
+
+func profileOptions(profile string) []selectOption {
+	if profile == "codex" {
+		return codexOptions
+	}
+	return defaultOptions
+}
+
+func defaultConfig(profile string) map[string]string {
+	out := map[string]string{}
+	for _, o := range profileOptions(profile) {
+		out[o.id] = o.def
+	}
+	return out
+}
+
+func configOptions(profile string, ss *session) []acp.ConfigOption {
+	var out []acp.ConfigOption
+	for _, o := range profileOptions(profile) {
+		out = append(out, acp.ConfigOption{ID: o.id, Name: o.name, Category: o.category, Type: acp.ConfigSelect,
+			Current: acp.ConfigValue{ID: ss.Config[o.id]}, Options: o.values})
+	}
+	return out
+}
+
+// validConfig reports whether value is one of the option's values.
+func validConfig(profile, id, value string) bool {
+	for _, o := range profileOptions(profile) {
+		if o.id != id {
+			continue
+		}
+		for _, v := range o.values {
+			if v.Value == value {
+				return true
+			}
+		}
+	}
+	return false
+}

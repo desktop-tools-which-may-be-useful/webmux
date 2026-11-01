@@ -110,7 +110,17 @@ type actor struct {
 	sleepTimer *time.Timer
 	sleepAt    time.Time
 	// probe is the eligibility check of the terminal side's session.
-	probe           probeState
+	probe probeState
+	// connector is the eligibility check of the profile's connector.
+	connector connectorState
+	// locks follows the writer locks of a profile that names sessions by
+	// them (Codex).
+	locks lockTracker
+	// runStart is when the actor last started a terminal run.
+	runStart time.Time
+	// agentPathNoted: the notice that the connector uses its own agent was
+	// shown.
+	agentPathNoted  bool
 	starting        bool
 	closeAfterStart bool
 	closing         bool
@@ -150,7 +160,7 @@ func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side S
 	a.chat = ChatState{
 		Side: side, Agent: cmd.Profile.Name, Requests: []Request{}, Config: []ConfigOption{},
 		Commands: []Command{}, Queue: Queue{Items: []QueueItem{}}, Unsupported: unsupported,
-		PermissionMode: PermissionAuto,
+		PermissionMode: PermissionAuto, Outdated: []Outdated{},
 	}
 	a.log = newChatLog(s.capacity, a.chat)
 	return a
@@ -177,6 +187,10 @@ func (a *actor) stopTimers() {
 	if a.probe.timer != nil {
 		a.probe.timer.Stop()
 		a.probe.timer = nil
+	}
+	if a.connector.timer != nil {
+		a.connector.timer.Stop()
+		a.connector.timer = nil
 	}
 	a.probeCancel()
 }
@@ -381,6 +395,10 @@ type startResult struct {
 	process *runtime.Identity
 	init    acp.InitializeResponse
 	session acp.NewSessionResponse
+	// config is the agent's options after derived values were set; notes
+	// are the warnings about them.
+	config []acp.ConfigOption
+	notes  []string
 	// err is user-facing and may carry the agent's stderr: never log it.
 	err error
 }
@@ -401,6 +419,7 @@ func (a *actor) start(started chan<- error) {
 	}
 	if a.side == SideTUI {
 		shell, argv := a.shell, a.cmd.TUIArgv()
+		a.runStart = time.Now()
 		go func() {
 			if err := shell.StartRun(argv); err != nil {
 				report(startResult{err: fmt.Errorf("%w: 启动终端失败: %v", ErrInvalid, err)})
@@ -416,9 +435,12 @@ func (a *actor) start(started chan<- error) {
 	go func() { report(a.spawnACP(epoch)) }()
 }
 
-// spawnACP starts the ACP process and opens a new agent session. It runs
-// in a subtask; a failure stops the process before returning.
+// spawnACP starts the ACP process and opens a new agent session with the
+// option values derived from the launch arguments (or recorded, for a
+// resumed record). It runs in a subtask; a failure stops the process
+// before returning.
 func (a *actor) spawnACP(epoch int) startResult {
+	want := a.reapplyValues()
 	link, init, fail := a.connect(epoch)
 	if fail != nil {
 		return startResult{err: fail.err}
@@ -433,6 +455,7 @@ func (a *actor) spawnACP(epoch int) startResult {
 		return startResult{err: a.callFailed(link, acp.MethodSessionNew, err).err}
 	}
 	link.sessionID = res.session.SessionID
+	res.config, res.notes = a.reapply(link, want, res.session.ConfigOptions)
 	res.pid = link.sidecar.PID()
 	res.process = processIdentity(res.pid)
 	return res
@@ -473,7 +496,7 @@ func (a *actor) started(started chan<- error, res startResult) {
 			a.record(true, func(r *Record) { r.PID, r.Process = pid, process })
 		}
 	} else {
-		a.installLink(res.link, res.init, res.session.ConfigOptions, nil)
+		a.installLink(res.link, res.init, res.config, res.notes)
 		sid := a.agentSessionID
 		a.record(true, func(r *Record) {
 			r.PID, r.Process = pid, process
@@ -577,7 +600,17 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 	if epoch != a.epoch || a.stopped {
 		return
 	}
-	a.emit(a.tr.update(n.Update)...)
+	events := a.tr.update(n.Update)
+	if hidden := a.cmd.Profile.HiddenCommands; len(hidden) > 0 {
+		for i := range events {
+			if events[i].Kind == EventCommands {
+				events[i].Commands = slices.DeleteFunc(slices.Clone(events[i].Commands), func(c Command) bool {
+					return slices.Contains(hidden, c.Name)
+				})
+			}
+		}
+	}
+	a.emit(events...)
 }
 
 func (a *actor) openRequest(p *pending) {

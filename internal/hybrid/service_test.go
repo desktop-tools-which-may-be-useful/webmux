@@ -44,8 +44,8 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// agentPath builds the fake agent once, as executables named after both
-// profiles so agentprofile recognises them.
+// agentPath builds the fake agent once, as executables named after every
+// profile (and Codex's connector) so agentprofile recognises them.
 func agentPath(t *testing.T, profile string) string {
 	t.Helper()
 	if testing.Short() {
@@ -58,7 +58,7 @@ func agentPath(t *testing.T, profile string) string {
 		}
 		// A separate file per profile, not a hard link: macOS reports a
 		// hard-linked executable under either name, breaking the root check.
-		for _, name := range []string{agentprofile.OMP, agentprofile.OpenCode} {
+		for _, name := range []string{agentprofile.OMP, agentprofile.OpenCode, agentprofile.Codex, "codex-acp"} {
 			out, err := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent").CombinedOutput()
 			if err != nil {
 				fakeAgent.err = fmt.Errorf("go build: %w\n%s", err, out)
@@ -244,7 +244,7 @@ func TestCreateStartsEitherSide(t *testing.T) {
 					}
 					st := sub.Snapshot.State
 					sub.Close()
-					if st.AgentVersion == "" || st.Steering != (profile == agentprofile.OMP) || len(st.Config) != 2 || st.AgentSessionID == nil {
+					if st.Steering != (profile == agentprofile.OMP) || len(st.Config) != 2 || st.AgentSessionID == nil {
 						t.Fatalf("chat state %+v", st)
 					}
 				}

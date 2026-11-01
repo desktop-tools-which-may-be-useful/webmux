@@ -27,3 +27,6 @@ export const OpenCode: Story = {
 export const Switching: Story = { args: { scenario: "switching" } };
 export const AwaitingChoice: Story = { args: { scenario: "awaiting-choice" } };
 export const TerminalSide: Story = { args: { scenario: "terminal" } };
+export const ConnectorMissing: Story = {
+  args: { scenario: "connector-missing" },
+};

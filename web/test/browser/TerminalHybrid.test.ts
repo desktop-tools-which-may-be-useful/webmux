@@ -129,6 +129,79 @@ test("the chat tab explains why the session cannot switch yet", async () => {
   await expect.element(chatTab("聊天")).not.toHaveAttribute("aria-disabled");
 });
 
+const connector = {
+  executable: "codex-acp",
+  title: "Codex ACP 适配器",
+  installCommand: "npm install -g @agentclientprotocol/codex-acp",
+  docsUrl: "https://github.com/agentclientprotocol/codex-acp",
+};
+
+test("a missing connector disables the chat tab and shows a dismissible install banner", async () => {
+  await onTerminalSide(
+    tuiState({
+      agent: "codex",
+      eligibility: {
+        available: false,
+        reason: "connector_missing",
+        connector,
+      },
+    }),
+  );
+  await expect
+    .element(chatTab("聊天（未安装 Codex ACP 适配器（codex-acp））"))
+    .toHaveAttribute("aria-disabled", "true");
+  await expect.element(page.getByText(connector.installCommand)).toBeVisible();
+  await expect.element(page.getByText("安装后会自动重新检测")).toBeVisible();
+  await page.getByRole("button", { name: "关闭安装提示" }).click();
+  await expect
+    .element(page.getByText(connector.installCommand))
+    .not.toBeInTheDocument();
+});
+
+test("an ambiguous switch lets the user pick the agent session and resends it", async () => {
+  let attempts = 0;
+  respond(/^POST \/api\/sessions\/hybrid22\/switch$/, () => {
+    attempts += 1;
+    if (attempts === 1)
+      return Response.json(
+        {
+          error: "无法确定当前会话",
+          reason: "session_ambiguous",
+          candidates: [
+            {
+              agentSessionId: "thread-a",
+              title: "修复排序",
+              updatedAt: "2026-10-28T00:00:00Z",
+            },
+            {
+              agentSessionId: "thread-b",
+              title: "更新 README",
+              updatedAt: "2026-10-28T00:01:00Z",
+            },
+          ],
+        },
+        { status: 409 },
+      );
+    return Response.json({ side: "acp", dropped: [], unsupported: [] });
+  });
+  await onTerminalSide(tuiState({ agent: "codex" }));
+  await chatTab("聊天").click();
+  const picker = page.getByRole("combobox", { name: "选择要打开的会话" });
+  await expect.element(picker).toBeVisible();
+  await picker.selectOptions("thread-b");
+  await page.getByRole("button", { name: "确认" }).click();
+  await expect
+    .poll(() => commands().map((command) => command.body))
+    .toEqual([
+      { clientRequestId: expect.any(String), to: "acp" },
+      {
+        clientRequestId: expect.any(String),
+        to: "acp",
+        agentSessionId: "thread-b",
+      },
+    ]);
+});
+
 test("switching to chat shows its steps, asks after a stuck interrupt and lands on the chat view", async () => {
   const finish = pendingSwitch();
   const { terminal, chat } = await onTerminalSide(tuiState());

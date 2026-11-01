@@ -66,13 +66,33 @@ export const HybridCandidateSchema = z.object({
 });
 export type HybridCandidate = z.infer<typeof HybridCandidateSchema>;
 
+// A third-party connector that provides an agent's chat (ACP) side and is
+// installed separately; its presence does not mean it is installed.
+export const AgentConnectorSchema = z.object({
+  executable: z.string(),
+  title: z.string(),
+  installCommand: z.string(),
+  docsUrl: z.string(),
+});
+export type AgentConnector = z.infer<typeof AgentConnectorSchema>;
+
 export const HybridConflictSchema = z.object({
   error: z.string(),
   reason: z.string(),
   eligibility: z.string().optional(),
   candidates: z.array(HybridCandidateSchema).optional(),
+  connector: AgentConnectorSchema.optional(),
 });
 export type HybridConflict = z.infer<typeof HybridConflictSchema>;
+
+export const HybridSwitchRequestSchema = z
+  .object({
+    clientRequestId: z.string(),
+    to: z.enum(["acp", "tui"]).optional(),
+    choice: z.enum(["wait", "force", "cancel"]).optional(),
+    agentSessionId: z.string().optional(),
+  })
+  .strict();
 
 const ToolStatusSchema = z.enum([
   "pending",
@@ -320,18 +340,26 @@ export const ChatPermissionModeRequestSchema = z
   .object({ clientRequestId: z.string(), mode: ChatPermissionModeSchema })
   .strict();
 
+export const ChatEligibilitySchema = z.object({
+  available: z.boolean(),
+  reason: z.string().optional(),
+  connector: AgentConnectorSchema.optional(),
+});
+export type ChatEligibility = z.infer<typeof ChatEligibilitySchema>;
+
 export const ChatStateSchema = z.object({
   side: HybridSideSchema,
   phase: HybridPhaseSchema.optional(),
   dormant: z.boolean(),
   agent: z.string(),
-  agentVersion: z.string().optional(),
-  verifiedBelow: z.string().optional(),
   agentSessionId: z.string().nullable(),
-  eligibility: z.object({
-    available: z.boolean(),
-    reason: z.string().optional(),
-  }),
+  // Components running below their verified versions.
+  outdated: z.array(
+    z.object({ name: z.string(), version: z.string(), verified: z.string() }),
+  ),
+  // The chat side could not start because its connector is not installed.
+  connectorMissing: AgentConnectorSchema.optional(),
+  eligibility: ChatEligibilitySchema,
   turn: z.object({
     running: z.boolean(),
     turnId: z.string().optional(),

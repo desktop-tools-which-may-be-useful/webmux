@@ -12,6 +12,7 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Select from "$lib/components/ui/select";
+  import ConnectorInstallHint from "./ConnectorInstallHint.svelte";
   import InlineNotice from "./InlineNotice.svelte";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import { api, APIError } from "../api";
@@ -21,7 +22,7 @@
     type HybridSupport,
     type LaunchConfig,
   } from "../schemas";
-  import { hybridSupportReason } from "../hybrid";
+  import { connectorNoticeText, hybridSupportReason } from "../hybrid";
   import {
     defaultPreviewSettings,
     previewSettings,
@@ -342,8 +343,15 @@
               class="text-xs text-muted-foreground"
             >
               {#if hybridReason}{hybridReason}{:else}从这个配置启动的会话可以在网页聊天视图与终端之间切换，适用于
-                OpenCode 与 omp。{/if}
+                OpenCode、omp 与 Codex CLI。{/if}
             </p>
+            {#if hybridSupport?.supported && hybridSupport.connector}
+              <ConnectorInstallHint
+                connector={hybridSupport.connector}
+                message={connectorNoticeText(hybridSupport.connector)}
+                tone="info"
+              />
+            {/if}
           </div>
           <fieldset class="grid min-w-0 gap-2">
             <legend class="mb-2 text-sm font-medium">

@@ -129,6 +129,7 @@ export function chatState(patch: Partial<ChatState> = {}): ChatState {
     dormant: false,
     agent: "omp",
     agentSessionId: "01a17e26c4b84f0e9d2a",
+    outdated: [],
     eligibility: { available: true },
     turn: { running: false },
     requests: [],

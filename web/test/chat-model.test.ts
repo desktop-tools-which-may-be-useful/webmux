@@ -32,6 +32,7 @@ const state = {
   dormant: false,
   agent: "omp",
   agentSessionId: "01a",
+  outdated: [],
   eligibility: { available: true },
   turn: { running: false },
   requests: [],

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,6 +66,19 @@ func runACP(cfg config, st *store, in io.Reader, out io.Writer) error {
 		if _, err := fmt.Fprintln(out, cfg.noise); err != nil {
 			return err
 		}
+	}
+	if cfg.profile == "codex" {
+		// Tests assert the environment webmux gives the connector.
+		var vars []string
+		for _, k := range []string{"CODEX_PATH", "NO_BROWSER"} {
+			if v, ok := os.LookupEnv(k); ok {
+				vars = append(vars, k+"="+v)
+			}
+		}
+		if len(vars) == 0 {
+			vars = []string{"-"}
+		}
+		st.event("env", strings.Join(vars, " "))
 	}
 	br := bufio.NewReaderSize(in, 1<<20)
 	for {
@@ -256,10 +271,17 @@ func (a *agent) afterOpen(m, resp rpcMessage) {
 }
 
 func (a *agent) commands(sid string) {
-	a.update(sid, &acp.AvailableCommandsUpdate{AvailableCommands: []acp.AvailableCommand{
+	commands := []acp.AvailableCommand{
 		{Name: "compact", Description: "Compact the context"},
 		{Name: "plan", Description: "Show a plan", Input: &acp.AvailableCommandInput{Hint: "goal"}},
-	}})
+	}
+	if a.cfg.profile == "codex" {
+		commands = []acp.AvailableCommand{
+			{Name: "review", Description: "Review my current changes"},
+			{Name: "logout", Description: "Log out of Codex"},
+		}
+	}
+	a.update(sid, &acp.AvailableCommandsUpdate{AvailableCommands: commands})
 }
 
 func (a *agent) notification(m rpcMessage) {
@@ -323,17 +345,14 @@ func (a *agent) serve(ctx context.Context, m rpcMessage) (any, error) {
 		if ss, err = a.open(ss.ID, ss); err != nil {
 			return nil, err
 		}
-		return acp.NewSessionResponse{SessionID: ss.ID, ConfigOptions: configOptions(ss)}, nil
+		return acp.NewSessionResponse{SessionID: ss.ID, ConfigOptions: configOptions(a.cfg.profile, ss)}, nil
 	case acp.MethodSessionLoad:
 		var p acp.LoadSessionRequest
 		if err := decodeParams(m.Params, &p); err != nil {
 			return nil, err
 		}
-		ss, err := a.find(p.SessionID)
+		ss, err := a.reopen(p.SessionID, true)
 		if err != nil {
-			return nil, err
-		}
-		if ss, err = a.open(p.SessionID, ss); err != nil {
 			return nil, err
 		}
 		for _, msg := range ss.Messages {
@@ -344,14 +363,8 @@ func (a *agent) serve(ctx context.Context, m rpcMessage) (any, error) {
 				a.update(p.SessionID, (*acp.AgentMessageChunk)(&chunk))
 			}
 		}
-		if a.cfg.profile == "omp" {
-			// omp loads a session in its default mode (baseline D25).
-			a.mu.Lock()
-			ss.Config["mode"] = defaultConfig()["mode"]
-			a.mu.Unlock()
-		}
 		a.mu.Lock()
-		options := configOptions(ss)
+		options := configOptions(a.cfg.profile, ss)
 		a.mu.Unlock()
 		return acp.LoadSessionResponse{ConfigOptions: options}, nil
 	case acp.MethodSessionResume:
@@ -359,14 +372,14 @@ func (a *agent) serve(ctx context.Context, m rpcMessage) (any, error) {
 		if err := decodeParams(m.Params, &p); err != nil {
 			return nil, err
 		}
-		ss, err := a.find(p.SessionID)
+		ss, err := a.reopen(p.SessionID, false)
 		if err != nil {
 			return nil, err
 		}
-		if ss, err = a.open(p.SessionID, ss); err != nil {
-			return nil, err
-		}
-		return acp.ResumeSessionResponse{ConfigOptions: configOptions(ss)}, nil
+		a.mu.Lock()
+		options := configOptions(a.cfg.profile, ss)
+		a.mu.Unlock()
+		return acp.ResumeSessionResponse{ConfigOptions: options}, nil
 	case acp.MethodSessionList:
 		var p acp.ListSessionsRequest
 		if err := decodeParams(m.Params, &p); err != nil {
@@ -403,22 +416,14 @@ func (a *agent) serve(ctx context.Context, m rpcMessage) (any, error) {
 		}
 		return a.setConfig(p)
 	case methodSteering:
-		if a.cfg.profile != "omp" {
+		if a.cfg.profile == "opencode" {
 			break
 		}
 		var p acp.PromptRequest
 		if err := decodeParams(m.Params, &p); err != nil {
 			return nil, err
 		}
-		ls := a.session(p.SessionID)
-		if ls == nil {
-			return nil, &acp.RPCError{Code: acp.CodeResourceNotFound, Message: "session not open"}
-		}
-		a.mu.Lock()
-		ls.data.Messages = append(ls.data.Messages, message{ID: newMessageID(), Role: "user", Text: promptText(p.Prompt), Blocks: p.Prompt})
-		err := a.st.save(ls.data)
-		a.mu.Unlock()
-		return struct{}{}, err
+		return a.steer(p)
 	}
 	return nil, &acp.RPCError{Code: acp.CodeMethodNotFound, Message: "method not found"}
 }
@@ -447,10 +452,13 @@ func (a *agent) initialize() (any, error) {
 		},
 		AgentInfo: &acp.Implementation{Name: a.cfg.profile, Version: pluginVersion},
 	}
+	if a.cfg.profile == "codex" {
+		resp.AgentInfo = &acp.Implementation{Name: "@agentclientprotocol/codex-acp", Title: "Codex", Version: a.cfg.connectorVersion}
+	}
 	if a.cfg.noResume {
 		resp.AgentCapabilities.SessionCapabilities.Resume = nil
 	}
-	if a.cfg.profile == "omp" {
+	if a.cfg.profile != "opencode" {
 		resp.Meta = json.RawMessage(`{"steering":{"supported":true}}`)
 	}
 	return resp, nil
@@ -462,6 +470,86 @@ func (a *agent) find(id string) (*session, error) {
 		return nil, &acp.RPCError{Code: acp.CodeResourceNotFound, Message: "session not found"}
 	}
 	return ss, err
+}
+
+// reopen opens a stored session for session/load or session/resume. Codex
+// refuses a thread another live client writes and, like codex-acp, opens it
+// at the default options; omp loads a session in its default mode
+// (baseline D25).
+func (a *agent) reopen(id string, load bool) (*session, error) {
+	ss, err := a.find(id)
+	if err != nil {
+		return nil, err
+	}
+	if a.cfg.profile == "codex" {
+		held, err := codexLockHeld(id)
+		if err != nil {
+			return nil, err
+		}
+		if held {
+			a.st.event("thread_active_writer", id)
+			return nil, threadActiveWriter(id)
+		}
+	}
+	if ss, err = a.open(id, ss); err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	switch {
+	case a.cfg.profile == "codex":
+		maps.Copy(ss.Config, defaultConfig(a.cfg.profile))
+	case a.cfg.profile == "omp" && load:
+		ss.Config["mode"] = defaultConfig(a.cfg.profile)["mode"]
+	}
+	return ss, nil
+}
+
+// steeringResult is codex-acp's _session/steering answer.
+type steeringResult struct {
+	Outcome string `json:"outcome"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// steer injects a user message into the running turn. omp always records
+// it. Codex answers an outcome: with no running turn it starts one, unless
+// _meta.steering.idleBehavior is "promptRequired".
+func (a *agent) steer(p acp.PromptRequest) (any, error) {
+	ls := a.session(p.SessionID)
+	if ls == nil {
+		return nil, &acp.RPCError{Code: acp.CodeResourceNotFound, Message: "session not open"}
+	}
+	codex := a.cfg.profile == "codex"
+	a.mu.Lock()
+	if codex && ls.turn == nil {
+		a.mu.Unlock()
+		var meta struct {
+			Steering struct {
+				IdleBehavior string `json:"idleBehavior"`
+			} `json:"steering"`
+		}
+		if len(p.Meta) > 0 {
+			if err := json.Unmarshal(p.Meta, &meta); err != nil {
+				return nil, &acp.RPCError{Code: acp.CodeInvalidParams, Message: "invalid _meta"}
+			}
+		}
+		if meta.Steering.IdleBehavior == "promptRequired" {
+			return steeringResult{Outcome: "promptRequired", Reason: "noRunningTurn"}, nil
+		}
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			_, _ = a.prompt(acp.PromptRequest{SessionID: p.SessionID, Prompt: p.Prompt})
+		}()
+		return steeringResult{Outcome: "startedNewTurn"}, nil
+	}
+	ls.data.Messages = append(ls.data.Messages, message{ID: newMessageID(), Role: "user", Text: promptText(p.Prompt), Blocks: p.Prompt})
+	err := a.st.save(ls.data)
+	a.mu.Unlock()
+	if codex {
+		return steeringResult{Outcome: "injected"}, err
+	}
+	return struct{}{}, err
 }
 
 // open leases ss for this process under the client's ID key; a lease
@@ -511,35 +599,18 @@ func (a *agent) list(p acp.ListSessionsRequest) (any, error) {
 	return resp, nil
 }
 
-func configOptions(ss *session) []acp.ConfigOption {
-	return []acp.ConfigOption{
-		{ID: "mode", Name: "Mode", Category: "mode", Type: acp.ConfigSelect, Current: acp.ConfigValue{ID: ss.Config["mode"]}, Options: []acp.ConfigSelectOption{
-			{Value: "code", Name: "Code"}, {Value: "plan", Name: "Plan"},
-		}},
-		{ID: "model", Name: "Model", Category: "model", Type: acp.ConfigSelect, Current: acp.ConfigValue{ID: ss.Config["model"]}, Options: []acp.ConfigSelectOption{
-			{Value: "fast", Name: "Fast", Group: "builtin", GroupName: "Built-in"},
-			{Value: "smart", Name: "Smart", Group: "builtin", GroupName: "Built-in"},
-		}},
-	}
-}
-
 func (a *agent) setConfig(p acp.SetConfigOptionRequest) (any, error) {
 	ls := a.session(p.SessionID)
 	if ls == nil {
 		return nil, &acp.RPCError{Code: acp.CodeResourceNotFound, Message: "session not open"}
 	}
-	valid := map[string][]string{"mode": {"code", "plan"}, "model": {"fast", "smart"}}[p.ConfigID]
-	ok := false
-	for _, v := range valid {
-		ok = ok || v == p.Value.ID
-	}
-	if !ok || p.Value.Bool != nil {
+	if !validConfig(a.cfg.profile, p.ConfigID, p.Value.ID) || p.Value.Bool != nil {
 		return nil, &acp.RPCError{Code: acp.CodeInvalidParams, Message: "unknown config value"}
 	}
 	a.mu.Lock()
 	ls.data.Config[p.ConfigID] = p.Value.ID
 	err := a.st.save(ls.data)
-	opts := configOptions(ls.data)
+	opts := configOptions(a.cfg.profile, ls.data)
 	a.mu.Unlock()
 	return acp.SetConfigOptionResponse{ConfigOptions: opts}, err
 }

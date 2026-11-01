@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SessionHybridSchema } from "./chatSchemas";
+import { AgentConnectorSchema, SessionHybridSchema } from "./chatSchemas";
 
 export * from "./chatSchemas";
 
@@ -99,8 +99,10 @@ export const HybridSupportSchema = z.object({
       "session_store",
       "directory_arg",
       "non_interactive",
+      "session_arg",
     ])
     .optional(),
+  connector: AgentConnectorSchema.optional(),
 });
 export type HybridSupport = z.infer<typeof HybridSupportSchema>;
 

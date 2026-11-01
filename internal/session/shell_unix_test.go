@@ -384,7 +384,7 @@ func TestOrdinarySessionHasNoHybridInfo(t *testing.T) {
 	if err = s.StartRun([]string{"/bin/sleep", "1"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("StartRun on an ordinary session: %v", err)
 	}
-	if _, err = s.StartSidecar([]string{"/bin/sleep", "1"}, false); !errors.Is(err, ErrInvalid) {
+	if _, err = s.StartSidecar([]string{"/bin/sleep", "1"}, false, nil); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("StartSidecar on an ordinary session: %v", err)
 	}
 }

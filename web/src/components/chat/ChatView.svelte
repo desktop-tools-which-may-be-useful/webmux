@@ -4,6 +4,8 @@
   import IconZzz from "~icons/tabler/zzz";
   import { Button } from "$lib/components/ui/button";
   import InlineNotice from "../InlineNotice.svelte";
+  import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
+  import { outdatedText } from "../../hybrid";
   import type { ChatActions, RequestAnswer } from "../../chat-api";
   import { groupTimeline, type ChatModel } from "../../chat-model";
   import { errorMessage } from "../../error";
@@ -35,7 +37,7 @@
     unavailable = "",
     uploadUnavailable = "",
     onreview,
-    onlogin,
+    onterminal,
   }: {
     model: ChatModel;
     chat: ChatState | undefined;
@@ -50,8 +52,8 @@
     uploadUnavailable?: string;
     /** Opens a changed file in the code panel. */
     onreview: (path: string) => void;
-    /** Moves the session to its terminal, where the agent can log in. */
-    onlogin: () => void;
+    /** Moves the session to its terminal, such as to log in there. */
+    onterminal: () => void;
   } = $props();
 
   let scroller = $state<HTMLDivElement>();
@@ -181,12 +183,9 @@
         {#if model.truncated}
           <InlineNotice>更早的历史未缓存，可切到终端查看</InlineNotice>
         {/if}
-        {#if chat?.verifiedBelow}
-          <InlineNotice tone="warning"
-            >{chat.agent}
-            {chat.agentVersion ?? ""} 低于已验证版本 {chat.verifiedBelow}，部分功能可能不可用</InlineNotice
-          >
-        {/if}
+        {#each chat?.outdated ?? [] as item (item.name)}
+          <InlineNotice tone="warning">{outdatedText(item)}</InlineNotice>
+        {/each}
         {#if chat?.unsupported.length}
           <InlineNotice tone="warning"
             >聊天视图不支持该参数：{chat.unsupported.join(" ")}</InlineNotice
@@ -239,6 +238,16 @@
   </div>
   <div class="mx-auto w-full max-w-3xl space-y-2 px-3 pb-safe-4 sm:px-4">
     {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
+    {#if chat?.connectorMissing}
+      <ConnectorInstallHint connector={chat.connectorMissing}>
+        {#snippet actions()}<Button
+            size="sm"
+            variant="outline"
+            disabled={!!unavailable}
+            onclick={onterminal}>切到终端</Button
+          >{/snippet}
+      </ConnectorInstallHint>
+    {/if}
     {#if chat?.authRequired}
       <InlineNotice tone="danger">
         <span class="flex flex-wrap items-center gap-2"
@@ -246,7 +255,7 @@
             size="sm"
             variant="outline"
             disabled={!!unavailable}
-            onclick={onlogin}>切到终端登录</Button
+            onclick={onterminal}>切到终端登录</Button
           ></span
         >
       </InlineNotice>

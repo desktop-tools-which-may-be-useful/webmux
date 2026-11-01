@@ -124,6 +124,48 @@ test("renders the snapshot's timeline and updates a tool row in place", async ()
     .toHaveTextContent("web/src/homeWorktrees.ts");
 });
 
+test("a missing connector offers its install hint and the terminal; outdated parts each warn", async () => {
+  const socket = await open();
+  socket.frame(
+    snapshot(
+      chatState({
+        agent: "codex",
+        outdated: [
+          { name: "codex", version: "0.150.0", verified: "0.166.0" },
+          { name: "codex-acp", version: "2.4.0", verified: "2.5.0" },
+        ],
+        connectorMissing: {
+          executable: "codex-acp",
+          title: "Codex ACP 适配器",
+          installCommand: "npm install -g @agentclientprotocol/codex-acp",
+          docsUrl: "https://github.com/agentclientprotocol/codex-acp",
+        },
+      }),
+    ),
+  );
+  await expect
+    .element(page.getByText("未安装 Codex ACP 适配器（codex-acp）"))
+    .toBeVisible();
+  await expect
+    .element(
+      page.getByText(
+        "codex 0.150.0 低于已验证版本 0.166.0，部分功能可能不可用",
+      ),
+    )
+    .toBeVisible();
+  await expect
+    .element(
+      page.getByText(
+        "codex-acp 2.4.0 低于已验证版本 2.5.0，部分功能可能不可用",
+      ),
+    )
+    .toBeVisible();
+  await page.getByRole("button", { name: "切到终端", exact: true }).click();
+  await expect
+    .element(page.getByRole("status", { name: "Terminal requests" }))
+    .toHaveTextContent("1");
+});
+
 test("renders the attachments of a user prompt", async () => {
   const socket = await open();
   socket.frame(snapshot(chatState()));

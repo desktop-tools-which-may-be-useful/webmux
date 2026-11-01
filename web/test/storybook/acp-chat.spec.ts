@@ -14,6 +14,7 @@ const stories = [
   ["switching", "heading", "正在切换到终端…"],
   ["awaiting-choice", "button", "强制切换"],
   ["terminal-side", "tab", /^聊天/],
+  ["connector-missing", "button", "切到终端"],
 ] as const;
 
 async function show(page: Page, story: string, theme: string) {

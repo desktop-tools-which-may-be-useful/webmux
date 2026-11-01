@@ -22,14 +22,16 @@ const pluginVersion = "1.0.0"
 const doubleEscWindow = time.Second
 
 type tui struct {
-	cfg config
-	st  *store
-	cwd string
+	cfg   config
+	st    *store
+	cwd   string
+	codex bool
 
 	outMu sync.Mutex
 	out   io.Writer
 
 	cur      *session
+	locks    []*os.File    // Codex: the writer locks of every thread opened
 	turn     chan struct{} // closed to interrupt the running turn; nil when idle
 	turnDone chan bool     // receives interrupted when a turn ends
 	pending  string        // the running turn's prompt
@@ -42,16 +44,28 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	t := &tui{cfg: cfg, st: st, cwd: cwd, out: out, turnDone: make(chan bool, 1)}
+	t := &tui{cfg: cfg, st: st, cwd: cwd, codex: cfg.profile == "codex", out: out, turnDone: make(chan bool, 1)}
 	restore := rawMode()
 	defer restore()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 
 	t.printf("fakeagent tui (%s)\r\n", cfg.profile)
-	t.emit7501("state=idle:app=" + cfg.profile)
+	if t.codex {
+		// Codex reports working while it starts, and nothing but its root
+		// record.
+		t.emit7501("state=working:app=codex")
+	} else {
+		t.emit7501("state=idle:app=" + cfg.profile)
+	}
 	switch {
 	case cfg.resume != "":
+		// Codex resume starts a blank thread before opening the resumed one.
+		if t.codex {
+			if err := t.holdLock(st.newID()); err != nil {
+				return err
+			}
+		}
 		ss, err := st.load(cfg.resume)
 		if err != nil {
 			return fmt.Errorf("resume %s: %w", cfg.resume, err)
@@ -62,7 +76,7 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 	case cfg.session != "":
 		ss, err := st.load(cfg.session)
 		if errors.Is(err, fs.ErrNotExist) {
-			ss = &session{ID: cfg.session, Cwd: cwd, Messages: []message{}, Config: defaultConfig()}
+			ss = &session{ID: cfg.session, Cwd: cwd, Messages: []message{}, Config: defaultConfig(cfg.profile)}
 			err = st.save(ss)
 		}
 		if err != nil {
@@ -71,12 +85,19 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 		if err := t.open(ss); err != nil {
 			return err
 		}
-	case cfg.profile == "omp":
+	case cfg.profile == "omp" || t.codex:
 		if err := t.create(); err != nil {
 			return err
 		}
 	}
+	if t.codex {
+		time.Sleep(cfg.startupDelay)
+		t.emit7501("state=idle:app=codex")
+	}
 	t.printf("prompt> ")
+	if cfg.prompt != "" {
+		t.submit(cfg.prompt)
+	}
 
 	keys := make(chan []byte)
 	go func() {
@@ -122,7 +143,11 @@ func (t *tui) printf(format string, args ...any) {
 
 func (t *tui) emit7501(body string) { t.printf("\x1b]7501;%s\x1b\\", body) }
 
+// warp sends a Warp cli-agent event; Codex sends none.
 func (t *tui) warp(event string) {
+	if t.codex {
+		return
+	}
 	ev := map[string]any{"v": 1, "event": event, "agent": t.cfg.profile, "plugin_version": pluginVersion, "cwd": t.cwd}
 	if t.cur != nil {
 		ev["session_id"] = t.cur.ID
@@ -139,12 +164,21 @@ func (t *tui) create() error {
 }
 
 func (t *tui) open(ss *session) error {
+	if err := t.holdLock(ss.ID); err != nil {
+		return err
+	}
 	if t.cur != nil {
 		t.st.release(t.cur.ID)
 	}
+	requested := ss.ID
 	ss, err := t.st.lease(ss)
 	if err != nil {
 		return err
+	}
+	if ss.ID != requested {
+		if err := t.holdLock(ss.ID); err != nil {
+			return err
+		}
 	}
 	t.cur = ss
 	for _, m := range ss.Messages {
@@ -156,10 +190,25 @@ func (t *tui) open(ss *session) error {
 	}
 	t.warp("session_start")
 	// Like the real OpenCode TUI (baseline.md), the opencode profile names
-	// its session only once a turn runs, even when it opened one with -s.
-	if t.cfg.profile != "opencode" {
+	// its session only once a turn runs, even when it opened one with -s;
+	// Codex never reports it.
+	if t.cfg.profile == "omp" {
 		t.emit7501("state=idle:id=" + ss.ID)
 	}
+	return nil
+}
+
+// holdLock keeps a Codex thread's writer lock until the process exits, as
+// Codex does even after /new.
+func (t *tui) holdLock(id string) error {
+	if !t.codex {
+		return nil
+	}
+	f, err := holdCodexLock(id)
+	if err != nil {
+		return err
+	}
+	t.locks = append(t.locks, f)
 	return nil
 }
 
@@ -210,7 +259,7 @@ func (t *tui) escape() {
 	if t.turn == nil || t.cfg.ignoreInterrupt {
 		return
 	}
-	if t.cfg.profile == "omp" || double {
+	if t.cfg.profile != "opencode" || double {
 		close(t.turn)
 		t.turn = nil
 		t.lastEsc = time.Time{}
@@ -244,8 +293,7 @@ func (t *tui) submit(line string) bool {
 		t.printf("error: %v\r\n", err)
 	}
 	t.pending = line
-	t.emit7501("state=working")
-	t.emit7501("state=working:id=" + t.cur.ID)
+	t.status("working")
 	t.warp("prompt_submit")
 	stop := make(chan struct{})
 	t.turn = stop
@@ -283,10 +331,20 @@ func (t *tui) finishTurn(interrupted bool) {
 		t.printf("error: %v\r\n", err)
 	}
 	t.printf("\r\n")
-	t.emit7501("state=idle")
-	t.emit7501("state=idle:id=" + t.cur.ID)
+	t.status("idle")
 	t.warp("stop")
 	t.printf("prompt> ")
+}
+
+// status reports a turn's state: Codex in its root record only, the others
+// in the root and the session's child record.
+func (t *tui) status(state string) {
+	if t.codex {
+		t.emit7501("state=" + state + ":app=codex")
+		return
+	}
+	t.emit7501("state=" + state)
+	t.emit7501("state=" + state + ":id=" + t.cur.ID)
 }
 
 func (t *tui) shutdown() {
@@ -297,6 +355,9 @@ func (t *tui) shutdown() {
 	}
 	if t.cur != nil {
 		t.st.release(t.cur.ID)
+	}
+	for _, f := range t.locks {
+		_ = f.Close()
 	}
 	t.emit7501("state=clear")
 }

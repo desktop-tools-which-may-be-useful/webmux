@@ -6,7 +6,7 @@
 - 一个可执行的 shell，以及打算使用的 CLI agent（Claude Code、Codex CLI 等）。
 - 可选：Git，用于仓库与 worktree 管理（需支持 `git worktree list --porcelain -z`）。
 
-运行端不需要 Node.js、Go、tmux 或数据库。
+运行端不需要 Node.js、Go、tmux 或数据库。例外：Codex CLI 的混合模式（聊天 ↔ 终端）需要另外安装第三方适配器 codex-acp，它运行在 Node 上，见下文。
 
 ## 安装
 
@@ -119,6 +119,15 @@ JSON 输出契约见 [控制面 JSON 契约](protocol/control-json.md#控制面-
 - 它们是普通配置，可编辑或删除。不再读取 `[[presets]]` 或 `shell`；旧配置请改为在设置页保存。
 
 新安装的 omp 启动配置额外预置 `PI_FORCE_IMAGE_PROTOCOL=kitty`，以在浏览器终端启用 Kitty 图片传输；其他 agent 配置不增加该环境变量。已经存在的 `launch-configs.json` 不自动修改，升级后可手动编辑自己的 omp 配置。
+
+新安装的 Codex CLI、Open Code 与 omp 配置默认勾选混合模式。Codex 的聊天端由 [codex-acp](https://github.com/agentclientprotocol/codex-acp) 提供，webmux 不会自动安装：
+
+```sh
+npm install -g @agentclientprotocol/codex-acp
+which codex-acp    # 必须出现在服务的 PATH 中，或经“加载 ~/.bashrc”的配置可以找到
+```
+
+没有安装时 Codex 会话照常在终端运行，页面提示安装命令；安装后 30 秒内自动重新检测。webmux 每次启动聊天端前都会检查一次（“加载 ~/.bashrc”的配置会多启动一次 `bash -ic`），资格核对还会冷启动一次 codex-acp（约 2.5 秒）。
 
 完整命令按引号与反斜杠规则拆分为 argv，不经 shell 求值。
 

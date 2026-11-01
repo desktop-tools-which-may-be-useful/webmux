@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -27,6 +30,7 @@ type acpLink struct {
 	sessionID string
 	caps      acp.SessionCapabilities
 	prompt    acp.PromptCapabilities
+	tools     acpTools
 }
 
 // stop closes the connection and ends the process, and reports whether its
@@ -98,17 +102,26 @@ func agentFailure(method string, err error, sidecar *session.Sidecar) failure {
 	return failure{err: fmt.Errorf("%w: %s: %s", ErrAgent, method, full), public: public}
 }
 
-// connect starts the ACP process under epoch and initializes it. The agent
-// must support session/load and session/list. A failure stops the process
-// before returning.
+// connect checks the profile's connector, starts the ACP process under
+// epoch and initializes it. The agent must support session/load and
+// session/list. A failure stops the process before returning.
 func (a *actor) connect(epoch int) (*acpLink, acp.InitializeResponse, *failure) {
+	tools, err := a.prepareACP(context.Background())
+	if err != nil {
+		a.svc.log.Warn("hybrid acp check failed", "id", a.id, "missing", errors.Is(err, ErrConnectorMissing))
+		public := "启动 agent 失败"
+		if errors.Is(err, ErrConnectorMissing) {
+			public = err.Error()
+		}
+		return nil, acp.InitializeResponse{}, &failure{err: err, public: public}
+	}
 	argv, _ := a.cmd.ACPArgv()
-	sidecar, err := a.shell.StartSidecar(argv, a.cmd.ProtocolOnFD3())
+	sidecar, err := a.shell.StartSidecar(argv, a.cmd.ProtocolOnFD3(), tools.env)
 	if err != nil {
 		a.svc.log.Warn("hybrid acp start failed", "id", a.id, "error", err)
-		return nil, acp.InitializeResponse{}, &failure{err: fmt.Errorf("%w: %v", ErrAgent, err), public: "启动 agent 失败"}
+		return nil, acp.InitializeResponse{}, a.startFailure(err)
 	}
-	link := &acpLink{epoch: epoch, sidecar: sidecar}
+	link := &acpLink{epoch: epoch, sidecar: sidecar, tools: tools}
 	link.conn = acp.NewConn(sidecar.Stdout(), sidecar.Stdin(), acp.Options{Handler: &handler{a: a, epoch: epoch}, Logger: a.svc.log})
 	go func() {
 		<-link.conn.Done()
@@ -122,7 +135,11 @@ func (a *actor) connect(epoch int) (*acpLink, acp.InitializeResponse, *failure) 
 		}
 	}
 	if err != nil {
-		return nil, init, a.callFailed(link, acp.MethodInitialize, err)
+		f := a.callFailed(link, acp.MethodInitialize, err)
+		if missing := a.exitedNotFound(link.sidecar); missing != nil {
+			f = missing
+		}
+		return nil, init, f
 	}
 	link.caps = init.AgentCapabilities.SessionCapabilities
 	link.prompt = init.AgentCapabilities.PromptCapabilities
@@ -144,9 +161,10 @@ type openResult struct {
 	init    acp.InitializeResponse
 	config  []acp.ConfigOption
 	resumed bool
-	// warnings are reapplied options the agent refused, for a notice.
-	warnings []string
-	fail     *failure
+	// notes are warnings about options that could not be restored or
+	// derived, for notices.
+	notes []string
+	fail  *failure
 }
 
 // openACP starts the ACP process under epoch and opens agent session sid
@@ -154,7 +172,8 @@ type openResult struct {
 // agent declared it (no replay), else with session/load after beforeLoad
 // (which starts a new log generation; false means the actor ended). Options
 // the profile lists as not kept across loads get their recorded values
-// back (D25). It runs in a subtask; a failure stops the process.
+// back (D25), or on the first open the values derived from the launch
+// arguments. It runs in a subtask; a failure stops the process.
 func (a *actor) openACP(epoch int, sid, cwd string, resume bool, beforeLoad func() bool) openResult {
 	want := a.reapplyValues()
 	link, init, fail := a.connect(epoch)
@@ -180,60 +199,86 @@ func (a *actor) openACP(epoch int, sid, cwd string, resume bool, beforeLoad func
 		res.config = r.ConfigOptions
 	}
 	if err != nil {
-		return openResult{fail: a.callFailed(link, method, err)}
+		f := a.callFailed(link, method, err)
+		if externalWriter(err) {
+			f = &failure{err: ErrExternalWriter, public: ErrExternalWriter.Error()}
+		}
+		return openResult{fail: f}
 	}
 	link.sessionID = sid
-	res.config, res.warnings = a.reapply(link, want, res.config)
+	res.config, res.notes = a.reapply(link, want, res.config)
 	return res
+}
+
+// wanted is an option value to set after an open: recorded, or derived
+// from launch argument arg.
+type wanted struct {
+	id, value, arg string
 }
 
 // reapplyValues reads the recorded values of the options the profile says
 // a load does not keep. It is read before the new connection reports any
-// option, since reported options replace the recorded values.
-func (a *actor) reapplyValues() map[string]string {
+// option, since reported options replace the recorded values. A session
+// that never had options recorded (its first open) gets the values the
+// profile derives from the launch arguments instead.
+func (a *actor) reapplyValues() []wanted {
 	rec, ok := a.svc.records.get(a.id)
-	want := map[string]string{}
 	if !ok {
-		return want
+		return nil
 	}
+	if len(rec.Config) == 0 {
+		return a.seedValues()
+	}
+	var want []wanted
 	for _, id := range a.cmd.Profile.ReapplyOnLoad {
 		if v, ok := rec.Config[id]; ok && v != "" {
-			want[id] = v
+			want = append(want, wanted{id: id, value: v})
 		}
 	}
 	return want
 }
 
+// seedValues are the option values derived from the launch arguments.
+func (a *actor) seedValues() []wanted {
+	seeds, _ := a.cmd.ChatConfig()
+	want := make([]wanted, 0, len(seeds))
+	for _, s := range seeds {
+		want = append(want, wanted{id: s.ConfigID, value: s.Value, arg: s.Arg})
+	}
+	return want
+}
+
 // reapply sets each wanted option the agent answered with another value
-// (or not at all) and returns the resulting options; refusals become
-// warnings, not failures.
-func (a *actor) reapply(link *acpLink, want map[string]string, options []acp.ConfigOption) ([]acp.ConfigOption, []string) {
-	var warnings []string
-	for _, id := range a.cmd.Profile.ReapplyOnLoad {
-		value, ok := want[id]
-		if !ok {
+// (or not at all) and returns the resulting options. Refusals become
+// notes, not failures; a derived value the agent does not offer is not
+// set and noted as not taking effect.
+func (a *actor) reapply(link *acpLink, want []wanted, options []acp.ConfigOption) ([]acp.ConfigOption, []string) {
+	var notes, ignored []string
+	for _, w := range want {
+		i := slices.IndexFunc(options, func(o acp.ConfigOption) bool { return o.ID == w.id })
+		if w.arg != "" && (i < 0 || !offers(options[i], w.value)) {
+			ignored = append(ignored, w.arg)
 			continue
 		}
-		i := slices.IndexFunc(options, func(o acp.ConfigOption) bool { return o.ID == id })
 		var v acp.ConfigValue
 		switch {
 		case i >= 0 && options[i].Type == acp.ConfigBoolean:
-			b, err := strconv.ParseBool(value)
+			b, err := strconv.ParseBool(w.value)
 			if err != nil || (options[i].Current.Bool != nil && *options[i].Current.Bool == b) {
 				continue
 			}
 			v.Bool = &b
-		case i >= 0 && options[i].Current.ID == value:
+		case i >= 0 && options[i].Current.ID == w.value:
 			continue
 		default:
-			v.ID = value
+			v.ID = w.value
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), acp.RequestTimeout)
-		resp, err := link.conn.SetConfigOption(ctx, acp.SetConfigOptionRequest{SessionID: link.sessionID, ConfigID: id, Value: v})
+		resp, err := link.conn.SetConfigOption(ctx, acp.SetConfigOptionRequest{SessionID: link.sessionID, ConfigID: w.id, Value: v})
 		cancel()
 		if err != nil {
-			a.svc.log.Warn("hybrid config reapply failed", "id", a.id, "option", id, "error", err)
-			warnings = append(warnings, id)
+			a.svc.log.Warn("hybrid config reapply failed", "id", a.id, "option", w.id, "error", err)
+			notes = append(notes, "未能恢复配置项 "+w.id)
 			continue
 		}
 		switch {
@@ -244,20 +289,26 @@ func (a *actor) reapply(link *acpLink, want map[string]string, options []acp.Con
 			options[i].Current = v
 		}
 	}
-	return options, warnings
+	if len(ignored) > 0 {
+		notes = append(notes, "以下参数在聊天端不生效："+strings.Join(ignored, " "))
+	}
+	return options, notes
 }
 
-// installLink makes an opened connection the session's: agent version,
+// offers reports whether select option o has choice value.
+func offers(o acp.ConfigOption, value string) bool {
+	return o.Type != acp.ConfigBoolean && slices.ContainsFunc(o.Options, func(c acp.ConfigSelectOption) bool { return c.Value == value })
+}
+
+// installLink makes an opened connection the session's: versions,
 // steering and the agent's options.
-func (a *actor) installLink(link *acpLink, init acp.InitializeResponse, config []acp.ConfigOption, warnings []string) {
+func (a *actor) installLink(link *acpLink, init acp.InitializeResponse, config []acp.ConfigOption, notes []string) {
 	a.link = link
 	a.agentSessionID = link.sessionID
-	if info := init.AgentInfo; info != nil {
-		a.chat.AgentVersion = info.Version
-		a.chat.VerifiedBelow = ""
-		if a.cmd.Profile.BelowVerified(info.Version) {
-			a.chat.VerifiedBelow = a.cmd.Profile.VerifiedVersion
-		}
+	a.chat.ConnectorMissing = nil
+	a.setConnector(nil)
+	if init.AgentInfo != nil {
+		a.chat.Outdated = a.outdated(init.AgentInfo.Version, link.tools.agentVersion)
 	}
 	a.chat.Steering = a.cmd.Profile.Steering && steeringSupported(init.Meta)
 	a.chat.PromptCapabilities = PromptCapabilities{
@@ -268,9 +319,32 @@ func (a *actor) installLink(link *acpLink, init acp.InitializeResponse, config [
 	if config != nil {
 		a.emit(Event{Kind: EventConfig, Config: configOptions(config)})
 	}
-	for _, id := range warnings {
-		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: "未能恢复配置项 " + id}})
+	if link.tools.agentMissing && !a.agentPathNoted {
+		a.agentPathNoted = true
+		notes = append(notes, "未找到 "+filepath.Base(a.cmd.Executable)+"，聊天端使用适配器自带的 "+a.cmd.Profile.Title)
 	}
+	for _, note := range notes {
+		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: note}})
+	}
+}
+
+// outdated lists the programs below their verified versions: the ACP side
+// reports the connector's version when the profile has one, and the
+// agent's own (from its executable) is checked beside it.
+func (a *actor) outdated(reported, agentVersion string) []Outdated {
+	p := a.cmd.Profile
+	out := []Outdated{}
+	agent := reported
+	if c := p.Connector; c != nil {
+		agent = agentVersion
+		if order, ok := agentprofile.CompareVersions(reported, c.VerifiedVersion); ok && order < 0 {
+			out = append(out, Outdated{Name: c.Title, Version: reported, Verified: c.VerifiedVersion})
+		}
+	}
+	if p.BelowVerified(agent) {
+		out = append(out, Outdated{Name: p.Title, Version: agent, Verified: p.VerifiedVersion})
+	}
+	return out
 }
 
 // restartLog begins a new log generation for a session/load replay.
@@ -358,6 +432,7 @@ func (a *actor) reopened(res openResult, reconnect, oldGone bool) {
 	a.dirty = true
 	if res.fail != nil {
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: res.fail.public}})
+		a.noteConnector(res.fail.err)
 		if reconnect {
 			a.interrupt("idle", oldGone)
 		} else {
@@ -366,7 +441,7 @@ func (a *actor) reopened(res openResult, reconnect, oldGone bool) {
 		a.afterTransition()
 		return
 	}
-	a.installLink(res.link, res.init, res.config, res.warnings)
+	a.installLink(res.link, res.init, res.config, res.notes)
 	a.chat.Dormant = false
 	kind := MarkerLoaded
 	switch {

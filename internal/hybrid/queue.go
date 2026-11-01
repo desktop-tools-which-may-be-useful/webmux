@@ -19,8 +19,8 @@ const (
 	MaxPromptBytes = 64 << 10
 	// maxQueueItems bounds the shared prompt queue of one session.
 	maxQueueItems = 64
-	// methodSteering is omp's steering extension: it injects a user
-	// message into the running turn.
+	// methodSteering is the steering extension of omp and codex-acp: it
+	// injects a user message into the running turn.
 	methodSteering = "_session/steering"
 	// Prompt modes.
 	ModeAuto  = "auto"
@@ -268,8 +268,23 @@ func (a *actor) cancel() error {
 // agentCall is a command's ACP call, run outside the actor.
 type agentCall func(ctx context.Context) error
 
+// Steering outcomes of an agent asked to hand idle prompts back
+// (Profile.SteeringIdlePrompt); other agents answer nothing.
+const (
+	steerInjected       = "injected"
+	steerPromptRequired = "promptRequired"
+	steerFailed         = "failed"
+	steerStartedNewTurn = "startedNewTurn"
+)
+
+// steeringIdlePrompt is the steering request _meta asking for
+// promptRequired instead of a turn the agent would start by itself.
+var steeringIdlePrompt = []byte(`{"steering":{"idleBehavior":"promptRequired"}}`)
+
 // steer prepares injecting text into the running turn. It needs a profile
-// with the steering extension, an agent that declared it, and a turn.
+// with the steering extension, an agent that declared it, and a turn. A
+// turn that ended before the text got in (promptRequired) puts the text at
+// the head of the queue.
 func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) {
 	if err := a.linked(); err != nil {
 		return nil, err
@@ -283,23 +298,56 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 	}
 	a.clearAttention()
 	conn, sid, epoch := a.link.conn, a.link.sessionID, a.epoch
+	req := acp.PromptRequest{SessionID: sid, Prompt: blocks}
+	var resp struct {
+		Outcome string `json:"outcome"`
+	}
+	// Only agents asked for promptRequired promise an outcome; others may
+	// answer anything.
+	var result any
+	if a.cmd.Profile.SteeringIdlePrompt {
+		req.Meta = steeringIdlePrompt
+		result = &resp
+	}
 	return func(ctx context.Context) error {
-		err := conn.CallExtension(ctx, methodSteering, acp.PromptRequest{SessionID: sid, Prompt: blocks}, nil)
+		err := conn.CallExtension(ctx, methodSteering, req, result)
 		if err != nil {
 			return a.agentCallFailed(methodSteering, err)
 		}
+		if resp.Outcome == steerFailed {
+			a.svc.log.Warn("hybrid steering failed", "id", a.id, "method", methodSteering, "outcome", resp.Outcome)
+			return fmt.Errorf("%w: agent 未能插话", ErrAgentCall)
+		}
 		_, err = call(ctx, a, func() (struct{}, error) {
-			if a.epoch == epoch && !a.stopped {
-				a.emit(a.tr.userMessage(text, attachments))
-				a.tr.breakMessage()
-				for _, note := range notes {
-					a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: note}})
-				}
+			if a.epoch != epoch || a.stopped {
+				return struct{}{}, nil
+			}
+			switch resp.Outcome {
+			case steerPromptRequired:
+				a.requeue(text, attachments)
+				return struct{}{}, nil
+			case steerStartedNewTurn:
+				a.svc.log.Warn("hybrid steering started a turn", "id", a.id, "method", methodSteering, "outcome", resp.Outcome)
+				a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: "agent 自行开始了一个回合，该回合不受 WebMux 跟踪"}})
+			}
+			a.emit(a.tr.userMessage(text, attachments))
+			a.tr.breakMessage()
+			for _, note := range notes {
+				a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: note}})
 			}
 			return struct{}{}, nil
 		})
 		return err
 	}, nil
+}
+
+// requeue puts a prompt that missed its turn at the head of the queue, to
+// go out as the next turn.
+func (a *actor) requeue(text string, attachments []Attachment) {
+	a.nextItem++
+	item := QueueItem{ID: "q" + strconv.Itoa(a.nextItem), Text: text, CreatedAt: time.Now().UTC(), Attachments: attachments}
+	a.setQueue(slices.Insert(slices.Clone(a.chat.Queue.Items), 0, item), a.chat.Queue.Paused)
+	a.drain()
 }
 
 // setConfig prepares session/set_config_option for one option: Value for

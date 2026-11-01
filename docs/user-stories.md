@@ -283,7 +283,7 @@ WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端�
 | N    | Cloudflare 公网隧道                    | US-N01–US-N08 |
 | O    | Windows/WSL 托盘管理                   | US-O01–US-O11 |
 | P    | Tailscale Serve / Funnel               | US-P01–US-P07 |
-| Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q15 |
+| Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q16 |
 
 ## 分组文档
 
@@ -324,3 +324,9 @@ diff 库的行号按压只在主页面 `document` 上等待 pointerup，现由 `
 本次局部核对（2026-11-01）：#220 代码工作区资源管理器的右键文件操作（上传、下载、目录 ZIP、新建文件夹、重命名、复制、剪切、粘贴、删除）对应新增 US-I19，并更新 US-I18（临时文件夹改为可写）与 US-A05（代码接口含文件操作）；覆盖索引同步。未重新核验其余故事能力。
 
 本次局部核对（2026-11-01）：#220 补充移动端文件操作（长按、底部操作面板、触控尺寸、剪贴板提示条、重命名预选文件名），对应更新 US-I19；Playwright 桌面与 Pixel 7 用例覆盖长按与操作面板。未重新核验其余故事能力。
+
+本次局部核对（2026-11-01）：#208 的 Codex CLI 混合模式与第三方 ACP 连接器安装检查对应新增 US-Q16，并更新 US-Q01、US-Q03、US-Q08，覆盖索引同步。
+
+- 依据：`internal/agentprofile`、`internal/hybrid`（含 `codex_test.go` 的往返、连接器缺失与安装后重检、bashrc 检查、外部占用、插话退回队首、启动静默期）与 `internal/session` 的 Go race 测试，线上快照与 wire 契约用例，浏览器组件测试，以及桌面/Pixel 7 的 Codex E2E 用例。
+- 真实工具实测：Linux 上 Codex CLI 0.166.0 与 codex-acp 2.5.0 的写锁、`session/load` 配置重置、`thread_active_writer`、插话 `idleBehavior` 与权限选项（结论记录在 OpenSpec 变更的 design.md）；未在 macOS 上用真实 Codex 验收。
+- 一致性：175 个故事 ID 唯一；未重新核验其余故事能力。

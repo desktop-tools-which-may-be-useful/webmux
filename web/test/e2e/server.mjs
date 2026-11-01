@@ -42,8 +42,9 @@ async function stopChild(child) {
 
 // Every Playwright worker owns a real server and a fresh HOME, config and cwd.
 // Port zero asks the OS to allocate ports; no local developer server is reused.
-// The fake agents (global-setup) come first on PATH as omp and opencode, with
-// a session store private to this server that survives its restarts.
+// The fake agents (global-setup) come first on PATH as omp, opencode, codex
+// and codex-acp, with a session store private to this server that survives
+// its restarts.
 /** @param {{noGit?: boolean, token?: string, tunnel?: {cloudflared: string, enabled?: boolean}}} options @returns {Promise<E2EServer>} */
 export async function startE2EServer({
   noGit = false,

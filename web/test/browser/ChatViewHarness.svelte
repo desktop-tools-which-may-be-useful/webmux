@@ -18,6 +18,7 @@
   const actions = chatActions(session);
   let reviewed = $state("");
   let error = $state("");
+  let terminalRequests = $state(0);
   const uploads = useChatUpload(session, (message) => {
     error = message;
   });
@@ -33,9 +34,10 @@
     {uploads}
     {actions}
     onreview={(path) => (reviewed = path)}
-    onlogin={() => {}}
+    onterminal={() => (terminalRequests += 1)}
   />
 </div>
 <output aria-label="Reviewed path">{reviewed}</output>
 <output aria-label="Draft">{draft.text}</output>
 <output aria-label="Upload error">{error}</output>
+<output aria-label="Terminal requests">{terminalRequests}</output>

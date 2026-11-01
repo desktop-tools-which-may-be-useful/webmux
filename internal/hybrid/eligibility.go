@@ -3,7 +3,6 @@ package hybrid
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"slices"
 	"time"
@@ -16,11 +15,12 @@ import (
 // Reasons switching to chat is unavailable, in the order the conditions
 // are checked (agent-session-identity).
 const (
-	ReasonUnknownAgent = "unknown_agent"
-	ReasonNotRoot      = "not_root"
-	ReasonNoSessionID  = "no_session_id"
-	ReasonNotListed    = "not_listed"
-	ReasonOccupied     = "occupied"
+	ReasonUnknownAgent     = "unknown_agent"
+	ReasonConnectorMissing = "connector_missing"
+	ReasonNotRoot          = "not_root"
+	ReasonNoSessionID      = "no_session_id"
+	ReasonNotListed        = "not_listed"
+	ReasonOccupied         = "occupied"
 	// ReasonChecking: the session/list probe has not answered yet.
 	ReasonChecking = "checking"
 )
@@ -32,6 +32,9 @@ const (
 	probeTimeout = 15 * time.Second
 	// probePages bounds the session/list pages one probe reads.
 	probePages = 20
+	// lockReadEvery bounds how often a terminal's open files are read for
+	// its writer locks.
+	lockReadEvery = 2 * time.Second
 )
 
 // IneligibleError refuses a switch to chat: Reason is an eligibility code.
@@ -50,6 +53,8 @@ func reasonText(reason string) string {
 	switch reason {
 	case ReasonUnknownAgent:
 		return "未识别到支持的 Agent"
+	case ReasonConnectorMissing:
+		return "未安装 ACP 连接器"
 	case ReasonNotRoot:
 		return "Agent 不是由本会话直接启动的"
 	case ReasonNoSessionID:
@@ -65,7 +70,9 @@ func reasonText(reason string) string {
 }
 
 // target is the agent session the terminal has open, and the resolved cwd
-// its agent lists it under.
+// its agent lists it under. An empty sid stands for the sessions updated
+// since the terminal run started, when a profile's locks cannot tell
+// which one the terminal has open.
 type target struct {
 	sid, cwd string
 }
@@ -79,7 +86,15 @@ const (
 	probeNotListed
 )
 
-// probeState is condition 4 for the terminal's current target: checked
+// probeAnswer is a finished probe: whether the target is listed, and for
+// an empty sid the candidate sessions.
+type probeAnswer struct {
+	listed     bool
+	candidates []Candidate
+	err        error
+}
+
+// probeState is condition 5 for the terminal's current target: checked
 // after the target changes (debounced), again once the terminal is idle
 // after output since the last check while it was not listed yet (an agent
 // saves a new session with its first message), and right before a switch.
@@ -93,6 +108,95 @@ type probeState struct {
 	checked time.Time
 	// rawCwd and cwd cache the symlink resolution of the identity's cwd.
 	rawCwd, cwd string
+}
+
+// lockTracker follows the writer locks a terminal run holds open, for a
+// profile that names its sessions by them. Codex keeps the lock of a
+// session it left (/new) and, resuming, also holds a blank session's, so
+// the current session is the one whose lock appeared last.
+type lockTracker struct {
+	pid     int
+	seen    map[string]bool
+	current string
+	// unknown: the open files could not be read, or the locks do not tell
+	// which session is current; the recently updated sessions decide.
+	unknown bool
+	read    time.Time
+}
+
+// track updates the current session from the locks held now. While the
+// run is starting, or nothing is known, the run's resumed session wins,
+// else a single lock; afterwards a single new lock is a new session.
+func (lt *lockTracker) track(held []string, unreadable bool, resumed string, starting bool) {
+	if unreadable {
+		lt.current, lt.unknown = "", true
+		return
+	}
+	var fresh []string
+	for _, id := range held {
+		if !lt.seen[id] {
+			lt.seen[id] = true
+			fresh = append(fresh, id)
+		}
+	}
+	lt.unknown = false
+	switch {
+	case len(held) == 0:
+		lt.current = ""
+	case starting || lt.current == "":
+		switch {
+		case resumed != "" && slices.Contains(held, resumed):
+			lt.current = resumed
+		case len(held) == 1:
+			lt.current = held[0]
+		default:
+			lt.current, lt.unknown = "", true
+		}
+	case len(fresh) == 1:
+		lt.current = fresh[0]
+	case len(fresh) > 1:
+		lt.current, lt.unknown = "", true
+	case !slices.Contains(held, lt.current):
+		if len(held) == 1 {
+			lt.current = held[0]
+		} else {
+			lt.current, lt.unknown = "", true
+		}
+	}
+}
+
+// lockedSession is the agent session a lock-tracking profile's terminal
+// has open, read at most every lockReadEvery.
+func (a *actor) lockedSession(id session.Identity) string {
+	lt := &a.locks
+	if id.PID == 0 {
+		*lt = lockTracker{}
+		return ""
+	}
+	if lt.pid != id.PID {
+		*lt = lockTracker{pid: id.PID, seen: map[string]bool{}}
+	}
+	if !lt.read.IsZero() && time.Since(lt.read) < lockReadEvery {
+		return lt.current
+	}
+	lt.read = time.Now()
+	files := a.shell.RunOpenFiles()
+	held := a.cmd.Profile.LockedSessions(files, a.shell.Getenv, a.svc.userHome)
+	lt.track(held, len(files) == 0, a.resumedSID, time.Since(a.runStart) < a.cmd.Profile.StartupQuiet)
+	return lt.current
+}
+
+// agentIsRoot is condition 3: the agent is the PTY's root process, or the
+// profile's launcher is and its direct child is the agent.
+func (a *actor) agentIsRoot(id session.Identity, agent string) bool {
+	if id.PID == 0 {
+		return false
+	}
+	if id.Executable == agent {
+		return true
+	}
+	launcher := a.cmd.Profile.Launcher
+	return launcher != "" && id.Executable == launcher && slices.Contains(a.shell.RunChildren(), agent)
 }
 
 func signals(id session.Identity) agentprofile.Signals {
@@ -123,8 +227,7 @@ func (a *actor) observe() {
 	if a.side != SideTUI || a.state != StateActive || a.closing || a.starting || a.switching != nil {
 		return
 	}
-	id := a.shell.Identity()
-	ident, known := agentprofile.Identify(signals(id))
+	id, ident, known := a.identify()
 	if known && ident.Agent == a.cmd.Profile.Name && ident.AgentSessionID != "" && ident.AgentSessionID != a.agentSessionID {
 		a.agentSessionChanged(ident.AgentSessionID)
 	}
@@ -147,6 +250,17 @@ func (a *actor) observe() {
 	a.setEligibility(reason)
 }
 
+// identify reads the terminal's identity and the profile's view of it; a
+// lock-tracking profile's session ID comes from its writer locks.
+func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
+	id := a.shell.Identity()
+	ident, known := agentprofile.Identify(signals(id))
+	if known && ident.Agent == a.cmd.Profile.Name && a.cmd.Profile.TracksLocks() {
+		ident.AgentSessionID = a.lockedSession(id)
+	}
+	return id, ident, known
+}
+
 // agentSessionChanged follows the terminal to another agent session
 // (/new, /resume, /fork): the record keeps the previous ID and every
 // device is told. The first ID a terminal reports is no change.
@@ -161,21 +275,28 @@ func (a *actor) agentSessionChanged(sid string) {
 	a.dirty = true
 }
 
-// assess checks conditions 1 to 3: a known agent of this session's
-// profile, running as the PTY's root process, with a session ID: the one
-// the terminal reports, or else the one its run was started to resume. It
-// returns the target or the first failed condition's reason.
+// assess checks conditions 1 to 4: a known agent of this session's
+// profile, its connector installed, running as the PTY's root process (or
+// under its launcher), with a session ID: the one the terminal reports, or
+// else the one its run was started to resume. A lock-tracking profile
+// whose locks do not tell gets the recently updated sessions as target
+// (empty sid). It returns the target or the first failed condition's
+// reason.
 func (a *actor) assess(id session.Identity, ident agentprofile.Identity, known bool) (target, string) {
 	sid := ident.AgentSessionID
 	if sid == "" {
 		sid = a.resumedSID
 	}
-	switch {
-	case !known || ident.Agent != a.cmd.Profile.Name:
+	if !known || ident.Agent != a.cmd.Profile.Name {
 		return target{}, ReasonUnknownAgent
-	case id.PID == 0 || id.Executable != ident.Agent:
+	}
+	if reason := a.connectorReason(); reason != "" {
+		return target{}, reason
+	}
+	switch {
+	case !a.agentIsRoot(id, ident.Agent):
 		return target{}, ReasonNotRoot
-	case sid == "":
+	case sid == "" && (!a.cmd.Profile.TracksLocks() || !a.locks.unknown):
 		return target{}, ReasonNoSessionID
 	}
 	raw := ident.Cwd
@@ -192,14 +313,18 @@ func (a *actor) assess(id session.Identity, ident agentprofile.Identity, known b
 	return target{sid: sid, cwd: a.probe.cwd}, ""
 }
 
-// listedReason is conditions 4 and 5 for the current target.
+// listedReason is conditions 5 and 6 for the current target. A session a
+// lock-tracking profile holds but has not saved yet is waiting for its
+// first message.
 func (a *actor) listedReason(t target) string {
 	switch {
 	case a.probe.key != t || a.probe.result == probePending:
 		return ReasonChecking
+	case a.probe.result == probeNotListed && (t.sid == "" || a.cmd.Profile.TracksLocks()):
+		return ReasonNoSessionID
 	case a.probe.result == probeNotListed:
 		return ReasonNotListed
-	case a.svc.occupied(a.id, t.sid):
+	case t.sid != "" && a.svc.occupied(a.id, t.sid):
 		return ReasonOccupied
 	}
 	return ""
@@ -207,6 +332,9 @@ func (a *actor) listedReason(t target) string {
 
 func (a *actor) setEligibility(reason string) {
 	e := Eligibility{Available: reason == "", Reason: reason}
+	if reason == ReasonConnectorMissing {
+		e.Connector = a.cmd.Profile.Connector
+	}
 	if a.chat.Eligibility != e {
 		a.chat.Eligibility = e
 		a.dirty = true
@@ -235,15 +363,21 @@ func (a *actor) probeDue(key target) {
 		return
 	}
 	a.probe.running = true
-	a.runProbe(key, func(listed bool, err error) { a.probed(key, listed, err) })
+	a.runProbe(key, func(ans probeAnswer) { a.probed(key, ans) })
 }
 
-// probed records a background probe's answer.
-func (a *actor) probed(key target, listed bool, err error) {
+// probed records a background probe's answer. A missing connector sends
+// the check back to condition 2 and the target is probed again once the
+// connector is found.
+func (a *actor) probed(key target, ans probeAnswer) {
 	a.probe.running = false
-	if key == a.probe.key && !errors.Is(err, context.Canceled) {
+	switch {
+	case errors.Is(ans.err, ErrConnectorMissing):
+		a.setConnector(ans.err)
+		a.probe.key = target{}
+	case key == a.probe.key && !errors.Is(ans.err, context.Canceled):
 		a.probe.result = probeNotListed
-		if listed {
+		if ans.listed {
 			a.probe.result = probeListed
 		}
 	}
@@ -255,29 +389,41 @@ func (a *actor) probed(key target, listed bool, err error) {
 }
 
 // runProbe checks t in a subtask and posts done with the answer.
-func (a *actor) runProbe(t target, done func(listed bool, err error)) {
+func (a *actor) runProbe(t target, done func(probeAnswer)) {
 	a.probes.Add(1)
+	since := a.runStart
 	go func() {
 		defer a.probes.Done()
-		listed, err := a.listed(a.probeCtx, t)
-		a.post(func() { done(listed, err) })
+		ans := a.listed(a.probeCtx, t, since)
+		a.post(func() { done(ans) })
 	}()
 }
 
 // listed reports whether t.sid is among the sessions its agent lists in
-// t.cwd.
-func (a *actor) listed(ctx context.Context, t target) (bool, error) {
+// t.cwd; for an empty sid, the sessions there updated after since are the
+// candidates, listed when there is one at least.
+func (a *actor) listed(ctx context.Context, t target, since time.Time) probeAnswer {
 	sessions, err := a.sessions(ctx, t.cwd, t.sid)
 	if err != nil {
-		return false, err
+		return probeAnswer{err: err}
 	}
-	return slices.ContainsFunc(sessions, func(s acp.SessionInfo) bool { return s.SessionID == t.sid }), nil
+	if t.sid != "" {
+		return probeAnswer{listed: slices.ContainsFunc(sessions, func(s acp.SessionInfo) bool { return s.SessionID == t.sid })}
+	}
+	var recent []Candidate
+	for _, c := range candidates(sessions) {
+		if c.UpdatedAt.After(since) {
+			recent = append(recent, c)
+		}
+	}
+	return probeAnswer{listed: len(recent) > 0, candidates: recent}
 }
 
 // sessions runs a temporary ACP process that only initializes and lists the
 // sessions in cwd, page by page until one is session until or the pages
 // run out (at most probePages). It never loads or resumes a session, so it
-// is never a second writer. At most maxProbes run at once, server-wide.
+// is never a second writer. A profile connector is checked first. At most
+// maxProbes run at once, server-wide.
 func (a *actor) sessions(ctx context.Context, cwd, until string) ([]acp.SessionInfo, error) {
 	select {
 	case a.svc.probes <- struct{}{}:
@@ -287,10 +433,14 @@ func (a *actor) sessions(ctx context.Context, cwd, until string) ([]acp.SessionI
 	defer func() { <-a.svc.probes }()
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	argv, _ := a.cmd.ACPArgv()
-	sidecar, err := a.shell.StartSidecar(argv, a.cmd.ProtocolOnFD3())
+	tools, err := a.prepareACP(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAgent, err)
+		return nil, err
+	}
+	argv, _ := a.cmd.ACPArgv()
+	sidecar, err := a.shell.StartSidecar(argv, a.cmd.ProtocolOnFD3(), tools.env)
+	if err != nil {
+		return nil, a.startFailure(err).err
 	}
 	link := &acpLink{sidecar: sidecar}
 	link.conn = acp.NewConn(sidecar.Stdout(), sidecar.Stdin(), acp.Options{Logger: a.svc.log})
@@ -300,9 +450,12 @@ func (a *actor) sessions(ctx context.Context, cwd, until string) ([]acp.SessionI
 		err = errMissingCapability
 	}
 	if err != nil {
-		f := agentFailure(acp.MethodInitialize, err, sidecar)
 		a.svc.log.Warn("hybrid probe failed", "id", a.id, "method", acp.MethodInitialize, "error", err)
-		return nil, f.err
+		_ = link.stop()
+		if missing := a.exitedNotFound(sidecar); missing != nil {
+			return nil, missing.err
+		}
+		return nil, agentFailure(acp.MethodInitialize, err, sidecar).err
 	}
 	var out []acp.SessionInfo
 	cursor := ""
@@ -313,7 +466,7 @@ func (a *actor) sessions(ctx context.Context, cwd, until string) ([]acp.SessionI
 			return nil, agentFailure(acp.MethodSessionList, err, sidecar).err
 		}
 		out = append(out, resp.Sessions...)
-		if resp.NextCursor == "" || slices.ContainsFunc(resp.Sessions, func(s acp.SessionInfo) bool { return s.SessionID == until }) {
+		if resp.NextCursor == "" || (until != "" && slices.ContainsFunc(resp.Sessions, func(s acp.SessionInfo) bool { return s.SessionID == until })) {
 			break
 		}
 		cursor = resp.NextCursor

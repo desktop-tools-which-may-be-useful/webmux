@@ -21,11 +21,13 @@ const groups: Array<[z.ZodType, string[]]> = [
     [
       "chat-conflict-answered",
       "chat-conflict-wrong-side",
+      "hybrid-conflict-connector-missing",
       "hybrid-conflict-not-eligible",
       "hybrid-resume-config-missing",
       "hybrid-resume-session-missing",
     ],
   ],
+  [S.HybridSupportSchema, ["launch-hybrid-support"]],
   [S.HybridRecordsSchema, ["hybrid-records"]],
   [S.HybridSwitchResultSchema, ["hybrid-switch"]],
   [

@@ -1,6 +1,7 @@
 package agentprofile
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -48,6 +49,9 @@ func Identify(s Signals) (Identity, bool) {
 			id = s.ProgramChildID
 		}
 		return Identity{Agent: OpenCode, AgentSessionID: id, Cwd: s.RootCwd}, true
+	case s.ProgramApp == Codex:
+		// Codex names its session in no signal: see LockedSessions.
+		return Identity{Agent: Codex, Cwd: s.RootCwd}, true
 	}
 	return Identity{}, false
 }
@@ -103,4 +107,59 @@ func parseVersion(v string) ([]int, bool) {
 		parts[i] = n
 	}
 	return parts, true
+}
+
+// TracksLocks reports that the agent's session IDs come from the writer
+// locks its processes hold open (LockedSessions) rather than its signals.
+func (p *Profile) TracksLocks() bool { return p.locks != nil }
+
+// LockedSessions returns the agent session IDs whose writer locks are among
+// paths, the open files of the terminal UI's processes, in paths order.
+// getenv reads the session's environment; userHome is the service user's
+// home directory. The lock directory is compared with symbolic links
+// resolved, as the process table reports open files.
+func (p *Profile) LockedSessions(paths []string, getenv func(string) string, userHome string) []string {
+	l := p.locks
+	if l == nil {
+		return nil
+	}
+	home := getenv(l.homeEnv)
+	if home == "" {
+		if userHome == "" {
+			return nil
+		}
+		home = filepath.Join(userHome, l.homeDefault)
+	}
+	dir := filepath.Join(home, l.dir)
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	var ids []string
+	for _, path := range paths {
+		if filepath.Dir(path) != dir {
+			continue
+		}
+		id, ok := strings.CutSuffix(filepath.Base(path), l.suffix)
+		if ok && sessionLockID(id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// sessionLockID accepts UUID-shaped names: hex digits and dashes, 36 bytes.
+// The lock directory also holds other locks (.coordination.lock).
+func sessionLockID(id string) bool {
+	if len(id) != 36 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch {
+		case c == '-', c >= '0' && c <= '9', c >= 'a' && c <= 'f', c >= 'A' && c <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
 }

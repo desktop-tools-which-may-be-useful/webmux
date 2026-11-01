@@ -3,6 +3,7 @@ import { newRequestId } from "./ids";
 import {
   ChatPermissionModeRequestSchema,
   ChatPromptResultSchema,
+  HybridSwitchRequestSchema,
   HybridSwitchResultSchema,
   NoContentSchema,
   type ChatAttachment,
@@ -86,18 +87,31 @@ export function chatActions(id: string): ChatActions {
 /**
  * Moves session `id` to side `to`. Resolves once the switch finished; while
  * it waits for the user's choice (D21) another request answers it.
+ * `agentSessionId` picks one of a session_ambiguous conflict's candidates.
  */
-export function switchSide(id: string, to: "acp" | "tui") {
-  return api(`/sessions/${id}/switch`, HybridSwitchResultSchema, "POST", {
-    clientRequestId: newRequestId(),
-    to,
-  });
+export function switchSide(
+  id: string,
+  to: "acp" | "tui",
+  agentSessionId?: string,
+) {
+  return api(
+    `/sessions/${id}/switch`,
+    HybridSwitchResultSchema,
+    "POST",
+    { clientRequestId: newRequestId(), to, agentSessionId },
+    undefined,
+    HybridSwitchRequestSchema,
+  );
 }
 
 /** Answers a switch waiting for the user after the interrupt timed out. */
 export function answerSwitch(id: string, choice: "wait" | "force" | "cancel") {
-  return api(`/sessions/${id}/switch`, HybridSwitchResultSchema, "POST", {
-    clientRequestId: newRequestId(),
-    choice,
-  });
+  return api(
+    `/sessions/${id}/switch`,
+    HybridSwitchResultSchema,
+    "POST",
+    { clientRequestId: newRequestId(), choice },
+    undefined,
+    HybridSwitchRequestSchema,
+  );
 }

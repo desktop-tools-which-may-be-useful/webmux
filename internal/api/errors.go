@@ -197,7 +197,9 @@ func hybridStatus(err error) (status int, ok bool) {
 		errors.Is(err, hybrid.ErrWrongSide), errors.Is(err, hybrid.ErrAnswered),
 		errors.Is(err, hybrid.ErrSwitching), errors.Is(err, hybrid.ErrSent),
 		errors.Is(err, hybrid.ErrSteeringUnavailable), errors.Is(err, hybrid.ErrNotEligible),
-		errors.Is(err, hybrid.ErrSessionMissing), errors.Is(err, hybrid.ErrConfigMissing):
+		errors.Is(err, hybrid.ErrSessionMissing), errors.Is(err, hybrid.ErrConfigMissing),
+		errors.Is(err, hybrid.ErrConnectorMissing), errors.Is(err, hybrid.ErrSessionAmbiguous),
+		errors.Is(err, hybrid.ErrExternalWriter):
 		return http.StatusConflict, true
 	case errors.Is(err, hybrid.ErrAgent), errors.Is(err, hybrid.ErrAgentCall):
 		return http.StatusBadGateway, true
@@ -229,13 +231,20 @@ func hybridReason(err error) string {
 		return "session_missing"
 	case errors.Is(err, hybrid.ErrConfigMissing):
 		return "config_missing"
+	case errors.Is(err, hybrid.ErrConnectorMissing):
+		return "connector_missing"
+	case errors.Is(err, hybrid.ErrSessionAmbiguous):
+		return "session_ambiguous"
+	case errors.Is(err, hybrid.ErrExternalWriter):
+		return "occupied_external"
 	}
 	return ""
 }
 
 // hybridFailure answers a hybrid error kind, with a HybridConflict body
 // for 409s that have a reason (not_eligible with its eligibility reason,
-// session_missing with its candidates); false for other errors.
+// session_missing and session_ambiguous with their candidates,
+// connector_missing with its connector); false for other errors.
 func hybridFailure(w http.ResponseWriter, err error) bool {
 	status, ok := hybridStatus(err)
 	if !ok {
@@ -250,6 +259,14 @@ func hybridFailure(w http.ResponseWriter, err error) bool {
 		var missing *hybrid.SessionMissingError
 		if errors.As(err, &missing) {
 			conflict.Candidates = wire.HybridCandidates(missing.Candidates)
+		}
+		var ambiguous *hybrid.SessionAmbiguousError
+		if errors.As(err, &ambiguous) {
+			conflict.Candidates = wire.HybridCandidates(ambiguous.Candidates)
+		}
+		var connector *hybrid.ConnectorMissingError
+		if errors.As(err, &connector) {
+			conflict.Connector = wire.AgentConnector(connector.Connector)
 		}
 		reply(w, status, conflict)
 		return true

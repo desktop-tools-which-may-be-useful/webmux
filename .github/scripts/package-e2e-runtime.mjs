@@ -48,5 +48,6 @@ for (const [platform, arch] of [
     join(agents, "omp"),
     "./internal/acp/testdata/fakeagent",
   );
-  await copyFile(join(agents, "omp"), join(agents, "opencode"));
+  for (const name of ["opencode", "codex", "codex-acp"])
+    await copyFile(join(agents, "omp"), join(agents, name));
 }

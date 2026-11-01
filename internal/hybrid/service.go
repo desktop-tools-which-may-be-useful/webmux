@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -69,9 +70,15 @@ type timing struct {
 	observe time.Duration
 	// minute is the unit of chatIdleSleepMinutes.
 	minute time.Duration
+	// connectorRecheck is how often a missing connector is looked for
+	// again while the terminal side runs.
+	connectorRecheck time.Duration
 }
 
-var defaultTiming = timing{interrupt: 10 * time.Second, probeDelay: time.Second, observe: 500 * time.Millisecond, minute: time.Minute}
+var defaultTiming = timing{
+	interrupt: 10 * time.Second, probeDelay: time.Second, observe: 500 * time.Millisecond, minute: time.Minute,
+	connectorRecheck: connectorRecheck,
+}
 
 // Service owns the hybrid sessions of one server.
 type Service struct {
@@ -82,6 +89,9 @@ type Service struct {
 	log      *slog.Logger
 	timing   timing
 	uploads  func(id, path string) (string, error)
+	// userHome is the service user's home directory, where agents keep
+	// their state unless the session environment says otherwise.
+	userHome string
 	// probes holds a token per running eligibility probe (maxProbes).
 	probes chan struct{}
 	// settingsDone closes when the settings watcher ends (nil without one).
@@ -114,10 +124,11 @@ func New(o Options) *Service {
 	if o.Version == "" {
 		o.Version = "dev"
 	}
+	userHome, _ := os.UserHomeDir()
 	s := &Service{
 		manager: o.Manager, records: openRecords(o.StateDir), capacity: capacity, version: o.Version, log: log,
-		uploads: o.Uploads,
-		timing:  defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
+		uploads: o.Uploads, userHome: userHome,
+		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
 		recovering:  make(map[string]bool),
 		idleMinutes: settings.DefaultChatIdleSleepMinutes,
 	}
@@ -248,6 +259,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	}
 	info := shell.Info()
 	a.id, a.shell = info.ID, shell
+	if side == SideACP {
+		// A missing connector refuses the session before it is recorded.
+		if _, err := a.prepareACP(ctx); err != nil {
+			_ = s.manager.Remove(info.ID)
+			return nil, err
+		}
+	}
 	now := time.Now().UTC()
 	rec := Record{
 		ID: info.ID, Name: in.Name, ConfigID: in.ConfigID, Agent: cmd.Profile.Name, Cwd: cwd,

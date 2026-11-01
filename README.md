@@ -56,13 +56,13 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 
 ### 混合会话（ACP 聊天 ↔ 终端）
 
-OpenCode 与 omp 的同一段对话可以在原生 TUI 与基于 [ACP（Agent Client Protocol）](https://agentclientprotocol.com) 的聊天视图之间随时切换：电脑上用 TUI 精细操作，手机上切到聊天视图阅读和回复。切换前后是同一个 WebMux 会话、同一个 agent 会话，历史由 agent 自己保存；正在执行的回合会先中断，失败自动回到原来的一端。
+OpenCode、omp 与 Codex CLI 的同一段对话可以在原生 TUI 与基于 [ACP（Agent Client Protocol）](https://agentclientprotocol.com) 的聊天视图之间随时切换：电脑上用 TUI 精细操作，手机上切到聊天视图阅读和回复。切换前后是同一个 WebMux 会话、同一个 agent 会话，历史由 agent 自己保存；正在执行的回合会先中断，失败自动回到原来的一端。Codex 的聊天端需要另外安装 [codex-acp](https://github.com/agentclientprotocol/codex-acp)，未安装时页面给出安装命令。
 
 - **聊天视图**：消息、思考（默认折叠）与工具调用（可展开，diff 可在代码面板查看）按时间线展示；输入框下方选择模型、模式与权限（“自动批准”或“每次询问”），圆环显示上下文用量，点击查看 Token 详情。
-- **多设备协作**：回合进行中的消息进入所有设备共享的队列，omp 还支持插话；权限请求与表单在所有设备同步。上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
+- **多设备协作**：回合进行中的消息进入所有设备共享的队列，omp 与 Codex 还支持插话；权限请求与表单在所有设备同步。上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
 - **省资源、可恢复**：聊天端空闲后结束 agent 进程（默认 30 分钟），打开会话或发送消息时自动唤醒；服务重启后从首页“可恢复”分组恢复到聊天或终端。
 
-新安装预置的 Open Code 与 omp 启动配置已开启混合模式，新建会话时选择“从终端开始”或“从聊天开始”即可。详见 [混合会话](docs/hybrid-sessions.md)。
+新安装预置的 Open Code、omp 与 Codex CLI 启动配置已开启混合模式，新建会话时选择“从终端开始”或“从聊天开始”即可。详见 [混合会话](docs/hybrid-sessions.md)。
 
 <table>
   <tr>
@@ -91,9 +91,9 @@ OpenCode 与 omp 的同一段对话可以在原生 TUI 与基于 [ACP（Agent Cl
 
 - **持久会话**：浏览器断开后会话继续运行；短暂断线或回到前台时只续接缺失的输出，否则清屏并回放服务端缓冲（默认每会话 2 MiB）。
 - **会话总览**：按仓库 / 工作树分组展示所有会话，实时显示标题、状态（运行中 / 可能在等你 / 空闲 / 已退出）和终端屏幕预览。
-- **ACP 混合会话**：OpenCode / omp 对话在原生 TUI 与聊天视图之间切换，支持多设备队列、插话、权限请求、附件、空闲休眠与重启恢复，详见 [混合会话](#混合会话acp-聊天--终端)。
+- **ACP 混合会话**：OpenCode / omp / Codex CLI 对话在原生 TUI 与聊天视图之间切换，支持多设备队列、插话、权限请求、附件、空闲休眠与重启恢复，详见 [混合会话](#混合会话acp-聊天--终端)。
 - **终端分屏**：同一页面左右 / 上下嵌套最多 8 个窗格，拖动调整比例，tmux 风格 `Ctrl+B` 前缀切换、放大和关闭窗格；终端菜单可锁定尺寸，避免手机键盘弹出导致 TUI 重绘。
-- **自定义启动配置**：在设置页保存 Shell、Open Code、Claude Code、Codex、omp 等程序的完整命令与环境变量，新建会话时统一选用；新安装首次启动时预置 [九款 CLI agent](docs/cli-agents.md)，以及 Shell 和 omp；每项附带本地品牌图标，均可编辑或删除，Open Code 与 omp 默认开启混合模式；也可填写一次性命令。
+- **自定义启动配置**：在设置页保存 Shell、Open Code、Claude Code、Codex、omp 等程序的完整命令与环境变量，新建会话时统一选用；新安装首次启动时预置 [九款 CLI agent](docs/cli-agents.md)，以及 Shell 和 omp；每项附带本地品牌图标，均可编辑或删除，Codex CLI、Open Code 与 omp 默认开启混合模式；也可填写一次性命令。
 - **Git worktree 管理**：登记已有仓库，创建 / 安全删除 worktree，并在其中直接启动 agent。
 - **代码工作区**：在终端旁只读浏览文件和 Git 修改、查看 Diff，预览 Markdown 与图片，把 `路径:行号` 引用一键插入终端；资源管理器右键即可上传、下载（目录打包 ZIP）、重命名、复制、移动和删除文件。
 - **草稿模式**：先在多行输入框里编写、组合引用和上传路径，再一次性发送给 agent；草稿保存在本机，发送有送达确认。
@@ -221,20 +221,20 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 ## 文档
 
-| 文档                                             | 内容                                                             |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| [User Stories](docs/user-stories.md)             | 各项功能的用户目的、验收要点、分组文档与功能覆盖索引             |
-| [使用指南](docs/usage.md)                        | 会话、终端、草稿模式、代码工作区、worktree、移动端               |
-| [混合会话](docs/hybrid-sessions.md)              | OpenCode / omp 在聊天视图与终端间切换、队列、恢复与注意事项      |
-| [部署指南](docs/deployment.md)                   | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异 |
-| [Cloudflare 公网隧道](docs/cloudflare-tunnel.md) | Named Tunnel 的创建、token、公共主机名、验证与排错               |
-| [Tailscale Serve / Funnel](docs/tailscale.md)    | 自动 HTTPS 入口、端口、证书、WSL Windows provider 与精确移除     |
-| [架构设计](docs/architecture.md)                 | 会话模型、缓冲与回放、状态探测、并发与资源                       |
-| [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码（按主题分页）                 |
-| [文档治理](docs/doc-governance.md)               | 文档与 spec 的行数、单行长度、体积、目录扇出与树状组织规则       |
-| [参与贡献](CONTRIBUTING.md)                      | 开发环境、测试、代码规范、OpenSpec 工作流                        |
-| [安全策略](SECURITY.md)                          | 安全模型与漏洞报告                                               |
-| [产品能力 baseline](baseline/README.md)          | 可复现评测、统计口径与首次量化结果                               |
+| 文档                                             | 内容                                                                    |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| [User Stories](docs/user-stories.md)             | 各项功能的用户目的、验收要点、分组文档与功能覆盖索引                    |
+| [使用指南](docs/usage.md)                        | 会话、终端、草稿模式、代码工作区、worktree、移动端                      |
+| [混合会话](docs/hybrid-sessions.md)              | OpenCode / omp / Codex CLI 在聊天视图与终端间切换、队列、恢复与注意事项 |
+| [部署指南](docs/deployment.md)                   | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异        |
+| [Cloudflare 公网隧道](docs/cloudflare-tunnel.md) | Named Tunnel 的创建、token、公共主机名、验证与排错                      |
+| [Tailscale Serve / Funnel](docs/tailscale.md)    | 自动 HTTPS 入口、端口、证书、WSL Windows provider 与精确移除            |
+| [架构设计](docs/architecture.md)                 | 会话模型、缓冲与回放、状态探测、并发与资源                              |
+| [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码（按主题分页）                        |
+| [文档治理](docs/doc-governance.md)               | 文档与 spec 的行数、单行长度、体积、目录扇出与树状组织规则              |
+| [参与贡献](CONTRIBUTING.md)                      | 开发环境、测试、代码规范、OpenSpec 工作流                               |
+| [安全策略](SECURITY.md)                          | 安全模型与漏洞报告                                                      |
+| [产品能力 baseline](baseline/README.md)          | 可复现评测、统计口径与首次量化结果                                      |
 
 ## 常见问题
 

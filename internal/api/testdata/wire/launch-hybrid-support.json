@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "agent": "codex",
+    "connector": {
+      "docsUrl": "https://github.com/agentclientprotocol/codex-acp",
+      "executable": "codex-acp",
+      "installCommand": "npm install -g @agentclientprotocol/codex-acp",
+      "title": "Codex ACP 适配器"
+    },
+    "supported": true
+  }
+}

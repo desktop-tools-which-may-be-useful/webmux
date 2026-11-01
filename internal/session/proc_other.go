@@ -19,3 +19,6 @@ func (s *Session) resizePTYLocked(cols, rows uint16) error {
 	}
 	return pty.Setsize(s.run.terminal, &pty.Winsize{Cols: cols, Rows: rows})
 }
+
+func runChildren(int) []string  { return nil }
+func runOpenFiles(int) []string { return nil }

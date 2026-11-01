@@ -26,6 +26,8 @@
   import { browserDraftStorage } from "../draftStorage";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
+  import ConnectorInstallHint from "../components/ConnectorInstallHint.svelte";
+  import HybridCandidatePicker from "../components/HybridCandidatePicker.svelte";
   import HybridRecovery from "../components/HybridRecovery.svelte";
   import ChatView from "../components/chat/ChatView.svelte";
   import SwitchChoiceDialog from "../components/chat/SwitchChoiceDialog.svelte";
@@ -385,6 +387,10 @@
   $effect(() => {
     if (!hybrid.awaitingChoice) choiceClosed = false;
   });
+  // The agent session picked when a switch to chat found several.
+  let ambiguousPick = $derived(
+    hybrid.ambiguous?.candidates[0]?.agentSessionId ?? "",
+  );
   // The header reads the chat channel while the terminal is not shown.
   const headerTerminal = {
     get info() {
@@ -642,6 +648,15 @@
     dismiss={(key) => hybrid.dismiss(key)}
     recovery={hybrid.recoverable ? recovery : undefined}
   />
+  {#if hybrid.connector && hybrid.view === "terminal"}<div
+      class="shrink-0 border-b px-4 py-2"
+    >
+      <ConnectorInstallHint
+        connector={hybrid.connector}
+        detail="安装后会自动重新检测"
+        ondismiss={() => hybrid.dismissConnector()}
+      />
+    </div>{/if}
   <TerminalWorkspace
     {codeShown}
     {desktop}
@@ -700,7 +715,7 @@
             uploadUnavailable={chatUploadUnavailable}
             actions={hybrid.actions}
             onreview={review}
-            onlogin={() => hybrid.request("tui")}
+            onterminal={() => hybrid.request("tui")}
           />
         </div>
       {:else if hybrid.view === "switching"}
@@ -785,6 +800,21 @@
     }
     title={hybrid.confirming?.title ?? ""}
     onconfirm={() => hybrid.confirm()}>{hybrid.confirming?.body}</ConfirmDialog
+  >
+  <ConfirmDialog
+    bind:open={
+      () => !!hybrid.ambiguous,
+      (open) => {
+        if (!open) hybrid.cancelPick();
+      }
+    }
+    title="选择要切到聊天的会话"
+    onconfirm={() => hybrid.pick(ambiguousPick)}
+    >{hybrid.ambiguous?.message}<HybridCandidatePicker
+      candidates={hybrid.ambiguous?.candidates ?? []}
+      bind:picked={ambiguousPick}
+      label="选择要打开的会话"
+    /></ConfirmDialog
   >
   <SwitchChoiceDialog
     bind:open={

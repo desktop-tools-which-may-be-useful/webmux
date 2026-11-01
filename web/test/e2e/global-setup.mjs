@@ -19,8 +19,9 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repoRoot = resolve(webRoot, "..");
 
 // Hybrid sessions recognise agents by executable name, so the fake agent
-// stands in for both under their names.
-const agentNames = ["omp", "opencode"];
+// stands in for all of them (and for the codex-acp connector) under their
+// names.
+const agentNames = ["omp", "opencode", "codex", "codex-acp"];
 
 async function executable(path) {
   const resolved = await realpath(path);
@@ -148,7 +149,8 @@ export default async function globalSetup() {
       ],
       root,
     );
-    await copyFile(join(agents, "omp"), join(agents, "opencode"));
+    for (const name of agentNames.slice(1))
+      await copyFile(join(agents, "omp"), join(agents, name));
     console.log(
       `E2E build: frontend ${((frontendDone - started) / 1000).toFixed(2)}s; Go ${((performance.now() - frontendDone) / 1000).toFixed(2)}s`,
     );

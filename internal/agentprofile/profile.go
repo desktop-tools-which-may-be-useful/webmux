@@ -2,14 +2,33 @@
 // between a terminal UI and an ACP connection. Profiles are plain data plus
 // pure functions over argv and terminal signals; they start no processes and
 // hold no state. The parameter tables follow the measured baseline in
-// openspec/changes/add-acp-hybrid-sessions/baseline.md.
+// openspec/changes/archive/2026-10-29-add-acp-hybrid-sessions/baseline.md
+// and, for Codex, the measurements recorded in the add-codex-hybrid-profile
+// change.
 package agentprofile
+
+import "time"
 
 // Agent names identify a profile on the wire and in hybrid session records.
 const (
 	OpenCode = "opencode"
 	OMP      = "omp"
+	Codex    = "codex"
 )
+
+// Connector is a separately installed program that provides an agent's ACP
+// side when the agent has no ACP mode of its own. WebMux never installs it;
+// it checks that it can be found before every ACP start.
+type Connector struct {
+	// Executable is looked up through PATH like the agent itself.
+	Executable     string
+	Title          string
+	InstallCommand string
+	DocsURL        string
+	// VerifiedVersion is the newest release measured; the ACP side reports
+	// the connector's version, so an older one only produces a notice.
+	VerifiedVersion string
+}
 
 // argClass says what happens to a recognised option when webmux builds a
 // resume or ACP command from a launch config's argv.
@@ -77,17 +96,51 @@ type Profile struct {
 	// sleep and reconnecting after a crash, when the agent declares it;
 	// otherwise those use session/load.
 	Resume bool
+	// SteeringIdlePrompt asks the steering extension to hand a prompt back
+	// (outcome promptRequired) instead of starting a turn by itself when no
+	// turn runs.
+	SteeringIdlePrompt bool
+	// Connector provides the ACP side; nil when the agent's own executable
+	// has an acp subcommand.
+	Connector *Connector
+	// Launcher is an interpreter that may run as the PTY's root process when
+	// its direct child is the agent's native executable (npm installs).
+	Launcher string
+	// ACPEnv are variables the ACP process gets unless the launch config
+	// sets them.
+	ACPEnv map[string]string
+	// AgentPathEnv names the ACP variable that receives the resolved path of
+	// the terminal UI's executable, so both sides run the same agent; that
+	// executable's --version is the agent version.
+	AgentPathEnv string
+	// HiddenCommands are agent slash commands left out of the chat view's
+	// command menu.
+	HiddenCommands []string
+	// StartupQuiet ignores the terminal UI's busy signal for this long after
+	// it starts: Codex reports working while it loads.
+	StartupQuiet time.Duration
 
 	resumeFlag string
 	tuiInject  []string
 	passToACP  bool
-	// acpNotice lists kept options that change behaviour but have no ACP
-	// equivalent, so the chat view names them. None today: OpenCode's
-	// --auto is covered by the chat view's own permission mode.
-	acpNotice   map[string]bool
+	// chatSide derives chat-side config values from the kept options and
+	// lists the kept options the chat side cannot apply.
+	chatSide    func(kept []keptOption) ([]Seed, []string)
+	locks       *lockLayout
 	options     map[string]option
 	positional  positionalPolicy
 	subcommands map[string]bool
+	// subcommandPrefixes also start no interactive UI (Codex migrate-*).
+	subcommandPrefixes []string
+	// sessionSubcommands open an existing session (Codex resume, fork).
+	sessionSubcommands map[string]bool
+}
+
+// lockLayout is where an agent holds a writer lock for each session it has
+// open: <home>/<dir>/<id><suffix>, home from env variable homeEnv or else
+// homeDefault under the user's home directory.
+type lockLayout struct {
+	homeEnv, homeDefault, dir, suffix string
 }
 
 var opencode = &Profile{
@@ -199,7 +252,7 @@ func setOf(names ...string) map[string]bool {
 	return set
 }
 
-var profiles = []*Profile{opencode, omp}
+var profiles = []*Profile{opencode, omp, codex}
 
 // Lookup returns the built-in profile with the given name.
 func Lookup(name string) (*Profile, bool) {

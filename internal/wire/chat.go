@@ -39,8 +39,11 @@ func ChatFrame(f hybrid.Frame) contract.ChatFrame {
 func ChatState(s hybrid.ChatState) contract.ChatState {
 	out := contract.ChatState{
 		Side: contract.HybridSide(s.Side), Phase: contract.HybridPhase(s.Phase), Dormant: s.Dormant,
-		Agent: s.Agent, AgentVersion: s.AgentVersion, VerifiedBelow: s.VerifiedBelow,
-		Eligibility:        contract.ChatEligibility(s.Eligibility),
+		Agent: s.Agent,
+		Eligibility: contract.ChatEligibility{
+			Available: s.Eligibility.Available, Reason: s.Eligibility.Reason,
+			Connector: AgentConnector(s.Eligibility.Connector),
+		},
 		Turn:               contract.ChatTurn(s.Turn),
 		Requests:           each(s.Requests, chatRequest),
 		Config:             each(s.Config, chatConfig),
@@ -52,6 +55,8 @@ func ChatState(s hybrid.ChatState) contract.ChatState {
 		Steering:           s.Steering, AuthRequired: s.AuthRequired, PermissionMode: contract.ChatPermissionAuto,
 		SwitchError: s.SwitchError,
 		Unsupported: required(s.Unsupported), QueueLost: s.QueueLost,
+		Outdated:         each(s.Outdated, func(o hybrid.Outdated) contract.ChatOutdated { return contract.ChatOutdated(o) }),
+		ConnectorMissing: AgentConnector(s.ConnectorMissing),
 	}
 	// The contract always names a mode; the zero value means auto.
 	if s.PermissionMode == hybrid.PermissionAsk {
@@ -233,7 +238,7 @@ func ChatPermissionModeInput(r contract.ChatPermissionModeRequest) hybrid.Permis
 }
 
 func HybridSwitchInput(r contract.HybridSwitchRequest) hybrid.SwitchInput {
-	return hybrid.SwitchInput{ClientRequestID: r.ClientRequestID, To: hybrid.Side(r.To), Choice: r.Choice}
+	return hybrid.SwitchInput{ClientRequestID: r.ClientRequestID, To: hybrid.Side(r.To), Choice: r.Choice, AgentSessionID: r.AgentSessionID}
 }
 
 func HybridSwitchResult(r hybrid.SwitchResult) contract.HybridSwitchResult {

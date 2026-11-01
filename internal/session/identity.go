@@ -44,16 +44,50 @@ func (i *Identity) mergeSignals(report Identity) {
 func (s *Session) Identity() Identity {
 	s.mu.Lock()
 	identity := s.identity
-	pid := 0
-	if r := s.run; r != nil && !r.ended() {
-		pid = r.cmd.Process.Pid
-	}
+	pid := s.runPIDLocked()
 	s.mu.Unlock()
 	if pid > 0 {
 		identity.PID = pid
 		identity.Executable, identity.Cwd = rootProcess(pid)
 	}
 	return identity
+}
+
+// runPIDLocked is the current run's root process ID, 0 without a live run.
+func (s *Session) runPIDLocked() int {
+	if r := s.run; r != nil && !r.ended() {
+		return r.cmd.Process.Pid
+	}
+	return 0
+}
+
+func (s *Session) runPID() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.runPIDLocked()
+}
+
+// RunChildren returns the executable base names of the current run's root
+// process's direct children, read on demand for profiles that allow a
+// launcher as the root. Empty without a live run or a readable process
+// table.
+func (s *Session) RunChildren() []string {
+	if pid := s.runPID(); pid > 0 {
+		return runChildren(pid)
+	}
+	return nil
+}
+
+// RunOpenFiles returns the absolute paths of the regular files the current
+// run's root process and its descendants hold open (at most 4096), read on
+// demand for profiles that name sessions by the files their agent keeps
+// open. Empty without a live run or when descriptors cannot be read. The
+// paths are never logged or published.
+func (s *Session) RunOpenFiles() []string {
+	if pid := s.runPID(); pid > 0 {
+		return runOpenFiles(pid)
+	}
+	return nil
 }
 
 // Identity returns the identity of session id's current run.

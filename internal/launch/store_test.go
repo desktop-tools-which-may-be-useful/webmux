@@ -92,7 +92,7 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 		}
 		// Only the agents with a hybrid profile start as hybrid sessions,
 		// and their seeded commands, auto-approve flag included, qualify.
-		hybrid := c.Name == "Open Code" || c.Name == "omp"
+		hybrid := c.Name == "Codex CLI" || c.Name == "Open Code" || c.Name == "omp"
 		if c.Hybrid != hybrid || (hybrid && !c.HybridSupport.Supported) {
 			t.Fatalf("preset %s hybrid %v support %+v", c.Name, c.Hybrid, c.HybridSupport)
 		}

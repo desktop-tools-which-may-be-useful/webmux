@@ -49,4 +49,15 @@ var (
 	// again with confirmation runs without its environment (409
 	// config_missing).
 	ErrConfigMissing = errors.New("启动配置已删除，确认后将不带配置中的环境变量恢复")
+	// ErrConnectorMissing: the profile's ACP connector is not installed, so
+	// no ACP process was started; the error is a *ConnectorMissingError
+	// naming it (409 connector_missing).
+	ErrConnectorMissing = errors.New("未安装 ACP 连接器")
+	// ErrSessionAmbiguous: the terminal's agent session could not be told
+	// apart from other recently updated ones; the error is a
+	// *SessionAmbiguousError offering them (409 session_ambiguous).
+	ErrSessionAmbiguous = errors.New("无法确定终端正在使用的会话，请选择要切换的会话")
+	// ErrExternalWriter: a client outside WebMux holds the agent session
+	// (Codex's thread_active_writer) (409 occupied_external).
+	ErrExternalWriter = errors.New("该会话正被另一个 Codex 客户端使用")
 )

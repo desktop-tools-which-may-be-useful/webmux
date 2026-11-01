@@ -71,17 +71,23 @@ const session: SessionInfo = {
 };
 
 let created: unknown[] = [];
+// The 409 body a create starting on the chat side answers, when set.
+let acpConflict: unknown = null;
 const origin = location.pathname + location.search;
 
 beforeEach(() => {
   localStorage.clear();
   created = [];
+  acpConflict = null;
   vi.stubGlobal(
     "fetch",
     vi.fn<typeof fetch>(async (input, init) => {
       const path = new URL(String(input), location.href).pathname;
       if (path === "/api/sessions" && init?.method === "POST") {
-        created.push(JSON.parse(String(init.body)));
+        const body = JSON.parse(String(init.body)) as { startSide?: string };
+        created.push(body);
+        if (acpConflict && body.startSide === "acp")
+          return Response.json(acpConflict, { status: 409 });
         return Response.json(session, { status: 201 });
       }
       if (path === "/api/repositories/repo-1/branches") {
@@ -225,6 +231,56 @@ test("a hybrid config offers and remembers where the session starts", async () =
   await vi.waitFor(() =>
     expect(localStorage.getItem("webmux.hybridStartSide")).toBe("acp"),
   );
+});
+
+test("a missing chat connector keeps the sheet and can start on the terminal", async () => {
+  const connector = {
+    executable: "codex-acp",
+    title: "Codex ACP 适配器",
+    installCommand: "npm install -g @agentclientprotocol/codex-acp",
+    docsUrl: "https://github.com/agentclientprotocol/codex-acp",
+  };
+  const codexConfig = {
+    ...otherConfig,
+    id: "codex222",
+    name: "Codex 混合",
+    cmd: ["codex"],
+    hybrid: true,
+    hybridSupport: { supported: true, agent: "codex", connector },
+  };
+  acpConflict = {
+    error: "未安装 Codex ACP 适配器（codex-acp）",
+    reason: "connector_missing",
+    connector,
+  };
+  open({ status: "ready", configs: [codexConfig] });
+  await chooseConfig(codexConfig.name);
+  await expect
+    .element(page.getByText("聊天端需要另外安装 codex-acp", { exact: false }))
+    .toBeVisible();
+  const sides = page.getByRole("tablist", { name: "起始端", exact: true });
+  await sides.getByRole("tab", { name: "从聊天开始", exact: true }).click();
+  const nameInput = page.getByPlaceholder("留空则跟随终端标题");
+  await nameInput.fill("修复排序");
+  await submit().click();
+  await expect
+    .element(page.getByText("未安装 Codex ACP 适配器（codex-acp）"))
+    .toBeVisible();
+  await expect.element(page.getByText(connector.installCommand)).toBeVisible();
+  await expect
+    .element(page.getByRole("link", { name: "安装说明" }))
+    .toHaveAttribute("href", connector.docsUrl);
+  await expect.element(nameInput).toHaveValue("修复排序");
+  expect(created).toHaveLength(1);
+
+  await page.getByRole("button", { name: "改为从终端开始" }).click();
+  await vi.waitFor(() => expect(created).toHaveLength(2));
+  expect(created[1]).toEqual({
+    cwd: "/work",
+    configId: "codex222",
+    name: "修复排序",
+    startSide: "tui",
+  });
 });
 
 test("defaults to the first saved config only when no launch choice was remembered", async () => {

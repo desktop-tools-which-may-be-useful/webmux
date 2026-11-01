@@ -15,7 +15,7 @@ func TestSubreaperLeavesSidecarExitStatus(t *testing.T) {
 	m := shellManager(t)
 	s := createShell(t, m, nil)
 	for range 20 {
-		sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", "exit 17"}, false)
+		sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", "exit 17"}, false, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

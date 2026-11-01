@@ -61,6 +61,9 @@ type HybridSwitchRequest struct {
 	ClientRequestID string     `json:"clientRequestId"`
 	To              HybridSide `json:"to,omitempty"`
 	Choice          string     `json:"choice,omitempty"`
+	// AgentSessionID picks one of the candidates a 409 session_ambiguous
+	// offered; it is accepted only with To "acp".
+	AgentSessionID string `json:"agentSessionId,omitempty"`
 }
 
 // HybridSwitchResult answers a completed switch request. Draft is the
@@ -120,12 +123,25 @@ type HybridCandidate struct {
 
 // HybridConflict is the 409 body of hybrid and chat commands. Reason is a
 // stable code: switching, wrong_side, not_eligible, answered, sent,
-// steering_unavailable, session_missing, config_missing or limit.
+// steering_unavailable, session_missing, session_ambiguous,
+// connector_missing, occupied_external, config_missing or limit.
 // Eligibility carries the not_eligible cause; Candidates the session_missing
-// alternatives.
+// and session_ambiguous alternatives; Connector the connector_missing
+// connector.
 type HybridConflict struct {
 	Error       string            `json:"error"`
 	Reason      string            `json:"reason"`
 	Eligibility string            `json:"eligibility,omitempty"`
 	Candidates  []HybridCandidate `json:"candidates,omitempty"`
+	Connector   *AgentConnector   `json:"connector,omitempty"`
+}
+
+// AgentConnector is the third-party program that provides an agent's ACP
+// side (Codex's codex-acp). It comes from the agent profile only: it never
+// says where, or whether, the program is installed.
+type AgentConnector struct {
+	Executable     string `json:"executable"`
+	Title          string `json:"title"`
+	InstallCommand string `json:"installCommand"`
+	DocsURL        string `json:"docsUrl"`
 }

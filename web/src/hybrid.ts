@@ -1,4 +1,6 @@
 import type {
+  AgentConnector,
+  ChatEligibility,
   ChatState,
   HybridPhase,
   HybridSupport,
@@ -16,6 +18,7 @@ const hybridSupportReasons: Record<
   session_store: "该参数使聊天视图无法找到会话",
   directory_arg: "请在新建会话时选择目录，不要在命令中写目录",
   non_interactive: "该参数不启动交互界面",
+  session_arg: "该参数打开已有会话，混合配置请不要指定会话",
 };
 
 export function hybridSupportReason(support: HybridSupport | null) {
@@ -32,6 +35,21 @@ export function hybridSideLabel(hybrid: SessionHybrid): HybridSideLabel {
   return "终端";
 }
 
+/** Why the chat side cannot start: its connector is not installed. */
+export function connectorMissingText(connector: AgentConnector) {
+  return `未安装 ${connector.title}（${connector.executable}）`;
+}
+
+/** The notice that a hybrid config's chat side is installed separately. */
+export function connectorNoticeText(connector: AgentConnector) {
+  return `聊天端需要另外安装 ${connector.executable}`;
+}
+
+/** A component running below the version WebMux was verified with. */
+export function outdatedText(item: ChatState["outdated"][number]) {
+  return `${item.name} ${item.version} 低于已验证版本 ${item.verified}，部分功能可能不可用`;
+}
+
 // Why switching to chat is unavailable, in the order the server checks the
 // conditions (agent-session-identity); the server sends only the code.
 const eligibilityReasons: Record<string, string> = {
@@ -40,13 +58,17 @@ const eligibilityReasons: Record<string, string> = {
   no_session_id: "请先在 TUI 中发送一条消息",
   not_listed: "会话尚未保存或找不到会话",
   occupied: "该会话已在另一个会话中打开",
+  occupied_external: "该会话正被另一个 Codex 客户端使用",
+  session_ambiguous: "无法确定当前会话，请选择要打开的会话",
   checking: "正在核对会话",
 };
 
 /** The reason switching to chat is unavailable, or "" when it is. */
-export function eligibilityText(eligibility: ChatState["eligibility"]) {
+export function eligibilityText(eligibility: ChatEligibility) {
   if (eligibility.available) return "";
   const reason = eligibility.reason ?? "";
+  if (reason === "connector_missing" && eligibility.connector)
+    return connectorMissingText(eligibility.connector);
   return eligibilityReasons[reason] ?? (reason || "暂时不能切到聊天");
 }
 

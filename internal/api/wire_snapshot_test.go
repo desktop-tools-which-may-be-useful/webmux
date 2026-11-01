@@ -1029,6 +1029,15 @@ func wireChat(f *wireFixture) {
 	f.call("hybrid-conflict-not-eligible", "POST", "/api/sessions/"+terminal.Info().ID+"/switch", contract.HybridSwitchRequest{ClientRequestID: "wire-switch-1", To: contract.HybridSideACP}, 409)
 	chat := fakeChat(f.t, f.hybrids, f.root, agentprofile.OMP)
 	f.call("hybrid-switch", "POST", "/api/sessions/"+chat+"/switch", contract.HybridSwitchRequest{ClientRequestID: "wire-switch-2", To: contract.HybridSideTUI}, 200)
+
+	// Codex's chat side needs the codex-acp connector, which this PATH
+	// lacks: the session is refused before anything starts.
+	codex, err := f.launches.Create(launch.Input{Name: "codex", Cmd: []string{fakeAgentPath(f.t, agentprofile.Codex)}, Env: map[string]string{"PATH": "/nonexistent"}, Hybrid: true})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.call("hybrid-conflict-connector-missing", "POST", "/api/sessions", map[string]any{"configId": codex.ID, "cwd": f.root, "startSide": "acp"}, 409)
+	f.call("launch-hybrid-support", "POST", "/api/launch-configs/hybrid-support", contract.HybridSupportRequest{Cmd: []string{"codex"}}, 200)
 }
 
 // wireHybridRecords pins the record list, the resume conflicts (a deleted

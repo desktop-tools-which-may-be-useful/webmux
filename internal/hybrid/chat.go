@@ -1,6 +1,10 @@
 package hybrid
 
-import "time"
+import (
+	"time"
+
+	"github.com/rainchan/webmux/internal/agentprofile"
+)
 
 // The chat channel's service types. They mirror internal/contract's chat
 // shapes field for field (internal/wire converts them); the service never
@@ -300,8 +304,6 @@ type ChatState struct {
 	Phase          Phase
 	Dormant        bool
 	Agent          string
-	AgentVersion   string
-	VerifiedBelow  string
 	AgentSessionID *string
 	Eligibility    Eligibility
 	Turn           Turn
@@ -323,12 +325,26 @@ type ChatState struct {
 	// resumed from lost; the queue lives only in memory.
 	QueueLost int
 	Recovery  *RecoveryTip
+	// Outdated lists the programs older than their verified releases.
+	Outdated []Outdated
+	// ConnectorMissing is set while the chat side cannot start because
+	// the profile's connector is not installed.
+	ConnectorMissing *agentprofile.Connector
+}
+
+// Outdated is a program below the version its profile was verified with.
+type Outdated struct {
+	Name     string
+	Version  string
+	Verified string
 }
 
 // Eligibility says whether switching to chat is possible from the terminal.
+// Connector names the missing connector of reason connector_missing.
 type Eligibility struct {
 	Available bool
 	Reason    string
+	Connector *agentprofile.Connector
 }
 
 // Turn is the current or last turn.

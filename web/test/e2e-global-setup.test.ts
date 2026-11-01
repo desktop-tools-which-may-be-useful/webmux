@@ -15,8 +15,9 @@ describe("prepared E2E runtime", () => {
   let root: string;
   const contents = "#!/bin/sh\nexit 0\n";
 
-  // The backend and, in agents/ beside it, the fake agent as omp and opencode.
-  async function runtime(agents = ["omp", "opencode"]) {
+  // The backend and, in agents/ beside it, the fake agent as omp, opencode,
+  // codex and codex-acp.
+  async function runtime(agents = ["omp", "opencode", "codex", "codex-acp"]) {
     const binary = join(root, "webmux");
     await writeFile(binary, contents, { mode: 0o700 });
     await mkdir(join(root, "agents"));

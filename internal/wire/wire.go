@@ -178,7 +178,16 @@ func LaunchInput(r contract.LaunchConfigInput) launch.Input {
 }
 
 func HybridSupport(s agentprofile.Support) contract.HybridSupport {
-	return contract.HybridSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason)}
+	return contract.HybridSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason), Connector: AgentConnector(s.Connector)}
+}
+
+// AgentConnector converts a profile's connector; nil stays nil. Its
+// verified version stays on the server.
+func AgentConnector(c *agentprofile.Connector) *contract.AgentConnector {
+	if c == nil {
+		return nil
+	}
+	return &contract.AgentConnector{Executable: c.Executable, Title: c.Title, InstallCommand: c.InstallCommand, DocsURL: c.DocsURL}
 }
 
 func PushTestReport(r push.TestReport) contract.PushTestReport {

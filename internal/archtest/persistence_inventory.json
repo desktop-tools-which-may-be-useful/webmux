@@ -100,7 +100,8 @@
     "service-definition": "systemd/launchd 服务定义与日志；由显式服务管理命令写入。",
     "fresh-log": "createFresh 生成本机控制/日志输出文件；不是新的 JSON 存储。",
     "read-only-codeview": "通过 Open/Openat(O_RDONLY/O_PATH/O_NOFOLLOW) 与 NewFile 进行代码只读访问（阅读、下载、打包与复制源）；登记以防新写入入口被漏过。",
-    "pty-descriptor": "将已有 PTY 描述符包装为可轮询文件；不是磁盘持久化。"
+    "pty-descriptor": "将已有 PTY 描述符包装为可轮询文件；不是磁盘持久化。",
+    "agent-state": "外部 agent 自己的状态文件名（Codex 的会话写锁后缀）；WebMux 只拿它与 agent 进程已打开的路径比较，从不创建、打开或写入。"
   },
   "references": {
     "cmd/baseline/fixture.go|*fixture.close|os.RemoveAll": {
@@ -178,6 +179,10 @@
     "cmd/webmux/tailscaleownership.go|*tailscaleController.openLock|github.com/rainchan/webmux/internal/statefile.Open": {
       "count": 1,
       "owner": "tailscale-ownership"
+    },
+    "internal/agentprofile/codex.go|path|.lock": {
+      "count": 1,
+      "owner": "agent-state"
     },
     "internal/artifacts/artifacts.go|*Service.removeLocked|os.RemoveAll": {
       "count": 1,

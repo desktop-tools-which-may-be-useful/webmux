@@ -28,7 +28,7 @@ func TestSidecarPipesAndStop(t *testing.T) {
 	t.Parallel()
 	m := shellManager(t)
 	s := createShell(t, m, nil, "/bin/sleep", "30")
-	sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", `echo "$WEBMUX_SESSION_ID $PWD" >&2; exec cat`}, false)
+	sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", `echo "$WEBMUX_SESSION_ID $PWD" >&2; exec cat`}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestShutdownKillsSidecars(t *testing.T) {
 	t.Parallel()
 	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	s := createShell(t, m, nil)
-	sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", "sleep 60 & echo $!; wait"}, false)
+	sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", "sleep 60 & echo $!; wait"}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestShutdownKillsSidecars(t *testing.T) {
 			time.Sleep(20 * time.Millisecond)
 		}
 	}
-	if _, err = s.StartSidecar([]string{"/bin/true"}, false); err != ErrClosed {
+	if _, err = s.StartSidecar([]string{"/bin/true"}, false, nil); err != ErrClosed {
 		t.Fatalf("sidecar after shutdown: %v", err)
 	}
 }
@@ -117,7 +117,7 @@ func TestSidecarBashrcOutputStaysOffProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecar, err := s.StartSidecar([]string{bash, "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "/bin/sh", "-c", `printf "PROTOCOL:$FROM_BASHRC"`}, true)
+	sidecar, err := s.StartSidecar([]string{bash, "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "/bin/sh", "-c", `printf "PROTOCOL:$FROM_BASHRC"`}, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestSidecarStderrIsBounded(t *testing.T) {
 	t.Parallel()
 	m := shellManager(t)
 	s := createShell(t, m, nil)
-	sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", "head -c 200000 /dev/zero | tr '\\0' e >&2; printf END >&2"}, false)
+	sidecar, err := s.StartSidecar([]string{"/bin/sh", "-c", "head -c 200000 /dev/zero | tr '\\0' e >&2; printf END >&2"}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

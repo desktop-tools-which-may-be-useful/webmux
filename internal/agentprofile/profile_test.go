@@ -2,6 +2,8 @@ package agentprofile
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -39,11 +41,24 @@ func TestCheck(t *testing.T) {
 		{name: "omp subcommand", argv: []string{"omp", "commit"}, reason: ReasonNonInteractive, arg: "commit"},
 		{name: "omp prompt equal to subcommand after prompt", argv: []string{"omp", "fix", "commit"}, agent: OMP},
 		{name: "omp after double dash", argv: []string{"omp", "--", "commit"}, agent: OMP},
+		{name: "codex preset", argv: wrapped("codex", "--dangerously-bypass-approvals-and-sandbox"), agent: Codex},
+		{name: "codex prompt", argv: []string{"codex", "-m", "gpt-5", "fix the bug"}, agent: Codex},
+		{name: "codex resume subcommand", argv: []string{"codex", "resume", "--last"}, reason: ReasonSessionArg, arg: "resume"},
+		{name: "codex fork subcommand", argv: []string{"codex", "-m", "x", "fork"}, reason: ReasonSessionArg, arg: "fork"},
+		{name: "codex exec", argv: []string{"codex", "exec", "修 bug"}, reason: ReasonNonInteractive, arg: "exec"},
+		{name: "codex migrate prefix", argv: []string{"codex", "migrate-rollouts"}, reason: ReasonNonInteractive, arg: "migrate-rollouts"},
+		{name: "codex version", argv: []string{"codex", "-V"}, reason: ReasonNonInteractive, arg: "-V"},
+		{name: "codex remote", argv: []string{"codex", "--remote", "ws://h:1"}, reason: ReasonSessionStore, arg: "--remote"},
+		{name: "codex cd", argv: []string{"codex", "-C", "/srv"}, reason: ReasonDirectoryArg, arg: "-C"},
+		{name: "codex worktree", argv: []string{"codex", "--worktree"}, reason: ReasonDirectoryArg, arg: "--worktree"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Check(tt.argv)
 			want := Support{Supported: tt.agent != "", Agent: tt.agent, Reason: tt.reason}
+			if tt.agent == Codex {
+				want.Connector = codex.Connector
+			}
 			if got != want {
 				t.Fatalf("Check(%q) = %+v, want %+v", tt.argv, got, want)
 			}
@@ -114,6 +129,20 @@ func TestResumeArgv(t *testing.T) {
 			id:   "01z",
 			want: wrapped("omp", "--profile", "work", "--resume", "01z"),
 		},
+		{
+			name:    "codex resume subcommand after global options",
+			argv:    []string{"codex", "-m", "gpt-5.6-luna", "-s", "read-only", "修 bug"},
+			id:      "01a18715",
+			want:    []string{"codex", "--no-daemon", "-m", "gpt-5.6-luna", "-s", "read-only", "resume", "01a18715"},
+			dropped: []string{"修 bug"},
+		},
+		{
+			name:    "codex image dropped",
+			argv:    wrapped("codex", "--no-daemon", "-i", "a.png", "--search"),
+			id:      "01b",
+			want:    wrapped("codex", "--no-daemon", "--search", "resume", "01b"),
+			dropped: []string{"-i a.png"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -138,6 +167,7 @@ func TestTUIArgv(t *testing.T) {
 		{[]string{"opencode", "--standalone"}, []string{"opencode", "--standalone"}},
 		{wrapped("opencode"), wrapped("opencode", "--standalone")},
 		{[]string{"omp", "--continue", "hi"}, []string{"omp", "--continue", "hi"}},
+		{wrapped("codex", "-m", "x"), wrapped("codex", "--no-daemon", "-m", "x")},
 	}
 	for _, tt := range tests {
 		cmd, err := Parse(tt.argv)
@@ -172,6 +202,18 @@ func TestACPArgv(t *testing.T) {
 			name: "bashrc writes protocol to fd 3",
 			argv: wrapped("omp", "--auto-approve"),
 			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "omp", "acp", "--auto-approve"},
+			fd3:  true,
+		},
+		{
+			name:        "codex runs its connector without arguments",
+			argv:        []string{"/opt/codex/bin/codex", "--search", "-m", "gpt-5", "-c", "model_reasoning_effort=high", "-c", "x=1", "-s", "danger-full-access", "-a", "never"},
+			want:        []string{"codex-acp"},
+			unsupported: []string{"--search", "-c x=1", "-s danger-full-access", "-a never"},
+		},
+		{
+			name: "codex connector through bashrc",
+			argv: wrapped("codex", "--dangerously-bypass-approvals-and-sandbox"),
+			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "codex-acp"},
 			fd3:  true,
 		},
 	}
@@ -220,6 +262,12 @@ func TestIdentify(t *testing.T) {
 			want: Identity{Agent: OpenCode, Cwd: "/p"},
 			ok:   true,
 		},
+		{
+			name: "codex names no session in its signals",
+			in:   Signals{ProgramApp: "codex", RootCwd: "/p"},
+			want: Identity{Agent: Codex, Cwd: "/p"},
+			ok:   true,
+		},
 		{name: "unknown", in: Signals{ProgramApp: "claude-code", WarpSessionID: "x"}},
 	}
 	for _, tt := range tests {
@@ -254,5 +302,108 @@ func TestBelowVerified(t *testing.T) {
 		if got := tt.profile.BelowVerified(tt.version); got != tt.want {
 			t.Errorf("%s.BelowVerified(%q) = %v, want %v", tt.profile.Name, tt.version, got, tt.want)
 		}
+	}
+}
+
+func TestCodexChatConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		argv        []string
+		seeds       []Seed
+		unsupported []string
+	}{
+		{
+			name:  "preset full access",
+			argv:  wrapped("codex", "--dangerously-bypass-approvals-and-sandbox"),
+			seeds: []Seed{{ConfigID: "mode", Value: "agent-full-access", Arg: "--dangerously-bypass-approvals-and-sandbox"}},
+		},
+		{
+			name: "model, quoted effort and sandbox",
+			argv: []string{"codex", "--model=gpt-5.6-luna", "-c", `model_reasoning_effort="high"`, "-s", "read-only"},
+			seeds: []Seed{
+				{ConfigID: "model", Value: "gpt-5.6-luna", Arg: "--model=gpt-5.6-luna"},
+				{ConfigID: "reasoning_effort", Value: "high", Arg: `-c model_reasoning_effort="high"`},
+				{ConfigID: "mode", Value: "read-only", Arg: "-s read-only"},
+			},
+		},
+		{
+			name:  "first approval option in priority order wins",
+			argv:  []string{"codex", "-s", "workspace-write", "--approve-for-me"},
+			seeds: []Seed{{ConfigID: "mode", Value: "agent", Arg: "--approve-for-me"}},
+		},
+		{
+			name:        "underivable approval and chat-only options",
+			argv:        []string{"codex", "-s", "danger-full-access", "-a", "on-request", "--profile", "work", "--enable", "x"},
+			unsupported: []string{"-s danger-full-access", "-a on-request", "--profile work", "--enable x"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := Parse(tt.argv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seeds, unsupported := cmd.ChatConfig()
+			if !slices.Equal(seeds, tt.seeds) || !slices.Equal(unsupported, tt.unsupported) {
+				t.Fatalf("ChatConfig = %+v %q, want %+v %q", seeds, unsupported, tt.seeds, tt.unsupported)
+			}
+		})
+	}
+	if seeds, unsupported := mustParse(t, "omp", "--model", "haiku").ChatConfig(); seeds != nil || unsupported != nil {
+		t.Fatalf("omp derives %+v %q", seeds, unsupported)
+	}
+}
+
+func mustParse(t *testing.T, argv ...string) Command {
+	t.Helper()
+	cmd, err := Parse(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cmd
+}
+
+func TestLockedSessions(t *testing.T) {
+	// Open files are reported with symbolic links resolved, the
+	// temporary directory's included.
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	locks := filepath.Join(home, "codex", "thread-writer-locks")
+	if err := os.MkdirAll(locks, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "codex-home")
+	if err := os.Symlink(filepath.Dir(locks), link); err != nil {
+		t.Fatal(err)
+	}
+	const a, b = "01a1953f-5c3a-7280-aa68-7ff5b7f7dab4", "01a1953f-8342-7e43-acfe-1b5d26be5c75"
+	paths := []string{
+		"/usr/lib/libc.so",
+		filepath.Join(locks, ".coordination.lock"),
+		filepath.Join(locks, b+".lock"),
+		filepath.Join(home, "other", a+".lock"),
+		filepath.Join(locks, a+".lock"),
+	}
+	env := func(v string) func(string) string {
+		return func(name string) string {
+			if name == "CODEX_HOME" {
+				return v
+			}
+			return ""
+		}
+	}
+	// CODEX_HOME through a symbolic link: open files are reported resolved.
+	if got := codex.LockedSessions(paths, env(link), "/nonexistent"); !slices.Equal(got, []string{b, a}) {
+		t.Fatalf("locked sessions %q", got)
+	}
+	// The default home is .codex under the user's home.
+	def := filepath.Join(home, ".codex", "thread-writer-locks", a+".lock")
+	if got := codex.LockedSessions([]string{def}, env(""), home); !slices.Equal(got, []string{a}) {
+		t.Fatalf("default home %q", got)
+	}
+	if omp.TracksLocks() || omp.LockedSessions(paths, env(link), home) != nil {
+		t.Fatal("omp tracks locks")
 	}
 }

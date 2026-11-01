@@ -94,7 +94,8 @@
       "permissionMode": "auto",
       "unsupported": [],
       "idChange": null,
-      "recovery": null
+      "recovery": null,
+      "outdated": []
     }
   },
   "check": {

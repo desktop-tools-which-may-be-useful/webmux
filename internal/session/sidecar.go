@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"sync"
@@ -44,8 +45,11 @@ type Sidecar struct {
 // child's stdout and stderr both go to the stderr tail and the protocol pipe
 // is its fd 3, so a wrapper such as
 // `bash -ic 'exec -- "$@" 1>&3 3>&-' webmux <agent>` keeps startup-file
-// output away from the protocol.
-func (s *Session) StartSidecar(argv []string, protocolOnFD3 bool) (*Sidecar, error) {
+// output away from the protocol. defaults are variables the child gets
+// unless the launch environment sets them. argv[0] is looked up in the
+// child's PATH, as LookPath does; an executable that cannot be found fails
+// with ErrNoExecutable.
+func (s *Session) StartSidecar(argv []string, protocolOnFD3 bool, defaults map[string]string) (*Sidecar, error) {
 	if len(argv) == 0 || argv[0] == "" {
 		return nil, fmt.Errorf("%w: command requires an executable", ErrInvalid)
 	}
@@ -60,7 +64,12 @@ func (s *Session) StartSidecar(argv []string, protocolOnFD3 bool) (*Sidecar, err
 	if closed {
 		return nil, ErrClosed
 	}
-	sidecar, err := startSidecar(s.info.ID, s.info.Cwd, argv, protocolOnFD3, s.options)
+	env := s.childEnv(defaults)
+	path, err := lookPath(argv[0], s.info.Cwd, env)
+	if err != nil {
+		return nil, err
+	}
+	sidecar, err := startSidecar(s.info.Cwd, path, argv, env, protocolOnFD3)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
@@ -71,7 +80,18 @@ func (s *Session) StartSidecar(argv []string, protocolOnFD3 bool) (*Sidecar, err
 	return sidecar, nil
 }
 
-func startSidecar(id, cwd string, argv []string, protocolOnFD3 bool, options startOptions) (*Sidecar, error) {
+// childEnv is a sidecar's environment: the launch environment over
+// defaults.
+func (s *Session) childEnv(defaults map[string]string) []string {
+	explicit := s.options.env
+	if len(defaults) > 0 {
+		explicit = maps.Clone(defaults)
+		maps.Copy(explicit, s.options.env)
+	}
+	return sessionEnvWithVersion(os.Environ(), s.info.ID, s.options.agentProtocol, explicit, s.options.terminalVersion)
+}
+
+func startSidecar(cwd, path string, argv, env []string, protocolOnFD3 bool) (*Sidecar, error) {
 	var files []*os.File
 	closeAll := func() {
 		for _, f := range files {
@@ -98,9 +118,10 @@ func startSidecar(id, cwd string, argv []string, protocolOnFD3 bool, options sta
 		closeAll()
 		return nil, err
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(path, argv[1:]...)
+	cmd.Args[0] = argv[0]
 	cmd.Dir = cwd
-	cmd.Env = sessionEnvWithVersion(os.Environ(), id, options.agentProtocol, options.env, options.terminalVersion)
+	cmd.Env = env
 	cmd.Stdin = stdinR
 	cmd.Stdout, cmd.Stderr = stdoutW, stderrW
 	if protocolOnFD3 {
@@ -240,4 +261,31 @@ func (c *Sidecar) Stop(ctx context.Context) error {
 		_ = c.stdout.Close()
 		return ctx.Err()
 	}
+}
+
+// Output runs argv as a short-lived sidecar without input and returns at
+// most limit bytes of its stdout and its exit code once its process tree is
+// gone; stderr is discarded. When ctx ends first the tree is killed and
+// ctx's error returned.
+func (s *Session) Output(ctx context.Context, argv []string, limit int) ([]byte, int, error) {
+	c, err := s.StartSidecar(argv, false, nil)
+	if err != nil {
+		return nil, -1, err
+	}
+	_ = c.stdin.Close()
+	out := make(chan []byte, 1)
+	go func() {
+		b, _ := io.ReadAll(io.LimitReader(c.stdout, int64(limit)))
+		_, _ = io.Copy(io.Discard, c.stdout)
+		out <- b
+	}()
+	select {
+	case <-c.done:
+	case <-ctx.Done():
+		_ = c.Stop(ctx)
+		return nil, -1, ctx.Err()
+	}
+	b := <-out
+	_ = c.Stop(ctx)
+	return b, c.ExitCode(), nil
 }

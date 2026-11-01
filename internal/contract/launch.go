@@ -11,11 +11,14 @@ type PreviewSettings struct {
 
 // HybridSupport reports whether a command can run as a hybrid session.
 // Reason is a stable code (unknown_agent, unsupported_form, session_store,
-// directory_arg, non_interactive) set when Supported is false.
+// directory_arg, non_interactive, session_arg) set when Supported is false.
+// Connector names the separately installed ACP connector a supported agent
+// needs for its chat side.
 type HybridSupport struct {
-	Supported bool   `json:"supported"`
-	Agent     string `json:"agent,omitempty"`
-	Reason    string `json:"reason,omitempty"`
+	Supported bool            `json:"supported"`
+	Agent     string          `json:"agent,omitempty"`
+	Reason    string          `json:"reason,omitempty"`
+	Connector *AgentConnector `json:"connector,omitempty"`
 }
 
 // HybridSupportRequest is the body of POST /api/launch-configs/hybrid-support.

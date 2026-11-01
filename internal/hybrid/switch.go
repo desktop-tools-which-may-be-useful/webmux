@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -29,11 +29,13 @@ const (
 )
 
 // SwitchInput asks to move a session to side To, or answers a switch
-// waiting in PhaseAwaitingChoice with Choice.
+// waiting in PhaseAwaitingChoice with Choice. AgentSessionID picks one of
+// the candidates a SessionAmbiguousError offered, moving to the chat only.
 type SwitchInput struct {
 	ClientRequestID string
 	To              Side
 	Choice          string
+	AgentSessionID  string
 }
 
 // SwitchResult is a finished switch request: the side the session is on.
@@ -57,6 +59,8 @@ type switchOp struct {
 	// queued is what the queue held when it became the draft, restored if
 	// the switch rolls back to the chat.
 	queued []QueueItem
+	// pick is the user's choice among ambiguous candidates.
+	pick string
 }
 
 type switchOutcome struct {
@@ -90,8 +94,11 @@ func (s *Service) Switch(ctx context.Context, id string, in SwitchInput) (Switch
 	if in.To != SideTUI && in.To != SideACP {
 		return SwitchResult{}, fmt.Errorf("%w: to 只能是 tui 或 acp", ErrInvalid)
 	}
+	if in.AgentSessionID != "" && in.To != SideACP {
+		return SwitchResult{}, fmt.Errorf("%w: agentSessionId 只能用于切到聊天", ErrInvalid)
+	}
 	return once(ctx, &a.recent, in.ClientRequestID, "switch", func(ctx context.Context) (SwitchResult, error) {
-		done, err := call(ctx, a, func() (<-chan switchOutcome, error) { return a.beginSwitch(in.To) })
+		done, err := call(ctx, a, func() (<-chan switchOutcome, error) { return a.beginSwitch(in.To, in.AgentSessionID) })
 		if err != nil {
 			return SwitchResult{}, err
 		}
@@ -112,8 +119,9 @@ func (s *Service) Switch(ctx context.Context, id string, in SwitchInput) (Switch
 }
 
 // beginSwitch starts a switch to side to and returns where its outcome
-// arrives. Switching to the side the session is on succeeds at once.
-func (a *actor) beginSwitch(to Side) (<-chan switchOutcome, error) {
+// arrives. Switching to the side the session is on succeeds at once. pick
+// chooses among the candidates a SessionAmbiguousError offered.
+func (a *actor) beginSwitch(to Side, pick string) (<-chan switchOutcome, error) {
 	switch {
 	case a.state != StateActive || a.closing:
 		return nil, fmt.Errorf("%w: 会话已结束", ErrConflict)
@@ -127,20 +135,25 @@ func (a *actor) beginSwitch(to Side) (<-chan switchOutcome, error) {
 		done <- switchOutcome{result: a.resultOn(to)}
 		return done, nil
 	}
-	op := &switchOp{from: a.side, to: to, done: done}
+	op := &switchOp{from: a.side, to: to, done: done, pick: pick}
 	if to == SideACP {
-		// Conditions 1-3 now, 4 (session/list) in a fresh probe, 5 after it.
-		id := a.shell.Identity()
-		ident, known := agentprofile.Identify(signals(id))
+		// Conditions 1-4 now, 5 (session/list, with the connector checked
+		// again) in a fresh probe, 6 after it.
+		id, ident, known := a.identify()
 		t, reason := a.assess(id, ident, known)
-		if reason != "" {
+		switch reason {
+		case "":
+		case ReasonConnectorMissing:
+			a.setEligibility(reason)
+			return nil, &ConnectorMissingError{Connector: a.cmd.Profile.Connector}
+		default:
 			a.setEligibility(reason)
 			return nil, &IneligibleError{Reason: reason}
 		}
 		a.switching = op
 		a.chat.SwitchError = ""
 		a.dirty = true
-		a.runProbe(t, func(listed bool, err error) { a.checked(op, t, listed, err) })
+		a.runProbe(t, func(ans probeAnswer) { a.checked(op, t, ans) })
 		return done, nil
 	}
 	a.switching = op
@@ -174,12 +187,14 @@ func (a *actor) setPhase(p Phase) {
 	a.dirty = true
 }
 
-// checked continues a switch to the chat after its probe: the session must
-// be listed (4) and not open elsewhere (5), else nothing changed.
-func (a *actor) checked(op *switchOp, t target, listed bool, err error) {
-	if key := a.probe.key; key == t && err == nil {
+// checked continues a switch to the chat after its probe: the connector
+// must be installed, the session listed (5) and not open elsewhere (6),
+// else nothing changed. Recently updated sessions standing in for the
+// terminal's must come down to one, or the user's pick among them.
+func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
+	if key := a.probe.key; key == t && ans.err == nil {
 		a.probe.result = probeNotListed
-		if listed {
+		if ans.listed {
 			a.probe.result = probeListed
 		}
 	}
@@ -194,12 +209,27 @@ func (a *actor) checked(op *switchOp, t target, listed bool, err error) {
 		a.interrupt("idle", true)
 		a.finish(op, SwitchResult{}, fmt.Errorf("%w: 终端已退出", ErrConflict))
 		return
-	case err != nil:
-		a.finish(op, SwitchResult{}, err)
+	case errors.Is(ans.err, ErrConnectorMissing):
+		a.setConnector(ans.err)
+		a.setEligibility(ReasonConnectorMissing)
+		a.finish(op, SwitchResult{}, ans.err)
 		return
-	case !listed:
+	case ans.err != nil:
+		a.finish(op, SwitchResult{}, ans.err)
+		return
+	case !ans.listed && (t.sid == "" || a.cmd.Profile.TracksLocks()):
+		reason = ReasonNoSessionID
+	case !ans.listed:
 		reason = ReasonNotListed
-	case a.svc.occupied(a.id, t.sid):
+	case t.sid == "":
+		sid, err := pickCandidate(ans.candidates, op.pick)
+		if err != nil {
+			a.finish(op, SwitchResult{}, err)
+			return
+		}
+		t.sid = sid
+	}
+	if reason == "" && a.svc.occupied(a.id, t.sid) {
 		reason = ReasonOccupied
 	}
 	if reason != "" {
@@ -207,7 +237,7 @@ func (a *actor) checked(op *switchOp, t target, listed bool, err error) {
 		a.finish(op, SwitchResult{}, &IneligibleError{Reason: reason})
 		return
 	}
-	busy := tuiBusy(a.shell.Info())
+	busy := tuiBusy(a.shell.Info()) && time.Since(a.runStart) >= a.cmd.Profile.StartupQuiet
 	a.side = SideSwitching
 	a.setPhase(PhaseStopping)
 	if busy {
@@ -219,6 +249,18 @@ func (a *actor) checked(op *switchOp, t target, listed bool, err error) {
 	a.shell.MoveClients()
 	a.svc.log.Info("hybrid switch started", "id", a.id, "to", string(SideACP), "interrupt", busy)
 	go a.runToACP(op, t, busy)
+}
+
+// pickCandidate is the one candidate, else the user's pick among them, else
+// a SessionAmbiguousError offering them.
+func pickCandidate(candidates []Candidate, pick string) (string, error) {
+	if len(candidates) == 1 {
+		return candidates[0].AgentSessionID, nil
+	}
+	if pick != "" && slices.ContainsFunc(candidates, func(c Candidate) bool { return c.AgentSessionID == pick }) {
+		return pick, nil
+	}
+	return "", &SessionAmbiguousError{Candidates: candidates}
 }
 
 // tuiBusy reports whether the terminal UI is in a turn by its signals:
@@ -427,7 +469,7 @@ func (a *actor) switchedToACP(op *switchOp, t target, res openResult) {
 	a.side = SideACP
 	a.agentCwd = t.cwd
 	a.chat.Dormant = false
-	a.installLink(res.link, res.init, res.config, res.warnings)
+	a.installLink(res.link, res.init, res.config, res.notes)
 	a.emit(Event{Kind: EventMarker, Marker: &Marker{Kind: MarkerSwitched, Side: SideACP}})
 	pid := res.link.sidecar.PID()
 	process := processIdentity(pid)
@@ -543,6 +585,7 @@ func (a *actor) switchedToTUI(op *switchOp, sid, draft string, dropped []string)
 // agent session sid; one that already exited interrupts the session (D23).
 func (a *actor) terminalStarted(sid string) {
 	a.resumedSID = sid
+	a.runStart = time.Now()
 	a.probe = probeState{}
 	pid := a.shell.Identity().PID
 	process := processIdentity(pid)
@@ -589,7 +632,7 @@ func (a *actor) rollbackToACP(op *switchOp, sid string, cause failure) {
 			a.switchAbandoned(op, cause, SideACP)
 			return
 		}
-		a.installLink(res.link, res.init, res.config, res.warnings)
+		a.installLink(res.link, res.init, res.config, res.notes)
 		a.emit(Event{Kind: EventMarker, Marker: &Marker{Kind: MarkerLoaded, Side: SideACP}})
 		if len(op.queued) > 0 {
 			a.setQueue(op.queued, true)
@@ -608,9 +651,24 @@ func (a *actor) rollbackToACP(op *switchOp, sid string, cause failure) {
 // rolledBack fails the switch after the session is back on its side; every
 // device sees why.
 func (a *actor) rolledBack(op *switchOp, cause failure) {
+	a.noteConnector(cause.err)
 	a.chat.SwitchError = "切换失败，已回到原端：" + cause.public
 	a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: a.chat.SwitchError}})
 	a.finish(op, SwitchResult{}, cause.err)
+}
+
+// noteConnector applies a failure caused by a missing connector: the chat
+// side shows how to install it, the terminal side's eligibility says so.
+func (a *actor) noteConnector(err error) {
+	var missing *ConnectorMissingError
+	if !errors.As(err, &missing) {
+		return
+	}
+	a.setConnector(err)
+	if a.side == SideACP {
+		a.chat.ConnectorMissing = missing.Connector
+	}
+	a.dirty = true
 }
 
 // switchAbandoned fails a switch that could not return: the session is
@@ -620,6 +678,7 @@ func (a *actor) rolledBack(op *switchOp, cause failure) {
 // keeps its identity.
 func (a *actor) switchAbandoned(op *switchOp, cause failure, side Side) {
 	a.side = side
+	a.noteConnector(cause.err)
 	if len(op.queued) > 0 {
 		a.setQueue(op.queued, true)
 	}

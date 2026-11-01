@@ -21,7 +21,7 @@ import (
 
 // fast shortens the service's waits; call it before creating sessions.
 func (h *harness) fast() {
-	h.svc.timing = timing{interrupt: 300 * time.Millisecond, probeDelay: 50 * time.Millisecond, observe: 20 * time.Millisecond, minute: time.Minute}
+	h.svc.timing = timing{interrupt: 300 * time.Millisecond, probeDelay: 50 * time.Millisecond, observe: 20 * time.Millisecond, minute: time.Minute, connectorRecheck: 100 * time.Millisecond}
 }
 
 func (h *harness) switchTo(id string, side Side) (SwitchResult, error) {

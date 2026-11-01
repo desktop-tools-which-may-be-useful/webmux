@@ -6,7 +6,6 @@
     "state": {
       "agent": "omp",
       "agentSessionId": "<agentSessionId#1>",
-      "agentVersion": "1.0.0",
       "authRequired": false,
       "commands": [
         {
@@ -60,6 +59,13 @@
         "available": false
       },
       "idChange": null,
+      "outdated": [
+        {
+          "name": "omp",
+          "verified": "18.13.1",
+          "version": "1.0.0"
+        }
+      ],
       "permissionMode": "ask",
       "plan": null,
       "promptCapabilities": {
@@ -78,8 +84,7 @@
         "running": false
       },
       "unsupported": [],
-      "usage": null,
-      "verifiedBelow": "18.13.1"
+      "usage": null
     },
     "type": "snapshot"
   }
