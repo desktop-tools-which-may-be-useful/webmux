@@ -23,7 +23,11 @@ const hybridSupportReasons: Record<
 
 export function hybridSupportReason(support: HybridSupport | null) {
   if (!support || support.supported) return "";
-  return hybridSupportReasons[support.reason ?? "unknown_agent"];
+  const reason = support.reason ?? "unknown_agent";
+  const text = hybridSupportReasons[reason];
+  return reason === "unknown_agent" && support.supportedAgents.length > 0
+    ? `${text}，当前版本支持：${support.supportedAgents.join("、")}`
+    : text;
 }
 
 export type HybridSideLabel = "终端" | "聊天" | "聊天·休眠" | "切换中";
@@ -58,7 +62,7 @@ const eligibilityReasons: Record<string, string> = {
   no_session_id: "请先在 TUI 中发送一条消息",
   not_listed: "会话尚未保存或找不到会话",
   occupied: "该会话已在另一个会话中打开",
-  occupied_external: "该会话正被另一个 Codex 客户端使用",
+  occupied_external: "该会话正被另一个 Agent 客户端使用",
   session_ambiguous: "无法确定当前会话，请选择要打开的会话",
   checking: "正在核对会话",
 };

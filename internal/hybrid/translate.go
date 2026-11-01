@@ -62,7 +62,7 @@ func (t *translator) breakMessage() { t.last.open = false }
 // messageID names the timeline message a chunk belongs to: the agent's
 // messageId, or a server-assigned ID shared by consecutive chunks of one
 // role. One ACP message can carry both thought and text chunks under the
-// same messageId (omp's replay does); the timeline shows them as separate
+// same messageId (an agent replay may do so); the timeline shows them as separate
 // entries, so roles other than the agent's reply are qualified.
 func (t *translator) messageID(role, agentID string) string {
 	if agentID != "" {

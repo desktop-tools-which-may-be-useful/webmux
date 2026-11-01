@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/launch"
@@ -182,10 +183,11 @@ func TestLaunchConfigHybrid(t *testing.T) {
 		Hybrid        bool                   `json:"hybrid"`
 		HybridSupport contract.HybridSupport `json:"hybridSupport"`
 	}
+	titles := agents.Default().Titles()
 	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs", `{"name":"omp","cmd":["omp"],"hybrid":true}`, 201), &created); err != nil {
 		t.Fatal(err)
 	}
-	if !created.Hybrid || created.HybridSupport != (contract.HybridSupport{Supported: true, Agent: "omp"}) {
+	if !created.Hybrid || !reflect.DeepEqual(created.HybridSupport, contract.HybridSupport{Supported: true, Agent: "omp", SupportedAgents: titles}) {
 		t.Fatalf("created %+v", created)
 	}
 	h.expect("POST", "/api/launch-configs", `{"name":"Claude","cmd":["claude"],"hybrid":true}`, 400)
@@ -199,13 +201,13 @@ func TestLaunchConfigHybrid(t *testing.T) {
 		body string
 		want contract.HybridSupport
 	}{
-		{`{"cmd":["opencode"]}`, contract.HybridSupport{Supported: true, Agent: "opencode"}},
-		{`{"cmd":["opencode","/home/u/proj"]}`, contract.HybridSupport{Reason: "directory_arg"}},
-		{`{"cmd":["/bin/bash","-l"]}`, contract.HybridSupport{Reason: "unknown_agent"}},
-		{`{"cmd":[]}`, contract.HybridSupport{Reason: "unknown_agent"}},
+		{`{"cmd":["opencode"]}`, contract.HybridSupport{Supported: true, Agent: "opencode", SupportedAgents: titles}},
+		{`{"cmd":["opencode","/home/u/proj"]}`, contract.HybridSupport{Reason: "directory_arg", SupportedAgents: titles}},
+		{`{"cmd":["/bin/bash","-l"]}`, contract.HybridSupport{Reason: "unknown_agent", SupportedAgents: titles}},
+		{`{"cmd":[]}`, contract.HybridSupport{Reason: "unknown_agent", SupportedAgents: titles}},
 	} {
 		var got contract.HybridSupport
-		if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/hybrid-support", row.body, 200), &got); err != nil || got != row.want {
+		if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/hybrid-support", row.body, 200), &got); err != nil || !reflect.DeepEqual(got, row.want) {
 			t.Fatalf("hybrid-support %s = %+v, %v", row.body, got, err)
 		}
 	}

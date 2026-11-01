@@ -25,7 +25,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/codex"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
@@ -980,7 +981,7 @@ func wireHybrid(f *wireFixture) {
 // and conflict bodies. The agent's own start updates arrive in no fixed
 // order, so the backlog frame is read but not recorded.
 func wireChat(f *wireFixture) {
-	id := fakeChat(f.t, f.hybrids, f.root, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id := fakeChat(f.t, f.hybrids, f.root, omp.Name, "FAKEAGENT_PERMISSION=1")
 	watch := observe(f.t, f.hybrids, id)
 	watch.until("start updates", func(o *observer) bool { return len(o.state.Commands) > 0 && len(o.state.Config) == 2 })
 	conn := f.dial("/ws/s/" + id + "/chat")
@@ -1010,7 +1011,7 @@ func wireChat(f *wireFixture) {
 	ctx, cancel := context.WithTimeout(f.ctx, chatTimeout)
 	defer cancel()
 	terminal, err := f.hybrids.Create(ctx, hybrid.CreateInput{
-		Cwd: f.root, Name: "tui", Cmd: []string{fakeAgentPath(f.t, agentprofile.OMP)}, StartSide: hybrid.SideTUI,
+		Cwd: f.root, Name: "tui", Cmd: []string{fakeAgentPath(f.t, omp.Name)}, StartSide: hybrid.SideTUI,
 		Env: map[string]string{"FAKEAGENT_STORE": f.t.TempDir()},
 	})
 	if err != nil {
@@ -1027,12 +1028,12 @@ func wireChat(f *wireFixture) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	f.call("hybrid-conflict-not-eligible", "POST", "/api/sessions/"+terminal.Info().ID+"/switch", contract.HybridSwitchRequest{ClientRequestID: "wire-switch-1", To: contract.HybridSideACP}, 409)
-	chat := fakeChat(f.t, f.hybrids, f.root, agentprofile.OMP)
+	chat := fakeChat(f.t, f.hybrids, f.root, omp.Name)
 	f.call("hybrid-switch", "POST", "/api/sessions/"+chat+"/switch", contract.HybridSwitchRequest{ClientRequestID: "wire-switch-2", To: contract.HybridSideTUI}, 200)
 
 	// Codex's chat side needs the codex-acp connector, which this PATH
 	// lacks: the session is refused before anything starts.
-	codex, err := f.launches.Create(launch.Input{Name: "codex", Cmd: []string{fakeAgentPath(f.t, agentprofile.Codex)}, Env: map[string]string{"PATH": "/nonexistent"}, Hybrid: true})
+	codex, err := f.launches.Create(launch.Input{Name: "codex", Cmd: []string{fakeAgentPath(f.t, codex.Name)}, Env: map[string]string{"PATH": "/nonexistent"}, Hybrid: true})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -1044,7 +1045,7 @@ func wireChat(f *wireFixture) {
 // launch config, a vanished agent session with its candidates), a resumed
 // session and the removal of a record.
 func wireHybridRecords(f *wireFixture) {
-	agent := fakeAgentPath(f.t, agentprofile.OMP)
+	agent := fakeAgentPath(f.t, omp.Name)
 	f.norm.path(filepath.Dir(agent), "<fakeagent>")
 	cwd, err := filepath.EvalSymlinks(f.root)
 	if err != nil {

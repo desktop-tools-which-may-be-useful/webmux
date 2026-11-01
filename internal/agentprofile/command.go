@@ -2,7 +2,6 @@ package agentprofile
 
 import (
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -47,7 +46,8 @@ const (
 	ReasonSessionArg Reason = "session_arg"
 )
 
-// Message is the user-facing explanation of r, used in API errors.
+// Message is the agent-neutral explanation of r; Registry.Explain adds
+// the supported agents.
 func (r Reason) Message() string {
 	switch r {
 	case ReasonUnsupportedForm:
@@ -61,7 +61,7 @@ func (r Reason) Message() string {
 	case ReasonSessionArg:
 		return "该参数打开已有会话，混合配置请不要指定会话"
 	default:
-		return "未识别到支持的 Agent，当前版本只支持 OpenCode、omp 与 Codex CLI"
+		return "未识别到支持的 Agent"
 	}
 }
 
@@ -86,15 +86,8 @@ type Support struct {
 	Agent     string
 	Reason    Reason
 	Connector *Connector
-}
-
-// Check reports whether argv can run as a hybrid session.
-func Check(argv []string) Support {
-	cmd, err := Parse(argv)
-	if err != nil {
-		return Support{Reason: err.(*UnsupportedError).Reason}
-	}
-	return Support{Supported: true, Agent: cmd.Profile.Name, Connector: cmd.Profile.Connector}
+	// Agents are the display names of every supported agent.
+	Agents []string
 }
 
 // Seed is a chat-side config value derived from the launch arguments: the
@@ -105,41 +98,35 @@ type Seed struct {
 	Arg      string
 }
 
-// keptOption is one kept option: its name, value (empty without one) and
+// KeptOption is one kept option: its name, value (empty without one) and
 // the argument as written, an option and its value joined by a space.
-type keptOption struct {
-	name, value, token string
+type KeptOption struct {
+	Name, Value, Token string
 }
 
-// canonical maps long option names to the short ones in aliases.
-func (o keptOption) canonical(aliases map[string]string) string {
-	if short, ok := aliases[o.name]; ok {
+// Canonical maps long option names to the short ones in aliases.
+func (o KeptOption) Canonical(aliases map[string]string) string {
+	if short, ok := aliases[o.Name]; ok {
 		return short
 	}
-	return o.name
+	return o.Name
 }
 
-// Command is a parsed launch command for a built-in agent.
+// Command is a parsed launch command for a registered agent.
 type Command struct {
+	Agent   Agent
 	Profile *Profile
 	Form    Form
 	// Executable is argv's agent executable as written (possibly a path).
 	Executable string
 	args       []string
 	kept       []string
-	keptOpts   []keptOption
+	keptOpts   []KeptOption
 	dropped    []string
 }
 
-// Parse recognises argv as a profile's command in a supported form and
-// classifies its arguments. The returned error is always *UnsupportedError.
-func Parse(argv []string) (Command, error) {
-	form, exe, args, ok := splitForm(argv)
-	profile, known := Lookup(filepath.Base(exe))
-	if !ok || !known {
-		return Command{}, &UnsupportedError{Reason: unrecognised(argv)}
-	}
-	cmd := Command{Profile: profile, Form: form, Executable: exe, args: slices.Clone(args)}
+func newCommand(agent Agent, form Form, exe string, args []string) (Command, error) {
+	cmd := Command{Agent: agent, Profile: agent.Profile(), Form: form, Executable: exe, args: slices.Clone(args)}
 	if err := cmd.classify(); err != nil {
 		return Command{}, err
 	}
@@ -156,19 +143,6 @@ func splitForm(argv []string) (Form, string, []string, bool) {
 	return FormDirect, "", nil, false
 }
 
-// unrecognised distinguishes a wrapper around a known agent, which the user
-// can rewrite, from a command that runs no supported agent at all.
-func unrecognised(argv []string) Reason {
-	for _, token := range argv {
-		for _, word := range strings.Fields(token) {
-			if _, ok := Lookup(filepath.Base(word)); ok {
-				return ReasonUnsupportedForm
-			}
-		}
-	}
-	return ReasonUnknownAgent
-}
-
 func (c *Command) classify() error {
 	p := c.Profile
 	positionalSeen := false
@@ -180,14 +154,14 @@ func (c *Command) classify() error {
 			continue
 		}
 		if optionsDone || !strings.HasPrefix(token, "-") || token == "-" {
-			if p.positional == positionalDirectory {
+			if p.Positional == PositionalDirectory {
 				return &UnsupportedError{Reason: ReasonDirectoryArg, Arg: token}
 			}
 			if !positionalSeen && !optionsDone {
-				if p.sessionSubcommands[token] {
+				if p.SessionSubcommands[token] {
 					return &UnsupportedError{Reason: ReasonSessionArg, Arg: token}
 				}
-				if p.subcommands[token] || hasAnyPrefix(token, p.subcommandPrefixes) {
+				if p.Subcommands[token] || hasAnyPrefix(token, p.SubcommandPrefixes) {
 					return &UnsupportedError{Reason: ReasonNonInteractive, Arg: token}
 				}
 			}
@@ -196,15 +170,15 @@ func (c *Command) classify() error {
 			continue
 		}
 		name, inlineValue, inline := strings.Cut(token, "=")
-		opt, known := p.options[name]
+		opt, known := p.Options[name]
 		taken := []string{token}
 		if known && !inline {
 			next := i + 1
 			switch {
-			case opt.arity == arityOne && next < len(c.args):
+			case opt.Arity == ArityOne && next < len(c.args):
 				taken = append(taken, c.args[next])
 				i = next
-			case opt.arity == arityOptional && next < len(c.args) && !strings.HasPrefix(c.args[next], "-"):
+			case opt.Arity == ArityOptional && next < len(c.args) && !strings.HasPrefix(c.args[next], "-"):
 				taken = append(taken, c.args[next])
 				i = next
 			}
@@ -213,21 +187,21 @@ func (c *Command) classify() error {
 			c.dropped = append(c.dropped, token)
 			continue
 		}
-		switch opt.class {
-		case argKeep:
+		switch opt.Class {
+		case ArgKeep:
 			c.kept = append(c.kept, taken...)
-			kept := keptOption{name: name, value: inlineValue, token: strings.Join(taken, " ")}
+			kept := KeptOption{Name: name, Value: inlineValue, Token: strings.Join(taken, " ")}
 			if len(taken) > 1 {
-				kept.value = taken[1]
+				kept.Value = taken[1]
 			}
 			c.keptOpts = append(c.keptOpts, kept)
-		case argDrop:
+		case ArgDrop:
 			c.dropped = append(c.dropped, strings.Join(taken, " "))
-		case argStore:
+		case ArgStore:
 			return &UnsupportedError{Reason: ReasonSessionStore, Arg: name}
-		case argDirectory:
+		case ArgDirectory:
 			return &UnsupportedError{Reason: ReasonDirectoryArg, Arg: name}
-		case argNonInteractive:
+		case ArgNonInteractive:
 			return &UnsupportedError{Reason: ReasonNonInteractive, Arg: name}
 		}
 	}
@@ -275,7 +249,7 @@ const LookupMarker = "\x01webmux-path:"
 // injected returns the profile's TUI options that args does not already hold.
 func (c Command) injected(args []string) []string {
 	var missing []string
-	for _, option := range c.Profile.tuiInject {
+	for _, option := range c.Profile.TUIInject {
 		if !slices.Contains(args, option) {
 			missing = append(missing, option)
 		}
@@ -294,7 +268,7 @@ func (c Command) TUIArgv() []string {
 // written, an option and its value joined by a space.
 func (c Command) ResumeArgv(agentSessionID string) (argv, dropped []string) {
 	args := append(c.injected(c.kept), c.kept...)
-	args = append(args, c.Profile.resumeFlag, agentSessionID)
+	args = append(args, c.Profile.ResumeFlag, agentSessionID)
 	return c.wrap(bashrcScript, args...), slices.Clone(c.dropped)
 }
 
@@ -309,7 +283,7 @@ func (c Command) ACPArgv() (argv, unsupported []string) {
 		return c.wrapExec(bashrcACPScript, connector.Executable), unsupported
 	}
 	args := []string{"acp"}
-	if c.Profile.passToACP {
+	if c.Profile.PassToACP {
 		args = append(args, c.kept...)
 	}
 	return c.wrap(bashrcACPScript, args...), unsupported
@@ -318,10 +292,10 @@ func (c Command) ACPArgv() (argv, unsupported []string) {
 // ChatConfig derives chat-side config values from the kept options, and
 // lists the kept options the chat side cannot apply.
 func (c Command) ChatConfig() (seeds []Seed, unsupported []string) {
-	if c.Profile.chatSide == nil {
+	if c.Profile.ChatSide == nil {
 		return nil, nil
 	}
-	return c.Profile.chatSide(c.keptOpts)
+	return c.Profile.ChatSide(c.keptOpts)
 }
 
 // ProtocolOnFD3 reports that ACPArgv's process writes the protocol to fd 3.

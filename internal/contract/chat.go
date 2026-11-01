@@ -54,6 +54,9 @@ type ChatState struct {
 	Queue          ChatQueue       `json:"queue"`
 	Steering       bool            `json:"steering"`
 	AuthRequired   bool            `json:"authRequired"`
+	// ForceSwitchNote says what forcing a switch while the terminal UI
+	// runs a turn loses; the agent's adapter supplies it.
+	ForceSwitchNote string `json:"forceSwitchNote"`
 	// PromptCapabilities says which non-text prompt blocks the agent
 	// accepts; false means the client must send attachments as paths.
 	PromptCapabilities PromptCapabilities `json:"promptCapabilities"`

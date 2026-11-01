@@ -18,7 +18,9 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/codex"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/settings"
 )
@@ -58,7 +60,7 @@ func agentPath(t *testing.T, profile string) string {
 		}
 		// A separate file per profile, not a hard link: macOS reports a
 		// hard-linked executable under either name, breaking the root check.
-		for _, name := range []string{agentprofile.OMP, agentprofile.OpenCode, agentprofile.Codex, "codex-acp"} {
+		for _, name := range []string{omp.Name, opencode.Name, codex.Name, "codex-acp"} {
 			out, err := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent").CombinedOutput()
 			if err != nil {
 				fakeAgent.err = fmt.Errorf("go build: %w\n%s", err, out)
@@ -202,7 +204,7 @@ func resolved(t *testing.T, path string) string {
 }
 
 func TestCreateStartsEitherSide(t *testing.T) {
-	for _, profile := range []string{agentprofile.OMP, agentprofile.OpenCode} {
+	for _, profile := range []string{omp.Name, opencode.Name} {
 		for _, side := range []Side{SideTUI, SideACP} {
 			t.Run(profile+"/"+string(side), func(t *testing.T) {
 				h := newHarness(t, 0)
@@ -212,7 +214,7 @@ func TestCreateStartsEitherSide(t *testing.T) {
 				if info.Hybrid == nil || info.Hybrid.Side != string(side) || info.Hybrid.State != string(StateActive) || info.Hybrid.Agent != profile {
 					t.Fatalf("hybrid info %+v", info.Hybrid)
 				}
-				if got := slices.Contains(info.Cmd, "--standalone"); got != (profile == agentprofile.OpenCode) {
+				if got := slices.Contains(info.Cmd, "--standalone"); got != (profile == opencode.Name) {
 					t.Fatalf("shown command %q", info.Cmd)
 				}
 				rec := h.record(info.ID)
@@ -225,7 +227,7 @@ func TestCreateStartsEitherSide(t *testing.T) {
 					// The TUI may already have reported idle through OSC 7501, and
 					// omp names its session at once; OpenCode only after a turn.
 					if info.Status == session.StatusExited || s.Identity().PID != rec.PID ||
-						(profile == agentprofile.OpenCode && info.Hybrid.AgentSessionID != nil) {
+						(profile == opencode.Name && info.Hybrid.AgentSessionID != nil) {
 						t.Fatalf("terminal side: status %s pid %d record pid %d", info.Status, s.Identity().PID, rec.PID)
 					}
 				case SideACP:
@@ -244,7 +246,7 @@ func TestCreateStartsEitherSide(t *testing.T) {
 					}
 					st := sub.Snapshot.State
 					sub.Close()
-					if st.Steering != (profile == agentprofile.OMP) || len(st.Config) != 2 || st.AgentSessionID == nil {
+					if st.Steering != (profile == omp.Name) || len(st.Config) != 2 || st.AgentSessionID == nil {
 						t.Fatalf("chat state %+v", st)
 					}
 				}
@@ -271,7 +273,7 @@ func TestCreateStartsEitherSide(t *testing.T) {
 func TestCreateACPFailureRemovesSessionAndReturnsStderr(t *testing.T) {
 	h := newHarness(t, 0)
 	// Without a store the fake agent prints its error to stderr and exits.
-	in := h.input(agentprofile.OMP, SideACP, "FAKEAGENT_STORE=")
+	in := h.input(omp.Name, SideACP, "FAKEAGENT_STORE=")
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 	_, err := h.svc.Create(ctx, in)
@@ -299,7 +301,7 @@ func TestCreateRejectsAgentErrors(t *testing.T) {
 		{"FAKEAGENT_PROTOCOL_VERSION=2", "协议版本不受支持"},
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-		_, err := h.svc.Create(ctx, h.input(agentprofile.OpenCode, SideACP, row.env))
+		_, err := h.svc.Create(ctx, h.input(opencode.Name, SideACP, row.env))
 		cancel()
 		if !errors.Is(err, ErrAgent) || !strings.Contains(err.Error(), row.want) {
 			t.Fatalf("%s: %v", row.env, err)
@@ -312,11 +314,11 @@ func TestCreateRejectsAgentErrors(t *testing.T) {
 
 func TestCreateValidatesInput(t *testing.T) {
 	h := newHarness(t, 0)
-	in := h.input(agentprofile.OMP, "chat")
+	in := h.input(omp.Name, "chat")
 	if _, err := h.svc.Create(context.Background(), in); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad start side: %v", err)
 	}
-	in = h.input(agentprofile.OMP, SideTUI)
+	in = h.input(omp.Name, SideTUI)
 	in.Cmd = []string{"bash"}
 	if _, err := h.svc.Create(context.Background(), in); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unsupported command: %v", err)
@@ -336,7 +338,7 @@ func TestCorruptStoreDisablesHybridOnly(t *testing.T) {
 	if err := h.svc.Unavailable(); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("unavailable: %v", err)
 	}
-	_, err := h.svc.Create(context.Background(), h.input(agentprofile.OMP, SideTUI))
+	_, err := h.svc.Create(context.Background(), h.input(omp.Name, SideTUI))
 	if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), path) {
 		t.Fatalf("create on a corrupt store: %v", err)
 	}
@@ -367,7 +369,7 @@ func TestRecordLimit(t *testing.T) {
 	seedRecords(t, r, seeded)
 	r.close()
 	h.open(0)
-	_, err := h.svc.Create(context.Background(), h.input(agentprofile.OMP, SideTUI))
+	_, err := h.svc.Create(context.Background(), h.input(omp.Name, SideTUI))
 	if !errors.Is(err, ErrLimit) {
 		t.Fatalf("create past the limit: %v", err)
 	}
@@ -384,7 +386,7 @@ func limitID(i int) string {
 
 func TestRecordedIDsAreReserved(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideTUI))
+	s := h.create(h.input(omp.Name, SideTUI))
 	id := s.Info().ID
 	h.closeSession(id)
 	if !h.svc.records.reserved(id) {
@@ -394,7 +396,7 @@ func TestRecordedIDsAreReserved(t *testing.T) {
 
 func TestTerminalExitInterrupts(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideTUI))
+	s := h.create(h.input(omp.Name, SideTUI))
 	id := s.Info().ID
 	pid := s.Identity().PID
 	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
@@ -419,7 +421,7 @@ func TestTerminalExitInterrupts(t *testing.T) {
 
 func TestRestartMarksActiveInterrupted(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	h.svc.Close()
 	if rec, _ := openRecordsForTest(t, h.state).get(id); rec.State != StateActive {
@@ -443,7 +445,7 @@ func TestCloseDuringStart(t *testing.T) {
 	const sessions = 4
 	errs := make(chan error, sessions)
 	for range sessions {
-		in := h.input(agentprofile.OMP, SideACP, "FAKEAGENT_DELAY=initialize=500ms")
+		in := h.input(omp.Name, SideACP, "FAKEAGENT_DELAY=initialize=500ms")
 		go func() {
 			_, err := h.svc.Create(context.Background(), in)
 			errs <- err

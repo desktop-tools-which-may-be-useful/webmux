@@ -19,6 +19,9 @@ type HybridSupport struct {
 	Agent     string          `json:"agent,omitempty"`
 	Reason    string          `json:"reason,omitempty"`
 	Connector *AgentConnector `json:"connector,omitempty"`
+	// SupportedAgents are the display names of the agents hybrid mode
+	// supports.
+	SupportedAgents []string `json:"supportedAgents"`
 }
 
 // HybridSupportRequest is the body of POST /api/launch-configs/hybrid-support.

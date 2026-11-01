@@ -263,7 +263,11 @@ describe("launch config schemas", () => {
     cmd: ["claude"],
     envNames: [],
     hybrid: false,
-    hybridSupport: { supported: false, reason: "unknown_agent" as const },
+    hybridSupport: {
+      supported: false,
+      supportedAgents: [],
+      reason: "unknown_agent" as const,
+    },
     createdAt: "2026-10-23T00:00:00Z",
     updatedAt: "2026-10-23T00:00:00Z",
   };

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/hybrid"
 )
 
@@ -18,7 +18,7 @@ func TestServicePushesChatPermission(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds and runs the fake ACP agent")
 	}
-	agent := filepath.Join(t.TempDir(), agentprofile.OMP)
+	agent := filepath.Join(t.TempDir(), omp.Name)
 	if out, err := exec.Command("go", "build", "-o", agent, "../acp/testdata/fakeagent").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}

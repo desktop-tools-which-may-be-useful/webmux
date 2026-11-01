@@ -383,6 +383,8 @@ export const ChatStateSchema = z.object({
   }),
   steering: z.boolean(),
   authRequired: z.boolean(),
+  // What forcing a switch during a terminal turn loses, per agent.
+  forceSwitchNote: z.string(),
   promptCapabilities: z
     .object({ image: z.boolean(), embeddedContext: z.boolean() })
     .default({ image: false, embeddedContext: false }),

@@ -184,7 +184,7 @@ func (a *actor) openACP(epoch int, sid, cwd string, resume bool, beforeLoad func
 	ctx := context.Background()
 	method := acp.MethodSessionLoad
 	var err error
-	if resume && a.cmd.Profile.Resume && link.caps.Resume != nil {
+	if resume && agentprofile.ResumesSessions(a.cmd.Agent) && link.caps.Resume != nil {
 		method = acp.MethodSessionResume
 		var r acp.ResumeSessionResponse
 		r, err = link.conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionID: sid, Cwd: cwd})
@@ -230,7 +230,7 @@ func (a *actor) reapplyValues() []wanted {
 		return a.seedValues()
 	}
 	var want []wanted
-	for _, id := range a.cmd.Profile.ReapplyOnLoad {
+	for _, id := range agentprofile.ReapplyOnLoad(a.cmd.Agent) {
 		if v, ok := rec.Config[id]; ok && v != "" {
 			want = append(want, wanted{id: id, value: v})
 		}
@@ -310,7 +310,8 @@ func (a *actor) installLink(link *acpLink, init acp.InitializeResponse, config [
 	if init.AgentInfo != nil {
 		a.chat.Outdated = a.outdated(init.AgentInfo.Version, link.tools.agentVersion)
 	}
-	a.chat.Steering = a.cmd.Profile.Steering && steeringSupported(init.Meta)
+	steerer, ok := a.cmd.Agent.(agentprofile.Steerer)
+	a.chat.Steering = ok && steerer.SteeringAvailable(init.Meta)
 	a.chat.PromptCapabilities = PromptCapabilities{
 		Image:           link.prompt.Image,
 		EmbeddedContext: link.prompt.EmbeddedContext,

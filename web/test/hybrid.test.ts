@@ -39,10 +39,23 @@ describe("hybrid labels", () => {
 
   test("support and eligibility reasons fall back for unknown codes", () => {
     expect(hybridSupportReason(null)).toBe("");
-    expect(hybridSupportReason({ supported: true, agent: "omp" })).toBe("");
-    expect(hybridSupportReason({ supported: false })).toBe(
+    expect(
+      hybridSupportReason({
+        supported: true,
+        supportedAgents: [],
+        agent: "omp",
+      }),
+    ).toBe("");
+    expect(hybridSupportReason({ supported: false, supportedAgents: [] })).toBe(
       "未识别到支持的 Agent",
     );
+    expect(
+      hybridSupportReason({
+        supported: false,
+        supportedAgents: ["A", "B"],
+        reason: "unknown_agent",
+      }),
+    ).toBe("未识别到支持的 Agent，当前版本支持：A、B");
     expect(eligibilityText({ available: true, reason: "occupied" })).toBe("");
     expect(eligibilityText({ available: false, reason: "occupied" })).toBe(
       "该会话已在另一个会话中打开",
@@ -55,7 +68,11 @@ describe("hybrid labels", () => {
 
   test("Codex reasons name the connector and the other client", () => {
     expect(
-      hybridSupportReason({ supported: false, reason: "session_arg" }),
+      hybridSupportReason({
+        supported: false,
+        supportedAgents: [],
+        reason: "session_arg",
+      }),
     ).toBe("该参数打开已有会话，混合配置请不要指定会话");
     expect(connectorMissingText(connector)).toBe(
       "未安装 Codex ACP 适配器（codex-acp）",
@@ -70,7 +87,7 @@ describe("hybrid labels", () => {
     ).toBe("未安装 Codex ACP 适配器（codex-acp）");
     expect(
       eligibilityText({ available: false, reason: "occupied_external" }),
-    ).toBe("该会话正被另一个 Codex 客户端使用");
+    ).toBe("该会话正被另一个 Agent 客户端使用");
     expect(
       outdatedText({ name: "codex-acp", version: "2.4.0", verified: "2.5.0" }),
     ).toBe("codex-acp 2.4.0 低于已验证版本 2.5.0，部分功能可能不可用");

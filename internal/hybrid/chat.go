@@ -315,6 +315,9 @@ type ChatState struct {
 	Queue          Queue
 	Steering       bool
 	AuthRequired   bool
+	// ForceSwitchNote says what forcing a switch during a terminal turn
+	// loses, from the agent's adapter.
+	ForceSwitchNote string
 	// PromptCapabilities is what the connected agent accepts besides text.
 	PromptCapabilities PromptCapabilities
 	PermissionMode     PermissionMode

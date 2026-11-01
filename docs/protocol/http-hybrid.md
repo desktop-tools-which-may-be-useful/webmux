@@ -52,11 +52,12 @@
 
 ## 启动配置
 
-`GET/POST/PUT /api/launch-configs[/{id}]` 的配置与摘要带 `hybrid`（布尔）与只读 `hybridSupport: {supported, agent?, reason?, connector?}`；请求体可带 `hybrid`，带 `hybridSupport` 视为未知字段返回 400。`hybrid: true` 而命令不受支持时返回 400 并给出原因；保存时不检查连接器是否已安装。
+`GET/POST/PUT /api/launch-configs[/{id}]` 的配置与摘要带 `hybrid`（布尔）与只读 `hybridSupport: {supported, agent?, reason?, connector?, supportedAgents}`；请求体可带 `hybrid`，带 `hybridSupport` 视为未知字段返回 400。`hybrid: true` 而命令不受支持时返回 400 并给出原因；保存时不检查连接器是否已安装。
 
 `POST /api/launch-configs/hybrid-support {cmd}` 只读返回同样的 `hybridSupport`，供设置页去抖查询：
 
 - `reason` 取值：`unknown_agent`、`unsupported_form`、`session_store`、`directory_arg`、`non_interactive`、`session_arg`。
+- `supportedAgents`：注册表中全部受支持 agent 的显示名（总是数组），用于原因与说明文案，前端不写死 agent 列表。
 - `connector` 只在档案需要第三方 ACP 连接器时出现，来自档案，不表示已安装；Codex 为 `{executable: "codex-acp", title, installCommand, docsUrl}`。
 
 `launch-configs.json` 保持 v2，`hybrid` 为 `false` 时不写入。
@@ -67,7 +68,8 @@
 
 - `snapshot`：首帧。`state` 为完整聊天状态，`generation`、`from`（日志中最早的序号）、`next`；`reset: true` 表示所给位置已不在日志中，客户端须丢弃时间线；`truncated: true` 表示更早的事件已按字节上限丢弃。
 - `events`：`{generation, from, items}`，snapshot 之后立即发送一帧补发（可为空），之后为实时增量。
-- `state`：完整替换聊天状态（所在端、阶段、资格与原因、回合、待答复请求、配置项、命令、计划、用量、队列、是否可插话、`authRequired`、`promptCapabilities`、`permissionMode`、`idChange`、`queueLost` 等）。其中几个字段：
+- `state`：完整替换聊天状态（所在端、阶段、资格与原因、回合、待答复请求、配置项、命令、计划、用量、队列、是否可插话、`authRequired`、`promptCapabilities`、`permissionMode`、`forceSwitchNote`、`idChange`、`queueLost` 等）。其中几个字段：
+  - `forceSwitchNote`：TUI 回合未停下时强制切换会损失什么，由该 agent 的适配器提供。
   - `promptCapabilities`：`{image, embeddedContext}`，来自 ACP `initialize`，连接断开或休眠时复位为 `false`。
   - `permissionMode`：`ask` 或 `auto`，见下文。
   - `eligibility`：`{available, reason?, connector?}`；`reason` 为 `connector_missing` 时 `connector` 给出未安装的连接器。

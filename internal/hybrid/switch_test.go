@@ -15,7 +15,8 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -176,7 +177,7 @@ func countCalls(t *testing.T, store, method string) int {
 // the TUI's resume command reopens the chat's session, and no two
 // processes ever hold the agent session.
 func TestSwitchRoundTripFromTerminal(t *testing.T) {
-	for _, profile := range []string{agentprofile.OMP, agentprofile.OpenCode} {
+	for _, profile := range []string{omp.Name, opencode.Name} {
 		t.Run(profile, func(t *testing.T) {
 			h := newHarness(t, 0)
 			h.fast()
@@ -218,7 +219,7 @@ func TestSwitchRoundTripFromTerminal(t *testing.T) {
 func TestSwitchRoundTripFromChat(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	chatTurn(t, h, id, "alpha")
 	st := h.follow(id)
@@ -265,7 +266,7 @@ func TestSwitchRoundTripFromChat(t *testing.T) {
 func TestSwitchBackWithoutTerminalInput(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OpenCode, SideACP))
+	s := h.create(h.input(opencode.Name, SideACP))
 	id := s.Info().ID
 	chatTurn(t, h, id, "alpha")
 	h.mustSwitch(id, SideTUI)
@@ -283,7 +284,7 @@ func TestSwitchBackWithoutTerminalInput(t *testing.T) {
 // the profile's key and the switch goes on once the terminal is idle; the
 // interrupted turn is in the loaded history.
 func TestSwitchMidTurnInterrupts(t *testing.T) {
-	for _, profile := range []string{agentprofile.OMP, agentprofile.OpenCode} {
+	for _, profile := range []string{omp.Name, opencode.Name} {
 		t.Run(profile, func(t *testing.T) {
 			h := newHarness(t, 0)
 			h.fast()
@@ -349,7 +350,7 @@ func (h *harness) choose(id, choice string) SwitchResult {
 func TestSwitchAwaitingChoice(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=200ms"))
+	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=200ms"))
 	id := s.Info().ID
 	tuiTurn(t, s, "first")
 	h.waitEligible(id)
@@ -403,7 +404,7 @@ func TestSwitchAwaitingChoice(t *testing.T) {
 func TestSwitchChoiceRacesIdle(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=100ms"))
+	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=100ms"))
 	id := s.Info().ID
 	tuiTurn(t, s, "first")
 	h.waitEligible(id)
@@ -450,7 +451,7 @@ func TestSwitchChoiceRacesIdle(t *testing.T) {
 func TestSwitchToTerminalReturnsDraft(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1"))
 	id := s.Info().ID
 	h.ask(id)
 	st := h.follow(id)
@@ -487,7 +488,7 @@ func TestSwitchToTerminalReturnsDraft(t *testing.T) {
 func TestSwitchReappliesModeAfterLoad(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	plan := "plan"
 	if err := h.svc.SetConfig(ctxT(t), id, ConfigInput{ClientRequestID: rid(), ConfigID: "mode", Value: &plan}); err != nil {
@@ -520,7 +521,7 @@ func TestSwitchReappliesModeAfterLoad(t *testing.T) {
 func TestSwitchConflicts(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI, "FAKEAGENT_DELAY=session/load=800ms"))
+	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_DELAY=session/load=800ms"))
 	id := s.Info().ID
 	tuiTurn(t, s, "one")
 	h.waitEligible(id)
@@ -564,7 +565,7 @@ func TestSwitchConflicts(t *testing.T) {
 func TestSwitchLoadFailureRollsBack(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI, "FAKEAGENT_FAIL=session/load=-32603"))
+	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_FAIL=session/load=-32603"))
 	id := s.Info().ID
 	tuiTurn(t, s, "one")
 	h.waitEligible(id)
@@ -592,8 +593,8 @@ func TestSwitchLoadFailureRollsBack(t *testing.T) {
 func TestSwitchRollbackFailureInterrupts(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	in := h.input(agentprofile.OMP, SideACP)
-	exe := filepath.Join(t.TempDir(), agentprofile.OMP)
+	in := h.input(omp.Name, SideACP)
+	exe := filepath.Join(t.TempDir(), omp.Name)
 	copyFile(t, in.Cmd[0], exe)
 	in.Cmd = []string{exe}
 	s := h.create(in)
@@ -624,8 +625,8 @@ func TestSwitchRollbackFailureInterrupts(t *testing.T) {
 func TestSwitchFailureKeepsQueue(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	in := h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1")
-	exe := filepath.Join(t.TempDir(), agentprofile.OMP)
+	in := h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1")
+	exe := filepath.Join(t.TempDir(), omp.Name)
 	copyFile(t, in.Cmd[0], exe)
 	in.Cmd = []string{exe}
 	s := h.create(in)
@@ -689,7 +690,7 @@ func copyFile(t *testing.T, from, to string) {
 func TestEligibilityBeforeFirstMessage(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	open := h.create(h.input(agentprofile.OpenCode, SideTUI))
+	open := h.create(h.input(opencode.Name, SideTUI))
 	h.waitReason(open.Info().ID, ReasonNoSessionID)
 	var ineligible *IneligibleError
 	if _, err := h.switchTo(open.Info().ID, SideACP); !errors.As(err, &ineligible) || ineligible.Reason != ReasonNoSessionID {
@@ -699,14 +700,14 @@ func TestEligibilityBeforeFirstMessage(t *testing.T) {
 		t.Fatalf("refused switch changed the session %+v", info.Hybrid)
 	}
 
-	omp := h.create(h.input(agentprofile.OMP, SideTUI))
-	id := omp.Info().ID
-	waitFor(t, "omp session id", func() bool { return omp.Info().Hybrid.AgentSessionID != nil })
+	ompSess := h.create(h.input(omp.Name, SideTUI))
+	id := ompSess.Info().ID
+	waitFor(t, "omp session id", func() bool { return ompSess.Info().Hybrid.AgentSessionID != nil })
 	h.waitReason(id, ReasonNotListed)
 	if _, err := h.switchTo(id, SideACP); !errors.As(err, &ineligible) || ineligible.Reason != ReasonNotListed {
 		t.Fatalf("switch before the session is saved: %v", err)
 	}
-	tuiTurn(t, omp, "first")
+	tuiTurn(t, ompSess, "first")
 	h.waitEligible(id)
 	if c := h.chatState(id).IDChange; c != nil {
 		t.Fatalf("first ID reported as a change %+v", c)
@@ -718,8 +719,8 @@ func TestEligibilityBeforeFirstMessage(t *testing.T) {
 func TestEligibilityNotRoot(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	in := h.input(agentprofile.OMP, SideTUI)
-	script := filepath.Join(t.TempDir(), agentprofile.OMP)
+	in := h.input(omp.Name, SideTUI)
+	script := filepath.Join(t.TempDir(), omp.Name)
 	if err := os.WriteFile(script, []byte("#!/bin/sh\n"+in.Cmd[0]+" \"$@\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +739,7 @@ func TestEligibilityNotRoot(t *testing.T) {
 func TestEligibilityOccupied(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI))
+	s := h.create(h.input(omp.Name, SideTUI))
 	id := s.Info().ID
 	tuiTurn(t, s, "first")
 	h.waitEligible(id)
@@ -766,7 +767,7 @@ func TestEligibilityOccupied(t *testing.T) {
 func TestAgentSessionIDChange(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI))
+	s := h.create(h.input(omp.Name, SideTUI))
 	id := s.Info().ID
 	tuiTurn(t, s, "first")
 	h.waitEligible(id)
@@ -796,7 +797,7 @@ func TestProbeDebounce(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
 	h.svc.timing.probeDelay = 600 * time.Millisecond
-	s := h.create(h.input(agentprofile.OMP, SideTUI))
+	s := h.create(h.input(omp.Name, SideTUI))
 	id := s.Info().ID
 	waitFor(t, "omp session id", func() bool { return s.Info().Hybrid.AgentSessionID != nil })
 	if err := s.WriteContext(ctxT(t), []byte("/new\r/new\r/new\r")); err != nil {
@@ -823,7 +824,7 @@ func TestProbeConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ids[i] = h.create(h.input(agentprofile.OMP, SideTUI, "FAKEAGENT_DELAY=session/list=700ms")).Info().ID
+			ids[i] = h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_DELAY=session/list=700ms")).Info().ID
 		}()
 	}
 	wg.Wait()
@@ -859,7 +860,7 @@ func TestProbeConcurrency(t *testing.T) {
 func TestChatAgentKilledMidTurnReconnects(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_TURN_DELAY=300ms"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=300ms"))
 	id := s.Info().ID
 	pid := h.record(id).PID
 	st := h.follow(id)
@@ -888,7 +889,7 @@ func TestChatAgentKilledMidTurnReconnects(t *testing.T) {
 func TestCloseInterruptsTerminalTurn(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(agentprofile.OMP, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=200ms"))
+	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=200ms"))
 	id := s.Info().ID
 	typeLine(t, s, strings.Repeat("slow ", 100))
 	waitFor(t, "terminal turn", func() bool { return tuiBusy(s.Info()) })

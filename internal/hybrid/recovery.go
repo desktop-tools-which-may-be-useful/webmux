@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -225,7 +224,7 @@ func (s *Service) resume(id string, in ResumeInput) (*session.Session, error) {
 	if side == "" {
 		side = rec.Side
 	}
-	cmd, err := agentprofile.Parse(rec.Cmd)
+	cmd, err := s.agents.Parse(rec.Cmd)
 	if err != nil {
 		return nil, fmt.Errorf("%w: 记录中的命令不能用于混合会话: %v", ErrInvalid, err)
 	}

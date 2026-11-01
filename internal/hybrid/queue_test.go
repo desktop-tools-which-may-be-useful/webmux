@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -80,7 +81,7 @@ func slowChat(t *testing.T, h *harness, profile string, env ...string) (string, 
 
 func TestQueueRunWhileBusy(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP)
+	id, st := slowChat(t, h, omp.Name)
 	ctx := ctxT(t)
 	if r := prompt(t, h, id, "first"); r.Queued || r.TurnID == "" {
 		t.Fatalf("idle prompt %+v", r)
@@ -116,7 +117,7 @@ func TestQueueRunWhileBusy(t *testing.T) {
 
 func TestPromptRetryDedupe(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP)
+	id, st := slowChat(t, h, omp.Name)
 	ctx := ctxT(t)
 	in := PromptInput{ClientRequestID: rid(), Text: "once"}
 	first, err := h.svc.Prompt(ctx, id, in)
@@ -161,7 +162,7 @@ func TestPromptRetryDedupe(t *testing.T) {
 
 func TestQueueRemovedItemConflicts(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id, st := slowChat(t, h, omp.Name, "FAKEAGENT_PERMISSION=1")
 	ctx := ctxT(t)
 	prompt(t, h, id, "busy")
 	item, err := h.svc.Prompt(ctx, id, PromptInput{ClientRequestID: rid(), Text: "queued"})
@@ -190,7 +191,7 @@ func TestQueueRemovedItemConflicts(t *testing.T) {
 
 func TestQueuePausesAfterStop(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id, st := slowChat(t, h, omp.Name, "FAKEAGENT_PERMISSION=1")
 	ctx := ctxT(t)
 	prompt(t, h, id, "busy")
 	for _, text := range []string{"one", "two"} {
@@ -236,7 +237,7 @@ func TestQueuePausesAfterStop(t *testing.T) {
 
 func TestQueueEditMoveAndSendNow(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id, st := slowChat(t, h, omp.Name, "FAKEAGENT_PERMISSION=1")
 	ctx := ctxT(t)
 	prompt(t, h, id, "busy")
 	var ids []string
@@ -277,7 +278,7 @@ func TestQueueEditMoveAndSendNow(t *testing.T) {
 
 func TestSteering(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id, st := slowChat(t, h, omp.Name, "FAKEAGENT_PERMISSION=1")
 	ctx := ctxT(t)
 	if !st.state.Steering {
 		t.Fatal("omp chat does not offer steering")
@@ -296,13 +297,13 @@ func TestSteering(t *testing.T) {
 	}
 	waitFor(t, "steering call", func() bool {
 		b, err := readEventsLog(h.store)
-		return err == nil && strings.Contains(b, "call "+methodSteering)
+		return err == nil && strings.Contains(b, "call _session/steering")
 	})
 }
 
 func TestOpenCodeHasNoSteering(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OpenCode, "FAKEAGENT_PERMISSION=1")
+	id, st := slowChat(t, h, opencode.Name, "FAKEAGENT_PERMISSION=1")
 	if st.state.Steering {
 		t.Fatal("OpenCode offers steering")
 	}
@@ -315,7 +316,7 @@ func TestOpenCodeHasNoSteering(t *testing.T) {
 
 func TestChatCommandsNeedChatSide(t *testing.T) {
 	h := newHarness(t, 0)
-	id := h.create(h.input(agentprofile.OMP, SideTUI)).Info().ID
+	id := h.create(h.input(omp.Name, SideTUI)).Info().ID
 	ctx := ctxT(t)
 	for name, err := range map[string]error{
 		"cancel": h.svc.Cancel(ctx, id, rid()),
@@ -333,7 +334,7 @@ func TestChatCommandsNeedChatSide(t *testing.T) {
 // chat side's attention.
 func TestChatSwitchingRefusesCommandsAndClearsAttention(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP)
+	id, st := slowChat(t, h, omp.Name)
 	shell, err := h.manager.Get(id)
 	if err != nil {
 		t.Fatal(err)
@@ -368,7 +369,7 @@ func TestChatSwitchingRefusesCommandsAndClearsAttention(t *testing.T) {
 
 func TestChatSetConfig(t *testing.T) {
 	h := newHarness(t, 0)
-	id, st := slowChat(t, h, agentprofile.OMP)
+	id, st := slowChat(t, h, omp.Name)
 	ctx := ctxT(t)
 	st.until("options", func([]Event) bool { return len(st.state.Config) == 2 })
 	smart := "smart"
@@ -399,7 +400,7 @@ func TestChatSetConfig(t *testing.T) {
 
 func TestChatAttentionAndPreview(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1"))
 	id := s.Info().ID
 	h.ask(id)
 	st := h.follow(id)
@@ -437,7 +438,7 @@ func TestChatAttentionAndPreview(t *testing.T) {
 
 func TestChatErrorAttention(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OpenCode, SideACP, "FAKEAGENT_FAIL=session/prompt=-32603"))
+	s := h.create(h.input(opencode.Name, SideACP, "FAKEAGENT_FAIL=session/prompt=-32603"))
 	id := s.Info().ID
 	st := h.follow(id)
 	prompt(t, h, id, "hi")

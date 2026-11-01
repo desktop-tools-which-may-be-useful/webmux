@@ -8,6 +8,11 @@
       "installCommand": "npm install -g @agentclientprotocol/codex-acp",
       "title": "Codex ACP 适配器"
     },
-    "supported": true
+    "supported": true,
+    "supportedAgents": [
+      "omp",
+      "OpenCode",
+      "Codex CLI"
+    ]
   }
 }

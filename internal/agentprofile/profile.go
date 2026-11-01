@@ -1,20 +1,99 @@
-// Package agentprofile describes the CLI agents that hybrid sessions can move
-// between a terminal UI and an ACP connection. Profiles are plain data plus
-// pure functions over argv and terminal signals; they start no processes and
-// hold no state. The parameter tables follow the measured baseline in
-// openspec/changes/archive/2026-10-29-add-acp-hybrid-sessions/baseline.md
-// and, for Codex, the measurements recorded in the add-codex-hybrid-profile
-// change.
+// Package agentprofile is the agent-neutral core of hybrid sessions: the
+// Agent adapter interface with its optional capabilities, the Profile data
+// an adapter describes its command line with, argv classification, and the
+// Registry that recognises commands and terminal signals. It starts no
+// processes and holds no state, and names no agent: each agent is an
+// adapter in its own subpackage (opencode, omp, codex), listed by
+// agentprofile/agents.
 package agentprofile
 
-import "time"
-
-// Agent names identify a profile on the wire and in hybrid session records.
-const (
-	OpenCode = "opencode"
-	OMP      = "omp"
-	Codex    = "codex"
+import (
+	"encoding/json"
+	"slices"
+	"time"
 )
+
+// Agent is one CLI agent that hybrid sessions can move between a terminal
+// UI and an ACP connection. Behaviour that only some agents have is an
+// optional interface (Resumer, ConfigReapplier, Steerer, LockTracker,
+// ForceSwitchNoter); callers type-assert for it.
+type Agent interface {
+	// Profile is the agent's static description; it is read-only.
+	Profile() *Profile
+	// Identify interprets terminal signals; ok is false when they do not
+	// come from this agent.
+	Identify(Signals) (Identity, bool)
+	// InterruptKeys are the key presses that stop a running turn in the
+	// terminal UI, written one at a time with a gap between them.
+	InterruptKeys() [][]byte
+}
+
+// Resumer is an agent whose session/resume (no history replay) may be used
+// for waking from idle sleep and reconnecting after a crash, when the
+// agent declares it; otherwise those use session/load.
+type Resumer interface {
+	ResumesSessions() bool
+}
+
+// ConfigReapplier is an agent whose session/load does not restore some
+// config options, so their recorded values are set again after a load.
+type ConfigReapplier interface {
+	ReapplyOnLoad() []string
+}
+
+// Steerer is an agent with a private extension that adds text to the
+// running turn.
+type Steerer interface {
+	// SteeringMethod is the extension's JSON-RPC method.
+	SteeringMethod() string
+	// SteeringAvailable reads the initialize result's _meta.
+	SteeringAvailable(initMeta json.RawMessage) bool
+	// SteeringMeta is the _meta sent with each steering request, nil for
+	// none.
+	SteeringMeta() json.RawMessage
+}
+
+// LockTracker is an agent whose session IDs come from the writer locks its
+// processes hold open rather than from its terminal signals.
+type LockTracker interface {
+	// LockedSessions returns the agent session IDs whose writer locks are
+	// among paths, the open files of the terminal UI's processes, in paths
+	// order. getenv reads the session's environment; userHome is the
+	// service user's home directory.
+	LockedSessions(paths []string, getenv func(string) string, userHome string) []string
+}
+
+// ForceSwitchNoter is an agent that says what forcing a switch while its
+// terminal UI runs a turn loses; others get DefaultForceSwitchNote.
+type ForceSwitchNoter interface {
+	ForceSwitchNote() string
+}
+
+// DefaultForceSwitchNote is what forcing a switch loses for an agent
+// without a ForceSwitchNoter.
+const DefaultForceSwitchNote = "已输出的部分可能丢失；回合不会在后台继续"
+
+// ForceSwitchNote is a's note on forcing a switch.
+func ForceSwitchNote(a Agent) string {
+	if n, ok := a.(ForceSwitchNoter); ok {
+		return n.ForceSwitchNote()
+	}
+	return DefaultForceSwitchNote
+}
+
+// ResumesSessions reports whether a permits session/resume.
+func ResumesSessions(a Agent) bool {
+	r, ok := a.(Resumer)
+	return ok && r.ResumesSessions()
+}
+
+// ReapplyOnLoad lists the config options a's session/load does not keep.
+func ReapplyOnLoad(a Agent) []string {
+	if r, ok := a.(ConfigReapplier); ok {
+		return r.ReapplyOnLoad()
+	}
+	return nil
+}
 
 // Connector is a separately installed program that provides an agent's ACP
 // side when the agent has no ACP mode of its own. WebMux never installs it;
@@ -30,76 +109,70 @@ type Connector struct {
 	VerifiedVersion string
 }
 
-// argClass says what happens to a recognised option when webmux builds a
+// ArgClass says what happens to a recognised option when webmux builds a
 // resume or ACP command from a launch config's argv.
-type argClass int
+type ArgClass int
 
 const (
-	// argKeep is written into resume commands and, for profiles that pass
+	// ArgKeep is written into resume commands and, for profiles that pass
 	// options through, into the ACP command.
-	argKeep argClass = iota
-	// argDrop is omitted from resume and ACP commands and listed to the user.
-	argDrop
-	// argStore prevents hybrid mode: the TUI and ACP would see different
+	ArgKeep ArgClass = iota
+	// ArgDrop is omitted from resume and ACP commands and listed to the user.
+	ArgDrop
+	// ArgStore prevents hybrid mode: the TUI and ACP would see different
 	// session stores.
-	argStore
-	// argDirectory prevents hybrid mode: the command names its own directory.
-	argDirectory
-	// argNonInteractive prevents hybrid mode: no interactive UI starts.
-	argNonInteractive
+	ArgStore
+	// ArgDirectory prevents hybrid mode: the command names its own directory.
+	ArgDirectory
+	// ArgNonInteractive prevents hybrid mode: no interactive UI starts.
+	ArgNonInteractive
 )
 
-// arity is how many values an option consumes after the option itself.
-type arity int
+// Arity is how many values an option consumes after the option itself.
+type Arity int
 
 const (
-	arityNone arity = iota
-	arityOne
-	// arityOptional consumes the next token unless it looks like an option.
-	arityOptional
+	ArityNone Arity = iota
+	ArityOne
+	// ArityOptional consumes the next token unless it looks like an option.
+	ArityOptional
 )
 
-type option struct {
-	class argClass
-	arity arity
+// Option is how an agent treats one command-line option.
+type Option struct {
+	Class ArgClass
+	Arity Arity
 }
 
-// positionalPolicy says what a non-option argument means for the agent.
-type positionalPolicy int
+// Options builds an option table entry for each name.
+func Options(table map[string]Option, class ArgClass, arity Arity, names ...string) {
+	for _, name := range names {
+		table[name] = Option{Class: class, Arity: arity}
+	}
+}
+
+// Positional says what a non-option argument means for the agent.
+type Positional int
 
 const (
-	// positionalPrompt arguments are an initial prompt and are dropped.
-	positionalPrompt positionalPolicy = iota
-	// positionalDirectory arguments name a working directory.
-	positionalDirectory
+	// PositionalPrompt arguments are an initial prompt and are dropped.
+	PositionalPrompt Positional = iota
+	// PositionalDirectory arguments name a working directory.
+	PositionalDirectory
 )
 
-// Profile is one built-in agent. Fields are read-only after package init.
+// Profile is an agent's static description: identity, versions, how its
+// command line is classified and rewritten, and how its processes run.
 type Profile struct {
-	// Name is the stable agent identifier, also the executable base name.
+	// Name is the stable agent identifier on the wire and in records.
 	Name string
 	// Title is the display name.
 	Title string
-	// VerifiedVersion is the newest release measured in the baseline; older
-	// versions only produce a notice.
+	// Executables are the base names the agent runs as; empty means Name.
+	Executables []string
+	// VerifiedVersion is the newest release measured; older versions only
+	// produce a notice.
 	VerifiedVersion string
-	// InterruptKeys are the key presses that stop a running turn, written to
-	// the PTY one at a time: OpenCode needs two separate Esc presses, and a
-	// single "\x1b\x1b" read reaches it as one Alt+Esc.
-	InterruptKeys [][]byte
-	// ReapplyOnLoad lists config option IDs that session/load does not
-	// restore, so the recorded values are set again after a switch.
-	ReapplyOnLoad []string
-	// Steering reports the private _session/steering extension.
-	Steering bool
-	// Resume allows session/resume (no history replay) for waking from idle
-	// sleep and reconnecting after a crash, when the agent declares it;
-	// otherwise those use session/load.
-	Resume bool
-	// SteeringIdlePrompt asks the steering extension to hand a prompt back
-	// (outcome promptRequired) instead of starting a turn by itself when no
-	// turn runs.
-	SteeringIdlePrompt bool
 	// Connector provides the ACP side; nil when the agent's own executable
 	// has an acp subcommand.
 	Connector *Connector
@@ -117,149 +190,41 @@ type Profile struct {
 	// command menu.
 	HiddenCommands []string
 	// StartupQuiet ignores the terminal UI's busy signal for this long after
-	// it starts: Codex reports working while it loads.
+	// it starts.
 	StartupQuiet time.Duration
 
-	resumeFlag string
-	tuiInject  []string
-	passToACP  bool
-	// chatSide derives chat-side config values from the kept options and
+	// ResumeFlag opens a session in the terminal UI: an option or a
+	// subcommand, followed by the session ID.
+	ResumeFlag string
+	// TUIInject are options every terminal run needs.
+	TUIInject []string
+	// PassToACP writes the kept options into the ACP command too.
+	PassToACP bool
+	// ChatSide derives chat-side config values from the kept options and
 	// lists the kept options the chat side cannot apply.
-	chatSide    func(kept []keptOption) ([]Seed, []string)
-	locks       *lockLayout
-	options     map[string]option
-	positional  positionalPolicy
-	subcommands map[string]bool
-	// subcommandPrefixes also start no interactive UI (Codex migrate-*).
-	subcommandPrefixes []string
-	// sessionSubcommands open an existing session (Codex resume, fork).
-	sessionSubcommands map[string]bool
+	ChatSide    func(kept []KeptOption) ([]Seed, []string)
+	Options     map[string]Option
+	Positional  Positional
+	Subcommands map[string]bool
+	// SubcommandPrefixes also start no interactive UI.
+	SubcommandPrefixes []string
+	// SessionSubcommands open an existing session.
+	SessionSubcommands map[string]bool
 }
 
-// lockLayout is where an agent holds a writer lock for each session it has
-// open: <home>/<dir>/<id><suffix>, home from env variable homeEnv or else
-// homeDefault under the user's home directory.
-type lockLayout struct {
-	homeEnv, homeDefault, dir, suffix string
-}
-
-var opencode = &Profile{
-	Name:            OpenCode,
-	Title:           "OpenCode",
-	VerifiedVersion: "2.1.4",
-	InterruptKeys:   [][]byte{[]byte("\x1b"), []byte("\x1b")},
-	Resume:          true,
-	resumeFlag:      "-s",
-	// The default TUI is a client of the background service, where a turn
-	// keeps running after the TUI exits; a private server stops with it.
-	tuiInject:  []string{"--standalone"},
-	positional: positionalDirectory,
-	options: map[string]option{
-		"--standalone":  {argKeep, arityNone},
-		"--auto":        {argKeep, arityNone},
-		"--log-level":   {argKeep, arityOne},
-		"--print-logs":  {argKeep, arityNone},
-		"-c":            {argDrop, arityNone},
-		"--continue":    {argDrop, arityNone},
-		"-s":            {argDrop, arityOne},
-		"--session":     {argDrop, arityOne},
-		"--prompt":      {argDrop, arityOne},
-		"--server":      {argStore, arityOne},
-		"-h":            {argNonInteractive, arityNone},
-		"--help":        {argNonInteractive, arityNone},
-		"-v":            {argNonInteractive, arityNone},
-		"--version":     {argNonInteractive, arityNone},
-		"--completions": {argNonInteractive, arityOne},
-		"--wizard":      {argNonInteractive, arityNone},
-	},
-}
-
-var omp = &Profile{
-	Name:            OMP,
-	Title:           "omp",
-	VerifiedVersion: "18.13.1",
-	InterruptKeys:   [][]byte{[]byte("\x1b")},
-	ReapplyOnLoad:   []string{"mode"},
-	Steering:        true,
-	Resume:          true,
-	resumeFlag:      "--resume",
-	// omp acp parses the full argv and ignores unknown options, so every
-	// kept option configures both sides the same way.
-	passToACP:  true,
-	positional: positionalPrompt,
-	options:    ompOptions(),
-	subcommands: setOf("acp", "agents", "anonymize", "auth", "auth-broker",
-		"auth-gateway", "bench", "browser-relay", "cleanse", "clip", "collab",
-		"commit", "completions", "compress", "config", "dry-balance", "find",
-		"gallery", "gc", "git", "grep", "grievances", "if-bench", "images",
-		"install", "join", "login", "models", "play", "plugin", "predict", "ps",
-		"read", "render", "say", "search", "session", "setup", "share", "shell",
-		"skill", "ssh", "stats", "stream", "tiny-models", "token", "toks",
-		"ttsr", "update", "usage", "worktree"),
-}
-
-func ompOptions() map[string]option {
-	options := map[string]option{
-		"-c":               {argDrop, arityNone},
-		"--continue":       {argDrop, arityNone},
-		"-r":               {argDrop, arityOptional},
-		"--resume":         {argDrop, arityOptional},
-		"--restore":        {argDrop, arityOne},
-		"--goal":           {argDrop, arityOne},
-		"--plan-yolo":      {argDrop, arityNone},
-		"--plan-yolo-into": {argDrop, arityOne},
-		"--from-claude":    {argDrop, arityNone},
-		"--from-codex":     {argDrop, arityNone},
-		"--wait-async":     {argDrop, arityNone},
-		"--print-thoughts": {argDrop, arityNone},
-		"--no-ui":          {argDrop, arityNone},
-		"--session-dir":    {argStore, arityOne},
-		"--no-session":     {argStore, arityNone},
-		"--cwd":            {argDirectory, arityOne},
-		"-p":               {argNonInteractive, arityNone},
-		"--print":          {argNonInteractive, arityNone},
-		"--mode":           {argNonInteractive, arityOne},
-		"--export":         {argNonInteractive, arityOne},
-		"--alias":          {argNonInteractive, arityOne},
-		"-h":               {argNonInteractive, arityNone},
-		"--help":           {argNonInteractive, arityNone},
-		"-v":               {argNonInteractive, arityNone},
-		"--version":        {argNonInteractive, arityNone},
+// RunsAs reports whether executable base name base runs this agent.
+func (p *Profile) RunsAs(base string) bool {
+	if len(p.Executables) == 0 {
+		return base == p.Name
 	}
-	for _, name := range []string{"--model", "--smol", "--slow", "--plan",
-		"--prewalk-into", "--provider", "--api-key", "--system-prompt",
-		"--system-prompt-template", "--append-system-prompt", "--profile",
-		"--config", "--add-dir", "--models", "--tools", "--thinking",
-		"--service-tier", "--hook", "-e", "--extension", "--skills",
-		"--max-time", "--warn-cost", "--max-cost", "--approval-mode",
-		"--plugin-dir"} {
-		options[name] = option{argKeep, arityOne}
-	}
-	for _, name := range []string{"--prewalk", "--no-prewalk", "--allow-home",
-		"--no-tools", "--no-lsp", "--no-pty", "--hide-thinking", "--advisor",
-		"--external-thinking", "--no-extensions", "--no-skills", "--no-rules",
-		"--no-context-files", "--no-title", "--auto-approve"} {
-		options[name] = option{argKeep, arityNone}
-	}
-	return options
+	return slices.Contains(p.Executables, base)
 }
 
-func setOf(names ...string) map[string]bool {
+// SetOf builds a set of names.
+func SetOf(names ...string) map[string]bool {
 	set := make(map[string]bool, len(names))
 	for _, name := range names {
 		set[name] = true
 	}
 	return set
-}
-
-var profiles = []*Profile{opencode, omp, codex}
-
-// Lookup returns the built-in profile with the given name.
-func Lookup(name string) (*Profile, bool) {
-	for _, p := range profiles {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return nil, false
 }

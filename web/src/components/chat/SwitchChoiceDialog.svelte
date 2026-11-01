@@ -6,12 +6,12 @@
   // seconds. Every device sees the question; the first answer applies.
   let {
     open = $bindable(false),
-    agent,
+    note,
     busy,
     onchoose,
   }: {
     open?: boolean;
-    agent: string;
+    note: string;
     busy: boolean;
     onchoose: (choice: "wait" | "force" | "cancel") => void;
   } = $props();
@@ -29,9 +29,7 @@
       <li><strong class="text-foreground">继续等待</strong>：再等待 10 秒。</li>
       <li>
         <strong class="text-foreground">强制切换</strong>：直接结束
-        TUI。被强制结束的回合可能不完整，{agent === "omp"
-          ? "omp 已输出的部分可能丢失"
-          : "已输出的部分可能丢失；回合不会在后台继续"}。
+        TUI。被强制结束的回合可能不完整{note ? `，${note}` : ""}。
       </li>
       <li>
         <strong class="text-foreground">取消</strong>：留在终端，TUI 继续运行。

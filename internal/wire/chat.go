@@ -53,7 +53,7 @@ func ChatState(s hybrid.ChatState) contract.ChatState {
 		Queue:              chatQueue(s.Queue),
 		PromptCapabilities: contract.PromptCapabilities(s.PromptCapabilities),
 		Steering:           s.Steering, AuthRequired: s.AuthRequired, PermissionMode: contract.ChatPermissionAuto,
-		SwitchError: s.SwitchError,
+		SwitchError: s.SwitchError, ForceSwitchNote: s.ForceSwitchNote,
 		Unsupported: required(s.Unsupported), QueueLost: s.QueueLost,
 		Outdated:         each(s.Outdated, func(o hybrid.Outdated) contract.ChatOutdated { return contract.ChatOutdated(o) }),
 		ConnectorMissing: AgentConnector(s.ConnectorMissing),

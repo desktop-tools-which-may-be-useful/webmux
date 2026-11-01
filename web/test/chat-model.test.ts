@@ -42,6 +42,7 @@ const state = {
   usage: null,
   queue: { paused: false, items: [] },
   steering: true,
+  forceSwitchNote: "",
   authRequired: false,
   permissionMode: "auto",
   unsupported: [],

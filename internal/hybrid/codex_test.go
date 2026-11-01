@@ -12,6 +12,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/acp"
 	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -20,12 +21,12 @@ import (
 // live in a CODEX_HOME of the test's own.
 func (h *harness) codexInput(side Side, pathDir string, args ...string) CreateInput {
 	h.t.Helper()
-	codex := agentPath(h.t, agentprofile.Codex)
+	exe := agentPath(h.t, codex.Name)
 	if pathDir == "" {
-		pathDir = filepath.Dir(codex)
+		pathDir = filepath.Dir(exe)
 	}
-	in := h.input(agentprofile.Codex, side, "FAKEAGENT_PROFILE=", "CODEX_HOME="+h.t.TempDir(), "PATH="+pathDir+":/usr/bin:/bin")
-	in.Cmd = append([]string{codex}, args...)
+	in := h.input(codex.Name, side, "FAKEAGENT_PROFILE=", "CODEX_HOME="+h.t.TempDir(), "PATH="+pathDir+":/usr/bin:/bin")
+	in.Cmd = append([]string{exe}, args...)
 	return in
 }
 
@@ -72,7 +73,7 @@ func TestCodexRoundTrip(t *testing.T) {
 		t.Fatalf("commands %+v", st.Commands)
 	}
 	log, err := readEventsLog(h.store)
-	if err != nil || !strings.Contains(log, "CODEX_PATH="+agentPath(t, agentprofile.Codex)+" NO_BROWSER=1") {
+	if err != nil || !strings.Contains(log, "CODEX_PATH="+agentPath(t, codex.Name)+" NO_BROWSER=1") {
 		t.Fatalf("connector environment not logged: %v", err)
 	}
 	chatTurn(t, h, id, "two")
@@ -101,7 +102,7 @@ func TestCodexConnectorMissing(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
 	dir := t.TempDir()
-	if err := os.Symlink(agentPath(t, agentprofile.Codex), filepath.Join(dir, "codex")); err != nil {
+	if err := os.Symlink(agentPath(t, codex.Name), filepath.Join(dir, "codex")); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -145,7 +146,7 @@ func TestCodexBashrcConnectorCheck(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
 	home := t.TempDir()
-	agents := filepath.Dir(agentPath(t, agentprofile.Codex))
+	agents := filepath.Dir(agentPath(t, codex.Name))
 	rc := "echo welcome\nexport PATH=" + agents + ":$PATH\n"
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(rc), 0o600); err != nil {
 		t.Fatal(err)
@@ -195,7 +196,7 @@ func TestCodexExternalWriter(t *testing.T) {
 func TestCodexSteeringAfterTurnEnd(t *testing.T) {
 	h := newHarness(t, 0)
 	in := h.codexInput(SideACP, "")
-	in.Env["FAKEAGENT_DELAY"] = methodSteering + "=300ms"
+	in.Env["FAKEAGENT_DELAY"] = "_session/steering=300ms"
 	id := h.create(in).Info().ID
 	st := h.follow(id)
 	if !st.state.Steering {

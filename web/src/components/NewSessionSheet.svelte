@@ -537,7 +537,7 @@
               <Input
                 id="custom-command"
                 bind:value={command}
-                placeholder="omp --resume 或 bash -lc 'npm run dev'"
+                placeholder="agent --resume 或 bash -lc 'npm run dev'"
                 autocomplete="off"
                 autocapitalize="off"
                 autocorrect="off"

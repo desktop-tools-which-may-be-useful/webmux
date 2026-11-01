@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/settings"
 )
@@ -89,6 +90,8 @@ type Service struct {
 	log      *slog.Logger
 	timing   timing
 	uploads  func(id, path string) (string, error)
+	// agents recognises launch commands and terminal signals.
+	agents *agentprofile.Registry
 	// userHome is the service user's home directory, where agents keep
 	// their state unless the session environment says otherwise.
 	userHome string
@@ -127,7 +130,7 @@ func New(o Options) *Service {
 	userHome, _ := os.UserHomeDir()
 	s := &Service{
 		manager: o.Manager, records: openRecords(o.StateDir), capacity: capacity, version: o.Version, log: log,
-		uploads: o.Uploads, userHome: userHome,
+		uploads: o.Uploads, userHome: userHome, agents: agents.Default(),
 		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
 		recovering:  make(map[string]bool),
 		idleMinutes: settings.DefaultChatIdleSleepMinutes,
@@ -223,11 +226,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	if side != SideTUI && side != SideACP {
 		return nil, fmt.Errorf("%w: startSide 只能是 tui 或 acp", ErrInvalid)
 	}
-	cmd, err := agentprofile.Parse(in.Cmd)
+	cmd, err := s.agents.Parse(in.Cmd)
 	if err != nil {
 		var unsupported *agentprofile.UnsupportedError
 		if errors.As(err, &unsupported) {
-			return nil, fmt.Errorf("%w: 该启动配置不能用于混合会话: %s", ErrInvalid, unsupported.Reason.Message())
+			return nil, fmt.Errorf("%w: 该启动配置不能用于混合会话: %s", ErrInvalid, s.agents.Explain(unsupported.Reason))
 		}
 		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}

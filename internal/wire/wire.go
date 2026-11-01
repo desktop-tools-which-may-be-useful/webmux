@@ -178,7 +178,9 @@ func LaunchInput(r contract.LaunchConfigInput) launch.Input {
 }
 
 func HybridSupport(s agentprofile.Support) contract.HybridSupport {
-	return contract.HybridSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason), Connector: AgentConnector(s.Connector)}
+	return contract.HybridSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason), Connector: AgentConnector(s.Connector),
+		SupportedAgents: required(s.Agents),
+	}
 }
 
 // AgentConnector converts a profile's connector; nil stays nil. Its

@@ -342,8 +342,9 @@
               id="launch-config-hybrid-help"
               class="text-xs text-muted-foreground"
             >
-              {#if hybridReason}{hybridReason}{:else}从这个配置启动的会话可以在网页聊天视图与终端之间切换，适用于
-                OpenCode、omp 与 Codex CLI。{/if}
+              {#if hybridReason}{hybridReason}{:else}从这个配置启动的会话可以在网页聊天视图与终端之间切换{hybridSupport
+                  ? `，适用于 ${hybridSupport.supportedAgents.join("、")}`
+                  : ""}。{/if}
             </p>
             {#if hybridSupport?.supported && hybridSupport.connector}
               <ConnectorInstallHint

@@ -9,7 +9,12 @@
     "hybrid": false,
     "hybridSupport": {
       "reason": "unknown_agent",
-      "supported": false
+      "supported": false,
+      "supportedAgents": [
+        "omp",
+        "OpenCode",
+        "Codex CLI"
+      ]
     },
     "id": "<id#1>",
     "name": "Claude 2",

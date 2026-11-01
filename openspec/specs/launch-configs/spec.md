@@ -288,7 +288,9 @@ Shell 配置 SHALL 不变。已存在的 `launch-configs.json` SHALL NOT 被改�
 
 ### Requirement: 启动配置的混合支持信息
 
-启动配置的完整配置、摘要、创建与更新请求 SHALL 包含 `hybrid`。完整配置与摘要 SHALL 额外包含只读的 `hybridSupport: {supported, agent?, reason?}`，由服务端按当前 argv 计算；请求体中提供 `hybridSupport` SHALL 视为未知字段而返回 400。
+启动配置的完整配置、摘要、创建与更新请求 SHALL 包含 `hybrid`。完整配置与摘要 SHALL 额外包含只读的 `hybridSupport: {supported, agent?, reason?, connector?, supportedAgents}`，由服务端按当前 argv 计算；请求体中提供 `hybridSupport` SHALL 视为未知字段而返回 400。
+
+`supportedAgents` SHALL 为受支持 agent 的显示名数组，总是存在。
 
 #### Scenario: 请求体携带只读字段
 

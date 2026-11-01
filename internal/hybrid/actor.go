@@ -2,7 +2,7 @@ package hybrid
 
 import (
 	"context"
-	"encoding/json"
+
 	"errors"
 	"fmt"
 	"slices"
@@ -161,6 +161,7 @@ func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side S
 		Side: side, Agent: cmd.Profile.Name, Requests: []Request{}, Config: []ConfigOption{},
 		Commands: []Command{}, Queue: Queue{Items: []QueueItem{}}, Unsupported: unsupported,
 		PermissionMode: PermissionAuto, Outdated: []Outdated{},
+		ForceSwitchNote: agentprofile.ForceSwitchNote(cmd.Agent),
 	}
 	a.log = newChatLog(s.capacity, a.chat)
 	return a
@@ -878,22 +879,6 @@ func (a *actor) cancelTurn() {
 	}
 	a.withdrawAll()
 	a.turn.cancel()
-}
-
-// steeringSupported reads the initialize result's _meta.steering.supported.
-func steeringSupported(meta []byte) bool {
-	if len(meta) == 0 {
-		return false
-	}
-	var m struct {
-		Steering *struct {
-			Supported bool `json:"supported"`
-		} `json:"steering"`
-	}
-	if err := json.Unmarshal(meta, &m); err != nil {
-		return false
-	}
-	return m.Steering != nil && m.Steering.Supported
 }
 
 // interrupt marks the session interrupted: its side ended by itself, or a

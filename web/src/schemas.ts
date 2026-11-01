@@ -91,6 +91,8 @@ export type PreviewSettings = z.infer<typeof PreviewSettingsSchema>;
 // by the server from its built-in agent profiles; reason is a stable code.
 export const HybridSupportSchema = z.object({
   supported: z.boolean(),
+  // Display names of every agent hybrid mode supports.
+  supportedAgents: z.array(z.string()),
   agent: z.string().optional(),
   reason: z
     .enum([

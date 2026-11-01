@@ -482,7 +482,7 @@
 >
 <SwitchChoiceDialog
   bind:open={choiceOpen}
-  {agent}
+  note={chat.forceSwitchNote}
   busy={false}
   onchoose={(choice) => {
     choiceOpen = false;

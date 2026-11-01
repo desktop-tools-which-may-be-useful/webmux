@@ -229,7 +229,13 @@ test("switching to chat shows its steps, asks after a stuck interrupt and lands 
   await expect.element(page.getByRole("tab", { name: "终端" })).toBeDisabled();
 
   // D21: the interrupt did not stop the TUI; every device is asked.
-  chat.frame({ type: "state", state: tuiState({ phase: "awaiting_choice" }) });
+  chat.frame({
+    type: "state",
+    state: tuiState({
+      phase: "awaiting_choice",
+      forceSwitchNote: "omp 已输出的部分可能丢失",
+    }),
+  });
   const dialog = page.getByRole("alertdialog", { name: "TUI 仍在执行回合" });
   await expect.element(dialog).toBeVisible();
   await expect.element(dialog).toMatchTextContent(/omp 已输出的部分可能丢失/);

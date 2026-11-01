@@ -59,5 +59,5 @@ var (
 	ErrSessionAmbiguous = errors.New("无法确定终端正在使用的会话，请选择要切换的会话")
 	// ErrExternalWriter: a client outside WebMux holds the agent session
 	// (Codex's thread_active_writer) (409 occupied_external).
-	ErrExternalWriter = errors.New("该会话正被另一个 Codex 客户端使用")
+	ErrExternalWriter = errors.New("该会话正被另一个 Agent 客户端使用")
 )

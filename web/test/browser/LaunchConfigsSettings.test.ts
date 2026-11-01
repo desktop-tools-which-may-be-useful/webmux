@@ -11,7 +11,11 @@ const config = {
   cmd: ["claude", "--resume", "a b"],
   envNames: ["API_KEY"],
   hybrid: false,
-  hybridSupport: { supported: false, reason: "unknown_agent" },
+  hybridSupport: {
+    supported: false,
+    supportedAgents: [],
+    reason: "unknown_agent",
+  },
   createdAt: "2026-10-23T00:00:00Z",
   updatedAt: "2026-10-23T00:00:00Z",
 };
@@ -146,7 +150,11 @@ test("hybrid configs are marked and the chat idle sleep saves to the server", as
             name: "omp",
             cmd: ["omp"],
             hybrid: true,
-            hybridSupport: { supported: true, agent: "omp" },
+            hybridSupport: {
+              supported: true,
+              supportedAgents: [],
+              agent: "omp",
+            },
           },
         ]);
       return Response.json({ error: "not found" }, { status: 404 });

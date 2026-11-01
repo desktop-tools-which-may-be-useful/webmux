@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 )
 
 func open(t *testing.T, dir string) *Service {
@@ -265,7 +266,7 @@ func TestHybridFlag(t *testing.T) {
 		t.Fatalf("unchecked config wrote hybrid: %s %v", raw, err)
 	}
 	on, err := s.Update(plain.ID, Input{Name: "omp", Cmd: omp, Hybrid: true})
-	if err != nil || !on.Hybrid || on.HybridSupport() != (agentprofile.Support{Supported: true, Agent: "omp"}) {
+	if err != nil || !on.Hybrid || !reflect.DeepEqual(on.HybridSupport(), agentprofile.Support{Supported: true, Agent: "omp", Agents: agents.Default().Titles()}) {
 		t.Fatalf("enable hybrid = %+v, %v", on, err)
 	}
 	list, err := s.List()

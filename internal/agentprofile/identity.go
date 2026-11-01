@@ -7,7 +7,7 @@ import (
 )
 
 // Signals are the bounded identity fields a session collected from its
-// terminal output and process table. They are agent-neutral; a profile
+// terminal output and process table. They are agent-neutral; an adapter
 // decides which of them identify its sessions.
 type Signals struct {
 	// Warp cli-agent event fields.
@@ -25,35 +25,12 @@ type Signals struct {
 	RootCwd        string
 }
 
-// Identity is a profile's interpretation of Signals.
+// Identity is an adapter's interpretation of Signals.
 type Identity struct {
 	Agent          string
 	Version        string
 	AgentSessionID string
 	Cwd            string
-}
-
-// opencodeSessionPrefix marks OpenCode session IDs. OpenCode borrows the
-// 7501 child record id for its session; only this profile reads it.
-const opencodeSessionPrefix = "ses_"
-
-// Identify maps signals to the agent that produced them. ok is false when
-// no profile recognises the signals.
-func Identify(s Signals) (Identity, bool) {
-	switch {
-	case s.WarpAgent == OMP || s.ProgramApp == OMP:
-		return Identity{Agent: OMP, Version: s.WarpPluginVersion, AgentSessionID: s.WarpSessionID, Cwd: s.WarpCwd}, true
-	case s.ProgramApp == OpenCode:
-		id := ""
-		if strings.HasPrefix(s.ProgramChildID, opencodeSessionPrefix) {
-			id = s.ProgramChildID
-		}
-		return Identity{Agent: OpenCode, AgentSessionID: id, Cwd: s.RootCwd}, true
-	case s.ProgramApp == Codex:
-		// Codex names its session in no signal: see LockedSessions.
-		return Identity{Agent: Codex, Cwd: s.RootCwd}, true
-	}
-	return Identity{}, false
 }
 
 // BelowVerified reports whether version is older than the newest release
@@ -109,28 +86,25 @@ func parseVersion(v string) ([]int, bool) {
 	return parts, true
 }
 
-// TracksLocks reports that the agent's session IDs come from the writer
-// locks its processes hold open (LockedSessions) rather than its signals.
-func (p *Profile) TracksLocks() bool { return p.locks != nil }
+// LockLayout is where an agent holds a writer lock for each session it has
+// open: <home>/<Dir>/<id><Suffix>, home from environment variable HomeEnv
+// or else HomeDefault under the user's home directory.
+type LockLayout struct {
+	HomeEnv, HomeDefault, Dir, Suffix string
+}
 
-// LockedSessions returns the agent session IDs whose writer locks are among
-// paths, the open files of the terminal UI's processes, in paths order.
-// getenv reads the session's environment; userHome is the service user's
-// home directory. The lock directory is compared with symbolic links
-// resolved, as the process table reports open files.
-func (p *Profile) LockedSessions(paths []string, getenv func(string) string, userHome string) []string {
-	l := p.locks
-	if l == nil {
-		return nil
-	}
-	home := getenv(l.homeEnv)
+// Sessions returns the session IDs whose writer locks are among paths, in
+// paths order (see LockTracker). The lock directory is compared with
+// symbolic links resolved, as the process table reports open files.
+func (l LockLayout) Sessions(paths []string, getenv func(string) string, userHome string) []string {
+	home := getenv(l.HomeEnv)
 	if home == "" {
 		if userHome == "" {
 			return nil
 		}
-		home = filepath.Join(userHome, l.homeDefault)
+		home = filepath.Join(userHome, l.HomeDefault)
 	}
-	dir := filepath.Join(home, l.dir)
+	dir := filepath.Join(home, l.Dir)
 	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = resolved
 	}
@@ -139,7 +113,7 @@ func (p *Profile) LockedSessions(paths []string, getenv func(string) string, use
 		if filepath.Dir(path) != dir {
 			continue
 		}
-		id, ok := strings.CutSuffix(filepath.Base(path), l.suffix)
+		id, ok := strings.CutSuffix(filepath.Base(path), l.Suffix)
 		if ok && sessionLockID(id) {
 			ids = append(ids, id)
 		}

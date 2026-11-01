@@ -180,7 +180,7 @@
       "count": 1,
       "owner": "tailscale-ownership"
     },
-    "internal/agentprofile/codex.go|path|.lock": {
+    "internal/agentprofile/codex/codex.go|path|.lock": {
       "count": 1,
       "owner": "agent-state"
     },

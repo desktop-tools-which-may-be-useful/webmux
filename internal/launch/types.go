@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -65,7 +66,7 @@ type Config struct {
 
 // HybridSupport reports whether the config's command can run as a hybrid
 // session, computed from the built-in agent profiles on every call.
-func (c Config) HybridSupport() agentprofile.Support { return agentprofile.Check(c.Cmd) }
+func (c Config) HybridSupport() agentprofile.Support { return agents.Default().Check(c.Cmd) }
 
 // Summary is the list form: environment names only, never values.
 type Summary struct {
@@ -144,8 +145,8 @@ func normalize(in Input) (Input, error) {
 		}
 	}
 	if in.Hybrid {
-		if support := agentprofile.Check(in.Cmd); !support.Supported {
-			return Input{}, invalidf("无法开启混合模式：%s", support.Reason.Message())
+		if support := agents.Default().Check(in.Cmd); !support.Supported {
+			return Input{}, invalidf("无法开启混合模式：%s", agents.Default().Explain(support.Reason))
 		}
 	}
 	return Input{Name: name, Icon: in.Icon, Cmd: slices.Clone(in.Cmd), Env: cloneEnv(in.Env), Preview: preview, Hybrid: in.Hybrid}, nil

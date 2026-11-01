@@ -821,7 +821,7 @@
       () => hybrid.awaitingChoice && !choiceClosed,
       (open) => (choiceClosed = !open)
     }
-    agent={hybrid.chat.state?.agent ?? ""}
+    note={hybrid.chat.state?.forceSwitchNote ?? ""}
     busy={hybrid.answering}
     onchoose={(choice) => void hybrid.choose(choice)}
   />

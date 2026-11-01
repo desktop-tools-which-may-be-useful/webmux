@@ -14,7 +14,8 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -118,7 +119,7 @@ func prompt(t *testing.T, h *harness, id, text string) PromptResult {
 
 func TestChatTurnEventSequence(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	st := h.follow(id)
 	started := prompt(t, h, id, "hello /plan")
@@ -171,7 +172,7 @@ func TestChatTurnEventSequence(t *testing.T) {
 
 func TestChatToolCallUpsert(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OpenCode, SideACP))
+	s := h.create(h.input(opencode.Name, SideACP))
 	id := s.Info().ID
 	st := h.follow(id)
 	prompt(t, h, id, "read it")
@@ -204,7 +205,7 @@ func TestChatToolCallUpsert(t *testing.T) {
 
 func TestChatOversizeFieldTruncated(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	st := h.follow(id)
 	// Prompts are limited far below the field limit; send past the
@@ -237,7 +238,7 @@ func TestChatOversizeFieldTruncated(t *testing.T) {
 
 func TestChatLogTruncationAdvancesFrom(t *testing.T) {
 	h := newHarness(t, 4<<10)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	st := h.follow(id)
 	if st.sub.Snapshot.From != 1 || st.sub.Snapshot.Truncated {
@@ -276,7 +277,7 @@ func TestChatLogTruncationAdvancesFrom(t *testing.T) {
 
 func TestChatPermissionAnswerAndCancel(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1"))
 	id := s.Info().ID
 	h.ask(id)
 	st := h.follow(id)
@@ -347,7 +348,7 @@ func TestChatTurnErrors(t *testing.T) {
 	} {
 		t.Run(row.code, func(t *testing.T) {
 			h := newHarness(t, 0)
-			s := h.create(h.input(agentprofile.OpenCode, SideACP, "FAKEAGENT_FAIL=session/prompt="+row.code))
+			s := h.create(h.input(opencode.Name, SideACP, "FAKEAGENT_FAIL=session/prompt="+row.code))
 			id := s.Info().ID
 			st := h.follow(id)
 			prompt(t, h, id, "hi")
@@ -366,7 +367,7 @@ func TestChatTurnErrors(t *testing.T) {
 
 func TestPromptNeedsChatSide(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideTUI))
+	s := h.create(h.input(omp.Name, SideTUI))
 	if _, err := h.svc.Prompt(context.Background(), s.Info().ID, PromptInput{ClientRequestID: rid(), Text: "hi"}); !errors.Is(err, ErrWrongSide) {
 		t.Fatalf("prompt on the terminal side: %v", err)
 	}
@@ -380,7 +381,7 @@ func TestPromptNeedsChatSide(t *testing.T) {
 // interrupts the session.
 func TestChatAgentCrashReconnectsOnce(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_CRASH=prompt-mid"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_CRASH=prompt-mid"))
 	id := s.Info().ID
 	first := h.record(id).PID
 	st := h.follow(id)
@@ -454,7 +455,7 @@ func notices(events []Event) []string {
 // user, and the approval leaves nothing in the timeline.
 func TestChatPermissionModeAuto(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1"))
 	id := s.Info().ID
 	st := h.follow(id)
 	if st.state.PermissionMode != PermissionAuto {
@@ -502,7 +503,7 @@ func TestChatPermissionModeAuto(t *testing.T) {
 // Switching to auto approves the requests already waiting.
 func TestChatPermissionModeApprovesPending(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1"))
 	id := s.Info().ID
 	h.ask(id)
 	st := h.follow(id)
@@ -540,7 +541,7 @@ func TestChatPermissionModeApprovesPending(t *testing.T) {
 func TestChatPermissionModePersists(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	in := h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1")
+	in := h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1")
 	id := h.create(in).Info().ID
 	chatTurn(t, h, id, "hello")
 	h.mustSwitch(id, SideTUI)
@@ -616,7 +617,7 @@ func userBlocks(t *testing.T, dir string) []storedBlock {
 
 func TestPromptSendsImageAttachment(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PROMPT_IMAGE=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PROMPT_IMAGE=1"))
 	id := s.Info().ID
 	st := h.follow(id)
 	path := upload(t, "shot.png", pngBytes())
@@ -651,7 +652,7 @@ func TestPromptSendsImageAttachment(t *testing.T) {
 
 func TestPromptDegradesImageWithoutCapability(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	st := h.follow(id)
 	path := upload(t, "shot.png", pngBytes())
@@ -682,7 +683,7 @@ func TestPromptDegradesImageWithoutCapability(t *testing.T) {
 
 func TestQueueKeepsAttachments(t *testing.T) {
 	h := newHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_TURN_DELAY=2s"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=2s"))
 	id := s.Info().ID
 	st := h.follow(id)
 	path := upload(t, "note.txt", []byte("hello"))

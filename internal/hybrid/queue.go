@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
 )
 
 const (
@@ -19,9 +20,6 @@ const (
 	MaxPromptBytes = 64 << 10
 	// maxQueueItems bounds the shared prompt queue of one session.
 	maxQueueItems = 64
-	// methodSteering is the steering extension of omp and codex-acp: it
-	// injects a user message into the running turn.
-	methodSteering = "_session/steering"
 	// Prompt modes.
 	ModeAuto  = "auto"
 	ModeSteer = "steer"
@@ -268,8 +266,8 @@ func (a *actor) cancel() error {
 // agentCall is a command's ACP call, run outside the actor.
 type agentCall func(ctx context.Context) error
 
-// Steering outcomes of an agent asked to hand idle prompts back
-// (Profile.SteeringIdlePrompt); other agents answer nothing.
+// Steering outcomes of an agent whose steering requests carry _meta (it
+// was asked to hand idle prompts back); other agents answer nothing.
 const (
 	steerInjected       = "injected"
 	steerPromptRequired = "promptRequired"
@@ -277,19 +275,16 @@ const (
 	steerStartedNewTurn = "startedNewTurn"
 )
 
-// steeringIdlePrompt is the steering request _meta asking for
-// promptRequired instead of a turn the agent would start by itself.
-var steeringIdlePrompt = []byte(`{"steering":{"idleBehavior":"promptRequired"}}`)
-
-// steer prepares injecting text into the running turn. It needs a profile
-// with the steering extension, an agent that declared it, and a turn. A
+// steer prepares injecting text into the running turn. It needs an agent
+// adapter with a steering extension (agentprofile.Steerer), an agent that declared it, and a turn. A
 // turn that ended before the text got in (promptRequired) puts the text at
 // the head of the queue.
 func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) {
 	if err := a.linked(); err != nil {
 		return nil, err
 	}
-	if !a.chat.Steering || a.turn == nil {
+	steerer, ok := a.cmd.Agent.(agentprofile.Steerer)
+	if !ok || !a.chat.Steering || a.turn == nil {
 		return nil, ErrSteeringUnavailable
 	}
 	blocks, notes, err := promptBlocks(text, attachments, a.chat.PromptCapabilities, a.svc.uploadCheck(a.id))
@@ -305,17 +300,18 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 	// Only agents asked for promptRequired promise an outcome; others may
 	// answer anything.
 	var result any
-	if a.cmd.Profile.SteeringIdlePrompt {
-		req.Meta = steeringIdlePrompt
+	if meta := steerer.SteeringMeta(); meta != nil {
+		req.Meta = meta
 		result = &resp
 	}
+	method := steerer.SteeringMethod()
 	return func(ctx context.Context) error {
-		err := conn.CallExtension(ctx, methodSteering, req, result)
+		err := conn.CallExtension(ctx, method, req, result)
 		if err != nil {
-			return a.agentCallFailed(methodSteering, err)
+			return a.agentCallFailed(method, err)
 		}
 		if resp.Outcome == steerFailed {
-			a.svc.log.Warn("hybrid steering failed", "id", a.id, "method", methodSteering, "outcome", resp.Outcome)
+			a.svc.log.Warn("hybrid steering failed", "id", a.id, "method", method, "outcome", resp.Outcome)
 			return fmt.Errorf("%w: agent 未能插话", ErrAgentCall)
 		}
 		_, err = call(ctx, a, func() (struct{}, error) {
@@ -327,7 +323,7 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 				a.requeue(text, attachments)
 				return struct{}{}, nil
 			case steerStartedNewTurn:
-				a.svc.log.Warn("hybrid steering started a turn", "id", a.id, "method", methodSteering, "outcome", resp.Outcome)
+				a.svc.log.Warn("hybrid steering started a turn", "id", a.id, "method", method, "outcome", resp.Outcome)
 				a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: "agent 自行开始了一个回合，该回合不受 WebMux 跟踪"}})
 			}
 			a.emit(a.tr.userMessage(text, attachments))

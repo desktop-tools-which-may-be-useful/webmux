@@ -357,6 +357,10 @@ function baseState(agent: Agent): ChatState {
     usage: { used: 26_800, size: 200_000, cost: 0.07, currency: "USD" },
     queue: { paused: false, items: [] },
     steering: agent === "omp",
+    forceSwitchNote:
+      agent === "omp"
+        ? "omp 已输出的部分可能丢失"
+        : "已输出的部分可能丢失；回合不会在后台继续",
     promptCapabilities: { image: true, embeddedContext: true },
     permissionMode: "auto",
     authRequired: false,

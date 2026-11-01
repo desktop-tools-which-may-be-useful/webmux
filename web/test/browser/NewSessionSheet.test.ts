@@ -11,7 +11,11 @@ const config = {
   cmd: ["claude", "--resume"],
   envNames: ["API_KEY", "BASE_URL"],
   hybrid: false,
-  hybridSupport: { supported: false, reason: "unknown_agent" },
+  hybridSupport: {
+    supported: false,
+    supportedAgents: [],
+    reason: "unknown_agent",
+  },
   createdAt: "2026-10-23T00:00:00Z",
   updatedAt: "2026-10-23T00:00:00Z",
 };
@@ -21,7 +25,7 @@ const otherConfig = {
   name: "Open Code",
   cmd: ["opencode", "--continue", "a b"],
   envNames: [],
-  hybridSupport: { supported: true, agent: "opencode" },
+  hybridSupport: { supported: true, supportedAgents: [], agent: "opencode" },
 };
 const repository = {
   id: "repo-1",
@@ -246,7 +250,12 @@ test("a missing chat connector keeps the sheet and can start on the terminal", a
     name: "Codex 混合",
     cmd: ["codex"],
     hybrid: true,
-    hybridSupport: { supported: true, agent: "codex", connector },
+    hybridSupport: {
+      supported: true,
+      supportedAgents: [],
+      agent: "codex",
+      connector,
+    },
   };
   acpConflict = {
     error: "未安装 Codex ACP 适配器（codex-acp）",

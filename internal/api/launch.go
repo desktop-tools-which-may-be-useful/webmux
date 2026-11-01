@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/wire"
 )
@@ -26,7 +26,7 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 		if !decode(w, r, &req) {
 			return
 		}
-		reply(w, http.StatusOK, wire.HybridSupport(agentprofile.Check(req.Cmd)))
+		reply(w, http.StatusOK, wire.HybridSupport(agents.Default().Check(req.Cmd)))
 	})
 	mux.HandleFunc("GET /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		item, err := s.Launch.Get(r.PathValue("id"))

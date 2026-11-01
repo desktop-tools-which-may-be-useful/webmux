@@ -181,22 +181,33 @@ func (a *actor) lockedSession(id session.Identity) string {
 	}
 	lt.read = time.Now()
 	files := a.shell.RunOpenFiles()
-	held := a.cmd.Profile.LockedSessions(files, a.shell.Getenv, a.svc.userHome)
+	tracker, _ := a.cmd.Agent.(agentprofile.LockTracker)
+	var held []string
+	if tracker != nil {
+		held = tracker.LockedSessions(files, a.shell.Getenv, a.svc.userHome)
+	}
 	lt.track(held, len(files) == 0, a.resumedSID, time.Since(a.runStart) < a.cmd.Profile.StartupQuiet)
 	return lt.current
 }
 
 // agentIsRoot is condition 3: the agent is the PTY's root process, or the
 // profile's launcher is and its direct child is the agent.
-func (a *actor) agentIsRoot(id session.Identity, agent string) bool {
+func (a *actor) agentIsRoot(id session.Identity) bool {
 	if id.PID == 0 {
 		return false
 	}
-	if id.Executable == agent {
+	p := a.cmd.Profile
+	if p.RunsAs(id.Executable) {
 		return true
 	}
-	launcher := a.cmd.Profile.Launcher
-	return launcher != "" && id.Executable == launcher && slices.Contains(a.shell.RunChildren(), agent)
+	return p.Launcher != "" && id.Executable == p.Launcher && slices.ContainsFunc(a.shell.RunChildren(), p.RunsAs)
+}
+
+// tracksLocks reports that the agent's session IDs come from its writer
+// locks rather than its terminal signals.
+func (a *actor) tracksLocks() bool {
+	_, ok := a.cmd.Agent.(agentprofile.LockTracker)
+	return ok
 }
 
 func signals(id session.Identity) agentprofile.Signals {
@@ -254,8 +265,8 @@ func (a *actor) observe() {
 // lock-tracking profile's session ID comes from its writer locks.
 func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
 	id := a.shell.Identity()
-	ident, known := agentprofile.Identify(signals(id))
-	if known && ident.Agent == a.cmd.Profile.Name && a.cmd.Profile.TracksLocks() {
+	ident, known := a.svc.agents.Identify(signals(id))
+	if known && ident.Agent == a.cmd.Profile.Name && a.tracksLocks() {
 		ident.AgentSessionID = a.lockedSession(id)
 	}
 	return id, ident, known
@@ -294,9 +305,9 @@ func (a *actor) assess(id session.Identity, ident agentprofile.Identity, known b
 		return target{}, reason
 	}
 	switch {
-	case !a.agentIsRoot(id, ident.Agent):
+	case !a.agentIsRoot(id):
 		return target{}, ReasonNotRoot
-	case sid == "" && (!a.cmd.Profile.TracksLocks() || !a.locks.unknown):
+	case sid == "" && (!a.tracksLocks() || !a.locks.unknown):
 		return target{}, ReasonNoSessionID
 	}
 	raw := ident.Cwd
@@ -320,7 +331,7 @@ func (a *actor) listedReason(t target) string {
 	switch {
 	case a.probe.key != t || a.probe.result == probePending:
 		return ReasonChecking
-	case a.probe.result == probeNotListed && (t.sid == "" || a.cmd.Profile.TracksLocks()):
+	case a.probe.result == probeNotListed && (t.sid == "" || a.tracksLocks()):
 		return ReasonNoSessionID
 	case a.probe.result == probeNotListed:
 		return ReasonNotListed
@@ -489,7 +500,7 @@ func (s *Service) occupied(self, sid string) bool {
 		if err != nil {
 			continue
 		}
-		if ident, ok := agentprofile.Identify(signals(id)); ok && ident.AgentSessionID == sid {
+		if ident, ok := s.agents.Identify(signals(id)); ok && ident.AgentSessionID == sid {
 			return true
 		}
 	}

@@ -18,7 +18,9 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/codex"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/session"
@@ -48,7 +50,7 @@ func fakeAgentPath(t testing.TB, profile string) string {
 		}
 		// A separate file per profile, not a hard link: macOS reports a
 		// hard-linked executable under either name, breaking the root check.
-		for _, name := range []string{agentprofile.OMP, agentprofile.OpenCode, agentprofile.Codex, "codex-acp"} {
+		for _, name := range []string{omp.Name, opencode.Name, codex.Name, "codex-acp"} {
 			build := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent")
 			build.Env = fakeAgent.env
 			if out, err := build.CombinedOutput(); err != nil {
@@ -223,7 +225,7 @@ func closeStatus(t testing.TB, conn *websocket.Conn) websocket.StatusCode {
 func TestChatSocketAuthOriginAndMissingSessions(t *testing.T) {
 	h := newHybridAPI(t, nil)
 	server := h.serve()
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OMP)
+	id := fakeChat(t, h.hybrids, h.cwd, omp.Name)
 	path := "/ws/s/" + id + "/chat"
 
 	ctx, cancel := context.WithTimeout(context.Background(), chatTimeout)
@@ -272,7 +274,7 @@ func TestChatSocketAuthOriginAndMissingSessions(t *testing.T) {
 func TestChatSocketResumeSendsOnlyTail(t *testing.T) {
 	h := newHybridAPI(t, nil)
 	server := h.serve()
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OMP)
+	id := fakeChat(t, h.hybrids, h.cwd, omp.Name)
 	watch := observe(t, h.hybrids, id)
 	watch.until("start events", func(o *observer) bool { return len(o.state.Commands) > 0 && len(o.state.Config) > 0 })
 	path := "/ws/s/" + id + "/chat"
@@ -325,7 +327,7 @@ func TestChatSocketResumeSendsOnlyTail(t *testing.T) {
 
 func TestChatCommands(t *testing.T) {
 	h := newHybridAPI(t, nil)
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id := fakeChat(t, h.hybrids, h.cwd, omp.Name, "FAKEAGENT_PERMISSION=1")
 	watch := observe(t, h.hybrids, id)
 	base := "/api/sessions/" + id + "/chat/"
 
@@ -390,7 +392,7 @@ func TestChatCommands(t *testing.T) {
 
 func TestChatPermissionMode(t *testing.T) {
 	h := newHybridAPI(t, nil)
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OMP, "FAKEAGENT_PERMISSION=1")
+	id := fakeChat(t, h.hybrids, h.cwd, omp.Name, "FAKEAGENT_PERMISSION=1")
 	watch := observe(t, h.hybrids, id)
 	path := "/api/sessions/" + id + "/chat/permission-mode"
 
@@ -419,7 +421,7 @@ func TestChatCommandConflicts(t *testing.T) {
 	h.expectConflict("POST", "/api/sessions/"+info.ID+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "hi"}, "wrong_side")
 	h.expectConflict("POST", "/api/sessions/"+info.ID+"/chat/cancel", contract.ChatCommandRequest{ClientRequestID: chatRID()}, "wrong_side")
 
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OpenCode, "FAKEAGENT_PERMISSION=1")
+	id := fakeChat(t, h.hybrids, h.cwd, opencode.Name, "FAKEAGENT_PERMISSION=1")
 	h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
 	h.expectConflict("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "nudge", Mode: "steer"}, "steering_unavailable")
 
@@ -474,7 +476,7 @@ func TestHybridSwitch(t *testing.T) {
 	h.expectCommand("POST", path, contract.HybridSwitchRequest{ClientRequestID: chatRID(), Choice: "force"}, 409)
 	h.expectCommand("POST", "/api/sessions/zzzzzzzz/switch", contract.HybridSwitchRequest{ClientRequestID: chatRID(), To: contract.HybridSideTUI}, 404)
 
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OMP, "FAKEAGENT_TURN_DELAY=400ms")
+	id := fakeChat(t, h.hybrids, h.cwd, omp.Name, "FAKEAGENT_TURN_DELAY=400ms")
 	base := "/api/sessions/" + id + "/chat/"
 	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
 	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "later"}, 200)
@@ -507,7 +509,7 @@ func TestChatSocketSlowClient(t *testing.T) {
 	server.Listener = smallBuffers{server.Listener}
 	server.Start()
 	t.Cleanup(server.Close)
-	id := fakeChat(t, h.hybrids, h.cwd, agentprofile.OMP, "FAKEAGENT_TURN_DELAY=1ms")
+	id := fakeChat(t, h.hybrids, h.cwd, omp.Name, "FAKEAGENT_TURN_DELAY=1ms")
 
 	// Small socket buffers on both ends make the server's writes block soon.
 	dial := func(ctx context.Context, network, address string) (net.Conn, error) {

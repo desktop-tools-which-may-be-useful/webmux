@@ -191,7 +191,12 @@ flowchart LR
 
 - **伴随进程**：ACP 进程由外壳以 `StartSidecar` 启动，环境与 PTY 运行相同（同一 `WEBMUX_SESSION_ID`），经 `startChild` 登记以免 subreaper 抢走退出状态；bashrc 包装下 agent 的 stdout 改走 fd 3，`.bashrc` 的输出不进入协议通道。
 - **单写者**：每个混合会话一个 actor 拥有全部可变状态；进入目标端之前必须观察到原端进程组退出，任何时刻至多一个进程打开该 agent 会话（omp 在 TUI 持有租约时另一进程写入会分叉会话）。资格探测的临时进程只调用 `session/list`。
-- **协议边界**：`internal/acp` 是只依赖标准库的 ACP v1 客户端（共享层），`internal/agentprofile` 是纯数据档案（命令写法、参数分类、恢复与 ACP 命令、身份映射）。ACP 更新在 `hybrid` 中翻译为 webmux 自己的规范化事件（按 `messageId`/`toolCallId` upsert），前端与 `contract` 不接触 ACP 原文。
+- **协议边界**：`internal/acp` 是只依赖标准库的 ACP v1 客户端（共享层）。ACP 更新在 `hybrid` 中翻译为 webmux 自己的规范化事件（按 `messageId`/`toolCallId` upsert），前端与 `contract` 不接触 ACP 原文。
+- **agent 适配器**：`internal/agentprofile` 是 agent 中立的核心，`hybrid` 只依赖其中的接口。
+  - `Agent` 接口提供档案数据（命令写法、参数分类、恢复与 ACP 命令）、身份识别与中断键。
+  - 只有部分 agent 具备的行为是可选小接口，`hybrid` 以类型断言使用：`Resumer`、`ConfigReapplier`、`Steerer`、`LockTracker`、`ForceSwitchNoter`。
+  - 每个 agent 是一个子包（`opencode`、`omp`、`codex`），`agentprofile/agents` 用显式列表组成不可变注册表；`agentprofile/agenttest` 是每个适配器都运行的契约测试。
+  - 新增 agent 只需新增子包并在注册表登记（启动预设、图标与文档另行添加）；`internal/archtest` 守住 `acp`、`hybrid`、核心包与 `web/src` 不出现 agent 名称。
 - **生命周期**：从终端或聊天开始，协议见 [混合会话接口](protocol/http-hybrid.md)。
   - 切换失败自动回到原端；TUI 自行退出或回滚失败标记 `interrupted`。
   - ACP 意外退出自动重连一次；聊天端空闲 `chatIdleSleepMinutes` 分钟后休眠并在下次命令时唤醒。

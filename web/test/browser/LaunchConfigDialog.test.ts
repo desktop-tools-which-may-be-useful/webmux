@@ -10,7 +10,11 @@ const saved: LaunchConfig = {
   cmd: ["claude", "--resume"],
   env: { API_KEY: "secret-value" },
   hybrid: false,
-  hybridSupport: { supported: false, reason: "unknown_agent" },
+  hybridSupport: {
+    supported: false,
+    supportedAgents: [],
+    reason: "unknown_agent",
+  },
   createdAt: "2026-10-23T00:00:00Z",
   updatedAt: "2026-10-23T00:00:00Z",
 };
@@ -337,7 +341,11 @@ test("the hybrid checkbox follows the server's verdict for the edited command", 
         : Response.json({ ...saved, ...(body as object) }),
     "/api/launch-configs/hybrid-support": (_method, body) => {
       asked.push(body);
-      return Response.json({ supported: true, agent: "omp" });
+      return Response.json({
+        supported: true,
+        supportedAgents: [],
+        agent: "omp",
+      });
     },
   });
   render(LaunchConfigDialog, { open: true, configId: saved.id, onsaved });

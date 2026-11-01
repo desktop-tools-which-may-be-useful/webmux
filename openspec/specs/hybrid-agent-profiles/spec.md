@@ -128,7 +128,7 @@ ACP 进程、恢复后的 TUI 与最初的 TUI SHALL 使用同一套环境：
 
 ### Requirement: 档案与混合开关的校验
 
-保存启动配置时，若 `hybrid: true` 而 argv 不满足可识别的写法，服务端 SHALL 返回 400，并给出不可用原因。启动配置摘要与完整配置 SHALL 提供只读字段 `hybridSupport`，内容为 `{supported, agent?, reason?}`，供设置页决定勾选框是否可用及显示原因。
+保存启动配置时，若 `hybrid: true` 而 argv 不满足可识别的写法，服务端 SHALL 返回 400，并给出不可用原因。启动配置摘要与完整配置 SHALL 提供只读字段 `hybridSupport`，内容为 `{supported, agent?, reason?, connector?, supportedAgents}`，供设置页决定勾选框是否可用及显示原因。
 
 #### Scenario: 对 shell 配置勾选
 

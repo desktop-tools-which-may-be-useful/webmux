@@ -1,11 +1,26 @@
-package agentprofile
+package agents_test
 
 import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
+
+	. "github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
+	"github.com/rainchan/webmux/internal/agentprofile/codex"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/agentprofile/opencode"
+)
+
+var registry = agents.Default()
+
+const (
+	OMP      = omp.Name
+	OpenCode = opencode.Name
+	Codex    = codex.Name
 )
 
 var wrapped = func(args ...string) []string {
@@ -54,21 +69,21 @@ func TestCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Check(tt.argv)
-			want := Support{Supported: tt.agent != "", Agent: tt.agent, Reason: tt.reason}
+			got := registry.Check(tt.argv)
+			want := Support{Supported: tt.agent != "", Agent: tt.agent, Reason: tt.reason, Agents: registry.Titles()}
 			if tt.agent == Codex {
-				want.Connector = codex.Connector
+				want.Connector = codex.Agent.Profile().Connector
 			}
-			if got != want {
+			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("Check(%q) = %+v, want %+v", tt.argv, got, want)
 			}
 			if tt.reason == "" {
 				return
 			}
-			_, err := Parse(tt.argv)
+			_, err := registry.Parse(tt.argv)
 			var unsupported *UnsupportedError
 			if !errors.As(err, &unsupported) || unsupported.Arg != tt.arg {
-				t.Fatalf("Parse(%q) error = %v, want arg %q", tt.argv, err, tt.arg)
+				t.Fatalf("registry.Parse(%q) error = %v, want arg %q", tt.argv, err, tt.arg)
 			}
 		})
 	}
@@ -146,7 +161,7 @@ func TestResumeArgv(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd, err := Parse(tt.argv)
+			cmd, err := registry.Parse(tt.argv)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -170,7 +185,7 @@ func TestTUIArgv(t *testing.T) {
 		{wrapped("codex", "-m", "x"), wrapped("codex", "--no-daemon", "-m", "x")},
 	}
 	for _, tt := range tests {
-		cmd, err := Parse(tt.argv)
+		cmd, err := registry.Parse(tt.argv)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -219,7 +234,7 @@ func TestACPArgv(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd, err := Parse(tt.argv)
+			cmd, err := registry.Parse(tt.argv)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -272,7 +287,7 @@ func TestIdentify(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := Identify(tt.in)
+			got, ok := registry.Identify(tt.in)
 			if got != tt.want || ok != tt.ok {
 				t.Fatalf("Identify = %+v %v, want %+v %v", got, ok, tt.want, tt.ok)
 			}
@@ -281,8 +296,8 @@ func TestIdentify(t *testing.T) {
 }
 
 func TestBelowVerified(t *testing.T) {
-	ompProfile, _ := Lookup(OMP)
-	opencodeProfile, _ := Lookup(OpenCode)
+	ompProfile := omp.Agent.Profile()
+	opencodeProfile := opencode.Agent.Profile()
 	tests := []struct {
 		profile *Profile
 		version string
@@ -339,7 +354,7 @@ func TestCodexChatConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd, err := Parse(tt.argv)
+			cmd, err := registry.Parse(tt.argv)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -356,7 +371,7 @@ func TestCodexChatConfig(t *testing.T) {
 
 func mustParse(t *testing.T, argv ...string) Command {
 	t.Helper()
-	cmd, err := Parse(argv)
+	cmd, err := registry.Parse(argv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,6 +393,7 @@ func TestLockedSessions(t *testing.T) {
 	if err := os.Symlink(filepath.Dir(locks), link); err != nil {
 		t.Fatal(err)
 	}
+	codexLocks := codex.Agent.(LockTracker)
 	const a, b = "01a1953f-5c3a-7280-aa68-7ff5b7f7dab4", "01a1953f-8342-7e43-acfe-1b5d26be5c75"
 	paths := []string{
 		"/usr/lib/libc.so",
@@ -395,15 +411,15 @@ func TestLockedSessions(t *testing.T) {
 		}
 	}
 	// CODEX_HOME through a symbolic link: open files are reported resolved.
-	if got := codex.LockedSessions(paths, env(link), "/nonexistent"); !slices.Equal(got, []string{b, a}) {
+	if got := codexLocks.LockedSessions(paths, env(link), "/nonexistent"); !slices.Equal(got, []string{b, a}) {
 		t.Fatalf("locked sessions %q", got)
 	}
 	// The default home is .codex under the user's home.
 	def := filepath.Join(home, ".codex", "thread-writer-locks", a+".lock")
-	if got := codex.LockedSessions([]string{def}, env(""), home); !slices.Equal(got, []string{a}) {
+	if got := codexLocks.LockedSessions([]string{def}, env(""), home); !slices.Equal(got, []string{a}) {
 		t.Fatalf("default home %q", got)
 	}
-	if omp.TracksLocks() || omp.LockedSessions(paths, env(link), home) != nil {
+	if _, ok := omp.Agent.(LockTracker); ok {
 		t.Fatal("omp tracks locks")
 	}
 }

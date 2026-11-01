@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/settings"
 )
 
@@ -73,7 +73,7 @@ func TestIdleSleepAndWake(t *testing.T) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			h := sleepyHarness(t, 2)
-			s := h.create(h.input(agentprofile.OMP, SideACP, row.env...))
+			s := h.create(h.input(omp.Name, SideACP, row.env...))
 			id := s.Info().ID
 			chatTurn(t, h, id, "hello")
 			generation := h.generation(id)
@@ -112,7 +112,7 @@ func TestIdleSleepAndWake(t *testing.T) {
 // in the queue and is sent once the agent is back.
 func TestPromptWhileDormantIsSentAfterWake(t *testing.T) {
 	h := sleepyHarness(t, 1)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	waitFor(t, "dormant", func() bool { return h.dormant(id) })
 	h.setIdle(0)
@@ -132,7 +132,7 @@ func TestPromptWhileDormantIsSentAfterWake(t *testing.T) {
 // sleeps once the turn is over.
 func TestIdleSleepConditions(t *testing.T) {
 	h := sleepyHarness(t, 1)
-	s := h.create(h.input(agentprofile.OMP, SideACP, "FAKEAGENT_PERMISSION=1"))
+	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_PERMISSION=1"))
 	id := s.Info().ID
 	h.ask(id)
 	st := h.follow(id)
@@ -154,7 +154,7 @@ func TestIdleSleepConditions(t *testing.T) {
 // re-arms running sessions at once; 0 never sleeps.
 func TestIdleSleepSettingAppliesImmediately(t *testing.T) {
 	h := sleepyHarness(t, 0)
-	s := h.create(h.input(agentprofile.OMP, SideACP))
+	s := h.create(h.input(omp.Name, SideACP))
 	id := s.Info().ID
 	time.Sleep(5 * idleUnit)
 	if h.dormant(id) {

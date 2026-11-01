@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/launch"
 )
@@ -138,7 +138,7 @@ func TestHybridRecordEndpoints(t *testing.T) {
 
 	list := h.records("?state=recoverable")
 	if len(list) != 1 || list[0].ID != closed || list[0].State != contract.HybridStateClosed || list[0].ConfigMissing || list[0].ConfigID != configID ||
-		list[0].Agent != agentprofile.OMP || list[0].Side != contract.HybridSideTUI || list[0].PreviousIDs == nil || list[0].InterruptedAt != nil {
+		list[0].Agent != omp.Name || list[0].Side != contract.HybridSideTUI || list[0].PreviousIDs == nil || list[0].InterruptedAt != nil {
 		t.Fatalf("recoverable %+v", list)
 	}
 	if all := h.records(""); len(all) != 2 {
@@ -184,7 +184,7 @@ func TestHybridRecordEndpoints(t *testing.T) {
 // agent session is gone.
 func TestResumeHybridSession(t *testing.T) {
 	h := newHybridAPI(t, nil)
-	agent := fakeAgentPath(t, agentprofile.OMP)
+	agent := fakeAgentPath(t, omp.Name)
 	store := t.TempDir()
 	// The store reaches the agent even without the config's environment.
 	t.Setenv("FAKEAGENT_STORE", store)

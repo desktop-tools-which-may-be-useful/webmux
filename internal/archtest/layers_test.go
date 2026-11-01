@@ -31,17 +31,22 @@ var webmux = manifest{
 		"internal/tailscalesettings": service,
 
 		// Wire contracts and infrastructure every layer may use.
-		"internal/acp":           shared,
-		"internal/agentprofile":  shared,
-		"internal/contract":      shared,
-		"internal/config":        shared,
-		"internal/runtime":       shared,
-		"internal/jsonutil":      shared,
-		"internal/statefile":     shared,
-		"internal/fetch":         shared,
-		"internal/pathutil":      shared,
-		"internal/attentionkind": shared,
-		"internal/wsl":           shared,
+		"internal/acp":          shared,
+		"internal/agentprofile": shared,
+		// Agent adapters and the registry that lists them.
+		"internal/agentprofile/agents":   shared,
+		"internal/agentprofile/codex":    shared,
+		"internal/agentprofile/omp":      shared,
+		"internal/agentprofile/opencode": shared,
+		"internal/contract":              shared,
+		"internal/config":                shared,
+		"internal/runtime":               shared,
+		"internal/jsonutil":              shared,
+		"internal/statefile":             shared,
+		"internal/fetch":                 shared,
+		"internal/pathutil":              shared,
+		"internal/attentionkind":         shared,
+		"internal/wsl":                   shared,
 
 		// Programs that run outside the server and talk to it over the wire.
 		"internal/client":       client,
@@ -55,8 +60,9 @@ var webmux = manifest{
 		"internal/tunnel":       client,
 		"internal/service":      client,
 
-		"internal/archtest": testOnly,
-		"internal/docguard": testOnly,
+		"internal/archtest":               testOnly,
+		"internal/agentprofile/agenttest": testOnly,
+		"internal/docguard":               testOnly,
 	},
 	outbound: map[string]string{
 		"internal/push": "delivers Web Push messages to browser push services",

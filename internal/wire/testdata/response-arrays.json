@@ -87,6 +87,7 @@
       },
       "steering": false,
       "authRequired": false,
+      "forceSwitchNote": "",
       "promptCapabilities": {
         "image": false,
         "embeddedContext": false
@@ -136,7 +137,8 @@
       "preview": null,
       "hybrid": false,
       "hybridSupport": {
-        "supported": false
+        "supported": false,
+        "supportedAgents": []
       },
       "createdAt": "0001-01-01T00:00:00Z",
       "updatedAt": "0001-01-01T00:00:00Z"
@@ -153,7 +155,12 @@
     "hybrid": false,
     "hybridSupport": {
       "supported": false,
-      "reason": "unknown_agent"
+      "reason": "unknown_agent",
+      "supportedAgents": [
+        "omp",
+        "OpenCode",
+        "Codex CLI"
+      ]
     },
     "createdAt": "0001-01-01T00:00:00Z",
     "updatedAt": "0001-01-01T00:00:00Z"

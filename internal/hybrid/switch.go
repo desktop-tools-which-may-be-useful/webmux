@@ -217,7 +217,7 @@ func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
 	case ans.err != nil:
 		a.finish(op, SwitchResult{}, ans.err)
 		return
-	case !ans.listed && (t.sid == "" || a.cmd.Profile.TracksLocks()):
+	case !ans.listed && (t.sid == "" || a.tracksLocks()):
 		reason = ReasonNoSessionID
 	case !ans.listed:
 		reason = ReasonNotListed
@@ -282,7 +282,7 @@ const interruptKeyGap = 150 * time.Millisecond
 
 // interruptKey writes the profile's interrupt key presses to the terminal UI.
 func (a *actor) interruptKey() {
-	for i, key := range a.cmd.Profile.InterruptKeys {
+	for i, key := range a.cmd.Agent.InterruptKeys() {
 		if i > 0 {
 			time.Sleep(interruptKeyGap)
 		}
