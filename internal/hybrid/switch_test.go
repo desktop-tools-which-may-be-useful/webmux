@@ -889,7 +889,9 @@ func TestChatAgentKilledMidTurnReconnects(t *testing.T) {
 func TestCloseInterruptsTerminalTurn(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=200ms"))
+	// The turn must outlast the interrupt wait, otherwise it can end on its own
+	// before the bound and close returns early on a slow runner.
+	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=5s"))
 	id := s.Info().ID
 	typeLine(t, s, strings.Repeat("slow ", 100))
 	waitFor(t, "terminal turn", func() bool { return tuiBusy(s.Info()) })

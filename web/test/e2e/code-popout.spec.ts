@@ -200,6 +200,7 @@ test("the code panel pops out into a framed window and both ways keeps its readi
   // State changed in the window returns with it.
   await gotoLine(frame, 320);
   await gutter(frame, 318).click();
+  await expect(sendButton(frame, "318")).toBeEnabled();
   const poppedTop = await topLine(frame);
   expect(poppedTop).toBeGreaterThan(top);
   await closeFrom(pip);
