@@ -12,6 +12,7 @@ type CodeContext struct {
 	Diff   bool   `json:"diffAvailable"`
 	Ignore bool   `json:"ignoreAvailable"`
 	Reason string `json:"reason"`
+	Write  bool   `json:"writableAvailable"`
 }
 
 type CodeNode struct {
@@ -112,4 +113,38 @@ type CodeCheck struct {
 	Directories map[string]string `json:"directories"`
 	Changes     string            `json:"changes"`
 	Checked     time.Time         `json:"checkedAt"`
+}
+
+// CodeRenameRequest is the body of POST .../code/rename.
+type CodeRenameRequest struct {
+	Context string `json:"contextId"`
+	NodeID  string `json:"nodeId"`
+	Name    string `json:"name"`
+}
+
+// CodeMkdirRequest is the body of POST .../code/mkdir.
+type CodeMkdirRequest struct {
+	Context string `json:"contextId"`
+	Parent  string `json:"parentNodeId"`
+	Name    string `json:"name"`
+}
+
+// CodeCopyRequest is the body of POST .../code/copy; Mode is "copy" or "move".
+type CodeCopyRequest struct {
+	Context string   `json:"contextId"`
+	NodeIDs []string `json:"nodeIds"`
+	Target  string   `json:"targetNodeId"`
+	Mode    string   `json:"mode"`
+}
+
+// CodeMutation lists the nodes a file operation produced, under final names.
+type CodeMutation struct {
+	Nodes []CodeNode `json:"nodes"`
+}
+
+// CodeUsage counts the entries and file bytes at and below one node.
+type CodeUsage struct {
+	Entries int   `json:"entries"`
+	Bytes   int64 `json:"bytes"`
+	Limited bool  `json:"limited"`
 }

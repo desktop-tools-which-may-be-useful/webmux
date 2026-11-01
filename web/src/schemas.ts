@@ -498,6 +498,7 @@ export const CodeContextSchema = z.object({
   diffAvailable: z.boolean(),
   ignoreAvailable: z.boolean(),
   reason: z.string(),
+  writableAvailable: z.boolean(),
 });
 export const CodeNodeSchema = z.object({
   nodeId: z.string(),
@@ -517,6 +518,42 @@ export const CodeListingSchema = z.object({
   complete: z.boolean(),
   contentVersion: z.string(),
   checkedAt: z.string(),
+});
+export type CodeNode = z.infer<typeof CodeNodeSchema>;
+// The nodes a file operation created, renamed or moved, under final names.
+export const CodeMutationSchema = z.object({
+  nodes: z.array(CodeNodeSchema),
+});
+export const CodeUsageSchema = z.object({
+  entries: z.number().int().nonnegative(),
+  bytes: z.number().int().nonnegative(),
+  limited: z.boolean(),
+});
+// File operation bodies are validated before any request is sent.
+export const CodeNameSchema = z
+  .string()
+  .min(1)
+  .refine((name) => new TextEncoder().encode(name).length <= 255, "名称过长")
+  .refine((name) => name !== "." && name !== "..", "名称无效")
+  .refine((name) => name.toLowerCase() !== ".git", ".git 为保留名称")
+  .refine((name) => !/[/\\]/.test(name), "名称不能包含 / 或 \\")
+  // \p{Cc} is the control set the server's unicode.IsControl refuses.
+  .refine((name) => !/\p{Cc}/u.test(name), "名称不能包含控制字符");
+export const CodeRenameRequestSchema = z.strictObject({
+  contextId: z.string().min(1),
+  nodeId: z.string().min(1),
+  name: CodeNameSchema,
+});
+export const CodeMkdirRequestSchema = z.strictObject({
+  contextId: z.string().min(1),
+  parentNodeId: z.string(),
+  name: CodeNameSchema,
+});
+export const CodeCopyRequestSchema = z.strictObject({
+  contextId: z.string().min(1),
+  nodeIds: z.array(z.string().min(1)).min(1).max(100),
+  targetNodeId: z.string(),
+  mode: z.enum(["copy", "move"]),
 });
 export const CodeLocationSchema = z.object({
   nodeId: z.string(),

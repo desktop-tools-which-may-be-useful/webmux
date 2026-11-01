@@ -25,7 +25,7 @@ flowchart LR
     H["hub"]
     S["Session"]
     W["workspace 仓库清单 / Git"]
-    CV["codeview 只读代码服务"]
+    CV["codeview 代码服务"]
   end
   L -- "JSON /ws/sessions" --> M
   T -- "二进制帧 /ws/s/{id}" --> H
@@ -62,7 +62,7 @@ flowchart LR
 | `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测       |
 | `internal/tailscalesettings`                  | Tailscale 网页设置持久化、独立文件锁、校验与故障关闭                                            |
 | `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                              |
-| `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
+| `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测；根内文件操作与目录 ZIP                          |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
 | `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R10                                                             |
 | `internal/docguard`                           | 只含测试：文档与 spec 的行数、体积、目录扇出与树状组织规则                                      |
@@ -303,12 +303,17 @@ else                                        → running
 - 所有会话创建经过统一协调层登记启动目录；删除预留会阻止目标目录的新启动。
 - 删除预览生成 5 分钟内单次有效的确认 ID，绑定目录、分支、锁和会话集合，执行前重新验证。强制删除等待相关会话完全退出后执行单次 `git worktree remove --force`，不使用递归删除兜底。
 
-## 只读代码工作区
+## 代码工作区
 
 - 根目录在首次读取时绑定到会话启动目录所在的 worktree 顶层，之后不随终端中的 `cd` 变化。
 - OSC 7 报告的目录只用于列表展示和显式的相对路径定位。会话归属、代码根、读取边界和命令执行环境仍取启动目录及其 worktree；远端主机的报告不参与本机路径解析。定位由服务端完成：报告目录和启动目录可能是经过符号链接的逻辑路径，而代码根已规范化，因此先解析符号链接再与根比较。
 - 路径从根目录描述符逐段 `openat(O_NOFOLLOW)` 打开，拒绝符号链接遍历、特殊文件、`.git` 内部和嵌套仓库。
 - Git 查询设置 `GIT_OPTIONAL_LOCKS=0`，禁用 clean / process filters 与 fsmonitor，从不修改索引或对象。
+- 文件内容只读。资源管理器的文件操作（上传、新建文件夹、重命名、复制、移动、删除）只作用于当前根内的常规文件与目录，删除还可移除符号链接本身：
+  - 全部基于父目录描述符的 `openat` / `mkdirat` / `renameat` / `unlinkat`。
+  - 重名时取最小可用的 ` (n)` 后缀：先建同类型占位，再用 `renameat` 覆盖占位，从不替换已有条目。
+  - 上传先写隐藏临时文件，整个请求读完后才改名。
+- 复制与目录 ZIP 先扫描，超过 100 MiB 或 10000 项返回 413；递归删除先扫描，遇到 `.git` 或嵌套仓库返回 409。ZIP 边遍历边写，与原始下载共用 4 个传输槽；移动是同根 `renameat`，跨文件系统返回 409。
 - 内容快照归属会话，总预算 64 MiB、最长 10 分钟；过期返回 410，不会用新内容冒充旧快照。
 - Diff 在浏览器 Web Worker 中使用 jsdiff 计算，服务端只返回冻结的双侧原文。
 

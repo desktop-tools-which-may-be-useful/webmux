@@ -34,19 +34,56 @@ type Transfer struct {
 // Raw resolves a snapshot side into an opened, verified Transfer. The service
 // slot is released before returning so slow clients only occupy a transfer slot.
 func (s *Service) Raw(ctx context.Context, id, sid, side string) (*Transfer, error) {
+	return holdTransfer(s, func() (*Transfer, error) { return s.openRaw(ctx, id, sid, side) }, func(t *Transfer, done func()) { t.release = done })
+}
+
+// NodeRaw opens the regular file nodeId of context cid for download, like
+// Raw but without a snapshot: the transfer pins the file opened now.
+func (s *Service) NodeRaw(ctx context.Context, id, cid, nid string) (*Transfer, error) {
+	return holdTransfer(s, func() (*Transfer, error) {
+		return withRoot(ctx, s, id, cid, func(b *binding) (*Transfer, error) {
+			p, e := nodePath(nid)
+			if e != nil {
+				return nil, e
+			}
+			f, e := b.open(p)
+			if e != nil {
+				return nil, e
+			}
+			info, e := f.Stat()
+			switch {
+			case e != nil:
+				_ = f.Close()
+				return nil, e
+			case !info.Mode().IsRegular():
+				_ = f.Close()
+				return nil, problemf(ErrInvalid, "目录请下载为 ZIP")
+			case info.Size() > MaxDownloadBytes:
+				_ = f.Close()
+				return nil, problemf(ErrTooLarge, "超过 100 MiB 下载上限")
+			}
+			return &Transfer{Name: path.Base(p), Size: info.Size(), binding: b, path: p, file: f, identity: fileIdentity(info)}, nil
+		})
+	}, func(t *Transfer, done func()) { t.release = done })
+}
+
+// holdTransfer runs open while holding one of the transfer slots and hands
+// the slot to the opened value through keep; a failed open frees it.
+func holdTransfer[T any](s *Service, open func() (T, error), keep func(T, func())) (T, error) {
 	select {
 	case s.transfers <- struct{}{}:
 	default:
-		return nil, problemf(ErrBusy, "下载并发已满，请稍后重试")
+		var zero T
+		return zero, problemf(ErrBusy, "传输并发已满，请稍后重试")
 	}
 	done := func() { <-s.transfers }
-	t, e := s.openRaw(ctx, id, sid, side)
+	v, e := open()
 	if e != nil {
 		done()
-		return nil, e
+		return v, e
 	}
-	t.release = done
-	return t, nil
+	keep(v, done)
+	return v, nil
 }
 func (s *Service) openRaw(ctx context.Context, id, sid, side string) (*Transfer, error) {
 	return withBinding(ctx, s, id, s.snapshotRoot(id, sid), func(b *binding) (*Transfer, error) {

@@ -120,22 +120,52 @@ export async function apiBuffer(id: string): Promise<Uint8Array> {
   );
 }
 // Raw bytes share the JSON transport's Bearer header, APIError and 401 event.
+// received, when given, sees the running byte count of a streamed body.
 export async function apiBlob(
   path: string,
   signal?: AbortSignal,
+  received?: (bytes: number) => void,
 ): Promise<Blob> {
-  return (await request(path, "GET", undefined, signal)).blob();
+  const response = await request(path, "GET", undefined, signal);
+  if (!received || !response.body) return response.blob();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+    received(total);
+  }
+  return new Blob(chunks, {
+    type: response.headers.get("Content-Type") ?? "",
+  });
 }
-// XHR exposes upload progress; fetch does not. Authentication and errors stay
-// shared with the JSON transport, and multipart boundaries belong to the browser.
 export function uploadFile(
   id: string,
   file: File,
   progress: (percent: number) => void,
   signal: AbortSignal,
 ): Promise<z.infer<typeof UploadSchema>> {
-  const { promise, resolve, reject } =
-    Promise.withResolvers<z.infer<typeof UploadSchema>>();
+  return uploadForm(
+    `/sessions/${id}/upload`,
+    file,
+    UploadSchema,
+    progress,
+    signal,
+  );
+}
+// XHR exposes upload progress; fetch does not. Authentication and errors stay
+// shared with the JSON transport, and multipart boundaries belong to the browser.
+export function uploadForm<T extends z.ZodType>(
+  path: string,
+  file: File,
+  schema: T,
+  progress: (percent: number) => void,
+  signal: AbortSignal,
+): Promise<z.output<T>> {
+  const { promise, resolve, reject } = Promise.withResolvers<z.output<T>>();
   if (signal.aborted) {
     reject(new DOMException("上传已取消", "AbortError"));
     return promise;
@@ -143,7 +173,7 @@ export function uploadFile(
   const xhr = new XMLHttpRequest();
   const abort = () => xhr.abort();
   const cleanup = () => signal.removeEventListener("abort", abort);
-  xhr.open("POST", `/api/sessions/${id}/upload`);
+  xhr.open("POST", "/api" + path);
   xhr.setRequestHeader("Authorization", "Bearer " + stored("token"));
   xhr.responseType = "json";
   xhr.timeout = 5 * 60 * 1000;
@@ -156,7 +186,7 @@ export function uploadFile(
     try {
       if (xhr.status < 200 || xhr.status >= 300)
         throw responseError(xhr.status, xhr.response, xhr.statusText);
-      resolve(UploadSchema.parse(xhr.response));
+      resolve(schema.parse(xhr.response));
     } catch (err) {
       reject(err);
     }

@@ -96,10 +96,10 @@
     "benchmark": "cmd/baseline 的隔离实验数据、门闩与结果 JSON，不属于服务端状态目录。",
     "tray-local": "Windows 托盘 tray.json、keepalive.json 与临时日志属于设备本地状态；不纳入服务器偏好同步。",
     "download-cache": "下载与解压 cloudflared 可执行缓存；不属于用户设置或所有权 JSON。",
-    "user-files": "用户上传文件及失败后的临时目录清理；目标为用户工作区而非服务端状态。",
+    "user-files": "用户上传文件、失败后的临时目录清理，以及代码树文件操作（描述符相对的上传、新建、重命名、复制、移动与删除）；目标为用户工作区或临时文件夹而非服务端状态。",
     "service-definition": "systemd/launchd 服务定义与日志；由显式服务管理命令写入。",
     "fresh-log": "createFresh 生成本机控制/日志输出文件；不是新的 JSON 存储。",
-    "read-only-codeview": "通过 Open/Openat(O_RDONLY/O_PATH/O_NOFOLLOW) 与 NewFile 进行代码只读访问；登记以防新写入入口被漏过。",
+    "read-only-codeview": "通过 Open/Openat(O_RDONLY/O_PATH/O_NOFOLLOW) 与 NewFile 进行代码只读访问（阅读、下载、打包与复制源）；登记以防新写入入口被漏过。",
     "pty-descriptor": "将已有 PTY 描述符包装为可轮询文件；不是磁盘持久化。"
   },
   "references": {
@@ -163,14 +163,6 @@
       "count": 1,
       "owner": "fresh-log"
     },
-    "cmd/webmux/tailscaleownership.go|*tailscaleController.loadState|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
-      "count": 1,
-      "owner": "tailscale-ownership"
-    },
-    "cmd/webmux/tailscaleownership.go|*tailscaleController.openLock|github.com/rainchan/webmux/internal/statefile.Open": {
-      "count": 1,
-      "owner": "tailscale-ownership"
-    },
     "cmd/webmux/tailscalectl.go|path|tailscale-ownership.json": {
       "count": 1,
       "owner": "tailscale-ownership"
@@ -179,9 +171,89 @@
       "count": 1,
       "owner": "tailscale-ownership"
     },
+    "cmd/webmux/tailscaleownership.go|*tailscaleController.loadState|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
+    "cmd/webmux/tailscaleownership.go|*tailscaleController.openLock|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
     "internal/artifacts/artifacts.go|*Service.removeLocked|os.RemoveAll": {
       "count": 1,
       "owner": "user-files"
+    },
+    "internal/codeview/archive.go|*Archive.WriteTo|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/archive.go|*Archive.WriteTo|os.NewFile": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/archive.go|*Service.Upload|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/archive.go|*Service.Upload|os.NewFile": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|*Service.Delete|golang.org/x/sys/unix.Unlinkat": {
+      "count": 3,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|copyAt|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|copyAt|os.NewFile": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|copyDir|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|copyDir|os.NewFile": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|copyFile|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/mutate.go|copyFile|os.NewFile": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/mutate.go|moveAt|golang.org/x/sys/unix.Renameat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|openDirAt|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/mutate.go|openDirAt|os.NewFile": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/mutate.go|placeholder|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|removeAt|golang.org/x/sys/unix.Unlinkat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|removeContents|golang.org/x/sys/unix.Unlinkat": {
+      "count": 2,
+      "owner": "user-files"
+    },
+    "internal/codeview/mutate.go|statAt|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
     },
     "internal/codeview/navigation.go|*binding.directory|golang.org/x/sys/unix.Openat": {
       "count": 1,

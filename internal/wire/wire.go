@@ -232,6 +232,12 @@ func CodeCheckRequest(r contract.CodeCheckRequest) codeview.CheckRequest {
 	return codeview.CheckRequest(r)
 }
 
+func CodeMutation(m codeview.Mutation) contract.CodeMutation {
+	return contract.CodeMutation{Nodes: each(m.Nodes, codeNode)}
+}
+
+func CodeUsage(u codeview.Usage) contract.CodeUsage { return contract.CodeUsage(u) }
+
 // SessionEvent converts one session list event.
 func SessionEvent(e session.Event) contract.SessionEvent {
 	out := contract.SessionEvent{Type: e.Type, Sessions: Sessions(e.Sessions), ID: e.ID}

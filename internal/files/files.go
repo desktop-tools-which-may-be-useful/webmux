@@ -150,9 +150,6 @@ func uploadFilename(name string) (string, error) {
 	return name, nil
 }
 
-// maxNameAttempts bounds the " (n)" suffixes tried for a taken filename.
-const maxNameAttempts = 1000
-
 // StoreUpload copies at most limit bytes of src into a new file in dir named
 // after filename, with mode 0600. A taken name gets the smallest free
 // " (n)" suffix before its extension; no file is ever replaced. dir must be
@@ -200,17 +197,8 @@ func (s *Service) StoreUpload(dir, filename string, src io.Reader, limit int64) 
 // free " (n)" suffix (n >= 2) placed before the extension. A leading dot
 // alone (".env") is not an extension.
 func createUnique(dir, name string) (*os.File, string, error) {
-	ext := filepath.Ext(name)
-	if ext == name {
-		ext = ""
-	}
-	stem := strings.TrimSuffix(name, ext)
-	for n := 1; n <= maxNameAttempts; n++ {
-		candidate := name
-		if n > 1 {
-			candidate = fmt.Sprintf("%s (%d)%s", stem, n, ext)
-		}
-		path := filepath.Join(dir, candidate)
+	for n := 1; n <= pathutil.MaxNameAttempts; n++ {
+		path := filepath.Join(dir, pathutil.SuffixedName(name, n))
 		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0600)
 		if err == nil {
 			return file, path, nil

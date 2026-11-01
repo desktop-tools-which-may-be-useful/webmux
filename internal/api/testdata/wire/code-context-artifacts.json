@@ -7,6 +7,7 @@
     "ignoreAvailable": false,
     "reason": "",
     "rootKind": "artifacts",
-    "rootPath": "<tmp>/webmux-artifacts-<instance>/<id#1>"
+    "rootPath": "<tmp>/webmux-artifacts-<instance>/<id#1>",
+    "writableAvailable": true
   }
 }

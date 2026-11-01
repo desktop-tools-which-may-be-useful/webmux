@@ -72,6 +72,7 @@ async function serve() {
           browseAvailable: true,
           diffAvailable: false,
           ignoreAvailable: false,
+          writableAvailable: true,
           reason: "",
         });
       if (url.pathname.endsWith("/tree"))

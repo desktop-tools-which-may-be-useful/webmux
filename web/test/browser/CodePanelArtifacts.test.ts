@@ -57,6 +57,7 @@ function serve() {
                 browseAvailable: true,
                 diffAvailable: false,
                 ignoreAvailable: false,
+                writableAvailable: true,
                 reason: "",
               }
             : {
@@ -66,6 +67,7 @@ function serve() {
                 browseAvailable: true,
                 diffAvailable: true,
                 ignoreAvailable: true,
+                writableAvailable: true,
                 reason: "",
               },
         );

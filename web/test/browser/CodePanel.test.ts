@@ -47,6 +47,7 @@ function serve() {
           browseAvailable: true,
           diffAvailable: false,
           ignoreAvailable: false,
+          writableAvailable: true,
           reason: "",
         });
       if (url.pathname.endsWith("/tree"))
@@ -697,6 +698,7 @@ function serveExplorer() {
           ...(await response.json()),
           diffAvailable: true,
           ignoreAvailable: true,
+          writableAvailable: true,
         });
       }
       if (url.pathname.endsWith("/changes"))

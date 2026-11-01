@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"image/png"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -265,4 +267,135 @@ func TestContentDispositionFallback(t *testing.T) {
 			t.Errorf("%q: %q want %q", name, got, want)
 		}
 	}
+}
+
+// File operations share the code routes' authentication, Origin and status
+// mapping; uploads and archives stream through their own handlers.
+func TestCodeFileOperationsAPI(t *testing.T) {
+	c, e := config.Load(filepath.Join(t.TempDir(), "absent"), false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	c.DefaultCwd, _ = filepath.EvalSymlinks(t.TempDir())
+	c.Token = "secret"
+	m := session.NewManager(testSessionOptions(c))
+	codes := codeview.New(m, nil)
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, c.DefaultCwd), Code: codes})))
+	defer server.Close()
+	defer codes.Close()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	}()
+	item, e := m.Create(session.CreateInput{Cwd: c.DefaultCwd, Cmd: []string{"/bin/sh"}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	root := c.DefaultCwd
+	if e := os.MkdirAll(filepath.Join(root, "docs/deep"), 0o755); e != nil {
+		t.Fatal(e)
+	}
+	os.WriteFile(filepath.Join(root, "docs/deep/note.md"), []byte("# note\n"), 0o600)
+	base := "/api/sessions/" + item.Info().ID + "/code"
+	do := func(method, path, contentType string, body io.Reader, origin string, want int) *http.Response {
+		t.Helper()
+		r, _ := http.NewRequest(method, server.URL+path, body)
+		r.Header.Set("Authorization", "Bearer secret")
+		if contentType != "" {
+			r.Header.Set("Content-Type", contentType)
+		}
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		res, e := http.DefaultClient.Do(r)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if res.StatusCode != want {
+			b, _ := io.ReadAll(res.Body)
+			t.Fatalf("%s %s: %d want %d: %s", method, path, res.StatusCode, want, b)
+		}
+		return res
+	}
+	mutation := func(res *http.Response) contract.CodeMutation {
+		t.Helper()
+		defer res.Body.Close()
+		var out contract.CodeMutation
+		if e := json.NewDecoder(res.Body).Decode(&out); e != nil || len(out.Nodes) == 0 {
+			t.Fatalf("mutation %+v %v", out, e)
+		}
+		return out
+	}
+	res := do("GET", base+"/context", "", nil, "", 200)
+	var info contract.CodeContext
+	json.NewDecoder(res.Body).Decode(&info)
+	res.Body.Close()
+	if !info.Write {
+		t.Fatalf("workspace not writable: %+v", info)
+	}
+	id := func(p string) string { return base64.RawURLEncoding.EncodeToString([]byte(p)) }
+	q := func(p string, extra ...string) string {
+		v := url.Values{"contextId": {info.ID}, "nodeId": {id(p)}}
+		for i := 0; i+1 < len(extra); i += 2 {
+			v.Set(extra[i], extra[i+1])
+		}
+		return "?" + v.Encode()
+	}
+	jsonBody := func(v any) io.Reader { b, _ := json.Marshal(v); return bytes.NewReader(b) }
+
+	rename := contract.CodeRenameRequest{Context: info.ID, NodeID: id("docs/deep/note.md"), Name: "readme.md"}
+	do("POST", base+"/rename", "application/json", jsonBody(rename), "http://evil.example", 403).Body.Close()
+	if out := mutation(do("POST", base+"/rename", "application/json", jsonBody(rename), "", 200)); out.Nodes[0].Path != "docs/deep/readme.md" {
+		t.Fatalf("rename %+v", out)
+	}
+	if out := mutation(do("POST", base+"/mkdir", "application/json", jsonBody(contract.CodeMkdirRequest{Context: info.ID, Parent: id(""), Name: "docs"}), "", 201)); out.Nodes[0].Path != "docs (2)" {
+		t.Fatalf("mkdir %+v", out)
+	}
+	copyReq := contract.CodeCopyRequest{Context: info.ID, NodeIDs: []string{id("docs/deep")}, Target: id("docs (2)"), Mode: "copy"}
+	if out := mutation(do("POST", base+"/copy", "application/json", jsonBody(copyReq), "", 200)); out.Nodes[0].Path != "docs (2)/deep" {
+		t.Fatalf("copy %+v", out)
+	}
+	copyReq.Target = id("docs/deep")
+	do("POST", base+"/copy", "application/json", jsonBody(copyReq), "", 400).Body.Close()
+
+	var form bytes.Buffer
+	w := multipart.NewWriter(&form)
+	part, _ := w.CreateFormFile("file", "readme.md")
+	part.Write([]byte("uploaded"))
+	w.Close()
+	if out := mutation(do("POST", base+"/upload"+q("docs/deep"), w.FormDataContentType(), &form, "", 201)); out.Nodes[0].Path != "docs/deep/readme (2).md" {
+		t.Fatalf("upload %+v", out)
+	}
+
+	res = do("GET", base+"/node"+q("docs/deep/readme (2).md"), "", nil, "", 200)
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if string(body) != "uploaded" || !strings.HasPrefix(res.Header.Get("Content-Disposition"), "attachment") {
+		t.Fatalf("node download %q %v", body, res.Header)
+	}
+	do("GET", base+"/node"+q("docs"), "", nil, "", 400).Body.Close()
+
+	res = do("GET", base+"/archive"+q("docs"), "", nil, "", 200)
+	body, _ = io.ReadAll(res.Body)
+	res.Body.Close()
+	archive, e := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if e != nil || res.Header.Get("Content-Type") != "application/zip" || len(archive.File) != 3 {
+		t.Fatalf("archive %v %v %d", e, res.Header, len(body))
+	}
+
+	res = do("GET", base+"/usage"+q("docs"), "", nil, "", 200)
+	var usage contract.CodeUsage
+	json.NewDecoder(res.Body).Decode(&usage)
+	res.Body.Close()
+	if usage.Entries != 4 || usage.Bytes != int64(len("# note\n")+len("uploaded")) {
+		t.Fatalf("usage %+v", usage)
+	}
+	do("DELETE", base+"/node"+q("docs"), "", nil, "", 409).Body.Close()
+	do("DELETE", base+"/node"+q("docs", "recursive", "1"), "", nil, "http://evil.example", 403).Body.Close()
+	do("DELETE", base+"/node"+q("docs", "recursive", "1"), "", nil, "", 204).Body.Close()
+	if _, e := os.Stat(filepath.Join(root, "docs")); !os.IsNotExist(e) {
+		t.Fatalf("docs still present: %v", e)
+	}
+	do("DELETE", base+"/node"+q(""), "", nil, "", 403).Body.Close()
 }

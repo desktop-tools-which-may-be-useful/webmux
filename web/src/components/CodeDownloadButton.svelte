@@ -1,5 +1,6 @@
 <script lang="ts">
   import { apiBlob, APIError } from "../api";
+  import { saveBlob } from "../download";
   import { rawError } from "../code-image";
   import { Button } from "$lib/components/ui/button";
   import IconDownload from "~icons/tabler/download";
@@ -35,19 +36,7 @@
         current.signal,
       );
       if (current.signal.aborted) return;
-      // The panel may live in a pop-out window; save from the button's own.
-      const owner = button?.ownerDocument ?? document;
-      const href = URL.createObjectURL(blob);
-      const anchor = owner.createElement("a");
-      anchor.href = href;
-      anchor.download = filename;
-      anchor.hidden = true;
-      owner.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      (owner.defaultView ?? window).requestAnimationFrame(() =>
-        URL.revokeObjectURL(href),
-      );
+      saveBlob(button?.ownerDocument ?? document, blob, filename);
     } catch (error) {
       if (!current.signal.aborted)
         onerror(

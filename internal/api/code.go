@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"io"
 	"mime"
 	"net/http"
 	"strconv"
@@ -76,6 +77,55 @@ func (s *Server) codeRoutes(mux *http.ServeMux) {
 	})
 	// Raw bytes stream outside the 10 s JSON wrapper; GET also serves HEAD.
 	mux.HandleFunc("GET"+base+"/snapshots/{snapshotId}/raw", s.codeRaw)
+	mux.HandleFunc("GET"+base+"/node", s.codeNodeRaw)
+	mux.HandleFunc("GET"+base+"/archive", s.codeArchive)
+	serveCode(mux, "GET"+base+"/usage", func(ctx context.Context, r *http.Request) (contract.CodeUsage, error) {
+		q := r.URL.Query()
+		v, err := s.Code.Usage(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"))
+		return wire.CodeUsage(v), err
+	})
+	mux.HandleFunc("POST"+base+"/rename", func(w http.ResponseWriter, r *http.Request) {
+		var req contract.CodeRenameRequest
+		if !decode(w, r, &req) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), codeWriteTimeout)
+		defer cancel()
+		m, err := s.Code.Rename(ctx, r.PathValue("id"), req.Context, req.NodeID, req.Name)
+		codeMutation(w, http.StatusOK, m, err)
+	})
+	mux.HandleFunc("POST"+base+"/mkdir", func(w http.ResponseWriter, r *http.Request) {
+		var req contract.CodeMkdirRequest
+		if !decode(w, r, &req) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), codeWriteTimeout)
+		defer cancel()
+		m, err := s.Code.Mkdir(ctx, r.PathValue("id"), req.Context, req.Parent, req.Name)
+		codeMutation(w, http.StatusCreated, m, err)
+	})
+	mux.HandleFunc("POST"+base+"/copy", func(w http.ResponseWriter, r *http.Request) {
+		var req contract.CodeCopyRequest
+		if !decode(w, r, &req) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), codeWriteTimeout)
+		defer cancel()
+		m, err := s.Code.Copy(ctx, r.PathValue("id"), req.Context, req.NodeIDs, req.Target, req.Mode)
+		codeMutation(w, http.StatusOK, m, err)
+	})
+	mux.HandleFunc("DELETE"+base+"/node", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		ctx, cancel := context.WithTimeout(r.Context(), codeWriteTimeout)
+		defer cancel()
+		if err := s.Code.Delete(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), q.Get("recursive") == "1"); err != nil {
+			failure(w, codeStatus(err), err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("POST"+base+"/upload", s.codeUpload)
 	mux.HandleFunc("POST"+base+"/check", func(w http.ResponseWriter, r *http.Request) {
 		var req contract.CodeCheckRequest
 		if !decode(w, r, &req) {
@@ -93,6 +143,19 @@ func (s *Server) codeRoutes(mux *http.ServeMux) {
 	})
 }
 
+// codeWriteTimeout bounds one file operation, including a recursive copy or
+// deletion; uploads and downloads are bounded per chunk instead.
+const codeWriteTimeout = time.Minute
+
+func codeMutation(w http.ResponseWriter, status int, m codeview.Mutation, err error) {
+	if err != nil {
+		failure(w, codeStatus(err), err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	reply(w, status, wire.CodeMutation(m))
+}
+
 // rawChunkDeadline bounds how long one streamed chunk may stall.
 const rawChunkDeadline = 30 * time.Second
 
@@ -101,10 +164,22 @@ const rawChunkDeadline = 30 * time.Second
 var rawLookupTimeout = 10 * time.Second
 
 func (s *Server) codeRaw(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), rawLookupTimeout)
+	t, err := s.Code.Raw(ctx, r.PathValue("id"), r.PathValue("snapshotId"), r.URL.Query().Get("side"))
+	cancel()
+	sendTransfer(w, r, t, err, r.URL.Query().Get("download") == "1")
+}
+
+// codeNodeRaw downloads one regular file of the tree as an attachment.
+func (s *Server) codeNodeRaw(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	ctx, cancel := context.WithTimeout(r.Context(), rawLookupTimeout)
-	t, err := s.Code.Raw(ctx, r.PathValue("id"), r.PathValue("snapshotId"), q.Get("side"))
+	t, err := s.Code.NodeRaw(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"))
 	cancel()
+	sendTransfer(w, r, t, err, true)
+}
+
+func sendTransfer(w http.ResponseWriter, r *http.Request, t *codeview.Transfer, err error, download bool) {
 	if err != nil {
 		failure(w, codeStatus(err), err)
 		return
@@ -114,7 +189,7 @@ func (s *Server) codeRaw(w http.ResponseWriter, r *http.Request) {
 	contentType, disposition := "application/octet-stream", "attachment"
 	if t.MediaType != "" {
 		contentType = t.MediaType
-		if q.Get("download") != "1" {
+		if !download {
 			disposition = "inline"
 		}
 	}
@@ -134,6 +209,69 @@ func (s *Server) codeRaw(w http.ResponseWriter, r *http.Request) {
 		// Headers promised Content-Length; abort so clients see a failure.
 		panic(http.ErrAbortHandler)
 	}
+}
+
+// codeArchive streams a directory as a ZIP built while it is sent, so the
+// response has no Content-Length; a failure after the headers aborts it.
+func (s *Server) codeArchive(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	ctx, cancel := context.WithTimeout(r.Context(), rawLookupTimeout)
+	a, err := s.Code.Archive(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), q.Get("includeIgnored") == "true")
+	cancel()
+	if err != nil {
+		failure(w, codeStatus(err), err)
+		return
+	}
+	defer a.Close()
+	h := w.Header()
+	h.Set("Content-Type", "application/zip")
+	h.Set("Cache-Control", "no-store")
+	h.Set("Content-Disposition", contentDisposition("attachment", a.Name))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if err := a.WriteTo(r.Context(), &deadlineWriter{w: w, rc: http.NewResponseController(w)}); err != nil {
+		panic(http.ErrAbortHandler)
+	}
+}
+
+// codeUpload stores one multipart file in a tree directory. The file is
+// written under a temporary name and renamed only after the whole request
+// was read, so a failed upload leaves nothing behind.
+func (s *Server) codeUpload(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var upload *codeview.Upload
+	defer func() {
+		if upload != nil {
+			upload.Close()
+		}
+	}()
+	received := receiveUpload(w, r, func(filename string, src io.Reader) bool {
+		ctx, cancel := context.WithTimeout(r.Context(), rawLookupTimeout)
+		u, err := s.Code.Upload(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), filename)
+		cancel()
+		if err != nil {
+			failure(w, codeStatus(err), err)
+			return false
+		}
+		upload = u
+		if err := u.Write(src, maxUploadBytes); err != nil {
+			var known *codeview.Error
+			if errors.As(err, &known) {
+				failure(w, codeStatus(err), err)
+			} else {
+				uploadReadFailure(w, "read uploaded file", err)
+			}
+			return false
+		}
+		return true
+	})
+	if !received {
+		return
+	}
+	m, err := upload.Commit()
+	codeMutation(w, http.StatusCreated, m, err)
 }
 
 // contentDisposition encodes the source basename (RFC 2231 for non-ASCII) and

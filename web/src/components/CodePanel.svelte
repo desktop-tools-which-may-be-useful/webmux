@@ -546,6 +546,20 @@
     tabs = tabs.filter((t) => t.key !== key);
     if (active === key) activate(tabs.at(-1)?.key ?? "");
   }
+  // After a file operation: tabs of the current root showing a path that no
+  // longer exists are closed, and the navigator re-reads its directories.
+  function filesChanged(removed: string[]) {
+    const current = context?.contextId;
+    for (const tab of tabs.filter((t) => {
+      const path = t.file?.document.path ?? t.diff?.new.path ?? "";
+      return (
+        t.contextId === current &&
+        removed.some((p) => path === p || path.startsWith(p + "/"))
+      );
+    }))
+      close(tab.key);
+    void load();
+  }
   async function refresh(tab: Tab) {
     const seq = ++tab.sequence;
     await read(
@@ -998,6 +1012,7 @@
     >
       <div class="contents" class:hidden={!navOpen}>
         <CodeNavigator
+          {id}
           {context}
           {listing}
           {rootListing}
@@ -1015,6 +1030,7 @@
           {switchRoot}
           retryRoot={() => void loadContext()}
           reload={() => void load()}
+          changed={filesChanged}
           changesEnabled={shown && !changesError && !navStatus}
           bind:nav
           bind:query

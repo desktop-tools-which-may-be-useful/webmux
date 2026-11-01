@@ -17,6 +17,9 @@
   import IconPhoto from "~icons/tabler/photo";
   import IconLink from "~icons/tabler/link";
   import IconLoader from "~icons/tabler/loader-2";
+  import IconDots from "~icons/tabler/dots";
+  import type { FileTarget } from "./CodeFileActions.svelte";
+  import { longPress } from "../hooks/long-press";
 
   let {
     listing,
@@ -29,6 +32,7 @@
     fetchDirectory,
     openFile,
     loadMore,
+    menu,
   }: {
     listing: CodeListing | undefined;
     rootPath: string;
@@ -44,7 +48,36 @@
     ) => Promise<CodeListing>;
     openFile: (path: string, id: string) => void;
     loadMore: () => void | Promise<void>;
+    /** Opens the file actions menu for node, anchored at a point or control. */
+    menu?: (
+      node: FileTarget,
+      at: HTMLElement | { x: number; y: number },
+      row: HTMLElement,
+    ) => void;
   } = $props();
+  const rootNode = $derived<FileTarget>({
+    nodeId: "",
+    path: "",
+    name: rootPath.split("/").filter(Boolean).at(-1) ?? "根目录",
+    kind: "directory",
+  });
+  // A pointer context menu opens at the pointer; a keyboard one (whose
+  // position may lie outside the row) opens at the row. Touch context menus
+  // come from the long press instead, which iOS Safari also supports.
+  function contextMenu(event: MouseEvent, node: FileTarget) {
+    if (!menu) return;
+    event.preventDefault();
+    if (event instanceof PointerEvent && event.pointerType === "touch") return;
+    const row = event.currentTarget as HTMLElement;
+    const box = row.getBoundingClientRect();
+    const inside =
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom;
+    menu(node, inside ? { x: event.clientX, y: event.clientY } : row, row);
+  }
+  const hold = (node: FileTarget) => longPress((row) => menu?.(node, row, row));
   let rootOpen = $state(true);
   const expanded = new SvelteSet<string>();
   const branches = new SvelteMap<string, CodeListing>();
@@ -193,6 +226,23 @@
   }
 </script>
 
+{#snippet actions(node: FileTarget)}
+  {#if menu}<ListButton
+      variant="file-tree-action"
+      tabindex={-1}
+      aria-label={`文件操作 ${node.name}`}
+      title="更多操作"
+      onclick={(event) => {
+        const button = event.currentTarget;
+        const row =
+          button.parentElement?.querySelector<HTMLElement>(
+            "[data-file-entry]",
+          ) ?? button;
+        menu(node, button, row);
+      }}><IconDots aria-hidden="true" /></ListButton
+    >{/if}
+{/snippet}
+
 {#snippet contents(value: CodeListing | undefined, path: string)}
   <ul class="m-0 list-none p-0">
     {#each value?.children ?? [] as node (node.nodeId)}
@@ -203,36 +253,41 @@
             open={expanded.has(node.path)}
             onOpenChange={(open) => toggle(node.path, open)}
           >
-            <Collapsible.Trigger>
-              {#snippet child({ props })}
-                <ListButton
-                  {...props}
-                  variant="file-tree"
-                  data-file-entry
-                  onkeydown={keyboard}
-                  title={node.path}
-                >
-                  {#if loading.has(node.path)}<IconLoader
-                      class="size-3.5 shrink-0 animate-spin"
-                      aria-hidden="true"
-                    />{:else if expanded.has(node.path)}<IconChevronDown
-                      class="size-3.5 shrink-0"
-                      aria-hidden="true"
-                    />{:else}<IconChevronRight
-                      class="size-3.5 shrink-0"
-                      aria-hidden="true"
-                    />{/if}
-                  {#if expanded.has(node.path)}<IconFolderOpen
-                      class="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />{:else}<IconFolder
-                      class="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />{/if}
-                  <span class="truncate">{node.name}</span>
-                </ListButton>
-              {/snippet}
-            </Collapsible.Trigger>
+            <div class="group/row relative">
+              <Collapsible.Trigger>
+                {#snippet child({ props })}
+                  <ListButton
+                    {...props}
+                    variant="file-tree"
+                    data-file-entry
+                    onkeydown={keyboard}
+                    oncontextmenu={(event) => contextMenu(event, node)}
+                    {@attach hold(node)}
+                    title={node.path}
+                  >
+                    {#if loading.has(node.path)}<IconLoader
+                        class="size-3.5 shrink-0 animate-spin"
+                        aria-hidden="true"
+                      />{:else if expanded.has(node.path)}<IconChevronDown
+                        class="size-3.5 shrink-0"
+                        aria-hidden="true"
+                      />{:else}<IconChevronRight
+                        class="size-3.5 shrink-0"
+                        aria-hidden="true"
+                      />{/if}
+                    {#if expanded.has(node.path)}<IconFolderOpen
+                        class="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />{:else}<IconFolder
+                        class="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />{/if}
+                    <span class="truncate">{node.name}</span>
+                  </ListButton>
+                {/snippet}
+              </Collapsible.Trigger>
+              {@render actions(node)}
+            </div>
             <Collapsible.Content>
               <div class="ml-3 border-l pl-1">
                 {@render contents(branches.get(node.path), node.path)}
@@ -250,37 +305,43 @@
                 : /\.(go|ts|js|svelte|json|yaml|toml|css|html)$/.test(node.name)
                   ? IconCode
                   : IconFile}
-          <ListButton
-            variant="file-tree"
-            data-file-entry
-            onkeydown={keyboard}
-            aria-label={node.name}
-            aria-current={activePath === node.path ? "page" : undefined}
-            {disabled}
-            title={`${node.path}${node.linkTarget ? ` → ${node.linkTarget}` : ""}${disabled ? " · 不支持打开此路径" : ""}`}
-            onclick={() => openFile(node.path, node.nodeId)}
-          >
-            <span class="size-3.5 shrink-0"></span>
-            <FileIcon
-              class="size-4 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <span class="truncate">{node.name}</span>
-            {#if node.gitStatus}<span
-                class="ml-auto shrink-0 text-warning"
-                aria-label={`Git 状态 ${node.gitStatus}`}>{node.gitStatus}</span
-              >{/if}
-            {#if node.ignored}<span
-                class="ml-auto shrink-0 text-muted-foreground">忽略</span
-              >{/if}
-            {#if disabled}<span class="ml-auto shrink-0 text-muted-foreground"
-                >{node.kind === "boundary"
-                  ? "边界"
-                  : node.kind === "symlink"
-                    ? "链接"
-                    : "特殊"}</span
-              >{/if}
-          </ListButton>
+          <div class="group/row relative">
+            <ListButton
+              variant="file-tree"
+              data-file-entry
+              onkeydown={keyboard}
+              oncontextmenu={(event) => contextMenu(event, node)}
+              {@attach hold(node)}
+              aria-label={node.name}
+              aria-current={activePath === node.path ? "page" : undefined}
+              {disabled}
+              title={`${node.path}${node.linkTarget ? ` → ${node.linkTarget}` : ""}${disabled ? " · 不支持打开此路径" : ""}`}
+              onclick={() => openFile(node.path, node.nodeId)}
+            >
+              <span class="size-3.5 shrink-0"></span>
+              <FileIcon
+                class="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span class="truncate">{node.name}</span>
+              {#if node.gitStatus}<span
+                  class="ml-auto shrink-0 text-warning"
+                  aria-label={`Git 状态 ${node.gitStatus}`}
+                  >{node.gitStatus}</span
+                >{/if}
+              {#if node.ignored}<span
+                  class="ml-auto shrink-0 text-muted-foreground">忽略</span
+                >{/if}
+              {#if disabled}<span class="ml-auto shrink-0 text-muted-foreground"
+                  >{node.kind === "boundary"
+                    ? "边界"
+                    : node.kind === "symlink"
+                      ? "链接"
+                      : "特殊"}</span
+                >{/if}
+            </ListButton>
+            {@render actions(node)}
+          </div>
         {/if}
       </li>
     {/each}
@@ -319,28 +380,31 @@
 <ScrollArea class="min-h-0 flex-1">
   <div class="p-1" role="group" aria-label="文件树" data-file-tree>
     <Collapsible.Root bind:open={rootOpen}>
-      <Collapsible.Trigger>
-        {#snippet child({ props })}
-          <ListButton
-            {...props}
-            variant="file-tree-root"
-            data-file-entry
-            onkeydown={keyboard}
-            title={rootPath}
-          >
-            {#if rootOpen}<IconChevronDown
-                class="size-3.5 shrink-0"
-                aria-hidden="true"
-              />{:else}<IconChevronRight
-                class="size-3.5 shrink-0"
-                aria-hidden="true"
-              />{/if}
-            <span class="truncate"
-              >{rootPath.split("/").filter(Boolean).at(-1) ?? "根目录"}</span
+      <div class="group/row relative">
+        <Collapsible.Trigger>
+          {#snippet child({ props })}
+            <ListButton
+              {...props}
+              variant="file-tree-root"
+              data-file-entry
+              onkeydown={keyboard}
+              oncontextmenu={(event) => contextMenu(event, rootNode)}
+              {@attach hold(rootNode)}
+              title={rootPath}
             >
-          </ListButton>
-        {/snippet}
-      </Collapsible.Trigger>
+              {#if rootOpen}<IconChevronDown
+                  class="size-3.5 shrink-0"
+                  aria-hidden="true"
+                />{:else}<IconChevronRight
+                  class="size-3.5 shrink-0"
+                  aria-hidden="true"
+                />{/if}
+              <span class="truncate">{rootNode.name}</span>
+            </ListButton>
+          {/snippet}
+        </Collapsible.Trigger>
+        {@render actions(rootNode)}
+      </div>
       <Collapsible.Content>
         {@render contents(listing, "")}
       </Collapsible.Content>

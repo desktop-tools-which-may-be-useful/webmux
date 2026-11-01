@@ -1,4 +1,7 @@
-// Package codeview owns bounded, read-only session code contexts and immutable snapshots.
+// Package codeview owns bounded session code contexts and immutable
+// snapshots: read-only browsing of file contents plus descriptor-relative
+// filesystem operations (rename, copy, move, delete, upload, download)
+// confined to a context's root.
 package codeview
 
 import (
@@ -73,6 +76,8 @@ type Context struct {
 	Diff   bool   `json:"diffAvailable"`
 	Ignore bool   `json:"ignoreAvailable"`
 	Reason string `json:"reason"`
+	// Write reports whether the service user may change entries in the root.
+	Write bool `json:"writableAvailable"`
 }
 type Node struct {
 	ID            string `json:"nodeId"`
@@ -177,4 +182,18 @@ type Check struct {
 	Directories map[string]string `json:"directories"`
 	Changes     string            `json:"changes"`
 	Checked     time.Time         `json:"checkedAt"`
+}
+
+// Mutation lists the nodes a filesystem operation created, renamed or moved,
+// under their final names.
+type Mutation struct {
+	Nodes []Node `json:"nodes"`
+}
+
+// Usage counts the entries and regular-file bytes at and below one node.
+// Limited means counting stopped at the scan bound.
+type Usage struct {
+	Entries int   `json:"entries"`
+	Bytes   int64 `json:"bytes"`
+	Limited bool  `json:"limited"`
 }

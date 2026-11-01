@@ -228,6 +228,7 @@ func (s *Service) bind(ctx context.Context, id, kind string) (*binding, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.Write = writable(root)
 	s.mu.Lock()
 	if old := s.roots[key]; old != nil {
 		b = old
@@ -268,7 +269,7 @@ func (s *Service) bindArtifacts(id string) (*binding, error) {
 	if err != nil || !identity.IsDir() {
 		return nil, problemf(ErrUnavailable, "临时文件夹不可用")
 	}
-	b := &binding{Context: Context{ID: random(), Root: dir, Kind: RootArtifacts, Browse: true}, identity: identity}
+	b := &binding{Context: Context{ID: random(), Root: dir, Kind: RootArtifacts, Browse: true, Write: writable(dir)}, identity: identity}
 	s.roots[key] = b
 	return b, nil
 }

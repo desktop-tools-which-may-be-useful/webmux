@@ -65,6 +65,7 @@
     style:--code-nav-width="288px"
   >
     <CodeNavigator
+      id="demo-session"
       context={{
         contextId: "demo",
         rootPath: "/workspace/webmux",
@@ -73,6 +74,7 @@
         diffAvailable: true,
         ignoreAvailable: true,
         reason: "",
+        writableAvailable: true,
       }}
       listing={current}
       rootListing={listing("")}
@@ -107,6 +109,10 @@
       switchRoot={() => {}}
       retryRoot={() => {}}
       reload={() => {
+        current = listing("");
+        refresh++;
+      }}
+      changed={() => {
         current = listing("");
         refresh++;
       }}

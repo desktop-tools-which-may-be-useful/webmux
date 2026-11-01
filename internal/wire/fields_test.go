@@ -33,6 +33,7 @@ func TestDirectConversionsKeepFieldOrder(t *testing.T) {
 		{"CodeChange", codeview.Change{}, contract.CodeChange{}},
 		{"CodeCheck", codeview.Check{}, contract.CodeCheck{}},
 		{"CodeCheckRequest", codeview.CheckRequest{}, contract.CodeCheckRequest{}},
+		{"CodeUsage", codeview.Usage{}, contract.CodeUsage{}},
 		{"Position", session.Position{}, contract.StreamPosition{}},
 		{"Workspace", session.Workspace{}, contract.SessionWorkspace{}},
 		{"ReportedCwd", session.ReportedCwd{}, contract.SessionReportedCwd{}},
