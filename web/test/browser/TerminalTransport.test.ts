@@ -12,6 +12,7 @@ import {
   FixtureSocket,
   geometry,
   host,
+  hostObserver,
   inputText,
   installTerminalFixture,
   observeGlyphPixels,
@@ -109,39 +110,116 @@ test("terminal resize and resync recover on the same socket after saturation", a
   expect(socket.closeCount).toBe(0);
 });
 
-test("locking the terminal size keeps the PTY grid across height changes", async () => {
+test("locking the terminal size keeps the PTY grid across host resizes", async () => {
   observeGlyphPixels(true);
   let locked = false;
   const { socket, api } = await openTerminalApi({
     sizeLocked: () => locked,
   });
   const sizeFrames = () => socket.sent.filter((frame) => frame[0] === 1).length;
+  const screen = () =>
+    host().querySelector(".xterm-screen")!.getBoundingClientRect();
   const initial = geometry(socket);
   expect(initial.bounds.width).toBeLessThanOrEqual(host().clientWidth);
   const fitted = sizeFrames();
   expect(fitted).toBeGreaterThan(0);
 
-  // The menu toggle refits the host; a locked grid ignores that fit.
+  // The menu toggle keeps the current grid instead of refitting it.
   locked = true;
+  host().classList.add("size-locked");
   api.fit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(sizeFrames()).toBe(fitted);
 
-  // A keyboard or browser-chrome shrink changes only the height.
+  // A keyboard or browser-chrome shrink changes only the height; the
+  // scrollable host stays anchored to the newest rows.
   host().style.height = "500px";
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await expect
+    .poll(() => host().scrollHeight)
+    .toBeGreaterThan(host().clientHeight);
+  await expect
+    .poll(() => host().scrollTop + host().clientHeight)
+    .toBeGreaterThanOrEqual(host().scrollHeight - 1);
   expect(sizeFrames()).toBe(fitted);
-  const lockedScreen = host()
-    .querySelector(".xterm-screen")!
-    .getBoundingClientRect();
-  expect(lockedScreen.width).toBe(initial.bounds.width);
-  expect(lockedScreen.height).toBe(initial.bounds.height);
+  expect(screen().width).toBe(initial.bounds.width);
+  expect(screen().height).toBe(initial.bounds.height);
 
-  // A deliberate width change (rotation, code panel) still adopts the host.
+  // Scrolling the host up reports history; the control returns to the newest
+  // rows without resizing the grid.
+  const position = page.getByRole("status", { name: "Terminal position" });
+  host().scrollTop = 0;
+  await expect.element(position).toHaveTextContent("history");
+  await page.getByRole("button", { name: "Scroll to latest" }).click();
+  await expect.element(position).toHaveTextContent("latest");
+  expect(sizeFrames()).toBe(fitted);
+
+  // A deliberate width change (rotation, window, code panel) also keeps the
+  // grid; the host scrolls horizontally instead of refitting the PTY.
   host().style.width = "300px";
+  await expect
+    .poll(() => host().scrollWidth)
+    .toBeGreaterThan(host().clientWidth);
+  expect(sizeFrames()).toBe(fitted);
+  expect(screen().width).toBe(initial.bounds.width);
+
+  // Unlocking adopts the host again.
+  locked = false;
+  host().classList.remove("size-locked");
+  api.fit();
   await expect.poll(sizeFrames).toBeGreaterThan(fitted);
-  expect(
-    host().querySelector(".xterm-screen")!.getBoundingClientRect().width,
-  ).toBeLessThan(initial.bounds.width);
+  await expect
+    .poll(() => screen().width)
+    .toBeLessThanOrEqual(host().clientWidth);
+});
+
+test("a locked host keeps following output that arrives during a resize", async () => {
+  observeGlyphPixels(true);
+  const { socket, api } = await openTerminalApi({
+    sizeLocked: () => true,
+  });
+  host().classList.add("size-locked");
+  api.fit();
+  // Drop the debounced layout so output can update the position from the
+  // smaller box before the next fit, as it can while the real timer is pending.
+  hostObserver().disconnect();
+  // A layout the observer already scheduled (100 ms debounce) would fit and
+  // re-anchor after the resize below. The timer is internal and xterm renders
+  // on real timers, so instead of faking time, outlast it: timers run in
+  // deadline order, so it has run before the box shrinks.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  host().style.height = "400px";
+  await expect
+    .poll(() => host().scrollHeight)
+    .toBeGreaterThan(host().clientHeight);
+  socket.receive(0, "during resize\r\n");
+  await expectDomText("during resize");
+  const position = page.getByRole("status", { name: "Terminal position" });
+  await expect.element(position).toHaveTextContent("history");
+  // The debounced layout calls this same fit, now after the position changed.
+  api.fit();
+  await expect
+    .poll(() => host().scrollTop + host().clientHeight)
+    .toBeGreaterThanOrEqual(host().scrollHeight - 1);
+  await expect.element(position).toHaveTextContent("latest");
+});
+
+test("a locked grid only rescales the font, keeping the PTY rows and columns", async () => {
+  observeGlyphPixels(true);
+  const { socket, api } = await openTerminalApi({
+    sizeLocked: () => true,
+  });
+  host().classList.add("size-locked");
+  const sizeFrames = () => socket.sent.filter((frame) => frame[0] === 1).length;
+  const screen = () =>
+    host().querySelector(".xterm-screen")!.getBoundingClientRect();
+  const fitted = sizeFrames();
+  expect(fitted).toBeGreaterThan(0);
+  const before = screen();
+
+  api.setFontSize(20);
+  await expect.poll(() => screen().width).toBeGreaterThan(before.width);
+  expect(screen().height).toBeGreaterThan(before.height);
+  expect(sizeFrames()).toBe(fitted);
 });
 
 test("a persisted size lock still fits the grid once on mount", async () => {

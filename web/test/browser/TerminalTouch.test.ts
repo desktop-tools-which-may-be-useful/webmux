@@ -10,6 +10,7 @@ import {
   gestureStart,
   historyLine,
   host,
+  hostObserver,
   inputText,
   installTerminalFixture,
   observeGlyphPixels,
@@ -353,4 +354,55 @@ test("viewing history is reported until the terminal returns to the latest outpu
   socket.receive(0, "\r\nnewest output");
   await expectDomText("newest output");
   await expect.element(position).toHaveTextContent("latest");
+});
+
+test("a locked host pans to rows outside the viewport and returns to the latest", async () => {
+  observeGlyphPixels(true);
+  const { api } = await openTerminalApi({ sizeLocked: () => true });
+  host().classList.add("size-locked");
+  const delivered = hostObserver().deliveryCount;
+  host().style.height = "300px";
+  await expect
+    .poll(() => host().scrollHeight)
+    .toBeGreaterThan(host().clientHeight);
+  // The resize schedules a 100 ms debounced layout that re-anchors to the
+  // newest rows; a pan made before it runs would be undone. The timer is
+  // internal and xterm renders on real timers, so outlast it after the
+  // observer delivered: timers run in deadline order.
+  await expect
+    .poll(() => hostObserver().deliveryCount)
+    .toBeGreaterThan(delivered);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await expect
+    .poll(() => host().scrollTop + host().clientHeight)
+    .toBeGreaterThanOrEqual(host().scrollHeight - 1);
+  const position = page.getByRole("status", { name: "Terminal position" });
+  await expect.element(position).toHaveTextContent("latest");
+
+  const target = host();
+  const capture = syntheticPointerCapture(target);
+  const start = { x: 100, y: 150 };
+  pointer(target, "pointerdown", 1, start);
+  pointer(target, "pointermove", 1, { x: start.x, y: start.y + 120 });
+  pointer(target, "pointermove", 1, { x: start.x, y: start.y + 240 });
+  pointer(target, "pointerup", 1, { x: start.x, y: start.y + 240 });
+  // The pan reports itself without waiting for the host's delayed scroll event,
+  // so a slow frame cannot leave the history control hidden or let a pending
+  // layout fit pull the reader back down.
+  await Promise.resolve();
+  expect(
+    document.querySelector('[aria-label="Terminal position"]')?.textContent,
+  ).toBe("history");
+  await expect
+    .poll(() => host().scrollTop)
+    .toBeLessThan(host().scrollHeight - host().clientHeight);
+  await expect.element(position).toHaveTextContent("history");
+  capture.set.mockRestore();
+  capture.release.mockRestore();
+
+  api.scrollToBottom();
+  await expect.element(position).toHaveTextContent("latest");
+  expect(host().scrollTop + host().clientHeight).toBeGreaterThanOrEqual(
+    host().scrollHeight - 1,
+  );
 });

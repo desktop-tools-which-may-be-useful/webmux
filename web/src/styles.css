@@ -358,20 +358,29 @@
   min-width: 0;
   min-height: 0;
 }
-/* A locked terminal keeps its grid while the host shrinks (soft keyboard,
-   browser chrome, draft pane or window). Anchor the grid to the bottom so the
-   newest rows and the input line stay visible; the host clips the top. */
+/* A locked terminal keeps its grid while the host changes (soft keyboard,
+   browser chrome, rotation, draft pane or window). Like the observer layout,
+   the host scrolls instead of clipping, so rows or columns beyond the viewport
+   stay reachable; the hook anchors it to the newest rows. */
 .terminal-host.size-locked:not(.observing) {
-  display: flex;
-  align-items: flex-end;
-  /* Not a scroll container: focus or IME scrolling cannot reveal the clipped
-     top and undo the bottom anchoring. */
-  overflow: clip;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .terminal-host.size-locked:not(.observing) .xterm {
-  flex: none;
   width: max-content;
   height: auto;
+}
+/* A locked host scrolls, so focusing the iOS helper would reveal it at the
+   grid's top and hide the newest rows. The helper box has no height of its own,
+   so anchor it and the textarea to the grid's bottom; focus and IME updates
+   then keep the prompt in view. */
+.terminal-host.size-locked.ios-ime .xterm-helpers {
+  top: auto;
+  bottom: 0;
+}
+.terminal-host.size-locked.ios-ime .xterm-helper-textarea {
+  top: auto !important;
+  bottom: 0 !important;
 }
 .terminal-pane,
 .code-pane {

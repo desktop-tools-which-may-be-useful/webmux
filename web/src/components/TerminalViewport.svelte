@@ -44,7 +44,7 @@
     terminal: ViewportTerminal;
     // Whether the terminal pane is on screen (mobile may show code instead).
     visible: boolean;
-    // Keeps the PTY grid fixed and bottom-anchored while the host resizes.
+    // Keeps the PTY grid fixed and lets the host scroll past its edges.
     sizeLocked?: boolean;
     uploads: ViewportUploads;
     quickMenu: Snippet<["top" | "bottom"]>;

@@ -14,6 +14,9 @@ export function attachTouchGestures(
     setFontSize: (value: number) => void;
     hasSelection: () => boolean;
     keyboardDismissed: () => boolean;
+    // The host's scroll event arrives on a later frame; report the pan now so a
+    // pending layout fit cannot mistake the reader for following the tail.
+    hostScrolled: () => void;
   },
 ) {
   const terminalElement = term.element!;
@@ -181,9 +184,12 @@ export function attachTouchGestures(
     if (pointers.size === 2 && pinchDistance > 0) {
       options.setFontSize((pinchFont * distance()) / pinchDistance);
     } else if (pointers.size === 1) {
-      // An observer's grid can exceed the host. Pan the host first, so the
-      // rows above the visible part and history stay reachable in order.
-      if (parent.classList.contains("observing")) {
+      // An observer's or locked grid can exceed the host. Pan the host first,
+      // so the rows above the visible part and history stay reachable in order.
+      if (
+        parent.classList.contains("observing") ||
+        parent.classList.contains("size-locked")
+      ) {
         parent.scrollLeft += panX - point.x;
         panX = point.x;
         const delta = touchY - point.y;
@@ -196,6 +202,7 @@ export function attachTouchGestures(
         ) {
           parent.scrollTop += delta;
           touchY = point.y;
+          options.hostScrolled();
           return;
         }
       }

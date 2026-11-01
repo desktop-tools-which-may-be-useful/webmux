@@ -183,6 +183,42 @@ test("iOS IME composition keeps the helper caret fixed without dropping commits"
   }
 });
 
+test("a locked iOS helper stays inside the grid's bottom edge", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    Navigator.prototype,
+    "userAgent",
+  );
+  Object.defineProperty(Navigator.prototype, "userAgent", {
+    configurable: true,
+    get: () => "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+  });
+  try {
+    observeGlyphPixels(true);
+    const { api } = await openTerminalApi({ sizeLocked: () => true });
+    host().classList.add("size-locked");
+    host().style.height = "400px";
+    await expect
+      .poll(() => host().scrollHeight)
+      .toBeGreaterThan(host().clientHeight);
+    api.fit();
+    await expect
+      .poll(() => host().scrollTop + host().clientHeight)
+      .toBeGreaterThanOrEqual(host().scrollHeight - 1);
+    const screen = host()
+      .querySelector(".xterm-screen")!
+      .getBoundingClientRect();
+    const helper = host()
+      .querySelector(".xterm-helper-textarea")!
+      .getBoundingClientRect();
+    // The helper box is anchored to the grid bottom, not above its top.
+    expect(helper.top).toBeGreaterThanOrEqual(screen.top - 1);
+    expect(helper.bottom).toBeLessThanOrEqual(screen.bottom + 1);
+  } finally {
+    if (descriptor)
+      Object.defineProperty(Navigator.prototype, "userAgent", descriptor);
+  }
+});
+
 test("Alt arrows retain shell navigation and are classified as user input", async () => {
   const { socket } = await openTerminal();
   const textarea = host().querySelector("textarea")!;
