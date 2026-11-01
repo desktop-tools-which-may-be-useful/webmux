@@ -136,7 +136,31 @@ export function createTerminalRenderer(
   });
   observeSize();
   let remeasureFrame = 0;
-  const remeasure = () => {
+  // Chromium repeats loadingdone for faces that loaded long ago, e.g. on every
+  // window resize. Remeasuring clears the glyph atlas and re-renders the grid
+  // twice, so only a face this terminal has not been measured with counts.
+  // FontFace wrappers are not stable across events; key faces by descriptors.
+  const faceKey = (face: FontFace) =>
+    [
+      face.family,
+      face.style,
+      face.weight,
+      face.stretch,
+      face.unicodeRange,
+    ].join("|");
+  const measured = new Set<string>();
+  document.fonts.forEach((face) => {
+    if (face.status === "loaded") measured.add(faceKey(face));
+  });
+  const remeasure = (event: FontFaceSetLoadEvent) => {
+    let fresh = false;
+    for (const face of event.fontfaces) {
+      const key = faceKey(face);
+      if (measured.has(key)) continue;
+      measured.add(key);
+      fresh = true;
+    }
+    if (!fresh) return;
     cancelAnimationFrame(remeasureFrame);
     remeasureFrame = requestAnimationFrame(() => {
       if (disposed) return;

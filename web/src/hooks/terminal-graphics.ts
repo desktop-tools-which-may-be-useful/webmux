@@ -62,14 +62,23 @@ export function attachTerminalGraphics(
   let totalCanvasPixels = 0;
   const rendered = new Set<RenderedPlacement>();
 
+  // Measuring forces a synchronous layout. Output frames and every placement
+  // need the cell size, so keep it until the grid, screen box or DPR changes.
+  let cachedCell: { width: number; height: number } | undefined;
   function cellSize() {
     if (term.cols <= 0 || term.rows <= 0) return undefined;
+    if (cachedCell) return cachedCell;
     const bounds = target.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return undefined;
-    return {
+    cachedCell = {
       width: bounds.width / term.cols,
       height: bounds.height / term.rows,
     };
+    return cachedCell;
+  }
+  function remeasure() {
+    cachedCell = undefined;
+    schedule();
   }
 
   function cursor() {
@@ -284,15 +293,15 @@ export function attachTerminalGraphics(
   );
   const resize = term.onResize(() => {
     for (const placement of rendered) placement.anchor?.resized();
-    schedule();
+    remeasure();
   });
   const parsed = term.onWriteParsed(() => {
     for (const placement of rendered) placement.anchor?.sync();
     schedule();
   });
-  const observer = new ResizeObserver(schedule);
+  const observer = new ResizeObserver(remeasure);
   observer.observe(screen);
-  const stopDpr = observeDevicePixelRatio(schedule);
+  const stopDpr = observeDevicePixelRatio(remeasure);
   schedule();
 
   return {

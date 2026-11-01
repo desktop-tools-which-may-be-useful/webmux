@@ -261,11 +261,27 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 	writeMessages(ctx, c, sub)
 }
 
+// Output pacing. An idle connection sends output at once, so a keystroke echo
+// never waits for later bytes. While a burst flows, such as a TUI repainting
+// its whole transcript after a resize, frames are spaced about one display
+// frame apart: output is combined until the burst pauses for outputQuietGap,
+// the frame deadline passes, the frame reaches maxOutputFrame, or a control
+// message must keep its place. The browser then parses and paints a redraw in
+// a few large frames instead of hundreds of fragments.
+const (
+	maxOutputFrame      = 1 + 64*1024
+	outputFrameInterval = 16 * time.Millisecond
+	outputQuietGap      = 4 * time.Millisecond
+)
+
 // writeMessages is the sole terminal data writer, including aggregation.
 func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscriber) {
 	var pending session.Message
 	var hasPending bool
 	var combinedBuffer []byte
+	var lastOutput time.Time
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
 	for {
 		var m session.Message
 		if hasPending {
@@ -292,37 +308,27 @@ func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscrib
 			_ = c.Close(websocket.StatusInternalError, "invalid session message")
 			return
 		}
-		if m.Frame != nil && frame[0] == contract.FrameOutput {
+		output := m.Frame != nil && frame[0] == contract.FrameOutput
+		if output {
 			if combinedBuffer == nil {
-				combinedBuffer = make([]byte, 0, 65537)
+				combinedBuffer = make([]byte, 0, maxOutputFrame)
 			}
-			combined := append(combinedBuffer[:0], frame...)
-			// Coalesce queued output without waiting for future bytes. A timed
-			// batch delays every keystroke echo and makes streaming output jump.
-		aggregate:
-			for len(combined) < 65537 {
-				select {
-				case next := <-sub.Out:
-					sub.Release(next)
-					if !next.Valid() || next.Frame == nil || next.Frame[0] != contract.FrameOutput || len(combined)+len(next.Frame)-1 > 65537 {
-						pending, hasPending = next, true
-						break aggregate
-					}
-					combined = append(combined, next.Frame[1:]...)
-				default:
-					break aggregate
-				case <-ctx.Done():
-					return
-				case <-sub.Slow:
-					_ = c.Close(4408, "slow client")
-					return
-				}
+			var deadline time.Time
+			if since := time.Since(lastOutput); since < outputFrameInterval {
+				deadline = lastOutput.Add(outputFrameInterval)
 			}
-			frame = combined
+			var ok bool
+			frame, pending, hasPending, ok = collectOutput(ctx, c, sub, append(combinedBuffer[:0], frame...), deadline, timer)
+			if !ok {
+				return
+			}
 		}
 		if write(ctx, c, websocket.MessageBinary, frame) != nil {
 			_ = c.Close(4408, "write timeout")
 			return
+		}
+		if output {
+			lastOutput = time.Now()
 		}
 		if exit {
 			_ = c.Close(4410, "session exited")
@@ -330,6 +336,50 @@ func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscrib
 		}
 	}
 }
+
+// collectOutput appends further output to combined. Queued output is always
+// taken; with a deadline it also waits for more until the burst goes quiet.
+// It returns the frame, a message that ended it and must be sent next, and
+// false when the connection is finished.
+func collectOutput(ctx context.Context, c *websocket.Conn, sub *session.Subscriber, combined []byte, deadline time.Time, timer *time.Timer) (frame []byte, next session.Message, hasNext, ok bool) {
+	for len(combined) < maxOutputFrame {
+		var m session.Message
+		select {
+		case m = <-sub.Out:
+		case <-ctx.Done():
+			return nil, next, false, false
+		case <-sub.Slow:
+			_ = c.Close(4408, "slow client")
+			return nil, next, false, false
+		default:
+			wait := min(outputQuietGap, time.Until(deadline))
+			if deadline.IsZero() || wait <= 0 {
+				return combined, next, false, true
+			}
+			timer.Reset(wait)
+			select {
+			case m = <-sub.Out:
+				timer.Stop()
+			case <-timer.C:
+				return combined, next, false, true
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, next, false, false
+			case <-sub.Slow:
+				timer.Stop()
+				_ = c.Close(4408, "slow client")
+				return nil, next, false, false
+			}
+		}
+		sub.Release(m)
+		if !m.Valid() || m.Frame == nil || m.Frame[0] != contract.FrameOutput || len(combined)+len(m.Frame)-1 > maxOutputFrame {
+			return combined, m, true, true
+		}
+		combined = append(combined, m.Frame[1:]...)
+	}
+	return combined, next, false, true
+}
+
 func List(ctx context.Context, m *session.Manager, c *websocket.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
 	sub := m.Subscribe()

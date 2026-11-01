@@ -1208,19 +1208,20 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
     chain = chain
       .then(async () => {
         if (!current(expected)) return;
+        // Text keeps xterm's write order without a round trip per fragment;
+        // only a graphics command waits, so it sees the cursor the preceding
+        // text left. Awaiting every fragment cost one timer task each and
+        // stretched a mixed redraw across many painted frames.
         for (const event of events) {
           if (!current(expected)) return;
           if (event.kind === "text") {
-            if (event.data.length > 0) {
-              const { promise, resolve } = Promise.withResolvers<void>();
-              options.write(event.data, resolve);
-              await promise;
-            }
+            if (event.data.length > 0) writeText(event.data);
           } else {
             await drainWrites();
             await handle(event.control, event.payload, expected);
           }
         }
+        await drainWrites();
       })
       .catch((error: unknown) => {
         if (
