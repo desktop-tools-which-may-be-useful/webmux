@@ -37,8 +37,8 @@ E2E 的 worker 数从 2 调到 4，Storybook 从 2 调到 6，使用同一台机
 - Go 的独立资源用例并行；workspace 的公共 Git 环境在测试进程启动时设置一次。会修改 PATH 或钩子环境的用例保持串行。`-parallel=4` 限制每个包的测试并发。
 - Storybook 将视口/主题矩阵移到 test-scoped 配置，复用浏览器进程，每个用例仍创建全新上下文。试点击自带滚动与稳定性检查；禁用按钮仍显式滚动，两种情况都检查完整入屏。生产构建、tree shaking、语法高亮 worker 和反例检测保持验证。
 - Storybook 在 CI 只为首次重试记录 trace，与 E2E 一致；失败截图、报告和本地失败 trace 保留。Storybook 重试只用于诊断，flaky 仍使 CI 失败；速度比较也拒绝 flaky 结果。
-- CI 安装 Chromium 及其 headless shell，覆盖通知与常规浏览器用例。macOS 的原生 Go race 与四个 E2E 分片使用独立 runner；任一失败都会令最终检查失败。E2E 通过显式的 `WEBMUX_E2E_DIST` 路径复制该 job 刚生成的生产产物，避免重复构建，默认运行仍从源码构建。`Test result` 仍要求所有 job 成功。
-- Ubuntu E2E 的格式检查与构建 job 统一构建，并通过同轮 artifact 分发给六个分片。
+- CI 安装 Chromium 及其 headless shell，覆盖通知与常规浏览器用例。macOS 的原生 Go race 与两个桌面项目 E2E 分片使用独立 runner；任一失败都会令最终检查失败。E2E 通过显式的 `WEBMUX_E2E_DIST` 路径复制该 job 刚生成的生产产物，避免重复构建，默认运行仍从源码构建。`Test result` 仍要求所有 job 成功。
+- E2E 运行时由 Ubuntu Go job 在 race 测试前统一构建，并通过同轮 artifact 分发给 Ubuntu 四个、macOS 两个分片。
   - 构建内容：当前提交的内嵌程序，以及按 `omp`、`opencode` 命名的假 ACP agent（`.ci-runtime/<平台>/agents/`，由 `.github/scripts/package-e2e-runtime.mjs` 构建）；使用 tar 保留可执行权限。
   - 分片通过 `WEBMUX_E2E_BINARY` 使用该程序，从其旁边的 `agents/` 取得假 agent；不安装 Go、不恢复 Go 缓存，也不重复构建前端或后端。
   - 显式路径无效或缺少假 agent 时直接失败；本地未指定时仍从源码构建。
@@ -101,3 +101,22 @@ node web/scripts/benchmark-actions.mjs \
 第五轮完整运行 [40169548976](https://github.com/mzdluo123/webmux/actions/runs/40169548976) 全部通过，238 秒、首次排队 3 秒；同源码主分支运行 [40168028403](https://github.com/mzdluo123/webmux/actions/runs/40168028403) 为 455 秒。第五个 macOS job 比首个 job 晚 164 秒启动，这部分等待保留在指标中。
 
 第六轮将 macOS 总 job 从五个减为四个：原生 Go race 独立，E2E 全部用例改分三片；Ubuntu 仍为六片。
+
+第七轮（2026-11-01）有意收窄双平台范围，只在 macOS 重复操作系统可能改变结果的部分。以运行 [41284391271](https://github.com/mzdluo123/webmux/actions/runs/41284391271) 为参照（6 分 37 秒）：
+
+- E2E 运行时原在格式/构建 job 末尾（约 170 秒）产出，九个分片空等约 160 秒。改由 Go job 在前端构建后、race 测试前产出，lint、类型与架构检查不再位于 E2E 关键路径。
+- macOS E2E 只运行 `chromium-desktop`（146 个用例，原 292 个），由三片减为两片。移动端仿真是同一 Chromium 的视口与触摸逻辑，与宿主系统无关；macOS 慢机上它曾以 flaky 判失败（如 [41283675836](https://github.com/mzdluo123/webmux/actions/runs/41283675836)）。慢机时序由 Ubuntu 的 4x CPU 性能 job 覆盖。
+- macOS Go race 排除 `archtest`、`docguard`（静态检查）与 `tray`、`wsl`、`wslclient`（Windows 托盘/WSL 客户端）；其余包默认全部运行，新增包自动纳入。
+- Ubuntu E2E 由六片减为四片：原各片测试段 43–132 秒，空等占 runner 时间的大头；分片开始时间提前后，关键路径仍为 macOS Go race。
+- Ubuntu Go job 增加 `GOOS=darwin go vet`，使只在 macOS 编译的 `*_darwin.go` 也经过完整 vet（此前 macOS 只有 `go test` 自带的部分检查）。
+- `internal/hybrid` 的三个记录上限用例改为一次写入预置记录，不再逐条提交并 fsync 增长中的文件；最后一个空位仍经过 `add`，断言不变。本机该包由约 75 秒降至约 32 秒。
+- 删除未被引用的 `.github/scripts/test-macos.sh`。
+- 保留：格式/构建 job 中的 `persistence-check`、`docs-check` 与 Go race 重复，但合计约 8 秒且不在关键路径，失败信息更直接；发布流程的 race 测试作为打标签前的最后门禁。
+
+每次运行 macOS job 由四个减为三个，Ubuntu job 由十二个减为十个，缓解 macOS 并发上限造成的排队。
+
+PR 运行 [41287420287](https://github.com/mzdluo123/webmux/actions/runs/41287420287) 全部通过，用时 4 分 47 秒（参照 6 分 37 秒）：
+
+- E2E 运行时 65 秒产出（原约 170 秒）；E2E 分片最晚约 3 分 45 秒结束。
+- macOS Go race 96 秒（原 199 秒）。
+- 关键路径变为 Storybook job（约 4 分 40 秒，其中构建与测试 3 分 56 秒），是下一轮的优化对象。

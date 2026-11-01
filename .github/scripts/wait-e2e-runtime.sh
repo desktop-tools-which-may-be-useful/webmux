@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Start runner setup while the producer is building. Only this workflow run's
 # artifact can satisfy the dependency; never reuse another commit's executable.
-# Type-aware frontend lint can make the producer longer than the old 5-minute wait.
+# The producer (the Ubuntu Go job) publishes the runtime before its race tests.
 deadline=$((SECONDS + 1200))
 
 # GitHub's API occasionally returns transient 5xx responses under load; retry
@@ -31,7 +31,7 @@ while (( SECONDS < deadline )); do
     exit 0
   fi
   result=$(gh_api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
-    --jq '.jobs[] | select(.name == "Format, check and build") | .conclusion // ""') || result=""
+    --jq '.jobs[] | select(.name == "Go race (Ubuntu)") | .conclusion // ""') || result=""
   if [[ -n "$result" && "$result" != success ]]; then
     echo "E2E runtime producer finished with $result" >&2
     exit 1

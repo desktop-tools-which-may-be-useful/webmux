@@ -324,14 +324,14 @@ func TestResumeRefusals(t *testing.T) {
 func TestRemoveRecord(t *testing.T) {
 	h := &harness{t: t, state: t.TempDir(), store: t.TempDir(), logs: &syncBuffer{}}
 	r := openRecords(h.state)
+	seeded := make([]Record, 0, MaxRecords-2)
 	for i := range MaxRecords - 2 {
 		rec := testRecord(limitID(i))
 		rec.State = StateClosed
 		rec.UpdatedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		if err := r.add(rec); err != nil {
-			t.Fatal(err)
-		}
+		seeded = append(seeded, rec)
 	}
+	seedRecords(t, r, seeded)
 	r.close()
 	h.open(0)
 	in := h.input(agentprofile.OMP, SideACP)

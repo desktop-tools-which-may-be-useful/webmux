@@ -15,9 +15,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Platform-independent suites run on Ubuntu. Native macOS Go race and three
-# real-PTY E2E shards use separate runners so compilation and browser work
-# do not compete for the same three-core machine.
+# Platform-independent suites run on Ubuntu. macOS re-runs only what the OS
+# can change: Go race for packages with process, PTY, filesystem or path
+# behaviour, and the desktop E2E project against the native backend. Mobile
+# emulation, static guards and the Windows tray/WSL clients behave the same
+# on both hosts, so they run once on Ubuntu.
 jobs:
   lint:
     name: Format, check and build
@@ -51,6 +53,28 @@ jobs:
           version: v2.15.0
           args: --timeout=5m
           only-new-issues: false
+      - name: Save pnpm cache
+        if: github.ref == 'refs/heads/main' && steps.setup.outputs.pnpm-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.setup.outputs.pnpm-store }}
+          key: ${{ steps.setup.outputs.pnpm-key }}
+
+  # Also the E2E runtime producer: it needs only the frontend build and Go,
+  # so publishing it before the race tests releases the waiting E2E shards
+  # without the lint and type checks on the critical path.
+  go:
+    name: Go race (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - id: setup
+        uses: ./.github/actions/setup
+        with:
+          go: "true"
+      - name: Build embedded frontend
+        run: pnpm --dir web exec vite build
       - name: Build shared E2E runtime
         run: |
           node .github/scripts/package-e2e-runtime.mjs "$RUNNER_TEMP/webmux-e2e"
@@ -64,27 +88,12 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 14
-      - name: Save pnpm cache
-        if: github.ref == 'refs/heads/main' && steps.setup.outputs.pnpm-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.setup.outputs.pnpm-store }}
-          key: ${{ steps.setup.outputs.pnpm-key }}
-
-  go:
-    name: Go race (Ubuntu)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-      - id: setup
-        uses: ./.github/actions/setup
-        with:
-          go: "true"
-      - name: Build embedded frontend
-        run: pnpm --dir web exec vite build
       - name: Vet Go
         run: go vet -printf.funcs=problemf,invalidf,usagef,checkf ./...
+      # macOS runs only the race tests; vet its build tags here so the
+      # *_darwin.go files are checked without another macOS runner.
+      - name: Vet the macOS build
+        run: GOOS=darwin go vet -printf.funcs=problemf,invalidf,usagef,checkf ./...
       - name: Run Go race tests
         run: go test -race -parallel=4 ./...
       # No Windows runner: hosted runners lack a usable WSL 2, so the Windows
@@ -149,13 +158,13 @@ jobs:
           retention-days: 14
 
   e2e:
-    name: E2E (Ubuntu ${{ matrix.shard }}/6)
+    name: E2E (Ubuntu ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
@@ -178,7 +187,7 @@ jobs:
         env:
           WEBMUX_E2E_BINARY: ${{ github.workspace }}/.ci-runtime/linux/webmux
         working-directory: web
-        run: node node_modules/playwright/cli.js test --config playwright.config.ts --shard=${{ matrix.shard }}/6
+        run: node node_modules/playwright/cli.js test --config playwright.config.ts --shard=${{ matrix.shard }}/4
       - name: Preserve E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v6
@@ -201,7 +210,6 @@ jobs:
           - { suite: go, shard: 0 }
           - { suite: e2e, shard: 1 }
           - { suite: e2e, shard: 2 }
-          - { suite: e2e, shard: 3 }
     steps:
       - uses: actions/checkout@v6
       - id: setup
@@ -229,15 +237,20 @@ jobs:
       - name: Install test browser
         if: matrix.suite == 'e2e'
         uses: ./.github/actions/playwright
+      # Excluded packages are static guards (archtest, docguard) and the
+      # Windows tray/WSL clients; Ubuntu runs them, and new packages are
+      # included here by default.
       - name: Run native Go race tests
         if: matrix.suite == 'go'
-        run: go test -race -parallel=4 ./...
+        run: |
+          packages=$(go list ./... | grep -Ev '/internal/(archtest|docguard|tray|wsl|wslclient)(/|$)')
+          go test -race -parallel=4 $packages
       - name: Run Playwright E2E shard
         if: matrix.suite == 'e2e'
         env:
           WEBMUX_E2E_BINARY: ${{ github.workspace }}/.ci-runtime/darwin/webmux
         working-directory: web
-        run: node node_modules/playwright/cli.js test --config playwright.config.ts --shard=${{ matrix.shard }}/3
+        run: node node_modules/playwright/cli.js test --config playwright.config.ts --project=chromium-desktop --shard=${{ matrix.shard }}/2
       - name: Preserve E2E diagnostics
         if: always() && matrix.suite == 'e2e'
         uses: actions/upload-artifact@v6

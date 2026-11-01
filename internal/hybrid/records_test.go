@@ -34,6 +34,21 @@ func openTestRecords(t *testing.T, dir string) *records {
 	return r
 }
 
+// seedRecords stores recs as one write, so limit tests do not commit (and
+// fsync) the growing file once per record.
+func seedRecords(t *testing.T, r *records, recs []Record) {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.unavailableLocked(); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.commitLocked(recs); err != nil {
+		t.Fatal(err)
+	}
+	r.list = recs
+}
+
 func readFile(t *testing.T, dir string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(dir, "hybrid-sessions.json"))
@@ -95,15 +110,17 @@ func TestRecordsCorruptFileIsUnavailableAndKept(t *testing.T) {
 
 func TestRecordsLimit(t *testing.T) {
 	r := openTestRecords(t, t.TempDir())
-	const alphabet = "abcdefghijklmnopqrstuvwxyz234567"
-	for i := range MaxRecords {
-		id := []byte("aaaaaaaa")
-		for n, at := i, 7; n > 0; n, at = n/32, at-1 {
-			id[at] = alphabet[n%32]
-		}
-		if err := r.add(testRecord(string(id))); err != nil {
-			t.Fatalf("record %d (%s): %v", i, id, err)
-		}
+	seeded := make([]Record, 0, MaxRecords-1)
+	for i := range MaxRecords - 1 {
+		seeded = append(seeded, testRecord(limitID(i)))
+	}
+	seedRecords(t, r, seeded)
+	// The last free slot still goes through add.
+	if err := r.add(testRecord(limitID(MaxRecords - 1))); err != nil {
+		t.Fatalf("record %d: %v", MaxRecords, err)
+	}
+	if got := len(r.all()); got != MaxRecords {
+		t.Fatalf("records after filling: %d", got)
 	}
 	if err := r.add(testRecord("zzzzzzzz")); !errors.Is(err, ErrLimit) {
 		t.Fatalf("201st record: %v", err)

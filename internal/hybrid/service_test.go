@@ -358,13 +358,13 @@ func TestCorruptStoreDisablesHybridOnly(t *testing.T) {
 func TestRecordLimit(t *testing.T) {
 	h := &harness{t: t, state: t.TempDir(), store: t.TempDir(), logs: &syncBuffer{}}
 	r := openRecords(h.state)
+	seeded := make([]Record, 0, MaxRecords)
 	for i := range MaxRecords {
 		rec := testRecord(limitID(i))
 		rec.State = StateClosed
-		if err := r.add(rec); err != nil {
-			t.Fatal(err)
-		}
+		seeded = append(seeded, rec)
 	}
+	seedRecords(t, r, seeded)
 	r.close()
 	h.open(0)
 	_, err := h.svc.Create(context.Background(), h.input(agentprofile.OMP, SideTUI))
