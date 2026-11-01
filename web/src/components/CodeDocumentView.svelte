@@ -9,6 +9,7 @@
     CodeDiffSchema,
     type CodeFile,
     type CodeDiff,
+    type CodeDocumentViewState,
   } from "../schemas";
   import { calculateDiff } from "../code-diff-client";
   import type { FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
@@ -64,13 +65,14 @@
     heading,
     onHeading,
     diffAvailable = true,
+    restore,
   }: {
     id: string;
     active?: boolean;
     file?: CodeFile;
     diff?: CodeDiff;
     status: string;
-    paste: (text: string) => TextInsertion;
+    paste: (text: string) => Promise<TextInsertion>;
     draftEnabled: boolean;
     refresh: () => void;
     openSide: (file: CodeFile, intent: number) => void;
@@ -87,8 +89,20 @@
     onHeading?: () => void;
     /** False for roots without Git (the artifacts folder): no Diff toggle. */
     diffAvailable?: boolean;
+    /** Reading state from another window, applied once. */
+    restore?: CodeDocumentViewState;
   } = $props();
-  let mode = $state<"file" | "diff">("file");
+  // Leaf views read their part once at mount; only the first instance of each
+  // gets it, so a later remount (new version, other side) starts fresh.
+  const initial = untrack(() => restore);
+  type Leaf = "reader" | "diff" | "markdown" | "image" | "pdf" | "json";
+  const taken: Partial<Record<Leaf, true>> = {};
+  function restoreFor<K extends Leaf>(
+    key: K,
+  ): CodeDocumentViewState[K] | undefined {
+    return taken[key] ? undefined : initial?.[key];
+  }
+  let mode = $state<"file" | "diff">(initial?.mode ?? "file");
   let shownDiff = $derived(diff ?? (mode === "diff" ? comparison : undefined));
   let mounted = false;
   const requests = new SvelteSet<AbortController>();
@@ -110,17 +124,48 @@
   const diffReady = $derived(
     modelSnapshot === shownDiff?.snapshotId && calculation === "ready",
   );
-  let side = $state<"old" | "new">("new");
-  let start = $state<number>();
-  let end = $state<number>();
+  let side = $state<"old" | "new">(initial?.side ?? "new");
+  let start = $state<number | undefined>(initial?.start);
+  let end = $state<number | undefined>(initial?.end);
   let invalidSelection = $state(false);
   let error = $state("");
   let busy = $state(false);
   let generation = $state(0);
   let reader = $state<CodeReader>();
   let diffReader = $state<CodeDiffReader>();
+  let imageView = $state<CodeImageView>();
+  let pdfView = $state<CodePdfView>();
+  let jsonView = $state<CodeJsonPreview>();
   let anchor = $state(1);
-  let lastVersion = $state("");
+  // A restored view already shows its version; the first run resets nothing.
+  let lastVersion = $state(
+    initial ? untrack(() => file?.snapshotId ?? diff?.snapshotId ?? "") : "",
+  );
+  let keepRestoredSide = !!initial;
+  $effect(() => {
+    if (reader) taken.reader = true;
+    if (diffReader) taken.diff = true;
+    if (markdownPreview) taken.markdown = true;
+    if (imageView) taken.image = true;
+    if (pdfView) taken.pdf = true;
+    if (jsonView) taken.json = true;
+  });
+  export function capture(): CodeDocumentViewState {
+    return {
+      mode,
+      side,
+      start,
+      end,
+      svgView,
+      formatView,
+      reader: reader?.capture() ?? restoreFor("reader"),
+      diff: diffReader?.capture() ?? restoreFor("diff"),
+      markdown: markdownPreview?.capture() ?? restoreFor("markdown"),
+      image: imageView?.capture() ?? restoreFor("image"),
+      pdf: pdfView?.capture() ?? restoreFor("pdf"),
+      json: jsonView?.capture() ?? restoreFor("json"),
+    };
+  }
   // Selection guidance from the active reader, shown beside the actions.
   let hint = $state("");
   let doc = $derived(
@@ -151,14 +196,16 @@
   // Diff snapshots need the side; file snapshots ignore it.
   const rawSide = $derived(shownDiff ? side : undefined);
   // SVG is a text document: preview by default, source on request or failure.
-  let svgView = $state<"preview" | "source">("preview");
+  let svgView = $state<"preview" | "source">(initial?.svgView ?? "preview");
   let svgNotice = $state("");
   const svgFile = $derived(
     !shownDiff && doc?.kind === "text" && doc.mediaType === "image/svg+xml",
   );
   // Markdown, HTML, CSV/TSV and JSON stay in source mode until the reader
   // asks for a preview; the choice resets with the document.
-  let formatView = $state<"source" | "preview">("source");
+  let formatView = $state<"source" | "preview">(
+    initial?.formatView ?? "source",
+  );
   const formatFile = $derived(
     !shownDiff && doc?.kind === "text" ? previewFormat(doc.path) : undefined,
   );
@@ -237,6 +284,10 @@
   $effect(() => {
     const current = shownDiff;
     untrack(() => {
+      if (keepRestoredSide) {
+        keepRestoredSide = false;
+        return;
+      }
       anchor = reader?.line() ?? 1;
       generation++;
       start = undefined;
@@ -415,10 +466,12 @@
       return;
     }
   }
-  function send(reference = preview) {
+  async function send(reference = preview) {
     if (!reference || status !== "unchanged") return;
-    error =
-      paste(reference) !== "failed" ? "" : "输入目标未就绪，位置未插入；请重试";
+    error = "";
+    const result = await paste(reference);
+    if (mounted && result === "failed")
+      error = "输入目标未就绪，位置未插入；请重试";
   }
   function clearSelection() {
     start = undefined;
@@ -728,6 +781,7 @@
         {draftEnabled}
         bind:hint
         onselect={selectDiff}
+        restore={restoreFor("diff")}
       >
         {#snippet lineAction(row)}
           {@const reference = referenceAt(row)}
@@ -735,26 +789,30 @@
               line={reference.number}
               {draftEnabled}
               disabled={status !== "unchanged"}
-              onclick={() => send(reference.text)}
+              onclick={() => void send(reference.text)}
             />{/if}
         {/snippet}
       </CodeDiffReader>
     {/key}
   {:else if imagePreview && doc}
     {#key `${snapshotId}:${rawSide ?? ""}`}<CodeImageView
+        bind:this={imageView}
         {id}
         {snapshotId}
         side={rawSide}
         document={doc}
         onerror={previewFailed}
+        restore={restoreFor("image")}
       />{/key}
   {:else if doc?.kind === "pdf" && pdfFile}
     {#key snapshotId}<CodePdfView
+        bind:this={pdfView}
         {id}
         {snapshotId}
         document={doc}
         {active}
         ondownloaderror={downloadFailed}
+        restore={restoreFor("pdf")}
       />{/key}
   {:else if formatPreview && doc}
     {#if formatFile === "markdown"}
@@ -765,6 +823,7 @@
         path={doc.path}
         {active}
         {workspace}
+        restore={restoreFor("markdown")}
       />
     {:else if formatFile === "html"}
       <CodeHtmlPreview text={doc.text} />
@@ -775,7 +834,12 @@
         onsource={() => showFormat("source")}
       />
     {:else if formatFile === "json"}
-      <CodeJsonPreview text={doc.text} onsource={() => showFormat("source")} />
+      <CodeJsonPreview
+        bind:this={jsonView}
+        text={doc.text}
+        onsource={() => showFormat("source")}
+        restore={restoreFor("json")}
+      />
     {/if}
   {:else if doc?.kind === "text" && !shownDiff}
     {#key `${lastVersion}:${generation}`}<CodeReader
@@ -784,6 +848,7 @@
         path={doc.path}
         restoreLine={anchor}
         onselect={select}
+        restore={restoreFor("reader")}
         {draftEnabled}
         bind:hint
       >
@@ -794,7 +859,7 @@
               {draftEnabled}
               tooltip
               disabled={status !== "unchanged"}
-              onclick={() => send(reference.text)}
+              onclick={() => void send(reference.text)}
             />{/if}
         {/snippet}
       </CodeReader>{/key}
@@ -841,7 +906,7 @@
       <Button
         size="sm"
         disabled={!preview || status !== "unchanged"}
-        onclick={() => send()}
+        onclick={() => void send()}
         >发送位置到{draftEnabled
           ? "草稿"
           : "终端"}{#if start !== undefined}（{start}{end !== undefined &&

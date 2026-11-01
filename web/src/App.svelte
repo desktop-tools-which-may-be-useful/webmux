@@ -26,6 +26,8 @@
   let error = $state("");
   const match = $derived(path.match(/^\/s\/([a-z2-7]{8})$/));
   const sessionId = $derived(match?.[1]);
+  // The frame of a pop-out code window; it only shows the code workspace.
+  const codeId = $derived(path.match(/^\/code\/([a-z2-7]{8})$/)?.[1]);
 
   async function check() {
     checking = true;
@@ -36,7 +38,7 @@
       error = "";
       // Re-registers an existing push subscription, e.g. after the server
       // rebuilt its store; without one it touches nothing.
-      void syncPush().catch(() => undefined);
+      if (!codeId) void syncPush().catch(() => undefined);
     } catch (err) {
       error = errorMessage(err);
     } finally {
@@ -126,6 +128,16 @@
       </Card.Content>
     </Card.Root>
   </main>
+{:else if codeId}
+  {#await import("./pages/CodePopout.svelte")}
+    <p role="status" class="p-6 text-muted-foreground">正在加载代码…</p>
+  {:then page}
+    <page.default id={codeId} />
+  {:catch}
+    <p role="alert" class="p-6 text-destructive">
+      代码窗口加载失败，请关闭后重新打开。
+    </p>
+  {/await}
 {:else if sessionId}
   {#await import("./pages/Terminal.svelte")}
     <p role="status" class="p-6 text-muted-foreground">正在加载终端…</p>

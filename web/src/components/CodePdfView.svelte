@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { apiBlob } from "../api";
-  import type { CodeDocument } from "../schemas";
+  import type { CodeDocument, CodePdfState } from "../schemas";
   import { basename, codeRawPath, formatBytes, rawError } from "../code-image";
   import type { PDFDocumentProxy, PdfLink } from "../code-pdf";
   import CodeDownloadButton from "./CodeDownloadButton.svelte";
@@ -17,6 +17,7 @@
     document: doc,
     active = true,
     ondownloaderror,
+    restore,
   }: {
     id: string;
     snapshotId: string;
@@ -24,6 +25,8 @@
     /** Inactive views cancel the read and parse, and start none. */
     active?: boolean;
     ondownloaderror: (message: string, status: number) => void;
+    /** A captured zoom and page position, applied once page sizes are known. */
+    restore?: CodePdfState;
   } = $props();
   type PdfModule = typeof import("../code-pdf");
   const minZoom = 0.25,
@@ -114,6 +117,7 @@
         proxy = document;
         phase = "ready";
         fit();
+        void applyRestore();
       } catch (error) {
         if (!signal.aborted) fail(module.pdfLoadError(error));
       }
@@ -137,6 +141,68 @@
     const first = sizes[0];
     if (!scroller || !first) return;
     zoom = clamp((scroller.clientWidth - padding * 2) / first.width);
+  }
+  // Until applied, `capture()` returns it unchanged.
+  let pending = untrack(() => restore);
+  let applying = false;
+  // The position last seen with layout; a hidden tab reports this one.
+  let known: CodePdfState = { fitted: true, zoom: 1, page: 1, offset: 0 };
+  function reading(): CodePdfState {
+    const element = scroller;
+    if (phase !== "ready" || !element || element.clientHeight === 0)
+      return known;
+    const pages = element.querySelectorAll<HTMLElement>("[data-pdf-page]");
+    if (!pages.length) return known;
+    // The page crossing the top edge, found by its offset like `track`.
+    const line = element.scrollTop + padding;
+    let low = 0,
+      high = pages.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (pages[middle]!.offsetTop <= line + 1) low = middle;
+      else high = middle - 1;
+    }
+    const box = pages[low]!;
+    return {
+      fitted,
+      zoom,
+      page: low + 1,
+      offset:
+        box.offsetHeight > 0
+          ? Math.min(1, Math.max(0, (line - box.offsetTop) / box.offsetHeight))
+          : 0,
+    };
+  }
+  export function capture(): CodePdfState {
+    return pending ?? reading();
+  }
+  $effect(() => {
+    void zoom;
+    void fitted;
+    if (!pending) known = reading();
+  });
+  async function applyRestore() {
+    const state = pending,
+      element = scroller;
+    if (!state || applying || phase !== "ready" || !sizes.length) return;
+    if (!element || element.clientWidth === 0) return;
+    applying = true;
+    if (state.fitted) fit();
+    else {
+      fitted = false;
+      zoom = clamp(state.zoom);
+    }
+    await tick();
+    applying = false;
+    if (pending !== state || phase !== "ready") return;
+    pending = undefined;
+    const target = element.querySelector<HTMLElement>(
+      `[data-pdf-page="${Math.min(state.page, sizes.length)}"]`,
+    );
+    if (target)
+      element.scrollTop =
+        target.offsetTop - padding + state.offset * target.offsetHeight;
+    known = reading();
   }
   // Zooms keeping the content point under (x, y) of the scroller fixed.
   function zoomTo(next: number, x?: number, y?: number) {
@@ -371,7 +437,9 @@
       );
     };
     const resize = () => {
-      if (fitted && phase === "ready") fit();
+      // A hidden tab has no layout; a pending restore waits until it is shown.
+      if (pending) void applyRestore();
+      else if (fitted && phase === "ready") fit();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(element);
@@ -466,7 +534,10 @@
     class="code-pdf-scroller relative min-h-0 flex-1 overflow-auto bg-muted/40"
     role="group"
     aria-label="PDF 预览"
-    onscroll={track}
+    onscroll={() => {
+      track();
+      if (!pending) known = reading();
+    }}
   >
     {#if phase === "loading"}<p
         class="absolute inset-0 grid place-items-center text-sm text-muted-foreground"

@@ -88,7 +88,7 @@ export async function startSession(options: SessionOptions) {
       draftEnabled={true}
       paste={(text) => {
         inserted = text;
-        return "draft";
+        return Promise.resolve("draft");
       }}
       refresh={() => {}}
       beginOpen={() => 1}

@@ -1,12 +1,21 @@
-// Moves a live element into a separate window and back. The element keeps its
-// component state and listeners; only its document changes. Chromium desktop
-// browsers in secure contexts get an always-on-top Document Picture-in-Picture
-// window; other desktop browsers (Safari, Firefox, plain-HTTP origins) get an
-// ordinary same-origin popup.
+// Shows the code workspace in a separate window. The window holds only a
+// same-origin frame at /code/<id>, which runs its own app instance; the opener
+// hands it the reading state and answers its requests over a MessageChannel.
+// Chromium desktop browsers in secure contexts get an always-on-top Document
+// Picture-in-Picture window; other desktop browsers (Safari, Firefox,
+// plain-HTTP origins) get an ordinary same-origin popup.
 
-import { mount, unmount } from "svelte";
-import PopoutEventRoot from "./PopoutEventRoot.svelte";
 import { isStandalone, popoutOffered } from "../capabilities";
+import {
+  CodePopoutHandshakeSchema,
+  codePopoutHandshake,
+  CodePopoutOutboundSchema,
+  type CodeHostState,
+  type CodePopoutInbound,
+  type CodeWorkspaceSnapshot,
+} from "../schemas";
+import type { TextInsertion } from "../terminal-draft.svelte";
+import { SnapshotBodies } from "../code-snapshot";
 
 type DocumentPictureInPicture = {
   requestWindow(options?: { width?: number; height?: number }): Promise<Window>;
@@ -39,188 +48,182 @@ async function openWindow(width: number, height: number) {
   return popup;
 }
 
-// Constructed stylesheets belong to the document that created them, and a
-// shadow root drops its adopted sheets when moved to another document. Record
-// what each shadow root adopted so the sheets can be rebuilt after a move.
-const adopted = new WeakMap<ShadowRoot, readonly CSSStyleSheet[]>();
-let recording = false;
-function recordAdoptedSheets() {
-  if (recording) return;
-  recording = true;
-  const property = Object.getOwnPropertyDescriptor(
-    ShadowRoot.prototype,
-    "adoptedStyleSheets",
-  );
-  if (!property?.set || !property.get) return;
-  const { get, set } = property;
-  Object.defineProperty(ShadowRoot.prototype, "adoptedStyleSheets", {
-    ...property,
-    get,
-    set(this: ShadowRoot, sheets: CSSStyleSheet[]) {
-      adopted.set(this, [...sheets]);
-      set.call(this, sheets);
-    },
-  });
-}
-// Node type checks, not instanceof: nodes from either window's realm qualify.
-function* shadowRoots(root: Node): Generator<ShadowRoot> {
-  if (
-    root.nodeType !== Node.ELEMENT_NODE &&
-    root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE
-  )
-    return;
-  const parent = root as Element | DocumentFragment;
-  const elements = [
-    ...(root.nodeType === Node.ELEMENT_NODE ? [root as Element] : []),
-    ...parent.querySelectorAll("*"),
-  ];
-  for (const element of elements) {
-    if (!element.shadowRoot) continue;
-    yield element.shadowRoot;
-    yield* shadowRoots(element.shadowRoot);
-  }
-}
-function captureSheets(root: Node) {
-  for (const shadow of shadowRoots(root))
-    if (shadow.adoptedStyleSheets.length && !adopted.has(shadow))
-      adopted.set(shadow, [...shadow.adoptedStyleSheets]);
-}
-type Realm = Window & { CSSStyleSheet: typeof CSSStyleSheet };
-const clones = new WeakMap<Window, WeakMap<CSSStyleSheet, CSSStyleSheet>>();
-function sheetFor(sheet: CSSStyleSheet, win: Realm) {
-  if (Object.getPrototypeOf(sheet) === win.CSSStyleSheet.prototype)
-    return sheet;
-  let cache = clones.get(win);
-  if (!cache) clones.set(win, (cache = new WeakMap()));
-  let clone = cache.get(sheet);
-  if (!clone) {
-    clone = new win.CSSStyleSheet();
-    clone.replaceSync(
-      [...sheet.cssRules].map((rule) => rule.cssText).join("\n"),
-    );
-    cache.set(sheet, clone);
-  }
-  return clone;
-}
-function restoreSheets(root: Node, win: Realm) {
-  for (const shadow of shadowRoots(root)) {
-    const sheets = adopted.get(shadow);
-    if (!sheets?.length) continue;
-    const wanted = sheets.map((sheet) => sheetFor(sheet, win));
-    const current = shadow.adoptedStyleSheets;
-    if (
-      current.length === wanted.length &&
-      current.every((sheet, index) => sheet === wanted[index])
-    )
-      continue;
-    // Bypass the recorder: the recorded sheets stay the originals.
-    shadowSet.call(shadow, wanted);
-  }
-}
-const shadowSet = Object.getOwnPropertyDescriptor(
-  ShadowRoot.prototype,
-  "adoptedStyleSheets",
-)!.set!;
+// The frame has this long to load and restore before the pop-out fails.
+const readyTimeout = 10_000;
+// After a close request, how long the opener waits for the final state.
+const collectTimeout = 2_000;
+// A window closed by the user may still deliver its final state shortly
+// after its pagehide.
+const finalTimeout = 500;
 
-function copyStyles(from: Document, to: Document) {
-  for (const node of from.head.querySelectorAll(
-    'link[rel="stylesheet"], style',
-  ))
-    to.head.append(to.importNode(node, true));
-}
-function mirrorAttributes(from: Element, to: Element) {
-  while (to.attributes.length) to.removeAttribute(to.attributes[0]!.name);
-  for (const { name, value } of from.attributes) to.setAttribute(name, value);
-}
-
-export type Popout = {
-  readonly window: Window;
-  // Closes the window; the element returns through the window's pagehide.
-  close(): void;
+export type CodePopout = {
+  /** Collects the frame's latest state, then closes the window. */
+  close(): Promise<void>;
+  host(state: CodeHostState): void;
+  reveal(target: { path: string; key: number }): void;
+  /** Closes the window without handing state back, for a leaving opener. */
+  dispose(): void;
 };
 
 // Must be called from a user gesture: both window kinds need activation.
-export async function popOut(
-  element: HTMLElement,
-  options: {
-    title: string;
-    // Called after the element moved into `document`, or back to the opener.
-    moved(document: Document): void;
-    returned(): void;
-  },
-): Promise<Popout> {
-  const source = element.ownerDocument;
-  const rect = element.getBoundingClientRect();
-  const pip = await openWindow(
-    Math.max(480, Math.round(rect.width)),
-    Math.max(360, Math.round(rect.height)),
+export async function popOut(options: {
+  id: string;
+  title: string;
+  width: number;
+  height: number;
+  snapshot: CodeWorkspaceSnapshot;
+  host: CodeHostState;
+  paste(text: string): TextInsertion;
+  /** The window is gone; `snapshot` is the latest state it reported. */
+  closed(snapshot: CodeWorkspaceSnapshot): void;
+}): Promise<CodePopout> {
+  const win = await openWindow(
+    Math.max(480, Math.round(options.width)),
+    Math.max(360, Math.round(options.height)),
   );
-  const target = pip.document;
-  target.title = options.title;
-  copyStyles(source, target);
-  // Theme and font settings live on <html>; stylesheets added later (lazy
-  // chunks, editor themes) land in <head>.
-  mirrorAttributes(source.documentElement, target.documentElement);
-  const layout = target.createElement("style");
-  layout.textContent =
-    "html,body{height:100%}body{margin:0;display:flex;flex-direction:column}";
-  target.head.append(layout);
-  const mirror = new MutationObserver((records) => {
-    for (const record of records) {
-      if (record.type === "attributes")
-        mirrorAttributes(source.documentElement, target.documentElement);
-      else
-        for (const node of record.addedNodes)
-          if (
-            node instanceof HTMLStyleElement ||
-            (node instanceof HTMLLinkElement && node.rel === "stylesheet")
-          )
-            target.head.append(target.importNode(node, true));
+  const shell = win.document;
+  shell.title = options.title;
+  const style = shell.createElement("style");
+  // The frame paints the app; the shell only avoids a white flash.
+  const background = getComputedStyle(document.body).backgroundColor;
+  style.textContent = `html,body{height:100%;margin:0;background:${background};color-scheme:${getComputedStyle(document.documentElement).colorScheme || "normal"}}iframe{display:block;width:100%;height:100%;border:0}`;
+  shell.head.append(style);
+  const frame = shell.createElement("iframe");
+  frame.title = "代码工作区";
+  frame.src = `/code/${options.id}`;
+  shell.body.append(frame);
+
+  let latest = options.snapshot;
+  // The frame sends each document body once; later snapshots reference it.
+  const bodies = new SnapshotBodies();
+  bodies.resolve(options.snapshot);
+  let port: MessagePort | undefined;
+  let finished = false;
+  let disposed = false;
+  let collecting: { id: number; done: () => void } | undefined;
+  let collectSequence = 0;
+  let afterHide: (() => void) | undefined;
+  const ready = Promise.withResolvers<void>();
+  // A window closed before it was ready only rejects the awaited promise.
+  ready.promise.catch(() => undefined);
+
+  const send = (message: CodePopoutInbound) => port?.postMessage(message);
+  const receive = (event: MessageEvent) => {
+    const parsed = CodePopoutOutboundSchema.safeParse(event.data);
+    if (!parsed.success) {
+      if (import.meta.env.DEV)
+        console.warn("code pop-out: dropped message", parsed.error);
+      return;
     }
-  });
-  mirror.observe(source.documentElement, { attributes: true });
-  mirror.observe(source.head, { childList: true });
+    const message = parsed.data;
+    switch (message.type) {
+      case "ready":
+        ready.resolve();
+        break;
+      case "paste":
+        send({
+          type: "pasteResult",
+          requestId: message.requestId,
+          result: options.paste(message.text),
+        });
+        break;
+      case "snapshot":
+        latest = bodies.resolve(message.snapshot);
+        if (collecting && message.requestId === collecting.id)
+          collecting.done();
+        afterHide?.();
+        break;
+      case "close":
+        void popout.close();
+        break;
+    }
+  };
+  // Only the frame this call created may open the channel.
+  const handshake = (event: MessageEvent) => {
+    if (
+      port ||
+      event.origin !== location.origin ||
+      event.source !== frame.contentWindow ||
+      !CodePopoutHandshakeSchema.safeParse(event.data).success
+    )
+      return;
+    const channel = new MessageChannel();
+    port = channel.port1;
+    port.onmessage = receive;
+    frame.contentWindow!.postMessage(codePopoutHandshake, location.origin, [
+      channel.port2,
+    ]);
+    send({ type: "init", snapshot: options.snapshot, host: options.host });
+  };
+  win.addEventListener("message", handshake);
 
-  recordAdoptedSheets();
-  captureSheets(element);
-  const marker = source.createComment("code-popout");
-  element.before(marker);
-  target.body.append(element);
-  restoreSheets(element, pip as Realm);
-  // Components keep creating shadow roots in the opener's document and
-  // inserting them here; rebuild their sheets as they arrive.
-  const inserted = new MutationObserver((records) => {
-    for (const record of records)
-      for (const node of record.addedNodes) restoreSheets(node, pip as Realm);
-  });
-  inserted.observe(target.body, { childList: true, subtree: true });
-  // Svelte delegates handlers such as onclick to listeners on its roots and
-  // the opener's document; events here bubble to neither. A root mounted in
-  // this body attaches those listeners for the moved components.
-  const events = mount(PopoutEventRoot, { target: target.body });
-  options.moved(target);
-
+  // Ends the pop-out. The window always closes: one whose page went away
+  // (reloaded, navigated) would otherwise stay open and empty.
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.removeEventListener("pagehide", closeWithOpener);
+    win.removeEventListener("message", handshake);
+    port?.close();
+    win.close();
+    if (!disposed) options.closed(latest);
+  };
   // An ordinary popup outlives its opener; close it with the opener so the
-  // panel is never stranded in an orphaned window.
-  const opener = source.defaultView!;
-  const closeWithOpener = () => pip.close();
-  opener.addEventListener("pagehide", closeWithOpener);
-  pip.addEventListener(
+  // workspace is never stranded in an orphaned window.
+  const closeWithOpener = () => popout.dispose();
+  window.addEventListener("pagehide", closeWithOpener);
+  win.addEventListener(
     "pagehide",
     () => {
-      opener.removeEventListener("pagehide", closeWithOpener);
-      mirror.disconnect();
-      inserted.disconnect();
-      void unmount(events);
-      if (marker.isConnected) {
-        captureSheets(element);
-        marker.replaceWith(element);
-        restoreSheets(element, opener as Realm);
-        options.moved(source);
-      } else marker.remove();
-      options.returned();
+      ready.reject(new Error("独立窗口已关闭"));
+      if (finished) return;
+      // The frame reports its final state from its own pagehide; that
+      // message may arrive just after this one.
+      const timer = window.setTimeout(finish, finalTimeout);
+      afterHide = () => {
+        clearTimeout(timer);
+        finish();
+      };
     },
     { once: true },
   );
-  return { window: pip, close: () => pip.close() };
+
+  const popout: CodePopout = {
+    async close() {
+      if (finished || collecting) return;
+      const id = ++collectSequence;
+      const collected = Promise.withResolvers<void>();
+      const timer = window.setTimeout(collected.resolve, collectTimeout);
+      collecting = {
+        id,
+        done: () => {
+          clearTimeout(timer);
+          collected.resolve();
+        },
+      };
+      send({ type: "collect", requestId: id });
+      await collected.promise;
+      finish();
+    },
+    host: (state) => send({ type: "host", host: state }),
+    reveal: (target) => send({ type: "reveal", reveal: target }),
+    dispose() {
+      disposed = true;
+      finish();
+    },
+  };
+
+  const timer = window.setTimeout(
+    () => ready.reject(new Error("独立窗口加载超时")),
+    readyTimeout,
+  );
+  try {
+    await ready.promise;
+  } catch (error) {
+    popout.dispose();
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  return popout;
 }

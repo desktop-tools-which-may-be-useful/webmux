@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack, type Snippet } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import {
     CodeView,
     type CodeViewOptions,
@@ -17,6 +18,7 @@
   import { settings, changeSettings } from "../settings.svelte";
   import { defaultCodeReader } from "../settings-intent";
   import { acquireDiffHighlighter } from "../code-diff-highlighter";
+  import type { CodeDiffReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import CodeSearchPanel from "./CodeSearchPanel.svelte";
   import CodeGotoLine from "./CodeGotoLine.svelte";
@@ -30,6 +32,7 @@
     draftEnabled,
     onselect,
     lineAction,
+    restore,
     hint = $bindable(""),
   }: {
     fileDiff: FileDiffMetadata;
@@ -38,6 +41,9 @@
     draftEnabled: boolean;
     onselect: (range: SelectedLineRange | null) => void;
     lineAction?: Snippet<[line: number]>;
+    // A captured reading state, applied once the diff has rendered with
+    // layout.
+    restore?: CodeDiffReaderState;
     // Selection guidance, rendered by the document's action bar.
     hint?: string;
   } = $props();
@@ -62,6 +68,20 @@
   });
   let cursor = $state.raw<MatchCursor>();
   const id = "diff";
+  const expansionLines = 30;
+  // Until applied, `capture()` returns it unchanged.
+  let pending = untrack(() => restore);
+  // Unmodified lines revealed per hunk separator. The library keeps its own
+  // count privately, so each rendered instance's expandHunk is wrapped to
+  // record the same totals.
+  const expanded = new SvelteMap<
+    number,
+    { fromStart: number; fromEnd: number }
+  >();
+  const recorded = new WeakSet<object>();
+  // The top line last measured while the diff had layout; a hidden tab
+  // reports this one.
+  let knownTop: CodeDiffReaderState["top"];
   const diffStyle = $derived(width >= 760 ? "split" : "unified");
   const hasChanges = $derived(fileDiff.hunks.length > 0);
   const totals = $derived(
@@ -91,6 +111,112 @@
     selected = range;
     onselect(range);
   }
+  // The rendered diff instance, its expandHunk wrapped to record expansions
+  // exactly as the library's renderer counts them.
+  function diffInstance() {
+    const item = viewer?.getRenderedItems()[0];
+    if (item?.type !== "diff") return;
+    const { instance } = item;
+    if (!recorded.has(instance)) {
+      recorded.add(instance);
+      const expand = instance.expandHunk;
+      instance.expandHunk = (index, direction, count) => {
+        // The schema needs finite counts; this exceeds any region.
+        const lines = Math.min(count ?? expansionLines, 1e9);
+        const region = expanded.get(index) ?? { fromStart: 0, fromEnd: 0 };
+        if (direction !== "down")
+          region.fromStart = Math.min(region.fromStart + lines, 1e9);
+        if (direction !== "up")
+          region.fromEnd = Math.min(region.fromEnd + lines, 1e9);
+        expanded.set(index, region);
+        expand(index, direction, count);
+      };
+    }
+    return instance;
+  }
+  // The first source row at least partly below the top edge.
+  function topLine(): CodeDiffReaderState["top"] {
+    if (host.clientHeight === 0) return knownTop;
+    const item = viewer?.getRenderedItems()[0];
+    const edge = host.getBoundingClientRect().top;
+    for (const row of item?.element.shadowRoot?.querySelectorAll<HTMLElement>(
+      "[data-line]",
+    ) ?? []) {
+      const line = Number(row.dataset.line);
+      if (!Number.isInteger(line) || line < 1) continue;
+      if (row.getBoundingClientRect().bottom <= edge + 0.5) continue;
+      // Split columns name their side; unified rows only by their type.
+      const deletions = row.closest("[data-deletions]")
+        ? true
+        : row.closest("[data-additions]")
+          ? false
+          : (row.dataset.lineType ?? "").includes("deletion");
+      knownTop = { line, side: deletions ? "deletions" : "additions" };
+      return knownTop;
+    }
+    return knownTop;
+  }
+  export function capture(): CodeDiffReaderState {
+    if (pending) return pending;
+    const range = viewer?.getSelectedLines()?.range ?? selected;
+    return {
+      selected: range && {
+        start: range.start,
+        end: range.end,
+        ...(range.side ? { side: range.side } : {}),
+        ...(range.endSide ? { endSide: range.endSide } : {}),
+      },
+      expanded: [...expanded].map(([index, region]) => ({
+        index,
+        ...region,
+      })),
+      search: $state.snapshot(search),
+      ...(panel ? { panel } : {}),
+      ...(cursor && cursor.matches === matches
+        ? { cursor: { matches: [...cursor.matches], index: cursor.index } }
+        : {}),
+      ...(viewer ? { top: topLine() } : {}),
+    };
+  }
+  // Applies `pending` once the diff has rendered with layout.
+  function applyRestore() {
+    const state = pending;
+    if (!state || host.clientHeight === 0) return;
+    const instance = diffInstance();
+    if (!instance) return;
+    pending = undefined;
+    for (const { index, fromStart, fromEnd } of state.expanded) {
+      if (fromStart > 0) instance.expandHunk(index, "up", fromStart);
+      if (fromEnd > 0) instance.expandHunk(index, "down", fromEnd);
+    }
+    if (state.selected) {
+      viewer?.setSelectedLines(
+        { id, range: state.selected },
+        { notify: false },
+      );
+      choose(state.selected);
+    }
+    search = state.search;
+    panel = state.panel;
+    // A cursor only applies to the match list it was made for.
+    const current = matches;
+    cursor =
+      state.cursor &&
+      state.cursor.matches.length === current.length &&
+      state.cursor.matches.every((line, index) => line === current[index])
+        ? { matches: current, index: state.cursor.index }
+        : undefined;
+    if (state.top) {
+      knownTop = state.top;
+      viewer?.scrollTo({
+        type: "line",
+        id,
+        lineNumber: state.top.line,
+        side: state.top.side,
+        align: "start",
+      });
+    }
+  }
   function scrollToLine(line: number) {
     if (!hasChanges || !sourceLines.length) return;
     const number = Math.max(1, Math.min(sourceLines.length, line));
@@ -106,9 +232,7 @@
       : 0;
     if (number > previousEnd) {
       if (expired) return;
-      const item = viewer?.getRenderedItems()[0];
-      if (item?.type === "diff")
-        item.instance.expandHunk(region, "both", Number.POSITIVE_INFINITY);
+      diffInstance()?.expandHunk(region, "both", Number.POSITIVE_INFINITY);
     }
     viewer?.scrollTo({
       type: "line",
@@ -173,7 +297,7 @@
       disableFileHeader: true,
       enableLineSelection: true,
       lineHoverHighlight: "number",
-      expansionLineCount: 30,
+      expansionLineCount: expansionLines,
       hunkSeparators: "line-info",
       itemMetrics: { lineHeight: 22 },
       layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
@@ -198,7 +322,11 @@
       // CodeView publishes getRenderedItems() after the item render callback.
       // Defer until then so plain-text files get named, focusable controls on
       // the first render, even when highlighting needs no second render.
-      onPostRender: () => queueMicrotask(enhanceControls),
+      onPostRender: () =>
+        queueMicrotask(() => {
+          enhanceControls();
+          applyRestore();
+        }),
       // Only fixed application CSS enters the shadow root. Source text is
       // rendered by the library's escaped token renderer.
       unsafeCSS: `
@@ -211,6 +339,7 @@
   // The library's expand controls are role=button divs. Supply names and
   // keyboard handling here, and enforce the frozen-snapshot policy.
   function enhanceControls() {
+    diffInstance();
     for (const item of viewer?.getRenderedItems() ?? []) {
       for (const button of item.element.shadowRoot?.querySelectorAll<HTMLElement>(
         "[data-expand-button]",
@@ -223,8 +352,8 @@
           all
             ? "展开全部上下文"
             : button.hasAttribute("data-expand-up")
-              ? "向上展开 30 行"
-              : "向下展开 30 行",
+              ? `向上展开 ${expansionLines} 行`
+              : `向下展开 ${expansionLines} 行`,
         );
         button.setAttribute("aria-disabled", String(expired));
         button.tabIndex = expired ? -1 : 0;
@@ -266,10 +395,20 @@
       attributeFilter: ["class"],
     });
     width = host.clientWidth;
+    // A hidden tab has no layout; a pending restore waits until it is shown.
     const resize = new ResizeObserver(() => {
       width = host.clientWidth;
+      applyRestore();
     });
     resize.observe(host);
+    let measuring = 0;
+    const scrolled = () => {
+      if (pending || measuring) return;
+      measuring = requestAnimationFrame(() => {
+        measuring = 0;
+        if (!pending) topLine();
+      });
+    };
     const highlighter = acquireDiffHighlighter();
     viewer = new CodeView(options(), highlighter.pool);
     viewer.setup(host);
@@ -288,19 +427,19 @@
         if (!expired) {
           const separator = button.closest<HTMLElement>("[data-expand-index]");
           const index = Number(separator?.dataset.expandIndex);
-          const item = viewer?.getRenderedItems()[0];
-          if (item?.type === "diff" && Number.isInteger(index)) {
+          const instance = diffInstance();
+          if (instance && Number.isInteger(index)) {
             const all =
               button.hasAttribute("data-expand-all-button") ||
               button.hasAttribute("data-expand-both");
-            item.instance.expandHunk(
+            instance.expandHunk(
               index,
               all
                 ? "both"
                 : button.hasAttribute("data-expand-up")
                   ? "up"
                   : "down",
-              all ? Number.POSITIVE_INFINITY : 30,
+              all ? Number.POSITIVE_INFINITY : expansionLines,
             );
           }
         }
@@ -333,28 +472,7 @@
       const nativeSelection = document.getSelection();
       if (nativeSelection && !nativeSelection.isCollapsed) selected = null;
     };
-    // @pierre/diffs 1.3.6 follows a line-number press (click, Shift-click
-    // range, drag) with pointer listeners on the global `document`. In a
-    // pop-out window those events reach only the window's own document, so
-    // the press never ends; relay them until the press does.
-    let stopRelay: (() => void) | undefined;
-    const relayPointer = (down: PointerEvent) => {
-      const own = host.ownerDocument;
-      if (own === document) return;
-      stopRelay?.();
-      const types = ["pointermove", "pointerup", "pointercancel"] as const;
-      const relay = (event: PointerEvent) => {
-        document.dispatchEvent(new PointerEvent(event.type, event));
-        if (event.type !== "pointermove" && event.pointerId === down.pointerId)
-          stopRelay?.();
-      };
-      for (const type of types) own.addEventListener(type, relay, true);
-      stopRelay = () => {
-        for (const type of types) own.removeEventListener(type, relay, true);
-        stopRelay = undefined;
-      };
-    };
-    host.addEventListener("pointerdown", relayPointer, true);
+    host.addEventListener("scroll", scrolled, { passive: true });
     host.addEventListener("pointerdown", guardExpansion, true);
     host.addEventListener("click", guardExpansion, true);
     root.addEventListener("keydown", keydown);
@@ -365,8 +483,8 @@
       themeObserver.disconnect();
       pointer.removeEventListener("change", updatePointer);
       host.removeEventListener("pointerdown", guardExpansion, true);
-      host.removeEventListener("pointerdown", relayPointer, true);
-      stopRelay?.();
+      host.removeEventListener("scroll", scrolled);
+      cancelAnimationFrame(measuring);
       host.removeEventListener("click", guardExpansion, true);
       root.removeEventListener("keydown", keydown);
       document.removeEventListener("selectionchange", selectionChanged);

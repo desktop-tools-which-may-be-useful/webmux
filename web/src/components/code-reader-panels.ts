@@ -3,6 +3,7 @@ import {
   EditorSelection,
   StateEffect,
   StateField,
+  type EditorState,
   type Extension,
 } from "@codemirror/state";
 import {
@@ -20,6 +21,7 @@ import {
   findPrevious,
   getSearchQuery,
   gotoLine as defaultGotoLine,
+  openSearchPanel,
   search,
   searchKeymap,
   selectMatches,
@@ -38,7 +40,11 @@ function spec(query: SearchQuery): SearchSpec {
   };
 }
 
+// Set while restoring panels, so reopening them leaves focus where it is.
+let quiet = false;
+
 function focusInput(dom: HTMLElement) {
+  if (quiet) return;
   const input = dom.querySelector("input");
   input?.focus();
   input?.select();
@@ -159,6 +165,35 @@ export const openGotoLine: Command = (view) => {
   else view.dispatch({ effects: toggleGoto.of(true) });
   return true;
 };
+
+/** Whether the go-to-line panel is open. */
+export function gotoLineOpen(state: EditorState): boolean {
+  return state.field(gotoOpen, false) ?? false;
+}
+
+/**
+ * Reopens the panels a captured reader had open and sets its search query,
+ * without moving focus into the panels.
+ */
+export function restorePanels(
+  view: EditorView,
+  state: { search: SearchSpec; searchOpen: boolean; gotoOpen: boolean },
+) {
+  quiet = true;
+  try {
+    // Opening the search panel seeds the query from the selection, so the
+    // captured query is set afterwards.
+    if (state.searchOpen) openSearchPanel(view);
+    view.dispatch({
+      effects: [
+        setSearchQuery.of(new SearchQuery(state.search)),
+        ...(state.gotoOpen ? [toggleGoto.of(true)] : []),
+      ],
+    });
+  } finally {
+    quiet = false;
+  }
+}
 
 /** Search and go-to-line panels rendered with the app's shadcn components. */
 export function codeReaderPanels(): Extension {

@@ -21,6 +21,7 @@
     CodeRenameRequestSchema,
     CodeUsageSchema,
     NoContentSchema,
+    type CodeNavigatorState,
   } from "../schemas";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -54,11 +55,7 @@
     // Actions of one group sit between separators.
     group: number;
   };
-  type Clipboard = {
-    contextId: string;
-    nodes: FileTarget[];
-    mode: "copy" | "move";
-  };
+  type Clipboard = NonNullable<CodeNavigatorState["clipboard"]>;
 
   // The explorer's context menu: file operations on one tree entry, with the
   // copy/cut clipboard, dialogs and transfer progress they need.
@@ -68,6 +65,7 @@
     includeIgnored,
     openFile,
     changed,
+    restore,
   }: {
     id: string;
     context: z.infer<typeof CodeContextSchema> | undefined;
@@ -75,6 +73,8 @@
     openFile: (path: string, nodeId: string) => void;
     /** After a change; removed lists paths that no longer exist. */
     changed: (removed: string[]) => void;
+    /** The copy/cut clipboard to start with. */
+    restore?: Clipboard;
   } = $props();
 
   const base = $derived(`/sessions/${id}/code`);
@@ -83,7 +83,7 @@
   let target = $state<FileTarget>();
   let anchor = $state<HTMLElement | { getBoundingClientRect(): DOMRect }>();
   let returnFocus: HTMLElement | undefined;
-  let clipboard = $state<Clipboard>();
+  let clipboard = $state<Clipboard | undefined>(untrack(() => restore));
   let notice = $state("");
   let error = $state("");
   let naming = $state<{ kind: "rename" | "mkdir"; node: FileTarget }>();
@@ -93,7 +93,7 @@
   let removing = $state<{ node: FileTarget; detail: string }>();
   let confirmOpen = $state(false);
   let picker = $state<UploadFileInput>();
-  let uploadTarget: FileTarget | undefined;
+  let pickerTarget: FileTarget | undefined;
   let progress = $state<UploadProgress | null>(null);
   let uploadController: AbortController | undefined;
   let download = $state<{ name: string; bytes: number }>();
@@ -153,7 +153,7 @@
           group: 1,
           disabled: !writable,
           run: () => {
-            uploadTarget = node;
+            pickerTarget = node;
             picker?.open();
           },
         },
@@ -236,6 +236,34 @@
     menuOpen = true;
   }
 
+  /** The pending copy/cut, to carry into another instance. */
+  export function capture(): Clipboard | undefined {
+    if (!clipboard) return undefined;
+    const { contextId, nodes, mode } = clipboard;
+    return {
+      contextId,
+      mode,
+      nodes: nodes.map(({ nodeId, path, name, kind }) => ({
+        nodeId,
+        path,
+        name,
+        kind,
+      })),
+    };
+  }
+
+  /** Why files cannot be uploaded right now; empty when they can. */
+  export function uploadRefusal(): string {
+    if (!writable) return "当前目录只读，无法上传";
+    return uploadController ? "请等待当前上传完成" : "";
+  }
+
+  /** Reports a refused operation in the strip above the tree. */
+  export function refuse(message: string) {
+    notice = "";
+    error = message;
+  }
+
   function query(node: FileTarget, extra: Record<string, string> = {}) {
     return new URLSearchParams({
       contextId: context?.contextId ?? "",
@@ -245,12 +273,16 @@
   }
 
   // Runs one operation, reporting its outcome in the strip above the tree.
+  // A refusal reported meanwhile gives way to the outcome.
   async function run(action: () => Promise<string | void>) {
     error = "";
     notice = "";
     try {
-      notice = (await action()) ?? "";
+      const outcome = (await action()) ?? "";
+      error = "";
+      notice = outcome;
     } catch (e) {
+      notice = "";
       error = errorMessage(e);
     }
   }
@@ -379,9 +411,12 @@
     });
   }
 
-  async function upload(files: File[]) {
-    const into = uploadTarget;
-    if (!into || !files.length) return;
+  /**
+   * Uploads files into a folder one by one, replacing any running upload;
+   * resolves to the outcome shown in the strip.
+   */
+  export async function upload(files: File[], into: FileTarget) {
+    if (!files.length) return "";
     uploadController?.abort();
     const controller = new AbortController();
     uploadController = controller;
@@ -415,6 +450,7 @@
         if (stored.length) changed([]);
       }
     });
+    return error || notice;
   }
 
   async function save(node: FileTarget, archive: boolean) {
@@ -453,7 +489,13 @@
   });
 </script>
 
-<UploadFileInput bind:this={picker} {upload} label="选择上传到此目录的文件" />
+<UploadFileInput
+  bind:this={picker}
+  upload={async (files) => {
+    if (pickerTarget) await upload(files, pickerTarget);
+  }}
+  label="选择上传到此目录的文件"
+/>
 
 {#if progress}<FileUploadProgress
     variant="card"

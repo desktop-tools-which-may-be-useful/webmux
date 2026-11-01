@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import Harness from "./CodeImageHarness.svelte";
+import ViewHarness from "./CodePdfViewHarness.svelte";
 import {
   CodeFileSchema,
   type CodeDocument,
@@ -329,4 +330,42 @@ test("leaving the tab cancels an unfinished load and keeps a loaded PDF", async 
   expect(painted(1)).toBe(true);
   expect(signals).toHaveLength(2);
   expect(signals[1]?.aborted).toBe(false);
+});
+
+test("captured zoom and page position restore in a new view, also one mounted hidden", async () => {
+  serve(() => pdfResponse(pdfFixture({ pages: 10 })));
+  const doc = pdfDocument();
+  const first = await render(ViewHarness, { document: doc });
+  await expect
+    .poll(() => document.querySelectorAll("[data-pdf-page]").length, {
+      timeout: 10_000,
+    })
+    .toBe(10);
+  const fit = percent();
+  await page.getByRole("button", { name: "放大" }).click();
+  await expect.poll(percent).not.toBe(fit);
+  const zoomed = percent();
+  scroller().scrollTop = pageBox(6).offsetTop - 8 + pageBox(6).offsetHeight / 2;
+  const scrollTop = scroller().scrollTop;
+  const captured = first.component.capture();
+  expect(captured).toMatchObject({ fitted: false, page: 6 });
+  expect(captured.offset).toBeCloseTo(0.5, 2);
+  await first.unmount();
+
+  const second = await render(ViewHarness, {
+    document: doc,
+    restore: captured,
+    hidden: true,
+  });
+  expect(second.component.capture()).toEqual(captured);
+  await second.rerender({ hidden: false });
+  await expect
+    .poll(() => scroller()?.scrollTop, { timeout: 10_000 })
+    .toBeCloseTo(scrollTop, 0);
+  expect(percent()).toBe(zoomed);
+  expect(second.component.capture()).toMatchObject({
+    fitted: false,
+    zoom: captured.zoom,
+    page: 6,
+  });
 });

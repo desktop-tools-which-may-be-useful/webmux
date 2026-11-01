@@ -1,17 +1,27 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { parseJson, type JsonNode } from "../code-json";
+  import type { CodeJsonState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import * as Collapsible from "$lib/components/ui/collapsible";
   import IconChevronRight from "~icons/tabler/chevron-right";
-  let { text, onsource }: { text: string; onsource: () => void } = $props();
+  let {
+    text,
+    onsource,
+    restore,
+  }: { text: string; onsource: () => void; restore?: CodeJsonState } = $props();
   const result = $derived(parseJson(text));
   // Large collections reveal their members in batches.
   const batch = 200;
   // Per-collection state keyed by its path; the first two levels start open.
-  const opened = new SvelteMap<string, boolean>();
-  const shown = new SvelteMap<string, number>();
+  const initial = untrack(() => restore);
+  const opened = new SvelteMap<string, boolean>(initial?.opened);
+  const shown = new SvelteMap<string, number>(initial?.shown);
   const isOpen = (key: string, depth: number) => opened.get(key) ?? depth < 2;
+  export function capture(): CodeJsonState {
+    return { opened: [...opened], shown: [...shown] };
+  }
   function members(node: JsonNode) {
     return node.kind === "object"
       ? node.entries.map((entry) => ({ name: entry.key, value: entry.value }))

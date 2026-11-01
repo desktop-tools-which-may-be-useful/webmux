@@ -1,7 +1,11 @@
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
+import { EditorView } from "@codemirror/view";
 import Harness from "./CodeReaderHarness.svelte";
+
+const editor = () =>
+  EditorView.findFromDOM(document.querySelector<HTMLElement>(".cm-editor")!)!;
 afterEach(async () => {
   await cleanup();
   await userEvent.cleanup();
@@ -116,4 +120,80 @@ test("keeps Svelte script highlighting on JavaScript", async () => {
   await expect
     .poll(() => getComputedStyle(keyword.element()).color)
     .toBe("rgb(119, 0, 136)");
+});
+
+test("captured reading state restores in a new reader, also one mounted hidden", async () => {
+  const text = Array.from(
+    { length: 1000 },
+    (_, i) => `const line${i + 1} = ${i + 1};`,
+  ).join("\n");
+  const first = await render(Harness, { text });
+  await expect
+    .element(page.getByLabelText("只读代码"))
+    .toMatchTextContent(/const line1 = 1;/);
+  await page.getByRole("button", { name: "文件内查找" }).click();
+  await page.getByRole("textbox", { name: "查找" }).fill("line250");
+  const view = editor();
+  const { doc } = view.state;
+  view.dispatch({
+    selection: { anchor: doc.line(210).from, head: doc.line(215).to },
+  });
+  // Scroll halfway into line 200. Heights far from the viewport are
+  // estimates, so settle once the line has been measured.
+  const scrollIntoLine = () => {
+    const block = view.lineBlockAt(doc.line(200).from);
+    view.scrollDOM.scrollTop +=
+      block.top +
+      block.height / 2 -
+      (view.scrollDOM.getBoundingClientRect().top - view.documentTop);
+  };
+  scrollIntoLine();
+  await expect.poll(() => first.component.line()).toBe(200);
+  scrollIntoLine();
+  await expect.poll(() => first.component.capture().offset).toBeCloseTo(0.5, 1);
+  const captured = first.component.capture();
+  expect(captured).toMatchObject({
+    line: 200,
+    selection: {
+      ranges: [{ anchor: doc.line(210).from, head: doc.line(215).to }],
+      main: 0,
+    },
+    search: { search: "line250" },
+    searchOpen: true,
+    gotoOpen: false,
+  });
+  await first.unmount();
+
+  // A hidden tab has no layout: the state waits, and capture returns it.
+  const second = await render(Harness, {
+    text,
+    restore: captured,
+    hidden: true,
+  });
+  expect(second.component.capture()).toEqual(captured);
+  await second.rerender({ hidden: false });
+  await expect.poll(() => second.component.line()).toBe(200);
+  const restored = second.component.capture();
+  expect(restored).toMatchObject({ ...captured, offset: expect.any(Number) });
+  expect(restored.offset).toBeCloseTo(captured.offset, 1);
+  await expect
+    .element(page.getByRole("textbox", { name: "查找" }))
+    .toHaveValue("line250");
+  expect(document.activeElement?.closest(".cm-panels")).toBeFalsy();
+  const range = editor().state.selection.main;
+  expect([range.from, range.to]).toEqual([
+    doc.line(210).from,
+    doc.line(215).to,
+  ]);
+  await second.unmount();
+
+  // Restoring into a visible reader applies at once.
+  const third = await render(Harness, { text, restore: restored });
+  await expect.poll(() => third.component.line()).toBe(200);
+  expect(third.component.capture()).toMatchObject({
+    line: 200,
+    selection: restored.selection,
+    search: restored.search,
+    searchOpen: true,
+  });
 });

@@ -370,3 +370,41 @@ test("fenced code is highlighted by language, unknown languages stay plain", asy
   document.documentElement.classList.add("dark");
   expect(getComputedStyle(keyword).color).not.toBe(light);
 });
+
+test("captured reading position restores at the same heading, also when mounted hidden", async () => {
+  watchFetch();
+  const text = Array.from(
+    { length: 12 },
+    (_, section) =>
+      `## Section ${section + 1}\n\n` +
+      Array.from(
+        { length: 6 },
+        (_, paragraph) =>
+          `Paragraph ${paragraph + 1} of section ${section + 1}, long enough to wrap across a line or two in the preview.`,
+      ).join("\n\n"),
+  ).join("\n\n");
+  const first = await render(CodeMarkdownPreview, { text });
+  const heading = page.getByRole("heading", { name: "Section 7" });
+  await expect.element(heading).toBeInTheDocument();
+  // Scroll 30 pixels past the seventh heading.
+  preview().scrollTop +=
+    heading.element().getBoundingClientRect().top -
+    preview().getBoundingClientRect().top +
+    30;
+  const scrollTop = preview().scrollTop;
+  const captured = first.component.capture();
+  expect(captured.heading).toBe("section-7");
+  expect(captured.offset).toBeCloseTo(30, 0);
+  await first.unmount();
+
+  const second = await render(CodeMarkdownPreview, {
+    text,
+    restore: captured,
+    hidden: true,
+  });
+  expect(second.component.capture()).toEqual(captured);
+  await second.rerender({ hidden: false });
+  await expect.poll(() => preview().scrollTop).toBeCloseTo(scrollTop, 0);
+  expect(second.component.capture().heading).toBe("section-7");
+  expect(second.component.capture().offset).toBeCloseTo(30, 0);
+});

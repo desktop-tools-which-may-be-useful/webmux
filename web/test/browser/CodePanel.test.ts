@@ -381,28 +381,86 @@ test("loads changes beyond 1000 lazily, virtualizes rows, filters and refreshes 
     .toBeEnabled();
 });
 
-// A same-origin iframe stands in for the pop-out window: a second document
-// the panel moves into, closed through the window's pagehide.
-function fakeWindow() {
+// A same-origin iframe stands in for the pop-out window, closed through the
+// window's pagehide. The shell's own frame would load the app at /code/<id>;
+// a scripted stand-in performs the frame's handshake and records what the
+// opener sends, so a test can speak the frame's side of the channel.
+type FakeFrame = Window & {
+  port?: MessagePort;
+  messages: Record<string, unknown>[];
+};
+interface FakeWindow {
+  readonly window: Window | null;
+  readonly source: string;
+  readonly frame: FakeFrame | undefined;
+  open(): Window;
+}
+const frameScript =
+  `<script>
+  window.messages = [];
+  addEventListener("message", (event) => {
+    window.port = event.ports[0];
+    window.port.onmessage = (m) => window.messages.push(m.data);
+  });
+  parent.postMessage({ type: "webmux-code-popout", version: 1 }, "*");
+</scr` + `ipt>`;
+function fakeWindow(): FakeWindow {
+  let shell: HTMLIFrameElement | undefined;
   let frame: HTMLIFrameElement | undefined;
+  let source = "";
   return {
     get window() {
-      return frame?.contentWindow ?? null;
+      return shell?.contentWindow ?? null;
+    },
+    get source() {
+      return source;
+    },
+    get frame() {
+      return frame?.contentWindow as FakeFrame | undefined;
     },
     open() {
-      frame = document.createElement("iframe");
-      frame.title = "popout";
-      document.body.append(frame);
-      const win = frame.contentWindow!;
-      const close = () => {
-        win.dispatchEvent(new Event("pagehide"));
-        frame?.remove();
-        frame = undefined;
-      };
-      Object.defineProperty(win, "close", { value: close });
+      shell = document.createElement("iframe");
+      shell.title = "popout";
+      document.body.append(shell);
+      const win = shell.contentWindow!;
+      const create = win.document.createElement.bind(win.document);
+      win.document.createElement = ((tag: string) => {
+        const element = create(tag);
+        if (element instanceof win.HTMLIFrameElement) {
+          frame = element;
+          Object.defineProperty(element, "src", {
+            set(value: string) {
+              source = value;
+              element.srcdoc = frameScript;
+            },
+          });
+        }
+        return element;
+      }) as typeof win.document.createElement;
+      Object.defineProperty(win, "close", {
+        value: () => {
+          win.dispatchEvent(new Event("pagehide"));
+          shell?.remove();
+          shell = undefined;
+        },
+      });
       return win;
     },
   };
+}
+// Waits for the frame to have received a message of `type` and returns it.
+async function received(
+  popup: FakeWindow,
+  type: string,
+): Promise<Record<string, unknown>> {
+  let found: Record<string, unknown> | undefined;
+  await expect
+    .poll(() => {
+      found = popup.frame?.messages.find((m) => m.type === type);
+      return found;
+    })
+    .toBeTruthy();
+  return found!;
 }
 function fakePictureInPicture(refuse?: Error) {
   const fake = fakeWindow();
@@ -427,13 +485,6 @@ function pointer(fine: boolean) {
       : real(query),
   );
 }
-function popoutButton(win: Window, name: string) {
-  return [...win.document.querySelectorAll("button")].find(
-    (button) =>
-      button.getAttribute("aria-label") === name ||
-      button.textContent?.trim() === name,
-  );
-}
 
 test("touch-only devices without Picture-in-Picture get no pop-out control", async () => {
   serve();
@@ -448,7 +499,8 @@ test("touch-only devices without Picture-in-Picture get no pop-out control", asy
   ).toHaveLength(0);
 });
 
-test("desktop browsers without Picture-in-Picture pop out into an ordinary popup", async () => {
+// Opens file-0 and file-1, then pops out into an ordinary popup.
+async function popOutWithTabs(beforePopOut?: () => void) {
   serve();
   vi.stubGlobal("documentPictureInPicture", undefined);
   pointer(true);
@@ -456,26 +508,177 @@ test("desktop browsers without Picture-in-Picture pop out into an ordinary popup
   const open = vi.spyOn(window, "open").mockImplementation(() => popup.open());
   render(Harness);
   await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
+  await page.getByRole("button", { name: "file-1.txt", exact: true }).click();
+  beforePopOut?.();
   await page
     .getByRole("button", { name: "在独立窗口中显示代码", exact: true })
     .click();
-  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  return { popup, open };
+}
+type Snapshot = { active: string; tabs: { key: string }[] };
+
+test("desktop browsers without Picture-in-Picture pop out into a framed popup and take the state back", async () => {
+  const { popup, open } = await popOutWithTabs();
   expect(open).toHaveBeenCalledWith(
     "",
     "_blank",
     expect.stringMatching(/^popup,width=\d+,height=\d+$/),
   );
-  const win = popup.window!;
-  popoutButton(win, "file-1.txt")!.click();
+  const init = await received(popup, "init");
+  expect(popup.source).toBe("/code/code-session");
+  const snapshot = init.snapshot as Snapshot;
+  expect(snapshot.tabs.map((tab) => tab.key)).toHaveLength(2);
+  expect(snapshot.active).toBe(snapshot.tabs[1]!.key);
+  // The opener keeps its workspace until the frame shows its own.
+  expect(document.querySelector(".code-panel")).not.toBeNull();
+  popup.frame!.port!.postMessage({ type: "ready" });
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  expect(document.querySelector(".code-panel")).toBeNull();
+
+  const reads = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => String(input).includes("/file?")).length;
+  const before = reads();
+  await page.getByRole("button", { name: "收回到此处" }).click();
+  const collect = await received(popup, "collect");
+  popup.frame!.port!.postMessage({
+    type: "snapshot",
+    requestId: collect.requestId,
+    snapshot: { ...snapshot, active: snapshot.tabs[0]!.key },
+  });
   await expect
-    .poll(
-      () =>
-        win.document.querySelector("[role=tabpanel]:not(.hidden) .cm-content")
-          ?.textContent,
-    )
-    .toContain("original file 1");
-  // Reloading or leaving the opener must not strand the panel in the popup.
+    .element(page.getByRole("tab", { name: /^file-0\.txt/ }))
+    .toHaveAttribute("aria-selected", "true");
+  await expect
+    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
+    .toMatchTextContent(new RegExp("original file 0"));
+  expect(popup.window).toBeNull();
+  // Restored tabs keep the content they were handed.
+  expect(reads()).toBe(before);
+});
+
+test("a window closed by the user returns its last reported state", async () => {
+  const { popup } = await popOutWithTabs();
+  const snapshot = (await received(popup, "init")).snapshot as Snapshot;
+  popup.frame!.port!.postMessage({ type: "ready" });
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  popup.frame!.port!.postMessage({
+    type: "snapshot",
+    snapshot: { ...snapshot, active: snapshot.tabs[0]!.key },
+  });
+  // Malformed or unknown messages are dropped without effect.
+  popup.frame!.port!.postMessage({ type: "snapshot", snapshot: { bad: 1 } });
+  popup.frame!.port!.postMessage({ type: "unknown" });
+  await expect.poll(() => popup.frame?.messages.length).toBeGreaterThan(0);
+  popup.window!.close();
+  await expect
+    .element(page.getByRole("tab", { name: /^file-0\.txt/ }))
+    .toHaveAttribute("aria-selected", "true");
+});
+
+test("a state handed over while the tree was still loading reads it again", async () => {
+  const { popup } = await popOutWithTabs();
+  const snapshot = (await received(popup, "init")).snapshot as Snapshot;
+  popup.frame!.port!.postMessage({ type: "ready" });
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  popup.frame!.port!.postMessage({
+    type: "snapshot",
+    snapshot: { ...snapshot, listing: undefined, rootListing: undefined },
+  });
+  await expect.poll(() => popup.frame?.messages.length).toBeGreaterThan(0);
+  popup.window!.close();
+  await expect
+    .element(page.getByRole("button", { name: "file-0.txt", exact: true }))
+    .toBeVisible();
+});
+
+test("the window sends each document once and keeps update markers", async () => {
+  const { popup } = await popOutWithTabs();
+  const init = (await received(popup, "init")).snapshot as Snapshot & {
+    tabs: { key: string; status: string; file?: { snapshotId: string } }[];
+  };
+  popup.frame!.port!.postMessage({ type: "ready" });
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  // Later snapshots name bodies the opener already holds.
+  popup.frame!.port!.postMessage({
+    type: "snapshot",
+    snapshot: {
+      ...init,
+      active: init.tabs[0]!.key,
+      tabs: init.tabs.map((tab) => ({
+        ...tab,
+        file: undefined,
+        fileRef: tab.file!.snapshotId,
+        status: tab.key === init.tabs[0]!.key ? "updated" : tab.status,
+      })),
+    },
+  });
+  await expect.poll(() => popup.frame?.messages.length).toBeGreaterThan(0);
+  popup.window!.close();
+  await expect
+    .element(page.getByRole("tab", { name: /^file-0\.txt · worktree ●$/ }))
+    .toHaveAttribute("aria-selected", "true");
+  await expect
+    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
+    .toMatchTextContent(new RegExp("original file 0"));
+  await expect
+    .element(page.getByRole("tab", { name: /^file-1\.txt/ }))
+    .toBeInTheDocument();
+});
+
+test("requests to show a file while popped out go to the window, once", async () => {
+  const { popup } = await popOutWithTabs();
+  await received(popup, "init");
+  popup.frame!.port!.postMessage({ type: "ready" });
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  expect(popup.frame!.messages.filter((m) => m.type === "reveal")).toHaveLength(
+    0,
+  );
+  await page.getByRole("button", { name: "Reveal file 3" }).click();
+  expect(await received(popup, "reveal")).toEqual({
+    type: "reveal",
+    reveal: { path: "/root/file-3.txt", key: 1 },
+  });
+});
+
+test("the frame inserts references through the opener and the opener closes it on leave", async () => {
+  const { popup } = await popOutWithTabs();
+  await received(popup, "init");
+  popup.frame!.port!.postMessage({ type: "ready" });
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  popup.frame!.port!.postMessage({
+    type: "paste",
+    requestId: 7,
+    text: "@file-1.txt",
+  });
+  const result = await received(popup, "pasteResult");
+  expect(result).toEqual({
+    type: "pasteResult",
+    requestId: 7,
+    result: "terminal",
+  });
+  await expect
+    .element(page.getByLabelText("Inserted reference"))
+    .toHaveTextContent("@file-1.txt");
+  // Reloading or leaving the opener must not strand the popup.
   window.dispatchEvent(new Event("pagehide"));
+  expect(popup.window).toBeNull();
+});
+
+test("a frame that never gets ready closes and leaves the workspace in place", async () => {
+  const { popup } = await popOutWithTabs(() =>
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }),
+  );
+  try {
+    await received(popup, "init");
+    vi.advanceTimersByTime(10_000);
+  } finally {
+    vi.useRealTimers();
+  }
+  await expect
+    .element(page.getByRole("alert"))
+    .toMatchTextContent("独立窗口加载超时");
   expect(popup.window).toBeNull();
   await expect
     .element(page.getByRole("tab", { name: /^file-1\.txt/ }))
@@ -496,57 +699,6 @@ test("a blocked popup keeps the panel in place and says why", async () => {
     .toMatchTextContent("弹出窗口被浏览器拦截");
   expect(page.getByText("代码已在独立窗口中显示").elements()).toHaveLength(0);
   expect(document.querySelector(".code-panel")).not.toBeNull();
-});
-
-test("a popped-out panel stays interactive in the other document and returns with its tabs", async () => {
-  serve();
-  const pip = fakePictureInPicture();
-  render(Harness);
-  await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
-  await page
-    .getByRole("button", { name: "在独立窗口中显示代码", exact: true })
-    .click();
-  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
-  const win = pip.window!;
-  expect(document.querySelector(".code-panel")).toBeNull();
-  expect(win.document.querySelector(".code-panel")).not.toBeNull();
-  // Delegated Svelte handlers fire for clicks inside the other document.
-  popoutButton(win, "file-1.txt")!.click();
-  await expect
-    .poll(() =>
-      [
-        ...win.document.querySelectorAll('[aria-label="文件标签"] [role=tab]'),
-      ].map((tab) => tab.textContent),
-    )
-    .toEqual(["file-0.txt · worktree", "file-1.txt · worktree"]);
-  await expect
-    .poll(
-      () =>
-        win.document.querySelector("[role=tabpanel]:not(.hidden) .cm-content")
-          ?.textContent,
-    )
-    .toContain("original file 1");
-  // Hiding the opener's pane does not pause a popped-out panel.
-  await page.getByRole("button", { name: "Toggle code visibility" }).click();
-  const previous = checks;
-  document.dispatchEvent(new Event("visibilitychange"));
-  await expect.poll(() => checks).toBeGreaterThan(previous);
-
-  popoutButton(win, "收回代码窗口")!.click();
-  await expect
-    .element(page.getByText("代码已在独立窗口中显示"))
-    .not.toBeInTheDocument();
-  expect(pip.window).toBeNull();
-  await expect
-    .element(page.getByRole("tab", { name: /^file-1\.txt/ }))
-    .toHaveAttribute("aria-selected", "true");
-  await expect
-    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("original file 1"));
-  await page.getByRole("button", { name: "file-2.txt", exact: true }).click();
-  await expect
-    .element(page.getByRole("tab", { name: /^file-2\.txt/ }))
-    .toHaveAttribute("aria-selected", "true");
 });
 
 test("a refused pop-out window keeps the panel in place and says why", async () => {

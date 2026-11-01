@@ -101,6 +101,7 @@
 <script lang="ts">
   import { marked, type Token, type TokensList } from "marked";
   import { untrack } from "svelte";
+  import type { CodeMarkdownState } from "../schemas";
   import IconCheck from "~icons/tabler/check";
   import IconCopy from "~icons/tabler/copy";
   import { Button } from "$lib/components/ui/button";
@@ -125,6 +126,7 @@
     active = true,
     workspace,
     headings = $bindable([]),
+    restore,
   }: {
     text: string;
     variant?: "document" | "message";
@@ -134,6 +136,8 @@
     active?: boolean;
     workspace?: MarkdownWorkspace;
     headings?: MarkdownHeading[];
+    /** A captured reading position, applied after the first render with layout. */
+    restore?: CodeMarkdownState;
   } = $props();
 
   const escapeHtml = (value: string) =>
@@ -285,7 +289,98 @@
       headings = outline;
       pictures = found;
       notice = "";
+      applyRestore();
     });
+  });
+
+  // Until applied, `capture()` returns it unchanged.
+  let pending = untrack(() => restore);
+  // The position last measured while the preview had layout; a hidden tab
+  // reports this one.
+  let known: CodeMarkdownState = { heading: "", offset: 0 };
+  // A restored position is held while late images change the layout above
+  // it, until the reader moves on.
+  let anchor: CodeMarkdownState | undefined;
+  function measure(): CodeMarkdownState {
+    if (!region || !content || region.clientHeight === 0) return known;
+    const top = region.getBoundingClientRect().top;
+    let last: Element | undefined;
+    for (const heading of content.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+      if (heading.getBoundingClientRect().top > top + 1) break;
+      last = heading;
+    }
+    const range = region.scrollHeight - region.clientHeight;
+    known = last
+      ? {
+          heading: last.id.slice(headingIdPrefix.length),
+          offset: top - last.getBoundingClientRect().top,
+        }
+      : {
+          heading: "",
+          offset: range > 0 ? Math.min(1, region.scrollTop / range) : 0,
+        };
+    return known;
+  }
+  export function capture(): CodeMarkdownState {
+    return pending ?? measure();
+  }
+  function place(state: CodeMarkdownState) {
+    if (!region || !content) return;
+    if (!state.heading) {
+      region.scrollTop =
+        state.offset * (region.scrollHeight - region.clientHeight);
+      return;
+    }
+    const heading = content.querySelector(
+      `#${CSS.escape(headingIdPrefix + state.heading)}`,
+    );
+    if (heading)
+      region.scrollTop +=
+        heading.getBoundingClientRect().top -
+        region.getBoundingClientRect().top +
+        state.offset;
+  }
+  function applyRestore() {
+    const state = pending;
+    if (!state || !region || region.clientHeight === 0) return;
+    pending = undefined;
+    anchor = state;
+    known = state;
+    place(state);
+  }
+  // Defers a restore for a hidden tab, keeps a restored position anchored
+  // while images load, and tracks the position while scrolling.
+  $effect(() => {
+    const scroller = region;
+    const inner = content;
+    if (variant !== "document" || !scroller || !inner) return;
+    const observer = new ResizeObserver(() => {
+      if (pending) applyRestore();
+      else if (anchor && scroller.clientHeight > 0) place(anchor);
+    });
+    observer.observe(scroller);
+    observer.observe(inner);
+    let measuring = 0;
+    const scrolled = () => {
+      if (pending || measuring) return;
+      measuring = requestAnimationFrame(() => {
+        measuring = 0;
+        if (!pending) measure();
+      });
+    };
+    const release = () => {
+      anchor = undefined;
+    };
+    const inputs = ["wheel", "pointerdown", "touchstart", "keydown"] as const;
+    scroller.addEventListener("scroll", scrolled, { passive: true });
+    for (const type of inputs)
+      scroller.addEventListener(type, release, { passive: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(measuring);
+      scroller.removeEventListener("scroll", scrolled);
+      for (const type of inputs) scroller.removeEventListener(type, release);
+    };
   });
 
   // Loads images near the viewport through the workspace, at most two at a
@@ -395,6 +490,8 @@
       return false;
     }
     notice = "";
+    // An explicit navigation replaces any restored position.
+    pending = anchor = undefined;
     heading.scrollIntoView({ block: "start" });
     return true;
   }

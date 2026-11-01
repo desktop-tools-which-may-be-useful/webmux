@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import Harness from "./CodeImageHarness.svelte";
+import ViewHarness from "./CodeImageViewHarness.svelte";
 import {
   CodeDiffSchema,
   CodeFileSchema,
@@ -509,4 +510,42 @@ test("image diffs show the change, sizes and preview the selected side", async (
   await expect
     .element(page.getByRole("button", { name: "下载", exact: true }))
     .not.toBeInTheDocument();
+});
+
+test("captured zoom and pan restore in a new view, also one mounted hidden", async () => {
+  const blob = await png(800, 600);
+  serve(() => raw(blob));
+  const doc = imageDocument({ size: blob.size });
+  const first = await render(ViewHarness, { document: doc });
+  await expect.poll(percent).toBe(fitPercent(800, 600));
+  await page.getByRole("button", { name: "原始尺寸 1:1" }).click();
+  await expect.poll(percent).toBe("100%");
+  pointer("pointerdown", 1, 300, 200, "mouse");
+  pointer("pointermove", 1, 220, 150, "mouse");
+  pointer("pointerup", 1, 220, 150, "mouse");
+  const frame = viewport().getBoundingClientRect();
+  await expect
+    .poll(() => image()!.getBoundingClientRect().left - frame.left)
+    .toBeLessThan(0);
+  const placed = image()!.getBoundingClientRect();
+  const captured = first.component.capture();
+  expect(captured).toMatchObject({ fitted: false, scale: 1 });
+  expect(captured.centerX).toBeGreaterThan(0.5);
+  await first.unmount();
+
+  const second = await render(ViewHarness, {
+    document: doc,
+    restore: captured,
+    hidden: true,
+  });
+  expect(second.component.capture()).toEqual(captured);
+  await second.rerender({ hidden: false });
+  await expect.poll(percent).toBe("100%");
+  await expect
+    .poll(() => image()!.getBoundingClientRect().left)
+    .toBeCloseTo(placed.left, 0);
+  expect(image()!.getBoundingClientRect().top).toBeCloseTo(placed.top, 0);
+  const restored = second.component.capture();
+  expect(restored.centerX).toBeCloseTo(captured.centerX, 3);
+  expect(restored.centerY).toBeCloseTo(captured.centerY, 3);
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import type { CodeChange } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
@@ -22,6 +22,7 @@
     onmore,
     onopen,
     group = "",
+    restore,
   }: {
     entries: CodeChange[];
     total: number;
@@ -32,6 +33,8 @@
     onmore: () => void;
     onopen: (change: CodeChange) => void;
     group?: string;
+    /** The first visible row to scroll to once the list has rows and layout. */
+    restore?: number;
   } = $props();
   const rowHeight = 32,
     overscan = 6;
@@ -100,8 +103,24 @@
     height = host.clientHeight;
     return () => observer.disconnect();
   });
-  function scroll() {
+  let pendingTop = untrack(() => restore);
+  // A hidden list has no layout yet; the observer reruns this once shown.
+  $effect(() => {
+    if (pendingTop === undefined) return;
+    const count = rows.length;
+    void height;
+    if (!count || !host.clientHeight) return;
+    host.scrollTop = Math.min(pendingTop, count - 1) * rowHeight;
     top = host.scrollTop;
+    pendingTop = undefined;
+  });
+  /** The first visible row, as last scrolled (or still to be restored). */
+  export function capture(): number {
+    return pendingTop ?? Math.floor(top / rowHeight);
+  }
+  // A scroll set just before unmount can arrive after `host` is released.
+  function scroll(event: UIEvent & { currentTarget: HTMLDivElement }) {
+    top = event.currentTarget.scrollTop;
     if (
       enabled &&
       !pending &&

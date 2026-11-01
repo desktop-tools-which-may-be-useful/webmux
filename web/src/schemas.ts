@@ -640,6 +640,232 @@ export type CodeDiff = z.infer<typeof CodeDiffSchema>;
 export type CodeChange = z.infer<typeof CodeChangeSchema>;
 export type CodeListing = z.infer<typeof CodeListingSchema>;
 
+// Reading state of one code workspace, handed between the opener and the
+// pop-out window. Positions anchor on content (lines, pages, headings), so a
+// window of another size shows the same place.
+const CodeSearchSpecSchema = z.object({
+  search: z.string(),
+  caseSensitive: z.boolean(),
+  regexp: z.boolean(),
+  wholeWord: z.boolean(),
+});
+const CodeLineSideSchema = z.enum(["deletions", "additions"]);
+export const CodeReaderStateSchema = z.object({
+  // First visible line and how far (0-1 of its height) it is scrolled past.
+  line: z.number().int().min(1),
+  offset: z.number().min(0).max(1),
+  selection: z.object({
+    ranges: z
+      .array(
+        z.object({
+          anchor: z.number().int().nonnegative(),
+          head: z.number().int().nonnegative(),
+        }),
+      )
+      .min(1),
+    main: z.number().int().nonnegative(),
+  }),
+  search: CodeSearchSpecSchema,
+  searchOpen: z.boolean(),
+  gotoOpen: z.boolean(),
+  // The touch-picked line carrying the inline send action.
+  picked: z.number().int().min(1).optional(),
+});
+export const CodeDiffReaderStateSchema = z.object({
+  selected: z
+    .object({
+      start: z.number().int(),
+      end: z.number().int(),
+      side: CodeLineSideSchema.optional(),
+      endSide: CodeLineSideSchema.optional(),
+    })
+    .nullable(),
+  // Unmodified lines revealed per hunk separator, as the library counts them.
+  expanded: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      fromStart: z.number().int().nonnegative(),
+      fromEnd: z.number().int().nonnegative(),
+    }),
+  ),
+  search: CodeSearchSpecSchema,
+  panel: z.enum(["search", "goto"]).optional(),
+  cursor: z
+    .object({
+      matches: z.array(z.number().int()),
+      index: z.number().int(),
+    })
+    .optional(),
+  top: z
+    .object({ line: z.number().int().min(1), side: CodeLineSideSchema })
+    .optional(),
+});
+export const CodeMarkdownStateSchema = z.object({
+  // Slug of the last heading at or above the top edge, "" when none.
+  heading: z.string(),
+  // Pixels past that heading, or the scroll ratio (0-1) without a heading.
+  offset: z.number(),
+});
+export const CodeImageStateSchema = z.object({
+  fitted: z.boolean(),
+  scale: z.number().positive(),
+  // Image point (0-1 of its natural size) at the viewport centre.
+  centerX: z.number(),
+  centerY: z.number(),
+});
+export const CodePdfStateSchema = z.object({
+  fitted: z.boolean(),
+  zoom: z.number().positive(),
+  page: z.number().int().min(1),
+  // How far (0-1 of the page height) the top edge is into `page`.
+  offset: z.number().min(0).max(1),
+});
+export const CodeJsonStateSchema = z.object({
+  opened: z.array(z.tuple([z.string(), z.boolean()])),
+  shown: z.array(z.tuple([z.string(), z.number().int().nonnegative()])),
+});
+export const CodeDocumentViewStateSchema = z.object({
+  mode: z.enum(["file", "diff"]),
+  side: z.enum(["old", "new"]),
+  start: z.number().int().optional(),
+  end: z.number().int().optional(),
+  svgView: z.enum(["preview", "source"]),
+  formatView: z.enum(["preview", "source"]),
+  reader: CodeReaderStateSchema.optional(),
+  diff: CodeDiffReaderStateSchema.optional(),
+  markdown: CodeMarkdownStateSchema.optional(),
+  image: CodeImageStateSchema.optional(),
+  pdf: CodePdfStateSchema.optional(),
+  json: CodeJsonStateSchema.optional(),
+});
+const CodeFileTargetSchema = CodeNodeSchema.pick({
+  nodeId: true,
+  path: true,
+  name: true,
+  kind: true,
+});
+export const CodeNavigatorStateSchema = z.object({
+  rootOpen: z.boolean(),
+  // Expanded folders and the listings they had loaded, by path.
+  expanded: z.array(z.string()),
+  branches: z.array(z.tuple([z.string(), CodeListingSchema])),
+  // Index of the first visible row of the changes list.
+  changesTop: z.number().int().nonnegative(),
+  clipboard: z
+    .object({
+      contextId: z.string(),
+      nodes: z.array(CodeFileTargetSchema),
+      mode: z.enum(["copy", "move"]),
+    })
+    .optional(),
+});
+export const CodeWorkspaceSnapshotSchema = z.object({
+  version: z.literal(1),
+  root: z.enum(["workspace", "artifacts"]),
+  context: CodeContextSchema.optional(),
+  listing: CodeListingSchema.optional(),
+  rootListing: CodeListingSchema.optional(),
+  rootIncludeIgnored: z.boolean(),
+  directoryVersions: z.record(z.string(), z.string()),
+  navIdentity: z.string(),
+  navStatus: z.string(),
+  changes: CodeChangesSchema.optional(),
+  changeQuery: z.string(),
+  changeSearch: z.string(),
+  changeGroup: z.string(),
+  includeIgnored: z.boolean(),
+  directory: z.string(),
+  query: z.string(),
+  nav: z.string(),
+  navOpen: z.boolean(),
+  navWidth: z.number(),
+  active: z.string(),
+  tabs: z
+    .array(
+      z.object({
+        key: z.string(),
+        contextId: z.string(),
+        rootKind: CodeContextSchema.shape.rootKind,
+        file: CodeFileSchema.optional(),
+        diff: CodeDiffSchema.optional(),
+        comparison: CodeDiffSchema.optional(),
+        // Between windows, a body the receiver already holds is sent as its
+        // snapshot id instead.
+        fileRef: z.string().optional(),
+        diffRef: z.string().optional(),
+        comparisonRef: z.string().optional(),
+        status: z.string(),
+        view: CodeDocumentViewStateSchema.optional(),
+      }),
+    )
+    .max(20),
+  navigator: CodeNavigatorStateSchema.optional(),
+});
+export type CodeReaderState = z.infer<typeof CodeReaderStateSchema>;
+export type CodeDiffReaderState = z.infer<typeof CodeDiffReaderStateSchema>;
+export type CodeMarkdownState = z.infer<typeof CodeMarkdownStateSchema>;
+export type CodeImageState = z.infer<typeof CodeImageStateSchema>;
+export type CodePdfState = z.infer<typeof CodePdfStateSchema>;
+export type CodeJsonState = z.infer<typeof CodeJsonStateSchema>;
+export type CodeDocumentViewState = z.infer<typeof CodeDocumentViewStateSchema>;
+export type CodeNavigatorState = z.infer<typeof CodeNavigatorStateSchema>;
+export type CodeWorkspaceSnapshot = z.infer<typeof CodeWorkspaceSnapshotSchema>;
+
+// What the code workspace needs from the terminal page that hosts it.
+export const CodeHostStateSchema = z.object({
+  draftEnabled: z.boolean(),
+  connection: z.string(),
+  sessionCwd: z.string(),
+  reportedCwd: ReportedCwdSchema.nullable(),
+});
+export type CodeHostState = z.infer<typeof CodeHostStateSchema>;
+const CodeInsertionSchema = z.enum(["draft", "terminal", "failed"]);
+// The first message a pop-out frame accepts; it carries the channel port.
+export const CodePopoutHandshakeSchema = z.object({
+  type: z.literal("webmux-code-popout"),
+  version: z.literal(1),
+});
+export const codePopoutHandshake: z.infer<typeof CodePopoutHandshakeSchema> = {
+  type: "webmux-code-popout",
+  version: 1,
+};
+// Opener to pop-out frame, over the handshake's port.
+export const CodePopoutInboundSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("init"),
+    snapshot: CodeWorkspaceSnapshotSchema.nullable(),
+    host: CodeHostStateSchema,
+  }),
+  z.object({ type: z.literal("host"), host: CodeHostStateSchema }),
+  z.object({
+    type: z.literal("reveal"),
+    reveal: z.object({ path: z.string(), key: z.number() }),
+  }),
+  z.object({
+    type: z.literal("pasteResult"),
+    requestId: z.number().int(),
+    result: CodeInsertionSchema,
+  }),
+  z.object({ type: z.literal("collect"), requestId: z.number().int() }),
+]);
+// Pop-out frame to opener.
+export const CodePopoutOutboundSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ready") }),
+  z.object({
+    type: z.literal("paste"),
+    requestId: z.number().int(),
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal("snapshot"),
+    requestId: z.number().int().optional(),
+    snapshot: CodeWorkspaceSnapshotSchema,
+  }),
+  z.object({ type: z.literal("close") }),
+]);
+export type CodePopoutInbound = z.infer<typeof CodePopoutInboundSchema>;
+export type CodePopoutOutbound = z.infer<typeof CodePopoutOutboundSchema>;
+
 // User preferences shared by every authenticated client of this server.
 export const SettingsValuesSchema = z.strictObject({
   theme: ThemeSchema.nullable(),

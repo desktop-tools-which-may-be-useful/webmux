@@ -1,46 +1,18 @@
 <script lang="ts">
   import { errorMessage } from "../error";
-  import { onMount, untrack, type Snippet } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
-  import CodeNavigator from "./CodeNavigator.svelte";
-  import { api, apiBlob, APIError, ensureArtifactsFolder } from "../api";
-  import {
-    CodeContextSchema,
-    CodeListingSchema,
-    CodeFileSchema,
-    CodeChangesSchema,
-    CodeDiffSchema,
-    CodeLocationSchema,
-    CodeCheckSchema,
-    type CodeFile,
-    type CodeDiff,
-    type CodeChange,
-    type CodeListing,
-    type ReportedCwd,
-  } from "../schemas";
-  import type { z } from "zod";
-  import { nodeId } from "../code-reference";
-  import { codeRawPath, isImageType } from "../code-image";
-  import {
-    SymlinkTargetError,
-    targetFailure,
-    type MarkdownWorkspace,
-  } from "../markdown-link";
+  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
-  import { ListButton } from "$lib/components/ui/list-button";
-  import IconLayoutSidebarLeftCollapse from "~icons/tabler/layout-sidebar-left-collapse";
-  import IconLayoutSidebarLeftExpand from "~icons/tabler/layout-sidebar-left-expand";
-  import IconPhoto from "~icons/tabler/photo";
   import IconPictureInPictureOff from "~icons/tabler/picture-in-picture-off";
-  import IconPictureInPictureOn from "~icons/tabler/picture-in-picture-on";
-  import IconRefresh from "~icons/tabler/refresh";
-  import IconDots from "~icons/tabler/dots";
-  import IconX from "~icons/tabler/x";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { EditorView } from "@codemirror/view";
-  import CodeDocumentView from "./CodeDocumentView.svelte";
+  import CodeWorkspace from "./CodeWorkspace.svelte";
+  import type { CodeHost } from "../code-host";
+  import type {
+    CodeHostState,
+    CodeWorkspaceSnapshot,
+    ReportedCwd,
+  } from "../schemas";
   import type { TextInsertion } from "../terminal-draft.svelte";
-  import { popoutAvailable, popOut, type Popout } from "./codePopout";
+  import { popoutAvailable, popOut, type CodePopout } from "./codePopout";
+
   let {
     id,
     visible,
@@ -61,812 +33,116 @@
     /** A path another view asks to show, such as a chat tool call's diff. */
     reveal?: { path: string; key: number };
   } = $props();
-  type CodeContext = z.infer<typeof CodeContextSchema>;
-  type Tab = {
-    key: string;
-    // The root the tab was opened from; refreshes and checks use it even
-    // after the navigator switches roots.
-    contextId: string;
-    rootKind: CodeContext["rootKind"];
-    file?: CodeFile;
-    diff?: CodeDiff;
-    status: string;
-    sequence: number;
-    domId: number;
-    comparison?: CodeDiff;
-    // Narrow-screen menu content supplied by the tab's document view.
-    menu?: Snippet;
-    // A heading a Markdown link asked to show once the file is previewed.
-    heading?: { slug: string; key: number };
+
+  const host: CodeHost = {
+    get draftEnabled() {
+      return draftEnabled;
+    },
+    get connection() {
+      return connection;
+    },
+    get sessionCwd() {
+      return sessionCwd;
+    },
+    get reportedCwd() {
+      return reportedCwd;
+    },
+    get reveal() {
+      return reveal;
+    },
+    paste: (text) => Promise.resolve(paste(text)),
   };
-  let context = $state<CodeContext>();
-  // The navigator's root; artifacts is the session's temporary folder.
-  let root = $state<"workspace" | "artifacts">("workspace");
-  let rootError = $state("");
-  let contextController: AbortController | undefined;
-  let listing = $state<CodeListing>();
-  let rootListing = $state<CodeListing>();
-  let treeRefresh = $state(0);
-  let rootIncludeIgnored = false;
-  let directoryVersions: Record<string, string> = {};
-  let changeQuery = $state("");
-  let changeSearch = $state("");
-  let changeGroup = $state("");
-  let changesError = $state("");
-  let changes = $state<z.infer<typeof CodeChangesSchema>>();
-  let tabs = $state<Tab[]>([]);
-  let active = $state("");
-  const activePath = $derived(
-    tabs.find((tab) => tab.key === active)?.file?.document.path ?? "",
-  );
-  let nav = $state("files");
-  let navOpen = $state(true);
-  const navMin = 120,
-    navMax = 640;
-  let navWidth = $state(260);
-  let section = $state<HTMLElement>();
-  // Popped out, the panel stays live in its own window regardless of whether
-  // the opener still shows the code pane.
-  let popout = $state<Popout>();
-  let popping = false;
+  const hostState = $derived<CodeHostState>({
+    draftEnabled,
+    connection,
+    sessionCwd,
+    reportedCwd,
+  });
+
   const canPopOut = popoutAvailable();
-  const shown = $derived(visible || !!popout);
-  const activeMenu = $derived(tabs.find((tab) => tab.key === active)?.menu);
-  // Keep the narrow menu clear of the status bar and home indicator; env()
-  // is readable only through computed custom properties.
-  function safeAreaPadding() {
-    const style = getComputedStyle(section ?? document.documentElement);
-    const inset = (name: string) =>
-      parseFloat(style.getPropertyValue(name)) || 0;
-    return {
-      top: 8 + inset("--safe-top"),
-      bottom: 8 + inset("--safe-bottom"),
-      left: 8,
-      right: 8,
-    };
-  }
-  async function togglePopout() {
+  let workspace = $state<CodeWorkspace>();
+  let wrapper = $state<HTMLDivElement>();
+  // While popped out the window's frame owns the workspace; this page keeps
+  // only the latest state it reported, and remounts from it on return.
+  let popout = $state<CodePopout>();
+  // While the window starts, the workspace here is inert: the window restores
+  // the state captured when popping began.
+  let popping = $state(false);
+  let snapshot = $state.raw<CodeWorkspaceSnapshot>();
+  let generation = $state(0);
+  let notice = $state("");
+  let mounted = false;
+
+  async function toggle() {
     if (popout) return popout.close();
-    if (!section || popping) return;
+    if (!workspace || !wrapper || popping) return;
     popping = true;
+    notice = "";
+    const current = workspace.capture();
+    // Requests this workspace already showed are part of `current`.
+    const shownReveal = reveal?.key ?? 0;
+    const rect = wrapper.getBoundingClientRect();
     try {
-      popout = await popOut(section, {
-        title: `代码 · ${context?.rootPath ?? id}`,
-        moved(document) {
-          // CodeMirror binds to its root's window; rebind moved editors.
-          for (const editor of section!.querySelectorAll(".cm-editor"))
-            EditorView.findFromDOM(editor as HTMLElement)?.setRoot(document);
-        },
-        returned() {
+      const opened = await popOut({
+        id,
+        title: `代码 · ${current.context?.rootPath ?? id}`,
+        width: rect.width,
+        height: rect.height,
+        snapshot: current,
+        host: $state.snapshot(hostState),
+        paste,
+        closed(latest) {
           popout = undefined;
+          if (!mounted) return;
+          snapshot = latest;
+          generation++;
         },
       });
+      // A request that arrived while the window started is shown there too.
+      forwarded = shownReveal;
+      if (mounted) popout = opened;
+      else opened.dispose();
     } catch (e) {
-      error = errorMessage(e);
+      if (mounted) notice = `独立窗口打开失败：${errorMessage(e)}`;
     } finally {
       popping = false;
     }
   }
-  let inner = $state<HTMLDivElement>();
-  function setNavWidth(width: number) {
-    const limit = Math.min(navMax, (inner?.clientWidth ?? navMax) - 160);
-    navWidth = Math.round(Math.max(navMin, Math.min(limit, width)));
-  }
-  function resizeStart(event: PointerEvent) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    const handle = event.currentTarget as HTMLElement;
-    handle.setPointerCapture(event.pointerId);
-    const startX = event.clientX,
-      startWidth = navWidth;
-    const move = (e: PointerEvent) =>
-      setNavWidth(startWidth + e.clientX - startX);
-    const end = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", end);
-      handle.removeEventListener("pointercancel", end);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", end);
-    handle.addEventListener("pointercancel", end);
-  }
-  function resizeKey(event: KeyboardEvent) {
-    const step = event.shiftKey ? 64 : 16;
-    if (event.key === "ArrowLeft") setNavWidth(navWidth - step);
-    else if (event.key === "ArrowRight") setNavWidth(navWidth + step);
-    else if (event.key === "Home") setNavWidth(navMin);
-    else if (event.key === "End") setNavWidth(navMax);
-    else return;
-    event.preventDefault();
-  }
-  let includeIgnored = $state(false);
-  let directory = $state("");
-  let query = $state("");
-  let error = $state("");
-  let navStatus = $state("");
-  let pending = $state(false);
-  let controller: AbortController | undefined;
-  const controllers = new SvelteMap<string, AbortController>();
-  let navSequence = 0;
-  let mounted = false;
-  let checkController: AbortController | undefined;
-  let checking = false;
-  let navIdentity = "";
-  let base = $derived(`/sessions/${id}/code`);
-  function params(extra: Record<string, string> = {}) {
-    return new URLSearchParams({
-      contextId: context?.contextId ?? "",
-      includeIgnored: String(includeIgnored),
-      ...extra,
-    });
-  }
-  function aborted(e: unknown) {
-    return e instanceof DOMException && e.name === "AbortError";
-  }
-  async function load(append = false) {
-    if (!context || (append && pending)) return;
-    controller?.abort();
-    controller = new AbortController();
-    const request = controller;
-    const seq = ++navSequence;
-    const requestQuery = query;
-    const requestIgnored = includeIgnored;
-    pending = true;
-    error = "";
-    try {
-      if (nav === "changes") {
-        if (!context.diffAvailable) {
-          changes = undefined;
-          return;
-        }
-        changesError = "";
-        const cursor = append ? (changes?.nextCursor ?? "") : "";
-        const value = await api(
-          `${base}/changes?${params({ cursor, q: changeQuery, group: changeGroup })}`,
-          CodeChangesSchema,
-          "GET",
-          undefined,
-          request.signal,
-        );
-        if (mounted && seq === navSequence) {
-          changes =
-            append && changes
-              ? { ...value, entries: [...changes.entries, ...value.entries] }
-              : value;
-        }
-      } else {
-        if (requestQuery && rootIncludeIgnored !== requestIgnored) {
-          const root = await api(
-            `${base}/tree?${params({ nodeId: nodeId("") })}`,
-            CodeListingSchema,
-            "GET",
-            undefined,
-            request.signal,
-          );
-          if (!mounted || seq !== navSequence) return;
-          rootListing = root;
-          rootIncludeIgnored = requestIgnored;
-          directoryVersions = {};
-          treeRefresh++;
-        }
-        const previous = requestQuery ? listing : rootListing;
-        const cursor = append ? (previous?.nextCursor ?? "") : "";
-        const value = await api(
-          `${base}/${requestQuery ? "files" : "tree"}?${params({ nodeId: nodeId(""), q: requestQuery, cursor })}`,
-          CodeListingSchema,
-          "GET",
-          undefined,
-          request.signal,
-        );
-        if (mounted && seq === navSequence) {
-          listing =
-            append && previous
-              ? {
-                  ...value,
-                  children: [...previous.children, ...value.children],
-                }
-              : value;
-          navIdentity = requestQuery ? "" : nodeId("");
-          if (!requestQuery) {
-            rootListing = listing;
-            rootIncludeIgnored = requestIgnored;
-            if (!append) {
-              directoryVersions = {};
-              treeRefresh++;
-            }
-          }
-        }
-      }
-      if (seq === navSequence) navStatus = "";
-    } catch (e) {
-      if (!aborted(e) && mounted && seq === navSequence) {
-        error = errorMessage(e);
-        if (nav === "changes") changesError = error;
-      }
-    } finally {
-      if (mounted && seq === navSequence) pending = false;
-    }
-  }
-  async function fetchDirectory(
-    path: string,
-    cursor: string,
-    signal: AbortSignal,
-  ) {
-    const opaqueId = nodeId(path);
-    const value = await api(
-      `${base}/tree?${params({ nodeId: opaqueId, cursor })}`,
-      CodeListingSchema,
-      "GET",
-      undefined,
-      signal,
-    );
-    if (!signal.aborted) directoryVersions[opaqueId] = value.contentVersion;
-    return value;
-  }
-  let selectionSequence = 0;
-  let tabDomSequence = 0;
-  const beginOpen = () => ++selectionSequence;
-  function activate(key: string) {
-    beginOpen();
-    active = key;
-  }
-  function tabKeydown(event: KeyboardEvent, key: string) {
-    const index = tabs.findIndex((tab) => tab.key === key);
-    if (index < 0) return;
-    let next: number;
-    if (event.key === "ArrowLeft")
-      next = (index + tabs.length - 1) % tabs.length;
-    else if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = tabs.length - 1;
-    else return;
-    const target = tabs[next];
-    if (!target) return;
-    event.preventDefault();
-    activate(target.key);
-    const tablist = (event.currentTarget as HTMLElement).closest(
-      '[role="tablist"]',
-    );
-    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-  }
-  type TabOrigin = Pick<Tab, "contextId" | "rootKind">;
-  function install(
-    origin: TabOrigin,
-    file?: CodeFile,
-    diff?: CodeDiff,
-    shouldActivate = true,
-  ) {
-    const d = file?.document ?? diff?.new;
-    if (!d) return;
-    const key = `${origin.contextId}:${d.nodeId}:${diff ? "diff:" + diff.change.group : d.source}`;
-    const existing = tabs.find((t) => t.key === key);
-    if (existing) {
-      if (shouldActivate) active = key;
-      if (
-        file
-          ? file.document.contentVersion !==
-            existing.file?.document.contentVersion
-          : diff?.new.contentVersion !== existing.diff?.new.contentVersion ||
-            diff?.old.contentVersion !== existing.diff?.old.contentVersion
-      )
-        existing.status = "updated";
-      return;
-    }
-    if (tabs.length >= 20) {
-      error = "最多打开 20 个标签，请先关闭一个";
-      return;
-    }
-    tabs.push({
-      key,
-      contextId: origin.contextId,
-      rootKind: origin.rootKind,
-      file,
-      diff,
-      status: "unchanged",
-      sequence: 0,
-      domId: ++tabDomSequence,
-    });
-    if (shouldActivate) {
-      active = key;
-      closeOverlayNav();
-    }
-  }
-  // Below 1024px the navigator overlays the document, so selecting a file must
-  // reveal it; side-by-side layouts keep the navigator until the user collapses it.
-  function closeOverlayNav() {
-    if (
-      section?.closest('[data-terminal-compact="true"]') ||
-      matchMedia("(max-width:1023px)").matches
-    )
-      navOpen = false;
-  }
-  // The server resolves typed paths against the canonical code root; shell
-  // reports and launch directories may be logical paths through symlinks.
-  async function locate(input: string) {
-    if (!context) return;
-    await show(
-      await api(
-        `${base}/locate?${params({ path: input })}`,
-        CodeLocationSchema,
-      ),
-    );
-  }
-  // Reveals a directory in the file navigator or opens a file; resolves to
-  // the reason a file could not be opened, "" otherwise.
-  async function show(target: z.infer<typeof CodeLocationSchema>) {
-    if (target.kind === "file") return openFile(target.path, target.nodeId);
-    nav = "files";
-    navOpen = true;
-    directory = "";
-    query = "";
-    await load();
-    directory = target.path;
-    return "";
-  }
-  async function openFile(path: string, opaqueId = nodeId(path)) {
-    const origin = context;
-    if (!origin) return "";
-    return openTab(
-      `${origin.contextId}:${opaqueId}:worktree`,
-      `${base}/file?${params({ nodeId: opaqueId })}`,
-      CodeFileSchema,
-      (value, activate) => install(origin, value, undefined, activate),
-    );
-  }
-  // Resolves a root-relative path from a Markdown preview. The server walks
-  // the absolute path through symlinks, so a canonical path that differs from
-  // the requested one went through a link.
-  async function workspaceTarget(path: string, signal?: AbortSignal) {
-    if (!context) throw new Error("代码工作区尚未就绪");
-    const root = context.rootPath.replace(/\/+$/, "");
-    const target = await api(
-      `${base}/locate?${params({ path: path ? `${root}/${path}` : root || "/" })}`,
-      CodeLocationSchema,
-      "GET",
-      undefined,
-      signal,
-    );
-    if (target.path !== path) throw new SymlinkTargetError();
-    return target;
-  }
-  let headingSequence = 0;
-  const markdownWorkspace: MarkdownWorkspace = {
-    async open(path, heading = "") {
-      let target: z.infer<typeof CodeLocationSchema>;
-      try {
-        target = await workspaceTarget(path);
-      } catch (e) {
-        return targetFailure("链接目标", e);
-      }
-      const failure = await show(target);
-      if (failure) return `链接目标不可读：${failure}`;
-      const tab = tabs.find(
-        (t) => t.key === `${context?.contextId}:${target.nodeId}:worktree`,
-      );
-      if (heading && tab)
-        tab.heading = { slug: heading, key: ++headingSequence };
-      return "";
-    },
-    async image(path, signal) {
-      try {
-        const target = await workspaceTarget(path, signal);
-        if (target.kind !== "file")
-          return { ok: false, reason: "不是可预览的图片" };
-        const { snapshotId, document: doc } = await api(
-          `${base}/file?${params({ nodeId: target.nodeId })}`,
-          CodeFileSchema,
-          "GET",
-          undefined,
-          signal,
-        );
-        if (doc.kind === "too-large" && isImageType(doc.mediaType))
-          return { ok: false, reason: "超过 20 MiB 预览上限" };
-        if (
-          doc.kind !== "image" &&
-          !(doc.kind === "text" && doc.mediaType === "image/svg+xml")
-        )
-          return { ok: false, reason: "不是可预览的图片" };
-        const blob = await apiBlob(codeRawPath(id, snapshotId), signal);
-        // An <img> renders SVG only with its media type; slicing is a view.
-        return {
-          ok: true,
-          path: doc.path,
-          blob:
-            blob.type === doc.mediaType
-              ? blob
-              : blob.slice(0, blob.size, doc.mediaType),
-        };
-      } catch (e) {
-        if (aborted(e)) throw e;
-        return {
-          ok: false,
-          reason: targetFailure("图片", e),
-          retry: e instanceof APIError && e.status === 429,
-        };
-      }
-    },
-  };
-  async function openDiff(change: CodeChange) {
-    const origin = context;
-    if (!origin) return;
-    await openTab(
-      `${origin.contextId}:${change.nodeId}:diff:${change.group}`,
-      `${base}/diff?${params({ changeId: change.changeId })}`,
-      CodeDiffSchema,
-      (value, activate) => install(origin, undefined, value, activate),
-    );
-  }
-  // Focuses an already open tab, or fetches and installs it. A response only
-  // activates its tab when no later open request superseded it. Resolves to
-  // the reason the tab could not be read, "" otherwise.
-  async function openTab<T extends z.ZodType>(
-    key: string,
-    path: string,
-    schema: T,
-    done: (value: z.infer<T>, activate: boolean) => void,
-  ) {
-    const intent = beginOpen();
-    if (tabs.some((t) => t.key === key)) {
-      active = key;
-      closeOverlayNav();
-      void check();
-      return "";
-    }
-    return read(
-      key,
-      () => api(path, schema, "GET", undefined, controllers.get(key)?.signal),
-      (value) => done(value, intent === selectionSequence),
-    );
-  }
-  async function read<T>(
-    key: string,
-    request: () => Promise<T>,
-    done: (value: T) => void,
-  ) {
-    controllers.get(key)?.abort();
-    const c = new AbortController();
-    controllers.set(key, c);
-    error = "";
-    try {
-      const value = await request();
-      if (mounted && !c.signal.aborted && controllers.get(key) === c)
-        done(value);
-      return "";
-    } catch (e) {
-      if (!mounted || aborted(e)) return "";
-      error = errorMessage(e);
-      return error;
-    } finally {
-      if (controllers.get(key) === c) controllers.delete(key);
-    }
-  }
-  function close(key: string) {
-    controllers.get(key)?.abort();
-    controllers.delete(key);
-    tabs = tabs.filter((t) => t.key !== key);
-    if (active === key) activate(tabs.at(-1)?.key ?? "");
-  }
-  // After a file operation: tabs of the current root showing a path that no
-  // longer exists are closed, and the navigator re-reads its directories.
-  function filesChanged(removed: string[]) {
-    const current = context?.contextId;
-    for (const tab of tabs.filter((t) => {
-      const path = t.file?.document.path ?? t.diff?.new.path ?? "";
-      return (
-        t.contextId === current &&
-        removed.some((p) => path === p || path.startsWith(p + "/"))
-      );
-    }))
-      close(tab.key);
-    void load();
-  }
-  async function refresh(tab: Tab) {
-    const seq = ++tab.sequence;
-    await read(
-      tab.key,
-      async () => {
-        const signal = controllers.get(tab.key)?.signal;
-        const contextId = tab.contextId;
-        if (tab.diff) {
-          const next = await api(
-            `${base}/changes?${params({ contextId, nodeId: tab.diff.change.nodeId })}`,
-            CodeChangesSchema,
-            "GET",
-            undefined,
-            signal,
-          );
-          const c = next.entries.find(
-            (c) =>
-              c.group === tab.diff!.change.group &&
-              c.newPath === tab.diff!.change.newPath,
-          );
-          if (!c) throw new Error("此差异已不存在，请从文件导航打开完整文件");
-          return {
-            diff: await api(
-              `${base}/diff?${params({ contextId, changeId: c.changeId })}`,
-              CodeDiffSchema,
-              "GET",
-              undefined,
-              signal,
-            ),
-          };
-        }
-        if (!tab.file) throw new Error("文件不可用");
-        return {
-          file: await api(
-            `${base}/file?${params({ contextId, nodeId: tab.file.document.nodeId, source: tab.file.document.source })}`,
-            CodeFileSchema,
-            "GET",
-            undefined,
-            signal,
-          ),
-        };
-      },
-      (value) => {
-        if (!tabs.includes(tab) || tab.sequence !== seq) return;
-        tab.file = value.file;
-        tab.diff = value.diff;
-        tab.status = "unchanged";
-        tab.comparison = undefined;
-      },
-    );
-  }
-  async function check() {
-    const current = context;
-    if (
-      !mounted ||
-      !shown ||
-      (section?.ownerDocument ?? document).hidden ||
-      !current ||
-      checking
-    )
-      return;
-    checking = true;
-    checkController = new AbortController();
-    const c = checkController;
-    const documents = tabs.map((t) => ({
-      tab: t,
-      sid: t.file?.snapshotId ?? t.diff!.snapshotId,
-      sequence: t.sequence,
-    }));
-    const listingVersion = rootListing?.contentVersion;
-    const branchVersions = { ...directoryVersions };
-    const changesVersion = changes?.contentVersion;
-    const identity = navIdentity;
-    const treeGeneration = treeRefresh;
-    const checkIgnored = includeIgnored;
-    const directories =
-      rootListing && nav === "files" && !query
-        ? Object.entries({ ...branchVersions, [identity]: listingVersion })
-        : [];
-    // Snapshots belong to the root they were read from; tabs of the other
-    // root are checked under their own context.
-    const request = (
-      contextId: string,
-      docs: typeof documents,
-      dirs: typeof directories,
-      version: string,
-    ) =>
-      api(
-        `${base}/check`,
-        CodeCheckSchema,
-        "POST",
-        {
-          contextId,
-          snapshotIds: [
-            ...new Set(
-              docs.flatMap((d) =>
-                d.tab.comparison
-                  ? [d.sid, d.tab.comparison.snapshotId]
-                  : [d.sid],
-              ),
-            ),
-          ],
-          directories: Object.fromEntries(dirs),
-          changesVersion: version,
-          includeIgnored,
-        },
-        c.signal,
-      );
-    const inContext = (contextId: string) =>
-      documents.filter((d) => d.tab.contextId === contextId);
-    const others = [...new Set(documents.map((d) => d.tab.contextId))].filter(
-      (contextId) => contextId !== current.contextId,
-    );
-    try {
-      const r = await request(
-        current.contextId,
-        inContext(current.contextId),
-        directories.slice(0, 30),
-        changesVersion ?? "",
-      );
-      // The check endpoint accepts at most 30 directories per request.
-      for (let start = 30; start < directories.length; start += 30) {
-        const next = await request(
-          current.contextId,
-          [],
-          directories.slice(start, start + 30),
-          "",
-        );
-        Object.assign(r.directories, next.directories);
-      }
-      for (const contextId of others) {
-        try {
-          const next = await request(contextId, inContext(contextId), [], "");
-          Object.assign(r.snapshots, next.snapshots);
-        } catch (e) {
-          // An expired root leaves its tabs unknown, not the active root.
-          if (aborted(e)) throw e;
-        }
-      }
-      if (!mounted || c.signal.aborted) return;
-      for (const d of documents) {
-        if (
-          tabs.includes(d.tab) &&
-          d.tab.sequence === d.sequence &&
-          (d.tab.file?.snapshotId ?? d.tab.diff?.snapshotId) === d.sid
-        )
-          d.tab.status =
-            d.tab.comparison &&
-            r.snapshots[d.tab.comparison.snapshotId] !== "unchanged"
-              ? (r.snapshots[d.tab.comparison.snapshotId] ?? "unknown")
-              : (r.snapshots[d.sid] ?? "unknown");
-      }
-      if (current !== context) return;
-      if (
-        treeGeneration === treeRefresh &&
-        checkIgnored === includeIgnored &&
-        identity === navIdentity &&
-        listingVersion === rootListing?.contentVersion &&
-        Object.entries(r.directories).some(
-          ([key, status]) =>
-            status !== "unchanged" &&
-            (key === identity ||
-              branchVersions[key] === directoryVersions[key]),
-        )
-      )
-        navStatus = "目录已更新或检测失败";
-      if (
-        changesVersion !== undefined &&
-        changesVersion === changes?.contentVersion &&
-        r.changes !== "unchanged"
-      )
-        navStatus = "修改列表已更新或检测失败";
-    } catch (e) {
-      if (!aborted(e) && mounted) {
-        for (const d of documents) {
-          if (tabs.includes(d.tab) && d.tab.sequence === d.sequence)
-            d.tab.status = "unknown";
-        }
-        if (current === context) navStatus = "检测失败，状态未知";
-      }
-    } finally {
-      checking = false;
-    }
-  }
-  // Reads the navigator's root context. The artifacts folder is ensured
-  // first; a failure leaves the navigator empty rather than showing another
-  // root's content.
-  async function loadContext() {
-    contextController?.abort();
-    const request = new AbortController();
-    contextController = request;
-    const kind = root;
-    rootError = "";
-    try {
-      if (kind === "artifacts") await ensureArtifactsFolder(id, request.signal);
-      const value = await api(
-        `${base}/context${kind === "artifacts" ? "?root=artifacts" : ""}`,
-        CodeContextSchema,
-        "GET",
-        undefined,
-        request.signal,
-      );
-      if (!mounted || request.signal.aborted) return;
-      context = value;
-      void load();
-    } catch (e) {
-      if (!mounted || aborted(e) || request.signal.aborted) return;
-      if (kind === "artifacts") rootError = errorMessage(e);
-      else error = errorMessage(e);
-    }
-  }
-  function switchRoot(kind: "workspace" | "artifacts") {
-    if (kind === root) return;
-    root = kind;
-    controller?.abort();
-    checkController?.abort();
-    navSequence++;
-    context = undefined;
-    listing = undefined;
-    rootListing = undefined;
-    changes = undefined;
-    changesError = "";
-    directoryVersions = {};
-    rootIncludeIgnored = false;
-    includeIgnored = false;
-    navIdentity = "";
-    navStatus = "";
-    query = "";
-    directory = "";
-    pending = false;
-    error = "";
-    nav = "files";
-    treeRefresh++;
-    void loadContext();
-  }
-  onMount(() => {
-    mounted = true;
-    void loadContext();
-    const timer = window.setInterval(() => void check(), 5000);
-    const visibility = () => {
-      if ((section?.ownerDocument ?? document).hidden) checkController?.abort();
-      else void check();
-    };
-    document.addEventListener("visibilitychange", visibility);
-    return () => {
-      mounted = false;
-      contextController?.abort();
-      controller?.abort();
-      checkController?.abort();
-      for (const c of controllers.values()) c.abort();
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", visibility);
-      popout?.close();
-    };
-  });
+
   $effect(() => {
-    const show = shown;
-    const state = connection;
-    if (mounted) {
-      if (show && state === "connected") void check();
-      else checkController?.abort();
-    }
+    const state = $state.snapshot(hostState);
+    popout?.host(state);
   });
-  // Opens a requested path once the code context is known: the file's
-  // working-tree diff when it has changes, the file itself otherwise.
-  let revealed = 0;
+  let forwarded = 0;
   $effect(() => {
     const target = reveal;
-    const current = context;
-    if (!target || target.key === revealed) return;
-    // Revealed paths come from the workspace, such as a chat tool call.
-    if (untrack(() => root) !== "workspace") {
-      untrack(() => switchRoot("workspace"));
-      return;
-    }
-    if (!current) return;
-    revealed = target.key;
-    untrack(() => void showPath(target.path));
+    if (!popout || !target || target.key === forwarded) return;
+    forwarded = target.key;
+    // Reactive props are proxies, which a message port cannot clone.
+    popout.reveal({ path: target.path, key: target.key });
   });
-  async function showPath(path: string) {
-    try {
-      const location = await api(
-        `${base}/locate?${params({ path })}`,
-        CodeLocationSchema,
-      );
-      if (location.kind !== "file") {
-        await locate(path);
-        return;
-      }
-      const found = await api(
-        `${base}/changes?${params({ nodeId: location.nodeId })}`,
-        CodeChangesSchema,
-      );
-      const change =
-        found.entries.find((entry) => entry.group !== "staged") ??
-        found.entries[0];
-      if (change) await openDiff(change);
-      else await openFile(location.path, location.nodeId);
-    } catch (e) {
-      if (mounted) error = errorMessage(e);
-    }
-  }
+
+  onMount(() => {
+    mounted = true;
+    return () => {
+      mounted = false;
+      popout?.dispose();
+    };
+  });
 </script>
 
-<!-- The section is the part that moves into the pop-out window; the wrapper
-     stays in the opener and holds the placeholder. -->
-<div class="flex h-full min-h-0 min-w-0 flex-col">
+<div
+  bind:this={wrapper}
+  class="flex h-full min-h-0 min-w-0 flex-col"
+  inert={popping}
+  aria-busy={popping}
+>
+  {#if notice}<p
+      role="alert"
+      class="shrink-0 px-2 py-1 text-sm break-all text-destructive"
+    >
+      {notice}
+    </p>{/if}
   {#if popout}<div
       class="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-sm text-muted-foreground"
     >
@@ -874,228 +150,17 @@
       <Button variant="outline" size="sm" onclick={() => popout?.close()}
         ><IconPictureInPictureOff aria-hidden="true" />收回到此处</Button
       >
-    </div>{/if}
-  <section
-    bind:this={section}
-    class="code-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
-    aria-label="代码工作区"
-  >
-    <div class="flex shrink-0 items-stretch border-b">
-      <div class="flex shrink-0 items-center px-2 py-1">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          class="relative"
-          aria-label={navOpen ? "收起导航" : "文件导航"}
-          aria-expanded={navOpen}
-          title={navOpen
-            ? "收起导航"
-            : navStatus
-              ? `文件导航（${navStatus}）`
-              : "文件导航"}
-          onclick={() => (navOpen = !navOpen)}
-          >{#if navOpen}<IconLayoutSidebarLeftCollapse
-              aria-hidden="true"
-            />{:else}<IconLayoutSidebarLeftExpand
-              aria-hidden="true"
-            />{/if}{#if navStatus && !navOpen}<span
-              class="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-warning"
-              aria-hidden="true"
-            ></span>{/if}</Button
-        >
-      </div>
-      <div
-        class="flex min-w-0 flex-1 overflow-x-auto scrollbar-thin"
-        role="tablist"
-        aria-label="文件标签"
-      >
-        {#each tabs as tab (tab.key)}
-          {@const path = tab.file?.document.path ?? tab.diff?.new.path ?? ""}
-          {@const meta = `${tab.rootKind === "artifacts" ? "临时文件夹" : tab.diff ? tab.diff.change.group : tab.file?.document.source}${tab.status !== "unchanged" ? " ●" : ""}`}
-          {@const image = [
-            tab.file?.document.mediaType,
-            tab.diff?.new.mediaType,
-            tab.diff?.old.mediaType,
-          ].some((type) => type?.startsWith("image/"))}
-          <div class="flex shrink-0 items-center border-r first:border-l">
-            <ListButton
-              variant="tab"
-              role="tab"
-              aria-selected={active === tab.key}
-              aria-controls={`code-panel-${tab.domId}`}
-              id={`code-tab-${tab.domId}`}
-              tabindex={active === tab.key ? 0 : -1}
-              aria-label={`${path} · ${meta}`}
-              title={tab.rootKind === "artifacts"
-                ? `临时文件夹 · ${path}`
-                : path}
-              onclick={() => activate(tab.key)}
-              onkeydown={(event) => tabKeydown(event, tab.key)}
-              >{#if image}<IconPhoto
-                  class="mr-1 inline size-3.5 align-[-0.125em]"
-                  aria-hidden="true"
-                />{/if}{path.slice(path.lastIndexOf("/") + 1)} · {meta}</ListButton
-            >
-            <ListButton
-              variant="tab-close"
-              aria-label={`关闭 ${path}`}
-              title={`关闭 ${path}`}
-              onclick={() => close(tab.key)}
-              ><IconX aria-hidden="true" /></ListButton
-            >
-          </div>{/each}
-      </div>
-      <div class="flex shrink-0 items-center gap-1 px-2 py-1">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="刷新全部"
-          title={context?.rootPath
-            ? `刷新全部（${context.rootPath}）`
-            : "刷新全部"}
-          disabled={pending}
-          onclick={() => {
-            void load();
-            for (const tab of tabs) void refresh(tab);
-          }}><IconRefresh aria-hidden="true" /></Button
-        >
-        {#if canPopOut}<Button
-            variant="outline"
-            size="icon-sm"
-            class="max-sm:hidden"
-            aria-label={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
-            aria-pressed={!!popout}
-            title={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
-            onclick={() => void togglePopout()}
-            >{#if popout}<IconPictureInPictureOff
-                aria-hidden="true"
-              />{:else}<IconPictureInPictureOn
-                aria-hidden="true"
-              />{/if}</Button
-          >{/if}
-        {#if activeMenu}<DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              {#snippet child({ props })}<Button
-                  {...props}
-                  variant="outline"
-                  size="icon-sm"
-                  class="sm:hidden"
-                  aria-label="代码菜单"
-                  title="代码菜单"><IconDots aria-hidden="true" /></Button
-                >{/snippet}
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content
-              align="end"
-              collisionPadding={safeAreaPadding()}
-              class="w-72 max-w-[calc(100vw-1rem)]"
-            >
-              {@render activeMenu()}
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>{/if}
-      </div>
     </div>
-    {#if error}<p
-        role="alert"
-        class="shrink-0 px-2 py-1 text-sm break-all text-destructive"
-      >
-        {error}
-      </p>{/if}
-    {#if context?.reason}<p
-        class="shrink-0 px-2 py-1 text-xs text-muted-foreground"
-      >
-        {context.reason}
-      </p>{/if}
-    <div
-      class="code-inner flex min-h-0 flex-1 overflow-hidden"
-      style:--code-nav-width={`${navWidth}px`}
-      bind:this={inner}
-    >
-      <div class="contents" class:hidden={!navOpen}>
-        <CodeNavigator
-          {id}
-          {context}
-          {listing}
-          {rootListing}
-          {fetchDirectory}
-          {treeRefresh}
-          {activePath}
-          {changes}
-          {changesError}
-          {pending}
-          {sessionCwd}
-          {reportedCwd}
-          {navStatus}
-          {root}
-          {rootError}
-          {switchRoot}
-          retryRoot={() => void loadContext()}
-          reload={() => void load()}
-          changed={filesChanged}
-          changesEnabled={shown && !changesError && !navStatus}
-          bind:nav
-          bind:query
-          bind:directory
-          bind:includeIgnored
-          bind:changeGroup
-          bind:changeQuery
-          bind:changeSearch
-          load={(append) => load(append)}
-          openFile={(path, opaqueId) => void openFile(path, opaqueId)}
-          {locate}
-          openDiff={(change) => void openDiff(change)}
-        />
-        <!-- A focusable separator with aria-valuenow is an interactive widget (WAI-ARIA window splitter). -->
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-        <div
-          class="code-nav-divider"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="调整导航宽度"
-          aria-valuemin={navMin}
-          aria-valuemax={navMax}
-          aria-valuenow={navWidth}
-          tabindex="0"
-          onpointerdown={resizeStart}
-          onkeydown={resizeKey}
-        ></div>
-      </div>
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {#each tabs as tab (tab.key)}<div
-            class="min-h-0 flex-1 overflow-hidden"
-            class:hidden={active !== tab.key}
-            role="tabpanel"
-            id={`code-panel-${tab.domId}`}
-            aria-labelledby={`code-tab-${tab.domId}`}
-          >
-            <CodeDocumentView
-              {id}
-              active={shown && active === tab.key}
-              file={tab.file}
-              diff={tab.diff}
-              status={tab.status}
-              {paste}
-              {draftEnabled}
-              refresh={() => void refresh(tab)}
-              contextId={tab.contextId}
-              comparison={tab.comparison}
-              onComparison={(value) => (tab.comparison = value)}
-              onState={(state) => (tab.status = state)}
-              {beginOpen}
-              openSide={(file, intent) =>
-                install(tab, file, undefined, intent === selectionSequence)}
-              bind:menu={tab.menu}
-              workspace={tab.contextId === context?.contextId
-                ? markdownWorkspace
-                : undefined}
-              heading={tab.heading}
-              onHeading={() => (tab.heading = undefined)}
-              diffAvailable={tab.rootKind !== "artifacts"}
-            />
-          </div>{/each}
-        {#if !tabs.length}<p class="p-4 text-sm text-muted-foreground">
-            选择文件阅读完整内容，或从修改列表打开 Diff。
-          </p>{/if}
-      </div>
-    </div>
-  </section>
+  {:else}
+    {#key generation}<CodeWorkspace
+        bind:this={workspace}
+        {id}
+        {visible}
+        {host}
+        initial={snapshot}
+        popout={canPopOut
+          ? { popped: false, toggle: () => void toggle() }
+          : undefined}
+      />{/key}
+  {/if}
 </div>

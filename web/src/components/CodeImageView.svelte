@@ -2,7 +2,7 @@
   import { SvelteMap } from "svelte/reactivity";
   import { untrack } from "svelte";
   import { apiBlob } from "../api";
-  import type { CodeDocument } from "../schemas";
+  import type { CodeDocument, CodeImageState } from "../schemas";
   import {
     basename,
     codeRawPath,
@@ -20,6 +20,7 @@
     side,
     document: doc,
     onerror,
+    restore,
   }: {
     id: string;
     snapshotId: string;
@@ -28,6 +29,9 @@
     document: CodeDocument;
     // Lets the parent react to a failed preview, e.g. SVG falls back to source.
     onerror?: (message: string) => void;
+    // A captured zoom and pan, applied once the image and viewport sizes are
+    // known.
+    restore?: CodeImageState;
   } = $props();
   const minScale = 0.05,
     maxScale = 16,
@@ -48,7 +52,45 @@
   const base = $derived(intrinsic ? natural : box);
   const clamp = (value: number) =>
     Math.min(maxScale, Math.max(minScale, value));
-
+  // Until applied, `capture()` returns it unchanged.
+  let pending = untrack(() => restore);
+  // The view last seen with layout; a hidden tab reports this one.
+  let known: CodeImageState = {
+    fitted: true,
+    scale: 1,
+    centerX: 0.5,
+    centerY: 0.5,
+  };
+  function current(): CodeImageState {
+    const width = base.width * scale,
+      height = base.height * scale;
+    if (phase !== "ready" || box.width <= 0 || box.height <= 0 || !width)
+      return known;
+    return {
+      fitted,
+      scale,
+      centerX: (box.width / 2 - x) / width,
+      centerY: (box.height / 2 - y) / height,
+    };
+  }
+  $effect(() => {
+    known = current();
+  });
+  export function capture(): CodeImageState {
+    return pending ?? current();
+  }
+  function applyRestore() {
+    const state = pending;
+    if (!state || phase !== "ready" || box.width <= 0 || box.height <= 0)
+      return;
+    pending = undefined;
+    if (state.fitted) return fit();
+    fitted = false;
+    scale = clamp(state.scale);
+    x = box.width / 2 - state.centerX * base.width * scale;
+    y = box.height / 2 - state.centerY * base.height * scale;
+    place();
+  }
   $effect(() => {
     const path = codeRawPath(id, snapshotId, side);
     const mediaType = doc.mediaType;
@@ -128,6 +170,7 @@
     natural = { width: image.naturalWidth, height: image.naturalHeight };
     phase = "ready";
     fit();
+    applyRestore();
   }
 
   // Listeners are non-passive so the browser neither scrolls, zooms the page
@@ -225,7 +268,8 @@
     const resize = () => {
       box = { width: element.clientWidth, height: element.clientHeight };
       if (phase !== "ready") return;
-      if (fitted) fit();
+      if (pending) applyRestore();
+      else if (fitted) fit();
       else place();
     };
     const observer = new ResizeObserver(resize);

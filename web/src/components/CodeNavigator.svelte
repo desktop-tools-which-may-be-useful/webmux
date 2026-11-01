@@ -1,8 +1,9 @@
 <script lang="ts">
   import { errorMessage } from "../error";
+  import { untrack } from "svelte";
   import type { z } from "zod";
   import CodeFileTree from "./CodeFileTree.svelte";
-  import CodeFileActions from "./CodeFileActions.svelte";
+  import CodeFileActions, { type FileTarget } from "./CodeFileActions.svelte";
   import { longPress } from "../hooks/long-press";
   import CodeChangesList from "./CodeChangesList.svelte";
   import {
@@ -10,6 +11,7 @@
     CodeContextSchema,
     type CodeChange,
     type CodeListing,
+    type CodeNavigatorState,
     type ReportedCwd,
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
@@ -59,6 +61,9 @@
     retryRoot,
     reload,
     changed,
+    restore,
+    dropHost,
+    dropStatus = $bindable(""),
   }: {
     id: string;
     context: z.infer<typeof CodeContextSchema> | undefined;
@@ -97,8 +102,127 @@
     reload: () => void;
     /** After a file operation; removed lists paths that no longer exist. */
     changed: (removed: string[]) => void;
+    /** Reading state captured from another instance, applied once. */
+    restore?: CodeNavigatorState;
+    /** The code workspace; files dropped anywhere on it are uploaded. */
+    dropHost?: HTMLElement;
+    /** The drag hint, or the outcome of the last drop; empty when none. */
+    dropStatus?: string;
   } = $props();
   let actions = $state<CodeFileActions>();
+  const restored = untrack(() => restore);
+  // Listings belong to the context they were captured in; a tree remounted
+  // for another root starts afresh.
+  const restoredContext = untrack(() => context?.contextId);
+  let treeRestore = $state.raw(restored);
+  let changesRestore = $state.raw(restored?.changesTop);
+  let changesTop = restored?.changesTop ?? 0;
+  let tree = $state<CodeFileTree>();
+  let changesList = $state<CodeChangesList>();
+  $effect(() => {
+    if (tree && context) treeRestore = undefined;
+  });
+  $effect(() => {
+    if (changesList) changesRestore = undefined;
+  });
+
+  /** The navigator's own reading state; the rest is the parent's. */
+  export function capture(): CodeNavigatorState {
+    if (changesList) changesTop = changesList.capture();
+    return {
+      ...(tree?.capture() ??
+        treeRestore ?? { rootOpen: true, expanded: [], branches: [] }),
+      changesTop,
+      clipboard: actions ? actions.capture() : restored?.clipboard,
+    };
+  }
+
+  // Files dragged from the system onto the workspace upload into the folder
+  // row under the pointer, or the root anywhere else.
+  let drag = $state<{ target: FileTarget; refusal: string }>();
+  const dragHint = (target: FileTarget, refusal: string) =>
+    refusal || `松开以上传到 ${target.path || target.name}`;
+  const carriesFiles = (event: DragEvent) =>
+    !!event.dataTransfer?.types.includes("Files");
+  function dropTarget(event: DragEvent): FileTarget {
+    const element = event.target instanceof Element ? event.target : null;
+    return (
+      tree?.dropTarget(element) ?? {
+        nodeId: "",
+        path: "",
+        name: "根目录",
+        kind: "directory",
+      }
+    );
+  }
+  function hover(event: DragEvent) {
+    event.preventDefault();
+    const target = dropTarget(event);
+    const refusal = actions?.uploadRefusal() ?? "";
+    if (event.dataTransfer)
+      event.dataTransfer.dropEffect = refusal ? "none" : "copy";
+    if (drag?.target.nodeId !== target.nodeId || drag.refusal !== refusal) {
+      drag = { target, refusal };
+      dropStatus = dragHint(target, refusal);
+    }
+  }
+  async function receive(transfer: DataTransfer, into: FileTarget) {
+    // Entries can only be read while the drop event is dispatched.
+    const folder = [...transfer.items].some(
+      (item) => item.webkitGetAsEntry()?.isDirectory,
+    );
+    const files = [...transfer.files];
+    if (!actions) return;
+    const refusal =
+      folder && context?.writableAvailable
+        ? "不支持上传文件夹"
+        : actions.uploadRefusal();
+    if (refusal) {
+      actions.refuse(refusal);
+      dropStatus = refusal;
+      return;
+    }
+    dropStatus = "";
+    dropStatus = await actions.upload(files, into);
+  }
+  $effect(() => {
+    const host = dropHost;
+    if (!host) return;
+    let depth = 0;
+    const enter = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      depth++;
+      hover(event);
+    };
+    const over = (event: DragEvent) => {
+      if (carriesFiles(event)) hover(event);
+    };
+    const leave = (event: DragEvent) => {
+      if (!carriesFiles(event) || --depth > 0) return;
+      depth = 0;
+      drag = undefined;
+      dropStatus = "";
+    };
+    const drop = (event: DragEvent) => {
+      if (!carriesFiles(event) || !event.dataTransfer) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      depth = 0;
+      drag = undefined;
+      void receive(event.dataTransfer, dropTarget(event));
+    };
+    host.addEventListener("dragenter", enter, true);
+    host.addEventListener("dragover", over, true);
+    host.addEventListener("dragleave", leave, true);
+    host.addEventListener("drop", drop, true);
+    return () => {
+      host.removeEventListener("dragenter", enter, true);
+      host.removeEventListener("dragover", over, true);
+      host.removeEventListener("dragleave", leave, true);
+      host.removeEventListener("drop", drop, true);
+      drag = undefined;
+    };
+  });
   let searchOpen = $state(false);
   let searchInput = $state("");
   let locateOpen = $state(false);
@@ -325,10 +449,25 @@
       {includeIgnored}
       {openFile}
       {changed}
+      restore={restored?.clipboard}
     />
+    {#if drag}<p
+        role="status"
+        class={[
+          "shrink-0 px-2 py-1 text-xs break-all",
+          drag.refusal ? "text-destructive" : "text-muted-foreground",
+        ]}
+      >
+        {dragHint(drag.target, drag.refusal)}
+      </p>{/if}
     <div class:hidden={!!query} class="flex min-h-0 flex-1 flex-col">
       {#key context?.contextId}
         <CodeFileTree
+          bind:this={tree}
+          restore={context?.contextId === restoredContext
+            ? treeRestore
+            : undefined}
+          dropPath={drag && !drag.refusal ? drag.target.path : null}
           listing={rootListing}
           rootPath={context?.rootPath ?? ""}
           {pending}
@@ -448,6 +587,8 @@
           onclick={() => load()}>刷新修改列表</Button
         >{/if}
       <CodeChangesList
+        bind:this={changesList}
+        restore={changesRestore}
         entries={changes?.entries ?? []}
         total={changes?.total ?? 0}
         nextCursor={changes?.nextCursor ?? ""}

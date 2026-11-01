@@ -1,3 +1,12 @@
+<script lang="ts" module>
+  import type { CodeNavigatorState } from "../schemas";
+  /** The tree's part of the navigator state: open folders and their listings. */
+  export type CodeFileTreeState = Pick<
+    CodeNavigatorState,
+    "rootOpen" | "expanded" | "branches"
+  >;
+</script>
+
 <script lang="ts">
   import { errorMessage } from "../error";
   import { onDestroy, tick, untrack } from "svelte";
@@ -19,6 +28,7 @@
   import IconLoader from "~icons/tabler/loader-2";
   import IconDots from "~icons/tabler/dots";
   import type { FileTarget } from "./CodeFileActions.svelte";
+
   import { longPress } from "../hooks/long-press";
 
   let {
@@ -33,6 +43,8 @@
     openFile,
     loadMore,
     menu,
+    restore,
+    dropPath = null,
   }: {
     listing: CodeListing | undefined;
     rootPath: string;
@@ -54,6 +66,10 @@
       at: HTMLElement | { x: number; y: number },
       row: HTMLElement,
     ) => void;
+    /** Applied at mount: the listings are shown without refetching them. */
+    restore?: CodeFileTreeState;
+    /** The folder highlighted as the target of a file drag; "" is the root. */
+    dropPath?: string | null;
   } = $props();
   const rootNode = $derived<FileTarget>({
     nodeId: "",
@@ -87,14 +103,33 @@
     const node = rowNodes.get(element);
     if (node) menu?.(node, element, element);
   }, "button[data-file-entry]");
-  let rootOpen = $state(true);
-  const expanded = new SvelteSet<string>();
-  const branches = new SvelteMap<string, CodeListing>();
+  // Rows mark the folder that receives files dropped on them: a folder row
+  // its own folder, a file row its parent, the root row the root.
+  const dropZones = new WeakMap<Element, FileTarget>();
+  const dropZone = (node: FileTarget) => (element: HTMLElement) => {
+    dropZones.set(element, node);
+  };
+  /** The folder receiving files dropped on element; the root by default. */
+  export function dropTarget(element: Element | null): FileTarget {
+    const zone = element?.closest("[data-code-drop]");
+    return (zone && dropZones.get(zone)) ?? rootNode;
+  }
+  const restored = untrack(() => restore);
+  let rootOpen = $state(restored?.rootOpen ?? true);
+  const expanded = new SvelteSet<string>(restored?.expanded);
+  const branches = new SvelteMap<string, CodeListing>(restored?.branches);
   const errors = new SvelteMap<string, string>();
   const loading = new SvelteSet<string>();
   const requests = new SvelteMap<string, AbortController>();
   const inflight = new SvelteMap<string, Promise<void>>();
   let revealSequence = 0;
+  export function capture(): CodeFileTreeState {
+    return {
+      rootOpen,
+      expanded: [...expanded],
+      branches: [...branches],
+    };
+  }
   function loadBranch(path: string, append = false): Promise<void> {
     const current = inflight.get(path);
     if (current) return current;
@@ -151,8 +186,11 @@
     loading.clear();
   }
   onDestroy(abortRequests);
-  let lastRefresh = -1;
-  let lastCollapse = -1;
+  // Mount is not a refresh or a collapse: restored folders stay as they were.
+  let lastRefresh = untrack(() => refresh);
+  let lastCollapse = untrack(() => collapse);
+  for (const path of restored?.expanded ?? [])
+    if (!branches.has(path)) void loadBranch(path);
   $effect(() => {
     if (refresh === lastRefresh) return;
     lastRefresh = refresh;
@@ -195,9 +233,13 @@
       if (!branches.has(child)) await loadBranch(child);
     }
   }
+  // A restored tree already shows the folders the user had opened.
+  let revealed = !!restored;
   $effect(() => {
     const path = directory;
-    if (refresh === lastRefresh) untrack(() => void reveal(path));
+    if (refresh !== lastRefresh) return;
+    if (revealed) revealed = false;
+    else untrack(() => void reveal(path));
   });
   function keyboard(event: KeyboardEvent) {
     const target = (event.target as HTMLElement).closest<HTMLButtonElement>(
@@ -252,7 +294,11 @@
     >{/if}
 {/snippet}
 
-{#snippet contents(value: CodeListing | undefined, path: string)}
+{#snippet contents(
+  value: CodeListing | undefined,
+  path: string,
+  parent: FileTarget,
+)}
   <ul class="m-0 list-none p-0">
     {#each value?.children ?? [] as node (node.nodeId)}
       {@const folder = node.kind === "directory"}
@@ -262,13 +308,18 @@
             open={expanded.has(node.path)}
             onOpenChange={(open) => toggle(node.path, open)}
           >
-            <div class="group/row relative">
+            <div
+              class="group/row relative"
+              data-code-drop
+              {@attach dropZone(node)}
+            >
               <Collapsible.Trigger>
                 {#snippet child({ props })}
                   <ListButton
                     {...props}
                     variant="file-tree"
                     data-file-entry
+                    data-drop-target={dropPath === node.path || undefined}
                     onkeydown={keyboard}
                     oncontextmenu={(event) => contextMenu(event, node)}
                     {@attach register(node)}
@@ -299,7 +350,7 @@
             </div>
             <Collapsible.Content>
               <div class="ml-3 border-l pl-1">
-                {@render contents(branches.get(node.path), node.path)}
+                {@render contents(branches.get(node.path), node.path, node)}
               </div>
             </Collapsible.Content>
           </Collapsible.Root>
@@ -314,7 +365,11 @@
                 : /\.(go|ts|js|svelte|json|yaml|toml|css|html)$/.test(node.name)
                   ? IconCode
                   : IconFile}
-          <div class="group/row relative">
+          <div
+            class="group/row relative"
+            data-code-drop
+            {@attach dropZone(parent)}
+          >
             <ListButton
               variant="file-tree"
               data-file-entry
@@ -395,13 +450,18 @@
     {@attach hold}
   >
     <Collapsible.Root bind:open={rootOpen}>
-      <div class="group/row relative">
+      <div
+        class="group/row relative"
+        data-code-drop
+        {@attach dropZone(rootNode)}
+      >
         <Collapsible.Trigger>
           {#snippet child({ props })}
             <ListButton
               {...props}
               variant="file-tree-root"
               data-file-entry
+              data-drop-target={dropPath === "" || undefined}
               onkeydown={keyboard}
               oncontextmenu={(event) => contextMenu(event, rootNode)}
               {@attach register(rootNode)}
@@ -421,7 +481,7 @@
         {@render actions(rootNode)}
       </div>
       <Collapsible.Content>
-        {@render contents(listing, "")}
+        {@render contents(listing, "", rootNode)}
       </Collapsible.Content>
     </Collapsible.Root>
   </div>
