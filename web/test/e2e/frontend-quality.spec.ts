@@ -30,9 +30,10 @@ test("reduced motion disables skeleton and dialog animation", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const repositories = Promise.withResolvers<void>();
-  await page.route("**/api/repositories", async (route) => {
-    await repositories.promise;
+  // Server settings still gate the startup skeleton; Git discovery does not.
+  const config = Promise.withResolvers<void>();
+  await page.route("**/api/config", async (route) => {
+    await config.promise;
     await route.continue();
   });
   try {
@@ -61,7 +62,7 @@ test("reduced motion disables skeleton and dialog animation", async ({
       ),
     ).toBeLessThanOrEqual(0.001);
   } finally {
-    repositories.resolve();
+    config.resolve();
   }
 });
 

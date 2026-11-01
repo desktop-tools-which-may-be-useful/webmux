@@ -284,9 +284,17 @@ test("repository refresh failure keeps direct sessions reachable and preserves t
   await page.addInitScript(() =>
     localStorage.setItem("webmux.homeRepository", "saved-repository"),
   );
-  await page.route("**/api/repositories", (route) =>
-    route.fulfill({ status: 503, json: { error: "Registry unavailable" } }),
-  );
+  let requests = 0;
+  await page.route("**/api/repositories", async (route) => {
+    requests += 1;
+    // Hold the retry so the assertion observes the in-flight refresh, when the
+    // previous failure notice is already cleared but no new list exists yet.
+    if (requests > 1) await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.fulfill({
+      status: 503,
+      json: { error: "Registry unavailable" },
+    });
+  });
   const response = await request.post("/api/sessions", {
     data: {
       cwd: workDir,
@@ -299,6 +307,15 @@ test("repository refresh failure keeps direct sessions reachable and preserves t
   await expect(
     page.getByRole("link", { name: "Fallback shell" }),
   ).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("Registry unavailable");
+  expect(
+    await page.evaluate(() => localStorage.getItem("webmux.homeRepository")),
+  ).toBe("saved-repository");
+  await page.evaluate(() => window.dispatchEvent(new Event("pageshow")));
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem("webmux.homeRepository")),
+  ).toBe("saved-repository");
   await expect(page.getByRole("alert")).toContainText("Registry unavailable");
   expect(
     await page.evaluate(() => localStorage.getItem("webmux.homeRepository")),

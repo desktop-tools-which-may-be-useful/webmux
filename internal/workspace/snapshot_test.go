@@ -52,6 +52,40 @@ func TestUnknownStatusAndExecutablePermissionAreNotClean(t *testing.T) {
 	}
 	waitDone(t, item)
 }
+func TestListReadsRepositoriesConcurrently(t *testing.T) {
+	t.Parallel()
+	isolateGit(t)
+	root := initRepo(t)
+	other := initRepo(t)
+	s, _ := testService(t, t.TempDir(), root)
+	registerTest(t, s, root)
+	registerTest(t, s, other)
+	dir := t.TempDir()
+	lock := filepath.Join(dir, "active")
+	overlap := filepath.Join(dir, "overlap")
+	wrapper := filepath.Join(dir, "git")
+	realGit := s.gitPath
+	// Every Git call holds a lock directory across a short sleep. A second
+	// repository starting while one holds it proves List runs them in parallel.
+	putFile(t, wrapper, fmt.Sprintf("#!/bin/sh\nif ! mkdir %q 2>/dev/null; then : > %q; fi\nsleep 0.5\nrmdir %q 2>/dev/null\nexec %q \"$@\"\n", lock, overlap, lock, realGit))
+	if err := os.Chmod(wrapper, 0700); err != nil {
+		t.Fatal(err)
+	}
+	s.gitPath = wrapper
+	list, err := s.List(context.Background())
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list: %+v %v", list, err)
+	}
+	for _, repository := range list {
+		if repository.Availability != "available" {
+			t.Fatalf("repository unavailable: %+v", repository)
+		}
+	}
+	if _, err := os.Stat(overlap); err != nil {
+		t.Fatal("List read repositories serially")
+	}
+}
+
 func TestConcurrentSnapshotsCoalesceAndCancelOnlyLastWaiter(t *testing.T) {
 	t.Parallel()
 	isolateGit(t)
@@ -131,5 +165,82 @@ func TestConcurrentSnapshotsCoalesceAndCancelOnlyLastWaiter(t *testing.T) {
 	release(repository)
 	if _, err := s.Refresh(context.Background(), r.ID); err != nil {
 		t.Fatal("cancelled read retained repository gate", err)
+	}
+}
+
+func TestReadRepositoryLeavesFullWorktreePoolOnCancel(t *testing.T) {
+	t.Parallel()
+	isolateGit(t)
+	root := initRepo(t)
+	s, _ := testService(t, t.TempDir(), root)
+	r := registerTest(t, s, root)
+	tree := linkedTest(t, s, r, "pooled")
+	repository, err := s.repository(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fill every pool slot so the worktree goroutine can only proceed when it
+	// observes cancellation. A Git wrapper signals after `worktree list` runs,
+	// proving the read reached the pooled phase before its context is cancelled.
+	dir := t.TempDir()
+	signal := filepath.Join(dir, "listed")
+	realGit := s.gitPath
+	wrapper := filepath.Join(dir, "git")
+	putFile(t, wrapper, fmt.Sprintf("#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = list ]; then\n    %q \"$@\"\n    status=$?\n    : > %q\n    exit $status\n  fi\ndone\nexec %q \"$@\"\n", realGit, signal, realGit))
+	if err := os.Chmod(wrapper, 0700); err != nil {
+		t.Fatal(err)
+	}
+	s.gitPath = wrapper
+	for range cap(s.worktreeGate) {
+		s.worktreeGate <- struct{}{}
+	}
+	defer func() {
+		for range cap(s.worktreeGate) {
+			<-s.worktreeGate
+		}
+	}()
+	// The signal fires before Go has collected `worktree list`, so a cancel
+	// can still land before the pooled phase. Such an attempt fails the whole
+	// read without worktrees; retry until cancellation hits the pooled wait.
+	for attempt := 0; ; attempt++ {
+		if attempt == 20 {
+			t.Fatal("cancellation never reached the pooled worktree phase")
+		}
+		if err := os.Remove(signal); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan Repository, 1)
+		go func() { done <- s.readRepository(ctx, repository) }()
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			if _, err := os.Stat(signal); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				cancel()
+				t.Fatal("worktree list did not run")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		time.Sleep(time.Duration(attempt) * 10 * time.Millisecond)
+		cancel()
+		var result Repository
+		select {
+		case result = <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("worktree read ignored cancellation while waiting for the pool")
+		}
+		read, err := findTree(result, tree.ID)
+		if err != nil {
+			if result.Error != "" {
+				continue
+			}
+			t.Fatalf("cancelled read: %+v %v", result, err)
+		}
+		if !strings.Contains(read.Error, context.Canceled.Error()) {
+			t.Fatalf("cancelled worktree read: %+v", read)
+		}
+		return
 	}
 }

@@ -14,7 +14,6 @@
     repositoryCount,
     canAddRepository,
     refreshing,
-    refreshDisabled,
     onadd,
     onrefresh,
     children,
@@ -28,7 +27,6 @@
     repositoryCount: number;
     canAddRepository: boolean;
     refreshing: boolean;
-    refreshDisabled: boolean;
     onadd: () => void;
     onrefresh: () => void;
     // Search and status filters below the title row.
@@ -43,7 +41,8 @@
       <p role="status" class="sr-only">
         {#if loading}正在加载…
         {:else if filtering}显示 {visibleCount} / {sessionCount} 个会话
-        {:else}{repositoryCount} 个仓库 · {sessionCount} 个会话{/if}
+        {:else}{repositoryCount} 个仓库 · {sessionCount} 个会话{/if}{#if refreshing}
+          · 正在读取 Git 状态…{/if}
       </p>
     </div>
     <div
@@ -65,7 +64,6 @@
         aria-label="刷新 Git 状态"
         title={refreshing ? "正在刷新 Git 状态…" : "刷新 Git 状态"}
         aria-busy={refreshing}
-        disabled={refreshDisabled}
         onclick={() => onrefresh()}
         ><IconRefresh
           class={refreshing ? "animate-spin motion-reduce:animate-none" : ""}

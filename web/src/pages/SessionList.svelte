@@ -38,6 +38,7 @@
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
+  import { lastRepositories, rememberRepositories } from "../repository-cache";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
 
   let { drafts }: { drafts: TerminalDrafts } = $props();
@@ -66,7 +67,12 @@
       return null;
     }
   }
-  let repositories = $state.raw<Repository[]>([]);
+  // Returning from a terminal mounts this page again; the previous grouping
+  // renders immediately instead of flashing ungrouped sessions while Git runs.
+  let repositories = $state.raw<Repository[]>(lastRepositories() ?? []);
+  // A saved scope is only validated after a read settles; until then an empty
+  // or cached list must not discard it.
+  let repositoriesSettled = $state(false);
   let launchConfigs = $state<LaunchConfigsState>({ status: "loading" });
   let cwd = $state("~");
   let hostname = $state("");
@@ -120,6 +126,17 @@
         !repositories.some((r) => r.id === s.workspace?.repositoryId),
     ),
   );
+  // A workspace session proves at least one repository exists, so reserve the
+  // sidebar frame before Git discovery returns instead of moving the list when
+  // the repositories appear.
+  const awaitingRepositories = $derived(
+    !repositoriesSettled &&
+      !repositories.length &&
+      list.some((session) => session.workspace),
+  );
+  const sidebarVisible = $derived(
+    repositories.length > 0 || awaitingRepositories,
+  );
   const selectedRepository = $derived(
     repositoryChoice &&
       (repositoryChoice === "direct" ||
@@ -143,7 +160,8 @@
           ),
   );
   $effect(() => {
-    if (loading || initializing || repositoryError) return;
+    if (loading || initializing || !repositoriesSettled || repositoryError)
+      return;
     if (!repositoryChoice) {
       repositoryChoice =
         repositories.length > 1
@@ -175,6 +193,7 @@
   let startupRefresh: Promise<void> | undefined;
   let refreshGeneration = 0;
   let disposed = false;
+  const abort = new AbortController();
   const search = $derived(query.trim().toLocaleLowerCase());
   const filtering = $derived(Boolean(search) || statusFilter !== "all");
   const visible = $derived(
@@ -263,12 +282,14 @@
     if (repo)
       homeWorktrees.save(setPinned(homeWorktrees.value, repo, ids, pinned));
   }
-  async function refresh(signal?: AbortSignal) {
-    // Coalesce lifecycle refreshes with the bounded startup request instead
-    // of superseding it with another, potentially slower Git discovery.
-    if (initializing && startupRefresh) return startupRefresh;
+  async function refresh(force = false) {
+    // A lifecycle refresh coalesces with the startup read instead of starting
+    // another slow discovery. Explicit and later refreshes still supersede an
+    // older request, and generation ordering discards its late reply.
+    if (!force && startupRefresh) return startupRefresh;
     const generation = ++refreshGeneration;
     refreshing = true;
+    repositoriesSettled = false;
     repositoryError = "";
     try {
       const result = await api(
@@ -276,18 +297,20 @@
         RepositoriesSchema,
         "GET",
         undefined,
-        signal,
+        abort.signal,
       );
       if (!disposed && generation === refreshGeneration) {
         repositories = result;
+        rememberRepositories(result);
       }
     } catch (err) {
       if (!disposed && generation === refreshGeneration)
-        repositoryError = signal?.aborted
-          ? "初次读取超时，请重试刷新"
-          : errorMessage(err);
+        repositoryError = errorMessage(err);
     } finally {
-      if (!disposed && generation === refreshGeneration) refreshing = false;
+      if (!disposed && generation === refreshGeneration) {
+        refreshing = false;
+        repositoriesSettled = true;
+      }
     }
   }
   async function loadSetup(signal?: AbortSignal) {
@@ -315,18 +338,16 @@
   }
   onMount(() => {
     // Optional Git discovery must not hold existing terminals behind the
-    // startup skeleton. Abort late reads so they cannot regroup visible cards.
-    const startup = new AbortController();
-    const startupTimeout = setTimeout(() => startup.abort(), 1000);
-    startupRefresh = refresh(startup.signal);
+    // startup skeleton. Git keeps reading in the background while the session
+    // snapshot and server settings decide when the page becomes usable.
+    void loadSetup(abort.signal).finally(() => {
+      if (!disposed) initializing = false;
+    });
     void loadLaunchConfigs(true);
-    void Promise.allSettled([loadSetup(startup.signal), startupRefresh]).then(
-      () => {
-        clearTimeout(startupTimeout);
-        startupRefresh = undefined;
-        if (!disposed) initializing = false;
-      },
-    );
+    startupRefresh = refresh();
+    void startupRefresh.finally(() => {
+      startupRefresh = undefined;
+    });
     const ws = connect(
       "/ws/sessions",
       (data) => {
@@ -381,8 +402,7 @@
     return () => {
       disposed = true;
       ++refreshGeneration;
-      clearTimeout(startupTimeout);
-      startup.abort();
+      abort.abort();
       ws.close();
       resetBrowserChrome();
       clearInterval(clock);
@@ -415,14 +435,15 @@
     </div>
   {:else}
     <div
-      class={`mx-auto grid max-w-7xl gap-6 px-4 py-5 sm:px-8 sm:py-6 ${repositories.length ? "lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8" : ""}`}
+      class={`mx-auto grid max-w-7xl gap-6 px-4 py-5 sm:px-8 sm:py-6 ${sidebarVisible ? "lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8" : ""}`}
     >
-      {#if repositories.length}<RepositorySidebar
+      {#if sidebarVisible}<RepositorySidebar
           {repositories}
           sessions={list}
           directSessions={direct}
           selected={selectedRepository}
           label={selectedRepository === "all" ? "全部仓库" : scopeLabel}
+          loading={awaitingRepositories}
           onselect={selectRepository}
         />{/if}
       <main class="min-w-0">
@@ -439,11 +460,10 @@
               : 1}
           canAddRepository={gitReady && registryReady}
           {refreshing}
-          refreshDisabled={refreshing || initializing}
           onadd={() => {
             adding = true;
           }}
-          onrefresh={() => void refresh()}
+          onrefresh={() => void refresh(true)}
         >
           {#snippet controls()}<SessionViewControls
               {compact}
@@ -486,7 +506,9 @@
             仓库管理部分不可用：{capabilityError}。仍可直接启动会话。
           </InlineNotice>{/if}
         {#if repositoryError}<InlineNotice tone="danger" class="mb-4">
-            Git 状态刷新失败：{repositoryError}。保留上次快照与全部会话。
+            {repositories.length
+              ? `Git 状态刷新失败：${repositoryError}。保留上次快照与全部会话。`
+              : `Git 状态读取失败：${repositoryError}。会话仍可正常使用。`}
           </InlineNotice>{/if}
         <div class="space-y-8">
           {#each repositories as repo (repo.id)}

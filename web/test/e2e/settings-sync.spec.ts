@@ -146,13 +146,13 @@ test("loading and refreshing the home page never rewrites shared pins", async ({
     name: "刷新 Git 状态",
     exact: true,
   });
-  await expect(refresh).toBeEnabled();
+  await expect(refresh).toHaveAttribute("aria-busy", "false");
   const refreshed = page.waitForResponse(
     (response) => response.url().endsWith("/api/repositories") && response.ok(),
   );
   await refresh.click();
   await refreshed;
-  await expect(refresh).toBeEnabled();
+  await expect(refresh).toHaveAttribute("aria-busy", "false");
   const after = await (await request.get("/api/settings")).json();
   expect(after.revision).toBe(seeded.revision);
   expect(after.values.homeWorktrees).toEqual(homeWorktrees);

@@ -67,6 +67,23 @@ test("many repositories scroll within the sidebar while long names stay inside i
   expect(onselect).toHaveBeenCalledWith("direct");
 });
 
+test("pending Git discovery keeps the sidebar frame without rendering entries", async () => {
+  await page.viewport(1280, 900);
+  render(RepositorySidebar, {
+    repositories: [],
+    sessions: [],
+    directSessions: [],
+    selected: "all",
+    label: "全部仓库",
+    loading: true,
+    onselect: vi.fn(),
+  });
+  await expect
+    .element(page.getByRole("status").getByText("正在读取 Git 状态…"))
+    .toBeVisible();
+  expect(document.querySelector("nav")).toBeNull();
+});
+
 test("aggregate waiting badges include direct and unregistered-repository sessions and update live", async () => {
   await page.viewport(1280, 900);
   const repositories = repositoryFixtures(1);

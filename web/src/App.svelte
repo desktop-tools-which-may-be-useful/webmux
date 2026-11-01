@@ -14,6 +14,7 @@
   import SessionList from "./pages/SessionList.svelte";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
   import { browserDraftStorage } from "./draftStorage";
+  import { clearRepositories } from "./repository-cache";
 
   const drafts = createTerminalDrafts({ storage: browserDraftStorage() });
   let uploadNotice = $state("");
@@ -66,6 +67,7 @@
     const auth = () => {
       stopSettings();
       drafts.clearAll();
+      clearRepositories();
       uploadNotice = "";
       ready = false;
       checking = false;

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -247,9 +248,21 @@ func (s *Service) snapshot(ctx context.Context, r *repositoryState) (Repository,
 		return flight.repository, flight.err
 	}
 }
+func repositoryResult(e registration) Repository {
+	return Repository{ID: e.ID, Name: e.DisplayName, CommonDir: e.CommonDir, AnchorPath: e.AnchorPath, Availability: "unavailable", CheckedAt: time.Now().UTC(), Worktrees: []Worktree{}}
+}
+
+// unavailableRepository reports a read that failed before Git produced a
+// snapshot, so one repository cannot hide the others in a list.
+func unavailableRepository(r *repositoryState, err error) Repository {
+	result := repositoryResult(r.entry)
+	result.Error = err.Error()
+	return result
+}
+
 func (s *Service) readRepository(ctx context.Context, r *repositoryState) Repository {
 	e := r.entry
-	result := Repository{ID: e.ID, Name: e.DisplayName, CommonDir: e.CommonDir, AnchorPath: e.AnchorPath, Availability: "unavailable", CheckedAt: time.Now().UTC(), Worktrees: []Worktree{}}
+	result := repositoryResult(e)
 	common, err := s.common(ctx, e.AnchorPath)
 	if err == nil && common != e.CommonDir {
 		err = errors.New("仓库 common directory 身份已改变，请移除并重新注册")
@@ -268,35 +281,50 @@ func (s *Service) readRepository(ctx context.Context, r *repositoryState) Reposi
 		result.Error = err.Error()
 		return result
 	}
+	// Worktrees have independent indexes, so their status checks run in
+	// parallel; the service-wide pool avoids a process burst on large lists.
+	limit := s.worktreeGate
+	var wg sync.WaitGroup
 	for i := range trees {
-		tree := &trees[i]
-		stat, statErr := os.Stat(tree.Path)
-		if statErr != nil || !stat.IsDir() {
-			tree.Error = fmt.Sprintf("工作树目录不可访问: %v", statErr)
-			continue
-		}
-		if tree.Kind == "bare" {
+		wg.Add(1)
+		go func(tree *Worktree) {
+			defer wg.Done()
+			select {
+			case limit <- struct{}{}:
+			case <-ctx.Done():
+				tree.Error = ctx.Err().Error()
+				return
+			}
+			defer func() { <-limit }()
+			stat, statErr := os.Stat(tree.Path)
+			if statErr != nil || !stat.IsDir() {
+				tree.Error = fmt.Sprintf("工作树目录不可访问: %v", statErr)
+				return
+			}
+			if tree.Kind == "bare" {
+				tree.Available = true
+				return
+			}
+			actual, checkErr := s.common(ctx, tree.Path)
+			if checkErr != nil || actual != e.CommonDir {
+				tree.Error = fmt.Sprintf("无法验证工作树身份: %v", checkErr)
+				return
+			}
 			tree.Available = true
-			continue
-		}
-		actual, checkErr := s.common(ctx, tree.Path)
-		if checkErr != nil || actual != e.CommonDir {
-			tree.Error = fmt.Sprintf("无法验证工作树身份: %v", checkErr)
-			continue
-		}
-		tree.Available = true
-		status, statusErr := s.git(ctx, tree.Path, "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=matching")
-		if statusErr != nil {
-			tree.Error = statusErr.Error()
-			continue
-		}
-		dirty, untracked, ignored, parseErr := parseStatus(status)
-		if parseErr != nil {
-			tree.Error = parseErr.Error()
-			continue
-		}
-		tree.Dirty, tree.HasUntracked, tree.HasIgnored = &dirty, untracked, ignored
+			status, statusErr := s.git(ctx, tree.Path, "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=matching")
+			if statusErr != nil {
+				tree.Error = statusErr.Error()
+				return
+			}
+			dirty, untracked, ignored, parseErr := parseStatus(status)
+			if parseErr != nil {
+				tree.Error = parseErr.Error()
+				return
+			}
+			tree.Dirty, tree.HasUntracked, tree.HasIgnored = &dirty, untracked, ignored
+		}(&trees[i])
 	}
+	wg.Wait()
 	sort.SliceStable(trees, func(i, j int) bool {
 		if trees[i].Kind != "linked" {
 			return true

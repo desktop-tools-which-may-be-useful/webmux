@@ -390,7 +390,7 @@ test("multiple repositories keep every session visible through local failure, co
   await page.getByRole("button", { name: "刷新 Git 状态" }).click();
   await expect(
     page.getByRole("button", { name: "刷新 Git 状态" }),
-  ).toBeEnabled();
+  ).toHaveAttribute("aria-busy", "false");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   expect(
     await page
@@ -554,12 +554,80 @@ test("late Git response cannot replace a newer refresh", async ({
   );
   await expect(
     page.getByRole("button", { name: "刷新 Git 状态" }),
-  ).toBeEnabled();
+  ).toHaveAttribute("aria-busy", "false");
   if (!(await repo.locator('[data-slot="repository-details"]').count())) {
     await repo.getByRole("button", { name: /仓库菜单/ }).click();
     await page.getByRole("menuitem", { name: "仓库详情", exact: true }).click();
   }
   await expect(repo.getByText("主页 1 / 共 2 工作区")).toBeVisible();
+});
+
+test("returning home keeps the cached snapshot until a slow Git refresh finishes", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  const root = await repository(workDir);
+  await request.post("/api/repositories", { data: { path: root } });
+  const [repo] = await (await request.get("/api/repositories")).json();
+  const created = await request.post("/api/sessions", {
+    data: {
+      name: "Cached grouping",
+      cmd: ["/bin/sh", "-c", "sleep 600"],
+      workspace: { repositoryId: repo.id, worktreeId: repo.worktrees[0].id },
+    },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  await page.goto("/");
+  const group = page.locator(`[data-repository-id="${repo.id}"]`);
+  await expect(group).toHaveCount(1);
+  await page
+    .getByRole("link", { name: "Cached grouping", exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/s/${id}$`));
+  await expect(page.locator(".xterm-helper-textarea")).toBeAttached();
+  const external = join(workDir, "cached-newer");
+  await git(root, "worktree", "add", "-b", "cached-newer", external);
+  const held = Promise.withResolvers<void>();
+  await page.route("**/api/repositories", async (route) => {
+    await held.promise;
+    await route.continue();
+  });
+  const details = async () => {
+    if (!(await group.locator('[data-slot="repository-details"]').count())) {
+      await group.getByRole("button", { name: /仓库菜单/ }).click();
+      await page
+        .getByRole("menuitem", { name: "仓库详情", exact: true })
+        .click();
+    }
+  };
+  try {
+    await page
+      .getByRole("button", { name: "返回会话列表", exact: true })
+      .click();
+    // The cached snapshot keeps the session grouped under its repository
+    // while the delayed refresh is still in flight.
+    await expect(group).toHaveCount(1);
+    await expect(
+      group.getByRole("link", { name: "Cached grouping", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/Git 状态(?:刷新失败|读取失败)/)).toHaveCount(
+      0,
+    );
+    await details();
+    await expect(group.getByText("主页 1 / 共 1 工作区")).toBeVisible();
+    const refreshed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/repositories") && response.ok(),
+    );
+    held.resolve();
+    await (await refreshed).finished();
+    await details();
+    await expect(group.getByText("主页 1 / 共 2 工作区")).toBeVisible();
+  } finally {
+    held.resolve();
+  }
 });
 
 test("direct launch still offers explicit directory creation without registering a repository", async ({

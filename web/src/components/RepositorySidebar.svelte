@@ -17,6 +17,7 @@
     selected,
     label,
     onselect,
+    loading = false,
   }: {
     repositories: Repository[];
     sessions: SessionInfo[];
@@ -24,6 +25,9 @@
     selected: string;
     label: string;
     onselect: (id: string) => void;
+    // Keeps the same frame while the first Git read is still running so the
+    // session content beside it does not move when the repositories arrive.
+    loading?: boolean;
   } = $props();
   const navigationId = $props.id();
   let open = $state(false);
@@ -87,64 +91,74 @@
     variant="outline"
     size="sm-touch"
     class="w-full min-w-0 justify-between lg:hidden"
-    aria-label={`仓库导航：${label}`}
+    aria-label={loading ? "正在读取 Git 状态" : `仓库导航：${label}`}
+    aria-busy={loading}
     aria-expanded={open}
-    aria-controls={navigationId}
+    aria-controls={loading ? undefined : navigationId}
+    disabled={loading}
     bind:ref={trigger}
     onclick={() => (open = !open)}
   >
     <IconFolder aria-hidden="true" />
-    <span class="min-w-0 flex-1 truncate text-left">{label}</span>
+    <span class="min-w-0 flex-1 truncate text-left"
+      >{loading ? "正在读取 Git 状态…" : label}</span
+    >
     <IconChevronDown class={open ? "rotate-180" : ""} aria-hidden="true" />
   </Button>
-  <nav
-    id={navigationId}
-    aria-label="仓库导航"
-    class={open ? "mt-3 lg:mt-0" : "hidden lg:block"}
-  >
-    <div
-      class="mb-2 flex items-center justify-between px-3 pt-2 text-xs font-medium text-muted-foreground"
+  {#if loading}<p
+      role="status"
+      class="hidden px-3 pt-2 text-xs text-muted-foreground lg:block"
     >
-      <span>仓库</span><span class="tabular-nums">{repositories.length}</span>
-    </div>
-    <div
-      data-slot="repository-list"
-      class="max-h-[50dvh] space-y-1 overflow-y-auto overscroll-contain p-1 lg:max-h-[calc(100dvh-var(--sticky-header-offset,0px)-7rem)]"
+      正在读取 Git 状态…
+    </p>{/if}
+  {#if !loading}<nav
+      id={navigationId}
+      aria-label="仓库导航"
+      class={open ? "mt-3 lg:mt-0" : "hidden lg:block"}
     >
-      {#each entries as entry (entry.id)}
-        <ListButton
-          variant="navigation"
-          aria-label={entry.path ? `仓库 ${entry.name}` : entry.name}
-          aria-describedby={entry.path
-            ? `${navigationId}-${entry.id}-path`
-            : undefined}
-          aria-pressed={selected === entry.id}
-          data-repository-scope={entry.id}
-          onclick={() => select(entry.id)}
-        >
-          <entry.icon class="size-4 shrink-0" aria-hidden="true" />
-          <span class="min-w-0 flex-1">
-            <span class="block truncate">{entry.name}</span>
-            {#if entry.path}
-              <span id={`${navigationId}-${entry.id}-path`} class="sr-only"
-                >{entry.path}</span
-              >
-              <span
-                class="block truncate text-xs font-normal text-muted-foreground"
-                title={entry.path}>{parentPath(entry.path)}</span
-              >
-            {/if}
-          </span>
-          {#if entry.waiting}<Badge
-              variant="warning"
-              class="shrink-0"
-              title={`等待 ${entry.waiting} 个会话`}>待 {entry.waiting}</Badge
-            >{/if}
-          <Badge variant="secondary" class="min-w-6 shrink-0 justify-center"
-            ><span class="tabular-nums">{entry.count}</span></Badge
+      <div
+        class="mb-2 flex items-center justify-between px-3 pt-2 text-xs font-medium text-muted-foreground"
+      >
+        <span>仓库</span><span class="tabular-nums">{repositories.length}</span>
+      </div>
+      <div
+        data-slot="repository-list"
+        class="max-h-[50dvh] space-y-1 overflow-y-auto overscroll-contain p-1 lg:max-h-[calc(100dvh-var(--sticky-header-offset,0px)-7rem)]"
+      >
+        {#each entries as entry (entry.id)}
+          <ListButton
+            variant="navigation"
+            aria-label={entry.path ? `仓库 ${entry.name}` : entry.name}
+            aria-describedby={entry.path
+              ? `${navigationId}-${entry.id}-path`
+              : undefined}
+            aria-pressed={selected === entry.id}
+            data-repository-scope={entry.id}
+            onclick={() => select(entry.id)}
           >
-        </ListButton>
-      {/each}
-    </div>
-  </nav>
+            <entry.icon class="size-4 shrink-0" aria-hidden="true" />
+            <span class="min-w-0 flex-1">
+              <span class="block truncate">{entry.name}</span>
+              {#if entry.path}
+                <span id={`${navigationId}-${entry.id}-path`} class="sr-only"
+                  >{entry.path}</span
+                >
+                <span
+                  class="block truncate text-xs font-normal text-muted-foreground"
+                  title={entry.path}>{parentPath(entry.path)}</span
+                >
+              {/if}
+            </span>
+            {#if entry.waiting}<Badge
+                variant="warning"
+                class="shrink-0"
+                title={`等待 ${entry.waiting} 个会话`}>待 {entry.waiting}</Badge
+              >{/if}
+            <Badge variant="secondary" class="min-w-6 shrink-0 justify-center"
+              ><span class="tabular-nums">{entry.count}</span></Badge
+            >
+          </ListButton>
+        {/each}
+      </div>
+    </nav>{/if}
 </aside>

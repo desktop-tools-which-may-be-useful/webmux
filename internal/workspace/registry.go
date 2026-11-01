@@ -46,7 +46,10 @@ type Service struct {
 	defaultCwd string
 	gitPath    string
 	stateDir   string
-	mu         sync.Mutex
+	// worktreeGate bounds concurrent worktree status reads across every
+	// repository in a list, not just within one repository.
+	worktreeGate chan struct{}
+	mu           sync.Mutex
 	// saveMu serializes registry read-modify-write cycles without holding mu
 	// across the state file commit.
 	saveMu        sync.Mutex
@@ -66,7 +69,7 @@ func New(stateDir string, manager *session.Manager, launches *launch.Service, de
 	if stateDir == "" {
 		stateDir = config.DefaultStateDir()
 	}
-	s := &Service{manager: manager, launches: launches, defaultCwd: defaultCwd, stateDir: stateDir, starts: make(map[string]int), reservations: make(map[string]bool), changed: make(chan struct{}), confirmations: make(map[string]confirmation)}
+	s := &Service{manager: manager, launches: launches, defaultCwd: defaultCwd, stateDir: stateDir, worktreeGate: make(chan struct{}, 4), starts: make(map[string]int), reservations: make(map[string]bool), changed: make(chan struct{}), confirmations: make(map[string]confirmation)}
 	git, err := exec.LookPath("git")
 	if err != nil {
 		s.capability.GitError = "Git 不可用: " + err.Error()
@@ -284,14 +287,40 @@ func (s *Service) List(ctx context.Context) ([]Repository, error) {
 	}
 	entries := append([]*repositoryState(nil), s.entries...)
 	s.mu.Unlock()
+	// Repositories are independent, so a slow one must not serialize the rest.
+	// Each snapshot keeps its own gate and shared-flight semantics.
+	snapshots := make([]Repository, len(entries))
+	available := make([]bool, len(entries))
+	failures := make([]error, len(entries))
+	var wg sync.WaitGroup
+	for i, r := range entries {
+		wg.Add(1)
+		go func(i int, r *repositoryState) {
+			defer wg.Done()
+			snapshot, err := s.snapshot(ctx, r)
+			if err != nil {
+				failures[i] = err
+				return
+			}
+			if s.registered(r) {
+				snapshots[i], available[i] = snapshot, true
+			}
+		}(i, r)
+	}
+	wg.Wait()
 	out := make([]Repository, 0, len(entries))
-	for _, r := range entries {
-		snapshot, err := s.snapshot(ctx, r)
-		if err != nil {
-			return nil, err
-		}
-		if s.registered(r) {
-			out = append(out, snapshot)
+	for i := range entries {
+		if available[i] {
+			out = append(out, snapshots[i])
+		} else if failures[i] != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			// A single unreadable repository keeps the rest of the list and
+			// its sessions reachable instead of failing the whole response.
+			if s.registered(entries[i]) {
+				out = append(out, unavailableRepository(entries[i], failures[i]))
+			}
 		}
 	}
 	s.reassociate(ctx)
