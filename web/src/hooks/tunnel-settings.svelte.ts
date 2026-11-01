@@ -1,6 +1,7 @@
 import { errorMessage } from "../error";
 import { onMount } from "svelte";
 import { api, APIError } from "../api";
+import { LatestRequest } from "./remote-request.svelte";
 import {
   TunnelSettingsSchema,
   TunnelSettingsUpdateSchema,
@@ -16,30 +17,25 @@ export function useTunnelSettings() {
   let notice = $state("");
   let shutdownUnpersisted = $state(false);
   let editVersion = $state(0);
-  let requestVersion = 0;
-  let controller: AbortController | undefined;
-  let disposed = false;
+  const requests = new LatestRequest();
 
   async function refresh() {
-    const version = ++requestVersion;
-    controller?.abort();
-    controller = new AbortController();
+    const ticket = requests.begin();
     try {
       const current = await api(
         "/tunnel",
         TunnelSettingsSchema,
         "GET",
         undefined,
-        controller.signal,
+        ticket.signal,
       );
-      if (disposed || version !== requestVersion) return;
+      if (!ticket.current()) return;
       if (!view) editVersion++;
       view = current;
     } catch (cause) {
-      if (!disposed && version === requestVersion && !controller.signal.aborted)
-        error = errorMessage(cause);
+      if (ticket.reportable()) error = errorMessage(cause);
     } finally {
-      if (!disposed && version === requestVersion) loading = false;
+      if (ticket.current()) loading = false;
     }
   }
 
@@ -47,34 +43,30 @@ export function useTunnelSettings() {
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       if (!busy && !document.hidden) await refresh();
-      if (!disposed) timer = setTimeout(() => void poll(), 2000);
+      if (!requests.disposed) timer = setTimeout(() => void poll(), 2000);
     }
     void poll();
     return () => {
-      disposed = true;
-      requestVersion++;
-      controller?.abort();
+      requests.dispose();
       clearTimeout(timer);
     };
   });
 
   async function mutate(path: string, method: string, body?: unknown) {
-    if (busy || disposed) return false;
+    if (busy || requests.disposed) return false;
     busy = true;
     error = "";
     notice = "";
-    ++requestVersion;
-    controller?.abort();
-    controller = new AbortController();
+    const ticket = requests.begin();
     try {
       const current = await api(
         path,
         TunnelSettingsSchema,
         method,
         body,
-        controller.signal,
+        ticket.signal,
       );
-      if (disposed) return false;
+      if (requests.disposed) return false;
       view = current;
       shutdownUnpersisted = false;
       editVersion++;
@@ -84,7 +76,7 @@ export function useTunnelSettings() {
           : "操作已完成。";
       return true;
     } catch (cause) {
-      if (disposed) return false;
+      if (requests.disposed) return false;
       error = errorMessage(cause);
       if (cause instanceof APIError && cause.notPersisted)
         shutdownUnpersisted = true;
@@ -93,7 +85,7 @@ export function useTunnelSettings() {
       await refresh();
       return false;
     } finally {
-      if (!disposed) busy = false;
+      if (!requests.disposed) busy = false;
     }
   }
 

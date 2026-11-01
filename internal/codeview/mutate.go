@@ -355,18 +355,26 @@ func (b *binding) requireWrite() error {
 	return nil
 }
 
+// namedTarget checks write access, then parses node nid and the new entry
+// name shared by Rename and Mkdir.
+func (b *binding) namedTarget(nid, name string) (p, want string, err error) {
+	if err := b.requireWrite(); err != nil {
+		return "", "", err
+	}
+	if p, err = nodePath(nid); err != nil {
+		return "", "", err
+	}
+	if want, err = cleanName(name); err != nil {
+		return "", "", err
+	}
+	return p, want, nil
+}
+
 // Rename gives node nid the new name in its own directory; a taken name
 // gets the smallest free " (n)" suffix instead of replacing an entry.
 func (s *Service) Rename(ctx context.Context, id, cid, nid, name string) (Mutation, error) {
 	return withRoot(ctx, s, id, cid, func(b *binding) (Mutation, error) {
-		if err := b.requireWrite(); err != nil {
-			return Mutation{}, err
-		}
-		p, err := nodePath(nid)
-		if err != nil {
-			return Mutation{}, err
-		}
-		want, err := cleanName(name)
+		p, want, err := b.namedTarget(nid, name)
 		if err != nil {
 			return Mutation{}, err
 		}
@@ -393,14 +401,7 @@ func (s *Service) Rename(ctx context.Context, id, cid, nid, name string) (Mutati
 // Mkdir creates a directory named name in directory nid.
 func (s *Service) Mkdir(ctx context.Context, id, cid, nid, name string) (Mutation, error) {
 	return withRoot(ctx, s, id, cid, func(b *binding) (Mutation, error) {
-		if err := b.requireWrite(); err != nil {
-			return Mutation{}, err
-		}
-		p, err := nodePath(nid)
-		if err != nil {
-			return Mutation{}, err
-		}
-		want, err := cleanName(name)
+		p, want, err := b.namedTarget(nid, name)
 		if err != nil {
 			return Mutation{}, err
 		}

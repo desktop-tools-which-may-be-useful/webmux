@@ -1,6 +1,7 @@
 import { errorMessage } from "../error";
 import { onMount } from "svelte";
 import { api } from "../api";
+import { LatestRequest } from "./remote-request.svelte";
 import {
   TailscaleSettingsUpdateSchema,
   TailscaleStatusSchema,
@@ -33,21 +34,16 @@ export function useTailscaleSettings() {
     notice: "",
     editVersion: 0,
   });
-  let latest = 0;
-  let inflight: AbortController | undefined;
+  const requests = new LatestRequest();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let disposed = false;
 
-  // Every response supersedes older ones: the ticket drops late replies and
-  // the abort cancels the request it replaces.
+  // Every response supersedes older ones.
   async function exchange(
     path: string,
     method = "GET",
     body?: unknown,
   ): Promise<TailscaleStatus | undefined> {
-    const ticket = ++latest;
-    inflight?.abort();
-    const controller = (inflight = new AbortController());
+    const ticket = requests.begin();
     clearTimeout(timer);
     try {
       const next = await api(
@@ -55,18 +51,17 @@ export function useTailscaleSettings() {
         TailscaleStatusSchema,
         method,
         body,
-        controller.signal,
+        ticket.signal,
       );
-      if (disposed || ticket !== latest) return undefined;
+      if (!ticket.current()) return undefined;
       state.view = next;
       state.error = "";
       return next;
     } catch (cause) {
-      if (!disposed && ticket === latest && !controller.signal.aborted)
-        state.error = errorMessage(cause);
+      if (ticket.reportable()) state.error = errorMessage(cause);
       throw cause;
     } finally {
-      if (!disposed && ticket === latest) {
+      if (ticket.current()) {
         state.loading = false;
         if (state.view?.state === "starting")
           timer = setTimeout(() => void load(), STARTING_POLL_MS);
@@ -86,7 +81,7 @@ export function useTailscaleSettings() {
   }
 
   async function mutate(method: "PUT" | "DELETE", body?: unknown) {
-    if (state.busy || disposed) return false;
+    if (state.busy || requests.disposed) return false;
     state.busy = true;
     state.notice = "";
     try {
@@ -98,15 +93,14 @@ export function useTailscaleSettings() {
     } catch {
       return false;
     } finally {
-      if (!disposed) state.busy = false;
+      if (!requests.disposed) state.busy = false;
     }
   }
 
   onMount(() => {
     void load();
     return () => {
-      disposed = true;
-      inflight?.abort();
+      requests.dispose();
       clearTimeout(timer);
     };
   });

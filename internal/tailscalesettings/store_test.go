@@ -11,6 +11,8 @@ import (
 
 var tomlDefaults = config.TailscaleConfig{Mode: "serve", Port: 8443, Provider: "auto", Command: "/toml/tailscale"}
 
+const fileName = "tailscale-settings.json"
+
 func TestSaveOverridesTOMLAcrossRestartAndResetRestores(t *testing.T) {
 	dir := t.TempDir()
 	s := Open(dir, tomlDefaults)

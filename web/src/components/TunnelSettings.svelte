@@ -1,25 +1,13 @@
 <script lang="ts">
-  import { errorMessage } from "../error";
-  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import TunnelStateBadge from "./TunnelStateBadge.svelte";
-  import { api } from "../api";
-  import { ConfigSchema, type TunnelInfo } from "../schemas";
+  import { useMountedRead } from "../hooks/remote-request.svelte";
+  import { ConfigSchema } from "../schemas";
 
-  let tunnel = $state<TunnelInfo>();
-  let error = $state("");
-  onMount(() => {
-    const controller = new AbortController();
-    void api("/config", ConfigSchema, "GET", undefined, controller.signal)
-      .then((config) => {
-        tunnel = config.tunnel;
-      })
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) error = errorMessage(cause);
-      });
-    return () => controller.abort();
-  });
+  const read = useMountedRead("/config", ConfigSchema);
+  const tunnel = $derived(read.value?.tunnel);
+  const error = $derived(read.error);
 </script>
 
 <Card.Root id="access" class="scroll-mt-4">

@@ -1,36 +1,18 @@
 <script lang="ts">
-  import { errorMessage } from "../error";
-  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import TunnelStateBadge from "./TunnelStateBadge.svelte";
-  import { api } from "../api";
-  import { TailscaleStatusSchema, type TailscaleStatus } from "../schemas";
+  import { useMountedRead } from "../hooks/remote-request.svelte";
+  import { TailscaleStatusSchema } from "../schemas";
 
-  let status = $state<TailscaleStatus>();
-  let error = $state("");
+  const read = useMountedRead("/tailscale", TailscaleStatusSchema);
+  const status = $derived(read.value);
+  const error = $derived(read.error);
   const modeText = {
     off: "未启用",
     serve: "Serve（仅 tailnet）",
     funnel: "Funnel（公网）",
   };
-  onMount(() => {
-    const controller = new AbortController();
-    void api(
-      "/tailscale",
-      TailscaleStatusSchema,
-      "GET",
-      undefined,
-      controller.signal,
-    )
-      .then((value) => {
-        status = value;
-      })
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) error = errorMessage(cause);
-      });
-    return () => controller.abort();
-  });
 </script>
 
 <Card.Root id="tailscale" class="scroll-mt-4">

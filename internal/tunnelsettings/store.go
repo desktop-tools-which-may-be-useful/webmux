@@ -5,11 +5,9 @@ package tunnelsettings
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
-	"sync"
 
 	"github.com/rainchan/webmux/internal/config"
-	"github.com/rainchan/webmux/internal/pathutil"
+	"github.com/rainchan/webmux/internal/settingsstore"
 	"github.com/rainchan/webmux/internal/statefile"
 )
 
@@ -29,16 +27,31 @@ type storedFile struct {
 	Token    string  `json:"token,omitempty"`
 }
 
+func (storedFile) UnavailableErr() error { return ErrUnavailable }
+
+var spec = settingsstore.Spec[config.TunnelConfig, storedFile]{
+	ID:     statefile.Tunnel,
+	Decode: decodeStored,
+	Normalize: func(_, next config.TunnelConfig) (config.TunnelConfig, error) {
+		return Prepare(next, modeOf(next), next.Hostname, nil)
+	},
+	Encode: func(c config.TunnelConfig) storedFile {
+		return storedFile{V: 1, Enabled: &c.Enabled, Mode: modeOf(c), Token: c.Token, Hostname: &c.Hostname}
+	},
+	FailClosed: func(c *config.TunnelConfig) { c.Enabled = false },
+	Closed:     "tunnel settings service is closed",
+}
+
+func modeOf(c config.TunnelConfig) string {
+	if c.Named() {
+		return "named"
+	}
+	return "quick"
+}
+
 // Service holds an exclusive lock for its lifetime. A fault disables writes
 // and startup exposure without changing the original file.
-type Service struct {
-	mu                sync.Mutex
-	dir, path         string
-	store             *statefile.Handle[storedFile]
-	defaults, current config.TunnelConfig
-	web               bool
-	broken            error
-}
+type Service = settingsstore.Store[config.TunnelConfig, storedFile]
 
 func Open(stateDir string, defaults config.TunnelConfig) *Service {
 	if defaults.Named() {
@@ -46,22 +59,8 @@ func Open(stateDir string, defaults config.TunnelConfig) *Service {
 			defaults.Hostname = normalized.Hostname
 		}
 	}
-	s := &Service{defaults: defaults, current: defaults}
-	dir, err := pathutil.Expand(stateDir)
-	if err == nil {
-		dir, err = filepath.Abs(dir)
-	}
-	if err == nil {
-		s.dir, s.path = dir, filepath.Join(dir, "tunnel-settings.json")
-		err = s.load()
-	}
-	if err != nil {
-		s.broken = err
-		s.current.Enabled = false
-	}
-	return s
+	return settingsstore.Open(&spec, stateDir, defaults)
 }
-
 func decodeStored(f storedFile, defaults config.TunnelConfig) (config.TunnelConfig, error) {
 	if f.V != 1 || f.Enabled == nil || f.Hostname == nil {
 		return config.TunnelConfig{}, errors.New("incomplete tunnel settings")
@@ -74,28 +73,6 @@ func decodeStored(f storedFile, defaults config.TunnelConfig) (config.TunnelConf
 	next.Cloudflared = defaults.Cloudflared
 	next.DownloadMirrors = defaults.DownloadMirrors
 	return next, nil
-}
-func (s *Service) load() error {
-	var f storedFile
-	var err error
-	s.store, f, err = statefile.Open[storedFile](s.dir, statefile.Tunnel, func(f storedFile) error { _, err := decodeStored(f, s.defaults); return err })
-	if statefile.IsKind(err, statefile.Missing) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	s.current, err = decodeStored(f, s.defaults)
-	s.web = err == nil
-	return err
-}
-
-// Effective returns the current settings and whether they came from the web.
-// An unavailable store returns Enabled=false even when TOML enables exposure.
-func (s *Service) Effective() (config.TunnelConfig, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.current, s.web
 }
 
 // Prepare validates an update, preserving the credential only on omission.
@@ -110,78 +87,4 @@ func Prepare(current config.TunnelConfig, mode, hostname string, token *string) 
 	}
 	current.Token, current.Hostname = next.Token, next.Hostname
 	return current, nil
-}
-
-func (s *Service) unavailableLocked() error {
-	if s.broken != nil {
-		return fmt.Errorf("%w: %w", ErrUnavailable, s.broken)
-	}
-	return nil
-}
-
-func (s *Service) Unavailable() error {
-	if s == nil {
-		return ErrUnavailable
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.unavailableLocked()
-}
-
-// Save publishes before changing in-memory settings. A failed write leaves
-// the previous effective settings intact and marks storage unavailable.
-func (s *Service) Save(next config.TunnelConfig) error {
-	if s == nil {
-		return ErrUnavailable
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.unavailableLocked(); err != nil {
-		return err
-	}
-	mode := "quick"
-	if next.Named() {
-		mode = "named"
-	}
-	normalized, err := Prepare(next, mode, next.Hostname, nil)
-	if err != nil {
-		return err
-	}
-	stored := storedFile{V: 1, Enabled: &normalized.Enabled, Mode: mode, Token: normalized.Token, Hostname: &normalized.Hostname}
-	if err := s.store.Commit(stored); err != nil {
-		s.broken = err
-		return s.unavailableLocked()
-	}
-	s.current, s.web = normalized, true
-	return nil
-}
-
-// Reset removes the override durably. The controller stops this process,
-// while a later startup uses the original TOML Enabled value.
-func (s *Service) Reset() (config.TunnelConfig, error) {
-	if s == nil {
-		return config.TunnelConfig{}, ErrUnavailable
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.unavailableLocked(); err != nil {
-		return config.TunnelConfig{}, err
-	}
-	err := s.store.Remove()
-	if err != nil {
-		s.broken = err
-		return config.TunnelConfig{}, s.unavailableLocked()
-	}
-	s.current, s.web = s.defaults, false
-	return s.current, nil
-}
-
-func (s *Service) Close() {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.store.Close()
-	s.broken = errors.New("tunnel settings service is closed")
 }
