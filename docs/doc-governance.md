@@ -13,6 +13,8 @@ WebMux 由 Agent 主导开发，单个 Markdown 文件过长会让模型一次�
 
 归档变更是不可改写的记录；OpenSpec 允许在途变更的 proposal、design、tasks 与 delta 很短，因此它们没有行数下限。单行长度上限适用于上表中除归档外的 Markdown（即 `docs/` 与 `openspec/` 下的文件；仓库根目录的 `README.md`、`AGENTS.md` 等不在守卫范围内），表格行与围栏代码块内的内容豁免。
 
+`AGENTS.md` 虽不在守卫范围内，但有单独的 10 KiB 体积预算，由 `internal/archtest` 的 `TestAgentsGuideSize` 检查。超限时把最不常用的规则原文迁入 `docs/agent-rules/`，索引见 [Agent 规则](agent-rules.md)。
+
 ## 阈值
 
 - **行数上限**：400 行。

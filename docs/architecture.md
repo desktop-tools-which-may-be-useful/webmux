@@ -119,6 +119,7 @@ Tailscale 控制器的生命周期：
 - 新增 `internal/` 包时，在 `internal/archtest/layers_test.go` 的清单中归类；删除包时同时删除条目。
 - 例外只能写进清单的登记表（`outbound`、`sinks`、`encoders`、`pure`），并附理由，评审时可见。纯函数登记不能用于构造、状态访问或 I/O；缺失、未使用或指向非函数的条目使测试失败。依赖方向没有例外。
 - 每条规则由 `internal/archtest/testdata/fixture` 中带 `// want Rn` 注释的故意违规验证；修改规则时同步增加违规与合规样例。
+- `AGENTS.md` 有 10 KiB 体积预算，由 `TestAgentsGuideSize`（`internal/archtest/agents_size_test.go`）检查；超限时把最不常用的规则原文迁入 `docs/agent-rules/`，规则索引见 [Agent 规则](agent-rules.md)。
 - Service 以哨兵错误报告错误种类（`workspace.ErrConflict`、`codeview.ErrGone`、`files.ErrTooLarge` 等），Controller 用 `errors.Is` 映射状态码，错误文本不变。
 - 线上类型集中在 `internal/contract`，转换集中在 `internal/wire`，并保持 nil 与空集合的区别（`null` 与 `[]`/`{}` 不同）。持久化类型（`workspace` 的仓库清单、`launch.Config`、`push` 存储）保留自己的 json 标签，但不直接上线。
 

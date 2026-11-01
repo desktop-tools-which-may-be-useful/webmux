@@ -1,138 +1,57 @@
 # Repository Guidelines
 
-## Project Overview
+WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, including shells and CLI agents. Browser disconnection does not end a session; server restart does. The Go binary embeds the browser app. This is not a process sandbox, durable session store, or tmux wrapper: commands run as the service user. Keep deployments on loopback or a trusted VPN; never expose an unrestricted shell publicly.
 
-WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, including shells and CLI agents. Browser disconnection does not end a session; server restart does. The Go binary embeds the browser app. This is not a process sandbox, durable session store, or tmux wrapper: commands run as the service user. Keep deployments on loopback or a trusted VPN; do not expose an unrestricted shell publicly.
+**This file has a hard 10 KiB budget**, enforced by `internal/archtest` (`TestAgentsGuideSize`). Keep only rules needed on almost every change here; put the rest in `docs/agent-rules/` and link it. Index: [docs/agent-rules.md](docs/agent-rules.md).
 
-## Architecture & Data Flow
+## Architecture
 
-- Startup loads TOML configuration; `cmd/webmux` converts it to `session.Options` (via `cmd/internal/assemble`), constructs every service (`session.Manager`, launch, workspace, codeview, files, push), and injects them into `api.New` as `api.Deps`. Only `cmd/` constructs services or converts configuration into service options. Keep this explicit constructor-based dependency wiring.
-- Layers (enforced by `internal/archtest`, rules R0–R10 in `docs/architecture.md`): controllers `internal/api`, `internal/hub`, `internal/wire`; services `session`, `workspace`, `launch`, `push`, `codeview`, `files`; shared `contract`, `config`, `runtime`, `statefile`, `fetch`, `pathutil`, `attentionkind`; out-of-server clients `client`, `localclient`, `attach`, `sessioncmd`, `tray/...`, `wslclient`, `tunnel`, `service`. Shared packages and clients never import services or controllers; only `cmd/` imports `internal/api`.
-- `internal/session` owns PTYs, bounded byte scrollback, metadata, status detection, and process cleanup. `internal/api` owns REST routes, authentication, Origin checks, error-to-status mapping, and static serving; `internal/hub` bridges session subscriptions to WebSockets and encodes terminal JSON frames; `internal/files` owns directory completion, mkdir, and upload storage.
+- `cmd/webmux` loads TOML, converts it to `session.Options` (via `cmd/internal/assemble`), constructs every service (`session.Manager`, launch, workspace, codeview, files, push) and injects them into `api.New` as `api.Deps`. Only `cmd/` constructs services or converts configuration into service options. Keep explicit constructor-based wiring.
+- Layers are enforced by `internal/archtest` (rules R0–R10 in `docs/architecture.md`; manifest in `internal/archtest/layers_test.go`, where every new `internal/` package must be classified).
+  - Controllers: `internal/api`, `hub`, `wire`. Services: `session`, `workspace`, `launch`, `push`, `codeview`, `files`, and others. Shared: `contract`, `config`, `runtime`, `statefile`, `fetch`, `pathutil`, `attentionkind`. Out-of-server clients: `client`, `attach`, `tray/...`, `tunnel`, `service`, and others.
+  - Shared packages and clients never import services or controllers. Only `cmd/` imports `internal/api`.
+- `internal/session` owns PTYs, bounded byte scrollback, metadata, status detection, and process cleanup. `internal/api` owns REST routes, authentication, Origin checks, error-to-status mapping, and static serving. `internal/hub` bridges session subscriptions to WebSockets and encodes terminal JSON frames. `internal/files` owns directory completion, mkdir, and upload storage.
 - REST handles configuration, session operations, and filesystem requests. `/ws/sessions` delivers a snapshot followed by list events; `/ws/s/{id}` carries terminal frames. Raw PTY bytes reach xterm without server-side terminal emulation; OSC/title and preview parsing are side channels.
-- Replay capture and live subscription registration share a lock: preserve gap-free reattachment. Bounded queues disconnect slow clients rather than blocking PTY readers. Each connection has one data writer; cancellation must stop connection work without killing the persistent session.
-- Backend payloads and `web/src/schemas.ts` form one contract. Every JSON body and frame the controller or hub encodes or decodes is a type in `internal/contract`, converted from service types in `internal/wire`; services emit typed `session.Message` values and never encode client-visible JSON. Keep frame handling in `internal/hub` and `web/src/hooks/terminal-socket.svelte.ts` (composed by `useTerminal` in `terminal.svelte.ts`) aligned; update schemas, contract types, and consumers together when changing JSON fields, and re-record `internal/api/testdata/wire` with `go test ./internal/api -run TestWireSnapshots -update`.
+- Replay capture and live subscription registration share a lock: preserve gap-free reattachment. Bounded queues disconnect slow clients rather than blocking PTY readers. Each connection has one data writer; cancelling a connection must not kill the persistent session.
+- Backend payloads and `web/src/schemas.ts` form one contract. Every JSON body and frame is a type in `internal/contract`, converted from service types in `internal/wire`; services never encode client-visible JSON. When changing JSON fields, update schemas, contract types, hub/frontend frame handling and consumers together, then re-record `internal/api/testdata/wire` with `go test ./internal/api -run TestWireSnapshots -update`.
 
-## Key Directories
+## Commands
 
-| Path                                               | Change guidance                                                                                                                                                                           |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cmd/webmux/`                                      | CLI flags, dependency wiring, and server shutdown.                                                                                                                                        |
-| `internal/session/`                                | Session lifecycle and concurrency; process tables and cleanup are platform-specific (`_linux.go` reads `/proc`, `_darwin.go` uses sysctl/`proc_pidinfo`, shared logic in `_unix.go`).     |
-| `internal/api/`, `internal/hub/`, `internal/wire/` | Controllers: HTTP/security boundaries, status mapping (`api/errors.go`), streaming transport, and service↔wire conversion. No direct filesystem, process, or service package-level calls. |
-| `internal/contract/`, `internal/config/`           | Stdlib-only wire types and frame constants; configuration parsing and validation.                                                                                                         |
-| `internal/archtest/`                               | Test-only layer manifest and architecture rules; classify every new `internal/` package in `layers_test.go`. The fixture under `testdata/fixture` proves each rule.                       |
-| `internal/docguard/`                               | Test-only documentation/spec size and tree-layout guard; thresholds and exemptions live in `docs/doc-governance.md` and `doc_test.go`.                                                    |
-| `web/src/pages/`, `web/src/hooks/`                 | Page state and resource-owning terminal/mobile behavior.                                                                                                                                  |
-| `web/src/lib/components/ui/`                       | shadcn-svelte base components; compose them in business components instead of inventing replacement dialogs or menus.                                                                     |
-| `web/test/`                                        | Node unit, browser component, and isolated backend E2E suites.                                                                                                                            |
-| `deploy/`                                          | Deployment examples.                                                                                                                                                                      |
-| `docs/`, `openspec/`                               | User/contributor docs and specification artifacts; obey `docs/doc-governance.md` (20–400 lines, ≤300 display columns per line, ≤48 KiB per file, ≤20 child directories).                  |
+Run from the repository root; the full list is in [conventions](docs/agent-rules/conventions.md#development-commands).
 
-`web/dist/`, `bin/`, and browser reports are generated outputs. `acceptance.local/` is gitignored, machine-specific experimentation with fixed ports/tokens and live-session side effects—not the standard QA suite.
+- `make web`: install frontend dependencies, run Svelte/TypeScript checks, build `web/dist`.
+- `make build`: build the frontend, then the embedded Go binary `bin/webmux`. Rebuild the frontend before compiling Go (`web/embed.go` embeds `web/dist`).
+- `make check`: build the frontend, check test types and formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint` (needs golangci-lint v2.15.0).
+- `make format`: apply gofmt and Oxfmt.
+- `pnpm --dir web check:arch`: frontend architecture guard; run it before finishing frontend work.
+- `pnpm --dir web dev`: Vite at `http://127.0.0.1:5173`, proxying `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its TOML or browser writes are rejected.
+- `-config`, `-listen`, `-token` override startup settings; config defaults to `~/.config/webmux/config.toml`.
 
-## Development Commands
+## Conventions
 
-Run from the repository root:
+- Go: follow [docs/go-style.md](docs/go-style.md) and add no lint warnings (`make go-lint`). Return contextual errors. Services report sentinel errors (for example `workspace.ErrConflict`); only `internal/api/errors.go` maps them to HTTP statuses.
+- Concurrency: protect state with existing locks and never hold them across blocking network or PTY operations. Shared output chunks stay immutable. Exit publication follows PTY drain and process cleanup. Preserve cancellation/deadlines for PTY writes and join spawned connection goroutines.
+- Execute commands as argv, not shell-expanded strings. Session creation takes either a saved launch `configId` or an explicit full `cmd`/`env`, never both. There are no built-in launch presets or implicit shell wrappers; loading `.bashrc` needs an explicit command such as `bash -ic 'exec opencode "$@"' opencode`.
+- Security: preserve authentication and Origin checks on API/WebSocket paths. Never log terminal input/output or expose tokens through configuration responses.
+- Frontend: Svelte 5 runes per [docs/frontend-style.md](docs/frontend-style.md) (`$state` only for rendered state, `$derived` for computed values, `$effect` only for side effects with cleanup, typed `$props()`, `onclick` not `on:`). TypeScript is strict. Oxfmt: 80 columns, two spaces, semicolons, trailing commas.
+- Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. Reuse `api.ts` and `ws.ts`; do not add parallel request or reconnect conventions. PTY data stays binary. Failures use `APIError`; HTTP 401 triggers `webmux:auth`.
+- UI: look first in `web/src/lib/components/ui/`, then `web/src/components/`, then the shadcn-svelte registry. Add a variant or size to a design-system component instead of restyling it with `class`. Fix `check:arch` violations; never add `eslint-disable`/`jscpd:ignore` or grow a baseline ([docs/frontend-architecture.md](docs/frontend-architecture.md)).
+- Icons: Iconify with the `tabler` collection, bundled locally. Icon-only controls need an accessible name and a visible tooltip; decorative icons use `aria-hidden="true"` ([docs/design-system.md](docs/design-system.md#icons)).
+- Names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune hooks, Go `*_test.go`, Playwright `*.spec.ts`.
+- Use pnpm (never npm, Yarn, or Bun) with the frozen lockfile. Go 1.26+, Node 26.12.1 (`.nvmrc`), GNU Make. Release builds use `CGO_ENABLED=0`.
 
-| Command                                    | Purpose                                                                                                                           |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                                                                             |
-| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`.                                                         |
-| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.                                                               |
-| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                                                                          |
-| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                                                                      |
-| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                                                                              |
-| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                                                                         |
-| `pnpm --dir web check:test`                | Type-check `web/src` and top-level `web/test/*.test.ts` with Svelte support.                                                      |
-| `make check`                               | Build frontend, check test types and formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint`. |
-| `make docs-check`                          | Run the documentation/spec size and tree-layout guard (`internal/docguard`).                                                      |
-| `pnpm --dir web lint`                      | Run Oxlint, including type-aware Promise rules, on frontend code.                                                                 |
-| `pnpm --dir web check:arch`                | Run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test).             |
-| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                                                                                |
+## Testing
 
-Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its development TOML; otherwise browser write requests are rejected. Configuration defaults to `~/.config/webmux/config.toml`; `-config`, `-listen`, and `-token` override startup settings.
+- `make test` is the full gate (Go race plus all frontend suites); `make test-fast` skips Storybook, E2E and performance.
+- Target one Go package with `go test -race ./internal/session`, one Vitest file with `pnpm --dir web exec vitest run --config vitest.config.ts test/input.test.ts`, one E2E spec with `pnpm --dir web exec playwright test test/e2e/terminal.spec.ts`.
+- Preserve coverage for authentication/Origin rejection, argv boundaries, replay continuity, exit ordering, cancellation, terminal input/rendering, and touch interactions.
+- Do not connect tests to an existing developer service. macOS temp paths sit behind `/var -> /private/var`; compare canonical paths.
+- Test runtime, CI layout and diagnostics: [testing](docs/agent-rules/testing.md).
+- PRs that change visible UI MUST embed screenshots of the final implementation (before/after, light/dark and desktop/mobile where relevant, on isolated demo data, with URLs reviewers can open). Details in [testing](docs/agent-rules/testing.md#ui-pull-request-evidence).
 
-## Code Conventions & Common Patterns
+## Documentation and User Stories
 
-- Go follows [the Go quality baseline](docs/go-style.md), based on the Uber Go Style Guide with documented local exceptions. New Go code must add no lint warnings; use the pinned golangci-lint release and `make go-lint`.
-- Go uses gofmt. Frontend files use Oxfmt with an 80-column print width, two spaces, semicolons, trailing commas, and Svelte formatting enabled. Oxlint checks JS/TS and Svelte script blocks, with type-aware Promise rules for `.ts` and `.svelte.ts`; keep `svelte-check` for Svelte template and type diagnostics. TypeScript is strict with `noUncheckedIndexedAccess`; `$lib` aliases `web/src/lib`.
-- Before writing UI, look for an existing component in `web/src/lib/components/ui/`, then `web/src/components/`, then the shadcn-svelte registry; give design-system components a new variant or size instead of restyling them with `class`. Run `pnpm --dir web check:arch` before finishing frontend work. The committed baselines are empty, so any violation fails; fix it rather than adding `eslint-disable`/`jscpd:ignore` or growing a baseline. A baseline is only for adopting a new rule that has existing violations, followed by `pnpm --dir web arch:ratchet` as they are fixed. See [Frontend Architecture Guard](docs/frontend-architecture.md).
-- Follow existing names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune-bearing hooks, Go `*_test.go`, and Playwright `*.spec.ts`.
-- Use Iconify for new or changed UI icons, preferring the `tabler` collection for visual consistency. Bundle the required icon data locally so icons work without a public icon API. Migrate existing direct icon-library imports when updating the related UI. Icon-only controls must have an accessible name and a visible tooltip; decorative icons use `aria-hidden="true"`. See [Icons](docs/design-system.md#icons).
-- Use Svelte 5 `$state`/`$derived` for local reactive state and lifecycle cleanup for sockets, xterm, listeners, and observers. Reuse `api.ts` and `ws.ts`; do not add parallel request or reconnect conventions. The frontend baseline is [Frontend Code Quality](docs/frontend-style.md): `$state` only for state that drives rendering, `$derived` for computed values, `$effect` only for side effects with cleanup, stable business IDs for keyed lists, typed `$props()`, and Svelte 5 event attributes (`onclick`) rather than `on:` directives.
-- Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. High-risk request bodies use the optional body schema in `api()` and are validated before any network request. PTY data stays binary, not JSON or decoded text.
-- Return contextual Go errors and API JSON errors with meaningful HTTP statuses. Services report sentinel error kinds (for example `workspace.ErrConflict`); only `internal/api/errors.go` maps them to statuses. Frontend failures use `APIError`; HTTP 401 triggers `webmux:auth`. Preserve cancellation/deadlines for PTY writes and join spawned connection goroutines.
-- Protect manager/session state with existing locks; do not hold them across blocking network or PTY operations. Shared output chunks stay immutable. Exit publication follows PTY drain and process cleanup.
-- Execute commands as argv, not shell-expanded strings. Session creation takes either a saved custom launch `configId` or an explicit full `cmd`/`env`; they are mutually exclusive. There are no built-in launch presets or implicit shell wrappers. Loading `.bashrc` requires an explicit command such as `bash -ic 'exec opencode "$@"' opencode`. Preserve authentication and Origin checks on API/WebSocket paths; never log terminal input/output or expose tokens through configuration responses.
-
-## Important Files
-
-- `cmd/webmux/main.go`, `web/src/main.ts`, `web/src/App.svelte`: server/browser entry points and top-level lifecycle/routing.
-- `internal/session/manager.go`, `session.go`, `io.go`, `ring.go`: state ownership, PTY lifecycle, cancellable input, and replay.
-- `web/embed.go`: embeds `web/dist`; rebuild the frontend before compiling Go to avoid missing or stale assets.
-- `Makefile`, `go.mod`, `web/package.json`, `web/pnpm-lock.yaml`, `web/pnpm-workspace.yaml`: build commands, tool/dependency versions, and permitted install scripts.
-- `web/vite.config.ts`, `web/tsconfig.json`, `web/components.json`, `.oxfmtrc.json`, `web/.oxlintrc.json`: proxy/alias, strict typing, UI generation, formatting, and lint configuration.
-- `web/eslint.config.mjs`, `web/.dependency-cruiser.cjs`, `web/.jscpd.json`, `web/knip.json`, `web/test/architecture.test.ts` and their baselines (`web/eslint-suppressions.json`, `web/.dependency-cruiser-known-violations.json`, `web/.jscpd-baseline.json`): frontend architecture guard.
-- `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level; confirm implementation details against source. Maintain `docs/user-stories.md` (index) and `docs/user-stories/` (group files) under the rules below; follow `docs/doc-governance.md` for file size and tree layout, and update other documentation when relevant. `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.
-- `openspec/config.yaml`: spec-driven workflow context. Write new specification artifacts in Simplified Chinese, retaining English structural headings and SHALL/MUST keywords. `.agents/`, `.claude/`, and `.omp/` contain generated workflow integrations.
-
-## User Stories Maintenance
-
-- Read `docs/user-stories.md` (the index) and the relevant group file under
-  `docs/user-stories/` before changing a capability. Every implemented
-  capability MUST have one or more stories explaining the user role, intended
-  action, purpose, and observable acceptance criteria.
-- In the same change, update the affected stories when adding, changing, or
-  removing behavior. This includes UI, REST/WebSocket APIs, CLI commands,
-  configuration, security and session lifecycle, deployment, and contributor
-  tooling. Pure refactors, formatting, and dependency updates with no behavior
-  change do not require catalog edits.
-- Reuse existing stories when their purpose still fits; add stories for new
-  purposes. Keep IDs stable: do not renumber existing stories or reuse retired
-  IDs. When removing a capability, mark its stories as retired and explain the
-  replacement when applicable rather than silently losing their history.
-- Keep acceptance criteria, per-group source references in `docs/user-stories/`,
-  both feature indexes (`docs/user-stories.md` and
-  `docs/user-stories/coverage.md`), and any stated counts consistent. Use the
-  existing Chinese story format and functional groups; add a group only when
-  existing groups do not fit.
-- Check behavior against the implementation and relevant tests. Distinguish
-  implemented capabilities from OpenSpec plans; investigate disagreements
-  before updating the catalog. Keep verification notes accurate and never claim
-  that tests ran or the whole catalog was reverified without that evidence.
-- Before completing the change, verify that every added or changed capability
-  maps to a story, IDs are unique, index references resolve, and linked source
-  paths exist. Run the applicable Markdown formatting and whitespace checks.
-- In the delivery or PR summary, identify the affected story IDs, or briefly
-  explain why the change has no user-story impact.
-
-## Runtime/Tooling Preferences
-
-Use Go 1.26+, Node.js 26.12.1 (Current, pinned in `.nvmrc`), pnpm 12.11.2, and GNU Make. Use pnpm—not npm, Yarn, or Bun—to manage frontend dependencies; retain the frozen lockfile workflow and the `esbuild`-only dependency build-script allowlist.
-
-Production needs only the Linux or macOS binary, a shell, and any chosen CLI agents; it does not require Node or Go. `deploy/webmux.service` (systemd) and `deploy/com.webmux.plist` (launchd) are the service examples. Release builds use `CGO_ENABLED=0`. `make check` needs golangci-lint v2.15.0; CI runs the same configured linters and `go vet ./...` after building embedded frontend assets. OpenSpec 1.13.0 is optional workflow tooling, not a frontend runtime dependency.
-
-## Testing & QA
-
-```sh
-make test                         # Full gate: Go race + all frontend suites
-make test-fast                    # Go race + Vitest unit/browser (no Storybook/E2E/perf)
-make test-unit                    # Vitest in Node
-make test-browser                 # Vitest in headless Chromium
-make test-e2e                     # Playwright: desktop + Pixel 7 Chromium
-make test-browsers-install        # Chromium (+ Linux libraries; may require sudo)
-```
-
-- Go tests use the standard `testing` package. Target a package with `go test -race ./internal/session`; Linux/macOS lifecycle tests cover child-process cleanup, waiting detection, and input cancellation; subreaper reaping is Linux-only. macOS temp paths sit behind `/var -> /private/var`: compare against canonical paths (packages' `TestMain` canonicalizes `TMPDIR`; E2E uses `realpath`).
-- Browser tests exercise real Svelte/Tailwind/xterm rendering without a backend. Local `make test` builds one production frontend and `.cache/webmux-e2e/webmux` once, plus the fake ACP agent (`internal/acp/testdata/fakeagent`) as `.cache/webmux-e2e/agents/{omp,opencode}`, and E2E/performance reuse them via `WEBMUX_E2E_BINARY` (agents are found in `agents/` beside it); `make test-fast` skips Storybook, E2E and performance. CI builds the Linux and macOS E2E executables and fake agents once in the Ubuntu Go job, before its race tests (`.github/scripts/package-e2e-runtime.mjs`) and shares them, the frontend output and locked Playwright runtime through a same-run artifact. Workers share only the immutable executables, with independent backends, HOME/config/workdirs, fake-agent session stores (the agents come first on each backend's `PATH`) and dynamic ports (up to two workers locally, two on Ubuntu CI and four on macOS CI; `WEBMUX_E2E_WORKERS` overrides), and automatic session/process/hybrid-record cleanup. Do not connect tests to an existing developer service.
-- Target a frontend test with `pnpm --dir web exec vitest run --config vitest.config.ts test/input.test.ts`, or an E2E spec with `pnpm --dir web exec playwright test test/e2e/terminal.spec.ts`.
-- Preserve behavioral coverage for authentication/Origin rejection, argv boundaries, replay continuity, exit ordering, cancellation, terminal input/rendering, and touch interactions. No numeric coverage threshold is configured.
-- `.github/workflows/test.yml` runs parallel jobs: formatting/architecture guard/frontend build, Go race, Vitest, Storybook, single-worker 4x CPU performance and four E2E shards (desktop and mobile projects) on Ubuntu; E2E shards prepare Node while waiting for the same-run artifact, reuse the executable and Playwright packages, and skip pnpm/frontend dependencies and Go setup; macOS runs native Go race (excluding the static guards `archtest`/`docguard` and the Windows `tray`/`wsl`/`wslclient` packages) using the shared frontend output and two desktop-project E2E shards on separate runners, with all results required by the final gate. `Test result` aggregates every job. Every browser job installs Chromium through `.github/actions/playwright`, which caches the Linux apt packages because a slow Ubuntu mirror can otherwise consume a job's whole timeout. PR runs restore caches read-only and superseded PR runs are cancelled; caches are saved from `main`. Failure diagnostics live in `web/playwright-report/`, `web/test-results/`, and `web/.vitest/attachments/` (uploaded per job); open the E2E HTML report with `pnpm --dir web test:e2e:report`.
-- Chromium mobile emulation does not replace real-device iOS Safari/Android keyboard and native selection-menu checks.
-
-## UI Pull Request Evidence
-
-- PRs that change visible UI (layout, styling, components, or interaction states) MUST embed screenshots of the final implementation in the PR description. Capture the running app or its real Storybook components; mockups and test summaries do not replace screenshots.
-- Show before/after views for changes to an existing interface. Include the affected light/dark themes and desktop/mobile layouts when the change spans them, and label the viewport and any sample data.
-- Use GitHub attachments or committed image URLs that reviewers can open; local filesystem paths and localhost URLs are not valid PR image links. Check that the images render in the published PR and refresh them when later changes alter the UI. Use isolated fixtures or demo sessions without credentials or private terminal output.
+- `docs/` and `openspec/` obey [docs/doc-governance.md](docs/doc-governance.md): 20–400 lines, at most 300 display columns per line, at most 48 KiB per file, at most 20 child directories. Write new OpenSpec artifacts in Simplified Chinese, keeping English structural headings and SHALL/MUST.
+- Every implemented capability MUST have a story in `docs/user-stories/` (index: `docs/user-stories.md`). In the same change, update the affected stories when behavior changes: UI, APIs, CLI, configuration, security, lifecycle, deployment, contributor tooling. Pure refactors, formatting and dependency updates are exempt.
+- Keep story IDs stable (never renumber or reuse; mark removed ones retired), keep both indexes and counts consistent, and never claim verification you did not run. Name the affected story IDs (or say there is no impact) in the delivery or PR summary. Full procedure: [user-stories-maintenance](docs/agent-rules/user-stories-maintenance.md).
+- Repository map (directories, important files): [repo-map](docs/agent-rules/repo-map.md).
