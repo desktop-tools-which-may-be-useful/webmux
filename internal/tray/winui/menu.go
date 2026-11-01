@@ -11,7 +11,6 @@ import (
 const (
 	remotePool    = 8
 	forwardPool   = 8
-	infoLinkPool  = 8
 	candidatePool = 12
 	distroPool    = 16
 )
@@ -88,7 +87,7 @@ type menu struct {
 	pushInfo, pushGuide                    *item
 
 	remote, fwHeadline, fwBlocked, fwInit *item
-	fwLinks, fwCandidates                 []*item
+	fwCandidates                          []*item
 
 	start, stop, restart, install, download *item
 
@@ -174,7 +173,6 @@ func buildMenu() *menu {
 	m.fwHeadline = addSub(m.remote, "")
 	m.fwBlocked = addSub(m.remote, "")
 	m.fwInit = addSub(m.remote, "初始化配置（生成 Token）")
-	m.fwLinks = pool(m.remote, infoLinkPool)
 	m.remote.mi.AddSeparator()
 	m.fwCandidates = pool(m.remote, candidatePool)
 	systray.AddSeparator()

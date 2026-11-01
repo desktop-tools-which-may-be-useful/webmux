@@ -3,7 +3,6 @@
 package winui
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -128,19 +127,6 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 		m.fwInit.set("初始化配置（生成 Token）", true, false)
 	} else {
 		m.fwInit.hide()
-	}
-	var info []string
-	if !v.plan.Needed && snap.HasStatus {
-		for _, r := range status.URLs.Remote {
-			info = append(info, fmt.Sprintf("%s（%s · %s）", r.URL, r.Interface, kindLabel(r.Kind)))
-		}
-	}
-	for i, it := range m.fwLinks {
-		if i < len(info) {
-			it.set(info[i], false, false)
-		} else {
-			it.hide()
-		}
 	}
 	b.candidates = forwardCandidates(v)
 	if len(b.candidates) > len(m.fwCandidates) {
