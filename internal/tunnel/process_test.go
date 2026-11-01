@@ -16,6 +16,7 @@ import (
 const fakeCloudflared = `#!/bin/sh
 printf '%s\n' "$@" > "$FAKE_DIR/argv"
 printf '%s' "${TUNNEL_TOKEN-unset}" > "$FAKE_DIR/token"
+trap 'echo term > "$FAKE_DIR/term"; exit 0' TERM
 case "$FAKE_MODE" in
 quick)
 	echo 'ERR failed to request quick Tunnel: Post "https://api.trycloudflare.com/tunnel": EOF' >&2
@@ -29,7 +30,6 @@ late) sleep 0.5
 	echo 'INF Registered tunnel connection connIndex=0' >&2 ;;
 fail) echo 'ERR invalid tunnel token' >&2; exit 3 ;;
 esac
-trap 'echo term > "$FAKE_DIR/term"; exit 0' TERM
 while :; do sleep 0.05; done
 `
 

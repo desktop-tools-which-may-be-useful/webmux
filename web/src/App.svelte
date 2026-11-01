@@ -11,7 +11,9 @@
   import { Label } from "$lib/components/ui/label";
   import * as Card from "$lib/components/ui/card";
   import TokenHelp from "./components/TokenHelp.svelte";
+  import LazyPage from "./components/LazyPage.svelte";
   import SessionList from "./pages/SessionList.svelte";
+  import { matchRoute } from "./route";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
   import { browserDraftStorage } from "./draftStorage";
   import { clearRepositories } from "./repository-cache";
@@ -24,10 +26,10 @@
   let checking = $state(true);
   let token = $state(stored("token"));
   let error = $state("");
-  const match = $derived(path.match(/^\/s\/([a-z2-7]{8})$/));
-  const sessionId = $derived(match?.[1]);
+  const route = $derived(matchRoute(path));
+  const sessionId = $derived(route.name === "terminal" ? route.id : "");
   // The frame of a pop-out code window; it only shows the code workspace.
-  const codeId = $derived(path.match(/^\/code\/([a-z2-7]{8})$/)?.[1]);
+  const codeId = $derived(route.name === "code" ? route.id : "");
 
   async function check() {
     checking = true;
@@ -38,7 +40,7 @@
       error = "";
       // Re-registers an existing push subscription, e.g. after the server
       // rebuilt its store; without one it touches nothing.
-      if (!codeId) void syncPush().catch(() => undefined);
+      if (route.name !== "code") void syncPush().catch(() => undefined);
     } catch (err) {
       error = errorMessage(err);
     } finally {
@@ -129,63 +131,49 @@
     </Card.Root>
   </main>
 {:else if codeId}
-  {#await import("./pages/CodePopout.svelte")}
-    <p role="status" class="p-6 text-muted-foreground">正在加载代码…</p>
-  {:then page}
-    <page.default id={codeId} />
-  {:catch}
-    <p role="alert" class="p-6 text-destructive">
-      代码窗口加载失败，请关闭后重新打开。
-    </p>
-  {/await}
+  <LazyPage
+    load={() => import("./pages/CodePopout.svelte")}
+    label="代码"
+    errorMessage={() => "代码窗口加载失败，请关闭后重新打开。"}
+  >
+    {#snippet children(page)}<page.default id={codeId} />{/snippet}
+  </LazyPage>
 {:else if sessionId}
-  {#await import("./pages/Terminal.svelte")}
-    <p role="status" class="p-6 text-muted-foreground">正在加载终端…</p>
-  {:then page}
-    {#key sessionId}<page.default
-        id={sessionId}
-        {drafts}
-        onUploadNotice={(message) => {
-          if (ready) uploadNotice = message;
-        }}
-      />{/key}
-  {:catch error}
-    <p role="alert" class="p-6 text-destructive">
-      {error instanceof Error ? error.message : "终端加载失败"}
-    </p>
-  {/await}
-{:else if path === "/settings/tailscale"}
-  {#await import("./pages/TailscaleSettingsPage.svelte")}
-    <p role="status" class="p-6 text-muted-foreground">
-      正在加载 Tailscale 设置…
-    </p>
-  {:then page}
-    <page.default />
-  {:catch}
-    <p role="alert" class="p-6 text-destructive">
-      Tailscale 设置加载失败，请刷新页面后重试。
-    </p>
-  {/await}
-{:else if path === "/settings/tunnel"}
-  {#await import("./pages/TunnelSettingsPage.svelte")}
-    <p role="status" class="p-6 text-muted-foreground">正在加载公网访问设置…</p>
-  {:then page}
-    <page.default />
-  {:catch}
-    <p role="alert" class="p-6 text-destructive">
-      公网访问设置加载失败，请刷新页面后重试。
-    </p>
-  {/await}
-{:else if path === "/settings"}
-  {#await import("./pages/Settings.svelte")}
-    <p role="status" class="p-6 text-muted-foreground">正在加载设置…</p>
-  {:then page}
-    <page.default />
-  {:catch}
-    <p role="alert" class="p-6 text-destructive">
-      设置加载失败，请刷新页面后重试。
-    </p>
-  {/await}
+  <LazyPage
+    load={() => import("./pages/Terminal.svelte")}
+    label="终端"
+    errorMessage={(error) =>
+      error instanceof Error ? error.message : "终端加载失败"}
+  >
+    {#snippet children(page)}
+      {#key sessionId}<page.default
+          id={sessionId}
+          {drafts}
+          onUploadNotice={(message) => {
+            if (ready) uploadNotice = message;
+          }}
+        />{/key}
+    {/snippet}
+  </LazyPage>
+{:else if route.name === "settings-tailscale"}
+  <LazyPage
+    load={() => import("./pages/TailscaleSettingsPage.svelte")}
+    label="Tailscale 设置"
+    loadingText="正在加载 Tailscale 设置…"
+  >
+    {#snippet children(page)}<page.default />{/snippet}
+  </LazyPage>
+{:else if route.name === "settings-tunnel"}
+  <LazyPage
+    load={() => import("./pages/TunnelSettingsPage.svelte")}
+    label="公网访问设置"
+  >
+    {#snippet children(page)}<page.default />{/snippet}
+  </LazyPage>
+{:else if route.name === "settings"}
+  <LazyPage load={() => import("./pages/Settings.svelte")} label="设置">
+    {#snippet children(page)}<page.default />{/snippet}
+  </LazyPage>
 {:else}
   <SessionList {drafts} />
 {/if}
