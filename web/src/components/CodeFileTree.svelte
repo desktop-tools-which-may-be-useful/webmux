@@ -77,7 +77,16 @@
       event.clientY <= box.bottom;
     menu(node, inside ? { x: event.clientX, y: event.clientY } : row, row);
   }
-  const hold = (node: FileTarget) => longPress((row) => menu?.(node, row, row));
+  // Rows register their node; one long-press listener on the tree resolves
+  // the held row, so a directory refresh mid-press cannot cancel it.
+  const rowNodes = new WeakMap<HTMLElement, FileTarget>();
+  const register = (node: FileTarget) => (element: HTMLElement) => {
+    rowNodes.set(element, node);
+  };
+  const hold = longPress((element) => {
+    const node = rowNodes.get(element);
+    if (node) menu?.(node, element, element);
+  }, "button[data-file-entry]");
   let rootOpen = $state(true);
   const expanded = new SvelteSet<string>();
   const branches = new SvelteMap<string, CodeListing>();
@@ -262,7 +271,7 @@
                     data-file-entry
                     onkeydown={keyboard}
                     oncontextmenu={(event) => contextMenu(event, node)}
-                    {@attach hold(node)}
+                    {@attach register(node)}
                     title={node.path}
                   >
                     {#if loading.has(node.path)}<IconLoader
@@ -311,7 +320,7 @@
               data-file-entry
               onkeydown={keyboard}
               oncontextmenu={(event) => contextMenu(event, node)}
-              {@attach hold(node)}
+              {@attach register(node)}
               aria-label={node.name}
               aria-current={activePath === node.path ? "page" : undefined}
               {disabled}
@@ -378,7 +387,13 @@
 {/snippet}
 
 <ScrollArea class="min-h-0 flex-1">
-  <div class="p-1" role="group" aria-label="文件树" data-file-tree>
+  <div
+    class="p-1"
+    role="group"
+    aria-label="文件树"
+    data-file-tree
+    {@attach hold}
+  >
     <Collapsible.Root bind:open={rootOpen}>
       <div class="group/row relative">
         <Collapsible.Trigger>
@@ -389,7 +404,7 @@
               data-file-entry
               onkeydown={keyboard}
               oncontextmenu={(event) => contextMenu(event, rootNode)}
-              {@attach hold(rootNode)}
+              {@attach register(rootNode)}
               title={rootPath}
             >
               {#if rootOpen}<IconChevronDown
