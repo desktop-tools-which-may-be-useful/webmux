@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import IconArrowDown from "~icons/tabler/arrow-down";
   import { Button } from "$lib/components/ui/button";
+  import { Badge } from "$lib/components/ui/badge";
   import SoftKeys from "./SoftKeys.svelte";
   import type { Modifiers } from "../input";
   import type { UploadProgress } from "../hooks/upload.svelte";
@@ -105,7 +106,11 @@
         class="restore-overlay"
         role="status"
       >
-        {t.connection === "connected" ? "正在恢复…" : "正在连接…"}
+        {t.connection === "connecting" ? "正在连接…" : "正在恢复…"}
+      </div>{:else if t.connection === "connecting" || t.connection === "reconnecting"}<div
+        class="pointer-events-none absolute top-2 right-2 z-20"
+      >
+        <Badge variant="secondary" role="status">正在恢复…</Badge>
       </div>{/if}
     {#if !t.atBottom && !t.restoring && visible}<Button
         variant="secondary"

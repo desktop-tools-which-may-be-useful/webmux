@@ -208,8 +208,9 @@ test("a synced terminal resumes from its stream offset and appends only the miss
   await expect
     .element(page.getByRole("status", { name: "Terminal connection" }))
     .toHaveTextContent("reconnecting");
-  // A synced terminal stays visible while it reattaches.
+  // A synced terminal keeps its content visible while it reattaches.
   await expect.element(restoration()).toHaveTextContent("ready");
+  expect(domText()).toContain(prompt);
   const second = await reconnected(2);
   const query = new URL(second.url).searchParams;
   expect(query.get("generation")).toBe(generation);

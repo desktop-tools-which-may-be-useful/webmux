@@ -33,12 +33,12 @@
 
 客户端 SHALL 记录自最近快照以来已交给 xterm 的字节 offset，并在重连 URL 中携带 `generation` 与 `offset`。代际一致且 offset 位于保留范围 `[start, end]` 内时，服务端 SHALL 以 `append` 续接；否则 SHALL 以 `reset` 全量回放。客户端收到与本地 offset 不符的 `append` 时 SHALL 请求 0x02 全量同步。
 
-页面隐藏时客户端 SHALL 停止写入 xterm 并保留最后的 offset；回到前台重连后 SHALL 续接缺失的输出而不清屏。可续接的终端在重连期间 SHALL 保持显示原内容。
+页面隐藏时客户端 SHALL 停止写入 xterm 并保留最后的 offset；回到前台重连后 SHALL 续接缺失的输出而不清屏。可续接的终端在重连期间 SHALL 保持显示原内容，并显示不遮挡终端的“正在恢复…”提示；连接恢复后提示消失。
 
 #### Scenario: 短暂掉线
 
 - **WHEN** 已连接的页面断线期间会话又输出了若干字节，随后重连
-- **THEN** 服务端只发送断线后的字节，终端不清屏
+- **THEN** 服务端只发送断线后的字节，终端不清屏；重连期间显示不遮挡终端内容的“正在恢复…”提示，连接恢复后提示消失
 
 #### Scenario: 缓冲已覆盖
 

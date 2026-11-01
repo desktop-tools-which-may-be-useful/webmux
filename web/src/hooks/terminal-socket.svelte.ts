@@ -306,7 +306,8 @@ export function createTerminalSocket(id: string, manageChrome = true) {
             stale = false;
             exited = false;
           }
-          // A synced terminal stays visible and is extended in place.
+          // A synced terminal stays visible and is extended in place; the view
+          // still shows a non-blocking reconnect hint from the connection state.
           if (!synced) restoring = true;
           schemeReports = false;
           for (const report of submissions.values()) report("unknown");
