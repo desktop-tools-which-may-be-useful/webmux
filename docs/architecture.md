@@ -328,7 +328,12 @@ else                                        → running
 
 - Svelte 5 + TypeScript + Vite，基础控件使用 shadcn-svelte，样式基于 Tailwind CSS。
 - 所有 HTTP 响应、WebSocket JSON 和本地设置都先经 Zod 校验（`web/src/schemas.ts`），再进入页面状态。
-- 终端使用 xterm.js 5 与 WebGL 渲染；WebGL 不可用、上下文丢失或像素尺寸不一致时回退到 DOM 渲染器，不重置终端。
+- 终端使用 xterm.js 6 与 WebGL 渲染；WebGL 不可用、上下文丢失或像素尺寸不一致时回退到 DOM 渲染器，不重置终端。
+- DEC 2026 同步输出期间 xterm 保持旧画面，Kitty 图片层随之暂存新增、删除与定位，在 xterm 绘制完成更新的同一帧应用（`terminal-graphics.ts`）。
+  - xterm 6.0 的 DOM 渲染器会自行重绘行（滚动触发的选区刷新、resize、焦点、光标）并在缓冲重置时清空各行，绕过同步检查。
+    `terminal-sync.ts` 在同步期间把这些重绘改为受控刷新；WebGL 渲染器本就受控，且有自己的字形模型，保持不变。
+  - 全量回放：`CAN` 后开启同步再 `reset()`，回放期间保留旧画面与旧图片；回放解析完成后在代码中结束同步，
+    不在快照后写入结束序列（原始快照可能停在未结束的 APC/OSC/DCS 中，写入的序列会被当作数据吞掉）。
 - PTY 数据始终以二进制传输，不转为 JSON 或解码文本。
 
 ## 已知实现要点

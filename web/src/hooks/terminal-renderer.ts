@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { observeDevicePixelRatio } from "./terminal-dpr";
+import { holdRepaintsDuringSync } from "./terminal-sync";
 import {
   terminalFontFamilyAlt,
   terminalFontFamilyCss,
@@ -69,6 +70,7 @@ export function createTerminalRenderer(
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.open(parent);
+  const releaseSync = holdRepaintsDuringSync(term);
   let webgl: WebglAddon | undefined;
   const useDomRenderer = () => {
     if (!webgl) return;
@@ -202,6 +204,7 @@ export function createTerminalRenderer(
           // release the addon while the terminal's services still exist.
           webgl?.dispose();
           webgl = undefined;
+          releaseSync();
           term.dispose();
         });
       });

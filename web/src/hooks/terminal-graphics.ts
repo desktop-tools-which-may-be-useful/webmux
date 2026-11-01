@@ -10,7 +10,12 @@ import { graphicsAnchor } from "./terminal-graphics-anchor";
 
 export interface TerminalGraphics {
   write(data: Uint8Array, parsed: () => void): void;
-  reset(): void;
+  /**
+   * Drops every image and pending decode. Images already on screen stay
+   * until the returned release is called and xterm paints again, so a replay
+   * replaces the old text and images in the same frame.
+   */
+  reset(): () => void;
   dispose(): void;
 }
 
@@ -45,7 +50,7 @@ export function attachTerminalGraphics(
             if (!disposed) parsed();
           });
       },
-      reset() {},
+      reset: () => () => {},
       dispose() {
         disposed = true;
       },
@@ -141,8 +146,30 @@ export function attachTerminalGraphics(
     );
   }
 
+  // DEC 2026 synchronized output: xterm keeps painting the previous screen
+  // until the program ends its update (or xterm's timeout ends it). Hold the
+  // image layer with it, so a redraw never shows new images against old text
+  // or drops images before their text is replaced. Placements are positioned,
+  // revealed and retired only while xterm paints the current buffer.
+  let resetHold: "none" | "held" | "released" = "none";
+  let resetToken = 0;
+  const held = () => term.modes.synchronizedOutputMode || resetHold !== "none";
+  const retired: HTMLCanvasElement[] = [];
+  let deferred = false;
+  function release(canvas: HTMLCanvasElement) {
+    canvas.width = 0;
+    canvas.height = 0;
+    canvas.remove();
+  }
+
   function update() {
     if (disposed) return;
+    if (held()) {
+      deferred = true;
+      return;
+    }
+    deferred = false;
+    for (const canvas of retired.splice(0)) release(canvas);
     if (rendered.size === 0) return;
     const cell = cellSize();
     if (!cell) return;
@@ -194,9 +221,10 @@ export function attachTerminalGraphics(
     placement.anchor?.dispose();
     totalCanvasPixels -= placement.pixels;
     placement.pixels = 0;
-    placement.canvas.width = 0;
-    placement.canvas.height = 0;
-    placement.canvas.remove();
+    if (held()) {
+      retired.push(placement.canvas);
+      deferred = true;
+    } else release(placement.canvas);
     placement.dismissed();
     schedule();
   }
@@ -230,6 +258,8 @@ export function attachTerminalGraphics(
         canvas.height = 0;
         canvas.className = "xterm-graphics-image";
         canvas.style.zIndex = String(spec.z);
+        // update() reveals it once positioned, never inside a held frame.
+        canvas.style.display = "none";
         const placement: RenderedPlacement = {
           canvas,
           image,
@@ -278,7 +308,7 @@ export function attachTerminalGraphics(
     for (const placement of rendered) {
       if (placement.buffer.type === "alternate" && placement.buffer !== buffer)
         remove(placement);
-      else if (placement.buffer !== buffer)
+      else if (placement.buffer !== buffer && !held())
         placement.canvas.style.display = "none";
     }
     schedule();
@@ -299,6 +329,16 @@ export function attachTerminalGraphics(
     for (const placement of rendered) placement.anchor?.sync();
     schedule();
   });
+  // The frame that ends a held update: xterm has just painted the new text,
+  // so apply the images in the same task instead of a frame later.
+  const rendering = term.onRender(() => {
+    if (resetHold === "released" && !term.modes.synchronizedOutputMode)
+      resetHold = "none";
+    if (!deferred || held()) return;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    update();
+  });
   const observer = new ResizeObserver(remeasure);
   observer.observe(screen);
   const stopDpr = observeDevicePixelRatio(remeasure);
@@ -312,7 +352,14 @@ export function attachTerminalGraphics(
         });
     },
     reset() {
-      if (!disposed) graphics.reset();
+      if (disposed) return () => {};
+      const token = ++resetToken;
+      resetHold = "held";
+      graphics.reset();
+      return () => {
+        if (token === resetToken && resetHold === "held")
+          resetHold = "released";
+      };
     },
     dispose() {
       if (disposed) return;
@@ -325,6 +372,8 @@ export function attachTerminalGraphics(
       eraseDisplay.dispose();
       resize.dispose();
       parsed.dispose();
+      rendering.dispose();
+      for (const canvas of retired.splice(0)) release(canvas);
       observer.disconnect();
       stopDpr();
       layer.remove();

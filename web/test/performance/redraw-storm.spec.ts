@@ -51,9 +51,27 @@ async function installProbe(page: Page) {
         });
       }
     };
+    // Mutations only mark a frame for inspection; a frame counts as a repaint
+    // when what a viewer sees changed: the rows' text or the visible images
+    // and their positions (hidden canvases staged for later do not count).
     let observers: MutationObserver[] = [];
     let text = false;
     let graphics = false;
+    let shownText = "";
+    let shownImages = "";
+    const textNow = () =>
+      document.querySelector(".xterm-rows")?.textContent ?? "";
+    const imagesNow = () =>
+      Array.from(
+        document.querySelectorAll<HTMLCanvasElement>(
+          ".xterm-graphics-layer canvas",
+        ),
+      )
+        .filter(
+          (canvas) => canvas.isConnected && canvas.style.display !== "none",
+        )
+        .map((canvas) => `${canvas.style.transform}/${canvas.width}`)
+        .join();
     let frames: { time: number; text: boolean; graphics: boolean }[] = [];
     let start = 0;
     let fontLoads = 0;
@@ -62,7 +80,15 @@ async function installProbe(page: Page) {
     });
     const sample = (time: number) => {
       if (!probe.recording) return;
-      frames.push({ time, text, graphics });
+      const nextText = text ? textNow() : shownText;
+      const nextImages = graphics ? imagesNow() : shownImages;
+      frames.push({
+        time,
+        text: nextText !== shownText,
+        graphics: nextImages !== shownImages,
+      });
+      shownText = nextText;
+      shownImages = nextImages;
       text = false;
       graphics = false;
       requestAnimationFrame(sample);
@@ -76,6 +102,8 @@ async function installProbe(page: Page) {
         frames = [];
         text = false;
         graphics = false;
+        shownText = textNow();
+        shownImages = imagesNow();
         const rows = document.querySelector(".xterm-rows");
         const layer = document.querySelector(".xterm-graphics-layer");
         const textObserver = new MutationObserver(() => (text = true));
