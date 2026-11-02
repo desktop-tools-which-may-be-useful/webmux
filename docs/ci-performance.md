@@ -37,12 +37,27 @@ E2E 的 worker 数从 2 调到 4，Storybook 从 2 调到 6，使用同一台机
 - Go 的独立资源用例并行；workspace 的公共 Git 环境在测试进程启动时设置一次。会修改 PATH 或钩子环境的用例保持串行。`-parallel=4` 限制每个包的测试并发。
 - Storybook 将视口/主题矩阵移到 test-scoped 配置，复用浏览器进程，每个用例仍创建全新上下文。试点击自带滚动与稳定性检查；禁用按钮仍显式滚动，两种情况都检查完整入屏。生产构建、tree shaking、语法高亮 worker 和反例检测保持验证。
 - Storybook 在 CI 只为首次重试记录 trace，与 E2E 一致；失败截图、报告和本地失败 trace 保留。Storybook 重试只用于诊断，flaky 仍使 CI 失败；速度比较也拒绝 flaky 结果。
-- CI 安装 Chromium 及其 headless shell，覆盖通知与常规浏览器用例。macOS 的原生 Go race 与两个桌面项目 E2E 分片使用独立 runner；任一失败都会令最终检查失败。E2E 通过显式的 `WEBMUX_E2E_DIST` 路径复制该 job 刚生成的生产产物，避免重复构建，默认运行仍从源码构建。`Test result` 仍要求所有 job 成功。
-- E2E 运行时由 Ubuntu Go job 在 race 测试前统一构建，并通过同轮 artifact 分发给 Ubuntu 四个、macOS 两个分片。
+- CI 安装 Chromium 及其 headless shell，覆盖通知与常规浏览器用例。macOS 原生 Go race 与两个桌面 E2E 分片使用独立 runner，任一失败都令最终检查失败。E2E 通过显式 `WEBMUX_E2E_DIST` 复用刚生成的生产产物，默认仍从源码构建。`Test result` 要求已执行 job 成功，并接受变更裁剪跳过的 job。
+- E2E 运行时由独立的 `E2E runtime` job 统一构建，并通过同轮 artifact 分发给 Ubuntu 四个、macOS 两个分片；两个平台的 Go race 也依赖该 job 取得前端产物。
   - 构建内容：当前提交的内嵌程序，以及按 `omp`、`opencode` 命名的假 ACP agent（`.ci-runtime/<平台>/agents/`，由 `.github/scripts/package-e2e-runtime.mjs` 构建）；使用 tar 保留可执行权限。
   - 分片通过 `WEBMUX_E2E_BINARY` 使用该程序，从其旁边的 `agents/` 取得假 agent；不安装 Go、不恢复 Go 缓存，也不重复构建前端或后端。
   - 显式路径无效或缺少假 agent 时直接失败；本地未指定时仍从源码构建。
   - 分片的后端进程、HOME、目录、端口、假 agent 会话库和 PTY 仍各自独立。Node/pnpm 安装与浏览器系统依赖仍由每个 runner 准备。
+
+- **缓存与按变更裁剪（2026-11-02）**：
+  - Go 模块缓存与 `GOCACHE` 拆成两个 key；模块缓存跟随 `go.mod`/`go.sum`，构建缓存使用按 ISO 周滚动的 key（并随模块文件变化），`main` 上 key 未命中即保存。这样主分支每周最多新增一份完整 `GOCACHE`，不会与模块缓存和 pnpm store 争抢 10 GB 配额；Go 的内容寻址条目仍会复用旧缓存中未变化的编译单元。
+  - 新增 `Classify changes` job，用仓库内 `.github/scripts/classify-changes.sh` 计算
+    `go`、`web`、`docs_only`、`full`；不使用 `on.pull_request.paths`，保证必需的
+    `Test result` 始终上报。
+    - 分类时先校验 base 是否存在，任何 `.github/` 变更都独立强制全量。
+    - 随后执行 base 版本的分类脚本；仅当 base 尚无该脚本时才回退到工作区版本，
+      避免 PR 削弱跳过自身测试的规则。
+  - `docs-only` 只跑格式、文档、持久化与 agent/web 静态守卫；web-only 跳过 Ubuntu/macOS Go race、Windows 交叉编译与 Windows 安装程序冒烟；go-only 跳过 Vitest、Storybook 与性能；E2E 在两类变更下都保留。未识别路径、`.github/**`、`Makefile`、模块/锁文件与安装脚本一律全量运行。
+  - 新增 `E2E runtime` job，与 Go race 解耦；Ubuntu/macOS Go race 与所有 E2E 分片都依赖它。
+  - `Test result` 接受 `skipped`，但按分类结果交叉校验应运行的 job：
+    - `go` 为真时，`runtime`、两个 Go race、Windows 安装程序冒烟与两个平台的 E2E 必须成功。
+    - `web` 为真时，`vitest`、`storybook`、`performance` 必须成功。
+    - `changes` 与 `lint` 始终必需。
 
 - Ubuntu E2E 保持两个 worker，避免较少 CPU 上的争用；macOS 使用四个。E2E 和 Storybook 的 flaky 结果均使 CI 失败，重试仅保留诊断。异步生成默认分支名的用例等待初始值后再填入目标名称。
 - 本地 `make test` 预构建一次前端、`.cache/webmux-e2e/webmux` 与 `.cache/webmux-e2e/agents/` 中的假 agent，E2E 和性能测试通过 `WEBMUX_E2E_BINARY` 复用；`make test-fast` 提供不含 Storybook、E2E 与性能的快速分层入口。混合会话 E2E 中验证空闲休眠的用例要等待真实的 1 分钟，只在桌面项目运行。
@@ -78,7 +93,15 @@ node web/scripts/benchmark-actions.mjs \
   --baseline 39479795307 --candidate NEW_RUN_ID
 ```
 
-脚本要求两次运行全部成功、job 名称集合一致，保存墙钟与队列耗时，并仅在整体耗时降低至少 50% 时返回成功。在真实 runner 完成此验收前，整体 CI 目标仍是未验证状态。
+脚本的验收条件：
+
+- 两次运行都成功，且 job 名称集合一致。
+- 两次都是每个 job 实际执行的完整运行；含变更裁剪 `skipped` 的运行覆盖的工作不同，
+  不与全量运行比较。
+- 保存墙钟与队列耗时，仅在整体耗时降低至少 50% 时返回成功。
+
+改动 job 结构（例如新增 `changes` 与 `runtime`）后，先用新结构跑一次完整运行作为
+baseline，再比较候选运行。在真实 runner 完成此验收前，整体 CI 目标仍是未验证状态。
 
 ## 一分钟目标的迭代
 

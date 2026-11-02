@@ -40,14 +40,20 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
 
 ## CI
 
-- CI builds the Linux and macOS E2E executables and fake agents once in the Ubuntu Go job, before its race tests (`.github/scripts/package-e2e-runtime.mjs`).
-  - They are shared, with the frontend output and locked Playwright runtime, through a same-run artifact.
+- CI classifies changed paths in the `Classify changes` job (`.github/scripts/classify-changes.sh`).
+  - Docs-only changes run the formatting, documentation, persistence and agent/web static guards without the test suites.
+  - Go-only changes skip Vitest, Storybook and performance. Web-only changes skip both Go race jobs, the Windows cross-compile and the Windows installer smoke. E2E still runs for either.
+  - Unknown paths, `.github/**`, `Makefile`, module/lockfile changes and installer tooling force a full run. Do not use `on.pull_request.paths`: the required `Test result` check must always report.
+  - The job validates the base itself, forces a full run for any `.github/` change, and executes the base revision's classifier so a PR cannot weaken the rules that skip its own tests.
+- CI builds the Linux and macOS E2E executables, fake agents and frontend output once in the `E2E runtime` job (`.github/scripts/package-e2e-runtime.mjs`).
+  - Go race, macOS Go race and every E2E shard depend on that job and reuse its same-run artifact, including the locked Playwright runtime.
 - `.github/workflows/test.yml` runs parallel jobs:
   - Ubuntu: formatting/architecture guard/frontend build, Go race, Vitest, Storybook, single-worker 4x CPU performance, and four E2E shards (desktop and mobile projects).
-  - E2E shards prepare Node while waiting for the artifact, reuse the executable and Playwright packages, and skip pnpm/frontend dependencies and Go setup.
+  - E2E shards reuse the executable and Playwright packages; they skip pnpm/frontend dependencies and Go setup.
   - macOS: native Go race (excluding the static guards `archtest`/`docguard` and the Windows `tray`/`wsl`/`wslclient` packages) using the shared frontend output, and two desktop-project E2E shards on separate runners.
-  - `Test result` aggregates every job, and all results are required by the final gate.
+  - `Test result` aggregates every job, accepts intentionally `skipped` results, and cross-checks that every job the classifier selected actually succeeded.
 - Every browser job installs Chromium through `.github/actions/playwright`, which caches the Linux apt packages because a slow Ubuntu mirror can otherwise consume a job's whole timeout.
+- Go modules and the Go build/test cache use separate keys: modules follow `go.mod`/`go.sum`, while the build cache rolls over weekly (and on module changes) so `main` refreshes it without saving a full copy per Go commit.
 - PR runs restore caches read-only and superseded PR runs are cancelled. Caches are saved from `main`.
 - Failure diagnostics live in `web/playwright-report/`, `web/test-results/`, and `web/.vitest/attachments/` (uploaded per job). Open the E2E HTML report with `pnpm --dir web test:e2e:report`.
 

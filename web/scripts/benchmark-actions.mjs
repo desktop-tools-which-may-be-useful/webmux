@@ -36,12 +36,21 @@ async function readRun(id) {
   const run = JSON.parse(stdout);
   if (run.status !== "completed" || run.conclusion !== "success")
     throw new Error(`${run.url}: require a completed successful workflow`);
-  if (!run.jobs.length || run.jobs.some((job) => job.conclusion !== "success"))
-    throw new Error(`${run.url}: every job must succeed`);
-  const started = Math.min(...run.jobs.map((job) => Date.parse(job.startedAt)));
-  const completed = Math.max(
-    ...run.jobs.map((job) => Date.parse(job.completedAt)),
-  );
+  // Change detection intentionally skips jobs that cannot be affected. A run
+  // with skips covers less work, so its wall clock is not comparable to a full
+  // run; only compare runs where every job executed.
+  if (
+    !run.jobs.length ||
+    run.jobs.some(
+      (job) => job.conclusion !== "success" && job.conclusion !== "skipped",
+    )
+  )
+    throw new Error(`${run.url}: every job must succeed or be skipped`);
+  const ran = run.jobs.filter((job) => job.startedAt && job.completedAt);
+  if (ran.length !== run.jobs.length)
+    throw new Error(`${run.url}: compare only runs where every job executed`);
+  const started = Math.min(...ran.map((job) => Date.parse(job.startedAt)));
+  const completed = Math.max(...ran.map((job) => Date.parse(job.completedAt)));
   if (!Number.isFinite(started + completed) || completed < started)
     throw new Error(`${run.url}: missing job timestamps`);
   return {
