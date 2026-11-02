@@ -57,6 +57,24 @@ function topLine(scope: Scope) {
     return Number(row?.dataset.line);
   });
 }
+// The top line once the reader stops moving. On slow runners a jump keeps
+// settling for a few frames after its target row first becomes visible, and a
+// captured reading state records wherever it finally rests.
+async function settledTopLine(scope: Scope) {
+  let last = Number.NaN;
+  await expect
+    .poll(
+      async () => {
+        const now = await topLine(scope);
+        const same = now === last;
+        last = now;
+        return same;
+      },
+      { intervals: [250] },
+    )
+    .toBe(true);
+  return last;
+}
 async function gotoLine(scope: Scope, line: number) {
   // Font loading and closing the jump panel both change the virtualized
   // gutter's geometry. Finish those transitions before clicking a line number.
@@ -72,6 +90,7 @@ async function gotoLine(scope: Scope, line: number) {
   await input.press("Enter");
   await expect(input).toHaveCount(0);
   await expect(gutter(scope, line)).toBeInViewport();
+  await settledTopLine(scope);
 }
 function gutter(scope: Scope, line: number) {
   return scope
@@ -126,7 +145,7 @@ test("the code panel pops out into a framed window and both ways keeps its readi
   await expect(sendButton(page, "195")).toBeEnabled();
   await gutter(page, 198).click({ modifiers: ["Shift"] });
   await expect(sendButton(page, "195-198")).toBeEnabled();
-  const top = await topLine(page);
+  const top = await settledTopLine(page);
   expect(top).toBeGreaterThan(150);
 
   // A diff with unmodified context expanded and one line selected.
@@ -208,7 +227,7 @@ test("the code panel pops out into a framed window and both ways keeps its readi
   await gotoLine(frame, 320);
   await gutter(frame, 318).click();
   await expect(sendButton(frame, "318")).toBeEnabled();
-  const poppedTop = await topLine(frame);
+  const poppedTop = await settledTopLine(frame);
   expect(poppedTop).toBeGreaterThan(top);
   await closeFrom(pip);
   await expect(page.getByText("代码已在独立窗口中显示")).toHaveCount(0);
