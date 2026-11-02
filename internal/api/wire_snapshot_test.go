@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/artifacts"
@@ -478,7 +479,7 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 		t.Fatal(err)
 	}
 	hybrids := hybrid.New(hybrid.Options{StateDir: t.TempDir(), Manager: m, Uploads: folders.UploadPath})
-	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs, Hybrid: hybrids, Artifacts: folders})))
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs, Hybrid: hybrids, Artifacts: folders, DefaultShell: agentprofile.ShellBash})))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(func() {
 		cancel()

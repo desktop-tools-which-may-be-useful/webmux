@@ -13,6 +13,40 @@ import (
 	"github.com/rainchan/webmux/internal/session"
 )
 
+// TestConfigDefaultShell checks that GET /api/config reports the resolved
+// startup-file shell verbatim, empty for shells WebMux does not wrap.
+func TestConfigDefaultShell(t *testing.T) {
+	const loginToken = "webmux-login-token"
+	for _, shell := range []string{"bash", "zsh", ""} {
+		t.Run(shell, func(t *testing.T) {
+			m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
+			defer m.Shutdown(context.Background())
+			handler := New(testDeps(t, Deps{
+				Config:       config.Config{Token: loginToken},
+				DefaultShell: shell,
+				Manager:      m,
+				Workspace:    testWorkspace(t, m, t.TempDir()),
+			}))
+			req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+			req.Header.Set("Authorization", "Bearer "+loginToken)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
+			}
+			var response struct {
+				DefaultShell string `json:"defaultShell"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.DefaultShell != shell {
+				t.Fatalf("defaultShell = %q, want %q", response.DefaultShell, shell)
+			}
+		})
+	}
+}
+
 // TestConfigTunnelStatus checks the read-only tunnel object exposed to the
 // settings page. Neither credential may reach the browser.
 func TestConfigTunnelStatus(t *testing.T) {

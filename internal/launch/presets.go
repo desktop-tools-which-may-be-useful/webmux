@@ -1,35 +1,33 @@
 package launch
 
+import "github.com/rainchan/webmux/internal/agentprofile"
+
 // Presets returns the launch configs seeded into a new installation: a login
-// shell and common CLI agents. Agents load ~/.bashrc; permission flags are
-// explicit parts of the editable commands. Claude Code, Codex CLI, OpenCode
-// and omp start as hybrid sessions. They are ordinary configs the user may
-// edit or delete.
-// shell is the login shell path; empty means /bin/sh.
+// shell and common CLI agents. Agents load the startup file of the service's
+// default shell; permission flags are explicit parts of the editable
+// commands. Claude Code, Codex CLI, OpenCode and omp start as hybrid
+// sessions. They are ordinary configs the user may edit or delete. shell is
+// the login shell path; empty means /bin/sh.
 func Presets(shell string) []Input {
-	if shell == "" {
-		shell = "/bin/sh"
+	login := shell
+	if login == "" {
+		login = "/bin/sh"
+	}
+	startup := agentprofile.DefaultShell(shell)
+	command := func(program string, args ...string) []string {
+		return agentprofile.StartupArgv(startup, program, args...)
 	}
 	return []Input{
-		{Name: "Shell", Icon: "terminal", Cmd: []string{shell, "-l", "-i"}},
-		{Name: "Claude Code", Icon: "claudecode", Cmd: bashrcCommand("claude", "--dangerously-skip-permissions"), Hybrid: true},
-		{Name: "Codex CLI", Icon: "codex", Cmd: bashrcCommand("codex", "--dangerously-bypass-approvals-and-sandbox"), Hybrid: true},
-		{Name: "Gemini CLI", Icon: "geminicli", Cmd: bashrcCommand("gemini", "--yolo")},
-		{Name: "Cursor CLI", Icon: "cursor", Cmd: bashrcCommand("agent")},
-		{Name: "GitHub Copilot CLI", Icon: "githubcopilot", Cmd: bashrcCommand("copilot")},
-		{Name: "Open Code", Icon: "opencode", Cmd: bashrcCommand("opencode", "--auto"), Hybrid: true},
-		{Name: "Qwen Code", Icon: "qwen", Cmd: bashrcCommand("qwen")},
-		{Name: "Kimi Code CLI", Icon: "kimi", Cmd: bashrcCommand("kimi")},
-		{Name: "CodeBuddy Code", Icon: "codebuddy", Cmd: bashrcCommand("codebuddy")},
-		{Name: "omp", Icon: "pi", Cmd: bashrcCommand("omp", "--auto-approve"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}, Hybrid: true},
+		{Name: "Shell", Icon: "terminal", Cmd: []string{login, "-l", "-i"}},
+		{Name: "Claude Code", Icon: "claudecode", Cmd: command("claude", "--dangerously-skip-permissions"), Hybrid: true},
+		{Name: "Codex CLI", Icon: "codex", Cmd: command("codex", "--dangerously-bypass-approvals-and-sandbox"), Hybrid: true},
+		{Name: "Gemini CLI", Icon: "geminicli", Cmd: command("gemini", "--yolo")},
+		{Name: "Cursor CLI", Icon: "cursor", Cmd: command("agent")},
+		{Name: "GitHub Copilot CLI", Icon: "githubcopilot", Cmd: command("copilot")},
+		{Name: "Open Code", Icon: "opencode", Cmd: command("opencode", "--auto"), Hybrid: true},
+		{Name: "Qwen Code", Icon: "qwen", Cmd: command("qwen")},
+		{Name: "Kimi Code CLI", Icon: "kimi", Cmd: command("kimi")},
+		{Name: "CodeBuddy Code", Icon: "codebuddy", Cmd: command("codebuddy")},
+		{Name: "omp", Icon: "pi", Cmd: command("omp", "--auto-approve"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}, Hybrid: true},
 	}
-}
-
-// bashrcCommand runs program with args through an interactive bash so it sees
-// the PATH and environment from ~/.bashrc, which a service manager never
-// loads. It is the argv the settings editor saves for "加载 ~/.bashrc"
-// (BASHRC_PREFIX in web/src/launchConfigs.ts), so the editor shows the plain
-// command checked.
-func bashrcCommand(program string, args ...string) []string {
-	return append([]string{"bash", "-ic", `exec -- "$@"`, "webmux", program}, args...)
 }

@@ -121,7 +121,7 @@ test("masks env values by default and validates variable names", async () => {
   await expect.element(save()).toBeEnabled();
 });
 
-test("the Bashrc checkbox saves a normal command without expanding its arguments", async () => {
+test("the startup-file checkbox saves a normal command without expanding its arguments", async () => {
   const onsaved = vi.fn();
   const requests = serve({
     "/api/launch-configs": (method, body) =>
@@ -135,8 +135,11 @@ test("the Bashrc checkbox saves a normal command without expanding its arguments
     .getByLabelText("启动命令")
     .fill(`opencode --continue 'a b' '' '$HOME'`);
   await page
-    .getByRole("checkbox", { name: "加载 ~/.bashrc", exact: true })
+    .getByRole("checkbox", { name: "加载 shell 启动文件", exact: true })
     .click();
+  await expect
+    .element(page.getByRole("combobox", { name: "启动文件 shell" }))
+    .toMatchTextContent(/Bash/);
   await save().click();
   await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
   expect(requests.at(-1)).toEqual({
@@ -158,6 +161,39 @@ test("the Bashrc checkbox saves a normal command without expanding its arguments
       env: {},
       preview: null,
       hybrid: false,
+    },
+  });
+});
+
+test("the default shell preselects Zsh and can be switched back to Bash", async () => {
+  const onsaved = vi.fn();
+  const requests = serve({
+    "/api/launch-configs": (method, body) =>
+      method === "POST"
+        ? Response.json({ ...saved, ...(body as object) }, { status: 201 })
+        : undefined,
+  });
+  render(LaunchConfigDialog, {
+    open: true,
+    configId: undefined,
+    defaultShell: "zsh",
+    onsaved,
+  });
+  await page.getByLabelText("名称").fill("omp");
+  await page.getByLabelText("启动命令").fill("omp --auto-approve");
+  await page
+    .getByRole("checkbox", { name: "加载 shell 启动文件", exact: true })
+    .click();
+  const picker = page.getByRole("combobox", { name: "启动文件 shell" });
+  await expect.element(picker).toMatchTextContent(/Zsh/);
+  await picker.click();
+  await page.getByRole("option", { name: "Bash（~/.bashrc）" }).click();
+  await save().click();
+  await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
+  expect(requests.at(-1)).toMatchObject({
+    method: "POST",
+    body: {
+      cmd: ["bash", "-ic", 'exec -- "$@"', "webmux", "omp", "--auto-approve"],
     },
   });
 });
@@ -210,11 +246,16 @@ test("following the global default saves a null preview", async () => {
   expect(requests.at(-1)?.body).toMatchObject({ preview: null });
 });
 
-test.each([true, false])(
-  "editing a wrapped config keeps Bash loading %s without losing argv or env",
-  async (enabled) => {
+test.each([
+  ["bash", true],
+  ["bash", false],
+  ["zsh", true],
+  ["zsh", false],
+] as const)(
+  "editing a wrapped %s config keeps loading %s without losing argv or env",
+  async (shell, enabled) => {
     const argv = ["codex", "--resume", "a b", "", "$HOME"];
-    const wrapped = ["bash", "-ic", 'exec -- "$@"', "webmux", ...argv];
+    const wrapped = [shell, "-ic", 'exec -- "$@"', "webmux", ...argv];
     const onsaved = vi.fn();
     const requests = serve({
       "/api/launch-configs/abcdefg2": (method, body) =>
@@ -225,13 +266,17 @@ test.each([true, false])(
     await render(LaunchConfigDialog, {
       open: true,
       configId: saved.id,
+      defaultShell: shell === "zsh" ? "bash" : "zsh",
       onsaved,
     });
     const checkbox = page.getByRole("checkbox", {
-      name: "加载 ~/.bashrc",
+      name: "加载 shell 启动文件",
       exact: true,
     });
     await expect.element(checkbox).toBeChecked();
+    await expect
+      .element(page.getByRole("combobox", { name: "启动文件 shell" }))
+      .toMatchTextContent(shell === "zsh" ? /Zsh/ : /Bash/);
     await expect
       .element(page.getByLabelText("启动命令"))
       .toHaveValue("codex --resume 'a b' '' '$HOME'");

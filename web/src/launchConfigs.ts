@@ -15,7 +15,13 @@ export const LAUNCH_PREVIEW_SKIP_MAX = 50;
 const envName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const encoder = new TextEncoder();
 const bytes = (value: string) => encoder.encode(value).length;
-const BASHRC_PREFIX = ["bash", "-ic", 'exec -- "$@"', "webmux"] as const;
+
+const STARTUP_SHELLS = ["bash", "zsh"] as const;
+export type StartupShell = (typeof STARTUP_SHELLS)[number];
+const STARTUP_PREFIXES: Record<StartupShell, readonly string[]> = {
+  bash: ["bash", "-ic", 'exec -- "$@"', "webmux"],
+  zsh: ["zsh", "-ic", 'exec -- "$@"', "webmux"],
+};
 
 export type EnvRow = { key: number; name: string; value: string };
 export type LaunchConfigInput = {
@@ -40,18 +46,25 @@ export type LaunchConfigsState =
 
 /** Restore only our exact wrapper; arbitrary user-written shell commands stay intact. */
 export function launchCommandDraft(cmd: readonly string[]) {
-  const loadBashrc = hasBashrcWrapper(cmd);
+  const startupShell = wrappedShell(cmd);
   return {
-    command: joinArgs(loadBashrc ? cmd.slice(BASHRC_PREFIX.length) : cmd),
-    loadBashrc,
+    command: joinArgs(
+      startupShell ? cmd.slice(STARTUP_PREFIXES[startupShell].length) : cmd,
+    ),
+    startupShell,
   };
 }
 
-function hasBashrcWrapper(cmd: readonly string[]) {
-  return (
-    cmd.length > BASHRC_PREFIX.length &&
-    BASHRC_PREFIX.every((arg, index) => cmd[index] === arg)
-  );
+function wrappedShell(cmd: readonly string[]): StartupShell | null {
+  for (const shell of STARTUP_SHELLS) {
+    const prefix = STARTUP_PREFIXES[shell];
+    if (
+      cmd.length > prefix.length &&
+      prefix.every((arg, index) => cmd[index] === arg)
+    )
+      return shell;
+  }
+  return null;
 }
 
 export const LAUNCH_ICON_OPTIONS = [
@@ -74,9 +87,8 @@ export function launchConfigIcon(config: {
   cmd: readonly string[];
 }) {
   if (config.icon) return config.icon;
-  const executable = config.cmd[
-    hasBashrcWrapper(config.cmd) ? BASHRC_PREFIX.length : 0
-  ]
+  const shell = wrappedShell(config.cmd);
+  const executable = config.cmd[shell ? STARTUP_PREFIXES[shell].length : 0]
     ?.split(/[\\/]/)
     .pop()
     ?.toLowerCase()
@@ -126,7 +138,7 @@ export function validateLaunchDraft(
   name: string,
   command: string,
   rows: readonly EnvRow[],
-  loadBashrc = false,
+  startupShell: StartupShell | null = null,
   preview: PreviewSettings | null = null,
 ):
   | { ok: true; value: LaunchConfigInput; errors: LaunchDraftErrors }
@@ -156,10 +168,10 @@ export function validateLaunchDraft(
     cmd = parseArgs(command);
     if (!cmd.length || !cmd[0]) errors.command = "请输入可执行程序及参数";
     else {
-      if (loadBashrc) cmd = [...BASHRC_PREFIX, ...cmd];
+      if (startupShell) cmd = [...STARTUP_PREFIXES[startupShell], ...cmd];
       if (cmd.length > LAUNCH_ARGS_MAX)
-        errors.command = loadBashrc
-          ? `加载 .bashrc 后命令最多 ${LAUNCH_ARGS_MAX} 个参数（包含 Bash 启动参数）`
+        errors.command = startupShell
+          ? `加载 shell 启动文件后命令最多 ${LAUNCH_ARGS_MAX} 个参数（包含 shell 启动参数）`
           : `命令最多 ${LAUNCH_ARGS_MAX} 个参数`;
       else if (cmd.some((arg) => bytes(arg) > LAUNCH_VALUE_BYTES))
         errors.command = `单个参数不能超过 ${LAUNCH_VALUE_BYTES} 字节`;

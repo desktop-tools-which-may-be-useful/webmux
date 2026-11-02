@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// lookupTimeout bounds one connector check, ~/.bashrc included.
+	// lookupTimeout bounds one connector check, startup file included.
 	lookupTimeout = 10 * time.Second
 	// versionTimeout bounds asking the agent executable for its version.
 	versionTimeout = 5 * time.Second
@@ -59,7 +59,7 @@ type acpTools struct {
 // prepareACP checks the profile's connector the way the ACP start will run
 // it, and resolves the agent executable for the connector. A connector
 // that cannot be found is a *ConnectorMissingError; a check that fails
-// (timeout, broken ~/.bashrc) is ErrAgent. It blocks: run it in subtasks.
+// (timeout, broken startup file) is ErrAgent. It blocks: run it in subtasks.
 func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 	p := a.cmd.Profile
 	tools := acpTools{env: maps.Clone(p.ACPEnv)}
@@ -78,7 +78,7 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 		resolveAgent = agentPath == ""
 	}
 	var connectorPath string
-	if a.cmd.Form == agentprofile.FormBashrc {
+	if a.cmd.Form == agentprofile.FormStartup {
 		names := []string{p.Connector.Executable}
 		if resolveAgent {
 			names = append(names, a.cmd.Executable)
@@ -87,7 +87,7 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 		paths, ok := lookupAnswers(out, len(names))
 		if err != nil || !ok {
 			if err == nil {
-				err = errors.New("~/.bashrc 未正常结束")
+				err = errors.New("shell 启动文件未正常结束")
 			}
 			return tools, fmt.Errorf("%w: 检查 %s 失败: %v", ErrAgent, p.Connector.Executable, err)
 		}
@@ -123,7 +123,7 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 }
 
 // lookupAnswers reads the last n answer lines of a Lookup command; output
-// ~/.bashrc printed comes before them. ok is false without n answers.
+// the startup file printed comes before them. ok is false without n answers.
 func lookupAnswers(out []byte, n int) ([]string, bool) {
 	var answers []string
 	for _, line := range bytes.Split(out, []byte("\n")) {
@@ -170,12 +170,12 @@ func (a *actor) startFailure(err error) *failure {
 	return &failure{err: fmt.Errorf("%w: %v", ErrAgent, err), public: "启动 agent 失败"}
 }
 
-// exitedNotFound reports a connector run through ~/.bashrc that ended with
-// the shell's command-not-found status before answering: it was removed
-// after the check.
+// exitedNotFound reports a connector run through a startup file that ended
+// with the shell's command-not-found status before answering: it was
+// removed after the check.
 func (a *actor) exitedNotFound(sidecar *session.Sidecar) *failure {
 	c := a.cmd.Profile.Connector
-	if c == nil || a.cmd.Form != agentprofile.FormBashrc || sidecar.ExitCode() != exitNotFound {
+	if c == nil || a.cmd.Form != agentprofile.FormStartup || sidecar.ExitCode() != exitNotFound {
 		return nil
 	}
 	return &failure{err: &ConnectorMissingError{Connector: c}, public: connectorText(c)}

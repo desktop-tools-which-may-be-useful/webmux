@@ -102,38 +102,43 @@ func TestShutdownKillsSidecars(t *testing.T) {
 	}
 }
 
-func TestSidecarBashrcOutputStaysOffProtocol(t *testing.T) {
-	t.Parallel()
-	bash, err := exec.LookPath("bash")
-	if err != nil {
-		t.Skip("bash is not installed")
-	}
-	home := t.TempDir()
-	if err = os.WriteFile(filepath.Join(home, ".bashrc"), []byte("echo BASHRC_NOISE\nexport FROM_BASHRC=1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	m := shellManager(t)
-	s, err := m.CreateShell(ShellInput{CreateInput: CreateInput{Env: map[string]string{"HOME": home}}}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sidecar, err := s.StartSidecar([]string{bash, "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "/bin/sh", "-c", `printf "PROTOCOL:$FROM_BASHRC"`}, true, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	protocol, err := io.ReadAll(sidecar.Stdout())
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitSidecarDone(t, sidecar)
-	if string(protocol) != "PROTOCOL:1" {
-		t.Fatalf("protocol stdout %q", protocol)
-	}
-	if !strings.Contains(string(sidecar.Stderr()), "BASHRC_NOISE") {
-		t.Fatalf(".bashrc did not run or its output was lost: %q", sidecar.Stderr())
-	}
-	if code := sidecar.ExitCode(); code != 0 {
-		t.Fatalf("exit %d", code)
+func TestSidecarStartupFileOutputStaysOffProtocol(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh"} {
+		t.Run(shell, func(t *testing.T) {
+			t.Parallel()
+			path, err := exec.LookPath(shell)
+			if err != nil {
+				t.Skip(shell + " is not installed")
+			}
+			home := t.TempDir()
+			rc := filepath.Join(home, "."+shell+"rc")
+			if err = os.WriteFile(rc, []byte("echo STARTUP_NOISE\nexport FROM_STARTUP=1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			m := shellManager(t)
+			s, err := m.CreateShell(ShellInput{CreateInput: CreateInput{Env: map[string]string{"HOME": home}}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sidecar, err := s.StartSidecar([]string{path, "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "/bin/sh", "-c", `printf "PROTOCOL:$FROM_STARTUP"`}, true, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			protocol, err := io.ReadAll(sidecar.Stdout())
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitSidecarDone(t, sidecar)
+			if string(protocol) != "PROTOCOL:1" {
+				t.Fatalf("protocol stdout %q", protocol)
+			}
+			if !strings.Contains(string(sidecar.Stderr()), "STARTUP_NOISE") {
+				t.Fatalf("%s did not run or its output was lost: %q", rc, sidecar.Stderr())
+			}
+			if code := sidecar.ExitCode(); code != 0 {
+				t.Fatalf("exit %d", code)
+			}
+		})
 	}
 }
 

@@ -41,6 +41,9 @@ type Deps struct {
 	// Artifacts owns each session's interaction artifacts folder, where
 	// uploads are stored; nil answers 503 for uploads and the folder.
 	Artifacts *artifacts.Service
+	// DefaultShell is the startup-file shell resolved from the service's
+	// $SHELL: "bash", "zsh", or "" for a shell WebMux does not wrap.
+	DefaultShell string
 	// Public authorizes runtime HTTPS entry points; nil means no tunnel.
 	Public *PublicOrigins
 	// Push is nil when [push] enabled = false.
@@ -96,7 +99,7 @@ func (s *Server) routes() *http.ServeMux {
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
-		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo()})
+		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo()})
 	})
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, wire.Sessions(m.List())) })
 	mux.HandleFunc("POST /api/sessions", s.create)

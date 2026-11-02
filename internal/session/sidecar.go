@@ -44,8 +44,8 @@ type Sidecar struct {
 // StartSidecar starts argv beside the shell's runs. With protocolOnFD3 the
 // child's stdout and stderr both go to the stderr tail and the protocol pipe
 // is its fd 3, so a wrapper such as
-// `bash -ic 'exec -- "$@" 1>&3 3>&-' webmux <agent>` keeps startup-file
-// output away from the protocol. defaults are variables the child gets
+// `bash -ic 'exec -- "$@" 1>&3 3>&-' webmux <agent>` (or the same with
+// `zsh`) keeps startup-file output away from the protocol. defaults are variables the child gets
 // unless the launch environment sets them. argv[0] is looked up in the
 // child's PATH, as LookPath does; an executable that cannot be found fails
 // with ErrNoExecutable.

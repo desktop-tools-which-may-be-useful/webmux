@@ -111,12 +111,12 @@ interface SessionInfo {
 
 ## 其他
 
-| 方法 | 路径                   | 说明                                                                                                                |
-| ---- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                           |
-| GET  | `/api/config`          | `{defaultCwd, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel}`，不含 token |
-| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                    |
-| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                       |
+| 方法 | 路径                   | 说明                                                                                                                              |
+| ---- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                                         |
+| GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel}`，不含 token |
+| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                  |
+| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                     |
 
 `tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。
 
@@ -125,6 +125,8 @@ interface SessionInfo {
 - `named` 与 `hostname`：动态读取当前有效设置（Web 覆盖优先，否则使用配置文件），关闭时也保留模式信息；Named Tunnel 缺少 `hostname` 时为空字符串。
 - `publicUrl`：仅在 `ready` 时出现且不含 token。
 - 响应不包含 Cloudflare 凭据。
+
+`defaultShell` 为只读的启动文件 shell：`"bash"`、`"zsh"`，或空字符串表示不自动包装；由服务进程 `$SHELL` 的 basename 决定，未设置时为 `"bash"`。
 
 ## 启动配置
 
@@ -143,7 +145,7 @@ interface SessionInfo {
 
 - 省略或空字符串表示自动匹配；更新时同样恢复自动匹配。
 - 不接受 URL 或 SVG 内容。
-- 旧文件省略此字段仍可读取：浏览器按可识别的直接命令或标准 `.bashrc` 包装匹配图标，未匹配时显示通用终端。
+- 旧文件省略此字段仍可读取：浏览器按可识别的直接命令或标准 Bash/Zsh 启动文件包装匹配图标，未匹配时显示通用终端。
 - `terminal` 可显式覆盖自动匹配。
 
 `preview` 为 `null` 或省略时沿用服务端同步的全局预览设置；否则为 `{lines, skip}`，`lines` 为 1–50 的整数、`skip` 为 0–50 的整数。会话卡片按创建时记录的 `configId` 读取该配置的当前预览值，配置被删除或不可用时回退全局设置。

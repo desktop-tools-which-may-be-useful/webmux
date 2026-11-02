@@ -31,6 +31,11 @@ describe("launch icons", () => {
         cmd: ["bash", "-ic", 'exec -- "$@"', "webmux", ...cmd],
       }),
     ).toBe(icon);
+    expect(
+      launchConfigIcon({
+        cmd: ["zsh", "-ic", 'exec -- "$@"', "webmux", ...cmd],
+      }),
+    ).toBe(icon);
     expect(cmd).toEqual([program, "--resume"]);
   });
 
@@ -182,77 +187,101 @@ describe("validateLaunchDraft", () => {
   });
 
   test("validates optional preview settings and inherits when null", () => {
-    const valid = validateLaunchDraft("Agent", "agent", [], false, {
+    const valid = validateLaunchDraft("Agent", "agent", [], null, {
       lines: 20,
       skip: 3,
     });
     expect(valid.ok && valid.value.preview).toEqual({ lines: 20, skip: 3 });
     expect(
-      validateLaunchDraft("Agent", "agent", [], false, { lines: 0, skip: 0 })
+      validateLaunchDraft("Agent", "agent", [], null, { lines: 0, skip: 0 })
         .errors.preview,
     ).toBe("显示行数须为 1–50 的整数");
     expect(
-      validateLaunchDraft("Agent", "agent", [], false, {
+      validateLaunchDraft("Agent", "agent", [], null, {
         lines: 10,
         skip: 51,
       }).errors.preview,
     ).toBe("跳过末尾行数须为 0–50 的整数");
-    const inherited = validateLaunchDraft("Agent", "agent", [], false, null);
+    const inherited = validateLaunchDraft("Agent", "agent", [], null, null);
     expect(inherited.ok && inherited.value.preview).toBeNull();
   });
 
-  test("Bash loading keeps quoted, empty and shell-looking arguments literal", () => {
-    const argv = [
-      "opencode",
-      "two words",
-      "",
-      "$HOME",
-      "$(touch sentinel)",
-      "; exit 9",
-    ];
-    const result = validateLaunchDraft("Open Code", joinArgs(argv), [], true);
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("Expected valid Bash launch");
-    expect(result.value.cmd).toEqual([
-      "bash",
-      "-ic",
-      'exec -- "$@"',
-      "webmux",
-      ...argv,
-    ]);
-    const restored = launchCommandDraft(result.value.cmd);
-    expect(restored.loadBashrc).toBe(true);
-    expect(parseArgs(restored.command)).toEqual(argv);
-    expect(
-      validateLaunchDraft("Open Code", restored.command, [], true),
-    ).toEqual(result);
-    const direct = validateLaunchDraft(
-      "Open Code",
-      restored.command,
-      [],
-      false,
-    );
-    expect(direct.ok && direct.value.cmd).toEqual(argv);
-  });
+  test.each(["bash", "zsh"] as const)(
+    "%s loading keeps quoted, empty and shell-looking arguments literal",
+    (shell) => {
+      const argv = [
+        "opencode",
+        "two words",
+        "",
+        "$HOME",
+        "$(touch sentinel)",
+        "; exit 9",
+      ];
+      const result = validateLaunchDraft(
+        "Open Code",
+        joinArgs(argv),
+        [],
+        shell,
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(`Expected valid ${shell} launch`);
+      expect(result.value.cmd).toEqual([
+        shell,
+        "-ic",
+        'exec -- "$@"',
+        "webmux",
+        ...argv,
+      ]);
+      const restored = launchCommandDraft(result.value.cmd);
+      expect(restored.startupShell).toBe(shell);
+      expect(parseArgs(restored.command)).toEqual(argv);
+      expect(
+        validateLaunchDraft("Open Code", restored.command, [], shell),
+      ).toEqual(result);
+      const direct = validateLaunchDraft(
+        "Open Code",
+        restored.command,
+        [],
+        null,
+      );
+      expect(direct.ok && direct.value.cmd).toEqual(argv);
+    },
+  );
 
-  test("Bash loading cannot hide an empty command or bypass the stored argv limit", () => {
+  test("shell loading cannot hide an empty command or bypass the stored argv limit", () => {
     for (const command of ["", "''", "echo 'unfinished"])
-      expect(validateLaunchDraft("Agent", command, [], true).ok).toBe(false);
+      expect(validateLaunchDraft("Agent", command, [], "bash").ok).toBe(false);
     expect(
-      validateLaunchDraft("Agent", Array(124).fill("arg").join(" "), [], true)
+      validateLaunchDraft("Agent", Array(124).fill("arg").join(" "), [], "bash")
         .ok,
     ).toBe(true);
     expect(
-      validateLaunchDraft("Agent", Array(125).fill("arg").join(" "), [], true)
+      validateLaunchDraft("Agent", Array(125).fill("arg").join(" "), [], "bash")
         .ok,
     ).toBe(false);
   });
 
-  test("editing preserves a user-written Bash script that is not the checkbox wrapper", () => {
-    const argv = ["bash", "-ic", 'exec opencode "$@"', "opencode"];
-    const restored = launchCommandDraft(argv);
-    expect(restored.loadBashrc).toBe(false);
-    expect(parseArgs(restored.command)).toEqual(argv);
+  test.each(["bash", "zsh"] as const)(
+    "editing preserves a user-written %s script that is not the checkbox wrapper",
+    (shell) => {
+      const argv = [shell, "-ic", 'exec opencode "$@"', "opencode"];
+      const restored = launchCommandDraft(argv);
+      expect(restored.startupShell).toBeNull();
+      expect(parseArgs(restored.command)).toEqual(argv);
+    },
+  );
+
+  test("wrappers of one shell never restore another shell's choice", () => {
+    const zsh = ["zsh", "-ic", 'exec -- "$@"', "webmux", "omp"];
+    expect(launchCommandDraft(zsh)).toEqual({
+      command: "omp",
+      startupShell: "zsh",
+    });
+    const barePrefix = ["bash", "-ic", 'exec -- "$@"', "webmux"];
+    expect(launchCommandDraft(barePrefix)).toEqual({
+      command: joinArgs(barePrefix),
+      startupShell: null,
+    });
   });
 });
 

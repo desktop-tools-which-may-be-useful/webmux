@@ -2,6 +2,7 @@
   "status": 200,
   "body": {
     "defaultCwd": "<repo>",
+    "defaultShell": "bash",
     "hostname": "<hostname>",
     "tunnel": {
       "enabled": false,

@@ -336,6 +336,8 @@ export type TailscaleSettingsUpdate = z.infer<
 >;
 export const ConfigSchema = z.object({
   defaultCwd: z.string(),
+  // Older servers do not send the editor's default startup shell.
+  defaultShell: z.enum(["bash", "zsh", ""]).default(""),
   // Older servers do not send this display-only field.
   hostname: z.string().default(""),
   workspace: WorkspaceCapabilitySchema,

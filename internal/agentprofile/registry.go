@@ -89,12 +89,12 @@ func (r *Registry) Check(argv []string) Support {
 // Parse recognises argv as an agent's command in a supported form and
 // classifies its arguments. The returned error is always *UnsupportedError.
 func (r *Registry) Parse(argv []string) (Command, error) {
-	form, exe, args, ok := splitForm(argv)
+	form, shell, exe, args, ok := splitForm(argv)
 	agent, known := r.ForExecutable(filepath.Base(exe))
 	if !ok || !known {
 		return Command{}, &UnsupportedError{Reason: r.unrecognised(argv)}
 	}
-	return newCommand(agent, form, exe, args)
+	return newCommand(agent, form, shell, exe, args)
 }
 
 // unrecognised distinguishes a wrapper around a known agent, which the user

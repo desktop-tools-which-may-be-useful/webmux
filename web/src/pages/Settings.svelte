@@ -23,13 +23,18 @@
   import * as Item from "$lib/components/ui/item";
   import { api, joinArgs, navigate } from "../api";
   import {
+    ConfigSchema,
     LaunchConfigsSchema,
     NoContentSchema,
     PreviewSettingsSchema,
     type LaunchConfigSummary,
     type QuickCommand,
   } from "../schemas";
-  import { LAUNCH_CONFIGS_LIMIT, launchConfigIcon } from "../launchConfigs";
+  import {
+    LAUNCH_CONFIGS_LIMIT,
+    launchConfigIcon,
+    type StartupShell,
+  } from "../launchConfigs";
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
   import {
     defaultPreviewSettings,
@@ -101,6 +106,7 @@
   let launchDeleteOpen = $state(false);
   let launchDeleteBusy = $state(false);
   let launchDeleteError = $state("");
+  let defaultShell = $state<"" | StartupShell>("");
   const launchFull = $derived(launchConfigs.length >= LAUNCH_CONFIGS_LIMIT);
   async function loadLaunchConfigs() {
     try {
@@ -115,6 +121,20 @@
   function editLaunchConfig(id?: string) {
     launchEditing = id;
     launchDialogOpen = true;
+  }
+  async function loadDefaultShell() {
+    try {
+      const config = await api("/config", ConfigSchema, "GET");
+      defaultShell =
+        config.defaultShell === "zsh"
+          ? "zsh"
+          : config.defaultShell === "bash"
+            ? "bash"
+            : "";
+    } catch {
+      // Older or unavailable config responses keep the Bash fallback.
+      defaultShell = "";
+    }
   }
   async function deleteLaunchConfig() {
     if (!launchDeleting) return;
@@ -174,6 +194,7 @@
   onMount(() => {
     setBrowserChrome("WebMux · 设置", false);
     void loadLaunchConfigs();
+    void loadDefaultShell();
   });
 </script>
 
@@ -579,6 +600,7 @@
 <LaunchConfigDialog
   bind:open={launchDialogOpen}
   configId={launchEditing}
+  {defaultShell}
   onsaved={() => void loadLaunchConfigs()}
 />
 <AlertDialog.Root bind:open={launchDeleteOpen}>

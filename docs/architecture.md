@@ -190,7 +190,7 @@ flowchart LR
   - 混合会话由 `hybrid` 以驱动身份经 `Manager.CreateShell` 创建，可以没有运行（聊天端），也可以在同一 ID 下以新代际重新启动运行。
   - 切换导致运行结束时不发布退出帧，而以 4409 关闭终端连接。
 
-- **伴随进程**：ACP 进程由外壳以 `StartSidecar` 启动，环境与 PTY 运行相同（同一 `WEBMUX_SESSION_ID`），经 `startChild` 登记以免 subreaper 抢走退出状态；bashrc 包装下 agent 的 stdout 改走 fd 3，`.bashrc` 的输出不进入协议通道。
+- **伴随进程**：ACP 进程由外壳以 `StartSidecar` 启动，环境与 PTY 运行相同（同一 `WEBMUX_SESSION_ID`），经 `startChild` 登记以免 subreaper 抢走退出状态；启动文件包装下 agent 的 stdout 改走 fd 3，`~/.bashrc` 或 `~/.zshrc` 的输出不进入协议通道。
 - **单写者**：每个混合会话一个 actor 拥有全部可变状态；进入目标端之前必须观察到原端进程组退出，任何时刻至多一个进程打开该 agent 会话（omp 在 TUI 持有租约时另一进程写入会分叉会话）。资格探测的临时进程只调用 `session/list`。
 - **协议边界**：`internal/acp` 是只依赖标准库的 ACP v1 客户端（共享层）。ACP 更新在 `hybrid` 中翻译为 webmux 自己的规范化事件（按 `messageId`/`toolCallId` upsert），前端与 `contract` 不接触 ACP 原文。
 - **agent 适配器**：`internal/agentprofile` 是 agent 中立的核心，`hybrid` 只依赖其中的接口。

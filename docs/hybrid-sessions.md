@@ -9,7 +9,7 @@
 
 能开启混合模式的命令：
 
-- 直接执行 `opencode …` / `omp …` / `codex …` / `claude …`，或用“加载 ~/.bashrc”保存的包装；其他 shell 包装与 `env` 前缀不受支持。
+- 直接执行 `opencode …` / `omp …` / `codex …` / `claude …`，或用“加载 shell 启动文件”保存的 Bash/Zsh 包装；其他 shell 包装与 `env` 前缀不受支持。
 - 不能在命令里指定工作目录（OpenCode 的位置参数、omp 的 `--cwd`、Codex 的 `-C`/`--cd` 与 `--worktree`、Claude Code 的 `-w`/`--worktree` 与 `--tmux`），请在新建会话时选择目录。
 - 不能使用让两端看到不同会话库的参数：omp 的 `--session-dir`、`--no-session`，OpenCode 的 `--server`，Codex 的 `--remote`，Claude Code 的 `--no-session-persistence`、`--environment`。
 - 不能使用不启动交互界面的参数（`-p`/`--print`、`--version`、非交互子命令等）或打开已有会话的参数（`codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等）。
@@ -25,7 +25,7 @@ Codex CLI 没有自己的 ACP 模式，聊天端由第三方适配器 [codex-acp
 npm install -g @agentclientprotocol/codex-acp
 ```
 
-- webmux 不会自动安装或临时下载它。每次启动聊天端之前（从聊天开始、切到聊天、恢复到聊天、唤醒与重连）都按启动配置的写法检查它能否找到：直接执行时查启动配置环境的 `PATH`，“加载 ~/.bashrc”时经同样的包装执行 `command -v`。
+- webmux 不会自动安装或临时下载它。每次启动聊天端之前（从聊天开始、切到聊天、恢复到聊天、唤醒与重连）都按启动配置的写法检查它能否找到：直接执行时查启动配置环境的 `PATH`，“加载 shell 启动文件”时经同一 Bash/Zsh 包装执行 `command -v`。
 - 没有安装时不启动任何聊天端进程，页面显示“未安装 Codex ACP 适配器（codex-acp）”、可复制的安装命令与说明链接；终端端照常使用。安装后 30 秒内自动重新检测，无需刷新。
 - 聊天端通过 `CODEX_PATH` 使用终端端同一个 `codex`，并设置 `NO_BROWSER=1`；启动配置已设置同名变量时以配置为准。
 - 首次切到聊天时，按启动参数设置模式、模型与推理强度，之后每次加载都重新应用：

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/cmd/internal/assemble"
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/codeview"
@@ -422,6 +423,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
+		DefaultShell: agentprofile.DefaultShell(os.Getenv("SHELL")),
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	deps.Tailscale = tsCtl

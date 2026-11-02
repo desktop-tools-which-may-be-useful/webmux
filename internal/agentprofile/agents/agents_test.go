@@ -29,6 +29,10 @@ var wrapped = func(args ...string) []string {
 	return append([]string{"bash", "-ic", `exec -- "$@"`, "webmux"}, args...)
 }
 
+var wrappedZsh = func(args ...string) []string {
+	return append([]string{"zsh", "-ic", `exec -- "$@"`, "webmux"}, args...)
+}
+
 func TestCheck(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -39,12 +43,16 @@ func TestCheck(t *testing.T) {
 	}{
 		{name: "preset bashrc omp", argv: wrapped("omp"), agent: OMP},
 		{name: "preset bashrc opencode", argv: wrapped("opencode"), agent: OpenCode},
+		{name: "preset zsh omp", argv: wrappedZsh("omp"), agent: OMP},
+		{name: "preset zsh opencode", argv: wrappedZsh("opencode", "--auto"), agent: OpenCode},
 		{name: "preset bashrc claude", argv: wrapped("claude", "--dangerously-skip-permissions"), agent: ClaudeCode},
 		{name: "direct path", argv: []string{"/usr/local/bin/omp", "--model", "haiku"}, agent: OMP},
 		{name: "omp profile passes through", argv: []string{"omp", "--profile", "work"}, agent: OMP},
 		{name: "custom shell wrapper", argv: []string{"sh", "-c", "omp"}, reason: ReasonUnsupportedForm},
+		{name: "custom zsh wrapper", argv: []string{"zsh", "-c", "omp"}, reason: ReasonUnsupportedForm},
 		{name: "env prefix", argv: []string{"env", "A=1", "opencode"}, reason: ReasonUnsupportedForm},
 		{name: "other bashrc script", argv: []string{"bash", "-ic", "exec omp", "webmux"}, reason: ReasonUnsupportedForm},
+		{name: "other zshrc script", argv: []string{"zsh", "-ic", "exec omp", "webmux"}, reason: ReasonUnsupportedForm},
 		{name: "plain shell", argv: []string{"/bin/bash", "-l"}, reason: ReasonUnknownAgent},
 		{name: "other agent wrapped", argv: wrapped("gemini"), reason: ReasonUnknownAgent},
 		{name: "empty", argv: nil, reason: ReasonUnknownAgent},
@@ -159,6 +167,12 @@ func TestResumeArgv(t *testing.T) {
 			want: wrapped("omp", "--profile", "work", "--resume", "01z"),
 		},
 		{
+			name: "zsh form kept",
+			argv: wrappedZsh("omp", "--auto-approve"),
+			id:   "01abc",
+			want: wrappedZsh("omp", "--auto-approve", "--resume", "01abc"),
+		},
+		{
 			name:    "codex resume subcommand after global options",
 			argv:    []string{"codex", "-m", "gpt-5.6-luna", "-s", "read-only", "修 bug"},
 			id:      "01a18715",
@@ -195,8 +209,10 @@ func TestTUIArgv(t *testing.T) {
 		{[]string{"opencode", "--prompt", "hi"}, []string{"opencode", "--standalone", "--prompt", "hi"}},
 		{[]string{"opencode", "--standalone"}, []string{"opencode", "--standalone"}},
 		{wrapped("opencode"), wrapped("opencode", "--standalone")},
+		{wrappedZsh("opencode"), wrappedZsh("opencode", "--standalone")},
 		{[]string{"omp", "--continue", "hi"}, []string{"omp", "--continue", "hi"}},
 		{wrapped("codex", "-m", "x"), wrapped("codex", "--no-daemon", "-m", "x")},
+		{wrappedZsh("codex", "-m", "x"), wrappedZsh("codex", "--no-daemon", "-m", "x")},
 	}
 	for _, tt := range tests {
 		cmd, err := registry.Parse(tt.argv)
@@ -234,6 +250,12 @@ func TestACPArgv(t *testing.T) {
 			fd3:  true,
 		},
 		{
+			name: "zsh writes protocol to fd 3",
+			argv: wrappedZsh("omp", "--auto-approve"),
+			want: []string{"zsh", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "omp", "acp", "--auto-approve"},
+			fd3:  true,
+		},
+		{
 			name:        "codex runs its connector without arguments",
 			argv:        []string{"/opt/codex/bin/codex", "--search", "-m", "gpt-5", "-c", "model_reasoning_effort=high", "-c", "x=1", "-s", "danger-full-access", "-a", "never"},
 			want:        []string{"codex-acp"},
@@ -243,6 +265,12 @@ func TestACPArgv(t *testing.T) {
 			name: "codex connector through bashrc",
 			argv: wrapped("codex", "--dangerously-bypass-approvals-and-sandbox"),
 			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "codex-acp"},
+			fd3:  true,
+		},
+		{
+			name: "codex connector through zsh",
+			argv: wrappedZsh("codex", "--dangerously-bypass-approvals-and-sandbox"),
+			want: []string{"zsh", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "codex-acp"},
 			fd3:  true,
 		},
 	}

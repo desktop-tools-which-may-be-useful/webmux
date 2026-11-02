@@ -38,23 +38,28 @@
     launchCommandDraft,
     validateLaunchDraft,
     type EnvRow,
+    type StartupShell,
   } from "../launchConfigs";
 
   let {
     open = $bindable(false),
     configId,
+    defaultShell = "",
     onsaved,
   }: {
     open: boolean;
     /** Config being edited; undefined creates a new one. */
     configId: string | undefined;
+    /** Startup file shell to preselect; "" falls back to Bash. */
+    defaultShell?: "" | StartupShell;
     onsaved: (config: LaunchConfig) => void;
   } = $props();
 
   let name = $state("");
   let icon = $state("auto");
   let command = $state("");
-  let loadBashrc = $state(false);
+  let loadStartup = $state(false);
+  let startupShell = $state<StartupShell>("bash");
   let rows = $state<EnvRow[]>([]);
   let revealed = $state<Record<number, boolean>>({});
   let defaultPreview = $state(true);
@@ -81,7 +86,13 @@
         },
   );
   const draft = $derived(
-    validateLaunchDraft(name, command, rows, loadBashrc, preview),
+    validateLaunchDraft(
+      name,
+      command,
+      rows,
+      loadStartup ? startupShell : null,
+      preview,
+    ),
   );
   const previewLinesInvalid = $derived(
     !defaultPreview &&
@@ -101,6 +112,10 @@
     { value: "auto", label: "自动匹配" },
     ...LAUNCH_ICON_OPTIONS,
   ];
+  const startupShellOptions: { value: StartupShell; label: string }[] = [
+    { value: "bash", label: "Bash（~/.bashrc）" },
+    { value: "zsh", label: "Zsh（~/.zshrc）" },
+  ];
   const autoIcon = $derived(
     draft.ok ? launchConfigIcon(draft.value) : "terminal",
   );
@@ -119,7 +134,8 @@
       name = "";
       icon = "auto";
       command = "";
-      loadBashrc = false;
+      loadStartup = false;
+      startupShell = defaultShell === "zsh" ? "zsh" : "bash";
       rows = [];
       revealed = {};
       defaultPreview = true;
@@ -145,7 +161,10 @@
             icon = config.icon || "auto";
             const restored = launchCommandDraft(config.cmd);
             command = restored.command;
-            loadBashrc = restored.loadBashrc;
+            loadStartup = restored.startupShell !== null;
+            startupShell =
+              restored.startupShell ??
+              (defaultShell === "zsh" ? "zsh" : "bash");
             defaultPreview = !config.preview;
             previewLines = config.preview?.lines ?? previewSettings.lines;
             previewSkip = config.preview?.skip ?? previewSettings.skip;
@@ -316,17 +335,47 @@
             </p>
             <div class="flex items-center gap-2">
               <Checkbox
-                id="launch-config-bashrc"
-                bind:checked={loadBashrc}
-                aria-describedby="launch-config-bashrc-help"
+                id="launch-config-startup"
+                bind:checked={loadStartup}
+                aria-describedby="launch-config-startup-help"
               />
-              <Label for="launch-config-bashrc">加载 ~/.bashrc</Label>
+              <Label for="launch-config-startup">加载 shell 启动文件</Label>
             </div>
+            {#if loadStartup}
+              <div class="grid gap-2">
+                <Label for="launch-config-startup-shell">启动文件</Label>
+                <Select.Root
+                  type="single"
+                  value={startupShell}
+                  onValueChange={(value) => {
+                    if (value === "bash" || value === "zsh")
+                      startupShell = value;
+                  }}
+                  items={startupShellOptions}
+                >
+                  <Select.Trigger
+                    id="launch-config-startup-shell"
+                    aria-label="启动文件 shell"
+                  >
+                    {startupShellOptions.find(
+                      (option) => option.value === startupShell,
+                    )?.label}
+                  </Select.Trigger>
+                  <Select.Content>
+                    {#each startupShellOptions as option (option.value)}
+                      <Select.Item value={option.value} label={option.label}>
+                        {option.label}
+                      </Select.Item>
+                    {/each}
+                  </Select.Content>
+                </Select.Root>
+              </div>
+            {/if}
             <p
-              id="launch-config-bashrc-help"
+              id="launch-config-startup-help"
               class="text-xs text-muted-foreground"
             >
-              使用交互式 Bash 读取 PATH
+              使用交互式 Bash（~/.bashrc）或 Zsh（~/.zshrc）读取 PATH
               和环境变量；只需填写普通命令，参数仍原样传递，不展开变量或管道。
             </p>
             <div class="flex items-center gap-2">

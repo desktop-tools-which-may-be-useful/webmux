@@ -12,17 +12,19 @@ type Form int
 const (
 	// FormDirect executes the agent: [executable, args...].
 	FormDirect Form = iota
-	// FormBashrc runs the agent through WebMux's interactive bash wrapper so
-	// ~/.bashrc applies: bash -ic 'exec -- "$@"' webmux executable args...
-	FormBashrc
+	// FormStartup runs the agent through WebMux's interactive startup-file
+	// wrapper so ~/.bashrc or ~/.zshrc applies:
+	// bash|zsh -ic 'exec -- "$@"' webmux executable args...
+	FormStartup
 )
 
 const (
-	bashrcScript = `exec -- "$@"`
-	// bashrcACPScript moves the agent's stdout to fd 3, the protocol pipe,
-	// so anything ~/.bashrc prints stays on stdout/stderr and out of ACP.
-	bashrcACPScript = `exec -- "$@" 1>&3 3>&-`
-	bashrcName      = "webmux"
+	startupScript = `exec -- "$@"`
+	// startupACPScript moves the agent's stdout to fd 3, the protocol pipe,
+	// so anything the startup file prints stays on stdout/stderr and out of
+	// ACP.
+	startupACPScript = `exec -- "$@" 1>&3 3>&-`
+	startupName      = "webmux"
 )
 
 // Reason codes explain why a command cannot use hybrid mode. Clients map
@@ -33,7 +35,7 @@ const (
 	// ReasonUnknownAgent: no built-in profile matches the command.
 	ReasonUnknownAgent Reason = "unknown_agent"
 	// ReasonUnsupportedForm: a profile's executable appears, but not in a
-	// direct or bashrc-wrapped form.
+	// direct or startup-file-wrapped form.
 	ReasonUnsupportedForm Reason = "unsupported_form"
 	// ReasonSessionStore: an option makes the TUI and ACP use different
 	// session stores.
@@ -51,7 +53,7 @@ const (
 func (r Reason) Message() string {
 	switch r {
 	case ReasonUnsupportedForm:
-		return "命令写法不受支持，请直接执行 agent 或使用“加载 .bashrc”"
+		return "命令写法不受支持，请直接执行 agent 或使用“加载 shell 启动文件”"
 	case ReasonSessionStore:
 		return "该参数使聊天视图无法找到会话"
 	case ReasonDirectoryArg:
@@ -117,6 +119,8 @@ type Command struct {
 	Agent   Agent
 	Profile *Profile
 	Form    Form
+	// Shell is the startup-file shell of a FormStartup command.
+	Shell string
 	// Executable is argv's agent executable as written (possibly a path).
 	Executable string
 	args       []string
@@ -125,22 +129,22 @@ type Command struct {
 	dropped    []string
 }
 
-func newCommand(agent Agent, form Form, exe string, args []string) (Command, error) {
-	cmd := Command{Agent: agent, Profile: agent.Profile(), Form: form, Executable: exe, args: slices.Clone(args)}
+func newCommand(agent Agent, form Form, shell, exe string, args []string) (Command, error) {
+	cmd := Command{Agent: agent, Profile: agent.Profile(), Form: form, Shell: shell, Executable: exe, args: slices.Clone(args)}
 	if err := cmd.classify(); err != nil {
 		return Command{}, err
 	}
 	return cmd, nil
 }
 
-func splitForm(argv []string) (Form, string, []string, bool) {
-	if len(argv) >= 5 && argv[0] == "bash" && argv[1] == "-ic" && argv[2] == bashrcScript && argv[3] == bashrcName {
-		return FormBashrc, argv[4], argv[5:], true
+func splitForm(argv []string) (Form, string, string, []string, bool) {
+	if len(argv) >= 5 && argv[1] == "-ic" && argv[2] == startupScript && argv[3] == startupName && SupportedStartupShell(argv[0]) {
+		return FormStartup, argv[0], argv[4], argv[5:], true
 	}
-	if len(argv) >= 1 && argv[0] != "" && argv[0] != "bash" {
-		return FormDirect, argv[0], argv[1:], true
+	if len(argv) >= 1 && argv[0] != "" && argv[0] != ShellBash && argv[0] != ShellZsh {
+		return FormDirect, "", argv[0], argv[1:], true
 	}
-	return FormDirect, "", nil, false
+	return FormDirect, "", "", nil, false
 }
 
 func (c *Command) classify() error {
@@ -231,24 +235,24 @@ func (c Command) wrap(script string, args ...string) []string {
 
 // wrapExec runs executable in the command's form.
 func (c Command) wrapExec(script, executable string, args ...string) []string {
-	if c.Form == FormBashrc {
-		return append([]string{"bash", "-ic", script, bashrcName, executable}, args...)
+	if c.Form == FormStartup {
+		return append([]string{c.Shell, "-ic", script, startupName, executable}, args...)
 	}
 	return append([]string{executable}, args...)
 }
 
 // Lookup runs `command -v` for each name in the command's form, so a
-// bashrc form sees the PATH ~/.bashrc sets up: its output ends with a line
-// of the marker followed by the first name's path, or nothing when that is
-// not found, then one such line per further name. Startup-file output
-// comes before the marker lines. FormDirect returns nil: the caller looks
-// names up in the session's PATH itself.
+// startup-file form sees the PATH ~/.bashrc or ~/.zshrc sets up: its
+// output ends with a line of the marker followed by the first name's path,
+// or nothing when that is not found, then one such line per further name.
+// Startup-file output comes before the marker lines. FormDirect returns
+// nil: the caller looks names up in the session's PATH itself.
 func (c Command) Lookup(names ...string) []string {
-	if c.Form != FormBashrc {
+	if c.Form != FormStartup {
 		return nil
 	}
 	script := `for n in "$@"; do printf '\n` + LookupMarker + `%s' "$(command -v -- "$n" 2>/dev/null)"; done; printf '\n'`
-	return append([]string{"bash", "-ic", script, bashrcName}, names...)
+	return append([]string{c.Shell, "-ic", script, startupName}, names...)
 }
 
 // LookupMarker starts each answer line of a Lookup command.
@@ -268,7 +272,7 @@ func (c Command) injected(args []string) []string {
 // TUIArgv is the first terminal launch: the original command plus the
 // profile's required TUI options, in the original form.
 func (c Command) TUIArgv() []string {
-	return c.wrap(bashrcScript, append(c.injected(c.args), c.args...)...)
+	return c.wrap(startupScript, append(c.injected(c.args), c.args...)...)
 }
 
 // ResumeArgv opens agentSessionID in the terminal UI, keeping only the
@@ -277,24 +281,24 @@ func (c Command) TUIArgv() []string {
 func (c Command) ResumeArgv(agentSessionID string) (argv, dropped []string) {
 	args := append(c.injected(c.kept), c.kept...)
 	args = append(args, c.Profile.ResumeFlag, agentSessionID)
-	return c.wrap(bashrcScript, args...), slices.Clone(c.dropped)
+	return c.wrap(startupScript, args...), slices.Clone(c.dropped)
 }
 
 // ACPArgv starts the agent's ACP server in the original form: the agent's
-// acp subcommand, or the profile's connector without arguments. A bashrc
-// form writes ACP to fd 3, which the caller must connect to the protocol
-// pipe (ProtocolOnFD3). Unsupported lists kept options that change
-// behaviour but do not reach the chat side, for the user to be told.
+// acp subcommand, or the profile's connector without arguments. A startup-
+// file form writes ACP to fd 3, which the caller must connect to the
+// protocol pipe (ProtocolOnFD3). Unsupported lists kept options that
+// change behaviour but do not reach the chat side, for the user to be told.
 func (c Command) ACPArgv() (argv, unsupported []string) {
 	_, unsupported = c.ChatConfig()
 	if connector := c.Profile.Connector; connector != nil {
-		return c.wrapExec(bashrcACPScript, connector.Executable), unsupported
+		return c.wrapExec(startupACPScript, connector.Executable), unsupported
 	}
 	args := []string{"acp"}
 	if c.Profile.PassToACP {
 		args = append(args, c.kept...)
 	}
-	return c.wrap(bashrcACPScript, args...), unsupported
+	return c.wrap(startupACPScript, args...), unsupported
 }
 
 // ChatConfig derives chat-side config values from the kept options, and
@@ -307,7 +311,7 @@ func (c Command) ChatConfig() (seeds []Seed, unsupported []string) {
 }
 
 // ProtocolOnFD3 reports that ACPArgv's process writes the protocol to fd 3.
-func (c Command) ProtocolOnFD3() bool { return c.Form == FormBashrc }
+func (c Command) ProtocolOnFD3() bool { return c.Form == FormStartup }
 
 // Dropped lists the arguments that resume and ACP commands omit.
 func (c Command) Dropped() []string { return slices.Clone(c.dropped) }

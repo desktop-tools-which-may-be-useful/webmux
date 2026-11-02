@@ -70,6 +70,8 @@ Claude Code 在两种冷恢复后都重应用 `model` 与 `effort`。`mode` 采�
 
 `GET/POST/PUT /api/launch-configs[/{id}]` 的配置与摘要带 `hybrid`（布尔）与只读 `hybridSupport: {supported, agent?, reason?, connector?, supportedAgents}`；请求体可带 `hybrid`，带 `hybridSupport` 视为未知字段返回 400。`hybrid: true` 而命令不受支持时返回 400 并给出原因；保存时不检查连接器是否已安装。
 
+混合模式接受的启动文件包装为 `["bash","-ic","exec -- \"$@\"","webmux",…]` 或 `["zsh","-ic","exec -- \"$@\"","webmux",…]`；恢复与 ACP 命令沿用同一 shell。
+
 `POST /api/launch-configs/hybrid-support {cmd}` 只读返回同样的 `hybridSupport`，供设置页去抖查询：
 
 - `reason` 取值：`unknown_agent`、`unsupported_form`、`session_store`、`directory_arg`、`non_interactive`、`session_arg`。

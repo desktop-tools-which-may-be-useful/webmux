@@ -137,28 +137,85 @@ func TestCodexConnectorMissing(t *testing.T) {
 	h.mustSwitch(id, SideACP)
 }
 
-// TestCodexBashrcConnectorCheck: through ~/.bashrc the check sees the
-// PATH the startup file sets, and the file's output does not matter.
-func TestCodexBashrcConnectorCheck(t *testing.T) {
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash not installed")
+// TestCodexStartupConnectorCheck: through the configured startup file the
+// check sees the PATH it sets, and the file's output does not matter.
+func TestCodexStartupConnectorCheck(t *testing.T) {
+	tests := []struct {
+		shell, rc string
+	}{
+		{shell: "bash", rc: ".bashrc"},
+		{shell: "zsh", rc: ".zshrc"},
 	}
-	h := newHarness(t, 0)
-	h.fast()
-	home := t.TempDir()
-	agents := filepath.Dir(agentPath(t, codex.Name))
-	rc := "echo welcome\nexport PATH=" + agents + ":$PATH\n"
-	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(rc), 0o600); err != nil {
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			if _, err := exec.LookPath(tt.shell); err != nil {
+				t.Skip(tt.shell + " not installed")
+			}
+			h := newHarness(t, 0)
+			h.fast()
+			home := t.TempDir()
+			agents := filepath.Dir(agentPath(t, codex.Name))
+			rc := "echo welcome\nexport PATH=" + agents + ":$PATH\n"
+			if err := os.WriteFile(filepath.Join(home, tt.rc), []byte(rc), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			in := h.codexInput(SideACP, "/nonexistent")
+			in.Env["HOME"] = home
+			in.Cmd = []string{tt.shell, "-ic", `exec -- "$@"`, "webmux", "codex"}
+			id := h.create(in).Info().ID
+			chatTurn(t, h, id, "hello")
+			log, err := readEventsLog(h.store)
+			if err != nil || !strings.Contains(log, "CODEX_PATH="+filepath.Join(agents, "codex")) {
+				t.Fatalf("connector environment not logged: %v", err)
+			}
+		})
+	}
+}
+
+// TestExitedNotFound: a startup-file wrapper that exits 127 before
+// answering means the connector disappeared, for either supported shell;
+// a direct command has no wrapper exit status to interpret.
+func TestExitedNotFound(t *testing.T) {
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+		defer cancel()
+		m.Shutdown(ctx)
+	})
+	sess, err := m.CreateShell(session.ShellInput{}, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	in := h.codexInput(SideACP, "/nonexistent")
-	in.Env["HOME"] = home
-	in.Cmd = []string{"bash", "-ic", `exec -- "$@"`, "webmux", "codex"}
-	id := h.create(in).Info().ID
-	chatTurn(t, h, id, "hello")
-	log, err := readEventsLog(h.store)
-	if err != nil || !strings.Contains(log, "CODEX_PATH="+filepath.Join(agents, "codex")) {
-		t.Fatalf("connector environment not logged: %v", err)
+	sidecar, err := sess.StartSidecar([]string{"/bin/sh", "-c", "exit 127"}, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-sidecar.Done()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+		defer cancel()
+		_ = sidecar.Stop(ctx)
+	})
+	registry := agentprofile.NewRegistry(codex.Agent)
+	for _, tt := range []struct {
+		name string
+		argv []string
+		want bool
+	}{
+		{name: "bash", argv: []string{"bash", "-ic", `exec -- "$@"`, "webmux", "codex"}, want: true},
+		{name: "zsh", argv: []string{"zsh", "-ic", `exec -- "$@"`, "webmux", "codex"}, want: true},
+		{name: "direct", argv: []string{"codex"}, want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := registry.Parse(tt.argv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := (&actor{cmd: cmd}).exitedNotFound(sidecar)
+			if (got != nil) != tt.want {
+				t.Fatalf("exitedNotFound = %+v, want failure=%v", got, tt.want)
+			}
+		})
 	}
 }
 

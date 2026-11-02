@@ -77,7 +77,7 @@
 
 ### 在 omp 中显示图片
 
-新安装预置的 `omp` 启动配置自带 `PI_FORCE_IMAGE_PROTOCOL=kitty`，保留“加载 ~/.bashrc”包装；直接选用该配置即可。已有 `launch-configs.json`（包括用户编辑或删空的配置）不会被覆盖；升级后可在自己的 omp 启动配置中补上该环境变量。
+新安装预置的 `omp` 启动配置自带 `PI_FORCE_IMAGE_PROTOCOL=kitty`，保留“加载 shell 启动文件”包装（Bash 或 Zsh，按服务端 `$SHELL` 选择）；直接选用该配置即可。已有 `launch-configs.json`（包括用户编辑或删空的配置）不会被覆盖；升级后可在自己的 omp 启动配置中补上该环境变量。
 
 本机 `omp 18.12.6` 在未设置该变量的默认终端环境中只显示图片文字占位，不会自动发出 Kitty 传输；临时命令也可显式启动：
 

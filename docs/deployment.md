@@ -115,7 +115,7 @@ JSON 输出契约见 [控制面 JSON 契约](protocol/control-json.md#控制面-
 所有启动命令都由使用者自定义：在设置页保存“名称 + 完整命令 + 环境变量”，新建会话时选用，或直接填写不保存的临时命令。
 
 - 新安装首次启动（`launch-configs.json` 不存在）时自动写入 Shell（`$SHELL -l -i`，未设置时为 `/bin/sh`）、九款 CLI agent 和 omp，共 11 条启动配置。完整列表见 [CLI agent 接入](cli-agents.md)。
-- agent 预设以 `bash -ic 'exec -- "$@"' webmux <程序>` 加载 `~/.bashrc`。
+- agent 预设按服务端 `$SHELL` 的 basename 选择启动文件包装：`bash -ic 'exec -- "$@"' webmux <程序>` 读取 `~/.bashrc`，`zsh -ic 'exec -- "$@"' webmux <程序>` 读取 `~/.zshrc`；未设置时使用 Bash，fish、nu 等其他 shell 直接执行。
 - 它们是普通配置，可编辑或删除。不再读取 `[[presets]]` 或 `shell`；旧配置请改为在设置页保存。
 
 新安装的 omp 启动配置额外预置 `PI_FORCE_IMAGE_PROTOCOL=kitty`，以在浏览器终端启用 Kitty 图片传输；其他 agent 配置不增加该环境变量。已经存在的 `launch-configs.json` 不自动修改，升级后可手动编辑自己的 omp 配置。
@@ -125,19 +125,19 @@ JSON 输出契约见 [控制面 JSON 契约](protocol/control-json.md#控制面-
 ```sh
 npm install -g @agentclientprotocol/codex-acp
 npm install -g @agentclientprotocol/claude-agent-acp  # 需要 Node.js 22+
-which codex-acp claude-agent-acp  # 必须能在服务的 PATH 或“加载 ~/.bashrc”配置中找到
+which codex-acp claude-agent-acp  # 必须能在服务的 PATH 或“加载 shell 启动文件”配置中找到
 ```
 
-- 没有连接器时对应会话照常在终端运行，页面提示安装命令；安装后 30 秒内自动重新检测。每次启动聊天端前都会检查，资格核对还会冷启动连接器。
+- 没有连接器时对应会话照常在终端运行，页面提示安装命令；安装后 30 秒内自动重新检测。每次启动聊天端前都会检查（“加载 shell 启动文件”的配置会多启动一次对应的 `bash -ic` 或 `zsh -ic`），资格核对还会冷启动连接器。
 - 两条安装命令都跟随 npm `latest`。Claude 的实测基线是 Claude Code 2.1.316 与 claude-agent-acp 0.99.1，不保证未来版本兼容；旧版只提示，新版需重新验证。本次未实测 npm 启动器或 macOS。
 - Claude 聊天端通过 `CLAUDE_CODE_EXECUTABLE` 使用 TUI 同一个 `claude`（配置显式设置时保留配置值），并复用服务用户、`HOME`、`CLAUDE_CONFIG_DIR` 与现有认证。不要把服务账号无权读取的 Linux 凭据文件或 macOS Keychain 当作可共享凭据。
 - 现有订阅登录、API key、OAuth token 或第三方 provider 由 Claude 自己管理；webmux 不保存凭据，也不在聊天端登录或注销。技术复用不扩展订阅许可，部署者须自行确认实际使用方式符合订阅与服务条款。
 
 完整命令按引号与反斜杠规则拆分为 argv，不经 shell 求值。
 
-- 需要加载 `~/.bashrc` 的 Open Code 配置可填写 `bash -ic 'exec opencode "$@"' opencode`，对应 argv 为 `["bash", "-ic", "exec opencode \"$@\"", "opencode"]`。
-- 末尾的程序名是 `bash -c` 的 `$0` 占位符，后接参数经 `"$@"` 原样传给 agent。
-- WebMux 不改写 `~/.bashrc`；其中的输出、环境覆盖或提前退出同样会影响启动。
+- 需要加载启动文件的 Open Code 配置可勾选“加载 shell 启动文件”并选择 Bash 或 Zsh，无需手写包装；编辑器保存对应的完整 argv。
+- 末尾的程序名是 shell `-c` 的 `$0` 占位符，后接参数经 `"$@"` 原样传给 agent。
+- WebMux 不改写 `~/.bashrc` 或 `~/.zshrc`；其中的输出、环境覆盖或提前退出同样会影响启动。
 
 ### 状态目录
 
@@ -238,8 +238,8 @@ WebMux 运行在 WSL 2 发行版中，由 Windows 托盘程序或 `webmux-window
 
 systemd 和 launchd 都不会加载交互 shell 的初始化文件。
 
-- 需要从 `~/.bashrc` 获取 PATH 与环境变量时，在自定义启动配置中显式填写 `bash -ic 'exec opencode "$@"' opencode`（其他 agent 替换程序名）。
-- 不使用 Bash 包装时，可直接指定程序绝对路径或调整服务的 PATH。服务模板的 `PATH` 已包含 `~/.local/bin`、pnpm / npm 全局目录（macOS 另含 Homebrew）。
+- 需要从 `~/.bashrc` 或 `~/.zshrc` 获取 PATH 与环境变量时，在自定义启动配置中勾选“加载 shell 启动文件”并选择对应 shell。
+- 不使用启动文件包装时，可直接指定程序绝对路径或调整服务的 PATH。服务模板的 `PATH` 已包含 `~/.local/bin`、pnpm / npm 全局目录（macOS 另含 Homebrew）。
 
 如果 agent 安装在 nvm 等其他位置：
 

@@ -8,10 +8,13 @@ type APIHealth struct {
 
 // ServerConfig is the body of GET /api/config.
 type ServerConfig struct {
-	DefaultCwd string              `json:"defaultCwd"`
-	Hostname   string              `json:"hostname"`
-	Workspace  WorkspaceCapability `json:"workspace"`
-	Tunnel     TunnelInfo          `json:"tunnel"`
+	DefaultCwd string `json:"defaultCwd"`
+	// DefaultShell is the startup-file shell of the service's $SHELL:
+	// "bash", "zsh", or "" for a shell WebMux does not wrap.
+	DefaultShell string              `json:"defaultShell"`
+	Hostname     string              `json:"hostname"`
+	Workspace    WorkspaceCapability `json:"workspace"`
+	Tunnel       TunnelInfo          `json:"tunnel"`
 }
 
 // TunnelInfo is the read-only tunnel state in GET /api/config. It never
