@@ -4,13 +4,18 @@
 # Usage:
 #   curl -fsSL <install.sh URL> | sh
 #   curl -fsSL <install.sh URL> | WEBMUX_VERSION=0.2.0 sh
+#   curl -fsSL <install.sh URL> | WEBMUX_SERVICE=1 sh
 #
 # Environment:
 #   WEBMUX_VERSION      Release version without the leading "v" (default: latest)
 #   WEBMUX_INSTALL_DIR  Directory for the webmux binary (default: ~/.local/bin)
+#   WEBMUX_SERVICE      1 also installs the user service that starts at login,
+#                       0 installs the binary only; unset asks on the terminal
+#                       (default yes) and installs the binary only without one
 #   WEBMUX_MIRRORS      Space-separated gh-proxy prefixes; empty disables fallback
 #   WEBMUX_SHA256       Pin the binary digest instead of reading SHA256SUMS
 #   WEBMUX_BASE_URL     GitHub repository URL (mainly for tests and mirrors)
+#   WEBMUX_TTY          Terminal to ask on (default /dev/tty; for tests)
 #
 # GitHub is tried first, then the mirrors. Every source must serve a binary
 # whose SHA-256 matches SHA256SUMS from that same source before it is installed,
@@ -22,6 +27,8 @@ set -eu
 repo_base=${WEBMUX_BASE_URL:-https://github.com/mzdluo123/webmux}
 mirrors=${WEBMUX_MIRRORS-https://ghfast.top https://gh-proxy.com}
 install_dir=${WEBMUX_INSTALL_DIR:-"${HOME:-}/.local/bin"}
+service_choice=${WEBMUX_SERVICE-}
+tty=${WEBMUX_TTY:-/dev/tty}
 
 die() {
 	printf 'webmux install: %s\n' "$*" >&2
@@ -37,6 +44,10 @@ command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v uname >/dev/null 2>&1 || die "uname is required"
 command -v mktemp >/dev/null 2>&1 || die "mktemp is required"
 command -v awk >/dev/null 2>&1 || die "awk is required"
+case $service_choice in
+'' | 0 | 1) ;;
+*) die "invalid WEBMUX_SERVICE: $service_choice (use 1 to install the user service, 0 for the binary only)" ;;
+esac
 
 os=$(uname -s)
 case $os in
@@ -103,6 +114,58 @@ sums_digest() {
 
 download() {
 	curl -fsSL --connect-timeout 10 --max-time "$3" --speed-limit 1024 --speed-time 20 -o "$2" "$1"
+}
+
+# want_service reports whether to install the user service: WEBMUX_SERVICE,
+# else the answer on the terminal (default yes). Without a terminal (CI,
+# cron) the script keeps its old behaviour and installs the binary only.
+want_service() {
+	case $service_choice in
+	1) return 0 ;;
+	0) return 1 ;;
+	esac
+	(: <"$tty") 2>/dev/null || return 1
+	printf 'Run WebMux as a user service that starts when you log in? [Y/n] '
+	answer=
+	IFS= read -r answer <"$tty" || return 1
+	case $answer in
+	'' | [Yy] | [Yy][Ee][Ss]) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# install_service runs `webmux service install` unless a service already
+# exists: replacing or restarting it would end every terminal session. The
+# binary owns the definition path, so ask it with --dry-run. Commands read
+# /dev/null because stdin is this script when it is piped into sh.
+install_service() {
+	definition=$("$target" service install --dry-run </dev/null 2>/dev/null |
+		awk 'sub(/^# Service definition: /, "") { print; exit }') || definition=""
+	if [ -n "$definition" ] && [ -e "$definition" ]; then
+		note "A WebMux user service already exists ($definition); it was left unchanged."
+		if awk -v t="$target" 'index($0, t) { found = 1; exit } END { exit !found }' "$definition"; then
+			note "Restart it to use this version (this ends all terminal sessions):"
+			note "  $target service restart"
+		else
+			note "It runs another webmux executable. To switch it to this one (restarts it and ends all terminal sessions):"
+			note "  $target service install --force"
+		fi
+		return 0
+	fi
+	note "Installing the WebMux user service..."
+	if ! "$target" service install </dev/null; then
+		printf 'webmux install: %s is installed, but "service install" failed (see above).\n' "$target" >&2
+		printf 'Fix the problem, then retry: %s service install\n' "$target" >&2
+		exit 1
+	fi
+	note ""
+	note "WebMux runs as a user service and starts when you log in."
+	note "  Status: $target service status"
+	note "  Logs:   $target service logs"
+	note "  Token:  $target status --json --reveal-token"
+	if [ "$os" = linux ]; then
+		note "To keep it running while you are logged out: loginctl enable-linger \"\$USER\""
+	fi
 }
 
 mkdir -p "$install_dir" 2>/dev/null || die "cannot create install directory: $install_dir"
@@ -183,10 +246,14 @@ for source in "$@"; do
 	*) note "Note: $install_dir is not on PATH; add it or run $target directly." ;;
 	esac
 	note ""
-	note "Start WebMux:"
-	note "  $target --listen 127.0.0.1:7681"
-	note "Install it as a user service:"
-	note "  $target service install"
+	if want_service; then
+		install_service
+	else
+		note "Start WebMux:"
+		note "  $target --listen 127.0.0.1:7681"
+		note "Install it as a user service that starts when you log in:"
+		note "  $target service install"
+	fi
 	exit 0
 done
 

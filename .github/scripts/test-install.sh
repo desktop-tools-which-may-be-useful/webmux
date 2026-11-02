@@ -36,6 +36,34 @@ write_sums() {
 	)
 }
 
+# fixture writes a release binary stand-in. It reports a version, logs its
+# arguments to $WEBMUX_TEST_LOG and plays `service install`: --dry-run names
+# $WEBMUX_TEST_DEFINITION, a real install writes that file (or fails when
+# $WEBMUX_TEST_SERVICE_FAIL is 1).
+fixture() {
+	cat > "$1" <<EOF
+#!/bin/sh
+# $2
+[ -z "\${WEBMUX_TEST_LOG:-}" ] || printf '%s\n' "\$*" >> "\$WEBMUX_TEST_LOG"
+case "\$*" in
+"service install --dry-run")
+	printf '# Service definition: %s\n# Executable must remain at: %s\n' "\$WEBMUX_TEST_DEFINITION" "\$0"
+	;;
+"service install")
+	if [ "\${WEBMUX_TEST_SERVICE_FAIL:-}" = 1 ]; then
+		printf 'systemctl is required for user services\n' >&2
+		exit 1
+	fi
+	mkdir -p "\$(dirname "\$WEBMUX_TEST_DEFINITION")"
+	printf 'ExecStart=%s serve\n' "\$0" > "\$WEBMUX_TEST_DEFINITION"
+	printf 'Installed %s\n' "\$WEBMUX_TEST_DEFINITION"
+	;;
+*) printf 'webmux 0.2.0\n' ;;
+esac
+EOF
+	chmod 755 "$1"
+}
+
 sh -n "$repo/install.sh" || fail "install.sh has a syntax error"
 sh -n "$0" || fail "test-install.sh has a syntax error"
 
@@ -43,9 +71,7 @@ www=$work/www
 mkdir -p "$www/releases/latest/download"
 for os in linux darwin; do
 	for arch in amd64 arm64; do
-		asset=webmux-$os-$arch
-		printf '#!/bin/sh\n# %s latest\nprintf "webmux 0.2.0\\n"\n' "$asset" > "$www/releases/latest/download/$asset"
-		chmod 755 "$www/releases/latest/download/$asset"
+		fixture "$www/releases/latest/download/webmux-$os-$arch" "webmux-$os-$arch latest"
 	done
 done
 write_sums "$www/releases/latest/download"
@@ -53,9 +79,7 @@ write_sums "$www/releases/latest/download"
 mkdir -p "$www/releases/download/v0.2.0"
 for os in linux darwin; do
 	for arch in amd64 arm64; do
-		asset=webmux-$os-$arch
-		printf '#!/bin/sh\n# %s pinned\nprintf "webmux 0.2.0\\n"\n' "$asset" > "$www/releases/download/v0.2.0/$asset"
-		chmod 755 "$www/releases/download/v0.2.0/$asset"
+		fixture "$www/releases/download/v0.2.0/webmux-$os-$arch" "webmux-$os-$arch pinned"
 	done
 done
 write_sums "$www/releases/download/v0.2.0"
@@ -93,17 +117,25 @@ EOF
 	chmod 755 "$dir/uname"
 }
 
+# Without WEBMUX_TTY the script would ask on the developer's terminal; point
+# it at a missing file so the default runs are non-interactive like CI.
 run_install() {
 	uname_dir=$1
 	shift
-	env HOME="$work/home" PATH="$uname_dir:$PATH" WEBMUX_INSTALL_DIR="$work/out" \
-		WEBMUX_BASE_URL="$base" WEBMUX_MIRRORS="$mirrors" "$@" \
+	env -u WEBMUX_SERVICE HOME="$work/home" PATH="$uname_dir:$PATH" WEBMUX_INSTALL_DIR="$work/out" \
+		WEBMUX_BASE_URL="$base" WEBMUX_MIRRORS="$mirrors" WEBMUX_TTY="$work/no-tty" \
+		WEBMUX_TEST_LOG="$work/calls.log" WEBMUX_TEST_DEFINITION="$work/def/webmux.service" "$@" \
 		sh "$repo/install.sh"
 }
 
 reset_out() {
-	rm -rf "$work/out"
+	rm -rf "$work/out" "$work/def" "$work/calls.log"
 	mkdir -p "$work/out"
+	: > "$work/calls.log"
+}
+
+service_installs() {
+	grep -cx 'service install' "$work/calls.log" || true
 }
 
 base=$server
@@ -117,6 +149,91 @@ run_install "$work/uname-linux-amd64" >"$work/linux.log" 2>&1 || {
 }
 [ -x "$work/out/webmux" ] || fail "Linux amd64 binary was not installed"
 grep -q 'webmux-linux-amd64 latest' "$work/out/webmux" || fail "Linux amd64 selected the wrong asset"
+[ "$(service_installs)" = 0 ] || fail "non-interactive default installed the user service"
+grep -q 'service install$' "$work/linux.log" || fail "non-interactive default did not print the service install hint"
+
+# WEBMUX_SERVICE=1 installs the user service through the new binary.
+reset_out
+run_install "$work/uname-linux-amd64" WEBMUX_SERVICE=1 >"$work/service.log" 2>&1 || {
+	cat "$work/service.log"
+	fail "WEBMUX_SERVICE=1 installation failed"
+}
+[ "$(service_installs)" = 1 ] || fail "WEBMUX_SERVICE=1 did not run service install once"
+[ -f "$work/def/webmux.service" ] || fail "WEBMUX_SERVICE=1 wrote no service definition"
+grep -q 'loginctl enable-linger' "$work/service.log" || fail "Linux service install did not mention linger"
+grep -q 'service status' "$work/service.log" || fail "service install did not print the status command"
+
+# An existing service is neither replaced nor restarted.
+run_install "$work/uname-linux-amd64" WEBMUX_SERVICE=1 >"$work/service-again.log" 2>&1 || {
+	cat "$work/service-again.log"
+	fail "upgrade with an existing service failed"
+}
+[ "$(service_installs)" = 1 ] || fail "existing service was installed again"
+grep -q 'service restart' "$work/service-again.log" || fail "existing service did not get the restart hint"
+if grep -q -- '--force' "$work/service-again.log"; then
+	fail "existing service for the same executable got the --force hint"
+fi
+
+printf 'ExecStart=/usr/local/bin/webmux serve\n' > "$work/def/webmux.service"
+run_install "$work/uname-linux-amd64" WEBMUX_SERVICE=1 >"$work/service-other.log" 2>&1 || {
+	cat "$work/service-other.log"
+	fail "upgrade with a service for another executable failed"
+}
+[ "$(service_installs)" = 1 ] || fail "service for another executable was replaced"
+grep -q "$work/out/webmux service install --force" "$work/service-other.log" ||
+	fail "service for another executable did not get the --force hint"
+[ "$(cat "$work/def/webmux.service")" = 'ExecStart=/usr/local/bin/webmux serve' ] ||
+	fail "service for another executable was modified"
+if grep -q 'service restart' "$work/service-other.log"; then
+	fail "service for another executable got a restart hint that would not load this version"
+fi
+
+# A failing service install keeps the binary and exits non-zero.
+reset_out
+if run_install "$work/uname-linux-amd64" WEBMUX_SERVICE=1 WEBMUX_TEST_SERVICE_FAIL=1 >"$work/service-fail.log" 2>&1; then
+	fail "failed service install exited 0"
+fi
+[ -x "$work/out/webmux" ] || fail "failed service install removed the binary"
+grep -q 'service install failed' "$work/service-fail.log" || grep -q '"service install" failed' "$work/service-fail.log" ||
+	fail "failed service install was not reported"
+grep -q 'systemctl is required' "$work/service-fail.log" || fail "service install error was hidden"
+
+# On a terminal the script asks; Enter means yes, n means no.
+printf '\n' > "$work/tty-yes"
+reset_out
+run_install "$work/uname-linux-amd64" WEBMUX_TTY="$work/tty-yes" >"$work/ask-yes.log" 2>&1 || {
+	cat "$work/ask-yes.log"
+	fail "interactive default answer failed"
+}
+grep -q '\[Y/n\]' "$work/ask-yes.log" || fail "terminal run did not ask"
+[ "$(service_installs)" = 1 ] || fail "Enter at the prompt did not install the service"
+
+printf 'n\n' > "$work/tty-no"
+reset_out
+run_install "$work/uname-linux-amd64" WEBMUX_TTY="$work/tty-no" >"$work/ask-no.log" 2>&1 || {
+	cat "$work/ask-no.log"
+	fail "interactive no answer failed"
+}
+[ "$(service_installs)" = 0 ] || fail "answering n installed the service"
+
+# WEBMUX_SERVICE=0 never asks, even on a terminal.
+reset_out
+run_install "$work/uname-linux-amd64" WEBMUX_SERVICE=0 WEBMUX_TTY="$work/tty-yes" >"$work/service-off.log" 2>&1 || {
+	cat "$work/service-off.log"
+	fail "WEBMUX_SERVICE=0 installation failed"
+}
+if grep -q '\[Y/n\]' "$work/service-off.log"; then
+	fail "WEBMUX_SERVICE=0 still asked"
+fi
+[ "$(service_installs)" = 0 ] || fail "WEBMUX_SERVICE=0 installed the service"
+
+# Invalid values fail before anything is downloaded.
+reset_out
+if run_install "$work/uname-linux-amd64" WEBMUX_SERVICE=yes >"$work/service-bad.log" 2>&1; then
+	fail "invalid WEBMUX_SERVICE was accepted"
+fi
+grep -q 'invalid WEBMUX_SERVICE' "$work/service-bad.log" || fail "invalid WEBMUX_SERVICE error was unclear"
+[ -z "$(ls -A "$work/out")" ] || fail "invalid WEBMUX_SERVICE changed the install directory"
 
 # Hide sha256sum so install.sh has to fall back to shasum.
 if command -v shasum >/dev/null 2>&1; then

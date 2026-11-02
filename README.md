@@ -116,7 +116,9 @@ curl -fsSL https://cdn.jsdelivr.net/gh/mzdluo123/webmux@main/install.sh | sh
 curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/latest/download/install.sh | sh
 ```
 
-脚本自动识别 Linux/macOS 与 amd64/arm64，下载二进制和 `SHA256SUMS`，校验后安装到 `~/.local/bin/webmux`。GitHub 不可用时依次回退 `ghfast.top`、`gh-proxy.com`；脚本入口不依赖 `raw.githubusercontent.com`。可用 `WEBMUX_VERSION`、`WEBMUX_INSTALL_DIR`、`WEBMUX_MIRRORS`、`WEBMUX_SHA256` 覆盖版本、目录、镜像和固定摘要。Windows 请下载 exe 或使用托盘（见 [Windows（WSL）](#windowswsl)）。完整说明见 [部署指南](docs/deployment.md#安装)。
+脚本自动识别 Linux/macOS 与 amd64/arm64，下载二进制和 `SHA256SUMS`，校验后安装到 `~/.local/bin/webmux`。GitHub 不可用时依次回退 `ghfast.top`、`gh-proxy.com`；脚本入口不依赖 `raw.githubusercontent.com`。可用 `WEBMUX_VERSION`、`WEBMUX_INSTALL_DIR`、`WEBMUX_MIRRORS`、`WEBMUX_SHA256` 覆盖版本、目录、镜像和固定摘要。
+
+安装时可顺便设置开机自启：在终端中运行时脚本会询问是否安装用户服务（回车即安装），也可用 `WEBMUX_SERVICE=1`（安装）或 `WEBMUX_SERVICE=0`（只装二进制）指定。已有服务不会被改写或重启。Windows 请使用安装程序或托盘（见 [Windows（WSL）](#windowswsl)）。完整说明见 [部署指南](docs/deployment.md#安装)。
 
 也可以手动下载并校验。服务端为 `webmux-{linux,darwin}-{amd64,arm64}`；Windows 托盘与控制台客户端为 `webmux-tray-windows-{amd64,arm64}.exe`、`webmux-windows-{amd64,arm64}.exe`：
 

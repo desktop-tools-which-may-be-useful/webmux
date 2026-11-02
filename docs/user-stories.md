@@ -296,7 +296,7 @@ WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端�
 | H    | 手机、平板与触摸操作                   | US-H01–US-H09 |
 | I    | 代码工作区、Diff、引用与文件操作       | US-I01–US-I19 |
 | J    | 仓库登记与 worktree 管理               | US-J01–US-J11 |
-| K    | 配置、运行与服务管理                   | US-K01–US-K12 |
+| K    | 配置、运行与服务管理                   | US-K01–US-K13 |
 | L    | 开发、验证与发布支持                   | US-L01–US-L11 |
 | M    | 原生终端、CLI 与本机控制面             | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道                    | US-N01–US-N08 |
@@ -381,3 +381,9 @@ diff 库的行号按压只在主页面 `document` 上等待 pointerup，现由 `
 
 本次局部核对（2026-11-02）：Windows 安装程序对应新增 US-O12，并更新 US-O01（本地缓存与预置服务端离线安装）与 US-O04（安装程序登记登录启动、`webmux-tray.exe quit`）；覆盖索引同步。
 核对依据为 `internal/tray` 的 Go race 测试与在 Windows 11 上实际运行的 `windows-installer-smoke.ps1`（静默安装、`quit`、运行中升级、拒绝其他位置的托盘、架构不符、卸载）；178 个故事 ID 唯一，O 组来源路径有效；未用真实 WSL 发行版验收托盘菜单离线安装，未重新核验其余故事能力。
+
+本次局部核对（2026-11-02）：`install.sh` 可选安装用户服务对应新增 US-K13，覆盖索引同步。
+
+- 依据：`make test-install` 覆盖显式安装、已有服务保护、其他可执行文件提示、失败路径、终端询问与无效取值。
+- 实测：在本机 systemd 用户管理器上用本地发布产物安装，服务启动；重复运行服务 PID 不变；真实 `/dev/tty` 询问可用。
+- 限制：未在 macOS launchd 上实测，未重新核验其余故事能力；179 个故事 ID 唯一。

@@ -14,7 +14,7 @@ Linux/macOS 推荐使用仓库根目录的 [`install.sh`](../install.sh)。
 
 - 依赖：POSIX `sh`、`curl`、`uname`、`mktemp`、`awk`，以及 `sha256sum` 或 `shasum`（任一即可）。
 - 流程：自动识别 Linux/macOS 与 amd64/arm64（Apple Silicon 的 Rosetta 终端优先选择 arm64），下载对应二进制与 `SHA256SUMS`，校验通过后才原子替换目标文件。
-- 默认安装到 `~/.local/bin/webmux`，不需要 sudo，也不会执行 `config init`、`service install` 或改写 shell 配置。
+- 默认安装到 `~/.local/bin/webmux`，不需要 sudo，不改写 shell 配置；可选同时安装用户服务（见下文）。
 
 安装脚本本身不依赖 `raw.githubusercontent.com`。任选一个可访问的入口：
 
@@ -33,6 +33,7 @@ curl -fsSL https://cdn.jsdelivr.net/gh/mzdluo123/webmux@main/install.sh | sh
 | -------------------- | ----------------------------------------- | --------------------------------------------------------------- |
 | `WEBMUX_VERSION`     | 最新 Release                              | 指定 `x.y.z`（可带 `v` 前缀），从 `releases/download/v...` 下载 |
 | `WEBMUX_INSTALL_DIR` | `~/.local/bin`                            | 目标目录；不可写时明确报错，不自动 sudo                         |
+| `WEBMUX_SERVICE`     | 未设置                                    | `1` 同时安装用户服务，`0` 只装二进制；未设置时在终端中询问      |
 | `WEBMUX_MIRRORS`     | `https://ghfast.top https://gh-proxy.com` | 空格分隔的 gh-proxy 前缀；空值表示只用 GitHub                   |
 | `WEBMUX_SHA256`      | 空                                        | 固定二进制 SHA-256，跳过同源 `SHA256SUMS`                       |
 
@@ -47,11 +48,20 @@ curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.
 - 镜像是第三方服务，能看到请求者 IP。
 - 同源校验只能发现截断和损坏，无法防范同时替换两者的恶意镜像；高保证或离线场景请用 `WEBMUX_SHA256` 固定摘要。
 
-脚本只安装二进制。完成后按提示运行 `webmux --listen 127.0.0.1:7681`。
+**用户服务（开机自启）**：二进制安装成功后，脚本可以接着执行 `webmux service install`，让 WebMux 作为 systemd 用户服务（Linux）或 launchd 用户代理（macOS）后台运行，并在登录后自动启动。缺少配置时会生成带随机 Token 的配置。
 
-- 需要后台服务时再执行 `webmux service install`，首次启动会自动生成配置与 Token。
-- 重复执行脚本会升级二进制；正在运行的服务需手动重启，重启会结束现有会话。
-- Windows 不运行该脚本：请使用 `webmux-setup-windows-*.exe` 安装托盘，或下载 `webmux-windows-*.exe` / 独立托盘程序，或按 [Windows（WSL）](deployment/windows-wsl.md) 在 WSL 中运行同一脚本。
+```sh
+curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.sh | WEBMUX_SERVICE=1 sh
+```
+
+- 未设置 `WEBMUX_SERVICE` 时，脚本在终端中询问是否安装，直接回车即安装；没有终端（CI、cron）时不询问，只装二进制并提示 `webmux service install`。
+- 已经安装过用户服务时不改写也不重启它（重启会结束现有会话），只提示用 `webmux service restart` 使新版本生效；服务运行的是其他位置的 webmux 时改为提示 `webmux service install --force`。
+- 服务安装失败时二进制仍保留，脚本输出原因和重试命令并以非零退出码结束。
+- Linux 的用户服务默认在登录后运行、注销后停止；需要开机即运行时执行 `loginctl enable-linger "$USER"`。
+
+不安装服务时，完成后按提示运行 `webmux --listen 127.0.0.1:7681`，或之后再执行 `webmux service install`；首次启动会自动生成配置与 Token。重复执行脚本会升级二进制，正在运行的服务需手动重启，重启会结束现有会话。
+
+Windows 不运行该脚本：请使用 `webmux-setup-windows-*.exe` 安装托盘，或下载 `webmux-windows-*.exe` / 独立托盘程序，或按 [Windows（WSL）](deployment/windows-wsl.md) 在 WSL 中运行同一脚本。
 
 ## 配置
 
