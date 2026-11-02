@@ -49,7 +49,7 @@ func TestResponseArrayFixture(t *testing.T) {
 			{Seq: 3, Kind: hybrid.EventRequest, At: chatTime, Request: &hybrid.Request{RequestID: "r1", Kind: hybrid.RequestForm, Form: &hybrid.Form{Message: "?"}}},
 		}),
 		"hybridRecords": HybridRecords([]hybrid.Record{{
-			ID: "abcdefgh", Name: "omp", ConfigID: "abcdefgh", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"},
+			ID: "abcdefgh", Name: "omp", Title: "session title", ConfigID: "abcdefgh", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"},
 			Side: hybrid.SideTUI, State: hybrid.StateClosed, CreatedAt: chatTime, UpdatedAt: chatTime,
 		}}, func(string) bool { return false }),
 	}

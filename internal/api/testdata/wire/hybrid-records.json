@@ -18,6 +18,7 @@
       "queuedCount": 0,
       "side": "acp",
       "state": "closed",
+      "title": "agent",
       "updatedAt": "<time>"
     }
   ]

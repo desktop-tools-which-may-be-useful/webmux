@@ -51,6 +51,26 @@ func TestOSCBoundsAndRecovery(t *testing.T) {
 	}
 }
 
+// A terminal title equal to the directory name is still a reported title;
+// only an unset or cleared title is the cwd placeholder.
+func TestReportedTitleReplacesPlaceholder(t *testing.T) {
+	s := newSession("s", "/work/foo", "", startOptions{})
+	if info := s.info; !info.PlaceholderTitle || info.Title != "foo" {
+		t.Fatalf("new session %+v", info)
+	}
+	s.signals.Title("foo")
+	if s.info.PlaceholderTitle {
+		t.Fatal("reported title kept the placeholder flag")
+	}
+	s.signals.Title("")
+	if !s.info.PlaceholderTitle || s.info.Title != "foo" {
+		t.Fatalf("cleared title %+v", s.info)
+	}
+	if named := newSession("n", "/work/foo", "name", startOptions{}); named.info.PlaceholderTitle {
+		t.Fatal("a named session has no placeholder title")
+	}
+}
+
 func TestSignalChunkBoundaries(t *testing.T) {
 	sequence := "a\a\x1b]777;notify;warp://cli-agent;{\"v\":1,\"event\":\"question_asked\",\"summary\":\"问题\"}\x1b\\" +
 		"\x1b]9;done\a\x1b]777;notify;omp;Complete\a"

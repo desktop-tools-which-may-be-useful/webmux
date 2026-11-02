@@ -97,7 +97,10 @@ type actor struct {
 	// while the chat side shows no terminal run.
 	title        string
 	titleSession string
-	preview      preview
+	// recordTitle is the last title sent to the persistent record. Terminal
+	// titles arrive through the shell, chat titles through its overlay.
+	recordTitle string
+	preview     preview
 	// switching is the running switch, from its eligibility check on.
 	switching *switchOp
 	// opening: a reconnect or wake is opening the agent session again;
@@ -303,6 +306,7 @@ func (a *actor) flush() {
 	}
 	a.log.setState(a.chat)
 	a.shell.SetOverlay(a.overlay())
+	a.saveShellTitle(a.shell.Info())
 }
 
 // overlay is the shell's hybrid description; on the chat side it also
@@ -392,6 +396,27 @@ func (a *actor) emit(events ...Event) {
 		a.dirty = true
 	}
 	a.log.append(time.Now().UTC(), events...)
+}
+
+// saveShellTitle records the shell's displayed title unless it is still the
+// cwd-derived placeholder a fresh or switched terminal shows before it
+// reports an OSC title: that would overwrite the recorded title on every
+// terminal resume or switch.
+func (a *actor) saveShellTitle(info session.Info) {
+	if info.PlaceholderTitle {
+		return
+	}
+	a.saveTitle(info.Title)
+}
+
+// saveTitle keeps the recoverable card's title in sync with the running
+// session. Routine writes are coalesced; closing and interruption flush them.
+func (a *actor) saveTitle(title string) {
+	if title == a.recordTitle {
+		return
+	}
+	a.recordTitle = title
+	a.record(false, func(r *Record) { r.Title = title })
 }
 
 // record changes the session's record; immediate writes it now.
@@ -925,6 +950,7 @@ func (a *actor) interrupt(activity string, gone bool) {
 	a.dirty = true
 	now := time.Now().UTC()
 	lost := len(a.chat.Queue.Items)
+	a.saveShellTitle(a.shell.Info())
 	a.record(true, func(r *Record) {
 		r.State, r.Activity, r.InterruptedAt, r.QueuedCount = StateInterrupted, activity, &now, lost
 		if gone {
@@ -1043,6 +1069,7 @@ func (a *actor) beginClose() {
 func (a *actor) finishClose(gone bool) {
 	if a.state == StateActive {
 		a.state = StateClosed
+		a.saveShellTitle(a.shell.Info())
 		a.record(true, func(r *Record) {
 			r.State = StateClosed
 			if gone {

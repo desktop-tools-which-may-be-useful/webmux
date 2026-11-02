@@ -40,21 +40,24 @@ type Info struct {
 	ID string
 	// Generation distinguishes this run from any other session that could
 	// carry the same ID. Output offsets and submissions are bound to it.
-	Generation   string
-	Title        string
-	Cwd          string
-	Cmd          []string
-	Status       Status
-	ExitCode     *int
-	Preview      string
-	CreatedAt    time.Time
-	LastActiveAt time.Time
-	Cols         uint16
-	Rows         uint16
-	Clients      int
-	Workspace    *Workspace
-	Attention    *Attention
-	ReportedCwd  *ReportedCwd
+	Generation string
+	Title      string
+	// PlaceholderTitle says Title is still derived from Cwd: no name, OSC
+	// title or driver overlay title has replaced it.
+	PlaceholderTitle bool
+	Cwd              string
+	Cmd              []string
+	Status           Status
+	ExitCode         *int
+	Preview          string
+	CreatedAt        time.Time
+	LastActiveAt     time.Time
+	Cols             uint16
+	Rows             uint16
+	Clients          int
+	Workspace        *Workspace
+	Attention        *Attention
+	ReportedCwd      *ReportedCwd
 	// ConfigID is the saved launch config used at creation, if any.
 	ConfigID string
 	// Hybrid is set only on a shell whose driver published an overlay.
@@ -171,14 +174,15 @@ func newSession(id, cwd, name string, options startOptions) *Session {
 	now := time.Now()
 	s := &Session{
 		info: Info{
-			ID:           id,
-			Title:        filepath.Base(cwd),
-			Cwd:          cwd,
-			CreatedAt:    now,
-			LastActiveAt: now,
-			Cols:         80,
-			Rows:         24,
-			ConfigID:     options.configID,
+			ID:               id,
+			Title:            filepath.Base(cwd),
+			PlaceholderTitle: name == "",
+			Cwd:              cwd,
+			CreatedAt:        now,
+			LastActiveAt:     now,
+			Cols:             80,
+			Rows:             24,
+			ConfigID:         options.configID,
 		},
 		userTitle:     name,
 		subs:          make(map[*Subscriber]struct{}),

@@ -74,7 +74,7 @@
       picked = pending.candidates[0]?.agentSessionId ?? "";
       pendingOpen = true;
     } catch (err) {
-      onerror(`无法恢复“${record.name}”：${errorMessage(err)}`);
+      onerror(`无法恢复“${record.title || record.name}”：${errorMessage(err)}`);
     } finally {
       onbusy(false);
     }

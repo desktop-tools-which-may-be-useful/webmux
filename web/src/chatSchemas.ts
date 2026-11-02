@@ -41,6 +41,7 @@ export type HybridSwitchResult = z.infer<typeof HybridSwitchResultSchema>;
 export const HybridRecordSchema = z.object({
   id: z.string(),
   name: z.string(),
+  title: z.string(),
   configId: z.string(),
   configMissing: z.boolean(),
   agent: z.string(),

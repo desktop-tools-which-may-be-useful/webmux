@@ -273,6 +273,11 @@ WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端�
 
 本次局部核对（2026-11-02）：选择 Bash / Zsh 启动文件与只读 `defaultShell` 对应 US-B01、US-B08；后端定向 Go race 测试覆盖 Bash/Zsh 包装、恢复、ACP fd 3 与连接器检查，前端由 `launchConfigs` 单元测试与启动配置对话框浏览器测试覆盖；未重新核对其余故事。
 
+本次局部核对（2026-11-02）：可恢复混合会话持久化并展示当前会话标题，旧记录回退到创建名称，对应 US-Q12，不新增故事或改变覆盖索引。
+
+- 通过：标题持久化与恢复、API/wire Go race、线上快照、Zod 契约及可恢复分组浏览器测试。
+- 其余混合会话 Go race 在排除 `TestClaudeRoundTrip` 后通过；该用例在未修改的 HEAD 同样失败。未重新核对其余故事。
+
 ## 阅读约定与产品边界
 
 - **使用者**：通过桌面、手机或平板浏览器使用服务器上的 Shell、CLI agent 和其他终端程序的人。

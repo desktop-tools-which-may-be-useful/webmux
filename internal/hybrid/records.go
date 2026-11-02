@@ -47,8 +47,13 @@ const (
 // Record links a WebMux session ID to an agent session. It never holds
 // environment values, messages, queued text or tokens.
 type Record struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
+	ID string `json:"id"`
+	// Name is the explicit creation name, empty when the session follows
+	// terminal- or agent-reported titles.
+	Name string `json:"name"`
+	// Title is the latest displayed session title. It is optional on disk so
+	// records written before titles were persisted remain readable.
+	Title          string   `json:"title,omitempty"`
 	ConfigID       string   `json:"configId"`
 	Agent          string   `json:"agent"`
 	Cwd            string   `json:"cwd"`

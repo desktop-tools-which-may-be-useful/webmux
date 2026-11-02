@@ -38,6 +38,10 @@
   let removing = $state<HybridRecord | null>(null);
   let removeOpen = $state(false);
 
+  function title(record: HybridRecord) {
+    return record.title || record.name;
+  }
+
   function since(record: HybridRecord) {
     const at = Date.parse(record.interruptedAt ?? record.updatedAt);
     const seconds = Math.max(0, Math.floor((now - at) / 1000));
@@ -56,7 +60,7 @@
     try {
       await remove(record.id);
     } catch (err) {
-      error = `无法移除“${record.name}”：${errorMessage(err)}`;
+      error = `无法移除“${title(record)}”：${errorMessage(err)}`;
     } finally {
       busy = "";
     }
@@ -86,7 +90,7 @@
         <Item.Root variant="outline" class="min-w-0 flex-col items-stretch">
           <Item.Content class="min-w-0">
             <Item.Title class="min-w-0">
-              <span class="truncate">{record.name}</span>
+              <span class="truncate">{title(record)}</span>
               <Badge variant="outline"
                 >{record.state === "closed" ? "已关闭" : "已中断"}</Badge
               >
@@ -136,7 +140,7 @@
 
 <ConfirmDialog
   bind:open={removeOpen}
-  title={`移除“${removing?.name ?? ""}”？`}
+  title={`移除“${removing ? title(removing) : ""}”？`}
   onconfirm={confirmRemove}
 >
   只移除 WebMux 的记录与本机草稿；agent 自己保存的会话不受影响。

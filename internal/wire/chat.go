@@ -256,7 +256,7 @@ func HybridResumeInput(r contract.HybridResumeRequest) workspace.HybridResumeInp
 // and process identity stay on the server.
 func HybridRecord(r hybrid.Record, configMissing bool) contract.HybridRecord {
 	out := contract.HybridRecord{
-		ID: r.ID, Name: r.Name, ConfigID: r.ConfigID, ConfigMissing: configMissing, Agent: r.Agent, Cwd: r.Cwd,
+		ID: r.ID, Name: r.Name, Title: r.Title, ConfigID: r.ConfigID, ConfigMissing: configMissing, Agent: r.Agent, Cwd: r.Cwd,
 		Cmd: required(r.Cmd), Side: contract.HybridSide(r.Side), PreviousIDs: required(r.PreviousIDs),
 		State: contract.HybridState(r.State), Activity: r.Activity, QueuedCount: r.QueuedCount, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}

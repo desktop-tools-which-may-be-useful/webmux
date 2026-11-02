@@ -93,6 +93,7 @@ type HybridResumeRequest struct {
 type HybridRecord struct {
 	ID             string      `json:"id"`
 	Name           string      `json:"name"`
+	Title          string      `json:"title"`
 	ConfigID       string      `json:"configId"`
 	ConfigMissing  bool        `json:"configMissing"`
 	Agent          string      `json:"agent"`

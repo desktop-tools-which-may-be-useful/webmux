@@ -8,6 +8,7 @@ import type { HybridRecord, SessionInfo } from "../../src/schemas";
 const record: HybridRecord = {
   id: "hybrid22",
   name: "修复排序",
+  title: "修复排序",
   configId: "cfgomp01",
   configMissing: false,
   agent: "omp",
@@ -150,7 +151,7 @@ test("closing a hybrid session keeps its draft; removing the record deletes it",
   render(SessionList, { drafts });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [active] });
-  records = [{ ...record, id: "hybrid33", name: "进行中" }];
+  records = [{ ...record, id: "hybrid33", name: "进行中", title: "进行中" }];
   socket.message({ type: "removed", id: "hybrid33" });
   const group = page.getByRole("region", { name: "可恢复" });
   await expect.element(group).toMatchTextContent(/可恢复\s*1/);

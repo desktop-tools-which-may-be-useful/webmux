@@ -12,7 +12,8 @@ afterEach(async () => {
 
 const record: HybridRecord = {
   id: "hybrid22",
-  name: "修复排序",
+  name: "webmux",
+  title: "修复排序",
   configId: "cfgomp01",
   configMissing: false,
   agent: "omp",
@@ -74,6 +75,17 @@ test("is hidden without records and collapsed by default with a count", async ()
       .elements(),
   ).toHaveLength(1);
   await expect.element(group().getByText(/有 2 条排队消息/)).toBeVisible();
+});
+
+test("shows the stored title and falls back to the legacy record name", async () => {
+  show(
+    [record, { ...record, id: "hybrid33", title: "", name: "旧会话名称" }],
+    vi.fn(),
+  );
+  await expand();
+  await expect.element(group().getByText("修复排序")).toBeVisible();
+  await expect.element(group().getByText("旧会话名称")).toBeVisible();
+  expect(group().getByText("webmux", { exact: true }).elements()).toEqual([]);
 });
 
 test("resumes to either side", async () => {

@@ -170,6 +170,7 @@ func (s *Session) signalHandler() *SignalHandler {
 	h := &SignalHandler{
 		Title: func(title string) {
 			if s.userTitle == "" {
+				s.info.PlaceholderTitle = title == ""
 				if title == "" {
 					title = filepath.Base(s.info.Cwd)
 				}

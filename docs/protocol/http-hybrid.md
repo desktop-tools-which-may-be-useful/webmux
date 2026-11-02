@@ -35,7 +35,13 @@
 
 切换结果中：`draft` 是切到终端时退回的排队消息（按顺序以空行连接），只返回给发起切换的请求，其他设备收到提示事件；`dropped` 为恢复命令未保留的启动参数；`unsupported` 为聊天端不支持的参数。切换失败时会话回到原端并返回 502 与原因；回滚也失败时会话标记为 `interrupted`。
 
-记录（`HybridRecord`）包含 ID、名称、`configId`、`configMissing`、agent、cwd、命令快照、所在端、当前与最近 8 个历史 agent 会话 ID、状态、中断前的活动 `activity`（`idle`、`turn` 或 `switching`，后两者表示上一轮可能未完成）、中断时丢失的排队条数与时间戳，不含环境变量值、消息、队列正文或 token。
+记录（`HybridRecord`）包含以下字段，不含环境变量值、消息、队列正文或 token：
+
+- 身份与展示：ID、创建名称、当前会话标题 `title`、`configId`、`configMissing`、agent、cwd 与命令快照；
+- 会话关联：所在端、当前与最近 8 个历史 agent 会话 ID；
+- 生命周期：状态、中断前的活动 `activity`（`idle`、`turn` 或 `switching`，后两者表示上一轮可能未完成）、中断时丢失的排队条数与时间戳。
+
+`title` 跟随运行中会话实际展示的标题；可恢复卡片优先显示它，旧记录为空时回退到创建名称。
 
 恢复时命令取自记录中的快照，环境变量按 `configId` 重新读取。启动配置已删除且未确认时返回 409 `config_missing`；以 `confirmWithoutEnv: true` 重试则不带环境变量恢复。
 

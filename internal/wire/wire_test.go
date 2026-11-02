@@ -109,12 +109,12 @@ func TestSessionHybrid(t *testing.T) {
 func TestHybridRecord(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	rec := hybrid.Record{
-		ID: "abcdefgh", Name: "omp", ConfigID: "cfgomp01", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"}, Side: hybrid.SideACP,
+		ID: "abcdefgh", Name: "omp", Title: "session title", ConfigID: "cfgomp01", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"}, Side: hybrid.SideACP,
 		Config: map[string]string{"model": "fast"}, State: hybrid.StateClosed, Activity: "turn", QueuedCount: 2,
 		CreatedAt: at, UpdatedAt: at, PID: 42,
 	}
 	got := encode(t, HybridRecord(rec, true))
-	for _, want := range []string{`"configMissing":true`, `"agentSessionId":null`, `"previousIds":[]`, `"interruptedAt":null`, `"queuedCount":2`, `"activity":"turn"`} {
+	for _, want := range []string{`"configMissing":true`, `"title":"session title"`, `"agentSessionId":null`, `"previousIds":[]`, `"interruptedAt":null`, `"queuedCount":2`, `"activity":"turn"`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("record %s lacks %s", got, want)
 		}

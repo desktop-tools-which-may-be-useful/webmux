@@ -271,13 +271,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	}
 	now := time.Now().UTC()
 	rec := Record{
-		ID: info.ID, Name: in.Name, ConfigID: in.ConfigID, Agent: cmd.Profile.Name, Cwd: cwd,
+		ID: info.ID, Name: in.Name, Title: info.Title, ConfigID: in.ConfigID, Agent: cmd.Profile.Name, Cwd: cwd,
 		Cmd: in.Cmd, Side: side, PreviousIDs: []string{}, Config: map[string]string{},
 		State: StateActive, CreatedAt: now, UpdatedAt: now,
 	}
-	if rec.Name == "" {
-		rec.Name = info.Title
-	}
+	a.recordTitle = rec.Title
 	if err := s.records.add(rec); err != nil {
 		// The shell has no process yet: removal cannot be refused.
 		_ = s.manager.Remove(info.ID)

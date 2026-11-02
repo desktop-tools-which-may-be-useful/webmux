@@ -18,7 +18,7 @@ import (
 func testRecord(id string) Record {
 	now := time.Now().UTC()
 	return Record{
-		ID: id, Name: "omp", ConfigID: "cfgaaaaa", Agent: "omp", Cwd: "/p",
+		ID: id, Name: "omp", Title: "session title", ConfigID: "cfgaaaaa", Agent: "omp", Cwd: "/p",
 		Cmd: []string{"omp"}, Side: SideTUI, PreviousIDs: []string{}, Config: map[string]string{},
 		State: StateActive, CreatedAt: now, UpdatedAt: now,
 	}
@@ -77,7 +77,7 @@ func TestRecordsPersistAndReserveIDs(t *testing.T) {
 	r.close()
 	r = openTestRecords(t, dir)
 	got, ok := r.get("abcdefgh")
-	if all := r.all(); !ok || got.Agent != "omp" || got.State != StateActive || len(all) != 1 || all[0].ID != "abcdefgh" {
+	if all := r.all(); !ok || got.Agent != "omp" || got.Title != "session title" || got.State != StateActive || len(all) != 1 || all[0].ID != "abcdefgh" {
 		t.Fatalf("reopened record %+v %v", got, ok)
 	}
 	if err := r.remove("abcdefgh"); err != nil || r.reserved("abcdefgh") {

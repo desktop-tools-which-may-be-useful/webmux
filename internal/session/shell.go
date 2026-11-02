@@ -93,7 +93,7 @@ func (o *Overlay) applyTo(i *Info, noRun, unnamed bool) {
 	}
 	i.Preview = o.Preview
 	if o.Title != "" && unnamed {
-		i.Title = o.Title
+		i.Title, i.PlaceholderTitle = o.Title, false
 	}
 }
 
@@ -294,6 +294,7 @@ func (s *Session) resetRunStateLocked() {
 	s.info.ReportedCwd = nil
 	s.info.Preview = ""
 	s.info.Title = filepath.Base(s.info.Cwd)
+	s.info.PlaceholderTitle = s.userTitle == ""
 	if s.userTitle != "" {
 		s.info.Title = s.userTitle
 	}

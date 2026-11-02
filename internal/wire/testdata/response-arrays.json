@@ -109,6 +109,7 @@
     {
       "id": "abcdefgh",
       "name": "omp",
+      "title": "session title",
       "configId": "abcdefgh",
       "configMissing": false,
       "agent": "omp",
