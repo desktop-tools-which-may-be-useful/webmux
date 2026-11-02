@@ -39,11 +39,11 @@
           "name": "Model",
           "options": [
             {
-              "name": "Fast",
+              "name": "fast",
               "value": "fast"
             },
             {
-              "name": "Smart",
+              "name": "smart",
               "value": "smart"
             }
           ],
