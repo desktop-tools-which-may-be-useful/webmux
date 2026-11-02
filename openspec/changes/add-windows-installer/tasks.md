@@ -30,7 +30,9 @@
 
 ## 4. Windows 冒烟验证
 
-- [ ] 4.1 在 `.github/workflows/test.yml` 新增 `windows-latest` 任务（检测或 `choco install nsis`，编译两个架构的托盘，以占位文件代替 Linux 服务端后打包，运行 `.github/scripts/windows-installer-smoke.ps1`），并纳入 `Test result` 汇总；任务在 PR 上运行通过
+- [x] 4.1 在 `.github/workflows/test.yml` 新增 `windows-latest` 任务，并纳入 `Test result` 汇总；任务在 PR 上运行通过
+  - 步骤：检测或 `choco install nsis`，编译两个架构的托盘，以占位文件代替 Linux 服务端后打包，运行 `.github/scripts/windows-installer-smoke.ps1`；
+  - 依据：main 运行 41438983488 中 `Windows installer smoke` 成功。
 - [x] 4.2 冒烟脚本验证静默安装：文件、开始菜单快捷方式、卸载项字段、`Run\WebMuxTray` 值、预置服务端路径与 SHA-256 等于打包时的服务端文件；托盘进程在运行
 - [x] 4.3 冒烟脚本验证 `quit`：无托盘时退出码 0；运行中托盘被正常关闭且退出码 0；不响应的进程（以 `--kill-path` 指向的同名测试进程模拟）被结束，其他路径的进程不受影响
 - [x] 4.4 冒烟脚本验证覆盖安装：旧托盘被关闭、文件被替换、新托盘运行；再验证静默卸载删除项与保留项（`tray.json`、`tray.log` 保留，指向其他路径的 `Run` 值保留）
