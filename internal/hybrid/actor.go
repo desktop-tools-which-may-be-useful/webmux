@@ -808,7 +808,8 @@ func (a *actor) send(text string, attachments []Attachment) (PromptResult, error
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &turn{id: result.TurnID, cancel: cancel, done: make(chan struct{})}
 	a.turn = t
-	a.chat.Turn = Turn{Running: true, TurnID: t.id}
+	startedAt := time.Now().UTC()
+	a.chat.Turn = Turn{Running: true, TurnID: t.id, StartedAt: &startedAt}
 	a.dirty = true
 	a.clearAttention()
 	a.emit(Event{Kind: EventTurnStart, TurnStart: &TurnStart{TurnID: result.TurnID, PromptID: result.PromptID}}, a.tr.userMessage(text, attachments))
@@ -845,7 +846,8 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	}
 	a.svc.log.Info("hybrid turn ended", "id", a.id, "stopReason", stop, "code", code)
 	a.tr.breakMessage()
-	a.chat.Turn = Turn{TurnID: t.id, StopReason: stop}
+	endedAt := time.Now().UTC()
+	a.chat.Turn = Turn{TurnID: t.id, StopReason: stop, StartedAt: a.chat.Turn.StartedAt, EndedAt: &endedAt}
 	normal := stop == acp.StopEndTurn || stop == acp.StopMaxTokens || stop == acp.StopMaxTurnRequests
 	switch {
 	case stop == StopAuthRequired:

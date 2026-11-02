@@ -105,6 +105,7 @@
       "steering": true,
       "turn": {
         "running": true,
+        "startedAt": "<time>",
         "turnId": "t1"
       },
       "unsupported": [],

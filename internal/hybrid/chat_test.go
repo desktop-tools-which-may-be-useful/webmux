@@ -165,6 +165,10 @@ func TestChatTurnEventSequence(t *testing.T) {
 	if st.state.Plan == nil || st.state.Usage == nil || len(st.state.Commands) == 0 || len(st.state.Config) != 2 || st.state.Turn.TurnID != started.TurnID {
 		t.Fatalf("state after the turn %+v", st.state)
 	}
+	turn := st.state.Turn
+	if turn.StartedAt == nil || turn.EndedAt == nil || turn.EndedAt.Before(*turn.StartedAt) {
+		t.Fatalf("turn timestamps started=%v ended=%v", turn.StartedAt, turn.EndedAt)
+	}
 	// end_turn latches done attention: the session waits for the user.
 	if info := s.Info(); info.Status != session.StatusWaiting || info.Attention == nil {
 		t.Fatalf("status after the turn %s, attention %+v", info.Status, info.Attention)

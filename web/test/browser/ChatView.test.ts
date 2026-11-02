@@ -1,5 +1,5 @@
 import "../../src/styles.css";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte/pure";
 import type { ChatRequest } from "../../src/schemas";
@@ -122,6 +122,76 @@ test("renders the snapshot's timeline and updates a tool row in place", async ()
   await expect
     .element(page.getByRole("status", { name: "Reviewed path" }))
     .toHaveTextContent("web/src/homeWorktrees.ts");
+});
+
+test("shows server-timed progress and keeps the final duration", async () => {
+  const socket = await open();
+  vi.useFakeTimers({
+    now: new Date("2026-01-01T12:00:00Z"),
+    toFake: ["Date", "setInterval", "clearInterval"],
+  });
+  try {
+    const startedAt = "2026-01-01T11:58:55Z";
+    socket.frame(
+      snapshot(chatState({ turn: { running: true, turnId: "t1", startedAt } })),
+    );
+    const status = page
+      .getByRole("status")
+      .filter({ hasText: /正在工作|已完成|已结束/ });
+    await expect.element(status).toHaveTextContent("正在工作… · 1 分 05 秒");
+    await expect
+      .element(status.locator("span.tabular-nums"))
+      .toHaveAttribute("aria-hidden", "true");
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect.element(status).toHaveTextContent("正在工作… · 1 分 06 秒");
+
+    socket.frame({
+      type: "state",
+      state: chatState({
+        turn: {
+          running: false,
+          turnId: "t1",
+          stopReason: "end_turn",
+          startedAt,
+          endedAt: "2026-01-01T12:01:00Z",
+        },
+      }),
+    });
+    await expect.element(status).toHaveTextContent("已完成 · 用时 2 分 05 秒");
+
+    socket.frame({
+      type: "state",
+      state: chatState({
+        turn: {
+          running: false,
+          turnId: "t1",
+          stopReason: "error",
+          startedAt,
+          endedAt: "2026-01-01T12:01:00Z",
+        },
+      }),
+    });
+    await expect.element(status).toHaveTextContent("已结束 · 用时 2 分 05 秒");
+    expect(
+      document
+        .querySelector('[data-turn-result="error"] svg')
+        ?.classList.contains("text-destructive"),
+    ).toBe(true);
+
+    socket.frame({
+      type: "state",
+      state: chatState({
+        turn: {
+          running: true,
+          turnId: "t2",
+          startedAt: new Date().toISOString(),
+        },
+      }),
+    });
+    await expect.element(status).toHaveTextContent("正在工作… · 0 秒");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("a missing connector offers its install hint and the terminal; outdated parts each warn", async () => {

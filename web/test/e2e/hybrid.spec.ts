@@ -232,12 +232,16 @@ test.describe("hybrid sessions with the fake agent", () => {
     await openHybrid(page, id, "acp");
     await sendChat(page, "steer-first");
     await expect(working(page)).toBeVisible();
+    await expect(working(page)).toContainText(/· \d+ 秒/);
     await composer(page).fill("steer-nudge");
     await page.getByRole("button", { name: "插话", exact: true }).click();
     await expect(composer(page)).toHaveValue("");
     await expect(conversation(page)).toContainText("steer-nudge");
     await expect(conversation(page)).toContainText("echo: steer-first");
     await expect(working(page)).toHaveCount(0);
+    await expect(
+      page.getByRole("status").filter({ hasText: "已完成 · 用时" }),
+    ).toContainText(/· 用时 \d+ 秒/);
     await chatTurn(page, "steer-after");
   });
 

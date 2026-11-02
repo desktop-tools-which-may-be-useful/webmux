@@ -169,6 +169,7 @@ func wireSchema(name string) wireRules {
 		add("/items/*", "time", "at")
 	case "ws-chat-state":
 		add("/state", "id", "agentSessionId")
+		add("/state/turn", "time", "startedAt", "endedAt")
 		add("/state/queue/items/*", "time", "createdAt")
 	case "push-status", "push-status-quick-tunnel", "push-status-tailscale", "push-status-disabled":
 		add("", "id", "publicKey")

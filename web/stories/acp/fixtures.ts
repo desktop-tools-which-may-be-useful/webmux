@@ -469,7 +469,19 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
     agentSessionId: ids.current,
     eligibility,
     config,
-    turn: { running: running && !phase },
+    turn: running
+      ? {
+          running: true,
+          startedAt: new Date(Date.now() - 65_000).toISOString(),
+        }
+      : scenario === "commands" || scenario === "cancelled"
+        ? {
+            running: false,
+            stopReason: scenario === "cancelled" ? "cancelled" : "end_turn",
+            startedAt: "2026-01-01T11:57:54Z",
+            endedAt: at,
+          }
+        : { running: false },
     requests: scenario === "permission" ? [permissionRequest] : [],
     plan: plan(scenario === "commands"),
     queue: {

@@ -115,11 +115,14 @@ type ChatAttachment struct {
 	Kind     string `json:"kind,omitempty"`
 }
 
-// ChatTurn is the current or last turn.
+// ChatTurn is the current or last turn. StartedAt and EndedAt let every
+// connected client render the same elapsed and total durations.
 type ChatTurn struct {
-	Running    bool   `json:"running"`
-	TurnID     string `json:"turnId,omitempty"`
-	StopReason string `json:"stopReason,omitempty"`
+	Running    bool       `json:"running"`
+	TurnID     string     `json:"turnId,omitempty"`
+	StopReason string     `json:"stopReason,omitempty"`
+	StartedAt  *time.Time `json:"startedAt,omitempty"`
+	EndedAt    *time.Time `json:"endedAt,omitempty"`
 }
 
 // ChatIDChange reports that the terminal switched to another agent session

@@ -350,11 +350,15 @@ type Eligibility struct {
 	Connector *agentprofile.Connector
 }
 
-// Turn is the current or last turn.
+// Turn is the current or last turn. StartedAt is set for every turn once it
+// starts; EndedAt is set when it finishes, so a reconnect can show its elapsed
+// time without starting a new client-side measurement.
 type Turn struct {
 	Running    bool
 	TurnID     string
 	StopReason string
+	StartedAt  *time.Time
+	EndedAt    *time.Time
 }
 
 // IDChange reports that the terminal moved to another agent session.

@@ -364,6 +364,8 @@ export const ChatStateSchema = z.object({
     running: z.boolean(),
     turnId: z.string().optional(),
     stopReason: StopReasonSchema.optional(),
+    startedAt: datetime.optional(),
+    endedAt: datetime.optional(),
   }),
   requests: z.array(ChatRequestSchema),
   config: z.array(ChatConfigSchema),
