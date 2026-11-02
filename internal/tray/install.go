@@ -68,6 +68,7 @@ func (i Installer) Install(ctx context.Context) error {
 		return fmt.Errorf("不支持的 WSL 架构 %s", arch)
 	}
 	name := "webmux-linux-" + arch
+	// deploy/windows/webmux.nsi pre-seeds this cache name; keep them equal.
 	local := filepath.Join(i.Dir, "webmux-"+i.Version+"-linux-"+arch)
 	if sum, err := fetch.FileSHA256(local); err != nil || sum != digest {
 		if err := os.MkdirAll(i.Dir, 0o700); err != nil {

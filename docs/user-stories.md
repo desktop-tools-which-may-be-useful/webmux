@@ -287,7 +287,7 @@ WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端�
 | L    | 开发、验证与发布支持                   | US-L01–US-L11 |
 | M    | 原生终端、CLI 与本机控制面             | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道                    | US-N01–US-N08 |
-| O    | Windows/WSL 托盘管理                   | US-O01–US-O11 |
+| O    | Windows/WSL 托盘管理                   | US-O01–US-O12 |
 | P    | Tailscale Serve / Funnel               | US-P01–US-P07 |
 | Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q16 |
 
@@ -365,3 +365,6 @@ diff 库的行号按压只在主页面 `document` 上等待 pointerup，现由 `
 
 - 依据：新增 `TerminalSyncOutput` 浏览器用例（同步重绘、滚动重绘、快照回放、同步期间 resize 与焦点变化、快照停在图片上传中），修复前均失败；全部浏览器与单元用例、终端相关 E2E 通过。
 - 本机重绘风暴性能用例（DOM 渲染器、4x CPU、同步输出）：可见重绘帧 37→2–3，长任务 2.3 s→0.33 s；未测 WebGL；未重新核验其余故事能力。
+
+本次局部核对（2026-11-02）：Windows 安装程序对应新增 US-O12，并更新 US-O01（本地缓存与预置服务端离线安装）与 US-O04（安装程序登记登录启动、`webmux-tray.exe quit`）；覆盖索引同步。
+核对依据为 `internal/tray` 的 Go race 测试与在 Windows 11 上实际运行的 `windows-installer-smoke.ps1`（静默安装、`quit`、运行中升级、拒绝其他位置的托盘、架构不符、卸载）；178 个故事 ID 唯一，O 组来源路径有效；未用真实 WSL 发行版验收托盘菜单离线安装，未重新核验其余故事能力。

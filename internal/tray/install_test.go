@@ -119,6 +119,40 @@ func TestInstallerInstallsVerifiedRelease(t *testing.T) {
 	}
 }
 
+// The Windows installer pre-seeds the server where the tray caches
+// downloads: a matching file is installed offline, a damaged one is fetched
+// again.
+func TestInstallerUsesPreseededServer(t *testing.T) {
+	for name, tc := range map[string]struct {
+		seeded    []byte
+		downloads int32
+	}{
+		"verified file, no network": {seeded: serverBinary, downloads: 0},
+		"truncated file refetched":  {seeded: serverBinary[:5], downloads: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := newReleaseServer(t, serverBinary)
+			runner := &installRunner{machine: "x86_64", installed: "0.2.0"}
+			in := testInstaller(t, runner, srv.URL, map[string]string{"amd64": sum(serverBinary), "arm64": "unused"})
+			if err := os.MkdirAll(in.Dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(in.Dir, "webmux-0.2.0-linux-amd64"), tc.seeded, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := in.Install(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if got := srv.hits.Load(); got != tc.downloads {
+				t.Fatalf("%d downloads, want %d", got, tc.downloads)
+			}
+			if len(runner.program("install")) != 1 {
+				t.Fatalf("install calls %q", runner.program("install"))
+			}
+		})
+	}
+}
+
 func TestInstallerRefusesUnverifiedFiles(t *testing.T) {
 	srv := newReleaseServer(t, []byte("tampered"))
 	runner := &installRunner{machine: "x86_64", installed: "0.2.0"}

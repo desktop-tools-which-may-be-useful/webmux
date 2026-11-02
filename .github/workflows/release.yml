@@ -33,6 +33,8 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install NSIS for the Windows installers
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nsis
       - name: Build embedded frontend
         run: pnpm --dir web build
       - name: Run Go tests
@@ -52,4 +54,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --title "WebMux $GITHUB_REF_NAME" --generate-notes \
             webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
             webmux-windows-amd64.exe webmux-windows-arm64.exe \
-            webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe install.sh SHA256SUMS
+            webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
+            webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe install.sh SHA256SUMS

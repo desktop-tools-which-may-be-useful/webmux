@@ -20,9 +20,14 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "version" {
-		fmt.Println(version)
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "version":
+			fmt.Println(version)
+			return
+		case "quit":
+			os.Exit(winui.QuitCommand(os.Args[2:]))
+		}
 	}
 	if err := run(); err != nil {
 		_, _ = windows.MessageBox(0, windows.StringToUTF16Ptr("WebMux 托盘无法启动："+err.Error()), windows.StringToUTF16Ptr("WebMux"), windows.MB_OK|windows.MB_ICONERROR)

@@ -291,11 +291,54 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The installer, `webmux-tray quit` and uninstall on a real Windows user
+  # session. The runner has no WSL, so the tray stays in its "no WSL" state
+  # and a placeholder stands in for the pre-seeded Linux server.
+  windows-installer:
+    name: Windows installer smoke
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+        with:
+          frontend: "false"
+          node: "false"
+          go: "true"
+      - name: Build installers
+        shell: pwsh
+        run: |
+          $makensis = Get-Command makensis -ErrorAction SilentlyContinue
+          if (-not $makensis) {
+            $makensis = Get-Command "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -ErrorAction SilentlyContinue
+          }
+          if (-not $makensis) {
+            choco install nsis --no-progress -y
+            $makensis = Get-Command "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          }
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'bin'
+          New-Item -ItemType Directory -Force $bin | Out-Null
+          foreach ($arch in 'amd64', 'arm64') {
+            $env:CGO_ENABLED = '0'; $env:GOOS = 'windows'; $env:GOARCH = $arch
+            go build -trimpath -ldflags "-s -w -X main.version=0.0.1 -H=windowsgui" -o "$bin\webmux-tray-windows-$arch.exe" ./cmd/webmux-tray
+            if ($LASTEXITCODE) { exit 1 }
+            Set-Content -Path "$bin\webmux-linux-$arch" -Value "placeholder server $arch" -NoNewline
+            # Quote every -D: PowerShell splits a bare -DVERSION=0.0.1 at the dots.
+            & $makensis.Source -V2 -INPUTCHARSET UTF8 "-DVERSION=0.0.1" "-DARCH=$arch" "-DTRAY=$bin\webmux-tray-windows-$arch.exe" "-DSERVER=$bin\webmux-linux-$arch" "-DICON=$env:GITHUB_WORKSPACE\internal\tray\winui\icons\running.ico" "-DOUTFILE=$bin\webmux-setup-windows-$arch.exe" deploy\windows\webmux.nsi
+            if ($LASTEXITCODE) { exit 1 }
+          }
+      - name: Install, quit, upgrade and uninstall
+        shell: powershell
+        run: |
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'bin'
+          $sha = (Get-FileHash "$bin\webmux-linux-amd64" -Algorithm SHA256).Hash
+          & .github\scripts\windows-installer-smoke.ps1 -Setup "$bin\webmux-setup-windows-amd64.exe" -SetupOtherArch "$bin\webmux-setup-windows-arm64.exe" -ServerSha256 $sha -Version 0.0.1 -Arch amd64
+
   # Single stable check name for branch protection, independent of job layout.
   test-result:
     name: Test result
     if: always()
-    needs: [lint, go, vitest, storybook, e2e, macos, performance]
+    needs: [lint, go, vitest, storybook, e2e, macos, performance, windows-installer]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

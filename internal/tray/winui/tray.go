@@ -147,6 +147,7 @@ func (a *App) onReady() {
 	}
 	if a.o.Instance != nil {
 		a.o.Instance.Wakes(a.onWake)
+		a.o.Instance.Quits(a.externalQuit)
 	}
 	go a.uiLoop()
 	go a.watchSettings()

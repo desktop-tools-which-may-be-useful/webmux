@@ -93,6 +93,7 @@
 | 托盘登录启动、单实例、发行版、设置、状态与日志                                                      | US-O04–US-O07                                       |
 | Windows 远程转发、敏感链接复制、退出托盘                                                            | US-O08–US-O10                                       |
 | 托盘与 WSL 服务的兼容、版本对应、降级运行与更新入口                                                 | US-O11                                              |
+| Windows 安装程序的安装、升级、卸载、静默模式与托盘退出请求                                          | US-O04；US-O12                                      |
 | Tailscale 检测、节点 DNS、HTTPS 与现有入口只读状态                                                  | US-P01                                              |
 | Tailscale Serve/Funnel 配置、回读确认、精确移除与公网风险                                           | US-P02–US-P03                                       |
 | WSL NAT 阻塞、Windows provider 选择与 operator 提示                                                 | US-P04–US-P05                                       |

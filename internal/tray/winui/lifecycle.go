@@ -51,6 +51,15 @@ func (a *App) quit() {
 	systray.Quit()
 }
 
+// externalQuit serves `webmux-tray quit`: "仅退出托盘" without asking, so
+// WebMux and the keepalive keep running and an installer can replace the
+// executable.
+func (a *App) externalQuit() {
+	a.log.Printf("quit requested by another process")
+	a.shutdown(false)
+	systray.Quit()
+}
+
 func (a *App) fail(title string, err error) {
 	a.log.Printf("%s: %v", title, err)
 	a.notifier.Show(title, err.Error())

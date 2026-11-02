@@ -51,7 +51,7 @@ curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.
 
 - 需要后台服务时再执行 `webmux service install`，首次启动会自动生成配置与 Token。
 - 重复执行脚本会升级二进制；正在运行的服务需手动重启，重启会结束现有会话。
-- Windows 不运行该脚本：请下载 `webmux-windows-*.exe` 或托盘程序，或按 [Windows（WSL）](deployment/windows-wsl.md) 在 WSL 中运行同一脚本。
+- Windows 不运行该脚本：请使用 `webmux-setup-windows-*.exe` 安装托盘，或下载 `webmux-windows-*.exe` / 独立托盘程序，或按 [Windows（WSL）](deployment/windows-wsl.md) 在 WSL 中运行同一脚本。
 
 ## 配置
 

@@ -14,7 +14,9 @@ WebMux 不原生运行在 Windows 上，而是运行在 WSL 2 发行版中，由
 
 安装过程：
 
-1. 托盘在 Windows 侧下载与托盘同版本、与发行版架构（`uname -m`）匹配的 Linux 二进制；GitHub 无响应时依次改用 `ghfast.top`、`gh-proxy.com` 镜像。
+1. 托盘在 Windows 侧取得与托盘同版本、与发行版架构（`uname -m`）匹配的 Linux 二进制：
+   - `%LOCALAPPDATA%\WebMux\downloads\` 中已有摘要匹配的文件时直接使用，不联网；安装程序会把同架构的服务端预置在这里。
+   - 否则从 GitHub 下载；GitHub 无响应时依次改用 `ghfast.top`、`gh-proxy.com` 镜像。
 2. 只有 SHA-256 与发布构建时写入托盘的摘要一致才会使用。
 3. 再以 `install -D -m 0755` 放到托盘设置中的 `webmux` 路径。
 
@@ -45,12 +47,43 @@ webmux config init
 - 托盘菜单的“初始化配置（生成 Token）”调用同一个 `config init`，只在配置文件不存在时提供该入口，从不改写已有配置；修改配置请用“打开 WebMux 配置文件”。
 - 缺少 webmux 时托盘停在错误状态且不定时重试；手动安装后重新打开托盘菜单即恢复。
 
-## 放置托盘与登录启动
+## 安装托盘
 
-把 `webmux-tray-windows-amd64.exe`（或 `-arm64.exe`）放到固定位置（例如 `%LOCALAPPDATA%\Programs\WebMux\`）后双击运行。
+推荐使用安装程序：从 Release 下载与 Windows 架构一致的 `webmux-setup-windows-amd64.exe` 或 `webmux-setup-windows-arm64.exe` 并运行。
+
+- 只为当前用户安装，不需要管理员。默认目录为 `%LOCALAPPDATA%\Programs\WebMux\`，可在安装界面更改，之后的升级沿用该目录。
+- 安装 `webmux-tray.exe`，创建开始菜单“WebMux”，并在“应用和功能”中登记卸载项。
+- “安装选项”页的“开机后自动启动 WebMux（登录 Windows 时启动托盘）”默认勾选，写入与托盘菜单“登录时自动启动”相同的启动项；它在登录 Windows 后生效，不会在登录前启动。
+- 安装包内置同架构的 Linux 服务端，放在托盘的下载缓存中；安装程序本身不访问 WSL，首次使用仍在托盘菜单中选择“安装 WSL 中的 webmux”。
+- 架构不符时安装程序提示应下载的安装包并退出，不写任何文件。
+- 安装程序未签名，Windows SmartScreen 可能拦截，选择“更多信息 → 仍要运行”。
+
+**升级**：直接运行新版本安装程序。它先让正在运行的托盘按“仅退出托盘”退出（WebMux 与会话不受影响，托盘转发会中断，新托盘启动后自动恢复），替换文件后再启动新托盘。
+
+- 安装目录中的托盘 10 秒内未退出时会被强制结束。
+- 其他位置运行的旧托盘（例如手工存放的 exe）不会被结束：安装程序提示先从菜单退出，然后点击“重试”。
+
+**卸载**：在“应用和功能”中卸载 WebMux。卸载会关闭托盘，删除程序、快捷方式、卸载项和预置的服务端；登录启动项仅在指向本次安装的托盘时删除。
+
+- 保留托盘设置（`%APPDATA%\WebMux`）、托盘日志（`%LOCALAPPDATA%\WebMux`）和 WSL 中的 webmux。
+- 不停止 WebMux：正在运行的实例继续在 WSL 中运行，需要时在 WSL 中执行 `webmux stop`。
+
+静默安装与卸载使用 `/S`，选项取默认值（含登录启动）。退出码：0 成功，2 架构不符，3 有无法关闭的托盘在运行；后两种情况都不写任何文件。
+
+```bat
+webmux-setup-windows-amd64.exe /S
+"%LOCALAPPDATA%\Programs\WebMux\uninstall.exe" /S
+```
+
+也可以不用安装程序：把 `webmux-tray-windows-amd64.exe`（或 `-arm64.exe`）放到固定位置后双击运行。
 
 - 同一 Windows 用户只运行一个实例，再次启动只会让已有实例弹出状态通知。
 - 勾选菜单中的“登录时自动启动”会在 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 中登记当前 exe 路径；移动 exe 后复选项变为未勾选，重新勾选即可。
+
+`webmux-tray.exe quit` 请求当前用户正在运行的托盘按“仅退出托盘”退出，不弹出询问，最多等待 10 秒，供安装程序和脚本使用。
+
+- 退出码：0 表示托盘已退出或本来就没有运行，1 表示仍有托盘在运行（例如不支持该命令的旧版本），2 表示参数错误。
+- `--kill-path <路径>`：等待超时后结束当前用户从该路径运行的托盘，其他位置的托盘不受影响。
 
 托盘设置保存在 `%APPDATA%\WebMux\tray.json`（“编辑托盘设置”用记事本打开，保存后 2 秒内自动生效；文件无效时托盘以默认值运行并在状态行提示，不会覆盖该文件）：
 

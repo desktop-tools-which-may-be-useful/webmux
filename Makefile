@@ -18,10 +18,12 @@ LDFLAGS = -s -w -X main.version=$(VERSION)
 TRAY_PKG = github.com/rainchan/webmux/internal/tray
 # Set by release: the Linux server digests the tray may install.
 TRAY_LDFLAGS ?=
+MAKENSIS ?= makensis
 RELEASE_FILES = webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
-	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe
+	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
+	webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe
 
-.PHONY: web build tray release check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
+.PHONY: web build tray installer release check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -35,6 +37,19 @@ build: web
 tray:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS) $(TRAY_LDFLAGS) -H=windowsgui" -o bin/webmux-tray-windows-amd64.exe ./cmd/webmux-tray
 	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS) $(TRAY_LDFLAGS) -H=windowsgui" -o bin/webmux-tray-windows-arm64.exe ./cmd/webmux-tray
+
+# Packages bin/webmux-tray-windows-<arch>.exe and bin/webmux-linux-<arch>
+# as they are, so each installer holds the release artifacts byte for byte.
+# Needs NSIS 3 (`makensis`); see deploy/windows/webmux.nsi.
+installer:
+	for arch in amd64 arm64; do \
+		$(MAKENSIS) -V2 -INPUTCHARSET UTF8 -DVERSION=$(VERSION) -DARCH=$$arch \
+			"-DTRAY=$(abspath bin)/webmux-tray-windows-$$arch.exe" \
+			"-DSERVER=$(abspath bin)/webmux-linux-$$arch" \
+			"-DICON=$(abspath internal/tray/winui/icons/running.ico)" \
+			"-DOUTFILE=$(abspath bin)/webmux-setup-windows-$$arch.exe" \
+			deploy/windows/webmux.nsi || exit 1; \
+	done
 
 # Linux servers first: the tray embeds their digests, and SHA256SUMS lists
 # every artifact. The last step proves both trays carry both digests.
@@ -51,6 +66,7 @@ release: web
 	for exe in bin/webmux-tray-windows-amd64.exe bin/webmux-tray-windows-arm64.exe; do \
 		grep -qaF "$$amd64" $$exe && grep -qaF "$$arm64" $$exe || { echo "$$exe lacks the server digests" >&2; exit 1; }; \
 	done
+	$(MAKE) installer
 	cp install.sh bin/install.sh
 	cd bin && sha256sum $(RELEASE_FILES) install.sh > SHA256SUMS
 
