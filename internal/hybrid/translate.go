@@ -46,8 +46,11 @@ func cappedPtr(s *string) *string {
 // without a messageId belong to, and the summary of each compaction.
 // It is owned by the actor.
 type translator struct {
-	nextMessage int
-	last        struct {
+	// modelChoiceValues labels model choices by value; see
+	// Profile.ModelChoiceValues.
+	modelChoiceValues bool
+	nextMessage       int
+	last              struct {
 		open        bool
 		role, agent string // agent: the ACP messageId, empty if none
 		id          string
@@ -149,7 +152,7 @@ func (t *translator) update(u acp.Update) []Event {
 		}
 		return []Event{{Kind: EventCommands, Commands: commands}}
 	case *acp.ConfigOptionUpdate:
-		return []Event{{Kind: EventConfig, Config: configOptions(u.ConfigOptions)}}
+		return []Event{{Kind: EventConfig, Config: configOptions(u.ConfigOptions, t.modelChoiceValues)}}
 	case *acp.SessionInfoUpdate:
 		if !u.Title.Set {
 			return nil
@@ -313,8 +316,8 @@ func locations(in []acp.ToolCallLocation) []Location {
 }
 
 // configOptions keeps the select and boolean options; other types cannot
-// be rendered or set.
-func configOptions(in []acp.ConfigOption) []ConfigOption {
+// be rendered or set. modelChoiceValues labels model choices by value.
+func configOptions(in []acp.ConfigOption, modelChoiceValues bool) []ConfigOption {
 	out := make([]ConfigOption, 0, len(in))
 	for _, o := range in {
 		c := ConfigOption{ID: o.ID, Name: o.Name, Category: o.Category, Type: o.Type, Options: []ConfigChoice{}}
@@ -328,7 +331,11 @@ func configOptions(in []acp.ConfigOption) []ConfigOption {
 		case acp.ConfigSelect:
 			c.Value = o.Current.ID
 			for _, choice := range o.Options {
-				c.Options = append(c.Options, ConfigChoice{Value: choice.Value, Name: choice.Name, Description: choice.Description})
+				name := choice.Name
+				if modelChoiceValues && o.Category == "model" {
+					name = choice.Value
+				}
+				c.Options = append(c.Options, ConfigChoice{Value: choice.Value, Name: name, Description: choice.Description})
 			}
 		default:
 			continue

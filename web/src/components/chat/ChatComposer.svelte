@@ -297,7 +297,6 @@
         <UploadFileInput bind:this={fileInput} upload={uploads.uploadFiles} />
         <span class="sm:hidden">
           <ChatSessionOptions
-            agent={chat.agent}
             mode={chat.permissionMode}
             config={chat.config}
             {disabled}
@@ -352,11 +351,6 @@
       disabled={!!unavailable || savingMode}
       onchange={(mode) => void setPermissionMode(mode)}
     />
-    <ChatConfig
-      agent={chat.agent}
-      config={chat.config}
-      {disabled}
-      onchange={setConfig}
-    />
+    <ChatConfig config={chat.config} {disabled} onchange={setConfig} />
   </div>
 </div>

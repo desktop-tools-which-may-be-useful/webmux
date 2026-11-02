@@ -318,7 +318,7 @@ func (a *actor) installLink(link *acpLink, init acp.InitializeResponse, config [
 	}
 	a.dirty = true
 	if config != nil {
-		a.emit(Event{Kind: EventConfig, Config: configOptions(config)})
+		a.emit(Event{Kind: EventConfig, Config: configOptions(config, a.cmd.Profile.ModelChoiceValues)})
 	}
 	if link.tools.agentMissing && !a.agentPathNoted {
 		a.agentPathNoted = true
@@ -351,7 +351,7 @@ func (a *actor) outdated(reported, agentVersion string) []Outdated {
 // restartLog begins a new log generation for a session/load replay.
 func (a *actor) restartLog() {
 	a.log.restart()
-	a.tr = translator{}
+	a.tr = translator{modelChoiceValues: a.cmd.Profile.ModelChoiceValues}
 	a.chat.Plan, a.chat.Usage = nil, nil
 	a.preview = preview{}
 	a.dirty = true

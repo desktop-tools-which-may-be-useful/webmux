@@ -200,6 +200,10 @@ type Profile struct {
 	TUIInject []string
 	// PassToACP writes the kept options into the ACP command too.
 	PassToACP bool
+	// ModelChoiceValues labels model select choices with their value, the
+	// full "provider/model" id, for agents whose model display names repeat
+	// across providers.
+	ModelChoiceValues bool
 	// ChatSide derives chat-side config values from the kept options and
 	// lists the kept options the chat side cannot apply.
 	ChatSide    func(kept []KeptOption) ([]Seed, []string)

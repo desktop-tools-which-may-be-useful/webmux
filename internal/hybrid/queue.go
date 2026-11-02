@@ -391,7 +391,7 @@ func (a *actor) setConfig(id string, value *string, enabled *bool) (agentCall, e
 // set, or the previous set with the new value when it sent none.
 func (a *actor) configApplied(id string, v acp.ConfigValue, options []acp.ConfigOption) {
 	if options != nil {
-		a.emit(Event{Kind: EventConfig, Config: configOptions(options)})
+		a.emit(Event{Kind: EventConfig, Config: configOptions(options, a.cmd.Profile.ModelChoiceValues)})
 		return
 	}
 	config := slices.Clone(a.chat.Config)

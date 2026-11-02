@@ -15,3 +15,10 @@ func TestContract(t *testing.T) {
 		SteeringInit: json.RawMessage(`{"steering":{"supported":true}}`),
 	})
 }
+
+func TestModelChoicesShowProviderIDs(t *testing.T) {
+	// Names repeat across providers, so the chat view shows the value.
+	if !profile.ModelChoiceValues {
+		t.Fatal("omp model choices must be labelled with the provider/model id")
+	}
+}

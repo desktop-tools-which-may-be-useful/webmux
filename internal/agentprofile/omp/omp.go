@@ -24,9 +24,12 @@ var profile = &ap.Profile{
 	ResumeFlag:      "--resume",
 	// omp acp parses the full argv and ignores unknown options, so every
 	// kept option configures both sides the same way.
-	PassToACP:  true,
-	Positional: ap.PositionalPrompt,
-	Options:    options(),
+	PassToACP: true,
+	// omp names models by display name, which several providers share; the
+	// chat view shows the value instead so the choices stay distinct.
+	ModelChoiceValues: true,
+	Positional:        ap.PositionalPrompt,
+	Options:           options(),
 	Subcommands: ap.SetOf("acp", "agents", "anonymize", "auth", "auth-broker",
 		"auth-gateway", "bench", "browser-relay", "cleanse", "clip", "collab",
 		"commit", "completions", "compress", "config", "dry-balance", "find",

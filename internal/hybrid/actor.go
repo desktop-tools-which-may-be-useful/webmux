@@ -164,6 +164,7 @@ func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side S
 		ForceSwitchNote: agentprofile.ForceSwitchNote(cmd.Agent),
 	}
 	a.log = newChatLog(s.capacity, a.chat)
+	a.tr.modelChoiceValues = cmd.Profile.ModelChoiceValues
 	return a
 }
 

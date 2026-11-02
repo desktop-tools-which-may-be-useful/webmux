@@ -510,7 +510,6 @@ test("config options are icons with their full name and value on demand", async 
   socket.frame(
     snapshot(
       chatState({
-        agent: "opencode",
         config: [
           {
             id: "model",
@@ -555,37 +554,6 @@ test("config options are icons with their full name and value on demand", async 
       body: { clientRequestId: expect.stringMatching(/\S/), value: "fast" },
     },
   ]);
-});
-
-test("OMP models show the full provider/model id", async () => {
-  const socket = await open();
-  socket.frame(
-    snapshot(
-      chatState({
-        config: [
-          {
-            id: "model",
-            name: "Model",
-            category: "model",
-            type: "select",
-            value: "anthropic/claude-haiku-4-5",
-            options: [
-              { value: "anthropic/claude-haiku-4-5", name: "Claude Haiku 4.5" },
-              { value: "bedrock/claude-haiku-4-5", name: "Claude Haiku 4.5" },
-            ],
-          },
-        ],
-      }),
-    ),
-  );
-  await page
-    .getByRole("button", { name: "Model：anthropic/claude-haiku-4-5" })
-    .click();
-  await expect
-    .element(
-      page.getByRole("menuitemradio", { name: "bedrock/claude-haiku-4-5" }),
-    )
-    .toBeVisible();
 });
 
 test("narrow screens move session options into a popover beside the upload button", async () => {

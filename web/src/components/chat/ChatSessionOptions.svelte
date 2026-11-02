@@ -6,7 +6,6 @@
   import * as Popover from "$lib/components/ui/popover";
   import { Switch } from "$lib/components/ui/switch";
   import type { ConfigValue } from "../../chat-api";
-  import { choicesOf } from "../../chat-config";
   import {
     ChatPermissionModeSchema,
     type ChatConfig,
@@ -17,7 +16,6 @@
   // beside the attachment control opens them as a list. The set comes from the
   // agent, so the list is built from whatever options the session reports.
   let {
-    agent,
     mode,
     config,
     disabled,
@@ -25,7 +23,6 @@
     onmodechange,
     onconfigchange,
   }: {
-    agent: string;
     mode: ChatPermissionMode;
     config: ChatConfig[];
     disabled: boolean;
@@ -93,7 +90,7 @@
             onchange={(event) =>
               onconfigchange(option.id, { value: event.currentTarget.value })}
           >
-            {#each choicesOf(agent, option) as choice (choice.value)}
+            {#each option.options as choice (choice.value)}
               <NativeSelect.Option value={choice.value}
                 >{choice.name}</NativeSelect.Option
               >
