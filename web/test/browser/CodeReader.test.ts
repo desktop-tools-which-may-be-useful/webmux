@@ -116,6 +116,41 @@ test("goto accepts N:column and scrolls the code horizontally", async () => {
   await expect.poll(() => code()?.scrollLeft ?? 0).toBeGreaterThan(0);
 });
 
+test("a goto submitted before the first placement survives it", async () => {
+  const text = Array.from(
+    { length: 400 },
+    (_, i) => `const line${i + 1} = ${i + 1};`,
+  ).join("\n");
+  // A hidden reader has no layout, so its first placement waits until shown.
+  const harness = await render(Harness, { text, hidden: true });
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="跳转行"]')!
+    .click();
+  await expect
+    .poll(() => document.querySelector("[data-code-goto-line]"))
+    .toBeTruthy();
+  const input = document.querySelector<HTMLInputElement>(
+    'input[aria-label="跳转到行"]',
+  )!;
+  input.value = "200";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  document
+    .querySelector<HTMLFormElement>("[data-code-goto-line]")!
+    .requestSubmit();
+  await harness.rerender({ hidden: false });
+  const host = document.querySelector<HTMLElement>("[data-code-reader]")!;
+  const inView = (line: number) => {
+    const element = row(line);
+    if (!element) return false;
+    const rect = element.getBoundingClientRect();
+    const box = host.getBoundingClientRect();
+    return rect.top >= box.top && rect.bottom <= box.bottom;
+  };
+  await expect.poll(() => inView(200)).toBe(true);
+  expect(harness.component.line()).toBeGreaterThan(150);
+  expect(row(1)).toBeFalsy();
+});
+
 test("renders HTML and control-looking content as code text", async () => {
   const text =
     '<img src="invalid" onerror="window.codeExecuted=true">\n<script>window.codeExecuted=true</script>\ncarriage\rreturn\x1b[31m text';

@@ -90,6 +90,9 @@
   let viewer: CodeView | undefined;
   let mounted = $state(false);
   let placed = false;
+  // A jump made before the first render; the initial placement honors it
+  // instead of scrolling back to the restore line.
+  let requested: number | undefined;
   let coarse = $state(false);
   let dark = $state(false);
   let selected = $state<{ start: number; end: number } | null>(null);
@@ -261,10 +264,12 @@
   function placeInitial() {
     if (placed || pending) return;
     placed = true;
-    scrollToLine(
-      untrack(() => restoreLine),
-      "start",
-    );
+    if (requested !== undefined) scrollToLine(requested, "center");
+    else
+      scrollToLine(
+        untrack(() => restoreLine),
+        "start",
+      );
   }
 
   function scrollToColumn(line: number, column: number) {
@@ -309,6 +314,12 @@
         target = Math.round(lines.length * fraction);
       } else if (digits && sign)
         target = current + target * (sign === "-" ? -1 : 1);
+      // Before the first render this jump replaces any restore or initial
+      // placement, which would otherwise scroll back once layout arrives.
+      if (!placed) {
+        pending = undefined;
+        requested = target;
+      }
       scrollToLine(target, "center");
       if (column) scrollToColumn(target, Number(column.slice(1)));
     }
