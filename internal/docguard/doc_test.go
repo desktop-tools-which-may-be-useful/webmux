@@ -119,8 +119,9 @@ func lineCount(data []byte) int {
 }
 
 // wideLines reports the 1-based line numbers wider than maxLineWidth display
-// columns, where East Asian wide characters take two. Table rows and fenced
-// code blocks are exempt because neither can wrap.
+// columns, where East Asian wide characters take two. Fenced code blocks are
+// exempt because commands and JSON cannot wrap. Table rows are not: a table
+// whose aligned rows exceed the limit must become a list.
 func wideLines(data []byte) (lines []int, longest int) {
 	var fenceChar byte
 	fenceLen := 0
@@ -135,7 +136,7 @@ func wideLines(data []byte) (lines []int, longest int) {
 			}
 			continue
 		}
-		if fenceChar != 0 || strings.HasPrefix(trimmed, "|") {
+		if fenceChar != 0 {
 			continue
 		}
 		if n := displayWidth(line); n > maxLineWidth {
@@ -240,15 +241,20 @@ func skipFanout(dir string) bool {
 	return false
 }
 
+// restructureRule is appended to every message that asks for a reorganization.
+// Without it the limits invite compression: trimming words, squeezing a new
+// note into an existing line or narrowing a table column just enough to pass.
+const restructureRule = "这是重构，不是压缩：信息要原文迁移到更合适的位置，不得删减事实、缩写措辞，也不要为了刚好过线而挤进已有行、缩窄表格列或把多件事并进一句；文件已接近上限时先拆分再新增内容；只在确认完全重复时才删，并在 PR 中写明旧位置到新位置的对应。"
+
 // splitAdvice tells the next agent where an oversized file's content goes.
 // OpenSpec permits exactly one spec.md per capability, so specs split into new
 // capability directories instead of sibling topic files.
 func splitAdvice(name string) string {
 	if strings.HasPrefix(name, "openspec/") && strings.HasSuffix(name, "/spec.md") {
-		return "OpenSpec 要求每个 capability 只保留一个 spec.md；请按语义把这个 capability 拆成多个新的 capability 目录（每个仍是 openspec/specs/<新capability>/spec.md），在变更中迁移需求并更新引用，不要在同目录拆分 spec.md。"
+		return "OpenSpec 要求每个 capability 只保留一个 spec.md；请按语义把这个 capability 拆成多个新的 capability 目录（每个仍是 openspec/specs/<新capability>/spec.md），在变更中迁移需求并更新引用，不要在同目录拆分 spec.md。" + restructureRule
 	}
 	dir := strings.TrimSuffix(name, ".md") + "/"
-	return fmt.Sprintf("请按主题拆分为 %s<主题>.md，保留 %s 作为树状索引并更新所有引用；每个子文件保持 %d–%d 行且不超过 %d KiB。", dir, name, minLines, maxLines, maxBytes>>10)
+	return fmt.Sprintf("请按主题（或读者、生命周期，例如把历史记录与现行规则分开）拆分为 %s<主题>.md，保留 %s 作为树状索引并更新所有引用；每个子文件保持 %d–%d 行且不超过 %d KiB。%s", dir, name, minLines, maxLines, maxBytes>>10, restructureRule)
 }
 
 func maxLinesMessage(name string, n int) string {
@@ -264,7 +270,7 @@ func widthMessage(name string, lines []int, longest int) string {
 	for i, n := range lines {
 		places[i] = strconv.Itoa(n)
 	}
-	return fmt.Sprintf("%s：第 %s 行超过上限 %d 列（最长 %d 列，汉字按 2 列计）。这不是排版问题，而是行内塞了过多信息：请先判断这一行在表达什么（定义、规则、步骤、枚举、依据、例外），再做语义改写：按读者的阅读顺序改写——先写结论或总述，再用短句、有序/无序列表或子列表展开细节，并把例外、原因放在被修饰的内容旁边；删去重复和可由上下文推出的字句。不要只在句号处切开，也不要把句子按字数平均装箱，更不要按固定列硬折行（中文 Markdown 的软换行会在渲染时插入空格）；改写后逐项核对没有丢失条件、数值、标识符和 SHALL/MUST 语义。表格行与围栏代码块已豁免。内容本身确实过多时：%s", name, strings.Join(places, "、"), maxLineWidth, longest, splitAdvice(name))
+	return fmt.Sprintf("%s：第 %s 行超过上限 %d 列（最长 %d 列，汉字按 2 列计）。这不是排版问题，而是行内塞了过多信息：请先判断这一行在表达什么（定义、规则、步骤、枚举、依据、例外），再做语义改写：按读者的阅读顺序改写——先写结论或总述，再用短句、有序/无序列表或子列表展开细节，并把例外、原因放在被修饰的内容旁边；仅删去确认完全重复的字句，其余信息原样保留。不要只在句号处切开，也不要把句子按字数平均装箱，更不要按固定列硬折行（中文 Markdown 的软换行会在渲染时插入空格）；改写后逐项核对没有丢失条件、数值、标识符和 SHALL/MUST 语义。围栏代码块已豁免，表格行不豁免：对齐后超宽的表格（通常是某个单元格过长撑宽整列）请把长单元格移出表格，或整表改为列表。内容本身确实过多时：%s", name, strings.Join(places, "、"), maxLineWidth, longest, splitAdvice(name))
 }
 
 func minLinesMessage(name string, n int) string {
@@ -340,6 +346,7 @@ func TestRules(t *testing.T) {
 		"docs/wide-punct.md|width",
 		"docs/wide-short.md|bytes",
 		"docs/wide-short.md|width",
+		"docs/wide-table.md|width",
 		"openspec/changes/wide|fanout",
 		"openspec/changes/work/specs/big/spec.md|lines",
 		"openspec/specs/big/spec.md|lines",
@@ -358,13 +365,14 @@ func TestRules(t *testing.T) {
 		messages[v.path+"|"+v.rule] = v.msg
 	}
 	for key, texts := range map[string][]string{
-		"docs/long.md|lines":                            {"超过上限 400 行", "docs/long/", "树状索引"},
+		"docs/long.md|lines":                            {"超过上限 400 行", "docs/long/", "树状索引", "重构，不是压缩"},
 		"docs/heavy.md|bytes":                           {"超过上限 49152 字节", "docs/heavy/"},
 		"docs/short.md|short":                           {"低于下限 20 行", "合并"},
 		"docs/wide-short.md|bytes":                      {"超过上限 49152 字节", "docs/wide-short/"},
 		"docs/wide-short.md|width":                      {"超过上限 300 列", "第 6 行", "语义改写"},
-		"docs/wide-line.md|width":                       {"超过上限 300 列", "第 20 行", "最长 301 列", "语义改写", "不要只在句号处切开"},
+		"docs/wide-line.md|width":                       {"超过上限 300 列", "第 20 行", "最长 301 列", "语义改写", "不要只在句号处切开", "确认完全重复"},
 		"docs/wide-cjk.md|width":                        {"第 20 行", "最长 302 列", "汉字按 2 列计"},
+		"docs/wide-table.md|width":                      {"第 20 行", "最长 305 列", "表格行不豁免"},
 		"docs/wide|fanout":                              {"直接子目录 21 个", "不超过 20 个"},
 		"openspec/changes/work/specs/big/spec.md|lines": {"新的 capability", "不要在同目录拆分 spec.md"},
 		"openspec/specs/big/spec.md|lines":              {"新的 capability", "不要在同目录拆分 spec.md"},

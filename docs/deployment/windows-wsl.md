@@ -103,7 +103,7 @@ webmux-setup-windows-amd64.exe /S
 ## 两种启动方式
 
 - **托盘托管**：托盘在发行版中以参数数组（不经 shell）运行 `<webmux> serve --log-file <logFile> [--config <config>]`，WebMux 把启动方记为 `windows-tray`；该进程独立于托盘，并保持发行版存活。意外退出时托盘通知并按退避重启。
-- **systemd 用户服务**：发行版启用了 systemd 且已按[部署指南的 systemd 用户服务](../deployment.md#systemd-用户服务linux)安装 `webmux.service` 时使用。
+- **systemd 用户服务**：发行版启用了 systemd 且已按[部署指南的 systemd 用户服务](services.md#systemd-用户服务linux)安装 `webmux.service` 时使用。
   - 托盘通过 `systemctl --user start|stop|restart webmux` 管理该单元，重启策略交给单元自身。
   - 托盘另外维持一个 `wsl.exe --exec sleep infinity` 保活进程，避免发行版因没有 WSL 客户端而被关闭，停止 WebMux 时一并结束。
 
@@ -127,7 +127,7 @@ webmux-setup-windows-amd64.exe /S
 
 NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流量不会进入 WSL，手机无法直接访问 WebMux。三种途径，按推荐顺序：
 
-1. **mirrored 网络模式**：在 `.wslconfig` 的 `[wsl2]` 下设置 `networkingMode=mirrored`，WSL 与 Windows 共享网卡，按[部署指南的手机访问](../deployment.md#手机访问tailscale)配置即可。托盘的“远程访问”子菜单会显示“无需转发（镜像网络模式）”。
+1. **mirrored 网络模式**：在 `.wslconfig` 的 `[wsl2]` 下设置 `networkingMode=mirrored`，WSL 与 Windows 共享网卡，按[部署指南的手机访问](remote-access.md#手机访问tailscale)配置即可。托盘的“远程访问”子菜单会显示“无需转发（镜像网络模式）”。
 2. **在 WSL 内安装 Tailscale**：发行版获得自己的 Tailscale 地址，WebMux 直接监听该地址；状态报告了远程链接时托盘同样提示无需转发。
 3. **托盘转发**：在“远程访问”子菜单中勾选 Windows 主机的地址（Tailscale 地址置顶），托盘在该地址与 WebMux 相同的端口上监听，并把 HTTP 与 WebSocket 原样转给本机链接。
    - 转发默认关闭，只在 WebMux 运行且健康、配置了 token、Windows 侧可达时启用；条件不满足时暂停，恢复后自动继续。

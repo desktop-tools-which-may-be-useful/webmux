@@ -17,6 +17,7 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. Apply it whenever a 
 - When removing a capability, mark its stories as retired and explain the replacement when applicable, rather than silently losing their history.
 - Keep these consistent: acceptance criteria, per-group source references in `docs/user-stories/`, both feature indexes (`docs/user-stories.md` and `docs/user-stories/coverage.md`), and any stated counts.
 - Use the existing Chinese story format and functional groups. Add a group only when existing groups do not fit.
+- Record verification notes (scope, tests run, limits) in the newest `docs/user-stories/verification-log-*.md`, never in the `docs/user-stories.md` index, which stays an index. Split a log by date when it nears the size limits.
 
 ## Verification
 

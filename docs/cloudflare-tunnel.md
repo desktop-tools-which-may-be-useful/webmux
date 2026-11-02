@@ -147,7 +147,7 @@ Web Push 可从通过 Host/Origin 校验的 HTTPS 入口开启，包括 Named Tu
 - 修改 `hostname` 或 Tailscale 入口端口后，已有订阅保留登记时的旧地址，不自动迁移；需从新地址在各设备重新开启推送；
 - 隧道或 Tailscale 入口关闭期间推送仍会发出，但点开通知要等入口恢复后才能打开页面。
 
-详见[部署指南的手机推送章节](deployment.md#手机推送web-push)。
+详见[部署指南的手机推送章节](deployment/pwa-and-push.md#手机推送web-push)。
 
 ## 8. 安全
 
@@ -179,8 +179,8 @@ Web Push 可从通过 Host/Origin 校验的 HTTPS 入口开启，包括 Named Tu
 
 ## 10. 相关文档
 
-- [部署指南：公网访问](deployment.md#公网访问cloudflare-tunnel)
-- [部署指南：手机推送](deployment.md#手机推送web-push)
+- [部署指南：公网访问](deployment/remote-access.md#公网访问cloudflare-tunnel)
+- [部署指南：手机推送](deployment/pwa-and-push.md#手机推送web-push)
 - [部署指南：Windows / WSL](deployment/windows-wsl.md)
 - [安全策略](../SECURITY.md)
 - [配置样例](../deploy/config.example.toml)
