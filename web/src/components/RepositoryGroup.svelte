@@ -91,7 +91,7 @@
   onOpenChange={onopenchange}
 >
   <div class="flex flex-wrap items-center gap-2">
-    <h2 class="w-full min-w-0 flex-none sm:w-auto sm:flex-1">
+    <h2 class="min-w-0 flex-1">
       <Collapsible.Trigger
         class="group flex min-w-0 max-w-full items-center gap-2 text-left font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
