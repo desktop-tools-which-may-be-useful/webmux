@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack, type Snippet } from "svelte";
+  import { onMount, untrack } from "svelte";
   import {
     Compartment,
     EditorSelection,
@@ -41,7 +41,6 @@
     text,
     path,
     onselect,
-    lineAction,
     restoreLine = 1,
     restore,
     draftEnabled = false,
@@ -50,7 +49,6 @@
     text: string;
     path: string;
     onselect: (start: number, end: number) => void;
-    lineAction?: Snippet<[row: number]>;
     restoreLine?: number;
     // A captured reading state, applied once the editor has layout; it takes
     // precedence over `restoreLine`.
@@ -71,7 +69,6 @@
   let anchor: number | undefined;
   let coarse = $state(false);
   let actionLine = $state<number>();
-  let actionTop = $state<number>();
   const pickLine = StateEffect.define<number | undefined>();
   const gutterSlot = new Compartment();
   let lineGutter: Extension = [];
@@ -93,32 +90,9 @@
   });
   export function clearLineAction() {
     actionLine = undefined;
-    actionTop = undefined;
     view?.dispatch({ effects: pickLine.of(undefined) });
   }
-  function positionLineAction() {
-    if (!view || actionLine === undefined || !coarse) return;
-    view.requestMeasure({
-      key: positionLineAction,
-      read(editor) {
-        if (actionLine === undefined || !coarse) return;
-        const block = editor.lineBlockAt(
-          editor.state.doc.line(actionLine).from,
-        );
-        const height = host.clientHeight;
-        const center =
-          editor.documentTop +
-          block.top +
-          block.height / 2 -
-          host.getBoundingClientRect().top;
-        if (center < 0 || center > height) return;
-        return Math.max(22, Math.min(height - 22, center));
-      },
-      write(top) {
-        actionTop = top;
-      },
-    });
-  }
+
   function position(): Pick<CodeReaderState, "line" | "offset"> {
     if (!view || host.clientHeight === 0)
       return known ?? { line: untrack(() => restoreLine), offset: 0 };
@@ -199,7 +173,6 @@
       if (state.picked !== undefined && state.picked <= doc.lines && coarse) {
         actionLine = state.picked;
         view.dispatch({ effects: pickLine.of(state.picked) });
-        positionLineAction();
       }
     } finally {
       restoring = false;
@@ -208,7 +181,6 @@
   function select(number: number, shift: boolean) {
     if (coarse) {
       anchor = undefined;
-      actionTop = undefined;
       actionLine = number;
       if (view) {
         view.dispatch({
@@ -217,7 +189,6 @@
         });
       }
       onselect(number, number);
-      positionLineAction();
       return;
     }
     if (shift && anchor !== undefined) {
@@ -246,7 +217,6 @@
       ) {
         // A transaction here would reset the browser's native selection.
         actionLine = undefined;
-        actionTop = undefined;
       }
     };
     document.addEventListener("selectionchange", selectionChanged);
@@ -297,7 +267,7 @@
       }),
       EditorView.domEventHandlers({
         click(event, editor) {
-          if (!coarse || !lineAction) return false;
+          if (!coarse) return false;
           const target = event.target;
           if (!(target instanceof Element) || !target.closest(".cm-line"))
             return false;
@@ -312,7 +282,6 @@
           return false;
         },
         scroll() {
-          positionLineAction();
           if (!pending) position();
           return false;
         },
@@ -337,7 +306,6 @@
         provide: (field) => EditorView.decorations.from(field),
       }),
       EditorView.updateListener.of((u) => {
-        if (u.geometryChanged || u.viewportChanged) positionLineAction();
         if (u.selectionSet) {
           const range = u.state.selection.main;
           if (!range.empty && !restoring)
@@ -435,13 +403,5 @@
       class="h-full overflow-hidden"
       aria-label="只读代码"
     ></div>
-    {#if coarse && actionLine !== undefined && actionTop !== undefined && lineAction}
-      <div
-        class="absolute top-(--action-top) right-1 z-10 -translate-y-1/2"
-        style:--action-top={`${actionTop}px`}
-      >
-        {@render lineAction(actionLine)}
-      </div>
-    {/if}
   </div>
 </div>

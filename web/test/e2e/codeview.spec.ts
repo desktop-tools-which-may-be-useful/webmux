@@ -77,7 +77,9 @@ test("read ordinary files, independent tabs, updates and insert a line without E
       .filter({ hasText: /^package main$/ })
       .tap();
     await expect(
-      page.getByRole("button", { name: "发送第 1 行位置到终端", exact: true }),
+      page
+        .getByRole("button", { name: "发送位置到终端" })
+        .filter({ visible: true }),
     ).toBeVisible();
     await page
       .locator("[data-code-reader]:visible .cm-line")
@@ -89,9 +91,6 @@ test("read ordinary files, independent tabs, updates and insert a line without E
         selection.removeAllRanges();
         selection.addRange(range);
       });
-    await expect(
-      page.getByRole("button", { name: "发送第 1 行位置到终端", exact: true }),
-    ).toHaveCount(0);
     expect(await page.evaluate(() => getSelection()?.toString())).toBe(
       "package main",
     );
@@ -100,11 +99,9 @@ test("read ordinary files, independent tabs, updates and insert a line without E
       .locator("[data-code-reader]:visible .cm-line")
       .filter({ hasText: /^\/\/ unchanged line$/ })
       .tap();
-    await expect(
-      page.getByRole("button", { name: "发送第 1 行位置到终端", exact: true }),
-    ).toHaveCount(0);
     await page
-      .getByRole("button", { name: "发送第 2 行位置到终端", exact: true })
+      .getByRole("button", { name: "发送位置到终端" })
+      .filter({ visible: true })
       .tap();
     await expect(page.locator(".terminal-host")).toBeVisible();
   } else {
@@ -173,7 +170,9 @@ test("read ordinary files, independent tabs, updates and insert a line without E
       .filter({ hasText: /^\/\/ unchanged line$/ })
       .tap();
     await expect(
-      page.getByRole("button", { name: "发送第 2 行位置到终端", exact: true }),
+      page
+        .getByRole("button", { name: "发送位置到终端" })
+        .filter({ visible: true }),
     ).toBeDisabled();
   }
   await page
@@ -181,9 +180,6 @@ test("read ordinary files, independent tabs, updates and insert a line without E
     .filter({ visible: true })
     .click();
   await expect.poll(() => visibleCode(page)).toContain("new version");
-  await expect(
-    page.getByRole("button", { name: /^发送第 \d+ 行位置到终端$/ }),
-  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "文件内查找" })
     .filter({ visible: true })
@@ -224,11 +220,14 @@ test("touch line actions infer the reference source from the clicked line", asyn
   const lines = page.locator(".code-diff-reader:visible [data-line]");
   await lines.filter({ hasText: /^added two$/ }).tap();
   await expect(
-    page.getByRole("button", { name: "发送第 3 行位置到终端", exact: true }),
+    page
+      .getByRole("button", { name: "发送位置到终端（3 行）" })
+      .filter({ visible: true }),
   ).toBeVisible();
   await lines.filter({ hasText: /^removed$/ }).tap();
   await page
-    .getByRole("button", { name: "发送第 2 行位置到终端", exact: true })
+    .getByRole("button", { name: "发送位置到终端" })
+    .filter({ visible: true })
     .tap();
   await expect(page.locator(".terminal-host")).toBeVisible();
   await page.locator(".xterm-helper-textarea").focus();
@@ -240,7 +239,8 @@ test("touch line actions infer the reference source from the clicked line", asyn
   await showCode(page);
   await lines.filter({ hasText: /^added two$/ }).tap();
   await page
-    .getByRole("button", { name: "发送第 3 行位置到终端", exact: true })
+    .getByRole("button", { name: "发送位置到终端" })
+    .filter({ visible: true })
     .tap();
   await expect(page.locator(".terminal-host")).toBeVisible();
   await page.locator(".xterm-helper-textarea").focus();

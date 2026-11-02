@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack, type Snippet } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import {
     CodeView,
@@ -31,7 +31,6 @@
     expired,
     draftEnabled,
     onselect,
-    lineAction,
     restore,
     hint = $bindable(""),
   }: {
@@ -40,7 +39,6 @@
     expired: boolean;
     draftEnabled: boolean;
     onselect: (range: SelectedLineRange | null) => void;
-    lineAction?: Snippet<[line: number]>;
     // A captured reading state, applied once the diff has rendered with
     // layout.
     restore?: CodeDiffReaderState;
@@ -515,7 +513,7 @@
     hint = !hasChanges
       ? "当前可引用整个文件"
       : coarse
-        ? `点击代码行，点 ＋ 发送到${draftEnabled ? "草稿" : "终端"}`
+        ? `点击代码行，再发送到${draftEnabled ? "草稿" : "终端"}`
         : "点击行号选择；Shift 点击选择范围";
     return () => {
       hint = "";
@@ -618,11 +616,6 @@
       >
         文件内容没有变化；可通过“完整文件”查看内容
       </p>
-    {/if}
-    {#if coarse && selected && selected.start === selected.end && (!selected.endSide || selected.side === selected.endSide) && lineAction}
-      <div class="absolute right-3 bottom-3 z-10">
-        {@render lineAction(selected.start)}
-      </div>
     {/if}
   </div>
 </div>

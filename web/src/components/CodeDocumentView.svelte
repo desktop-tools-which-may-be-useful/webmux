@@ -19,7 +19,6 @@
   import { Button } from "$lib/components/ui/button";
   import { Label } from "$lib/components/ui/label";
   import * as NativeSelect from "$lib/components/ui/native-select";
-  import CodeLineAction from "./CodeLineAction.svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import IconChevronDown from "~icons/tabler/chevron-down";
   import CodeImageView from "./CodeImageView.svelte";
@@ -458,14 +457,6 @@
     start = Math.min(range.start, range.end);
     end = Math.max(range.start, range.end);
   }
-  function referenceAt(row: number) {
-    if (!doc) return;
-    try {
-      return { number: row, text: codeReference(doc, row) };
-    } catch {
-      return;
-    }
-  }
   async function send(reference = preview) {
     if (!reference || status !== "unchanged") return;
     error = "";
@@ -782,17 +773,7 @@
         bind:hint
         onselect={selectDiff}
         restore={restoreFor("diff")}
-      >
-        {#snippet lineAction(row)}
-          {@const reference = referenceAt(row)}
-          {#if reference}<CodeLineAction
-              line={reference.number}
-              {draftEnabled}
-              disabled={status !== "unchanged"}
-              onclick={() => void send(reference.text)}
-            />{/if}
-        {/snippet}
-      </CodeDiffReader>
+      />
     {/key}
   {:else if imagePreview && doc}
     {#key `${snapshotId}:${rawSide ?? ""}`}<CodeImageView
@@ -851,18 +832,7 @@
         restore={restoreFor("reader")}
         {draftEnabled}
         bind:hint
-      >
-        {#snippet lineAction(row)}
-          {@const reference = referenceAt(row)}
-          {#if reference}<CodeLineAction
-              line={reference.number}
-              {draftEnabled}
-              tooltip
-              disabled={status !== "unchanged"}
-              onclick={() => void send(reference.text)}
-            />{/if}
-        {/snippet}
-      </CodeReader>{/key}
+      />{/key}
   {:else if imageDocument && doc}
     <div class="space-y-1 p-2 text-sm">
       {#if doc.source === "empty"}<p role="status">
