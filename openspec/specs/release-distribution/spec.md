@@ -16,6 +16,7 @@
 - macOS：`webmux-darwin-amd64`、`webmux-darwin-arm64`；
 - Windows：`webmux-windows-amd64.exe`、`webmux-windows-arm64.exe`；
 - Windows 托盘：`webmux-tray-windows-amd64.exe`、`webmux-tray-windows-arm64.exe`；
+- Windows 安装程序：`webmux-setup-windows-amd64.exe`、`webmux-setup-windows-arm64.exe`；
 - 校验和：`SHA256SUMS`。
 
 每个二进制 SHALL 报告该版本号。构建或测试失败时 SHALL NOT 创建或更新 Release。
@@ -28,6 +29,11 @@
 #### Scenario: 构建失败
 
 - **WHEN** 推送标签后某个平台构建失败
+- **THEN** 不出现该标签的 Release，也不上传任何部分产物
+
+#### Scenario: 安装程序构建失败
+
+- **WHEN** 推送标签后 Windows 安装程序打包失败
 - **THEN** 不出现该标签的 Release，也不上传任何部分产物
 
 ### Requirement: 校验和文件
@@ -52,3 +58,23 @@
 
 - **WHEN** 用户运行本地 `make tray` 构建、未注入摘要的托盘，且 WSL 中缺少 webmux
 - **THEN** 托盘显示缺少 webmux 及“此版本托盘不支持安装 webmux”，菜单没有可用的安装动作
+
+### Requirement: 安装程序内容来自同一次构建
+
+每个 Windows 安装程序 SHALL 只包含同一次发布构建产出、同架构的托盘（与 Release 中 `webmux-tray-windows-<架构>.exe` 字节相同）以及同架构的 Linux 服务端（与 `webmux-linux-<架构>` 字节相同）。因此安装后的托盘 SHALL 内置与预置服务端相符的摘要。安装程序登记的版本号 SHALL 与该发布版本相同。
+
+#### Scenario: 安装后文件一致
+
+- **WHEN** 用户安装 `v0.2.0` 的 `webmux-setup-windows-amd64.exe`
+- **THEN** 安装目录中 `webmux-tray.exe` 的 SHA-256 与同一 Release `SHA256SUMS` 中 `webmux-tray-windows-amd64.exe` 一行一致，预置的服务端与 `webmux-linux-amd64` 一行一致
+
+### Requirement: Linux 安装包
+
+标签发布 SHALL 另外产出 Linux 安装包并上传到同一 Release：`webmux_<版本>-1_amd64.deb`、`webmux_<版本>-1_arm64.deb`、`webmux-<版本>-1.x86_64.rpm`、`webmux-<版本>-1.aarch64.rpm`。
+
+安装包 SHALL 由同一次构建的 `webmux-linux-<架构>` 打包，并各自在 `SHA256SUMS` 中占一行。安装包构建失败时 SHALL NOT 创建 Release。
+
+#### Scenario: 发布包含安装包
+
+- **WHEN** 维护者推送标签 `v0.2.0`
+- **THEN** Release 中包含上述四个安装包，`sha256sum -c SHA256SUMS` 对它们全部通过
