@@ -4,6 +4,12 @@ import { cleanup, render } from "vitest-browser-svelte/pure";
 import Harness from "./CodePanelHarness.svelte";
 import { nodeId } from "../../src/code-reference";
 const now = "2026-10-14T00:00:00Z";
+const readerText = () => {
+  const host = [
+    ...document.querySelectorAll<HTMLElement>("[data-code-reader]"),
+  ].find((element) => element.offsetParent !== null);
+  return host?.querySelector("diffs-container")?.shadowRoot?.textContent ?? "";
+};
 function file(n: number, version = "original") {
   return {
     snapshotId: `snapshot-${n}-${version}`,
@@ -100,9 +106,7 @@ test("updates only on refresh, blocks stale references and pauses hidden polling
   serve();
   render(Harness);
   await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
-  await expect
-    .element(page.getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("original file 0"));
+  await expect.poll(readerText).toContain("original file 0");
   state = "updated";
   document.dispatchEvent(new Event("visibilitychange"));
   await expect
@@ -113,15 +117,11 @@ test("updates only on refresh, blocks stale references and pauses hidden polling
   await expect
     .element(page.getByRole("button", { name: "发送位置到终端" }))
     .toBeDisabled();
-  await expect
-    .element(page.getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("original file 0"));
+  await expect.poll(readerText).toContain("original file 0");
   version = "refreshed";
   state = "unchanged";
   await page.getByRole("button", { name: "刷新文档" }).click();
-  await expect
-    .element(page.getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("refreshed file 0"));
+  await expect.poll(readerText).toContain("refreshed file 0");
   await page.getByRole("button", { name: "发送位置到终端" }).click();
   await expect
     .element(page.getByLabelText("Inserted reference"))
@@ -131,9 +131,7 @@ test("updates only on refresh, blocks stale references and pauses hidden polling
   await expect
     .element(page.getByRole("button", { name: "发送位置到终端" }))
     .toBeDisabled();
-  await expect
-    .element(page.getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("refreshed file 0"));
+  await expect.poll(readerText).toContain("refreshed file 0");
   await page.getByRole("button", { name: "Toggle code visibility" }).click();
   const previous = checks;
   document.dispatchEvent(new Event("visibilitychange"));
@@ -209,9 +207,7 @@ test("a delayed file response cannot activate over a newer document choice", asy
     )
     .toBeInTheDocument();
   await expect.element(latest).toHaveAttribute("aria-selected", "true");
-  await expect
-    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
-    .toMatchTextContent("original file 1");
+  await expect.poll(readerText).toContain("original file 1");
 });
 
 test("loads changes beyond 1000 lazily, virtualizes rows, filters and refreshes a late diff", async () => {
@@ -550,9 +546,7 @@ test("desktop browsers without Picture-in-Picture pop out into a framed popup an
   await expect
     .element(page.getByRole("tab", { name: /^file-0\.txt/ }))
     .toHaveAttribute("aria-selected", "true");
-  await expect
-    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("original file 0"));
+  await expect.poll(readerText).toContain("original file 0");
   expect(popup.window).toBeNull();
   // Restored tabs keep the content they were handed.
   expect(reads()).toBe(before);
@@ -619,9 +613,7 @@ test("the window sends each document once and keeps update markers", async () =>
   await expect
     .element(page.getByRole("tab", { name: /^file-0\.txt · worktree ●$/ }))
     .toHaveAttribute("aria-selected", "true");
-  await expect
-    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("original file 0"));
+  await expect.poll(readerText).toContain("original file 0");
   await expect
     .element(page.getByRole("tab", { name: /^file-1\.txt/ }))
     .toBeInTheDocument();
@@ -718,9 +710,7 @@ test("a refused pop-out window keeps the panel in place and says why", async () 
     .toMatchTextContent("Document PiP requires user activation");
   expect(page.getByText("代码已在独立窗口中显示").elements()).toHaveLength(0);
   await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
-  await expect
-    .element(page.getByLabelText("只读代码"))
-    .toMatchTextContent(new RegExp("original file 0"));
+  await expect.poll(readerText).toContain("original file 0");
 });
 
 test("checks all loaded tree branches within the server's 30-directory limit", async () => {

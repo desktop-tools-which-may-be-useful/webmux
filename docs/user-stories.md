@@ -34,6 +34,11 @@
 
 本次局部核对（2026-10-25）：代码阅读的语法高亮改为按文件名与扩展名从 CodeMirror language-data 按需加载，并新增 US-I16 Markdown 预览（源码/预览切换、DOMPurify 清洗、图片与外部资源不加载、相对链接不导航）；已运行 svelte-check、前端单元与浏览器测试、`check:arch` 和生产构建；未重新核对其余功能组。
 
+本次局部核对（2026-11-02）：单文件阅读迁移到 `@pierre/diffs` 只读 `File`/`CodeView`，与 Diff 共用渲染器、主题和高亮 worker；复核 US-I04、US-I05、US-I09、US-I13，并更新 US-I04、US-I05 的验收与来源。
+
+- 已运行：svelte-check、前端单元与浏览器测试、`check:arch`、`codeview`/`code-popout`/`code-documents`/`compact-chrome` E2E 及大型代码文件性能用例。
+- 范围限制：未重新核对其余功能组。
+
 本次局部核对（2026-10-26）：`add-program-status-signals` 的 `OSC 7501` 程序状态识别、服务端探测应答、信号来源分层与状态合成对应更新 US-C05、US-C06、US-K04。
 
 - 已运行：Go race 全套与 `attention.spec.ts` 桌面/Pixel 7 E2E。

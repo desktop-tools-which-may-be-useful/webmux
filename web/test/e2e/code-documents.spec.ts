@@ -94,7 +94,7 @@ test("previews HTML, CSV and JSON statically and PDF on demand", async ({
   // HTML: a static, sandboxed frame that issues no requests at all.
   await open(page, "report.html");
   await expect(
-    page.locator("[data-code-reader]:visible .cm-content"),
+    page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("构建报告");
   const before = requests.length;
   await togglePreview(page, "预览 HTML");
@@ -124,7 +124,7 @@ test("previews HTML, CSV and JSON statically and PDF on demand", async ({
   expect(fromPreview.map((request) => request.url())).toEqual([]);
   await togglePreview(page, "返回源码");
   await expect(
-    page.locator("[data-code-reader]:visible .cm-content"),
+    page.locator("[data-code-reader]:visible [data-content]"),
   ).toBeVisible();
 
   // CSV: quoted fields and multi-line cells in a table.

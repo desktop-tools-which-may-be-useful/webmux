@@ -360,14 +360,14 @@ test("4x CPU: settings and a large code file stay usable and stable", async ({
   await expect(page.getByRole("region", { name: "代码工作区" })).toBeVisible();
   await page.getByRole("button", { name: "large.ts", exact: true }).click();
   await expect(
-    page.locator("[data-code-reader]:visible .cm-content"),
+    page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("export const value0");
-  const editor = page.locator("[data-code-reader]:visible .cm-scroller");
+  const editor = page.locator("[data-code-reader]:visible");
   await editor.evaluate(
     (element) => (element.scrollTop = element.scrollHeight),
   );
   await expect(
-    page.locator("[data-code-reader]:visible .cm-content"),
+    page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("export const value2999");
   await performanceReport(page, testInfo, "large-code-file");
 });

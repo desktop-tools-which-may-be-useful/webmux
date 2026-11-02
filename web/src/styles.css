@@ -443,9 +443,6 @@
   background: var(--border);
   outline: none;
 }
-.cm-line {
-  tab-size: 4;
-}
 @media (max-width: 1023px) {
   .code-divider {
     display: none !important;

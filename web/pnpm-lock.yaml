@@ -223,9 +223,6 @@ importers:
       '@codemirror/state':
         specifier: ^6.7.6
         version: 6.7.6
-      '@codemirror/view':
-        specifier: ^6.43.15
-        version: 6.43.15
       '@lezer/highlight':
         specifier: ^1.2.5
         version: 1.2.5

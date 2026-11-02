@@ -137,8 +137,11 @@ test("a phone Diff leaves most of the screen to code and reaches document action
   await expect(
     page.getByRole("tab", { name: /^code\.txt · index(?: ●)?$/ }),
   ).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "跳转行", exact: true }).click();
+  await page.locator("[data-code-goto-line]:visible input").fill("50");
+  await page.locator("[data-code-goto-line]:visible input").press("Enter");
   await expect(
-    page.locator("[data-code-reader]:visible .cm-content"),
+    page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("ordinary line 50");
   // The Diff tab and its reading state stay open beside the snapshot.
   await expect(

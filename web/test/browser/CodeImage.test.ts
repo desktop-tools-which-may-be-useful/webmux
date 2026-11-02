@@ -151,7 +151,7 @@ test("image documents load an authenticated Blob, fit, zoom, pan and release it"
   );
   expect(getComputedStyle(viewport()).touchAction).toBe("none");
   // Preview replaces the line reader; whole-file references stay available.
-  expect(document.querySelector(".cm-editor")).toBeNull();
+  expect(document.querySelector("diffs-container")).toBeNull();
   await expect.poll(percent).toBe(fitPercent(800, 600));
   const frame = viewport().getBoundingClientRect();
   const fitted = image()!.getBoundingClientRect();
@@ -426,11 +426,15 @@ test("SVG previews by default, toggles to referenceable source and falls back wh
   await expect
     .element(page.getByRole("button", { name: "预览", exact: true }))
     .toHaveAttribute("aria-pressed", "true");
-  expect(document.querySelector(".cm-editor")).toBeNull();
+  expect(document.querySelector("diffs-container")).toBeNull();
 
   await page.getByRole("button", { name: "源码", exact: true }).click();
   await expect
-    .poll(() => document.querySelector(".cm-content")?.textContent)
+    .poll(
+      () =>
+        document.querySelector("[data-code-reader] diffs-container")?.shadowRoot
+          ?.textContent,
+    )
     .toContain("<svg");
   expect(document.querySelector('[aria-label="图片预览"]')).toBeNull();
   await page.getByRole("button", { name: "预览", exact: true }).click();
@@ -447,7 +451,11 @@ test("SVG previews by default, toggles to referenceable source and falls back wh
     .element(page.getByRole("button", { name: "源码", exact: true }))
     .toHaveAttribute("aria-pressed", "true");
   await expect
-    .poll(() => document.querySelector(".cm-content")?.textContent)
+    .poll(
+      () =>
+        document.querySelector("[data-code-reader] diffs-container")?.shadowRoot
+          ?.textContent,
+    )
     .toContain("<svg");
 });
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import {
     CodeView,
@@ -8,20 +8,26 @@
     type SelectedLineRange,
     type SelectionSide,
   } from "@pierre/diffs";
-  import {
-    findMatchLines,
-    matchStatus,
-    stepMatch,
-    type MatchCursor,
-    type SearchSpec,
-  } from "../code-search";
+  import { captureCursor, restoreCursor } from "../code-search";
+  import { createCodeFind } from "../code-find.svelte";
   import { settings, changeSettings } from "../settings.svelte";
   import { defaultCodeReader } from "../settings-intent";
-  import { acquireDiffHighlighter } from "../code-diff-highlighter";
+  import { acquireCodeHighlighter } from "../code-highlighter";
+  import {
+    codeItemMetrics,
+    codeTokenizeLimit,
+    codeUnsafeCSS,
+    pierreTheme,
+  } from "../code-pierre";
+  import {
+    readerKeydown,
+    releaseCodeView,
+    syncViewerOptions,
+    watchReader,
+  } from "../code-reader-controls";
   import type { CodeDiffReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
-  import CodeSearchPanel from "./CodeSearchPanel.svelte";
-  import CodeGotoLine from "./CodeGotoLine.svelte";
+  import CodeReaderPanels from "./CodeReaderPanels.svelte";
   import IconSearch from "~icons/tabler/search";
   import IconTextWrap from "~icons/tabler/text-wrap";
 
@@ -57,14 +63,6 @@
   let root: HTMLDivElement;
   let viewer: CodeView | undefined;
   let mounted = $state(false);
-  let panel = $state<"search" | "goto">();
-  let search = $state<SearchSpec>({
-    search: "",
-    caseSensitive: false,
-    regexp: false,
-    wholeWord: false,
-  });
-  let cursor = $state.raw<MatchCursor>();
   const id = "diff";
   const expansionLines = 30;
   // Until applied, `capture()` returns it unchanged.
@@ -97,8 +95,12 @@
   const sourceLines = $derived(
     side === "old" ? fileDiff.deletionLines : fileDiff.additionLines,
   );
-  const matches = $derived(
-    hasChanges ? findMatchLines(sourceLines, search) : [],
+  const find = createCodeFind(
+    () => sourceLines,
+    () => host,
+    () => root,
+    scrollToLine,
+    () => hasChanges,
   );
 
   export function clearLineAction() {
@@ -168,11 +170,9 @@
         index,
         ...region,
       })),
-      search: $state.snapshot(search),
-      ...(panel ? { panel } : {}),
-      ...(cursor && cursor.matches === matches
-        ? { cursor: { matches: [...cursor.matches], index: cursor.index } }
-        : {}),
+      search: $state.snapshot(find.search),
+      ...(find.panel ? { panel: find.panel } : {}),
+      ...captureCursor(find.cursor, find.matches),
       ...(viewer ? { top: topLine() } : {}),
     };
   }
@@ -194,16 +194,9 @@
       );
       choose(state.selected);
     }
-    search = state.search;
-    panel = state.panel;
-    // A cursor only applies to the match list it was made for.
-    const current = matches;
-    cursor =
-      state.cursor &&
-      state.cursor.matches.length === current.length &&
-      state.cursor.matches.every((line, index) => line === current[index])
-        ? { matches: current, index: state.cursor.index }
-        : undefined;
+    find.search = state.search;
+    find.panel = state.panel;
+    find.cursor = restoreCursor(state.cursor, find.matches);
     if (state.top) {
       knownTop = state.top;
       viewer?.scrollTo({
@@ -246,24 +239,6 @@
     viewer?.setSelectedLines({ id, range }, { notify: false });
     choose(range);
   }
-  async function openPanel(value: "search" | "goto", toggle = true) {
-    if (!hasChanges) return;
-    panel = toggle && panel === value ? undefined : value;
-    await tick();
-    root
-      .querySelector<HTMLInputElement>(
-        "[data-code-search] input, [data-code-goto-line] input",
-      )
-      ?.focus();
-  }
-  function nextMatch(direction: 1 | -1) {
-    const next = stepMatch(cursor, matches, direction);
-    if (!next) return;
-    cursor = next;
-    const line = matches[next.index];
-    if (line === undefined) return;
-    scrollToLine(line);
-  }
   function goto(value: string) {
     const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());
     if (match) {
@@ -279,25 +254,24 @@
         target = current + target * (sign === "-" ? -1 : 1);
       scrollToLine(target);
     }
-    panel = undefined;
+    find.panel = undefined;
     host.focus();
   }
   function options(): CodeViewOptions<undefined> {
     return {
+      ...pierreTheme(dark),
       diffStyle,
       overflow,
-      theme: { light: "pierre-light", dark: "pierre-dark" },
-      themeType: dark ? "dark" : "light",
       diffIndicators: "bars",
       lineDiffType: "word-alt",
-      maxLineDiffLength: 4096,
-      tokenizeMaxLineLength: 4096,
+      maxLineDiffLength: codeTokenizeLimit,
+      tokenizeMaxLineLength: codeTokenizeLimit,
       disableFileHeader: true,
       enableLineSelection: true,
       lineHoverHighlight: "number",
       expansionLineCount: expansionLines,
       hunkSeparators: "line-info",
-      itemMetrics: { lineHeight: 22 },
+      itemMetrics: codeItemMetrics,
       layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
       onSelectedLinesChange: (selection) => choose(selection?.range ?? null),
       onLineNumberClick(props) {
@@ -325,12 +299,10 @@
           enhanceControls();
           applyRestore();
         }),
-      // Only fixed application CSS enters the shadow root. Source text is
-      // rendered by the library's escaped token renderer.
-      unsafeCSS: `
+      // Source text is rendered by the library's escaped token renderer.
+      unsafeCSS: `${codeUnsafeCSS}
         [data-expand-button][aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
         [data-expand-button]:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-        [data-line], [data-column-number] { font-variant-ligatures: none; }
       `,
     };
   }
@@ -377,37 +349,24 @@
       );
   }
   onMount(() => {
-    const pointer = matchMedia("(pointer: coarse)");
-    const updatePointer = () => {
-      coarse = pointer.matches;
-    };
-    updatePointer();
-    pointer.addEventListener("change", updatePointer);
-    const updateTheme = () => {
-      dark = document.documentElement.classList.contains("dark");
-    };
-    updateTheme();
-    const themeObserver = new MutationObserver(updateTheme);
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
+    const stopEnvironment = watchReader(host, {
+      onPointer: (value) => {
+        coarse = value;
+      },
+      onTheme: (value) => {
+        dark = value;
+      },
+      // A hidden tab has no layout; a pending restore waits until it is shown.
+      onResize: () => {
+        width = host.clientWidth;
+        applyRestore();
+      },
+      onScroll: () => {
+        if (!pending) topLine();
+      },
     });
     width = host.clientWidth;
-    // A hidden tab has no layout; a pending restore waits until it is shown.
-    const resize = new ResizeObserver(() => {
-      width = host.clientWidth;
-      applyRestore();
-    });
-    resize.observe(host);
-    let measuring = 0;
-    const scrolled = () => {
-      if (pending || measuring) return;
-      measuring = requestAnimationFrame(() => {
-        measuring = 0;
-        if (!pending) topLine();
-      });
-    };
-    const highlighter = acquireDiffHighlighter();
+    const highlighter = acquireCodeHighlighter();
     viewer = new CodeView(options(), highlighter.pool);
     viewer.setup(host);
     viewer.setItems([{ id, type: "diff", fileDiff }]);
@@ -441,69 +400,34 @@
             );
           }
         }
-      } else if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === "f"
-      ) {
-        event.preventDefault();
-        void openPanel("search", false);
-      } else if (
-        (event.metaKey || event.ctrlKey) &&
-        event.altKey &&
-        event.key.toLowerCase() === "g"
-      ) {
-        event.preventDefault();
-        void openPanel("goto", false);
-      } else if (
-        event.key === "F3" ||
-        ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "g")
-      ) {
-        event.preventDefault();
-        nextMatch(event.shiftKey ? -1 : 1);
-      } else if (event.key === "Escape") {
-        panel = undefined;
-        host.focus();
-      }
+      } else readerKeydown(event, find.actions.keyHandlers);
     };
     const selectionChanged = () => {
       if (!coarse) return;
       const nativeSelection = document.getSelection();
       if (nativeSelection && !nativeSelection.isCollapsed) selected = null;
     };
-    host.addEventListener("scroll", scrolled, { passive: true });
     host.addEventListener("pointerdown", guardExpansion, true);
     host.addEventListener("click", guardExpansion, true);
     root.addEventListener("keydown", keydown);
     document.addEventListener("selectionchange", selectionChanged);
     return () => {
       mounted = false;
-      resize.disconnect();
-      themeObserver.disconnect();
-      pointer.removeEventListener("change", updatePointer);
+      stopEnvironment();
       host.removeEventListener("pointerdown", guardExpansion, true);
-      host.removeEventListener("scroll", scrolled);
-      cancelAnimationFrame(measuring);
       host.removeEventListener("click", guardExpansion, true);
       root.removeEventListener("keydown", keydown);
       document.removeEventListener("selectionchange", selectionChanged);
-      viewer?.cleanUp();
+      releaseCodeView(viewer, highlighter);
       viewer = undefined;
-      highlighter.release();
     };
   });
   $effect(() => {
     const current = options();
-    if (mounted) {
-      untrack(() => {
-        const selection = viewer?.getSelectedLines();
-        viewer?.setOptions(current);
-        viewer?.render();
-        if (selection) {
-          viewer?.setSelectedLines(selection, { notify: false });
-          choose(selection.range);
-        }
-      });
-    }
+    if (mounted)
+      untrack(() =>
+        syncViewerOptions(viewer, current, (range) => choose(range)),
+      );
   });
   $effect(() => {
     void expired;
@@ -537,14 +461,14 @@
       ></span
     >
     <Button
-      variant={panel === "search" ? "secondary" : "ghost"}
+      variant={find.panel === "search" ? "secondary" : "ghost"}
       size="icon-sm"
       aria-label="文件内查找"
-      aria-expanded={panel === "search"}
+      aria-expanded={find.panel === "search"}
       aria-keyshortcuts="Control+f Meta+f"
       title="文件内查找（Ctrl / ⌘ F）"
       disabled={!hasChanges}
-      onclick={() => void openPanel("search")}
+      onclick={() => void find.actions.openPanel("search")}
       ><IconSearch aria-hidden="true" /></Button
     >
     <Button
@@ -563,36 +487,14 @@
       }}><IconTextWrap aria-hidden="true" /></Button
     >
   </div>
-  {#if panel === "search"}
-    <div class="shrink-0 border-b">
-      <CodeSearchPanel
-        query={search}
-        onquery={(value) => {
-          search = value;
-        }}
-        onnext={() => nextMatch(1)}
-        onprevious={() => nextMatch(-1)}
-        onclose={() => {
-          panel = undefined;
-          host.focus();
-        }}
-      />
-      <p class="px-2 pb-1 text-xs text-muted-foreground" role="status">
-        {side === "old" ? "修改前" : "修改后"} · {matchStatus(cursor, matches)}
-      </p>
-    </div>
-  {:else if panel === "goto"}
-    <div class="shrink-0 border-b">
-      <CodeGotoLine
-        line={selected?.start ?? 1}
-        onsubmit={goto}
-        onclose={() => {
-          panel = undefined;
-          host.focus();
-        }}
-      />
-    </div>
-  {/if}
+  <CodeReaderPanels
+    panel={find.panel}
+    query={find.search}
+    line={selected?.start ?? 1}
+    status={`${side === "old" ? "修改前" : "修改后"} · ${find.status}`}
+    {...find.panelProps}
+    ongoto={goto}
+  />
   {#if diffStyle === "split"}
     <div
       class="grid shrink-0 grid-cols-2 border-b bg-muted/40 font-mono text-xs text-muted-foreground"

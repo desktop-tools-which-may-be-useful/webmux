@@ -32,7 +32,7 @@ async function visibleCode(page: import("@playwright/test").Page) {
   return (
     await page
       .locator(
-        "[data-code-reader]:visible .cm-content, .code-diff-reader:visible [data-code]",
+        "[data-code-reader]:visible [data-content], .code-diff-reader:visible [data-code]",
       )
       .allTextContents()
   ).join("\n");
@@ -73,7 +73,7 @@ test("read ordinary files, independent tabs, updates and insert a line without E
   await expect.poll(() => visibleCode(page)).toContain("unchanged line");
   if (info.project.use.isMobile) {
     await page
-      .locator("[data-code-reader]:visible .cm-line")
+      .locator("[data-code-reader]:visible [data-line]")
       .filter({ hasText: /^package main$/ })
       .tap();
     await expect(
@@ -82,7 +82,7 @@ test("read ordinary files, independent tabs, updates and insert a line without E
         .filter({ visible: true }),
     ).toBeVisible();
     await page
-      .locator("[data-code-reader]:visible .cm-line")
+      .locator("[data-code-reader]:visible [data-line]")
       .filter({ hasText: /^package main$/ })
       .evaluate((row) => {
         const range = document.createRange();
@@ -96,7 +96,7 @@ test("read ordinary files, independent tabs, updates and insert a line without E
     );
     await page.evaluate(() => getSelection()?.removeAllRanges());
     await page
-      .locator("[data-code-reader]:visible .cm-line")
+      .locator("[data-code-reader]:visible [data-line]")
       .filter({ hasText: /^\/\/ unchanged line$/ })
       .tap();
     await page
@@ -129,7 +129,7 @@ test("read ordinary files, independent tabs, updates and insert a line without E
     await expect(navigation).toHaveCount(0);
     await page.getByRole("button", { name: "文件导航", exact: true }).click();
     await page
-      .locator("[data-code-reader]:visible .cm-lineNumbers .cm-gutterElement")
+      .locator("[data-code-reader]:visible [data-gutter] [data-column-number]")
       .filter({ hasText: /^2$/ })
       .click();
     await page.getByRole("button", { name: "发送位置到终端" }).click();
@@ -166,7 +166,7 @@ test("read ordinary files, independent tabs, updates and insert a line without E
   ).toBeDisabled();
   if (info.project.use.isMobile) {
     await page
-      .locator("[data-code-reader]:visible .cm-line")
+      .locator("[data-code-reader]:visible [data-line]")
       .filter({ hasText: /^\/\/ unchanged line$/ })
       .tap();
     await expect(

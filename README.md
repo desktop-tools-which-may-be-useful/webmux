@@ -275,7 +275,7 @@ HTTP 不是浏览器安全上下文，Clipboard API 不可用。WebMux 会回退
 
 ## 技术栈
 
-Go（`creack/pty`、`coder/websocket`）· Svelte 5 · TypeScript · Vite · xterm.js · shadcn-svelte · Tailwind CSS · Zod · CodeMirror
+Go（`creack/pty`、`coder/websocket`）· Svelte 5 · TypeScript · Vite · xterm.js · shadcn-svelte · Tailwind CSS · Zod · CodeMirror · @pierre/diffs
 
 ## 许可证
 

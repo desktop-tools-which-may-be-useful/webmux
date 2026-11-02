@@ -5,7 +5,7 @@ import { highlightCode, tags } from "@lezer/highlight";
  * Mirrors CodeMirror's default highlight tags, but reads colors from
  * `--code-*` variables so `.dark` swaps the palette without reconfiguring.
  */
-export const codeHighlightStyle = HighlightStyle.define([
+const codeHighlightStyle = HighlightStyle.define([
   { tag: tags.meta, color: "var(--code-meta)" },
   { tag: tags.link, textDecoration: "underline" },
   { tag: tags.heading, textDecoration: "underline", fontWeight: "bold" },

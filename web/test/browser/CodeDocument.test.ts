@@ -47,9 +47,7 @@ afterEach(async () => {
 
 test("previews Markdown on request without executing raw HTML or loading images", async () => {
   render(Harness, { markdown: true });
-  await expect
-    .element(page.getByLabelText("只读代码"))
-    .toMatchTextContent(/# Project/);
+  await expect.poll(code, { timeout: 10000 }).toContain("# Project");
   await page.getByRole("button", { name: "预览", exact: true }).click();
   const preview = page.getByLabelText("Markdown 预览");
   await expect

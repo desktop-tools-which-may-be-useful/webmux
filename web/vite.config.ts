@@ -40,7 +40,6 @@ export default defineConfig({
       "@xterm/addon-search",
       "paneforge",
       "@codemirror/state",
-      "@codemirror/view",
       "@codemirror/search",
       "@codemirror/language",
       "@codemirror/language-data",

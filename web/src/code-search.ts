@@ -8,6 +8,15 @@ export type SearchSpec = {
   wholeWord: boolean;
 };
 
+export function emptySearchSpec(): SearchSpec {
+  return {
+    search: "",
+    caseSensitive: false,
+    regexp: false,
+    wholeWord: false,
+  };
+}
+
 /** Matching stops here; the status then reads `n / 5000+`. */
 export const MATCH_LIMIT = 5000;
 
@@ -78,4 +87,39 @@ export function matchStatus(
   if (!matches.length) return "无匹配";
   const capped = matches.length === MATCH_LIMIT ? "+" : "";
   return `${matchIndex(cursor, matches) + 1} / ${matches.length}${capped}`;
+}
+
+/** Moves one step and returns the line to reveal, when there is one. */
+export function stepMatchLine(
+  cursor: MatchCursor | undefined,
+  matches: readonly number[],
+  direction: 1 | -1,
+): { cursor: MatchCursor; line: number } | undefined {
+  const next = stepMatch(cursor, matches, direction);
+  if (!next) return;
+  const line = matches[next.index];
+  if (line === undefined) return;
+  return { cursor: next, line };
+}
+
+/** The plain cursor fields a reader state stores for this match list. */
+export function captureCursor(
+  cursor: MatchCursor | undefined,
+  matches: readonly number[],
+) {
+  return cursor && cursor.matches === matches
+    ? { cursor: { matches: [...cursor.matches], index: cursor.index } }
+    : {};
+}
+
+/** A stored cursor only applies to the match list it was made for. */
+export function restoreCursor(
+  cursor: MatchCursor | undefined,
+  matches: readonly number[],
+): MatchCursor | undefined {
+  return cursor &&
+    cursor.matches.length === matches.length &&
+    cursor.matches.every((line, index) => line === matches[index])
+    ? { matches, index: cursor.index }
+    : undefined;
 }

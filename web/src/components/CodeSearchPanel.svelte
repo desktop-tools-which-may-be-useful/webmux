@@ -22,7 +22,7 @@
     onall?: () => void;
     onclose: () => void;
   } = $props();
-  // CodeMirror owns the query; the panel mirrors it and reports edits back.
+  // The reader owns the query; the panel mirrors it and reports edits back.
   // svelte-ignore state_referenced_locally
   let spec = $state({ ...query });
   export function setQuery(next: SearchSpec) {

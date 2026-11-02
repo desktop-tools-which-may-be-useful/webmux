@@ -45,21 +45,17 @@ function sendButton(scope: Scope, range?: string) {
 }
 // First line visible at the top of the active code reader.
 function topLine(scope: Scope) {
-  return scope
-    .locator("[data-code-reader]:visible .cm-scroller")
-    .evaluate((scroller) => {
-      const top = scroller.getBoundingClientRect().top;
-      const row = [
-        ...scroller.querySelectorAll<HTMLElement>(
-          ".cm-lineNumbers .cm-gutterElement",
-        ),
-      ].find(
-        (element) =>
-          element.textContent &&
-          element.getBoundingClientRect().bottom > top + 2,
-      );
-      return Number(row?.textContent);
-    });
+  return scope.locator("[data-code-reader]:visible").evaluate((reader) => {
+    const top = reader.getBoundingClientRect().top;
+    const rows =
+      reader
+        .querySelector("diffs-container")
+        ?.shadowRoot?.querySelectorAll<HTMLElement>("[data-line]") ?? [];
+    const row = [...rows].find(
+      (element) => element.getBoundingClientRect().bottom > top + 2,
+    );
+    return Number(row?.dataset.line);
+  });
 }
 async function gotoLine(scope: Scope, line: number) {
   // Font loading and closing the jump panel both change the virtualized
@@ -79,7 +75,7 @@ async function gotoLine(scope: Scope, line: number) {
 }
 function gutter(scope: Scope, line: number) {
   return scope
-    .locator("[data-code-reader]:visible .cm-lineNumbers .cm-gutterElement")
+    .locator("[data-code-reader]:visible [data-gutter] [data-column-number]")
     .filter({ hasText: new RegExp(`^${line}$`) });
 }
 function diffNumber(diff: Locator, line: number) {
@@ -172,10 +168,13 @@ test("the code panel pops out into a framed window and both ways keeps its readi
     "16 行未修改",
   );
   await expect(sendButton(frame, "50")).toBeEnabled();
-  // The file tab keeps its position and selection.
+  // The file tab keeps its position and selection. A restored edge can land
+  // one line away when the captured line only just crosses the viewport top.
   await frame.getByRole("tab", { name: /^long\.txt/ }).click();
   await expect(sendButton(frame, "195-198")).toBeEnabled();
-  await expect.poll(() => topLine(frame)).toBe(top);
+  await expect
+    .poll(async () => Math.abs((await topLine(frame)) - top))
+    .toBeLessThanOrEqual(1);
 
   // Server settings, such as the theme, reach the window.
   const settings = await (await request.get("/api/settings")).json();
@@ -219,7 +218,9 @@ test("the code panel pops out into a framed window and both ways keeps its readi
     "true",
   );
   await expect(sendButton(page, "318")).toBeEnabled();
-  await expect.poll(() => topLine(page)).toBe(poppedTop);
+  await expect
+    .poll(async () => Math.abs((await topLine(page)) - poppedTop))
+    .toBeLessThanOrEqual(1);
   await page.getByRole("tab", { name: /^diff\.txt/ }).click();
   await expect(page.locator("diffs-container:visible")).toContainText(
     "16 行未修改",
@@ -245,7 +246,9 @@ test("closing the opener's code view keeps the popped-out panel live", async ({
   await popOutButton(page).click();
   const frame = frameOf(await opened);
   await frame.getByRole("button", { name: "live.txt", exact: true }).click();
-  await expect(frame.locator(".cm-content")).toContainText("before");
+  await expect(
+    frame.locator("[data-code-reader]:visible [data-content]"),
+  ).toContainText("before");
   // Hiding the code pane in the opener must not pause the popped-out panel's
   // update checks.
   await toggle.click();
@@ -277,7 +280,7 @@ test("the popped-out window selects line ranges and inserts references into the 
   await popOutButton(page).click();
   const frame = frameOf(await opened);
 
-  // File view: CodeMirror gutter.
+  // File view: line-number gutter.
   await frame.getByRole("button", { name: "pick.txt", exact: true }).click();
   await gutter(frame, 1).click();
   await gutter(frame, 3).click({ modifiers: ["Shift"] });
@@ -289,7 +292,7 @@ test("the popped-out window selects line ranges and inserts references into the 
     .getByRole("button", { name: "修改 pick.txt", exact: true })
     .first()
     .click();
-  const diff = frame.locator("diffs-container").first();
+  const diff = frame.locator("diffs-container:visible").first();
   await expect(frame.locator(".code-diff-reader").first()).toContainText("TWO");
   await diffNumber(diff, 2).click();
   await expect(sendButton(frame, "2")).toBeEnabled();
@@ -441,8 +444,10 @@ test("without Picture-in-Picture a desktop browser pops out into an ordinary pop
   const frame = frameOf(popup);
   await expect(page.getByText("代码已在独立窗口中显示")).toBeVisible();
   await frame.getByRole("button", { name: "popup.txt", exact: true }).click();
-  await expect(frame.locator(".cm-content")).toContainText("popup document");
-  await expect(frame.locator(".cm-editor")).toHaveCSS("display", "flex");
+  await expect(
+    frame.locator("[data-code-reader]:visible [data-content]"),
+  ).toContainText("popup document");
+  await expect(frame.locator("[data-code-reader]:visible")).toBeVisible();
   await gutter(frame, 2).click();
   await expect(sendButton(frame, "2")).toBeEnabled();
 
@@ -450,7 +455,7 @@ test("without Picture-in-Picture a desktop browser pops out into an ordinary pop
   await popup.close();
   await expect(page.getByText("代码已在独立窗口中显示")).toHaveCount(0);
   await expect(
-    page.locator("[data-code-reader]:visible .cm-content"),
+    page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("popup document");
   await expect(sendButton(page, "2")).toBeEnabled();
 

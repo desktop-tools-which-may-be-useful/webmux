@@ -830,6 +830,7 @@
         restoreLine={anchor}
         onselect={select}
         restore={restoreFor("reader")}
+        {active}
         {draftEnabled}
         bind:hint
       />{/key}

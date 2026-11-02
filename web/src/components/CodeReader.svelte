@@ -1,46 +1,40 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import {
-    Compartment,
-    EditorSelection,
-    EditorState,
-    StateEffect,
-    StateField,
-    Text,
-    type Extension,
-  } from "@codemirror/state";
+    CodeView,
+    getFiletypeFromFileName,
+    type CodeViewOptions,
+  } from "@pierre/diffs";
+  import { captureCursor, restoreCursor } from "../code-search";
+  import { createCodeFind } from "../code-find.svelte";
+  import { settings, changeSettings } from "../settings.svelte";
+  import { defaultCodeReader } from "../settings-intent";
+  import { acquireCodeHighlighter } from "../code-highlighter";
   import {
-    EditorView,
-    lineNumbers,
-    highlightActiveLine,
-    highlightSpecialChars,
-    Decoration,
-  } from "@codemirror/view";
+    codeItemMetrics,
+    codeLineHeight,
+    codeTokenizeLimit,
+    fileUnsafeCSS,
+    pierreTheme,
+  } from "../code-pierre";
   import {
-    getSearchQuery,
-    openSearchPanel,
-    searchPanelOpen,
-  } from "@codemirror/search";
-  import {
-    codeReaderPanels,
-    gotoLineOpen,
-    openGotoLine,
-    restorePanels,
-  } from "./code-reader-panels";
-  import { syntaxHighlighting } from "@codemirror/language";
-  import { codeHighlightStyle } from "../code-highlight";
-  import { loadCodeLanguage } from "../code-language";
+    readerKeydown,
+    releaseCodeView,
+    syncViewerOptions,
+    watchReader,
+  } from "../code-reader-controls";
+  import type { CodeReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
+  import CodeReaderPanels from "./CodeReaderPanels.svelte";
   import IconListNumbers from "~icons/tabler/list-numbers";
   import IconNumber from "~icons/tabler/number";
   import IconSearch from "~icons/tabler/search";
-  import { settings, changeSettings } from "../settings.svelte";
-  import { defaultCodeReader } from "../settings-intent";
-  import type { CodeReaderState } from "../schemas";
+
   let {
     text,
     path,
     onselect,
+    active = true,
     restoreLine = 1,
     restore,
     draftEnabled = false,
@@ -49,32 +43,310 @@
     text: string;
     path: string;
     onselect: (start: number, end: number) => void;
+    // A hidden tab cannot measure itself; the position is recorded as it hides.
+    active?: boolean;
     restoreLine?: number;
-    // A captured reading state, applied once the editor has layout; it takes
+    // A captured reading state, applied once the reader has layout; it takes
     // precedence over `restoreLine`.
     restore?: CodeReaderState;
     draftEnabled?: boolean;
     // Selection guidance, rendered by the document's action bar.
     hint?: string;
   } = $props();
+
+  const id = "file";
+  // The document is fixed for this instance; the view remounts on a new
+  // version instead of replacing the text underneath a reader. Pierre treats
+  // every carriage return as a line break, so normalise them first.
+  const contents = untrack(() => text.replace(/\r\n?/g, "\n"));
+  const lines = contents.split("\n");
+  // Each line keeps its terminator so the shared search reports line numbers.
+  const searchLines = lines.map((line, index) =>
+    index < lines.length - 1 ? `${line}\n` : line,
+  );
+  const file = untrack(() => {
+    const name = path.split(/[\\/]/).pop() || path;
+    const inferred = getFiletypeFromFileName(name);
+    // Pierre's filename lookup is case-sensitive; retry lowercase extensions
+    // as the previous reader did (`README.MD`, `MAIN.GO`).
+    const lang =
+      inferred === "text"
+        ? getFiletypeFromFileName(name.toLowerCase())
+        : inferred;
+    return {
+      name,
+      contents,
+      // The old reader highlighted Svelte as JavaScript; keep that reading.
+      lang: /\.svelte$/i.test(name) ? "javascript" : lang,
+    };
+  });
   // Until applied, `capture()` returns it unchanged.
   let pending = untrack(() => restore);
-  // The scroll position last measured while the editor had layout; a hidden
-  // tab reports this one.
+  // The top line last measured while the reader had layout; a hidden tab
+  // reports this one.
   let known: Pick<CodeReaderState, "line" | "offset"> | undefined;
-  // Restoring sets the editor selection without reporting it as a new pick.
-  let restoring = false;
   let host: HTMLDivElement;
-  let view: EditorView | undefined;
-  let anchor: number | undefined;
+  let root: HTMLDivElement;
+  let viewer: CodeView | undefined;
+  let mounted = $state(false);
+  let placed = false;
   let coarse = $state(false);
-  let actionLine = $state<number>();
-  const pickLine = StateEffect.define<number | undefined>();
-  const gutterSlot = new Compartment();
-  let lineGutter: Extension = [];
+  let dark = $state(false);
+  let selected = $state<{ start: number; end: number } | null>(null);
+  // A desktop selection extends from the last picked line; touch picks only
+  // one line at a time.
+  let anchor: number | undefined;
   const showGutter = $derived(
     (settings.values.codeReader ?? defaultCodeReader).lineNumbers === "show",
   );
+  const find = createCodeFind(
+    () => searchLines,
+    () => host,
+    () => root,
+    (line) => {
+      scrollToLine(line, "center");
+      choose(line, line);
+    },
+  );
+
+  function lineNumber(value: number) {
+    return Math.max(1, Math.min(lines.length, value));
+  }
+
+  function paint(start: number, end: number) {
+    const range = { start: Math.min(start, end), end: Math.max(start, end) };
+    selected = range;
+    viewer?.setSelectedLines({ id, range }, { notify: false });
+  }
+
+  function choose(start: number, end: number) {
+    paint(start, end);
+    onselect(selected!.start, selected!.end);
+  }
+
+  export function clearLineAction() {
+    anchor = undefined;
+    selected = null;
+    viewer?.clearSelectedLines({ notify: false });
+  }
+
+  function select(number: number, shift: boolean) {
+    const line = lineNumber(number);
+    if (coarse) {
+      anchor = undefined;
+      choose(line, line);
+      return;
+    }
+    if (shift && anchor !== undefined) {
+      choose(anchor, line);
+      anchor = undefined;
+      return;
+    }
+    anchor = line;
+    choose(line, line);
+  }
+
+  // The first visible line and how far (0-1 of its height) it is scrolled
+  // past. A scroll event fires before the renderer has painted its rows, so
+  // derive it from the numeric line layout instead of the stale DOM.
+  function position(): Pick<CodeReaderState, "line" | "offset"> {
+    const fallback = () =>
+      known ?? { line: lineNumber(untrack(() => restoreLine)), offset: 0 };
+    if (!viewer || host.clientHeight === 0) return fallback();
+    const item = viewer.getRenderedItems()[0];
+    if (!item) return fallback();
+    const itemTop = viewer.getTopForItem(id);
+    if (itemTop !== undefined) {
+      const local = viewer.getScrollTop() - itemTop;
+      let low = 1;
+      let high = lines.length;
+      let block: { top: number; height: number } | undefined;
+      let found = 0;
+      while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        const candidate = item.instance.getLinePosition(middle);
+        if (!candidate) break;
+        if (candidate.top <= local) {
+          block = candidate;
+          found = middle;
+          low = middle + 1;
+        } else {
+          high = middle - 1;
+        }
+      }
+      if (block) {
+        known = {
+          line: lineNumber(found),
+          offset:
+            block.height > 0
+              ? Math.min(1, Math.max(0, (local - block.top) / block.height))
+              : 0,
+        };
+        return known;
+      }
+    }
+    const edge = host.getBoundingClientRect().top;
+    for (const row of item.element.shadowRoot?.querySelectorAll<HTMLElement>(
+      "[data-line]",
+    ) ?? []) {
+      const line = Number(row.dataset.line);
+      if (!Number.isInteger(line) || line < 1) continue;
+      const rect = row.getBoundingClientRect();
+      if (rect.bottom <= edge + 0.5) continue;
+      const offset =
+        rect.height > 0
+          ? Math.min(1, Math.max(0, (edge - rect.top) / rect.height))
+          : 0;
+      known = { line, offset };
+      return known;
+    }
+    return fallback();
+  }
+
+  export function line() {
+    return position().line;
+  }
+
+  export function capture(): CodeReaderState {
+    if (pending) return pending;
+    return {
+      ...position(),
+      selection: selected ? { start: selected.start, end: selected.end } : null,
+      search: $state.snapshot(find.search),
+      ...(find.panel ? { panel: find.panel } : {}),
+      ...captureCursor(find.cursor, find.matches),
+    };
+  }
+
+  function scrollToLine(line: number, align: "start" | "center") {
+    viewer?.scrollTo({
+      type: "line",
+      id,
+      lineNumber: lineNumber(line),
+      align,
+    });
+  }
+
+  // Applies `pending` once the reader has layout to scroll in.
+  function applyRestore() {
+    const state = pending;
+    if (!state || !viewer || host.clientHeight === 0) return;
+    if (!viewer.getRenderedItems()[0]) return;
+    pending = undefined;
+    placed = true;
+    known = {
+      line: lineNumber(state.line),
+      offset: Math.min(1, Math.max(0, state.offset)),
+    };
+    find.search = state.search;
+    find.panel = state.panel;
+    if (state.selection) {
+      const start = lineNumber(state.selection.start);
+      const end = lineNumber(state.selection.end);
+      paint(start, end);
+      onselect(Math.min(start, end), Math.max(start, end));
+    }
+    find.cursor = restoreCursor(state.cursor, find.matches);
+    viewer.scrollTo({
+      type: "line",
+      id,
+      lineNumber: known.line,
+      align: "start",
+      // A positive offset leaves the line below the edge; the captured
+      // fraction is how far the line is scrolled past it.
+      offset: -known.offset * codeLineHeight,
+    });
+  }
+
+  function placeInitial() {
+    if (placed || pending) return;
+    placed = true;
+    scrollToLine(
+      untrack(() => restoreLine),
+      "start",
+    );
+  }
+
+  function scrollToColumn(line: number, column: number) {
+    const target = lineNumber(line);
+    let attempts = 0;
+    // CodeView queues its render on a frame, so the target row usually only
+    // exists after the scroll request has painted.
+    const apply = () => {
+      const row = viewer
+        ?.getRenderedItems()[0]
+        ?.element.shadowRoot?.querySelector<HTMLElement>(
+          `[data-line="${target}"]`,
+        );
+      const scroller = row?.closest<HTMLElement>("[data-code]");
+      if (!row || !scroller) {
+        if (++attempts < 20) requestAnimationFrame(apply);
+        return;
+      }
+      const length = row.textContent?.length ?? 0;
+      if (!length) return;
+      const rect = row.getBoundingClientRect();
+      const box = scroller.getBoundingClientRect();
+      const x =
+        rect.left +
+        (rect.width * Math.min(Math.max(column - 1, 0), length)) / length;
+      scroller.scrollLeft += x - box.left;
+    };
+    requestAnimationFrame(apply);
+  }
+
+  function goto(value: string) {
+    const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());
+    if (match) {
+      const current = selected?.start ?? 1;
+      const [, sign, digits, column, percent] = match;
+      let target = digits ? Number(digits) : current;
+      if (digits && percent) {
+        let fraction = target / 100;
+        if (sign)
+          fraction =
+            fraction * (sign === "-" ? -1 : 1) + current / lines.length;
+        target = Math.round(lines.length * fraction);
+      } else if (digits && sign)
+        target = current + target * (sign === "-" ? -1 : 1);
+      scrollToLine(target, "center");
+      if (column) scrollToColumn(target, Number(column.slice(1)));
+    }
+    find.panel = undefined;
+    host.focus();
+  }
+
+  function options(): CodeViewOptions<undefined> {
+    return {
+      ...pierreTheme(dark),
+      overflow: "scroll",
+      disableFileHeader: true,
+      disableLineNumbers: !showGutter,
+      lineHoverHighlight: "number",
+      itemMetrics: codeItemMetrics,
+      tokenizeMaxLineLength: codeTokenizeLimit,
+      unsafeCSS: fileUnsafeCSS,
+      layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
+      onLineNumberClick(props) {
+        if (props.type !== "line") return;
+        select(props.lineNumber, props.event.shiftKey);
+      },
+      onLineClick(props) {
+        if (!coarse || props.type !== "line") return;
+        const nativeSelection = document.getSelection();
+        if (nativeSelection && !nativeSelection.isCollapsed) return;
+        select(props.lineNumber, false);
+      },
+      // CodeView publishes getRenderedItems() after the item render callback.
+      // Defer until then so a pending restore can scroll in.
+      onPostRender: () =>
+        queueMicrotask(() => {
+          if (pending) applyRestore();
+          else placeInitial();
+        }),
+    };
+  }
+
   function toggleGutter() {
     changeSettings({
       codeReader: {
@@ -83,279 +355,51 @@
       },
     });
   }
-  $effect(() => {
-    view?.dispatch({
-      effects: gutterSlot.reconfigure(showGutter ? lineGutter : []),
-    });
-  });
-  export function clearLineAction() {
-    actionLine = undefined;
-    view?.dispatch({ effects: pickLine.of(undefined) });
-  }
 
-  function position(): Pick<CodeReaderState, "line" | "offset"> {
-    if (!view || host.clientHeight === 0)
-      return known ?? { line: untrack(() => restoreLine), offset: 0 };
-    const top = view.scrollDOM.getBoundingClientRect().top - view.documentTop;
-    const block = view.lineBlockAtHeight(top);
-    known = {
-      line: view.state.doc.lineAt(block.from).number,
-      offset:
-        block.height > 0
-          ? Math.min(1, Math.max(0, (top - block.top) / block.height))
-          : 0,
-    };
-    return known;
-  }
-  export function line() {
-    return position().line;
-  }
-  export function capture(): CodeReaderState {
-    if (pending || !view) return pending ?? { ...empty(), ...position() };
-    const { selection } = view.state;
-    const query = getSearchQuery(view.state);
-    return {
-      ...position(),
-      selection: {
-        ranges: selection.ranges.map(({ anchor, head }) => ({ anchor, head })),
-        main: selection.mainIndex,
-      },
-      search: {
-        search: query.search,
-        caseSensitive: query.caseSensitive,
-        regexp: query.regexp,
-        wholeWord: query.wholeWord,
-      },
-      searchOpen: searchPanelOpen(view.state),
-      gotoOpen: gotoLineOpen(view.state),
-      ...(actionLine === undefined ? {} : { picked: actionLine }),
-    };
-  }
-  function empty(): CodeReaderState {
-    return {
-      line: 1,
-      offset: 0,
-      selection: { ranges: [{ anchor: 0, head: 0 }], main: 0 },
-      search: {
-        search: "",
-        caseSensitive: false,
-        regexp: false,
-        wholeWord: false,
-      },
-      searchOpen: false,
-      gotoOpen: false,
-    };
-  }
-  // Applies `pending` once the editor has layout to scroll in.
-  function applyRestore() {
-    const state = pending;
-    if (!view || !state || host.clientHeight === 0) return;
-    pending = undefined;
-    const { doc } = view.state;
-    const at = (value: number) => Math.min(value, doc.length);
-    const ranges = state.selection.ranges.map(({ anchor, head }) =>
-      EditorSelection.range(at(anchor), at(head)),
-    );
-    const target = doc.line(Math.min(state.line, doc.lines));
-    restoring = true;
-    try {
-      view.dispatch({
-        selection: EditorSelection.create(
-          ranges,
-          Math.min(state.selection.main, ranges.length - 1),
-        ),
-        effects: EditorView.scrollIntoView(target.from, {
-          y: "start",
-          yMargin: -state.offset * view.lineBlockAt(target.from).height,
-        }),
-      });
-      restorePanels(view, state);
-      if (state.picked !== undefined && state.picked <= doc.lines && coarse) {
-        actionLine = state.picked;
-        view.dispatch({ effects: pickLine.of(state.picked) });
-      }
-    } finally {
-      restoring = false;
-    }
-  }
-  function select(number: number, shift: boolean) {
-    if (coarse) {
-      anchor = undefined;
-      actionLine = number;
-      if (view) {
-        view.dispatch({
-          selection: { anchor: view.state.doc.line(number).from },
-          effects: pickLine.of(number),
-        });
-      }
-      onselect(number, number);
-      return;
-    }
-    if (shift && anchor !== undefined) {
-      onselect(Math.min(anchor, number), Math.max(anchor, number));
-      anchor = undefined;
-    } else {
-      anchor = number;
-      onselect(number, number);
-    }
-  }
   onMount(() => {
-    let cancelled = false;
-    const pointer = matchMedia("(pointer: coarse)");
-    const updatePointer = () => {
-      coarse = pointer.matches;
-      if (!coarse) clearLineAction();
-    };
-    updatePointer();
-    pointer.addEventListener("change", updatePointer);
-    const selectionChanged = () => {
-      const selection = document.getSelection();
-      if (
-        selection &&
-        !selection.isCollapsed &&
-        host.contains(selection.anchorNode)
-      ) {
-        // A transaction here would reset the browser's native selection.
-        actionLine = undefined;
-      }
-    };
-    document.addEventListener("selectionchange", selectionChanged);
-    lineGutter = lineNumbers({
-      domEventHandlers: {
-        click: (v, l, e) => {
-          select(v.state.doc.lineAt(l.from).number, (e as MouseEvent).shiftKey);
-          return true;
-        },
+    const stopEnvironment = watchReader(host, {
+      onPointer: (value) => {
+        coarse = value;
+      },
+      onTheme: (value) => {
+        dark = value;
+      },
+      // A hidden tab has no layout; a pending restore waits until it is shown.
+      onResize: () => {
+        if (pending) applyRestore();
+      },
+      onScroll: () => {
+        if (!pending) position();
       },
     });
-
-    const extensions = [
-      EditorState.readOnly.of(true),
-      EditorView.editable.of(false),
-      codeReaderPanels(),
-      syntaxHighlighting(codeHighlightStyle),
-      highlightActiveLine(),
-      highlightSpecialChars(),
-      EditorView.theme({
-        "&": { height: "100%", fontSize: "13px" },
-        ".cm-scroller": {
-          overflow: "auto",
-          fontFamily: "var(--font-mono, monospace)",
-        },
-        ".cm-content": { minWidth: "100%" },
-        ".cm-gutters": {
-          cursor: "pointer",
-          backgroundColor: "var(--muted)",
-          color: "var(--muted-foreground)",
-          borderRight: "1px solid var(--border)",
-        },
-        ".cm-activeLineGutter": {
-          backgroundColor: "var(--accent)",
-          color: "var(--foreground)",
-        },
-        ".cm-panels": {
-          backgroundColor: "var(--background)",
-          color: "var(--foreground)",
-        },
-        ".cm-panels.cm-panels-bottom": { borderTop: "1px solid var(--border)" },
-        ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
-        ".code-line-picked": {
-          boxShadow: "inset 3px 0 var(--primary)",
-          outline: "1px solid var(--primary)",
-          outlineOffset: "-1px",
-        },
-      }),
-      EditorView.domEventHandlers({
-        click(event, editor) {
-          if (!coarse) return false;
-          const target = event.target;
-          if (!(target instanceof Element) || !target.closest(".cm-line"))
-            return false;
-          if (document.getSelection()?.isCollapsed === false) return false;
-          const pos = editor.posAtCoords({
-            x: event.clientX,
-            y: event.clientY,
-          });
-          if (pos === null) return false;
-          const row = editor.state.doc.lineAt(pos).number;
-          select(row, false);
-          return false;
-        },
-        scroll() {
-          if (!pending) position();
-          return false;
-        },
-      }),
-      gutterSlot.of(showGutter ? lineGutter : []),
-      StateField.define({
-        create: () => Decoration.none,
-        update(value, transaction) {
-          for (const effect of transaction.effects) {
-            if (effect.is(pickLine)) {
-              return effect.value === undefined
-                ? Decoration.none
-                : Decoration.set([
-                    Decoration.line({ class: "code-line-picked" }).range(
-                      transaction.state.doc.line(effect.value).from,
-                    ),
-                  ]);
-            }
-          }
-          return value;
-        },
-        provide: (field) => EditorView.decorations.from(field),
-      }),
-      EditorView.updateListener.of((u) => {
-        if (u.selectionSet) {
-          const range = u.state.selection.main;
-          if (!range.empty && !restoring)
-            onselect(
-              u.state.doc.lineAt(range.from).number,
-              u.state.doc.lineAt(Math.max(range.from, range.to - 1)).number,
-            );
-        }
-      }),
-    ];
-    view = new EditorView({
-      parent: host,
-      state: EditorState.create({
-        doc: Text.of(text.split(/\r?\n/)),
-        extensions,
-      }),
-    });
-    // A hidden tab has no layout to scroll in; restore once it is shown.
-    const shown = new ResizeObserver(() => {
-      applyRestore();
-      if (!pending) shown.disconnect();
-    });
-    if (pending) {
-      applyRestore();
-      if (pending) shown.observe(host);
-    } else {
-      const target = Math.min(Math.max(restoreLine, 1), view.state.doc.lines);
-      view.dispatch({
-        effects: EditorView.scrollIntoView(view.state.doc.line(target).from, {
-          y: "start",
-          yMargin: 0,
-        }),
-      });
-    }
-    void loadCodeLanguage(path)
-      .then((language) => {
-        if (!cancelled && view && language)
-          view.dispatch({ effects: StateEffect.appendConfig.of(language) });
-      })
-      .catch(() => {
-        /* Plain text remains readable if language loading fails. */
-      });
+    const highlighter = acquireCodeHighlighter();
+    viewer = new CodeView(options(), highlighter.pool);
+    viewer.setup(host);
+    mounted = true;
+    viewer.setItems([{ id, type: "file", file }]);
+    const keydown = (event: KeyboardEvent) =>
+      readerKeydown(event, find.actions.keyHandlers);
+    root.addEventListener("keydown", keydown);
     return () => {
-      cancelled = true;
-      shown.disconnect();
-      pointer.removeEventListener("change", updatePointer);
-      document.removeEventListener("selectionchange", selectionChanged);
-      view?.destroy();
-      view = undefined;
+      mounted = false;
+      stopEnvironment();
+      root.removeEventListener("keydown", keydown);
+      releaseCodeView(viewer, highlighter);
+      viewer = undefined;
     };
+  });
+
+  $effect(() => {
+    const current = options();
+    if (mounted) untrack(() => syncViewerOptions(viewer, current));
+  });
+  // A scroll event may still be pending when the tab hides. Measure before the
+  // ancestor's DOM update removes the reader from the layout.
+  $effect.pre(() => {
+    const showing = active;
+    untrack(() => {
+      if (!showing) position();
+    });
   });
   $effect(() => {
     hint = coarse
@@ -369,22 +413,29 @@
   });
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+<div
+  bind:this={root}
+  class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+>
   <div class="flex shrink-0 items-center gap-1 border-b px-1 py-0.5">
     <Button
-      variant="ghost"
+      variant={find.panel === "search" ? "secondary" : "ghost"}
       size="icon-sm"
       aria-label="文件内查找"
-      title="文件内查找"
-      onclick={() => view && openSearchPanel(view)}
+      aria-expanded={find.panel === "search"}
+      aria-keyshortcuts="Control+f Meta+f"
+      title="文件内查找（Ctrl / ⌘ F）"
+      onclick={() => void find.actions.openPanel("search")}
       ><IconSearch aria-hidden="true" /></Button
     >
     <Button
-      variant="ghost"
+      variant={find.panel === "goto" ? "secondary" : "ghost"}
       size="icon-sm"
       aria-label="跳转行"
-      title="跳转行"
-      onclick={() => view && openGotoLine(view)}
+      aria-expanded={find.panel === "goto"}
+      aria-keyshortcuts="Control+Alt+g Meta+Alt+g"
+      title="跳转行（Ctrl / ⌘ + Alt + G）"
+      onclick={() => void find.actions.openPanel("goto")}
       ><IconListNumbers aria-hidden="true" /></Button
     >
     <Button
@@ -396,12 +447,29 @@
       onclick={toggleGutter}><IconNumber aria-hidden="true" /></Button
     >
   </div>
-  <div class="relative min-h-0 flex-1 overflow-hidden">
+  <CodeReaderPanels
+    panel={find.panel}
+    query={find.search}
+    line={selected?.start ?? line()}
+    status={find.status}
+    {...find.panelProps}
+    ongoto={goto}
+  />
+  <div class="relative min-h-0 min-w-0 flex-1">
     <div
       bind:this={host}
       data-code-reader
-      class="h-full overflow-hidden"
+      class="code-reader h-full overflow-x-hidden overflow-y-auto overscroll-contain outline-none contain-strict [overflow-anchor:none]"
+      tabindex="-1"
       aria-label="只读代码"
     ></div>
   </div>
 </div>
+
+<style>
+  .code-reader {
+    --diffs-font-family: var(--font-mono, monospace);
+    --diffs-font-size: 13px;
+    --diffs-line-height: 22px;
+  }
+</style>

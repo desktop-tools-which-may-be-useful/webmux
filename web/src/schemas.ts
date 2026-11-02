@@ -650,28 +650,30 @@ const CodeSearchSpecSchema = z.object({
   wholeWord: z.boolean(),
 });
 const CodeLineSideSchema = z.enum(["deletions", "additions"]);
-export const CodeReaderStateSchema = z.object({
+// Search panel and match cursor shared by the file and diff readers.
+const CodeFindStateSchema = z.object({
+  search: CodeSearchSpecSchema,
+  panel: z.enum(["search", "goto"]).optional(),
+  cursor: z
+    .object({
+      matches: z.array(z.number().int()),
+      index: z.number().int(),
+    })
+    .optional(),
+});
+export const CodeReaderStateSchema = CodeFindStateSchema.extend({
   // First visible line and how far (0-1 of its height) it is scrolled past.
   line: z.number().int().min(1),
   offset: z.number().min(0).max(1),
-  selection: z.object({
-    ranges: z
-      .array(
-        z.object({
-          anchor: z.number().int().nonnegative(),
-          head: z.number().int().nonnegative(),
-        }),
-      )
-      .min(1),
-    main: z.number().int().nonnegative(),
-  }),
-  search: CodeSearchSpecSchema,
-  searchOpen: z.boolean(),
-  gotoOpen: z.boolean(),
-  // The touch-picked line carrying the inline send action.
-  picked: z.number().int().min(1).optional(),
+  // The selected line range, or null when nothing is selected.
+  selection: z
+    .object({
+      start: z.number().int().min(1),
+      end: z.number().int().min(1),
+    })
+    .nullable(),
 });
-export const CodeDiffReaderStateSchema = z.object({
+export const CodeDiffReaderStateSchema = CodeFindStateSchema.extend({
   selected: z
     .object({
       start: z.number().int(),
@@ -688,14 +690,6 @@ export const CodeDiffReaderStateSchema = z.object({
       fromEnd: z.number().int().nonnegative(),
     }),
   ),
-  search: CodeSearchSpecSchema,
-  panel: z.enum(["search", "goto"]).optional(),
-  cursor: z
-    .object({
-      matches: z.array(z.number().int()),
-      index: z.number().int(),
-    })
-    .optional(),
   top: z
     .object({ line: z.number().int().min(1), side: CodeLineSideSchema })
     .optional(),
