@@ -348,8 +348,16 @@ func (s *Server) mkdir(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(204)
 }
+
+// accept upgrades a WebSocket. Browsers always offer permessage-deflate and
+// scripts cannot withdraw the offer, so the client opts in with compress=1;
+// otherwise the extension is not negotiated.
 func (s *Server) accept(w http.ResponseWriter, r *http.Request) *websocket.Conn {
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true, Subprotocols: []string{wsProtocol}})
+	opts := &websocket.AcceptOptions{InsecureSkipVerify: true, Subprotocols: []string{wsProtocol}}
+	if r.URL.Query().Get("compress") == "1" {
+		opts.CompressionMode = websocket.CompressionContextTakeover
+	}
+	c, err := websocket.Accept(w, r, opts)
 	if err != nil {
 		return nil
 	}

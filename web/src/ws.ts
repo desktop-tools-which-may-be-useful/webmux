@@ -1,6 +1,23 @@
-import { stored } from "./api";
+import { store, stored } from "./api";
 
 const maxBufferedAmount = 1024 * 1024;
+const compressionKey = "wsCompression";
+// Every live connection, so a compression change can reattach them at once.
+const live = new Set<() => void>();
+
+// Per-device opt-in to permessage-deflate. Browsers always offer the
+// extension, so the server negotiates it only when the URL asks.
+export function wsCompression(): boolean {
+  return stored(compressionKey) === "on";
+}
+export function setWsCompression(enabled: boolean) {
+  store(compressionKey, enabled ? "on" : "off");
+  for (const reopen of live) reopen();
+}
+function withCompression(target: string): string {
+  if (!wsCompression()) return target;
+  return `${target}${target.includes("?") ? "&" : "?"}compress=1`;
+}
 
 // Browsers cannot set Authorization on a WebSocket handshake. The token rides
 // in an offered subprotocol instead of the URL (proxy and edge request logs)
@@ -98,7 +115,7 @@ export function connect(
     socket = undefined;
     previous?.close();
     onState(attempt ? "reconnecting" : "connecting");
-    const target = typeof path === "string" ? path : path();
+    const target = withCompression(typeof path === "string" ? path : path());
     const next = new WebSocket(
       `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${target}`,
       protocols(stored("token")),
@@ -192,6 +209,7 @@ export function connect(
     },
     close() {
       disposed = true;
+      live.delete(reopen);
       clearTimeout(timer);
       clearTimeout(stableTimer);
       clearTimeout(resumeTimer);
@@ -209,6 +227,10 @@ export function connect(
       open();
     },
   };
+  const reopen = () => {
+    if (!disposed && !finished) open();
+  };
+  live.add(reopen);
   open();
   return api;
 }

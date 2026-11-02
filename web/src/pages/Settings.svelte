@@ -56,6 +56,7 @@
   import PushSettings from "../components/PushSettings.svelte";
   import InstallSettings from "../components/InstallSettings.svelte";
   import SettingsNavigation from "../components/SettingsNavigation.svelte";
+  import NetworkSettings from "../components/NetworkSettings.svelte";
   import { Switch } from "$lib/components/ui/switch";
   import { browserDraftStorage } from "../draftStorage";
 
@@ -503,6 +504,7 @@
           </div>
         </Card.Content>
       </Card.Root>
+      <NetworkSettings />
       <TunnelSettings />
       <TailscaleSettings />
       <InstallSettings />

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -261,32 +262,7 @@ func TestStaticModuleAndWasmTypes(t *testing.T) {
 }
 
 func TestStaticStylesheetGzip(t *testing.T) {
-	root, err := fs.Sub(assets.Assets, "dist")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var name string
-	var largest int64
-	err = fs.WalkDir(root, ".", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".css") {
-			return err
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if info.Size() > largest {
-			largest = info.Size()
-			name = path
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if name == "" {
-		skipWithoutFrontend(t, "frontend build has no stylesheet")
-	}
+	name, want := staticStylesheet(t)
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
 	handler := New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
@@ -308,8 +284,8 @@ func TestStaticStylesheetGzip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(body) < 100 {
-		t.Fatalf("decoded stylesheet is %d bytes", len(body))
+	if !bytes.Equal(body, want) {
+		t.Fatal("decoded stylesheet differs from the build output")
 	}
 }
 

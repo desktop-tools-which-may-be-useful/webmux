@@ -300,7 +300,7 @@ WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端�
 | E    | 剪贴板与文件上传                       | US-E01–US-E07 |
 | F    | 草稿编写、保存与发送确认               | US-F01–US-F09 |
 | G    | 快捷指令                               | US-G01–US-G06 |
-| H    | 手机、平板与触摸操作                   | US-H01–US-H09 |
+| H    | 手机、平板与触摸操作、慢速网络         | US-H01–US-H11 |
 | I    | 代码工作区、Diff、引用与文件操作       | US-I01–US-I19 |
 | J    | 仓库登记与 worktree 管理               | US-J01–US-J11 |
 | K    | 配置、运行与服务管理                   | US-K01–US-K13 |

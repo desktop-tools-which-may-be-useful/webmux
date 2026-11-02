@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connect, protocols, type SocketConnection } from "../src/ws";
+import {
+  connect,
+  protocols,
+  setWsCompression,
+  type SocketConnection,
+} from "../src/ws";
 
 const sendBudget = 1024 * 1024;
 
@@ -190,5 +195,55 @@ describe("WebSocket upstream send budget", () => {
 
     expect(connection.send(0, new Uint8Array([65]))).toBe(false);
     expect(socket.sent).toEqual([]);
+  });
+});
+
+describe("WebSocket compression opt-in", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockWebSocket.instances = [];
+    const items = new Map<string, string>();
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => items.set(key, value),
+    });
+    vi.stubGlobal("document", new EventTarget());
+    vi.stubGlobal(
+      "window",
+      Object.assign(new EventTarget(), { setTimeout: globalThis.setTimeout }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("reattaches live sockets with the opt-in and drops it when disabled", () => {
+    const list = connect("/ws/sessions", vi.fn(), vi.fn(), vi.fn());
+    const terminal = connect(
+      () => "/ws/s/test?client=c",
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+    const closed = connect("/ws/settings", vi.fn(), vi.fn(), vi.fn());
+    closed.close();
+
+    setWsCompression(true);
+    expect(MockWebSocket.instances.slice(3).map((s) => s.url)).toEqual([
+      "ws://localhost/ws/sessions?compress=1",
+      "ws://localhost/ws/s/test?client=c&compress=1",
+    ]);
+
+    setWsCompression(false);
+    expect(MockWebSocket.instances.slice(5).map((s) => s.url)).toEqual([
+      "ws://localhost/ws/sessions",
+      "ws://localhost/ws/s/test?client=c",
+    ]);
+    list.close();
+    terminal.close();
   });
 });

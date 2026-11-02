@@ -19,6 +19,8 @@ import (
 	assets "github.com/rainchan/webmux/web"
 )
 
+// staticStylesheet returns the largest embedded stylesheet's served path and
+// identity body. The build embeds compressible files as .br/.gz siblings only.
 func staticStylesheet(t *testing.T) (string, []byte) {
 	t.Helper()
 	var name string
@@ -27,15 +29,22 @@ func staticStylesheet(t *testing.T) (string, []byte) {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !strings.HasSuffix(p, ".css") {
+		if entry.IsDir() || !strings.HasSuffix(p, ".css.gz") {
 			return nil
 		}
 		b, err := fs.ReadFile(assets.Assets, p)
 		if err != nil {
 			return err
 		}
+		zr, err := gzip.NewReader(bytes.NewReader(b))
+		if err != nil {
+			return err
+		}
+		if b, err = io.ReadAll(zr); err != nil {
+			return err
+		}
 		if len(b) > len(data) {
-			name, data = strings.TrimPrefix(p, "dist/"), b
+			name, data = strings.TrimSuffix(strings.TrimPrefix(p, "dist/"), ".gz"), b
 		}
 		return nil
 	})
@@ -43,9 +52,25 @@ func staticStylesheet(t *testing.T) (string, []byte) {
 		t.Fatal(err)
 	}
 	if len(data) < 1024 {
-		t.Fatal("embedded build needs a stylesheet of at least 1024 bytes")
+		t.Fatal("embedded build needs a precompressed stylesheet of at least 1024 bytes")
+	}
+	if _, err := fs.Stat(assets.Assets, "dist/"+name+".br"); err != nil {
+		t.Fatalf("stylesheet lacks its brotli variant: %v", err)
 	}
 	return name, data
+}
+
+func gzipped(t testing.TB, data []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
 
 func TestStaticEncodingNegotiation(t *testing.T) {
@@ -56,9 +81,14 @@ func TestStaticEncodingNegotiation(t *testing.T) {
 	}{
 		{"", "", 200},
 		{"gzip", "gzip", 200},
+		{"gzip, deflate", "gzip", 200},
+		{"gzip, deflate, br, zstd", "br", 200},
+		{"br, gzip", "br", 200},
+		{"br;q=0.5, gzip", "gzip", 200},
+		{"BR", "br", 200},
 		{"gzip;q=0", "", 200},
-		{"gzip;q=0, *;q=1", "", 200},
-		{"*", "gzip", 200},
+		{"gzip;q=0, *;q=1", "br", 200},
+		{"*", "br", 200},
 		{"GZIP", "gzip", 200},
 		{"xgzip", "", 200},
 		{"*;q=0, gzip;q=1", "gzip", 200},
@@ -68,7 +98,8 @@ func TestStaticEncodingNegotiation(t *testing.T) {
 		{"gzip;q=0.5, identity;q=1", "", 200},
 		{"gzip;q=0, identity;q=0", "", 406},
 		{"*;q=0", "", 406},
-		{"br, identity;q=0", "", 406},
+		{"br, identity;q=0", "br", 200},
+		{"deflate, identity;q=0", "", 406},
 		{"gzip;q=invalid", "", 200},
 		{"gzip;q=NaN", "", 200},
 	} {
@@ -149,9 +180,11 @@ func (files *countedStaticFS) ReadFile(name string) ([]byte, error) {
 
 func TestStaticCacheReadsKnownAssetsOnce(t *testing.T) {
 	want := []byte(strings.Repeat("body { color: green; }\n", 100))
+	brotli := []byte("opaque brotli body")
 	root := &countedStaticFS{FS: fstest.MapFS{
-		"assets/app.css": {Data: want},
-		"index.html":     {Data: []byte("<!doctype html>")},
+		"assets/app.css.gz": {Data: gzipped(t, want)},
+		"assets/app.css.br": {Data: brotli},
+		"index.html":        {Data: []byte("<!doctype html>")},
 	}}
 	cache, err := newStaticFiles(root)
 	if err != nil {
@@ -161,7 +194,7 @@ func TestStaticCacheReadsKnownAssetsOnce(t *testing.T) {
 		t.Fatal("inventory eagerly read asset contents")
 	}
 	var wg sync.WaitGroup
-	for i := range 32 {
+	for i := range 33 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -171,13 +204,17 @@ func TestStaticCacheReadsKnownAssetsOnce(t *testing.T) {
 				return
 			}
 			req := httptest.NewRequest(http.MethodGet, "/assets/app.css", nil)
-			if i%2 == 0 {
-				req.Header.Set("Accept-Encoding", "gzip")
-			}
+			req.Header.Set("Accept-Encoding", []string{"br", "gzip", "identity"}[i%3])
 			w := httptest.NewRecorder()
 			asset.write(w, req)
 			data := w.Body.Bytes()
-			if i%2 == 0 {
+			switch i % 3 {
+			case 0:
+				if !bytes.Equal(data, brotli) {
+					t.Error("brotli variant not passed through")
+				}
+				return
+			case 1:
 				reader, err := gzip.NewReader(bytes.NewReader(data))
 				if err != nil {
 					t.Error(err)
@@ -196,26 +233,29 @@ func TestStaticCacheReadsKnownAssetsOnce(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if got := root.reads.Load(); got != 1 {
-		t.Fatalf("read asset %d times, want 1", got)
+	if got := root.reads.Load(); got != 2 {
+		t.Fatalf("read asset variants %d times, want 2", got)
 	}
 	first, _ := cache.get("assets/app.css")
 	again, _ := cache.get("assets/app.css")
 	if first != again || &first.data[0] != &again.data[0] || &first.gzip[0] != &again.gzip[0] {
-		t.Fatal("requests do not share cached raw and gzip representations")
+		t.Fatal("requests do not share cached identity and gzip representations")
 	}
 	for i := range 1000 {
 		if _, err := cache.get(fmt.Sprintf("missing-%d", i)); err != fs.ErrNotExist {
 			t.Fatalf("unknown asset error=%v", err)
 		}
 	}
-	if len(cache.files) != 2 || root.reads.Load() != 1 {
+	if _, err := cache.get("assets/app.css.gz"); err != fs.ErrNotExist {
+		t.Fatal("precompressed variant is directly addressable")
+	}
+	if len(cache.files) != 2 || root.reads.Load() != 2 {
 		t.Fatal("unknown paths expanded the fixed asset inventory")
 	}
 }
 
 func TestStaticUncompressedAssetNegotiation(t *testing.T) {
-	asset := &staticAsset{data: []byte("small body")}
+	asset := &staticAsset{name: "small.txt", data: []byte("small body")}
 	for _, tc := range []struct {
 		accept string
 		status int
@@ -238,7 +278,7 @@ func TestStaticUncompressedAssetNegotiation(t *testing.T) {
 }
 
 func BenchmarkStaticCachedGzip(b *testing.B) {
-	root := fstest.MapFS{"app.js": {Data: []byte(strings.Repeat("console.log('embedded asset');\n", 10000))}}
+	root := fstest.MapFS{"app.js.gz": {Data: gzipped(b, []byte(strings.Repeat("console.log('embedded asset');\n", 10000)))}}
 	cache, err := newStaticFiles(root)
 	if err != nil {
 		b.Fatal(err)

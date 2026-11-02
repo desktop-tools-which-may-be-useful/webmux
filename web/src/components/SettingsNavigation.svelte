@@ -8,6 +8,7 @@
     { id: "quick-commands", label: "快捷指令" },
     { id: "launch-configs", label: "启动配置" },
     { id: "drafts", label: "草稿与暂存" },
+    { id: "network", label: "网络" },
     { id: "access", label: "公网访问" },
     { id: "tailscale", label: "Tailscale" },
     { id: "install", label: "安装应用" },

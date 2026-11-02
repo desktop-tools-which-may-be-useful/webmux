@@ -110,6 +110,8 @@
 
 US-H09 图标验收：应用图标与页头标志一致。maskable 版本为系统裁切保留安全边距，Apple 主屏幕图标交由系统裁圆角。
 
+慢速网络下的连接与加载压缩（US-H10–US-H11）见[网络压缩用户故事](terminal-network.md)。
+
 依据：
 
 - [安装状态](../../web/src/install.svelte.ts)、[安装卡片](../../web/src/components/InstallSettings.svelte)、[安装卡片用例](../../web/test/browser/InstallSettings.test.ts)
