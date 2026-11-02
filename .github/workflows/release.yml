@@ -46,6 +46,7 @@ jobs:
         run: |
           sha256sum -c SHA256SUMS
           [ "$(./webmux-linux-amd64 version)" = "webmux ${{ steps.version.outputs.version }}" ]
+          sh ../.github/scripts/test-linux-packages.sh . ${{ steps.version.outputs.version }}
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,4 +56,5 @@ jobs:
             webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
             webmux-windows-amd64.exe webmux-windows-arm64.exe \
             webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
-            webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe install.sh SHA256SUMS
+            webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe \
+            webmux_*-1_*.deb webmux-*-1.*.rpm install.sh SHA256SUMS

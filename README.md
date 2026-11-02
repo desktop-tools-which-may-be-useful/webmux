@@ -118,6 +118,8 @@ curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/lates
 
 脚本自动识别 Linux/macOS 与 amd64/arm64，下载二进制和 `SHA256SUMS`，校验后安装到 `~/.local/bin/webmux`。GitHub 不可用时依次回退 `ghfast.top`、`gh-proxy.com`；脚本入口不依赖 `raw.githubusercontent.com`。可用 `WEBMUX_VERSION`、`WEBMUX_INSTALL_DIR`、`WEBMUX_MIRRORS`、`WEBMUX_SHA256` 覆盖版本、目录、镜像和固定摘要。Windows 请下载 exe 或使用托盘（见 [Windows（WSL）](#windowswsl)）。完整说明见 [部署指南](docs/deployment.md#安装)。
 
+Debian / Ubuntu 与 Fedora 等发行版也可以从 Release 下载 deb / rpm 安装包，用 `sudo apt install ./webmux_<版本>-1_amd64.deb` 或 `sudo dnf install ./webmux-<版本>-1.x86_64.rpm` 安装，之后由包管理器升级；需要开机自启时执行 `systemctl --user enable --now webmux`。见 [Linux 安装包](docs/deployment.md#linux-安装包deb--rpm)。
+
 也可以手动下载并校验。服务端为 `webmux-{linux,darwin}-{amd64,arm64}`；Windows 托盘与控制台客户端为 `webmux-tray-windows-{amd64,arm64}.exe`、`webmux-windows-{amd64,arm64}.exe`：
 
 ```sh

@@ -228,8 +228,9 @@ func (m *Manager) Control(ctx context.Context, action string, follow bool) error
 	default:
 		return fmt.Errorf("unknown service action %q", action)
 	}
-	if _, err := os.Stat(m.definitionPath()); err != nil {
-		return fmt.Errorf("service definition unavailable; run webmux service install: %w", err)
+	own, err := m.installed(ctx)
+	if err != nil {
+		return err
 	}
 	if m.platform == "linux" {
 		if action != "uninstall" {
@@ -237,6 +238,10 @@ func (m *Manager) Control(ctx context.Context, action string, follow bool) error
 		}
 		if err := m.command(ctx, "systemctl", "--user", "disable", "--now", "webmux.service"); err != nil {
 			return err
+		}
+		if !own {
+			_, _ = fmt.Fprintln(m.out, "Disabled and stopped webmux.service. It is provided outside your configuration (for example by the deb/rpm package); remove the package to delete it.")
+			return nil
 		}
 	} else {
 		switch action {
@@ -264,6 +269,24 @@ func (m *Manager) Control(ctx context.Context, action string, follow bool) error
 		return m.command(ctx, "systemctl", "--user", "daemon-reload")
 	}
 	return nil
+}
+
+// installed reports whether a WebMux service exists and whether it is the
+// definition `service install` writes. On Linux a webmux.service that
+// systemd finds elsewhere, such as /usr/lib/systemd/user from the deb/rpm
+// package, also counts; the Windows tray detects units the same way.
+func (m *Manager) installed(ctx context.Context) (own bool, err error) {
+	_, err = os.Stat(m.definitionPath())
+	if err == nil {
+		return true, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if m.platform == "linux" && m.run(ctx, "systemctl", []string{"--user", "cat", "webmux.service"}, io.Discard, io.Discard) == nil {
+		return false, nil
+	}
+	return false, fmt.Errorf("service definition unavailable; run webmux service install: %w", err)
 }
 
 func (m *Manager) launchdLoaded(ctx context.Context) (bool, error) {

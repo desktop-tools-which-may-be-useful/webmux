@@ -65,6 +65,7 @@
 | 前台启动、内嵌资源与平台支持                                                                        | US-K01                                              |
 | 无服务管理器后台启动、日志与客户端停止                                                              | US-K12                                              |
 | 一键安装脚本、平台识别、同源校验与镜像回退                                                          | US-K11                                              |
+| Linux deb / rpm 安装包、包内用户单元与服务命令识别                                                  | US-K13                                              |
 | config init/path/show/validate/check 与启动参数覆盖                                                 | US-K02–US-K04                                       |
 | 所有 TOML 配置项：访问、会话、提醒、存储                                                            | US-A03；US-K03–US-K04；US-K08–US-K09；US-N01–US-N04 |
 | service install/--dry-run/--force/start/stop/restart/status/logs/uninstall                          | US-K05–US-K07                                       |

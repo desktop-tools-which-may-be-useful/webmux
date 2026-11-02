@@ -449,6 +449,32 @@ jobs:
           $sha = (Get-FileHash "$bin\webmux-linux-amd64" -Algorithm SHA256).Hash
           & .github\scripts\windows-installer-smoke.ps1 -Setup "$bin\webmux-setup-windows-amd64.exe" -SetupOtherArch "$bin\webmux-setup-windows-arm64.exe" -ServerSha256 $sha -Version 0.0.1 -Arch amd64
 
+  # The deb and rpm packages built from a stand-in server are installed,
+  # checked and removed in clean Debian and Fedora containers.
+  linux-packages:
+    name: Linux packages
+    needs: changes
+    if: needs.changes.result == 'success' && needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+        with:
+          frontend: "false"
+          node: "false"
+          go: "true"
+      - name: Build packages
+        run: |
+          mkdir -p bin
+          for arch in amd64 arm64; do
+            printf '#!/bin/sh\necho "webmux 0.0.1"\n' > "bin/webmux-linux-$arch"
+            chmod 755 "bin/webmux-linux-$arch"
+          done
+          make linux-packages VERSION=0.0.1
+      - name: Install, check and remove in Debian and Fedora
+        run: sh .github/scripts/test-linux-packages.sh bin 0.0.1
+
   # Single stable check name for branch protection, independent of job layout.
   # A job skipped by change detection is fine; a failed or cancelled one is not.
   test-result:
@@ -467,6 +493,7 @@ jobs:
         macos-e2e,
         performance,
         windows-installer,
+        linux-packages,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -507,6 +534,7 @@ jobs:
           MACOS_E2E: ${{ needs.macos-e2e.result }}
           PERFORMANCE: ${{ needs.performance.result }}
           WINDOWS_INSTALLER: ${{ needs.windows-installer.result }}
+          LINUX_PACKAGES: ${{ needs.linux-packages.result }}
         run: |
           failed=0
           require_success() {
@@ -520,6 +548,7 @@ jobs:
             require_success "Go race (Ubuntu)" "$UBUNTU_GO"
             require_success "Go race (macOS)" "$MACOS_GO"
             require_success "Windows installer smoke" "$WINDOWS_INSTALLER"
+            require_success "Linux packages" "$LINUX_PACKAGES"
           fi
           if [ "$WEB" = "true" ]; then
             require_success "Vitest unit and browser" "$VITEST"

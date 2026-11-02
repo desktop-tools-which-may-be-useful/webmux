@@ -51,7 +51,24 @@ curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.
 
 - 需要后台服务时再执行 `webmux service install`，首次启动会自动生成配置与 Token。
 - 重复执行脚本会升级二进制；正在运行的服务需手动重启，重启会结束现有会话。
-- Windows 不运行该脚本：请使用 `webmux-setup-windows-*.exe` 安装托盘，或下载 `webmux-windows-*.exe` / 独立托盘程序，或按 [Windows（WSL）](deployment/windows-wsl.md) 在 WSL 中运行同一脚本。
+
+### Linux 安装包（deb / rpm）
+
+Release 中提供 amd64、arm64 的 deb 与 rpm 包，二进制与同一 Release 的 `webmux-linux-<架构>` 相同，安装需要 sudo，之后由 apt / dnf 升级与卸载。
+
+```sh
+# Debian / Ubuntu（arm64 换成 _arm64.deb）
+sudo apt install ./webmux_0.2.0-1_amd64.deb
+# Fedora / RHEL / openSUSE（arm64 换成 .aarch64.rpm）
+sudo dnf install ./webmux-0.2.0-1.x86_64.rpm
+```
+
+- 包内只有 `/usr/bin/webmux` 与 systemd 用户单元 `/usr/lib/systemd/user/webmux.service`，没有依赖，也没有安装脚本。
+- 安装、升级、卸载都不会为任何用户启用、启动或重启服务。需要开机自启的用户执行一次 `systemctl --user enable --now webmux`；首次启动会在 `~/.config/webmux/config.toml` 生成带随机 Token 的配置。
+- 升级后正在运行的服务继续使用旧进程，执行 `systemctl --user restart webmux`（或 `webmux service restart`）后生效，重启会结束现有会话。
+- `webmux service status|start|stop|restart|logs` 同样作用于包内单元；`webmux service uninstall` 只禁用并停止它，删除请卸载软件包。也可以改用 `webmux service install`，它写入的 `~/.config/systemd/user/webmux.service` 优先于包内单元。
+
+Windows 不使用 `install.sh` 或这些安装包：请使用 `webmux-setup-windows-*.exe` 安装托盘，或下载 `webmux-windows-*.exe` / 独立托盘程序，或按 [Windows（WSL）](deployment/windows-wsl.md) 在 WSL 中运行 `install.sh` 或安装 deb / rpm。
 
 ## 配置
 
@@ -186,7 +203,7 @@ webmux service uninstall
 
 ## systemd 用户服务（Linux）
 
-推荐使用 `webmux service install`，生成位置为 `$XDG_CONFIG_HOME/systemd/user/webmux.service`（默认 `~/.config/systemd/user/webmux.service`）。也可手工使用模板：
+推荐使用 `webmux service install`，生成位置为 `$XDG_CONFIG_HOME/systemd/user/webmux.service`（默认 `~/.config/systemd/user/webmux.service`）。通过 deb / rpm 安装时也可以直接启用包内单元：`systemctl --user enable --now webmux`（见上文 [Linux 安装包](#linux-安装包deb--rpm)）。也可手工使用模板：
 
 ```sh
 make install

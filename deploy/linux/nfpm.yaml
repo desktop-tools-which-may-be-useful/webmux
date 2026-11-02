@@ -1,0 +1,28 @@
+# nfpm configuration for the WebMux deb and rpm packages; `make
+# linux-packages` runs it once per format and architecture with VERSION and
+# ARCH (amd64 | arm64) set. Paths are relative to the repository root.
+name: webmux
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: 1
+section: net
+priority: optional
+maintainer: WebMux contributors
+description: |
+  Persistent web terminal for shells and CLI agents.
+  Sessions survive browser disconnects; the binary embeds the web app.
+  Enable the bundled user service with: systemctl --user enable --now webmux
+vendor: WebMux
+homepage: https://github.com/mzdluo123/webmux
+license: MIT
+contents:
+  - src: bin/webmux-linux-${ARCH}
+    dst: /usr/bin/webmux
+    expand: true
+    file_info:
+      mode: 0755
+  - src: deploy/linux/webmux.service
+    dst: /usr/lib/systemd/user/webmux.service
+    file_info:
+      mode: 0644

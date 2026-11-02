@@ -200,6 +200,41 @@ func TestFailureDoesNotRemoveInstallation(t *testing.T) {
 	}
 }
 
+// A webmux.service from the deb/rpm package (found by `systemctl --user
+// cat`) is controlled in place; uninstall only disables it.
+func TestPackagedUnitIsControlledButNotRemoved(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, "linux")
+	if err := f.m.Control(ctx, "status", false); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{{"systemctl", "--user", "cat", "webmux.service"}, {"systemctl", "--user", "--no-pager", "status", "webmux.service"}}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Fatalf("status calls: %q", f.calls)
+	}
+	f.calls = nil
+	if err := f.m.Control(ctx, "uninstall", false); err != nil {
+		t.Fatal(err)
+	}
+	want = [][]string{{"systemctl", "--user", "cat", "webmux.service"}, {"systemctl", "--user", "disable", "--now", "webmux.service"}}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Fatalf("uninstall calls: %q", f.calls)
+	}
+	if !strings.Contains(f.output.String(), "remove the package") {
+		t.Fatalf("uninstall output %q", f.output.String())
+	}
+
+	// With neither a definition nor a packaged unit nothing is controlled.
+	f.calls, f.failure = nil, "cat"
+	err := f.m.Control(ctx, "status", false)
+	if err == nil || !strings.Contains(err.Error(), "run webmux service install") {
+		t.Fatalf("missing unit: %v", err)
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("missing unit still called %q", f.calls)
+	}
+}
+
 func TestLogsAndCancellation(t *testing.T) {
 	for _, platform := range []string{"linux", "darwin"} {
 		f := newFixture(t, platform)

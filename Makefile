@@ -19,11 +19,16 @@ TRAY_PKG = github.com/rainchan/webmux/internal/tray
 # Set by release: the Linux server digests the tray may install.
 TRAY_LDFLAGS ?=
 MAKENSIS ?= makensis
+# Pinned nfpm, run through the Go toolchain so no separate install is needed.
+# v2.47+ requires a newer Go than go.mod pins for CI (GOTOOLCHAIN=local).
+NFPM ?= $(GO) run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3
+LINUX_PACKAGES = webmux_$(VERSION)-1_amd64.deb webmux_$(VERSION)-1_arm64.deb \
+	webmux-$(VERSION)-1.x86_64.rpm webmux-$(VERSION)-1.aarch64.rpm
 RELEASE_FILES = webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
 	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
-	webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe
+	webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe $(LINUX_PACKAGES)
 
-.PHONY: web build tray installer release check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
+.PHONY: web build tray installer linux-packages release check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -51,6 +56,17 @@ installer:
 			deploy/windows/webmux.nsi || exit 1; \
 	done
 
+# Packages bin/webmux-linux-<arch> as /usr/bin/webmux plus the systemd user
+# unit into $(LINUX_PACKAGES); see deploy/linux/nfpm.yaml.
+linux-packages:
+	for arch in amd64 arm64; do \
+		for format in deb rpm; do \
+			VERSION=$(VERSION) ARCH=$$arch $(NFPM) package --config deploy/linux/nfpm.yaml \
+				--packager $$format --target bin/ || exit 1; \
+		done; \
+	done
+	cd bin && ls $(LINUX_PACKAGES) >/dev/null
+
 # Linux servers first: the tray embeds their digests, and SHA256SUMS lists
 # every artifact. The last step proves both trays carry both digests.
 release: web
@@ -67,6 +83,7 @@ release: web
 		grep -qaF "$$amd64" $$exe && grep -qaF "$$arm64" $$exe || { echo "$$exe lacks the server digests" >&2; exit 1; }; \
 	done
 	$(MAKE) installer
+	$(MAKE) linux-packages
 	cp install.sh bin/install.sh
 	cd bin && sha256sum $(RELEASE_FILES) install.sh > SHA256SUMS
 

@@ -1,0 +1,24 @@
+# systemd user unit shipped by the WebMux deb/rpm packages as
+# /usr/lib/systemd/user/webmux.service. Nothing enables it; each user runs
+#   systemctl --user enable --now webmux
+# `webmux service install` writes ~/.config/systemd/user/webmux.service,
+# which takes precedence over this file.
+[Unit]
+Description=WebMux persistent web terminal
+After=network-online.target
+
+[Service]
+Type=exec
+# Uses the default configuration; the first start creates it with a token.
+ExecStart=/usr/bin/webmux serve
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=2
+# WebMux ends its sessions itself; systemd then cleans up the cgroup.
+KillMode=mixed
+TimeoutStopSec=15
+UMask=0077
+Environment=PATH=%h/.local/bin:%h/.local/share/pnpm:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
