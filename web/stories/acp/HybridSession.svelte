@@ -6,6 +6,8 @@
   import SwitchProgress from "../../src/components/chat/SwitchProgress.svelte";
   import CodeChangesList from "../../src/components/CodeChangesList.svelte";
   import ConfirmDialog from "../../src/components/ConfirmDialog.svelte";
+  import ConnectorInstallHint from "../../src/components/ConnectorInstallHint.svelte";
+  import HybridCandidatePicker from "../../src/components/HybridCandidatePicker.svelte";
   import QuickCommandMenu from "../../src/components/QuickCommandMenu.svelte";
   import SoftKeys from "../../src/components/SoftKeys.svelte";
   import TerminalHeader from "../../src/components/TerminalHeader.svelte";
@@ -33,7 +35,9 @@
   import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
   import { session } from "../fixtures";
   import {
+    agentMetadata,
     chatFixture,
+    claudeCandidates,
     codeChanges,
     terminalLines,
     withEvents,
@@ -55,6 +59,9 @@
   let chat = $state.raw<ChatState>(fixture.state);
   let confirming = $state<SwitchTarget | null>(null);
   let choiceOpen = $state(untrack(() => scenario === "awaiting-choice"));
+  let candidateOpen = $state(untrack(() => scenario === "ambiguous"));
+  let candidatePick = $state(claudeCandidates[0]!.agentSessionId);
+  let connectorDismissed = $state(false);
   let codeShown = $state(false);
   let notice = $state("");
   let dismissed = $state<string[]>([]);
@@ -137,10 +144,9 @@
   );
   const info = $derived<SessionInfo>({
     ...session,
-    title:
-      model.title ?? (agent === "omp" ? "omp · webmux" : "OpenCode · webmux"),
+    title: model.title ?? `${agentMetadata[agent].title} · webmux`,
     cwd: "/home/developer/webmux",
-    cmd: [agent],
+    cmd: [agentMetadata[agent].executable],
     status: chat.requests.length
       ? "waiting"
       : chat.turn.running
@@ -163,6 +169,12 @@
   });
   const notices = $derived.by(() => {
     const list: HybridNotice[] = [];
+    if (chat.switchError)
+      list.push({
+        key: `failure:${chat.switchError}`,
+        tone: "danger",
+        text: chat.switchError,
+      });
     if (notice)
       list.push({ key: `notice:${notice}`, tone: "info", text: notice });
     const change = chat.idChange;
@@ -402,6 +414,15 @@
       else dismissed = [...dismissed, key];
     }}
   />
+  {#if scenario === "connector-recheck" && !connectorDismissed && agentMetadata[agent].connector}
+    <div class="shrink-0 border-b px-4 py-2">
+      <ConnectorInstallHint
+        connector={agentMetadata[agent].connector}
+        detail="安装后会自动重新检测"
+        ondismiss={() => (connectorDismissed = true)}
+      />
+    </div>
+  {/if}
   <TerminalWorkspace
     {codeShown}
     desktop={desktopMedia.current}
@@ -435,7 +456,7 @@
           <div class="terminal-area">
             <pre
               class="absolute inset-0 overflow-auto p-2 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-(--terminal-foreground)"
-              aria-label="终端（示意）">{terminalLines}</pre>
+              aria-label="终端（示意）">{terminalLines(agent)}</pre>
           </div>
           <SoftKeys
             send={() => {}}
@@ -479,6 +500,19 @@
     confirming = null;
     run("tui");
   }}>当前回合会被中断，已输出的内容会保留。</ConfirmDialog
+>
+<ConfirmDialog
+  bind:open={candidateOpen}
+  title="选择要切到聊天的会话"
+  onconfirm={() => {
+    candidateOpen = false;
+    run("acp");
+  }}
+  >无法确定当前会话，请选择要打开的会话。<HybridCandidatePicker
+    candidates={claudeCandidates}
+    bind:picked={candidatePick}
+    label="选择要打开的会话"
+  /></ConfirmDialog
 >
 <SwitchChoiceDialog
   bind:open={choiceOpen}

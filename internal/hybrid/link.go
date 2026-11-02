@@ -175,6 +175,9 @@ type openResult struct {
 // back (D25), or on the first open the values derived from the launch
 // arguments. It runs in a subtask; a failure stops the process.
 func (a *actor) openACP(epoch int, sid, cwd string, resume bool, beforeLoad func() bool) openResult {
+	if a.externalWriterNow(sid) {
+		return openResult{fail: &failure{err: ErrExternalWriter, public: ErrExternalWriter.Error()}}
+	}
 	want := a.reapplyValues()
 	link, init, fail := a.connect(epoch)
 	if fail != nil {

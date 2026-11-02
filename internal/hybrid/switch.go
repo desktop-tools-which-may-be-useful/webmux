@@ -217,7 +217,7 @@ func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
 	case ans.err != nil:
 		a.finish(op, SwitchResult{}, ans.err)
 		return
-	case !ans.listed && (t.sid == "" || a.tracksLocks()):
+	case !ans.listed && (t.sid == "" || a.tracksLocks() || a.tracksRegistry()):
 		reason = ReasonNoSessionID
 	case !ans.listed:
 		reason = ReasonNotListed
@@ -231,6 +231,11 @@ func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
 	}
 	if reason == "" && a.svc.occupied(a.id, t.sid) {
 		reason = ReasonOccupied
+	}
+	if reason == "" && a.externallyHeld(t.sid, true) {
+		a.setEligibility(ReasonOccupied)
+		a.finish(op, SwitchResult{}, ErrExternalWriter)
+		return
 	}
 	if reason != "" {
 		a.setEligibility(reason)

@@ -99,73 +99,80 @@ func noViolations(t *testing.T, store string) {
 // A chat session goes through a restart; it can then be resumed on either
 // side under its ID, with its conversation and recorded options.
 func TestResumeAfterRestart(t *testing.T) {
-	for _, side := range []Side{SideTUI, SideACP} {
-		t.Run(string(side), func(t *testing.T) {
-			h := newHarness(t, 0)
-			in := h.input(omp.Name, SideACP)
-			id := h.create(in).Info().ID
-			plan := "plan"
-			if err := h.svc.SetConfig(ctxT(t), id, ConfigInput{ClientRequestID: rid(), ConfigID: "mode", Value: &plan}); err != nil {
-				t.Fatal(err)
-			}
-			chatTurn(t, h, id, "remember the lighthouse")
-			sid := h.record(id).AgentSessionID
-
-			h.restart()
-			if list := h.manager.List(); len(list) != 0 {
-				t.Fatalf("restart left sessions running: %+v", list)
-			}
-			list := h.recoverable()
-			if len(list) != 1 || list[0].ID != id || list[0].State != StateInterrupted || list[0].Side != SideACP || list[0].InterruptedAt == nil {
-				t.Fatalf("recoverable after restart %+v", list)
-			}
-
-			h.fast()
-			s := h.mustResume(id, ResumeInput{Side: side, Env: in.Env})
-			info := s.Info()
-			if info.Hybrid == nil || info.Hybrid.Side != string(side) || info.Hybrid.State != string(StateActive) || info.Hybrid.AgentSessionID == nil || *info.Hybrid.AgentSessionID != sid {
-				t.Fatalf("resumed hybrid info %+v", info.Hybrid)
-			}
-			rec := h.record(id)
-			if rec.State != StateActive || rec.Side != side || rec.AgentSessionID != sid || rec.InterruptedAt != nil || rec.Activity != "" || rec.PID <= 0 || rec.Process == nil {
-				t.Fatalf("resumed record %+v", rec)
-			}
-			if len(h.recoverable()) != 0 {
-				t.Fatal("resumed session still recoverable")
-			}
-			if strings.Contains(h.file(), "secret-value") {
-				t.Fatal("record file holds an environment value")
-			}
-			switch side {
-			case SideTUI:
-				waitFor(t, "previous conversation in the terminal", func() bool {
-					return strings.Contains(string(s.Buffer()), "> remember the lighthouse")
-				})
-				// The resumed TUI may already have reported idle through OSC 7501;
-				// its process identity, not the startup status, proves it is live.
-				if info.Status == session.StatusExited || s.Identity().PID != rec.PID {
-					t.Fatalf("terminal side: status %s pid %d", info.Status, s.Identity().PID)
-				}
-				h.waitEligible(id)
-				h.mustSwitch(id, SideACP)
-			case SideACP:
-				if users := h.replayedUsers(id); !slices.Contains(users, "remember the lighthouse") {
-					t.Fatalf("replayed users %q", users)
-				}
-				st := h.chatState(id)
-				mode := ""
-				for _, o := range st.Config {
-					if o.ID == "mode" {
-						mode = o.Value
+	for _, profile := range []string{omp.Name, "claude"} {
+		t.Run(profile, func(t *testing.T) {
+			for _, side := range []Side{SideTUI, SideACP} {
+				t.Run(string(side), func(t *testing.T) {
+					h := newHarness(t, 0)
+					in := h.input(omp.Name, SideACP)
+					if profile == "claude" {
+						in = h.claudeInput(SideACP, "")
 					}
-				}
-				if mode != plan || st.Recovery != nil || st.AgentSessionID == nil || *st.AgentSessionID != sid {
-					t.Fatalf("resumed chat: mode %q state %+v", mode, st)
-				}
-				chatTurn(t, h, id, "and after the restart")
-				h.mustSwitch(id, SideTUI)
+					id := h.create(in).Info().ID
+					plan := "plan"
+					if err := h.svc.SetConfig(ctxT(t), id, ConfigInput{ClientRequestID: rid(), ConfigID: "mode", Value: &plan}); err != nil {
+						t.Fatal(err)
+					}
+					chatTurn(t, h, id, "remember the lighthouse")
+					sid := h.record(id).AgentSessionID
+
+					h.restart()
+					if list := h.manager.List(); len(list) != 0 {
+						t.Fatalf("restart left sessions running: %+v", list)
+					}
+					list := h.recoverable()
+					if len(list) != 1 || list[0].ID != id || list[0].State != StateInterrupted || list[0].Side != SideACP || list[0].InterruptedAt == nil {
+						t.Fatalf("recoverable after restart %+v", list)
+					}
+
+					h.fast()
+					s := h.mustResume(id, ResumeInput{Side: side, Env: in.Env})
+					info := s.Info()
+					if info.Hybrid == nil || info.Hybrid.Side != string(side) || info.Hybrid.State != string(StateActive) || info.Hybrid.AgentSessionID == nil || *info.Hybrid.AgentSessionID != sid {
+						t.Fatalf("resumed hybrid info %+v", info.Hybrid)
+					}
+					rec := h.record(id)
+					if rec.State != StateActive || rec.Side != side || rec.AgentSessionID != sid || rec.InterruptedAt != nil || rec.Activity != "" || rec.PID <= 0 || rec.Process == nil {
+						t.Fatalf("resumed record %+v", rec)
+					}
+					if len(h.recoverable()) != 0 {
+						t.Fatal("resumed session still recoverable")
+					}
+					if strings.Contains(h.file(), "secret-value") {
+						t.Fatal("record file holds an environment value")
+					}
+					switch side {
+					case SideTUI:
+						waitFor(t, "previous conversation in the terminal", func() bool {
+							return strings.Contains(string(s.Buffer()), "> remember the lighthouse")
+						})
+						// The resumed TUI may already have reported idle through OSC 7501;
+						// its process identity, not the startup status, proves it is live.
+						if info.Status == session.StatusExited || s.Identity().PID != rec.PID {
+							t.Fatalf("terminal side: status %s pid %d", info.Status, s.Identity().PID)
+						}
+						h.waitEligible(id)
+						h.mustSwitch(id, SideACP)
+					case SideACP:
+						if users := h.replayedUsers(id); !slices.Contains(users, "remember the lighthouse") {
+							t.Fatalf("replayed users %q", users)
+						}
+						st := h.chatState(id)
+						mode := ""
+						for _, o := range st.Config {
+							if o.ID == "mode" {
+								mode = o.Value
+							}
+						}
+						if mode != plan || st.Recovery != nil || st.AgentSessionID == nil || *st.AgentSessionID != sid {
+							t.Fatalf("resumed chat: mode %q state %+v", mode, st)
+						}
+						chatTurn(t, h, id, "and after the restart")
+						h.mustSwitch(id, SideTUI)
+					}
+					noViolations(t, h.store)
+				})
 			}
-			noViolations(t, h.store)
 		})
 	}
 }

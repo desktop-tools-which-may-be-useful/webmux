@@ -858,28 +858,37 @@ func TestProbeConcurrency(t *testing.T) {
 // mid-turn ends the turn as cancelled; the session reconnects and takes
 // prompts again.
 func TestChatAgentKilledMidTurnReconnects(t *testing.T) {
-	h := newHarness(t, 0)
-	h.fast()
-	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=300ms"))
-	id := s.Info().ID
-	pid := h.record(id).PID
-	st := h.follow(id)
-	prompt(t, h, id, "long")
-	st.until("thought", hasKind(EventMessage))
-	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
-		t.Fatal(err)
-	}
-	events := st.until("reconnected", func(events []Event) bool {
-		return slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventMarker && e.Marker.Kind == MarkerReconnected })
-	})
-	end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == EventTurnEnd })
-	if end < 0 || events[end].TurnEnd.StopReason != acp.StopCancelled {
-		t.Fatalf("turn after SIGKILL %v", kinds(events))
-	}
-	waitFor(t, "new agent process", func() bool { p := h.record(id).PID; return p > 0 && p != pid })
-	chatTurn(t, h, id, "after")
-	if rec := h.record(id); rec.State != StateActive {
-		t.Fatalf("record %+v", rec)
+	for _, profile := range []string{omp.Name, "claude"} {
+		t.Run(profile, func(t *testing.T) {
+			h := newHarness(t, 0)
+			h.fast()
+			in := h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=300ms")
+			if profile == "claude" {
+				in = h.claudeInput(SideACP, "")
+				in.Env["FAKEAGENT_TURN_DELAY"] = "300ms"
+			}
+			s := h.create(in)
+			id := s.Info().ID
+			pid := h.record(id).PID
+			st := h.follow(id)
+			prompt(t, h, id, "long")
+			st.until("thought", hasKind(EventMessage))
+			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+				t.Fatal(err)
+			}
+			events := st.until("reconnected", func(events []Event) bool {
+				return slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventMarker && e.Marker.Kind == MarkerReconnected })
+			})
+			end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == EventTurnEnd })
+			if end < 0 || events[end].TurnEnd.StopReason != acp.StopCancelled {
+				t.Fatalf("turn after SIGKILL %v", kinds(events))
+			}
+			waitFor(t, "new agent process", func() bool { p := h.record(id).PID; return p > 0 && p != pid })
+			chatTurn(t, h, id, "after")
+			if rec := h.record(id); rec.State != StateActive {
+				t.Fatalf("record %+v", rec)
+			}
+		})
 	}
 }
 

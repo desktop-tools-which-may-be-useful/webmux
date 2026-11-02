@@ -63,6 +63,25 @@ type LockTracker interface {
 	LockedSessions(paths []string, getenv func(string) string, userHome string) []string
 }
 
+// ProcessFacts are the agent-neutral, in-memory facts needed to validate a
+// process registration record. Start and Domain are opaque, platform-specific
+// values; adapters only compare them with their records.
+type ProcessFacts struct {
+	PID        int
+	Executable string
+	Cwd        string
+	Start      string
+	Domain     string
+}
+
+// ProcessRegistry is an agent whose session IDs and external writers can be
+// discovered from per-process registration records. The lookup callback
+// supplies facts for another PID without exposing process data to clients.
+type ProcessRegistry interface {
+	RegisteredSession(process ProcessFacts, getenv func(string) string, userHome string) (string, bool)
+	ExternallyHeld(sessionID string, current ProcessFacts, lookup func(int) (ProcessFacts, bool), getenv func(string) string, userHome string) bool
+}
+
 // ForceSwitchNoter is an agent that says what forcing a switch while its
 // terminal UI runs a turn loses; others get DefaultForceSwitchNote.
 type ForceSwitchNoter interface {
@@ -126,6 +145,8 @@ const (
 	ArgDirectory
 	// ArgNonInteractive prevents hybrid mode: no interactive UI starts.
 	ArgNonInteractive
+	// ArgSession prevents hybrid mode: the option selects an agent session.
+	ArgSession
 )
 
 // Arity is how many values an option consumes after the option itself.
@@ -136,6 +157,8 @@ const (
 	ArityOne
 	// ArityOptional consumes the next token unless it looks like an option.
 	ArityOptional
+	// ArityVariadic consumes values until the next option.
+	ArityVariadic
 )
 
 // Option is how an agent treats one command-line option.
@@ -170,6 +193,9 @@ type Profile struct {
 	Title string
 	// Executables are the base names the agent runs as; empty means Name.
 	Executables []string
+	// ProcessExecutable optionally recognizes a native process whose name on
+	// disk differs from the launch command, such as a versioned installation.
+	ProcessExecutable func(base string) bool
 	// VerifiedVersion is the newest release measured; older versions only
 	// produce a notice.
 	VerifiedVersion string
@@ -222,6 +248,14 @@ func (p *Profile) RunsAs(base string) bool {
 		return base == p.Name
 	}
 	return slices.Contains(p.Executables, base)
+}
+
+// RunsProcess reports whether a running native process belongs to this agent.
+func (p *Profile) RunsProcess(base string) bool {
+	if p.ProcessExecutable != nil {
+		return p.ProcessExecutable(base)
+	}
+	return p.RunsAs(base)
 }
 
 // SetOf builds a set of names.

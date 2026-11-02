@@ -19,9 +19,16 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repoRoot = resolve(webRoot, "..");
 
 // Hybrid sessions recognise agents by executable name, so the fake agent
-// stands in for all of them (and for the codex-acp connector) under their
-// names.
-const agentNames = ["omp", "opencode", "codex", "codex-acp"];
+// stands in for all of them (and for both third-party ACP connectors) under
+// their names.
+const agentNames = [
+  "omp",
+  "opencode",
+  "codex",
+  "codex-acp",
+  "claude",
+  "claude-agent-acp",
+];
 
 async function executable(path) {
   const resolved = await realpath(path);

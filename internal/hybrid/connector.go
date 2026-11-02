@@ -63,6 +63,9 @@ type acpTools struct {
 func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 	p := a.cmd.Profile
 	tools := acpTools{env: maps.Clone(p.ACPEnv)}
+	if tools.env == nil {
+		tools.env = make(map[string]string)
+	}
 	if p.Connector == nil {
 		return tools, nil
 	}
@@ -134,8 +137,8 @@ func lookupAnswers(out []byte, n int) ([]string, bool) {
 	return answers[len(answers)-n:], true
 }
 
-// agentVersion asks the agent executable for its version: the last field
-// of the first output line ("codex-cli 0.165.0"), empty when it fails.
+// agentVersion asks the agent executable for its version, empty when it
+// fails.
 func (a *actor) agentVersion(ctx context.Context, path string) string {
 	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
 	defer cancel()
@@ -143,12 +146,19 @@ func (a *actor) agentVersion(ctx context.Context, path string) string {
 	if err != nil || code != 0 {
 		return ""
 	}
-	line, _, _ := strings.Cut(string(out), "\n")
-	fields := strings.Fields(line)
-	if len(fields) == 0 {
-		return ""
+	return versionField(string(out))
+}
+
+// versionField is the first version-shaped field of out's first line:
+// "codex-cli 0.165.0" and "2.1.316 (Claude Code)" both name their version.
+func versionField(out string) string {
+	line, _, _ := strings.Cut(out, "\n")
+	for _, field := range strings.Fields(line) {
+		if _, ok := agentprofile.CompareVersions(field, field); ok {
+			return field
+		}
 	}
-	return fields[len(fields)-1]
+	return ""
 }
 
 // startFailure classifies a failed ACP process start: an executable that

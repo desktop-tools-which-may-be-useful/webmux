@@ -2,13 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import ConnectorInstallHint from "../../src/components/ConnectorInstallHint.svelte";
-
-const connector = {
-  executable: "codex-acp",
-  title: "Codex ACP 适配器",
-  installCommand: "npm install -g @agentclientprotocol/codex-acp",
-  docsUrl: "https://github.com/agentclientprotocol/codex-acp",
-};
+import { claudeConnector as connector } from "./chat-fixture";
 
 afterEach(async () => {
   await cleanup();
@@ -22,7 +16,9 @@ test("names the missing connector, copies its install command and links its docs
     .mockResolvedValue(undefined);
   render(ConnectorInstallHint, { connector, detail: "安装后会自动重新检测" });
   await expect
-    .element(page.getByText("未安装 Codex ACP 适配器（codex-acp）"))
+    .element(
+      page.getByText("未安装 Claude Code ACP 适配器（claude-agent-acp）"),
+    )
     .toBeVisible();
   await expect.element(page.getByText("安装后会自动重新检测")).toBeVisible();
   await expect
@@ -44,12 +40,12 @@ test("a custom message replaces the missing text and the close control dismisses
   const ondismiss = vi.fn();
   render(ConnectorInstallHint, {
     connector,
-    message: "聊天端需要另外安装 codex-acp",
+    message: "聊天端需要另外安装 claude-agent-acp",
     tone: "info",
     ondismiss,
   });
   await expect
-    .element(page.getByText("聊天端需要另外安装 codex-acp"))
+    .element(page.getByText("聊天端需要另外安装 claude-agent-acp"))
     .toBeVisible();
   await expect.element(page.getByText(connector.installCommand)).toBeVisible();
   await page.getByRole("button", { name: "关闭安装提示" }).click();

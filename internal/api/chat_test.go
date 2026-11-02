@@ -50,7 +50,7 @@ func fakeAgentPath(t testing.TB, profile string) string {
 		}
 		// A separate file per profile, not a hard link: macOS reports a
 		// hard-linked executable under either name, breaking the root check.
-		for _, name := range []string{omp.Name, opencode.Name, codex.Name, "codex-acp"} {
+		for _, name := range []string{omp.Name, opencode.Name, codex.Name, "codex-acp", "claude", "claude-agent-acp"} {
 			build := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent")
 			build.Env = fakeAgent.env
 			if out, err := build.CombinedOutput(); err != nil {
@@ -69,7 +69,8 @@ func fakeAgentPath(t testing.TB, profile string) string {
 // FAKEAGENT_* settings.
 func fakeChat(t testing.TB, hybrids *hybrid.Service, cwd, profile string, env ...string) string {
 	t.Helper()
-	vars := map[string]string{"FAKEAGENT_STORE": t.TempDir(), "FAKEAGENT_PROFILE": profile, "FAKEAGENT_TURN_DELAY": "5ms"}
+	exe := fakeAgentPath(t, profile)
+	vars := map[string]string{"FAKEAGENT_STORE": t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms", "PATH": filepath.Dir(exe) + ":/usr/bin:/bin"}
 	for _, kv := range env {
 		k, v, _ := strings.Cut(kv, "=")
 		vars[k] = v
@@ -77,7 +78,7 @@ func fakeChat(t testing.TB, hybrids *hybrid.Service, cwd, profile string, env ..
 	ctx, cancel := context.WithTimeout(context.Background(), chatTimeout)
 	defer cancel()
 	s, err := hybrids.Create(ctx, hybrid.CreateInput{
-		Cwd: cwd, Name: "chat", ConfigID: "cfgtest01", Cmd: []string{fakeAgentPath(t, profile)}, Env: vars, StartSide: hybrid.SideACP,
+		Cwd: cwd, Name: "chat", ConfigID: "cfgtest01", Cmd: []string{exe}, Env: vars, StartSide: hybrid.SideACP,
 	})
 	if err != nil {
 		t.Fatalf("create chat session: %v", err)
@@ -272,56 +273,60 @@ func TestChatSocketAuthOriginAndMissingSessions(t *testing.T) {
 }
 
 func TestChatSocketResumeSendsOnlyTail(t *testing.T) {
-	h := newHybridAPI(t, nil)
-	server := h.serve()
-	id := fakeChat(t, h.hybrids, h.cwd, omp.Name)
-	watch := observe(t, h.hybrids, id)
-	watch.until("start events", func(o *observer) bool { return len(o.state.Commands) > 0 && len(o.state.Config) > 0 })
-	path := "/ws/s/" + id + "/chat"
+	for _, profile := range []string{omp.Name, "claude"} {
+		t.Run(profile, func(t *testing.T) {
+			h := newHybridAPI(t, nil)
+			server := h.serve()
+			id := fakeChat(t, h.hybrids, h.cwd, profile)
+			watch := observe(t, h.hybrids, id)
+			watch.until("start events", func(o *observer) bool { return len(o.state.Commands) > 0 && len(o.state.Config) > 0 })
+			path := "/ws/s/" + id + "/chat"
 
-	first, _, err := dialChat(t, server, path, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot := readChat(t, first)
-	backlog := readChat(t, first)
-	if snapshot.Type != contract.ChatFrameSnapshot || backlog.Type != contract.ChatFrameEvents || len(backlog.Items) == 0 {
-		t.Fatalf("first connection %+v %+v", snapshot, backlog)
-	}
-	last := backlog.Items[len(backlog.Items)-1].Seq
-	if last != snapshot.Next-1 || backlog.From != snapshot.From {
-		t.Fatalf("backlog %d..%d, snapshot %+v", backlog.From, last, snapshot)
-	}
-	_ = first.Close(websocket.StatusNormalClosure, "")
+			first, _, err := dialChat(t, server, path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot := readChat(t, first)
+			backlog := readChat(t, first)
+			if snapshot.Type != contract.ChatFrameSnapshot || backlog.Type != contract.ChatFrameEvents || len(backlog.Items) == 0 {
+				t.Fatalf("first connection %+v %+v", snapshot, backlog)
+			}
+			last := backlog.Items[len(backlog.Items)-1].Seq
+			if last != snapshot.Next-1 || backlog.From != snapshot.From {
+				t.Fatalf("backlog %d..%d, snapshot %+v", backlog.From, last, snapshot)
+			}
+			_ = first.Close(websocket.StatusNormalClosure, "")
 
-	h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "while away"}, 200)
-	watch.until("turn end", func(o *observer) bool { return o.count(hybrid.EventTurnEnd) == 1 })
+			h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "while away"}, 200)
+			watch.until("turn end", func(o *observer) bool { return o.count(hybrid.EventTurnEnd) == 1 })
 
-	again, _, err := dialChat(t, server, fmt.Sprintf("%s?generation=%s&seq=%d", path, snapshot.Generation, last), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resumed := readChat(t, again)
-	tail := readChat(t, again)
-	if resumed.Reset || resumed.Generation != snapshot.Generation || tail.From != last+1 || len(tail.Items) == 0 || tail.Items[0].Seq != last+1 {
-		t.Fatalf("resume snapshot %+v tail from %d", resumed, tail.From)
-	}
-	kinds := make([]string, len(tail.Items))
-	for i, e := range tail.Items {
-		kinds[i] = e.Kind
-	}
-	if kinds[0] != contract.ChatEventTurnStart || !strings.Contains(strings.Join(kinds, " "), contract.ChatEventTurnEnd) {
-		t.Fatalf("tail kinds %v", kinds)
-	}
+			again, _, err := dialChat(t, server, fmt.Sprintf("%s?generation=%s&seq=%d", path, snapshot.Generation, last), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resumed := readChat(t, again)
+			tail := readChat(t, again)
+			if resumed.Reset || resumed.Generation != snapshot.Generation || tail.From != last+1 || len(tail.Items) == 0 || tail.Items[0].Seq != last+1 {
+				t.Fatalf("resume snapshot %+v tail from %d", resumed, tail.From)
+			}
+			kinds := make([]string, len(tail.Items))
+			for i, e := range tail.Items {
+				kinds[i] = e.Kind
+			}
+			if kinds[0] != contract.ChatEventTurnStart || !strings.Contains(strings.Join(kinds, " "), contract.ChatEventTurnEnd) {
+				t.Fatalf("tail kinds %v", kinds)
+			}
 
-	stale, _, err := dialChat(t, server, path+"?generation=0123456789abcdef&seq=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reset := readChat(t, stale)
-	replay := readChat(t, stale)
-	if !reset.Reset || replay.Items[0].Seq != reset.From {
-		t.Fatalf("stale resume %+v replay from %d", reset, replay.From)
+			stale, _, err := dialChat(t, server, path+"?generation=0123456789abcdef&seq=1", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reset := readChat(t, stale)
+			replay := readChat(t, stale)
+			if !reset.Reset || replay.Items[0].Seq != reset.From {
+				t.Fatalf("stale resume %+v replay from %d", reset, replay.From)
+			}
+		})
 	}
 }
 

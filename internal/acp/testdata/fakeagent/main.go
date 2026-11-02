@@ -1,5 +1,6 @@
-// Command fakeagent is a scriptable stand-in for omp, OpenCode, Codex CLI and
-// the codex-acp connector in tests and E2E. Build it with
+// Command fakeagent is a scriptable stand-in for omp, OpenCode, Codex CLI,
+// Claude Code and the codex-acp/claude-agent-acp connectors in tests and E2E.
+// Build it with
 //
 //	go build -o <dir>/fakeagent ./internal/acp/testdata/fakeagent
 //
@@ -9,9 +10,10 @@
 //	fakeagent [flags] acp   ACP agent on stdio
 //
 // The profile comes from FAKEAGENT_PROFILE, else from the executable name:
-// "opencode" is OpenCode, "codex" and "codex-acp" are Codex, anything else
-// omp. Named "codex-acp" it runs in ACP mode without arguments, like the
-// connector; "codex --version" (or -V) prints "codex-cli <version>" and exits.
+// "opencode" is OpenCode, "codex" and "codex-acp" are Codex, "claude" and
+// "claude-agent-acp" are Claude Code, anything else omp. Named either
+// connector it runs in ACP mode without arguments; "codex --version" (or -V)
+// and "claude --version" print their respective versions and exit.
 //
 // All modes share one session store (--store or FAKEAGENT_STORE), so a
 // session written in one mode can be resumed or loaded in the other.
@@ -37,9 +39,16 @@
 // any global flags) opens a fresh blank thread's lock and then ID's. A
 // further positional argument is a prompt submitted at start.
 //
+// The Claude TUI queries OSC 7501, waits for the terminal's answer, then
+// reports idle/app=claude-code without a startup working state. Turns report
+// working/done, one Esc interrupts to idle, and exit clears the root record.
+// It writes <CLAUDE_CONFIG_DIR>/sessions/<pid>.json before the first prompt,
+// updates it for /new, retains the requested ID for --resume and deletes it on
+// exit. Multiple Claude TUIs may register the same ID for occupancy tests.
+//
 // ACP mode implements initialize, session/new|load|resume|list|close|
-// prompt|cancel|set_config_option, $/cancel_request and, for omp and Codex,
-// _session/steering. A turn sends a thought, a tool call (with a
+// prompt|cancel|set_config_option, $/cancel_request and, for omp, Codex and
+// Claude, _session/steering. A turn sends a thought, a tool call (with a
 // permission request when enabled), optionally a form elicitation, a
 // two-chunk agent message and a usage update. Prompt text containing
 // /plan, /notice, /compact, /title, /unknown or /fs adds a plan, notice,
@@ -58,6 +67,13 @@
 // another live process holds fails with -32600 and data.reason
 // "thread_active_writer". At start it logs "env CODEX_PATH=<v>
 // NO_BROWSER=<v>" (each only when set, "-" when neither is) to events.log.
+//
+// The Claude ACP side mimics claude-agent-acp 0.99.1: ACP v1 with list, load,
+// resume, image and embedded-resource prompts, steering and model/effort/mode
+// options. Cold load/resume resets model and effort but restores mode. With
+// FAKEAGENT_MODE_FALLBACK=1, requesting auto publishes a notice and actually
+// selects acceptEdits. Authentication commands are absent. At start it logs
+// "env CLAUDE_CODE_EXECUTABLE=<v>" ("-" when unset) to events.log.
 //
 // Flags (environment variable in brackets):
 //
@@ -80,7 +96,10 @@
 //	--protocol-version N   initialize answer, default 1 [FAKEAGENT_PROTOCOL_VERSION]
 //	--stdout-noise TEXT    ACP mode: print TEXT as a plain stdout line first [FAKEAGENT_STDOUT_NOISE]
 //	(environment only)     Codex --version output, default 0.166.0 [FAKEAGENT_CODEX_VERSION]
+//	(environment only)     Claude --version output, default 2.1.316 [FAKEAGENT_CLAUDE_VERSION]
 //	(environment only)     codex-acp agentInfo.version, default 2.5.0 [FAKEAGENT_CONNECTOR_VERSION]
+//	                       (claude-agent-acp default 0.99.1)
+//	(environment only)     fall back from auto to acceptEdits [FAKEAGENT_MODE_FALLBACK=1]
 //
 // For omp and opencode, agent flags such as --approval-mode, --yolo,
 // --auto-approve, --auto, --config, --model, --thinking, --standalone,
@@ -103,6 +122,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -115,8 +135,9 @@ type config struct {
 	resume           string
 	session          string
 	prompt           string // Codex TUI: submitted at start
-	version          bool   // Codex: print the version and exit
+	version          bool   // Codex/Claude: print the version and exit
 	codexVersion     string
+	claudeVersion    string
 	connectorVersion string
 	turnDelay        time.Duration
 	startupDelay     time.Duration
@@ -129,20 +150,32 @@ type config struct {
 	noResume         bool
 	promptImage      bool
 	embeddedContext  bool
+	modeFallback     bool
 	protocolVersion  int
 	noise            string
 }
 
-const connectorName = "codex-acp"
+const (
+	connectorName       = "codex-acp"
+	claudeConnectorName = "claude-agent-acp"
+)
 
 func main() {
+	if filepath.Base(os.Args[0]) == "node" {
+		runNodeLauncher()
+		return
+	}
 	cfg, acpMode, err := parseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakeagent:", err)
 		os.Exit(2)
 	}
 	if cfg.version {
-		fmt.Println("codex-cli " + cfg.codexVersion)
+		if cfg.profile == "claudecode" {
+			fmt.Println(cfg.claudeVersion + " (Claude Code)")
+		} else {
+			fmt.Println("codex-cli " + cfg.codexVersion)
+		}
 		return
 	}
 	mode := "tui"
@@ -165,15 +198,38 @@ func main() {
 	}
 }
 
+// runNodeLauncher mimics an npm native-binary launcher. The script named in
+// os.Args[1] is only a marker; the isolated test points at its native fake
+// with FAKEAGENT_NATIVE so process identity covers a node root and Claude child.
+func runNodeLauncher() {
+	native := os.Getenv("FAKEAGENT_NATIVE")
+	if native == "" {
+		fmt.Fprintln(os.Stderr, "fakeagent: FAKEAGENT_NATIVE is required for node")
+		os.Exit(2)
+	}
+	cmd := exec.Command(native, os.Args[2:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Run(); err != nil {
+		if exit, ok := err.(*exec.ExitError); ok {
+			os.Exit(exit.ExitCode())
+		}
+		fmt.Fprintln(os.Stderr, "fakeagent: node launcher:", err)
+		os.Exit(1)
+	}
+}
+
 // profileFromName lets the binary stand in for a real agent by name: copied
 // or linked as "opencode" it mimics OpenCode, as "codex" or "codex-acp"
-// Codex, otherwise omp.
+// Codex, as "claude" or "claude-agent-acp" Claude Code, otherwise omp.
 func profileFromName(argv0 string) string {
 	switch filepath.Base(argv0) {
 	case "opencode":
 		return "opencode"
 	case "codex", connectorName:
 		return "codex"
+	case "claude", claudeConnectorName:
+		return "claudecode"
 	}
 	return "omp"
 }
@@ -189,8 +245,10 @@ func parseArgs(args []string) (config, bool, error) {
 		noResume:         os.Getenv("FAKEAGENT_NO_RESUME") == "1",
 		promptImage:      os.Getenv("FAKEAGENT_PROMPT_IMAGE") == "1",
 		embeddedContext:  os.Getenv("FAKEAGENT_EMBEDDED_CONTEXT") == "1",
+		modeFallback:     os.Getenv("FAKEAGENT_MODE_FALLBACK") == "1",
 		noise:            os.Getenv("FAKEAGENT_STDOUT_NOISE"),
 		codexVersion:     envOr("FAKEAGENT_CODEX_VERSION", "0.166.0"),
+		claudeVersion:    envOr("FAKEAGENT_CLAUDE_VERSION", "2.1.316"),
 		connectorVersion: envOr("FAKEAGENT_CONNECTOR_VERSION", "2.5.0"),
 		turnDelay:        20 * time.Millisecond,
 		protocolVersion:  1,
@@ -232,6 +290,7 @@ func parseArgs(args []string) (config, bool, error) {
 	fs.IntVar(&cfg.protocolVersion, "protocol-version", cfg.protocolVersion, "")
 	fs.StringVar(&cfg.noise, "stdout-noise", cfg.noise, "")
 	codex := cfg.profile == "codex"
+	claude := cfg.profile == "claudecode"
 	if codex {
 		// Codex CLI flags the hybrid profile keeps or passes through.
 		for _, name := range []string{"no-daemon", "search", "dangerously-bypass-approvals-and-sandbox", "approve-for-me"} {
@@ -242,6 +301,23 @@ func parseArgs(args []string) (config, bool, error) {
 		}
 		fs.BoolVar(&cfg.version, "version", false, "")
 		fs.BoolVar(&cfg.version, "V", false, "")
+	} else if claude {
+		fs.StringVar(&cfg.resume, "resume", "", "")
+		fs.StringVar(&cfg.resume, "r", "", "")
+		fs.BoolVar(&cfg.version, "version", false, "")
+		fs.BoolVar(&cfg.version, "v", false, "")
+		for _, name := range []string{
+			"model", "effort", "fallback-model", "permission-mode", "settings",
+			"setting-sources", "system-prompt", "system-prompt-file",
+			"append-system-prompt", "append-system-prompt-file", "agents", "agent",
+			"plugin-dir", "add-dir", "mcp-config", "allowedTools", "allowed-tools",
+			"disallowedTools", "disallowed-tools", "tools", "betas",
+		} {
+			fs.String(name, "", "")
+		}
+		for _, name := range []string{"dangerously-skip-permissions", "strict-mcp-config", "bare"} {
+			fs.Bool(name, false, "")
+		}
 	} else {
 		fs.StringVar(&cfg.profile, "profile", cfg.profile, "")
 		fs.StringVar(&cfg.resume, "resume", "", "")
@@ -262,8 +338,8 @@ func parseArgs(args []string) (config, bool, error) {
 		fs.String("thinking", "", "")
 	}
 
-	// codex-acp takes no arguments: its name alone selects ACP mode.
-	acpMode := filepath.Base(os.Args[0]) == connectorName
+	// Third-party connectors take no arguments: their names select ACP mode.
+	acpMode := filepath.Base(os.Args[0]) == connectorName || filepath.Base(os.Args[0]) == claudeConnectorName
 	positional := 0
 	resumeNext := false
 	for {
@@ -297,8 +373,11 @@ func parseArgs(args []string) (config, bool, error) {
 	if cfg.store == "" {
 		return cfg, false, fmt.Errorf("--store or FAKEAGENT_STORE is required")
 	}
-	if cfg.profile != "omp" && cfg.profile != "opencode" && cfg.profile != "codex" {
+	if cfg.profile != "omp" && cfg.profile != "opencode" && cfg.profile != "codex" && cfg.profile != "claudecode" {
 		return cfg, false, fmt.Errorf("unknown profile %q", cfg.profile)
+	}
+	if cfg.profile == "claudecode" && os.Getenv("FAKEAGENT_CONNECTOR_VERSION") == "" {
+		cfg.connectorVersion = "0.99.1"
 	}
 	if yolo || autoApprove || auto || approval == "yolo" {
 		cfg.permission = false

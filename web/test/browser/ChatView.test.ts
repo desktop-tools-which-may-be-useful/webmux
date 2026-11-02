@@ -405,11 +405,12 @@ test("steering is offered only while a turn runs on an agent that takes it", asy
   ]);
 });
 
-test("typing / lists the agent's commands and filters them", async () => {
+test("typing / lists and filters published commands without authentication flows", async () => {
   const socket = await open();
   socket.frame(
     snapshot(
       chatState({
+        agent: "claudecode",
         commands: [
           { name: "compact", description: "压缩上下文" },
           { name: "review", description: "审阅当前改动", hint: "文件" },
@@ -423,6 +424,10 @@ test("typing / lists the agent's commands and filters them", async () => {
   await input.fill("/");
   await expect.element(menu).toBeVisible();
   expect(menu.getByRole("option").elements()).toHaveLength(3);
+  // The profile removes these before publication; there is no other auth UI.
+  expect(
+    menu.getByRole("option", { name: /^\/(login|logout)/ }).elements(),
+  ).toEqual([]);
 
   await input.fill("/re");
   await expect
@@ -505,11 +510,12 @@ test("the permission select sets the session's mode and shows the server's", asy
   expect(commands()).toHaveLength(2);
 });
 
-test("config options are icons with their full name and value on demand", async () => {
+test("config options expose the actual fallback mode and adapter notice", async () => {
   const socket = await open();
   socket.frame(
     snapshot(
       chatState({
+        agent: "claudecode",
         config: [
           {
             id: "model",
@@ -520,6 +526,17 @@ test("config options are icons with their full name and value on demand", async 
             options: [
               { value: "fast", name: "Fast" },
               { value: "smart", name: "Smart" },
+            ],
+          },
+          {
+            id: "mode",
+            name: "模式",
+            category: "mode",
+            type: "select",
+            value: "acceptEdits",
+            options: [
+              { value: "auto", name: "auto" },
+              { value: "acceptEdits", name: "acceptEdits" },
             ],
           },
           {
@@ -534,8 +551,30 @@ test("config options are icons with their full name and value on demand", async 
       }),
     ),
   );
+  socket.frame({
+    type: "events",
+    generation: "g1",
+    items: events({
+      kind: "notice",
+      notice: {
+        level: "warning",
+        text: "当前模型不支持 auto，实际权限模式已回退到 acceptEdits",
+      },
+    }),
+  });
   const model = page.getByRole("button", { name: "模型：Smart" });
   await expect.element(model).toHaveAttribute("title", "模型：Smart");
+  await expect
+    .element(page.getByRole("button", { name: "模式：acceptEdits" }))
+    .toBeVisible();
+  expect(page.getByRole("button", { name: "模式：auto" }).elements()).toEqual(
+    [],
+  );
+  await expect
+    .element(
+      page.getByText("当前模型不支持 auto，实际权限模式已回退到 acceptEdits"),
+    )
+    .toBeVisible();
   // The control is icon-only; the name and value stay in its label/tooltip.
   expect(model.element().textContent?.trim()).toBe("");
   await expect

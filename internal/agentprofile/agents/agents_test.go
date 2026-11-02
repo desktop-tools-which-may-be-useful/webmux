@@ -10,6 +10,7 @@ import (
 
 	. "github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
+	"github.com/rainchan/webmux/internal/agentprofile/claudecode"
 	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/agentprofile/opencode"
@@ -18,9 +19,10 @@ import (
 var registry = agents.Default()
 
 const (
-	OMP      = omp.Name
-	OpenCode = opencode.Name
-	Codex    = codex.Name
+	OMP        = omp.Name
+	OpenCode   = opencode.Name
+	Codex      = codex.Name
+	ClaudeCode = claudecode.Name
 )
 
 var wrapped = func(args ...string) []string {
@@ -37,13 +39,14 @@ func TestCheck(t *testing.T) {
 	}{
 		{name: "preset bashrc omp", argv: wrapped("omp"), agent: OMP},
 		{name: "preset bashrc opencode", argv: wrapped("opencode"), agent: OpenCode},
+		{name: "preset bashrc claude", argv: wrapped("claude", "--dangerously-skip-permissions"), agent: ClaudeCode},
 		{name: "direct path", argv: []string{"/usr/local/bin/omp", "--model", "haiku"}, agent: OMP},
 		{name: "omp profile passes through", argv: []string{"omp", "--profile", "work"}, agent: OMP},
 		{name: "custom shell wrapper", argv: []string{"sh", "-c", "omp"}, reason: ReasonUnsupportedForm},
 		{name: "env prefix", argv: []string{"env", "A=1", "opencode"}, reason: ReasonUnsupportedForm},
 		{name: "other bashrc script", argv: []string{"bash", "-ic", "exec omp", "webmux"}, reason: ReasonUnsupportedForm},
 		{name: "plain shell", argv: []string{"/bin/bash", "-l"}, reason: ReasonUnknownAgent},
-		{name: "other agent wrapped", argv: wrapped("claude"), reason: ReasonUnknownAgent},
+		{name: "other agent wrapped", argv: wrapped("gemini"), reason: ReasonUnknownAgent},
 		{name: "empty", argv: nil, reason: ReasonUnknownAgent},
 		{name: "opencode directory", argv: []string{"opencode", "/home/u/proj"}, reason: ReasonDirectoryArg, arg: "/home/u/proj"},
 		{name: "opencode server", argv: []string{"opencode", "--server", "http://x"}, reason: ReasonSessionStore, arg: "--server"},
@@ -66,6 +69,14 @@ func TestCheck(t *testing.T) {
 		{name: "codex remote", argv: []string{"codex", "--remote", "ws://h:1"}, reason: ReasonSessionStore, arg: "--remote"},
 		{name: "codex cd", argv: []string{"codex", "-C", "/srv"}, reason: ReasonDirectoryArg, arg: "-C"},
 		{name: "codex worktree", argv: []string{"codex", "--worktree"}, reason: ReasonDirectoryArg, arg: "--worktree"},
+		{name: "claude resume", argv: []string{"claude", "--resume", "01a"}, reason: ReasonSessionArg, arg: "--resume"},
+		{name: "claude continue inline", argv: []string{"claude", "--continue=01a"}, reason: ReasonSessionArg, arg: "--continue"},
+		{name: "claude attach", argv: []string{"claude", "attach", "01a"}, reason: ReasonSessionArg, arg: "attach"},
+		{name: "claude no persistence", argv: []string{"claude", "--no-session-persistence"}, reason: ReasonSessionStore, arg: "--no-session-persistence"},
+		{name: "claude worktree", argv: []string{"claude", "--worktree=feature"}, reason: ReasonDirectoryArg, arg: "--worktree"},
+		{name: "claude print", argv: []string{"claude", "-p", "总结改动"}, reason: ReasonNonInteractive, arg: "-p"},
+		{name: "claude subcommand", argv: []string{"claude", "agents", "list"}, reason: ReasonNonInteractive, arg: "agents"},
+		{name: "claude bare remains interactive", argv: []string{"claude", "--bare"}, agent: ClaudeCode},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,6 +84,9 @@ func TestCheck(t *testing.T) {
 			want := Support{Supported: tt.agent != "", Agent: tt.agent, Reason: tt.reason, Agents: registry.Titles()}
 			if tt.agent == Codex {
 				want.Connector = codex.Agent.Profile().Connector
+			}
+			if tt.agent == ClaudeCode {
+				want.Connector = claudecode.Agent.Profile().Connector
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("Check(%q) = %+v, want %+v", tt.argv, got, want)
@@ -283,7 +297,13 @@ func TestIdentify(t *testing.T) {
 			want: Identity{Agent: Codex, Cwd: "/p"},
 			ok:   true,
 		},
-		{name: "unknown", in: Signals{ProgramApp: "claude-code", WarpSessionID: "x"}},
+		{
+			name: "claude names no session in its signals",
+			in:   Signals{ProgramApp: "claude-code", RootCwd: "/p"},
+			want: Identity{Agent: ClaudeCode, Cwd: "/p"},
+			ok:   true,
+		},
+		{name: "unknown", in: Signals{ProgramApp: "other-agent", WarpSessionID: "x"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

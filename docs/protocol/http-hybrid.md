@@ -16,7 +16,7 @@
 | `phase`          | 切换中的步骤：`interrupting`、`awaiting_choice`、`cancelling`、`stopping`、`starting`、`loading`、`rolling_back`；不在切换中时省略 |
 | `dormant`        | 聊天端空闲休眠，agent 进程已结束                                                                                                   |
 | `state`          | `active`、`closed` 或 `interrupted`；首页运行中分组只显示 `active`                                                                 |
-| `agent`          | 档案名：`opencode`、`omp` 或 `codex`                                                                                               |
+| `agent`          | 档案名：`opencode`、`omp`、`codex` 或 `claudecode`                                                                                 |
 | `agentSessionId` | agent 自己的会话 ID；尚未得知时为 `null`                                                                                           |
 
 会话在聊天端时，`status`、`attention`（来源 `agent`）与 `preview`（最新 agent 消息前三行）来自聊天端的回合状态；`cmd` 为启动配置的命令。
@@ -48,7 +48,23 @@
 
 聊天端打开会话时 Codex 报告会话正被其他 Codex 客户端使用（`thread_active_writer`），恢复返回 409 `occupied_external`，切到聊天则回到终端端并以同样原因失败。
 
-核对通过后，恢复到终端端在 PTY 中执行档案生成的恢复命令；恢复到聊天端启动 ACP 进程并 `session/load`，再按档案补回记录中的配置项取值。成功后记录改为 `active`；中断时丢失过排队消息的，聊天状态的 `queueLost` 为丢失条数。恢复失败时记录保持原样。
+Claude Code 使用 `<CLAUDE_CONFIG_DIR>/sessions/<pid>.json` 注册记录取得 TUI 当前会话 ID；未设置配置目录时读取 `~/.claude`，不解析 transcript JSONL。原生进程使用根 PID，允许的 `node` 启动器使用其唯一直接 Claude 子进程 PID。
+
+采用记录前验证记录内外 PID、UUID、规范化 cwd、进程启动标识与 PID domain。Linux 的 `procStart` 是 `/proc/<pid>/stat` 第 22 字段的十进制 ticks，`pidDomain` 为 `linux:<machine-id>:<pid-namespace>`。
+
+注册记录按既有身份观察节奏重读，以跟踪 `/new` 与 `/resume`。记录不可用或验证失败时退回同一 cwd、本次 TUI 启动后更新的 `session/list` 候选：单候选采用，多候选返回 409 `session_ambiguous`，零候选保持不可切换。
+
+即使注册记录已有 UUID，首条消息前 `session/list` 尚无可加载会话时仍返回 `no_session_id` 对应的资格原因，不尝试 `session/load`。
+
+同一配置目录的有效注册记录还用于尽力检测外部 Claude 写者，排除当前进程、已退出进程与启动标识不匹配的记录；命中返回 409 `occupied_external`。来源不可读时仍保留 WebMux 内部占用检测，但不保证发现所有外部客户端。
+
+进程事实与注册记录只用于服务端资格判定。读取频率、单条大小与扫描条目有界；注册路径、PID、启动标识、记录正文和凭据不进入 REST/WebSocket 负载、混合记录或日志，普通会话不读取 Claude 注册记录。
+
+核对通过后，恢复到终端端在 PTY 中执行档案生成的恢复命令（Claude Code 为 `--resume <id>`）；恢复到聊天端启动 ACP 进程并 `session/load` 或支持的 `session/resume`，再按档案补回记录中的配置项取值。
+
+Claude Code 在两种冷恢复后都重应用 `model` 与 `effort`。`mode` 采用连接器从 transcript 恢复的实际值，不用旧 argv 覆盖；运行条件导致模式回退时以下发的实际配置与通知为准。
+
+成功后记录改为 `active`；中断时丢失过排队消息的，聊天状态的 `queueLost` 为丢失条数。恢复失败时记录保持原样。
 
 ## 启动配置
 
@@ -58,9 +74,13 @@
 
 - `reason` 取值：`unknown_agent`、`unsupported_form`、`session_store`、`directory_arg`、`non_interactive`、`session_arg`。
 - `supportedAgents`：注册表中全部受支持 agent 的显示名（总是数组），用于原因与说明文案，前端不写死 agent 列表。
-- `connector` 只在档案需要第三方 ACP 连接器时出现，来自档案，不表示已安装；Codex 为 `{executable: "codex-acp", title, installCommand, docsUrl}`。
+- `connector` 只在档案需要第三方 ACP 连接器时出现，来自档案，不表示已安装；Codex 为 `{executable: "codex-acp", title, installCommand, docsUrl}`，Claude Code 为同一形状且 `executable: "claude-agent-acp"`，安装命令为 `npm install -g @agentclientprotocol/claude-agent-acp`。
 
 `launch-configs.json` 保持 v2，`hybrid` 为 `false` 时不写入。
+
+Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固定请求 ACP v1。未显式配置时，服务端注入 `CLAUDE_CODE_EXECUTABLE` 为 TUI 实际 `claude` 的绝对路径；两端复用同一服务用户、`HOME`、`CLAUDE_CONFIG_DIR` 与已有认证，不另传或记录凭据。
+
+连接器要求 Node.js 22+；安装命令跟随 `latest`，实测版本 0.99.1 与 Claude Code 2.1.316 只用于版本提示，不构成未来版本兼容保证。聊天命令隐藏 `login` 与 `logout`，认证失败仍走 `auth_required`。
 
 ## 聊天通道 `GET /ws/s/{id}/chat`
 
@@ -69,11 +89,11 @@
 - `snapshot`：首帧。`state` 为完整聊天状态，`generation`、`from`（日志中最早的序号）、`next`；`reset: true` 表示所给位置已不在日志中，客户端须丢弃时间线；`truncated: true` 表示更早的事件已按字节上限丢弃。
 - `events`：`{generation, from, items}`，snapshot 之后立即发送一帧补发（可为空），之后为实时增量。
 - `state`：完整替换聊天状态（所在端、阶段、资格与原因、回合、待答复请求、配置项、命令、计划、用量、队列、是否可插话、`authRequired`、`promptCapabilities`、`permissionMode`、`forceSwitchNote`、`idChange`、`queueLost` 等）。其中几个字段：
-  - `forceSwitchNote`：TUI 回合未停下时强制切换会损失什么，由该 agent 的适配器提供。
+  - `forceSwitchNote`：TUI 回合未停下时强制切换会损失什么，由该 agent 的适配器提供。Claude Code 明确 `session/cancel` 后后台 Bash 或子任务可能仍存活；强制切换终止连接器并等待受管后代退出，不保证任意自行 daemonize 的进程。
   - `promptCapabilities`：`{image, embeddedContext}`，来自 ACP `initialize`，连接断开或休眠时复位为 `false`。
   - `permissionMode`：`ask` 或 `auto`，见下文。
   - `eligibility`：`{available, reason?, connector?}`；`reason` 为 `connector_missing` 时 `connector` 给出未安装的连接器。
-  - `outdated`：低于已验证版本的程序 `[{name, version, verified}]`，Codex 会分别列出 Codex CLI 与 codex-acp。
+  - `outdated`：低于已验证版本的程序 `[{name, version, verified}]`，Codex 会分别列出 Codex CLI 与 codex-acp，Claude Code 会分别列出 `claude` 与 claude-agent-acp。
   - `connectorMissing`：聊天端因连接器未安装而无法启动（唤醒、重连、回滚）时给出连接器，安装后成功连接即清除。
 
 关闭码：`4404` 会话不存在或不是混合会话；`4408` 客户端过慢或写超时，可重连；`1013` 日志被重置，重连后从新代际开始；`4410` 会话已结束。
@@ -105,7 +125,11 @@
 | PUT    | `/api/sessions/{id}/chat/config/{configId}`    | 选择类 `{value}`、布尔类 `{enabled}`，经 `session/set_config_option` 生效并记录，204                                                                                                         |
 | PUT    | `/api/sessions/{id}/chat/permission-mode`      | `{clientRequestId, mode}`，`mode` 为 `ask` 或 `auto`（其他值 400）；两端均可设置，切换中返回 409 `switching`，204                                                                            |
 
-`text` 不超过 64 KiB；有附件时可以只发附件。会话处于休眠时，命令先唤醒 agent 再执行。回合以 `cancelled`、错误、`refusal` 或 `auth_required` 结束时，非空队列暂停。插话只在档案声明、agent 在 `initialize` 中声明支持且有回合运行时可用。
+`text` 不超过 64 KiB；有附件时可以只发附件。会话处于休眠时，命令先唤醒 agent 再执行。回合以 `cancelled`、错误、`refusal` 或 `auth_required` 结束时，非空队列暂停。
+
+插话只在档案声明、agent 在 `initialize` 中声明支持且有回合运行时可用；omp、Codex 与 Claude Code 的档案声明该能力。
+
+Claude 的 `session/cancel` 只结束当前 ACP 回合，不表示后台任务或整个进程树已清理。
 
 附件只能是本会话 `POST /api/sessions/{id}/upload` 存入临时文件夹 `uploads/` 的文件：
 
@@ -133,12 +157,12 @@ agent 声明 `promptCapabilities.image` 时图片以 `image` 块（base64 与原
 - 当前状态不允许：`switching`（切换进行中）、`wrong_side`（不在聊天端）。
 - 不具备混合资格：`not_eligible`，`eligibility` 为 `unknown_agent`、`not_root`、`no_session_id`、`not_listed`、`occupied` 或 `checking`。
 - 档案的第三方 ACP 连接器未安装：`connector_missing`，`connector` 为 `{executable, title, installCommand, docsUrl}`；新建（从聊天开始）、切到聊天、恢复到聊天都可能返回，此时没有启动任何 ACP 进程。
-- 无法确定终端正在使用的 Codex 会话：`session_ambiguous`，`candidates` 为本次 TUI 启动后更新过的会话，带 `agentSessionId` 重新切换。
-- 会话被 webmux 之外的 Codex 客户端占用：`occupied_external`。
+- 无法确定终端正在使用的 Codex 或 Claude Code 会话：`session_ambiguous`，`candidates` 为本次 TUI 启动后更新过的会话，带 `agentSessionId` 重新切换。
+- 会话被 webmux 之外的 Codex 客户端或经有效注册记录识别的 Claude Code 进程占用：`occupied_external`。
 - 对象已变化：`answered`（请求已被其他设备答复）、`sent`（队列条目已发送或已删除）。
 - 其余：`steering_unavailable`、`session_missing`、`config_missing`、`limit`。
 
-Codex 的插话带 `_meta.steering.idleBehavior = "promptRequired"`：回合在注入前结束时，消息排到队首作为下一回合发送；agent 回答 `failed` 时请求以 502 失败。
+Codex 与 Claude Code 的插话带 `_meta.steering.idleBehavior = "promptRequired"`：回合在注入前结束时，消息排到队首作为下一回合发送；agent 回答 `failed` 时请求以 502 失败。
 
 agent 调用失败返回 502；`hybrid-sessions.json` 不可用返回 503 并附文件路径，普通会话不受影响。
 

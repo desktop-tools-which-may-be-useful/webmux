@@ -80,6 +80,14 @@ func runACP(cfg config, st *store, in io.Reader, out io.Writer) error {
 		}
 		st.event("env", strings.Join(vars, " "))
 	}
+	if cfg.profile == "claudecode" {
+		// Claude's connector must use the same executable as the TUI.
+		value := "-"
+		if configured, ok := os.LookupEnv("CLAUDE_CODE_EXECUTABLE"); ok {
+			value = configured
+		}
+		st.event("env", "CLAUDE_CODE_EXECUTABLE="+value)
+	}
 	br := bufio.NewReaderSize(in, 1<<20)
 	for {
 		line, err := br.ReadBytes('\n')
@@ -441,8 +449,8 @@ func (a *agent) initialize() (any, error) {
 		AgentCapabilities: acp.AgentCapabilities{
 			LoadSession: true,
 			PromptCapabilities: acp.PromptCapabilities{
-				Image:           a.cfg.promptImage,
-				EmbeddedContext: a.cfg.embeddedContext,
+				Image:           a.cfg.promptImage || a.cfg.profile == "claudecode",
+				EmbeddedContext: a.cfg.embeddedContext || a.cfg.profile == "claudecode",
 			},
 			SessionCapabilities: acp.SessionCapabilities{
 				List:   &acp.Capability{},
@@ -454,6 +462,9 @@ func (a *agent) initialize() (any, error) {
 	}
 	if a.cfg.profile == "codex" {
 		resp.AgentInfo = &acp.Implementation{Name: "@agentclientprotocol/codex-acp", Title: "Codex", Version: a.cfg.connectorVersion}
+	}
+	if a.cfg.profile == "claudecode" {
+		resp.AgentInfo = &acp.Implementation{Name: "@agentclientprotocol/claude-agent-acp", Title: "Claude Code", Version: a.cfg.connectorVersion}
 	}
 	if a.cfg.noResume {
 		resp.AgentCapabilities.SessionCapabilities.Resume = nil
@@ -475,7 +486,7 @@ func (a *agent) find(id string) (*session, error) {
 // reopen opens a stored session for session/load or session/resume. Codex
 // refuses a thread another live client writes and, like codex-acp, opens it
 // at the default options; omp loads a session in its default mode
-// (baseline D25).
+// (baseline D25). Claude restores mode but resets model and effort.
 func (a *agent) reopen(id string, load bool) (*session, error) {
 	ss, err := a.find(id)
 	if err != nil {
@@ -501,6 +512,10 @@ func (a *agent) reopen(id string, load bool) (*session, error) {
 		maps.Copy(ss.Config, defaultConfig(a.cfg.profile))
 	case a.cfg.profile == "omp" && load:
 		ss.Config["mode"] = defaultConfig(a.cfg.profile)["mode"]
+	case a.cfg.profile == "claudecode":
+		defaults := defaultConfig(a.cfg.profile)
+		ss.Config["model"] = defaults["model"]
+		ss.Config["effort"] = defaults["effort"]
 	}
 	return ss, nil
 }
@@ -512,16 +527,19 @@ type steeringResult struct {
 }
 
 // steer injects a user message into the running turn. omp always records
-// it. Codex answers an outcome: with no running turn it starts one, unless
-// _meta.steering.idleBehavior is "promptRequired".
+// it. Codex and Claude answer an outcome: with no running turn Codex starts
+// one unless promptRequired was requested, while Claude always requires the
+// client to submit a fresh prompt.
 func (a *agent) steer(p acp.PromptRequest) (any, error) {
 	ls := a.session(p.SessionID)
 	if ls == nil {
 		return nil, &acp.RPCError{Code: acp.CodeResourceNotFound, Message: "session not open"}
 	}
 	codex := a.cfg.profile == "codex"
+	claude := a.cfg.profile == "claudecode"
+	outcomes := codex || claude
 	a.mu.Lock()
-	if codex && ls.turn == nil {
+	if outcomes && ls.turn == nil {
 		a.mu.Unlock()
 		var meta struct {
 			Steering struct {
@@ -533,7 +551,7 @@ func (a *agent) steer(p acp.PromptRequest) (any, error) {
 				return nil, &acp.RPCError{Code: acp.CodeInvalidParams, Message: "invalid _meta"}
 			}
 		}
-		if meta.Steering.IdleBehavior == "promptRequired" {
+		if claude || meta.Steering.IdleBehavior == "promptRequired" {
 			return steeringResult{Outcome: "promptRequired", Reason: "noRunningTurn"}, nil
 		}
 		a.wg.Add(1)
@@ -546,7 +564,7 @@ func (a *agent) steer(p acp.PromptRequest) (any, error) {
 	ls.data.Messages = append(ls.data.Messages, message{ID: newMessageID(), Role: "user", Text: promptText(p.Prompt), Blocks: p.Prompt})
 	err := a.st.save(ls.data)
 	a.mu.Unlock()
-	if codex {
+	if outcomes {
 		return steeringResult{Outcome: "injected"}, err
 	}
 	return struct{}{}, err
@@ -608,7 +626,15 @@ func (a *agent) setConfig(p acp.SetConfigOptionRequest) (any, error) {
 		return nil, &acp.RPCError{Code: acp.CodeInvalidParams, Message: "unknown config value"}
 	}
 	a.mu.Lock()
-	ls.data.Config[p.ConfigID] = p.Value.ID
+	value := p.Value.ID
+	if a.cfg.profile == "claudecode" && a.cfg.modeFallback && p.ConfigID == "mode" && value == "auto" {
+		value = "acceptEdits"
+		a.update(p.SessionID, &acp.Notice{
+			Severity: acp.NoticeWarning, Title: "Auto mode unavailable",
+			Description: "The current model does not support Auto; using acceptEdits",
+		})
+	}
+	ls.data.Config[p.ConfigID] = value
 	err := a.st.save(ls.data)
 	opts := configOptions(a.cfg.profile, ls.data)
 	a.mu.Unlock()

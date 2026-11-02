@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -200,6 +202,7 @@ func transcript(updates []Update) string {
 // tuiAgent is a fake agent in TUI mode on pipes.
 type tuiAgent struct {
 	t     *testing.T
+	pid   int
 	stdin io.WriteCloser
 	out   syncBuffer
 	done  chan error
@@ -219,6 +222,7 @@ func (e fakeEnv) startTUI(t *testing.T, args ...string) *tuiAgent {
 		t.Fatal(err)
 	}
 	go func() { a.done <- cmd.Wait() }()
+	a.pid = cmd.Process.Pid
 	t.Cleanup(func() {
 		stdin.Close()
 		select {
@@ -642,4 +646,330 @@ func TestFakeAgentReportsConcurrentWriters(t *testing.T) {
 		t.Errorf("events.log:\n%s", events)
 	}
 	tui.exit()
+}
+
+const claudeQueryReply = "\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\"
+
+var fakeUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+type fakeClaudeRegistration struct {
+	SessionID string `json:"sessionId"`
+	PID       int    `json:"pid"`
+	Cwd       string `json:"cwd"`
+	ProcStart string `json:"procStart"`
+	PIDDomain string `json:"pidDomain"`
+}
+
+func claudeRegistrationPath(e fakeEnv, pid int) string {
+	return filepath.Join(e.store, "claude-config", "sessions", fmt.Sprintf("%d.json", pid))
+}
+
+func readFakeClaudeRegistration(t *testing.T, e fakeEnv, pid int) fakeClaudeRegistration {
+	t.Helper()
+	data, err := os.ReadFile(claudeRegistrationPath(e, pid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record fakeClaudeRegistration
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+func waitFakeClaudeRegistration(t *testing.T, e fakeEnv, pid int, previous string) fakeClaudeRegistration {
+	t.Helper()
+	deadline := time.Now().Add(testTimeout)
+	for time.Now().Before(deadline) {
+		record, err := func() (fakeClaudeRegistration, error) {
+			data, err := os.ReadFile(claudeRegistrationPath(e, pid))
+			if err != nil {
+				return fakeClaudeRegistration{}, err
+			}
+			var record fakeClaudeRegistration
+			if err := json.Unmarshal(data, &record); err != nil {
+				return fakeClaudeRegistration{}, err
+			}
+			return record, nil
+		}()
+		if err == nil && record.SessionID != "" && record.SessionID != previous {
+			return record
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("Claude registration was not updated")
+	return fakeClaudeRegistration{}
+}
+
+func answerFakeClaudeQuery(a *tuiAgent) string {
+	a.send(claudeQueryReply)
+	return a.waitFor("state=idle:app=claude-code", 1)
+}
+
+func hasFakeSession(list ListSessionsResponse, id string) bool {
+	for _, session := range list.Sessions {
+		if session.SessionID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func TestFakeAgentClaudeTUI(t *testing.T) {
+	e := newFakeEnv(t, "FAKEAGENT_PROFILE=claudecode")
+	e.env = append(e.env, "CLAUDE_CONFIG_DIR="+filepath.Join(e.store, "claude-config"))
+	tui := e.startTUI(t, "--turn-delay", "100ms")
+	out := tui.waitFor("\x1b]7501;?\x1b\\", 1)
+	if strings.Contains(out, "state=working") || strings.Contains(out, "state=idle") {
+		t.Fatalf("Claude published a state before its query response: %q", out)
+	}
+	record := waitFakeClaudeRegistration(t, e, tui.pid, "")
+	if !fakeUUID.MatchString(record.SessionID) || record.PID != tui.pid || record.Cwd != e.cwd {
+		t.Fatalf("registration = %+v", record)
+	}
+	if runtime.GOOS == "linux" {
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", tui.pid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		end := strings.LastIndexByte(string(data), ')')
+		fields := strings.Fields(string(data[end+1:]))
+		if record.ProcStart != fields[19] {
+			t.Errorf("procStart = %q, want field 22 %q", record.ProcStart, fields[19])
+		}
+		machine := ""
+		for _, path := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id"} {
+			if data, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(data)) != "" {
+				machine = strings.TrimSpace(string(data))
+				break
+			}
+		}
+		if machine == "" {
+			t.Fatal("machine ID unavailable")
+		}
+		namespace, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", tui.pid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantDomain := "linux:" + machine + ":" + namespace
+		if record.PIDDomain != wantDomain {
+			t.Errorf("pidDomain = %q, want %q", record.PIDDomain, wantDomain)
+		}
+	}
+
+	a := e.startACP(t, newRecorder())
+	a.initialize(t)
+	list, err := a.conn.ListSessions(context.Background(), ListSessionsRequest{Cwd: e.cwd})
+	if err != nil || hasFakeSession(list, record.SessionID) {
+		t.Fatalf("draft was listed before its first prompt: %+v, %v", list, err)
+	}
+	out = answerFakeClaudeQuery(tui)
+	if strings.Contains(out, "session_start") || strings.Contains(out, "state=idle:id=") {
+		t.Errorf("Claude emitted Warp or child identity records: %q", out)
+	}
+	firstID := record.SessionID
+	tui.send("hello\n")
+	tui.waitFor("state=done:app=claude-code", 1)
+	list, err = a.conn.ListSessions(context.Background(), ListSessionsRequest{Cwd: e.cwd})
+	if err != nil || !hasFakeSession(list, firstID) {
+		t.Fatalf("first prompt was not listed: %+v, %v", list, err)
+	}
+
+	tui.send("one two three four five six\n")
+	tui.waitFor("state=working:app=claude-code", 2)
+	tui.send("\x1b")
+	out = tui.waitFor("[interrupted]", 1)
+	if strings.Contains(out, "six") {
+		t.Error("Claude turn continued after one Esc")
+	}
+	tui.waitFor("state=idle:app=claude-code", 2)
+
+	tui.send("/new\n")
+	record = waitFakeClaudeRegistration(t, e, tui.pid, firstID)
+	secondID := record.SessionID
+	list, err = a.conn.ListSessions(context.Background(), ListSessionsRequest{Cwd: e.cwd})
+	if err != nil || hasFakeSession(list, secondID) {
+		t.Fatalf("/new draft was listed before its first prompt: %+v, %v", list, err)
+	}
+	tui.send("fresh\n")
+	tui.waitFor("state=done:app=claude-code", 2)
+	if code := tui.exit(); code != 0 {
+		t.Fatalf("TUI exit code %d", code)
+	}
+	if out := tui.out.String(); !strings.Contains(out, "\x1b]7501;state=clear\x1b\\") {
+		t.Errorf("exit did not clear OSC state: %q", out)
+	}
+	if _, err := os.Stat(claudeRegistrationPath(e, tui.pid)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("registration remains after exit: %v", err)
+	}
+	if code := a.exit(t); code != 0 {
+		t.Fatalf("ACP exit code %d", code)
+	}
+
+	resumed := e.startTUI(t, "--resume", secondID)
+	resumed.waitFor("\x1b]7501;?\x1b\\", 1)
+	answerFakeClaudeQuery(resumed)
+	if got := readFakeClaudeRegistration(t, e, resumed.pid).SessionID; got != secondID {
+		t.Fatalf("resume changed session ID to %s, want %s", got, secondID)
+	}
+	external := e.startTUI(t, "--resume", secondID)
+	external.waitFor("\x1b]7501;?\x1b\\", 1)
+	answerFakeClaudeQuery(external)
+	if got := readFakeClaudeRegistration(t, e, external.pid).SessionID; got != secondID {
+		t.Fatalf("external TUI forked session to %s, want %s", got, secondID)
+	}
+	if got := readFakeClaudeRegistration(t, e, resumed.pid).SessionID; got != secondID {
+		t.Fatalf("first registration changed to %s", got)
+	}
+	external.exit()
+	resumed.exit()
+}
+
+func fakeConfigValue(options []ConfigOption, id string) string {
+	for _, option := range options {
+		if option.ID == id {
+			return option.Current.ID
+		}
+	}
+	return ""
+}
+
+func TestFakeAgentClaudeACP(t *testing.T) {
+	ctx := context.Background()
+	e := newFakeEnv(t,
+		"FAKEAGENT_PROFILE=claudecode",
+		"CLAUDE_CODE_EXECUTABLE=/opt/claude/bin/claude",
+	)
+	a := e.startACP(t, newRecorder())
+	init := a.initialize(t)
+	if init.ProtocolVersion != 1 || init.AgentInfo == nil ||
+		init.AgentInfo.Name != "@agentclientprotocol/claude-agent-acp" || init.AgentInfo.Version != "0.99.1" ||
+		!init.AgentCapabilities.LoadSession || init.AgentCapabilities.SessionCapabilities.List == nil ||
+		init.AgentCapabilities.SessionCapabilities.Resume == nil ||
+		!init.AgentCapabilities.PromptCapabilities.Image || !init.AgentCapabilities.PromptCapabilities.EmbeddedContext {
+		t.Fatalf("initialize = %+v", init)
+	}
+	if events := e.events(t); !strings.Contains(events, "env CLAUDE_CODE_EXECUTABLE=/opt/claude/bin/claude") {
+		t.Errorf("events.log lacks Claude executable:\n%s", events)
+	}
+	created, err := a.conn.NewSession(ctx, NewSessionRequest{Cwd: e.cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := created.SessionID
+	for _, update := range a.rec.drain() {
+		if commands, ok := update.(*AvailableCommandsUpdate); ok {
+			for _, command := range commands.AvailableCommands {
+				if command.Name == "login" || command.Name == "logout" {
+					t.Errorf("authentication command %q was advertised", command.Name)
+				}
+			}
+		}
+	}
+	for _, setting := range []struct{ id, value string }{{"model", "sonnet"}, {"effort", "high"}, {"mode", "plan"}} {
+		response, err := a.conn.SetConfigOption(ctx, SetConfigOptionRequest{SessionID: id, ConfigID: setting.id, Value: ConfigValue{ID: setting.value}})
+		if err != nil || fakeConfigValue(response.ConfigOptions, setting.id) != setting.value {
+			t.Fatalf("set %s=%s: %+v, %v", setting.id, setting.value, response, err)
+		}
+	}
+	prompt := []ContentBlock{
+		TextBlock("with attachments"),
+		ImageBlock([]byte{1, 2, 3}, "image/png", ""),
+		ResourceTextBlock("file:///note.txt", "text/plain", "note"),
+	}
+	response, err := a.conn.Prompt(ctx, PromptRequest{SessionID: id, Prompt: prompt})
+	if err != nil || response.StopReason != StopEndTurn {
+		t.Fatalf("attachment prompt = %+v, %v", response, err)
+	}
+	data, err := os.ReadFile(filepath.Join(e.store, "sessions", id+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored struct {
+		Messages []struct {
+			Blocks []ContentBlock `json:"blocks"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Messages) == 0 || len(stored.Messages[0].Blocks) != 3 ||
+		stored.Messages[0].Blocks[1].Type != ContentImage || stored.Messages[0].Blocks[2].Type != ContentResource {
+		t.Errorf("stored attachments = %+v", stored.Messages)
+	}
+	var steering struct {
+		Outcome string `json:"outcome"`
+		Reason  string `json:"reason"`
+	}
+	err = a.conn.CallExtension(ctx, "_session/steering", PromptRequest{
+		SessionID: id, Prompt: []ContentBlock{TextBlock("steer")},
+		Meta: json.RawMessage(`{"steering":{"idleBehavior":"promptRequired"}}`),
+	}, &steering)
+	if err != nil || steering.Outcome != "promptRequired" || steering.Reason != "noRunningTurn" {
+		t.Errorf("idle steering = %+v, %v", steering, err)
+	}
+	if err := a.conn.CloseSession(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	a.exit(t)
+
+	a = e.startACP(t, newRecorder())
+	a.initialize(t)
+	loaded, err := a.conn.LoadSession(ctx, LoadSessionRequest{SessionID: id, Cwd: e.cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fakeConfigValue(loaded.ConfigOptions, "model") != "opus" ||
+		fakeConfigValue(loaded.ConfigOptions, "effort") != "medium" || fakeConfigValue(loaded.ConfigOptions, "mode") != "plan" {
+		t.Errorf("cold load config = %+v", loaded.ConfigOptions)
+	}
+	if replay := transcript(a.rec.drain()); !strings.Contains(replay, "user: with attachments") || !strings.Contains(replay, "agent: echo:") {
+		t.Errorf("load replay = %q", replay)
+	}
+	if err := a.conn.CloseSession(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	a.exit(t)
+
+	a = e.startACP(t, newRecorder())
+	a.initialize(t)
+	resumed, err := a.conn.ResumeSession(ctx, ResumeSessionRequest{SessionID: id, Cwd: e.cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fakeConfigValue(resumed.ConfigOptions, "model") != "opus" ||
+		fakeConfigValue(resumed.ConfigOptions, "effort") != "medium" || fakeConfigValue(resumed.ConfigOptions, "mode") != "plan" {
+		t.Errorf("cold resume config = %+v", resumed.ConfigOptions)
+	}
+	if replay := transcript(a.rec.drain()); replay != "" {
+		t.Errorf("resume replayed history %q", replay)
+	}
+	a.exit(t)
+}
+
+func TestFakeAgentClaudeModeFallback(t *testing.T) {
+	e := newFakeEnv(t, "FAKEAGENT_PROFILE=claudecode", "FAKEAGENT_MODE_FALLBACK=1")
+	a := e.startACP(t, newRecorder())
+	a.initialize(t)
+	created, err := a.conn.NewSession(context.Background(), NewSessionRequest{Cwd: e.cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.rec.drain()
+	response, err := a.conn.SetConfigOption(context.Background(), SetConfigOptionRequest{
+		SessionID: created.SessionID, ConfigID: "mode", Value: ConfigValue{ID: "auto"},
+	})
+	if err != nil || fakeConfigValue(response.ConfigOptions, "mode") != "acceptEdits" {
+		t.Fatalf("fallback response = %+v, %v", response, err)
+	}
+	foundNotice := false
+	for _, update := range a.rec.drain() {
+		if notice, ok := update.(*Notice); ok && strings.Contains(notice.Description, "acceptEdits") {
+			foundNotice = true
+		}
+	}
+	if !foundNotice {
+		t.Error("fallback did not publish an adapter notice")
+	}
+	a.exit(t)
 }

@@ -159,7 +159,8 @@
       "supportedAgents": [
         "omp",
         "OpenCode",
-        "Codex CLI"
+        "Codex CLI",
+        "Claude Code"
       ]
     },
     "createdAt": "0001-01-01T00:00:00Z",

@@ -66,6 +66,18 @@ export let sockets: FakeSocket[] = [];
 let requests: Recorded[] = [];
 let responders: [RegExp, Responder][] = [];
 
+export const claudeConnector = {
+  executable: "claude-agent-acp",
+  title: "Claude Code ACP 适配器",
+  installCommand: "npm install -g @agentclientprotocol/claude-agent-acp",
+  docsUrl: "https://github.com/agentclientprotocol/claude-agent-acp",
+} as const;
+
+export const claudeSessionIds = {
+  current: "01a18715-8504-7020-9f3d-257900000000",
+  alternative: "01b29826-9615-8131-af4e-368a11111111",
+} as const;
+
 /** Answers requests whose "METHOD /path" matches `pattern`; later wins. */
 export function respond(pattern: RegExp, responder: Responder) {
   responders.unshift([pattern, responder]);

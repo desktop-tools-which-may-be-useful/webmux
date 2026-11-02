@@ -1,5 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { APIRequestContext, Page } from "@playwright/test";
 import {
   expect,
@@ -11,8 +14,8 @@ import {
 import type { E2EServer } from "./server.mjs";
 
 // Hybrid sessions run the fake agent (internal/acp/testdata/fakeagent), which
-// global-setup puts first on every backend's PATH as omp, opencode, codex and
-// codex-acp. Its TUI does not echo typing: a line shows up as "> text" when a
+// global-setup puts first on every backend's PATH as omp, opencode, codex,
+// codex-acp, claude and claude-agent-acp. Its TUI does not echo typing: a line
 // later run replays the stored conversation, and replies stream as
 // "< echo: text". Its ACP side answers "echo: text" after a thought and a
 // "Read file" tool call. FAKEAGENT_TURN_DELAY paces every streamed piece
@@ -21,7 +24,7 @@ import type { E2EServer } from "./server.mjs";
 type Side = "tui" | "acp";
 type Options = {
   name?: string;
-  agent?: "omp" | "opencode" | "codex";
+  agent?: "omp" | "opencode" | "codex" | "claude";
   env?: Record<string, string>;
 };
 
@@ -133,6 +136,8 @@ test.describe("hybrid sessions with the fake agent", () => {
   for (const { start, agent } of [
     { start: "acp", agent: "omp" },
     { start: "tui", agent: "opencode" },
+    { start: "acp", agent: "claude" },
+    { start: "tui", agent: "claude" },
   ] as const) {
     test(`an ${agent} conversation started on ${start === "acp" ? "chat" : "the terminal"} round-trips with its history on both sides`, async ({
       page,
@@ -196,6 +201,46 @@ test.describe("hybrid sessions with the fake agent", () => {
     });
   }
 
+  test("Claude replays a long conversation on both sides", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    test.slow();
+    const id = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
+    });
+    await openHybrid(page, id, "acp");
+    for (let i = 0; i < 24; i++) await chatTurn(page, `history-${i}`);
+    await switchTo(page, "tui");
+    await expectTerminalLine(page, "> history-23");
+    await expectTerminalLine(page, "< echo: history-23");
+    await switchTo(page, "acp");
+    await expect(conversation(page)).toContainText("history-0");
+    await expect(conversation(page)).toContainText("echo: history-23");
+  });
+
+  test("Claude steers a running turn without starting an extra idle turn", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const id = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
+      env: { FAKEAGENT_TURN_DELAY: "2s" },
+    });
+    await openHybrid(page, id, "acp");
+    await sendChat(page, "steer-first");
+    await expect(working(page)).toBeVisible();
+    await composer(page).fill("steer-nudge");
+    await page.getByRole("button", { name: "插话", exact: true }).click();
+    await expect(composer(page)).toHaveValue("");
+    await expect(conversation(page)).toContainText("steer-nudge");
+    await expect(conversation(page)).toContainText("echo: steer-first");
+    await expect(working(page)).toHaveCount(0);
+    await chatTurn(page, "steer-after");
+  });
+
   test("switching mid-turn interrupts the running side and keeps what it said", async ({
     page,
     request,
@@ -205,6 +250,7 @@ test.describe("hybrid sessions with the fake agent", () => {
     // Two seconds per streamed piece leave each turn running for several
     // seconds: four pieces in chat, one per word in the TUI.
     const id = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
       env: { FAKEAGENT_TURN_DELAY: "2s" },
     });
     await openHybrid(page, id, "acp");
@@ -236,6 +282,7 @@ test.describe("hybrid sessions with the fake agent", () => {
     workDir,
   }, testInfo) => {
     const id = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
       env: { FAKEAGENT_PERMISSION: "1" },
     });
     // Sessions start in auto mode; ask so the request reaches the user.
@@ -320,6 +367,75 @@ test.describe("hybrid sessions with the fake agent", () => {
     }
   });
 
+  test("Claude sends image and embedded-resource attachments", async ({
+    page,
+    request,
+    server,
+    workDir,
+  }) => {
+    const id = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
+      env: {
+        FAKEAGENT_PROMPT_IMAGE: "1",
+        FAKEAGENT_EMBEDDED_CONTEXT: "1",
+      },
+    });
+    await openHybrid(page, id, "acp");
+    const upload = async (
+      name: string,
+      mimeType: string,
+      buffer: Buffer,
+    ): Promise<string> => {
+      const response = await request.post(`/api/sessions/${id}/upload`, {
+        multipart: { file: { name, mimeType, buffer } },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      return (await response.json()).path;
+    };
+    const image = await upload(
+      "pixel.png",
+      "image/png",
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    );
+    const text = await upload(
+      "note.txt",
+      "text/plain",
+      Buffer.from("attached context\n"),
+    );
+    const prompted = await request.post(`/api/sessions/${id}/chat/prompts`, {
+      data: {
+        clientRequestId: "e2e-claude-attachments",
+        text: "inspect attachments",
+        attachments: [{ path: image }, { path: text }],
+      },
+    });
+    expect(prompted.status(), await prompted.text()).toBe(200);
+    await expect(conversation(page)).toContainText("echo: inspect attachments");
+    await expect(working(page)).toHaveCount(0);
+
+    const info = await (await request.get(`/api/sessions/${id}`)).json();
+    const stored = JSON.parse(
+      await readFile(
+        join(
+          server.env.FAKEAGENT_STORE,
+          "sessions",
+          `${info.hybrid.agentSessionId}.json`,
+        ),
+        "utf8",
+      ),
+    );
+    const message = stored.messages.find(
+      (item: { role: string; text: string }) =>
+        item.role === "user" && item.text === "inspect attachments",
+    );
+    expect(
+      message.blocks.map((block: { type: string }) => block.type).sort(),
+    ).toEqual(["image", "resource", "text"]);
+  });
+
   test("queued prompts pause after a stop until continued or cleared", async ({
     page,
     request,
@@ -328,6 +444,7 @@ test.describe("hybrid sessions with the fake agent", () => {
     test.slow();
     // Each turn streams four pieces two seconds apart: time to queue behind it.
     const id = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
       env: { FAKEAGENT_TURN_DELAY: "2s" },
     });
     await openHybrid(page, id, "acp");
@@ -407,7 +524,9 @@ test.describe("hybrid sessions with the fake agent", () => {
           })
         ).ok(),
       ).toBeTruthy();
-      const id = await createHybrid(request, workDir, "acp");
+      const id = await createHybrid(request, workDir, "acp", {
+        agent: "claude",
+      });
       await openHybrid(page, id, "acp");
       await chatTurn(page, "before-sleep");
 
@@ -434,11 +553,13 @@ test.describe("hybrid sessions with the fake agent", () => {
     test.slow();
     const chat = await createHybrid(request, workDir, "acp", {
       name: "E2E resume chat",
+      agent: "claude",
     });
     await openHybrid(page, chat, "acp");
     await chatTurn(page, "kept-in-chat");
     const terminal = await createHybrid(request, workDir, "tui", {
       name: "E2E resume terminal",
+      agent: "claude",
     });
     await openHybrid(page, terminal, "tui");
     await tuiTurn(page, "kept-in-tui");
@@ -476,6 +597,93 @@ test.describe("hybrid sessions with the fake agent", () => {
     await tuiTurn(page, "after-restart");
   });
 
+  test("Claude falls back to candidates when its process record is unavailable", async ({
+    page,
+    request,
+    server,
+    workDir,
+  }) => {
+    test.slow();
+    const id = await createHybrid(request, workDir, "tui", {
+      agent: "claude",
+      name: "E2E Claude candidates",
+    });
+    await openHybrid(page, id, "tui");
+    await tuiTurn(page, "candidate-one");
+    await expect(sideTab(page, "acp")).toHaveAccessibleName("聊天");
+    const info = await (await request.get(`/api/sessions/${id}`)).json();
+    const sid = info.hybrid.agentSessionId;
+
+    const other = await createHybrid(request, workDir, "acp", {
+      agent: "claude",
+      name: "E2E Claude other candidate",
+    });
+    await openHybrid(page, other, "acp");
+    await chatTurn(page, "candidate-two");
+    const stored = JSON.parse(
+      await readFile(join(server.stateDir, "hybrid-sessions.json"), "utf8"),
+    );
+    const record = stored.records.find(
+      (item: { id: string }) => item.id === id,
+    );
+    await rm(
+      join(server.env.HOME, ".claude", "sessions", `${record.pid}.json`),
+    );
+    await page.goto(`/s/${id}`);
+    await delay(2_600);
+    await expect(sideTab(page, "acp")).toHaveAccessibleName("聊天", {
+      timeout: 20_000,
+    });
+    await sideTab(page, "acp").click();
+    const picker = page.getByRole("combobox", { name: "选择要打开的会话" });
+    await expect(picker).toBeVisible();
+    await picker.selectOption(sid);
+    await page.getByRole("button", { name: "确认", exact: true }).click();
+    await expectSide(page, "acp");
+    await expect(conversation(page)).toContainText("candidate-one");
+  });
+
+  test("Claude refuses an externally occupied session without forking it", async ({
+    page,
+    request,
+    server,
+    workDir,
+  }) => {
+    const id = await createHybrid(request, workDir, "tui", {
+      agent: "claude",
+      name: "E2E Claude external",
+    });
+    await openHybrid(page, id, "tui");
+    await tuiTurn(page, "external-one");
+    await expect(sideTab(page, "acp")).toHaveAccessibleName("聊天");
+    const info = await (await request.get(`/api/sessions/${id}`)).json();
+    const sid = info.hybrid.agentSessionId;
+    expect((await request.delete(`/api/sessions/${id}`)).status()).toBe(204);
+
+    const external = spawn(
+      join(process.env.WEBMUX_E2E_AGENTS!, "claude"),
+      ["--resume", sid],
+      { cwd: workDir, env: server.env, stdio: ["pipe", "pipe", "pipe"] },
+    );
+    let output = "";
+    external.stdout.on("data", (chunk) => (output += String(chunk)));
+    external.stderr.on("data", (chunk) => (output += String(chunk)));
+    try {
+      await expect.poll(() => output).toContain("> external-one");
+      const resumed = await request.post(`/api/sessions/${id}/resume`, {
+        data: { clientRequestId: "e2e-claude-external", side: "acp" },
+      });
+      expect(resumed.status()).toBe(409);
+      expect((await resumed.json()).reason).toBe("occupied_external");
+    } finally {
+      if (external.exitCode === null && external.signalCode === null) {
+        const exited = once(external, "exit");
+        external.kill("SIGTERM");
+        await exited;
+      }
+    }
+  });
+
   test("a Codex conversation round-trips through the codex-acp connector", async ({
     page,
     request,
@@ -495,57 +703,73 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expectTerminalLine(page, "> codex-two");
   });
 
-  test("a Codex session without codex-acp starts on the terminal and shows how to install it", async ({
-    page,
-    request,
-    workDir,
-  }) => {
-    const name = "E2E Codex without connector";
-    // The fake codex is named by its path; the config's PATH has no
-    // codex-acp.
-    const response = await request.post("/api/launch-configs", {
-      data: {
-        name,
-        cmd: [join(process.env.WEBMUX_E2E_AGENTS!, "codex")],
-        env: { PATH: "/usr/bin:/bin" },
-        hybrid: true,
-      },
+  for (const row of [
+    {
+      agent: "codex",
+      connector: "codex-acp",
+      title: "Codex ACP 适配器",
+      package: "@agentclientprotocol/codex-acp",
+    },
+    {
+      agent: "claude",
+      connector: "claude-agent-acp",
+      title: "Claude Code ACP 适配器",
+      package: "@agentclientprotocol/claude-agent-acp",
+    },
+  ] as const) {
+    test(`a ${row.agent} session without ${row.connector} starts on the terminal and shows how to install it`, async ({
+      page,
+      request,
+      workDir,
+    }) => {
+      const name = `E2E ${row.agent} without connector`;
+      // The fake agent is named by its path; the config's PATH has no connector.
+      const response = await request.post("/api/launch-configs", {
+        data: {
+          name,
+          cmd: [join(process.env.WEBMUX_E2E_AGENTS!, row.agent)],
+          env: { PATH: "/usr/bin:/bin" },
+          hybrid: true,
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      await page.goto("/");
+      await page
+        .locator("header")
+        .getByRole("button", { name: "＋ 新建会话", exact: true })
+        .click();
+      await page.getByRole("tab", { name: "预先输入", exact: true }).click();
+      await page
+        .getByRole("combobox", { name: "选择启动配置", exact: true })
+        .click();
+      await page.getByRole("option", { name, exact: true }).click();
+      await expect(
+        page.getByText(`聊天端需要另外安装 ${row.connector}`),
+      ).toBeVisible();
+      await page
+        .getByRole("tablist", { name: "起始端", exact: true })
+        .getByRole("tab", { name: "从聊天开始", exact: true })
+        .click();
+      await page.getByLabel("工作目录", { exact: true }).fill(workDir);
+      await page
+        .getByRole("button", { name: "创建并进入 →", exact: true })
+        .click();
+      await expect(
+        page.getByText(`未安装 ${row.title}（${row.connector}）`),
+      ).toBeVisible();
+      await expect(
+        page.getByText(`npm install -g ${row.package}`),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: "改为从终端开始", exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
+      await expectSide(page, "tui");
+      await expectTerminalLine(page, "prompt>");
+      await expect(sideTab(page, "acp")).toBeDisabled({ timeout: 20_000 });
+      await expect(page.getByText("安装后会自动重新检测")).toBeVisible();
     });
-    expect(response.status(), await response.text()).toBe(201);
-    await page.goto("/");
-    await page
-      .locator("header")
-      .getByRole("button", { name: "＋ 新建会话", exact: true })
-      .click();
-    await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-    await page
-      .getByRole("combobox", { name: "选择启动配置", exact: true })
-      .click();
-    await page.getByRole("option", { name, exact: true }).click();
-    await expect(page.getByText("聊天端需要另外安装 codex-acp")).toBeVisible();
-    await page
-      .getByRole("tablist", { name: "起始端", exact: true })
-      .getByRole("tab", { name: "从聊天开始", exact: true })
-      .click();
-    await page.getByLabel("工作目录", { exact: true }).fill(workDir);
-    await page
-      .getByRole("button", { name: "创建并进入 →", exact: true })
-      .click();
-    await expect(
-      page.getByText("未安装 Codex ACP 适配器（codex-acp）"),
-    ).toBeVisible();
-    await expect(
-      page.getByText("npm install -g @agentclientprotocol/codex-acp"),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: "改为从终端开始", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
-    await expectSide(page, "tui");
-    await expectTerminalLine(page, "prompt>");
-    await expect(sideTab(page, "acp")).toBeDisabled({ timeout: 20_000 });
-    await expect(page.getByText("安装后会自动重新检测")).toBeVisible();
-  });
+  }
 
   test("webmux attach detaches when the session moves to chat and refuses it there", async ({
     page,

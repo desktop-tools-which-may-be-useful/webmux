@@ -120,13 +120,34 @@ var (
 			{Value: "low", Name: "Low"}, {Value: "medium", Name: "Medium"}, {Value: "high", Name: "High"},
 		}},
 	}
+	// claudeOptions are claude-agent-acp's options. Model and effort return
+	// to these defaults after a cold load/resume, while mode is restored.
+	claudeOptions = []selectOption{
+		{id: "mode", name: "Permission Mode", category: "mode", def: "default", values: []acp.ConfigSelectOption{
+			{Value: "default", Name: "Manual"},
+			{Value: "acceptEdits", Name: "Accept Edits"},
+			{Value: "plan", Name: "Plan"},
+			{Value: "auto", Name: "Auto"},
+			{Value: "bypassPermissions", Name: "Bypass Permissions"},
+		}},
+		{id: "model", name: "Model", category: "model", def: "opus", values: []acp.ConfigSelectOption{
+			{Value: "opus", Name: "Opus"}, {Value: "sonnet", Name: "Sonnet"}, {Value: "haiku", Name: "Haiku"},
+		}},
+		{id: "effort", name: "Effort", category: "thought_level", def: "medium", values: []acp.ConfigSelectOption{
+			{Value: "low", Name: "Low"}, {Value: "medium", Name: "Medium"}, {Value: "high", Name: "High"},
+		}},
+	}
 )
 
 func profileOptions(profile string) []selectOption {
-	if profile == "codex" {
+	switch profile {
+	case "codex":
 		return codexOptions
+	case "claudecode":
+		return claudeOptions
+	default:
+		return defaultOptions
 	}
-	return defaultOptions
 }
 
 func defaultConfig(profile string) map[string]string {

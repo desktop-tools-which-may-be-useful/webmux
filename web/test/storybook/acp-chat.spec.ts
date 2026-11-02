@@ -15,6 +15,14 @@ const stories = [
   ["awaiting-choice", "button", "强制切换"],
   ["terminal-side", "tab", /^聊天/],
   ["connector-missing", "button", "切到终端"],
+  ["claude-code", "button", "停止"],
+  ["claude-connector-missing", "button", "复制安装命令"],
+  ["claude-first-message", "tab", /^聊天/],
+  ["claude-ambiguous", "combobox", "选择要打开的会话"],
+  ["claude-occupied", "tab", /^聊天/],
+  ["claude-mode-fallback", "button", "停止"],
+  ["claude-commands", "listbox", "命令"],
+  ["claude-recovery-failure", "button", "发送"],
 ] as const;
 
 async function show(page: Page, story: string, theme: string) {

@@ -93,7 +93,7 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 		}
 		// Only the agents with a hybrid profile start as hybrid sessions,
 		// and their seeded commands, auto-approve flag included, qualify.
-		hybrid := c.Name == "Codex CLI" || c.Name == "Open Code" || c.Name == "omp"
+		hybrid := c.Name == "Claude Code" || c.Name == "Codex CLI" || c.Name == "Open Code" || c.Name == "omp"
 		if c.Hybrid != hybrid || (hybrid && !c.HybridSupport.Supported) {
 			t.Fatalf("preset %s hybrid %v support %+v", c.Name, c.Hybrid, c.HybridSupport)
 		}
@@ -274,7 +274,7 @@ func TestHybridFlag(t *testing.T) {
 		t.Fatalf("summary %+v: %v", list, err)
 	}
 	// The argv must stay supported while checked; the user unchecks first.
-	for _, cmd := range [][]string{{"claude"}, {"omp", "--session-dir", "/tmp/x"}, {"sh", "-c", "omp"}} {
+	for _, cmd := range [][]string{{"gemini"}, {"omp", "--session-dir", "/tmp/x"}, {"sh", "-c", "omp"}} {
 		if _, err := s.Update(plain.ID, Input{Name: "omp", Cmd: cmd, Hybrid: true}); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("hybrid with %q accepted: %v", cmd, err)
 		}
@@ -297,7 +297,7 @@ func TestHybridFlag(t *testing.T) {
 	if err := json.Unmarshal(raw, &stored); err != nil || !stored.Configs[0].Hybrid {
 		t.Fatalf("checked config not persisted: %s %v", raw, err)
 	}
-	stored.Configs[0].Cmd[4] = "claude"
+	stored.Configs[0].Cmd[4] = "gemini"
 	if raw, err = json.Marshal(stored); err != nil {
 		t.Fatal(err)
 	}

@@ -15,9 +15,18 @@ describe("prepared E2E runtime", () => {
   let root: string;
   const contents = "#!/bin/sh\nexit 0\n";
 
-  // The backend and, in agents/ beside it, the fake agent as omp, opencode,
-  // codex and codex-acp.
-  async function runtime(agents = ["omp", "opencode", "codex", "codex-acp"]) {
+  // The backend and, in agents/ beside it, the fake agent under every
+  // supported agent and third-party connector name.
+  async function runtime(
+    agents = [
+      "omp",
+      "opencode",
+      "codex",
+      "codex-acp",
+      "claude",
+      "claude-agent-acp",
+    ],
+  ) {
     const binary = join(root, "webmux");
     await writeFile(binary, contents, { mode: 0o700 });
     await mkdir(join(root, "agents"));
@@ -63,7 +72,7 @@ describe("prepared E2E runtime", () => {
     },
   );
 
-  test("rejects a runtime without both fake agents", async () => {
+  test("rejects a runtime without the required fake agents", async () => {
     await runtime(["omp"]);
 
     await expect(globalSetup()).rejects.toThrow(

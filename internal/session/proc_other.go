@@ -12,6 +12,7 @@ func newProcessSnapshot(processTable) processSnapshot { return processSnapshot{}
 func (processSnapshot) foregroundBlocked(int) bool    { return false }
 func (processSnapshot) awaitingInput(int) bool        { return false }
 func rootProcess(int) (exe, cwd string)               { return "", "" }
+func processFacts(int) (ProcessFacts, bool)           { return ProcessFacts{}, false }
 
 func (s *Session) resizePTYLocked(cols, rows uint16) error {
 	if s.run == nil {

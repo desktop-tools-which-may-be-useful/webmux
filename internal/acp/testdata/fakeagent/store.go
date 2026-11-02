@@ -66,8 +66,8 @@ func (s *store) newID() string {
 			panic(err)
 		}
 		return "ses_" + hex.EncodeToString(b[:])
-	case "codex":
-		// Codex thread IDs are UUIDv7.
+	case "codex", "claudecode":
+		// Codex thread IDs and Claude session IDs are UUIDv7.
 		var b [16]byte
 		if _, err := rand.Read(b[:]); err != nil {
 			panic(err)

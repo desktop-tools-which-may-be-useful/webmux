@@ -345,6 +345,9 @@ func (a *actor) resumeSide(epoch int, side Side, sid string) resumeResult {
 // the recorded directory (a *SessionMissingError offering the others when
 // not) and open in no other session.
 func (a *actor) verify(sid string) error {
+	if a.externalWriterNow(sid) {
+		return ErrExternalWriter
+	}
 	listed, err := a.sessions(a.probeCtx, a.cwd, sid)
 	if err != nil {
 		return err

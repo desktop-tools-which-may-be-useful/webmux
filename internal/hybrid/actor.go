@@ -116,6 +116,12 @@ type actor struct {
 	// locks follows the writer locks of a profile that names sessions by
 	// them (Codex).
 	locks lockTracker
+	// registry follows process registration records and their best-effort
+	// external occupancy checks, independently of writer-lock tracking.
+	registry     processRegistryTracker
+	externalSID  string
+	externalHeld bool
+	externalRead time.Time
 	// runStart is when the actor last started a terminal run.
 	runStart time.Time
 	// agentPathNoted: the notice that the connector uses its own agent was

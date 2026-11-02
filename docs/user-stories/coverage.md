@@ -10,15 +10,15 @@
 | REST API、列表和终端 WebSocket                                                                      | US-A05；US-C02；US-D01–US-D06                       |
 | 统一上下文新建会话、九款 CLI 启动配置、目录浏览与创建、名称和命令                                   | US-B01–US-B07                                       |
 | 设置页自定义启动配置与图标、启动配置 API 与按配置启动                                               | US-B01；US-B08                                      |
-| 混合模式勾选、hybrid-support 判定、起始端选择                                                       | US-Q01–US-Q02；US-B01；US-B08                       |
-| 终端 ↔ 聊天切换、资格判定、中断等待、草稿退回与回滚                                                 | US-Q03–US-Q04                                       |
-| 聊天视图时间线、权限与表单、权限模式（每次询问 / 自动批准）、配置项与命令菜单                       | US-Q05–US-Q07                                       |
-| 聊天端服务端队列、去重与插话                                                                        | US-Q08                                              |
+| 混合模式勾选、Claude Code 默认混合、hybrid-support 判定、起始端选择                                 | US-Q01–US-Q02；US-B01；US-B08                       |
+| 终端 ↔ 聊天切换、Claude 注册记录身份/候选/外部占用、中断等待、草稿退回与回滚                        | US-Q03–US-Q04                                       |
+| 聊天视图时间线、权限与表单、权限模式、配置项、命令菜单及 Claude 恢复后配置重应用                    | US-Q05–US-Q07                                       |
+| 聊天端服务端队列、去重与 omp/Codex/Claude 插话                                                      | US-Q08                                              |
 | 聊天附件能力块构造、降级、队列与路径安全                                                            | US-Q15                                              |
-| 第三方 ACP 连接器（Codex 的 codex-acp）启动前检查、`connector_missing` 与安装提示                   | US-Q16；US-Q01；US-Q03                              |
+| 第三方 ACP 连接器（Codex 的 codex-acp、Claude 的 claude-agent-acp）启动前检查与安装提示             | US-Q16；US-Q01；US-Q03                              |
 | 聊天端关注、推送与首页混合卡片                                                                      | US-Q09；US-C02                                      |
-| 混合会话异常、自动重连、登录引导与空闲休眠                                                          | US-Q10–US-Q11；US-D09                               |
-| 混合会话记录、可恢复分组、恢复与移除                                                                | US-Q12；US-D10；US-L10                              |
+| 混合会话异常、自动重连、Claude 现有认证复用与登录引导、空闲休眠                                     | US-Q10–US-Q11；US-D09                               |
+| 混合会话记录、可恢复分组、恢复、Claude 配置重应用与移除                                             | US-Q12；US-D10；US-L10                              |
 | `run --launch-config`、`attach` 与 `ls` 对混合会话的行为                                            | US-Q13；US-M01；US-M03；US-M05                      |
 | 聊天端选择、拖放或粘贴文件，上传进度、取消与待发送附件                                              | US-Q14；US-E04–US-E07                               |
 | 首页导航、紧凑/预览、详情、分组、按需表单、增量更新、排序、搜索、筛选与空状态                       | US-C01–US-C05                                       |
@@ -76,7 +76,7 @@
 | `AGENTS.md` 体积预算与规则下沉到 `docs/agent-rules/`                                                | US-L11                                              |
 | Storybook、截图、baseline、CI 与 release                                                            | US-L03–US-L04                                       |
 | 分层架构测试、线上 JSON 快照、必填数组 Zod 契约与重新录制                                           | US-L05                                              |
-| agent 适配器接口、注册表、契约测试与 agent 名称守卫                                                 | US-L05；US-Q01；US-Q03                              |
+| agent 适配器接口、注册表、Claude 进程注册记录与隐私边界、契约测试与 agent 名称守卫                  | US-L05；US-Q01；US-Q03                              |
 | 前端架构守卫：设计系统 lint、分层、重复代码、未使用代码与基线                                       | US-L06                                              |
 | Pullfrog 指定订阅模型与 GitHub Actions 密钥                                                         | US-L07                                              |
 | 前端质量基线、类型感知与 Svelte lint、测试类型、wire 契约和失败路径回归                             | US-L09                                              |

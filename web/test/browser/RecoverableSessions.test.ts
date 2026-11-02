@@ -197,7 +197,14 @@ test("removing needs confirmation and failures stay inline", async () => {
 
   await cleanup();
   show(
-    [record],
+    [
+      {
+        ...record,
+        agent: "claudecode",
+        cmd: ["claude"],
+        agentSessionId: "01a18715-8504-7020-9f3d-257900000000",
+      },
+    ],
     vi.fn(async () => Promise.reject(new Error("网络中断"))),
   );
   await expand();

@@ -15,7 +15,8 @@
       "supportedAgents": [
         "omp",
         "OpenCode",
-        "Codex CLI"
+        "Codex CLI",
+        "Claude Code"
       ]
     },
     "id": "<id#2>",

@@ -11,6 +11,8 @@ import type {
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
 import {
   chatState,
+  claudeConnector,
+  claudeSessionIds,
   commands,
   installChatFixture,
   respond,
@@ -58,8 +60,19 @@ const tuiState = (patch: Partial<ChatState> = {}) =>
 /** The page on a hybrid session's terminal side, both streams attached. */
 async function onTerminalSide(state: ChatState) {
   await page.viewport(1280, 900);
+  const sessionInfo: SessionInfo = {
+    ...info,
+    title:
+      state.agent === "claudecode" ? "Claude Code · 修复首页排序" : info.title,
+    cmd: [state.agent === "claudecode" ? "claude" : state.agent],
+    hybrid: {
+      ...info.hybrid!,
+      agent: state.agent,
+      agentSessionId: state.agentSessionId,
+    },
+  };
   respond(/^GET \/api\/sessions\/hybrid22$/, () =>
-    Response.json({ ...info, generation: "" }),
+    Response.json({ ...sessionInfo, generation: "" }),
   );
   const drafts = createTerminalDrafts();
   render(Terminal, {
@@ -69,7 +82,7 @@ async function onTerminalSide(state: ChatState) {
     reopen: () => {},
   });
   const terminal = await socketAt(terminalPath);
-  terminal.binary(2, info);
+  terminal.binary(2, sessionInfo);
   const chat = await socketAt(chatPath);
   chat.frame(snapshot(state));
   return { terminal, chat, draft: drafts.get(id) };
@@ -101,7 +114,11 @@ const steps = () =>
 
 test("the chat tab explains why the session cannot switch yet", async () => {
   const { chat } = await onTerminalSide(
-    tuiState({ eligibility: { available: false, reason: "no_session_id" } }),
+    tuiState({
+      agent: "claudecode",
+      agentSessionId: claudeSessionIds.current,
+      eligibility: { available: false, reason: "no_session_id" },
+    }),
   );
   const tab = chatTab("聊天（请先在 TUI 中发送一条消息）");
   await expect.element(tab).toHaveAttribute("aria-disabled", "true");
@@ -120,42 +137,60 @@ test("the chat tab explains why the session cannot switch yet", async () => {
 
   chat.frame({
     type: "state",
-    state: tuiState({ eligibility: { available: false, reason: "occupied" } }),
+    state: tuiState({
+      agent: "claudecode",
+      agentSessionId: claudeSessionIds.current,
+      eligibility: { available: false, reason: "occupied" },
+    }),
   });
   await expect
     .element(chatTab("聊天（该会话已在另一个会话中打开）"))
     .toHaveAttribute("aria-disabled", "true");
-  chat.frame({ type: "state", state: tuiState() });
+  chat.frame({
+    type: "state",
+    state: tuiState({
+      agent: "claudecode",
+      agentSessionId: claudeSessionIds.current,
+    }),
+  });
   await expect.element(chatTab("聊天")).not.toHaveAttribute("aria-disabled");
 });
 
-const connector = {
-  executable: "codex-acp",
-  title: "Codex ACP 适配器",
-  installCommand: "npm install -g @agentclientprotocol/codex-acp",
-  docsUrl: "https://github.com/agentclientprotocol/codex-acp",
-};
-
-test("a missing connector disables the chat tab and shows a dismissible install banner", async () => {
-  await onTerminalSide(
+test("a missing connector disables chat, explains installation and rechecks", async () => {
+  const { chat } = await onTerminalSide(
     tuiState({
-      agent: "codex",
+      agent: "claudecode",
+      agentSessionId: claudeSessionIds.current,
       eligibility: {
         available: false,
         reason: "connector_missing",
-        connector,
+        connector: claudeConnector,
       },
     }),
   );
   await expect
-    .element(chatTab("聊天（未安装 Codex ACP 适配器（codex-acp））"))
+    .element(
+      chatTab("聊天（未安装 Claude Code ACP 适配器（claude-agent-acp））"),
+    )
     .toHaveAttribute("aria-disabled", "true");
-  await expect.element(page.getByText(connector.installCommand)).toBeVisible();
+  await expect
+    .element(page.getByText(claudeConnector.installCommand))
+    .toBeVisible();
   await expect.element(page.getByText("安装后会自动重新检测")).toBeVisible();
   await page.getByRole("button", { name: "关闭安装提示" }).click();
   await expect
-    .element(page.getByText(connector.installCommand))
+    .element(page.getByText(claudeConnector.installCommand))
     .not.toBeInTheDocument();
+
+  // The next eligibility probe finds the installed connector without a reload.
+  chat.frame({
+    type: "state",
+    state: tuiState({
+      agent: "claudecode",
+      agentSessionId: claudeSessionIds.current,
+    }),
+  });
+  await expect.element(chatTab("聊天")).not.toHaveAttribute("aria-disabled");
 });
 
 test("an ambiguous switch lets the user pick the agent session and resends it", async () => {
@@ -169,12 +204,12 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
           reason: "session_ambiguous",
           candidates: [
             {
-              agentSessionId: "thread-a",
+              agentSessionId: claudeSessionIds.current,
               title: "修复排序",
               updatedAt: "2026-10-28T00:00:00Z",
             },
             {
-              agentSessionId: "thread-b",
+              agentSessionId: claudeSessionIds.alternative,
               title: "更新 README",
               updatedAt: "2026-10-28T00:01:00Z",
             },
@@ -184,11 +219,16 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
       );
     return Response.json({ side: "acp", dropped: [], unsupported: [] });
   });
-  await onTerminalSide(tuiState({ agent: "codex" }));
+  await onTerminalSide(
+    tuiState({
+      agent: "claudecode",
+      agentSessionId: claudeSessionIds.current,
+    }),
+  );
   await chatTab("聊天").click();
   const picker = page.getByRole("combobox", { name: "选择要打开的会话" });
   await expect.element(picker).toBeVisible();
-  await picker.selectOptions("thread-b");
+  await picker.selectOptions(claudeSessionIds.alternative);
   await page.getByRole("button", { name: "确认" }).click();
   await expect
     .poll(() => commands().map((command) => command.body))
@@ -197,7 +237,7 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
       {
         clientRequestId: expect.any(String),
         to: "acp",
-        agentSessionId: "thread-b",
+        agentSessionId: claudeSessionIds.alternative,
       },
     ]);
 });

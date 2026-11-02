@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,21 +23,24 @@ const pluginVersion = "1.0.0"
 const doubleEscWindow = time.Second
 
 type tui struct {
-	cfg   config
-	st    *store
-	cwd   string
-	codex bool
+	cfg    config
+	st     *store
+	cwd    string
+	codex  bool
+	claude bool
 
 	outMu sync.Mutex
 	out   io.Writer
 
-	cur      *session
-	locks    []*os.File    // Codex: the writer locks of every thread opened
-	turn     chan struct{} // closed to interrupt the running turn; nil when idle
-	turnDone chan bool     // receives interrupted when a turn ends
-	pending  string        // the running turn's prompt
-	line     []byte
-	lastEsc  time.Time
+	cur          *session
+	locks        []*os.File    // Codex: the writer locks of every thread opened
+	turn         chan struct{} // closed to interrupt the running turn; nil when idle
+	turnDone     chan bool     // receives interrupted when a turn ends
+	pending      string        // the running turn's prompt
+	line         []byte
+	lastEsc      time.Time
+	queryPending bool
+	queryReply   []byte
 }
 
 func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
@@ -44,7 +48,15 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	t := &tui{cfg: cfg, st: st, cwd: cwd, codex: cfg.profile == "codex", out: out, turnDone: make(chan bool, 1)}
+	t := &tui{
+		cfg: cfg, st: st, cwd: cwd, codex: cfg.profile == "codex", claude: cfg.profile == "claudecode",
+		out: out, turnDone: make(chan bool, 1), queryPending: cfg.profile == "claudecode",
+	}
+	defer func() {
+		if t.claude {
+			removeClaudeRegistration()
+		}
+	}()
 	restore := rawMode()
 	defer restore()
 	sig := make(chan os.Signal, 1)
@@ -55,6 +67,9 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 		// Codex reports working while it starts, and nothing but its root
 		// record.
 		t.emit7501("state=working:app=codex")
+	} else if t.claude {
+		// Claude waits for the capability answer before publishing idle.
+		t.emit7501("?")
 	} else {
 		t.emit7501("state=idle:app=" + cfg.profile)
 	}
@@ -85,7 +100,7 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 		if err := t.open(ss); err != nil {
 			return err
 		}
-	case cfg.profile == "omp" || t.codex:
+	case cfg.profile == "omp" || t.codex || t.claude:
 		if err := t.create(); err != nil {
 			return err
 		}
@@ -143,9 +158,9 @@ func (t *tui) printf(format string, args ...any) {
 
 func (t *tui) emit7501(body string) { t.printf("\x1b]7501;%s\x1b\\", body) }
 
-// warp sends a Warp cli-agent event; Codex sends none.
+// warp sends a Warp cli-agent event; Codex and Claude send none.
 func (t *tui) warp(event string) {
-	if t.codex {
+	if t.codex || t.claude {
 		return
 	}
 	ev := map[string]any{"v": 1, "event": event, "agent": t.cfg.profile, "plugin_version": pluginVersion, "cwd": t.cwd}
@@ -171,9 +186,16 @@ func (t *tui) open(ss *session) error {
 		t.st.release(t.cur.ID)
 	}
 	requested := ss.ID
-	ss, err := t.st.lease(ss)
-	if err != nil {
-		return err
+	var err error
+	if t.claude {
+		// Unlike omp, a second Claude TUI keeps the requested UUID and gets
+		// its own PID registration instead of forking the session.
+		t.st.event("open", ss.ID)
+	} else {
+		ss, err = t.st.lease(ss)
+		if err != nil {
+			return err
+		}
 	}
 	if ss.ID != requested {
 		if err := t.holdLock(ss.ID); err != nil {
@@ -181,6 +203,11 @@ func (t *tui) open(ss *session) error {
 		}
 	}
 	t.cur = ss
+	if t.claude {
+		if err := writeClaudeRegistration(t.cwd, ss.ID); err != nil {
+			return err
+		}
+	}
 	for _, m := range ss.Messages {
 		mark := ">"
 		if m.Role == "agent" {
@@ -191,7 +218,7 @@ func (t *tui) open(ss *session) error {
 	t.warp("session_start")
 	// Like the real OpenCode TUI (baseline.md), the opencode profile names
 	// its session only once a turn runs, even when it opened one with -s;
-	// Codex never reports it.
+	// Codex and Claude never report it.
 	if t.cfg.profile == "omp" {
 		t.emit7501("state=idle:id=" + ss.ID)
 	}
@@ -214,6 +241,9 @@ func (t *tui) holdLock(id string) error {
 
 // keys handles input and reports whether the TUI should exit.
 func (t *tui) keys(chunk []byte) bool {
+	if t.claude && t.queryPending {
+		chunk = t.consumeQueryReply(chunk)
+	}
 	for i := 0; i < len(chunk); i++ {
 		b := chunk[i]
 		switch {
@@ -250,6 +280,34 @@ func (t *tui) keys(chunk []byte) bool {
 		}
 	}
 	return false
+}
+
+// consumeQueryReply waits for WebMux's OSC 7501 capability response. The
+// response may share a read with subsequent keystrokes, so only its bytes are
+// consumed. Input before the response is startup noise, not a prompt.
+func (t *tui) consumeQueryReply(chunk []byte) []byte {
+	t.queryReply = append(t.queryReply, chunk...)
+	prefix := []byte("\x1b]7501;?:")
+	start := bytes.Index(t.queryReply, prefix)
+	if start < 0 {
+		if len(t.queryReply) > 4096 {
+			t.queryReply = append(t.queryReply[:0], t.queryReply[len(t.queryReply)-len(prefix)+1:]...)
+		}
+		return nil
+	}
+	body := t.queryReply[start+len(prefix):]
+	end, width := bytes.Index(body, []byte("\x1b\\")), 2
+	if bel := bytes.IndexByte(body, '\a'); bel >= 0 && (end < 0 || bel < end) {
+		end, width = bel, 1
+	}
+	if end < 0 {
+		return nil
+	}
+	rest := append([]byte(nil), body[end+width:]...)
+	t.queryReply = nil
+	t.queryPending = false
+	t.emit7501("state=idle:app=claude-code")
+	return rest
 }
 
 func (t *tui) escape() {
@@ -331,16 +389,24 @@ func (t *tui) finishTurn(interrupted bool) {
 		t.printf("error: %v\r\n", err)
 	}
 	t.printf("\r\n")
-	t.status("idle")
+	if t.claude && !interrupted {
+		t.status("done")
+	} else {
+		t.status("idle")
+	}
 	t.warp("stop")
 	t.printf("prompt> ")
 }
 
-// status reports a turn's state: Codex in its root record only, the others
-// in the root and the session's child record.
+// status reports a turn's state: Codex and Claude in their root records only,
+// the others in the root and the session's child record.
 func (t *tui) status(state string) {
 	if t.codex {
 		t.emit7501("state=" + state + ":app=codex")
+		return
+	}
+	if t.claude {
+		t.emit7501("state=" + state + ":app=claude-code")
 		return
 	}
 	t.emit7501("state=" + state)

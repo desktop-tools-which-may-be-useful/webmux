@@ -190,7 +190,7 @@ func TestLaunchConfigHybrid(t *testing.T) {
 	if !created.Hybrid || !reflect.DeepEqual(created.HybridSupport, contract.HybridSupport{Supported: true, Agent: "omp", SupportedAgents: titles}) {
 		t.Fatalf("created %+v", created)
 	}
-	h.expect("POST", "/api/launch-configs", `{"name":"Claude","cmd":["claude"],"hybrid":true}`, 400)
+	h.expect("POST", "/api/launch-configs", `{"name":"Gemini","cmd":["gemini"],"hybrid":true}`, 400)
 	h.expect("PUT", "/api/launch-configs/"+created.ID, `{"name":"omp","cmd":["omp","-p","x"],"hybrid":true}`, 400)
 	h.expect("PUT", "/api/launch-configs/"+created.ID, `{"name":"omp","cmd":["omp"],"hybrid":true,"hybridSupport":{"supported":true}}`, 400)
 	if got, _ := h.store.Get(created.ID); !got.Hybrid || len(got.Cmd) != 1 {
@@ -210,6 +210,13 @@ func TestLaunchConfigHybrid(t *testing.T) {
 		if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/hybrid-support", row.body, 200), &got); err != nil || !reflect.DeepEqual(got, row.want) {
 			t.Fatalf("hybrid-support %s = %+v, %v", row.body, got, err)
 		}
+	}
+	var claude contract.HybridSupport
+	raw := h.expect("POST", "/api/launch-configs/hybrid-support", `{"cmd":["claude"]}`, 200)
+	if err := json.Unmarshal(raw, &claude); err != nil || !claude.Supported || claude.Agent != "claudecode" ||
+		claude.Connector == nil || claude.Connector.Executable != "claude-agent-acp" ||
+		claude.Connector.InstallCommand != "npm install -g @agentclientprotocol/claude-agent-acp" {
+		t.Fatalf("Claude hybrid support = %+v, %v", claude, err)
 	}
 	h.expect("POST", "/api/launch-configs/hybrid-support", `{"cmd":["omp"],"x":1}`, 400)
 	if list, _ := h.store.List(); len(list) != 1 {

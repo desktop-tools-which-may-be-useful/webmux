@@ -190,17 +190,149 @@ func (a *actor) lockedSession(id session.Identity) string {
 	return lt.current
 }
 
-// agentIsRoot is condition 3: the agent is the PTY's root process, or the
-// profile's launcher is and its direct child is the agent.
+// processRegistryTracker bounds reads of the current process's registration
+// record and retains only the selected native process and interpreted ID.
+type processRegistryTracker struct {
+	pid       int
+	read      time.Time
+	current   string
+	unknown   bool
+	process   agentprofile.ProcessFacts
+	processOK bool
+}
+
+// registeredSession reads a process-registry profile's current ID at the
+// same bounded cadence as writer locks. Missing or invalid records select
+// the generic session/list candidate fallback.
+func (a *actor) registeredSession(id session.Identity) string {
+	r := &a.registry
+	if id.PID == 0 {
+		*r = processRegistryTracker{}
+		return ""
+	}
+	if r.pid != id.PID {
+		*r = processRegistryTracker{pid: id.PID}
+	}
+	if !r.read.IsZero() && time.Since(r.read) < lockReadEvery {
+		return r.current
+	}
+	r.read = time.Now()
+	r.process, r.processOK = a.agentProcess()
+	r.current = ""
+	r.unknown = !r.processOK
+	if tracker, ok := a.cmd.Agent.(agentprofile.ProcessRegistry); ok && r.processOK {
+		r.current, _ = tracker.RegisteredSession(r.process, a.shell.Getenv, a.svc.userHome)
+		r.unknown = r.current == ""
+	}
+	return r.current
+}
+
+// agentProcess selects the native agent root, or exactly one native direct
+// child of an allowed launcher. Process facts never leave the service.
+func (a *actor) agentProcess() (agentprofile.ProcessFacts, bool) {
+	processes := a.shell.RunProcesses()
+	if len(processes) == 0 {
+		return agentprofile.ProcessFacts{}, false
+	}
+	convert := func(p session.ProcessFacts) agentprofile.ProcessFacts {
+		return agentprofile.ProcessFacts{PID: p.PID, Executable: p.Executable, Cwd: p.Cwd, Start: p.Start, Domain: p.Domain}
+	}
+	root := convert(processes[0])
+	if a.cmd.Profile.RunsProcess(root.Executable) {
+		return root, true
+	}
+	if a.cmd.Profile.Launcher == "" || root.Executable != a.cmd.Profile.Launcher {
+		return agentprofile.ProcessFacts{}, false
+	}
+	var selected agentprofile.ProcessFacts
+	for _, process := range processes[1:] {
+		candidate := convert(process)
+		if !a.cmd.Profile.RunsProcess(candidate.Executable) {
+			continue
+		}
+		if selected.PID != 0 {
+			return agentprofile.ProcessFacts{}, false
+		}
+		selected = candidate
+	}
+	return selected, selected.PID != 0
+}
+
+func (a *actor) tracksRegistry() bool {
+	_, ok := a.cmd.Agent.(agentprofile.ProcessRegistry)
+	return ok
+}
+
+func (a *actor) identityFallback() bool {
+	return (a.tracksLocks() && a.locks.unknown) || (a.tracksRegistry() && a.registry.unknown)
+}
+
+// externallyHeld checks registry occupancy at most once per observation
+// cadence. Operation boundaries force a fresh check before opening a writer.
+func (a *actor) externallyHeld(sid string, force bool) bool {
+	if sid == "" || !a.tracksRegistry() {
+		return false
+	}
+	if !force && a.externalSID == sid && !a.externalRead.IsZero() && time.Since(a.externalRead) < lockReadEvery {
+		return a.externalHeld
+	}
+	current := a.registry.process
+	if force && a.side == SideTUI {
+		if process, ok := a.agentProcess(); ok {
+			current = process
+		} else {
+			current = agentprofile.ProcessFacts{}
+		}
+	}
+	if current.Cwd == "" {
+		current.Cwd = a.agentCwd
+		if current.Cwd == "" {
+			current.Cwd = a.cwd
+		}
+	}
+	tracker, _ := a.cmd.Agent.(agentprofile.ProcessRegistry)
+	a.externalSID, a.externalRead = sid, time.Now()
+	a.externalHeld = a.registryExternalHeld(sid, current, tracker)
+	return a.externalHeld
+}
+
+// registryExternalHeld performs one fresh scan without changing actor state,
+// so ACP subtasks can also use it at operation boundaries.
+func (a *actor) registryExternalHeld(sid string, current agentprofile.ProcessFacts, tracker agentprofile.ProcessRegistry) bool {
+	if tracker == nil {
+		return false
+	}
+	if current.Cwd == "" {
+		current.Cwd = a.agentCwd
+		if current.Cwd == "" {
+			current.Cwd = a.cwd
+		}
+	}
+	lookup := func(pid int) (agentprofile.ProcessFacts, bool) {
+		process, ok := session.LookupProcess(pid)
+		if !ok {
+			return agentprofile.ProcessFacts{}, false
+		}
+		return agentprofile.ProcessFacts{PID: process.PID, Executable: process.Executable, Cwd: process.Cwd, Start: process.Start, Domain: process.Domain}, true
+	}
+	return tracker.ExternallyHeld(sid, current, lookup, a.shell.Getenv, a.svc.userHome)
+}
+
+func (a *actor) externalWriterNow(sid string) bool {
+	tracker, _ := a.cmd.Agent.(agentprofile.ProcessRegistry)
+	current := agentprofile.ProcessFacts{Cwd: a.agentCwd}
+	return tracker != nil && a.registryExternalHeld(sid, current, tracker)
+}
+
 func (a *actor) agentIsRoot(id session.Identity) bool {
 	if id.PID == 0 {
 		return false
 	}
 	p := a.cmd.Profile
-	if p.RunsAs(id.Executable) {
+	if p.RunsProcess(id.Executable) {
 		return true
 	}
-	return p.Launcher != "" && id.Executable == p.Launcher && slices.ContainsFunc(a.shell.RunChildren(), p.RunsAs)
+	return p.Launcher != "" && id.Executable == p.Launcher && slices.ContainsFunc(a.shell.RunChildren(), p.RunsProcess)
 }
 
 // tracksLocks reports that the agent's session IDs come from its writer
@@ -261,13 +393,18 @@ func (a *actor) observe() {
 	a.setEligibility(reason)
 }
 
-// identify reads the terminal's identity and the profile's view of it; a
-// lock-tracking profile's session ID comes from its writer locks.
+// identify reads the terminal's identity and the profile's view of it. A
+// lock- or registry-tracking profile gets its session ID from that source.
 func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
 	id := a.shell.Identity()
 	ident, known := a.svc.agents.Identify(signals(id))
-	if known && ident.Agent == a.cmd.Profile.Name && a.tracksLocks() {
-		ident.AgentSessionID = a.lockedSession(id)
+	if known && ident.Agent == a.cmd.Profile.Name {
+		switch {
+		case a.tracksLocks():
+			ident.AgentSessionID = a.lockedSession(id)
+		case a.tracksRegistry():
+			ident.AgentSessionID = a.registeredSession(id)
+		}
 	}
 	return id, ident, known
 }
@@ -295,7 +432,7 @@ func (a *actor) agentSessionChanged(sid string) {
 // reason.
 func (a *actor) assess(id session.Identity, ident agentprofile.Identity, known bool) (target, string) {
 	sid := ident.AgentSessionID
-	if sid == "" {
+	if sid == "" && !a.tracksRegistry() {
 		sid = a.resumedSID
 	}
 	if !known || ident.Agent != a.cmd.Profile.Name {
@@ -307,7 +444,7 @@ func (a *actor) assess(id session.Identity, ident agentprofile.Identity, known b
 	switch {
 	case !a.agentIsRoot(id):
 		return target{}, ReasonNotRoot
-	case sid == "" && (!a.tracksLocks() || !a.locks.unknown):
+	case sid == "" && !a.identityFallback():
 		return target{}, ReasonNoSessionID
 	}
 	raw := ident.Cwd
@@ -331,11 +468,13 @@ func (a *actor) listedReason(t target) string {
 	switch {
 	case a.probe.key != t || a.probe.result == probePending:
 		return ReasonChecking
-	case a.probe.result == probeNotListed && (t.sid == "" || a.tracksLocks()):
+	case a.probe.result == probeNotListed && (t.sid == "" || a.tracksLocks() || a.tracksRegistry()):
 		return ReasonNoSessionID
 	case a.probe.result == probeNotListed:
 		return ReasonNotListed
 	case t.sid != "" && a.svc.occupied(a.id, t.sid):
+		return ReasonOccupied
+	case t.sid != "" && a.externallyHeld(t.sid, false):
 		return ReasonOccupied
 	}
 	return ""

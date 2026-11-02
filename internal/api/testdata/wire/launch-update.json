@@ -8,12 +8,19 @@
     "env": {},
     "hybrid": false,
     "hybridSupport": {
-      "reason": "unknown_agent",
-      "supported": false,
+      "agent": "claudecode",
+      "connector": {
+        "docsUrl": "https://github.com/agentclientprotocol/claude-agent-acp",
+        "executable": "claude-agent-acp",
+        "installCommand": "npm install -g @agentclientprotocol/claude-agent-acp",
+        "title": "Claude Code ACP 适配器"
+      },
+      "supported": true,
       "supportedAgents": [
         "omp",
         "OpenCode",
-        "Codex CLI"
+        "Codex CLI",
+        "Claude Code"
       ]
     },
     "id": "<id#1>",

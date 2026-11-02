@@ -3,9 +3,11 @@ import {
   ChatFrameSchema,
   ChatStateSchema,
   CodeChangeSchema,
+  type AgentConnector,
   type ChatEvent,
   type ChatRequest,
   type ChatState,
+  type HybridCandidate,
 } from "../../src/schemas";
 
 // Sample data for the hybrid session stories: the chat channel's frames as
@@ -13,7 +15,7 @@ import {
 // production schemas and reduced by the production reducer. No ACP process,
 // PTY or API request is involved.
 
-export type Agent = "omp" | "opencode";
+export type Agent = "omp" | "opencode" | "claudecode";
 export type Scenario =
   | "conversation"
   | "permission"
@@ -23,7 +25,67 @@ export type Scenario =
   | "switching"
   | "awaiting-choice"
   | "terminal"
-  | "connector-missing";
+  | "connector-missing"
+  | "connector-recheck"
+  | "first-message"
+  | "ambiguous"
+  | "occupied"
+  | "mode-fallback"
+  | "recovery-failure";
+
+export const claudeConnector = {
+  executable: "claude-agent-acp",
+  title: "Claude Code ACP 适配器",
+  installCommand: "npm install -g @agentclientprotocol/claude-agent-acp",
+  docsUrl: "https://github.com/agentclientprotocol/claude-agent-acp",
+} satisfies AgentConnector;
+
+// Server-published profile facts, kept separate from the stable agent ID and
+// its executable. Stories consume these exactly as the production UI does.
+export const agentMetadata: Record<
+  Agent,
+  {
+    title: string;
+    executable: string;
+    connector?: AgentConnector;
+    steering: boolean;
+    forceSwitchNote: string;
+  }
+> = {
+  omp: {
+    title: "omp",
+    executable: "omp",
+    steering: true,
+    forceSwitchNote: "omp 已输出的部分可能丢失",
+  },
+  opencode: {
+    title: "OpenCode",
+    executable: "opencode",
+    steering: false,
+    forceSwitchNote: "已输出的部分可能丢失；回合不会在后台继续",
+  },
+  claudecode: {
+    title: "Claude Code",
+    executable: "claude",
+    connector: claudeConnector,
+    steering: true,
+    forceSwitchNote:
+      "cancel 只中断当前回合，后台 Bash 或子任务可能继续运行；强制切换会终止连接器并等待受管后代退出",
+  },
+};
+
+export const claudeCandidates = [
+  {
+    agentSessionId: "01a18715-8504-7020-9f3d-257900000000",
+    title: "修复首页排序",
+    updatedAt: "2026-01-01T11:58:00Z",
+  },
+  {
+    agentSessionId: "01b29826-9615-8131-af4e-368a11111111",
+    title: "更新 README",
+    updatedAt: "2026-01-01T11:59:00Z",
+  },
+] satisfies HybridCandidate[];
 
 const at = "2026-01-01T11:59:00Z";
 type EventBody = ChatEvent extends infer E
@@ -202,15 +264,65 @@ const configs: Record<Agent, ChatState["config"]> = {
       ],
     },
   ],
+  claudecode: [
+    {
+      id: "model",
+      name: "模型",
+      category: "model",
+      type: "select",
+      value: "sonnet",
+      options: [
+        { value: "sonnet", name: "Sonnet" },
+        { value: "opus", name: "Opus" },
+      ],
+    },
+    {
+      id: "effort",
+      name: "Effort",
+      category: "thought_level",
+      type: "select",
+      value: "high",
+      options: ["low", "medium", "high"].map((value) => ({
+        value,
+        name: value,
+      })),
+    },
+    {
+      id: "mode",
+      name: "模式",
+      category: "mode",
+      type: "select",
+      value: "auto",
+      options: [
+        "default",
+        "acceptEdits",
+        "plan",
+        "auto",
+        "bypassPermissions",
+      ].map((value) => ({ value, name: value })),
+    },
+  ],
 };
 
-const commands: ChatState["commands"] = [
+const commonCommands: ChatState["commands"] = [
   { name: "compact", description: "压缩上下文，保留摘要" },
   { name: "model", description: "切换模型", hint: "模型名称" },
   { name: "plan", description: "进入计划模式" },
   { name: "review", description: "审阅当前改动", hint: "文件或提交" },
   { name: "commit", description: "生成提交说明并提交" },
 ];
+
+// This is the list after the server profile removes authentication commands.
+// The chat UI only renders the published list; it has no agent-specific filter.
+const commands: Record<Agent, ChatState["commands"]> = {
+  omp: commonCommands,
+  opencode: commonCommands,
+  claudecode: [
+    ...commonCommands,
+    { name: "context", description: "查看当前上下文" },
+    { name: "init", description: "初始化项目说明" },
+  ],
+};
 
 const plan = (done: boolean): ChatState["plan"] => ({
   entries: [
@@ -247,18 +359,40 @@ export const sessionIds: Record<Agent, { current: string; previous: string }> =
   {
     omp: { current: "01a17e26c4b84f0e9d2a", previous: "01a17e25a9f04c11b7e3" },
     opencode: { current: "ses_7f3c2a91d0e4b5", previous: "ses_6e1b0f82c3d7a4" },
+    claudecode: {
+      current: "01a18715-8504-7020-9f3d-257900000000",
+      previous: "019f8765-4321-7090-8a1b-250000000000",
+    },
   };
 
 /** The chat channel of one scenario: its timeline and its latest state. */
 export function chatFixture(scenario: Scenario, agent: Agent) {
-  const running = ![
+  const terminalScenarios: Scenario[] = [
+    "terminal",
+    "awaiting-choice",
+    "connector-recheck",
+    "first-message",
+    "ambiguous",
+    "occupied",
+  ];
+  const idleScenarios: Scenario[] = [
     "commands",
     "cancelled",
-    "terminal",
     "connector-missing",
-  ].includes(scenario);
+    "recovery-failure",
+    ...terminalScenarios,
+  ];
+  const running = !idleScenarios.includes(scenario);
   const events = [...history];
   if (scenario === "compaction") events.push(...compaction);
+  if (scenario === "mode-fallback")
+    events.push({
+      kind: "notice",
+      notice: {
+        level: "warning",
+        text: "当前模型不支持 auto，实际权限模式已回退到 acceptEdits",
+      },
+    });
   if (scenario === "permission")
     events.push(
       tool(
@@ -307,16 +441,34 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
         ? "awaiting_choice"
         : undefined;
   const ids = sessionIds[agent];
+  const eligibility: ChatState["eligibility"] =
+    scenario === "first-message"
+      ? { available: false, reason: "no_session_id" }
+      : scenario === "occupied"
+        ? { available: false, reason: "occupied" }
+        : scenario === "connector-recheck"
+          ? {
+              available: false,
+              reason: "connector_missing",
+              connector: agentMetadata[agent].connector,
+            }
+          : { available: true };
+  const config = configs[agent].map((option) =>
+    scenario === "mode-fallback" && option.id === "mode"
+      ? { ...option, value: "acceptEdits" }
+      : option,
+  );
   const state = ChatStateSchema.parse({
     ...baseState(agent),
-    side:
-      scenario === "terminal" || scenario === "awaiting-choice"
-        ? "tui"
-        : scenario === "switching"
-          ? "switching"
-          : "acp",
+    side: terminalScenarios.includes(scenario)
+      ? "tui"
+      : scenario === "switching"
+        ? "switching"
+        : "acp",
     phase,
     agentSessionId: ids.current,
+    eligibility,
+    config,
     turn: { running: running && !phase },
     requests: scenario === "permission" ? [permissionRequest] : [],
     plan: plan(scenario === "commands"),
@@ -328,7 +480,14 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
     idChange:
       scenario === "terminal" ? { from: ids.previous, to: ids.current } : null,
     connectorMissing:
-      scenario === "connector-missing" ? codexConnector : undefined,
+      scenario === "connector-missing"
+        ? (agentMetadata[agent].connector ?? codexConnector)
+        : undefined,
+    switchError:
+      scenario === "recovery-failure"
+        ? "恢复会话失败：无法加载保存的 agent 会话"
+        : undefined,
+    recovery: scenario === "recovery-failure" ? { state: "interrupted" } : null,
   } satisfies ChatState);
   return { model, state };
 }
@@ -352,15 +511,12 @@ function baseState(agent: Agent): ChatState {
     turn: { running: false },
     requests: [],
     config: configs[agent],
-    commands,
+    commands: commands[agent],
     plan: null,
     usage: { used: 26_800, size: 200_000, cost: 0.07, currency: "USD" },
     queue: { paused: false, items: [] },
-    steering: agent === "omp",
-    forceSwitchNote:
-      agent === "omp"
-        ? "omp 已输出的部分可能丢失"
-        : "已输出的部分可能丢失；回合不会在后台继续",
+    steering: agentMetadata[agent].steering,
+    forceSwitchNote: agentMetadata[agent].forceSwitchNote,
     promptCapabilities: { image: true, embeddedContext: true },
     permissionMode: "auto",
     authRequired: false,
@@ -370,26 +526,27 @@ function baseState(agent: Agent): ChatState {
   };
 }
 
-export const terminalLines = [
-  " omp  claude-haiku-4-5 · webmux",
-  "",
-  "› 修复首页搜索的排序：置顶的工作区应排在最前。",
-  "",
-  "  ✓ Read web/src/pages/Home.svelte",
-  "  ✓ Read web/src/homeWorktrees.ts",
-  "  ✓ Edit web/src/homeWorktrees.ts (+30 −15)",
-  "  ✓ Edit web/src/pages/Home.svelte (+12 −3)",
-  "",
-  "  排序已修复，测试通过。",
-  "",
-  "› /new",
-  "",
-  "  New session started.",
-  "",
-  "› 继续：更新 README 中的排序说明",
-  "  ● Editing README.md …",
-  "",
-].join("\n");
+export const terminalLines = (agent: Agent) =>
+  [
+    ` ${agentMetadata[agent].title} · webmux`,
+    "",
+    "› 修复首页搜索的排序：置顶的工作区应排在最前。",
+    "",
+    "  ✓ Read web/src/pages/Home.svelte",
+    "  ✓ Read web/src/homeWorktrees.ts",
+    "  ✓ Edit web/src/homeWorktrees.ts (+30 −15)",
+    "  ✓ Edit web/src/pages/Home.svelte (+12 −3)",
+    "",
+    "  排序已修复，测试通过。",
+    "",
+    "› /new",
+    "",
+    "  New session started.",
+    "",
+    "› 继续：更新 README 中的排序说明",
+    "  ● Editing README.md …",
+    "",
+  ].join("\n");
 
 // The two files the chat changed, for the code panel.
 export const codeChanges = [

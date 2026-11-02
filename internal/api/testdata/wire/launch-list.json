@@ -12,12 +12,13 @@
       ],
       "hybrid": false,
       "hybridSupport": {
-        "reason": "unknown_agent",
+        "reason": "session_arg",
         "supported": false,
         "supportedAgents": [
           "omp",
           "OpenCode",
-          "Codex CLI"
+          "Codex CLI",
+          "Claude Code"
         ]
       },
       "id": "<id#1>",
@@ -40,7 +41,8 @@
         "supportedAgents": [
           "omp",
           "OpenCode",
-          "Codex CLI"
+          "Codex CLI",
+          "Claude Code"
         ]
       },
       "id": "<id#2>",
