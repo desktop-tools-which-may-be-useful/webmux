@@ -371,6 +371,47 @@ func TestOverlayReportsChatSideAndIsPublished(t *testing.T) {
 	}
 }
 
+func TestOverlayTitleNamesOnlyUnnamedChatShells(t *testing.T) {
+	t.Parallel()
+	m := shellManager(t)
+	base := t.TempDir()
+
+	unnamed, err := m.CreateShell(ShellInput{CreateInput: CreateInput{Cwd: base, Cmd: []string{"agent"}}}, newFakeDriver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	derived := unnamed.Info().Title
+	unnamed.SetOverlay(&Overlay{Hybrid: &HybridInfo{Side: "acp"}, Title: "chat title"})
+	if got := unnamed.Info().Title; got != "chat title" {
+		t.Fatalf("unnamed chat title %q", got)
+	}
+	// An empty title keeps the name derived from the launch directory.
+	unnamed.SetOverlay(&Overlay{Hybrid: &HybridInfo{Side: "acp"}})
+	if got := unnamed.Info().Title; got != derived {
+		t.Fatalf("cleared chat title %q, want %q", got, derived)
+	}
+	unnamed.SetOverlay(&Overlay{Hybrid: &HybridInfo{Side: "acp"}, Title: "chat title"})
+
+	// A creation name always wins over the agent's title.
+	named, err := m.CreateShell(ShellInput{CreateInput: CreateInput{Cwd: base, Name: "mine", Cmd: []string{"agent"}}}, newFakeDriver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	named.SetOverlay(&Overlay{Hybrid: &HybridInfo{Side: "acp"}, Title: "chat title"})
+	if got := named.Info().Title; got != "mine" {
+		t.Fatalf("named chat title %q", got)
+	}
+
+	// A terminal run's own title wins while it exists.
+	if err := unnamed.StartRun([]string{"/bin/sh", "-c", "printf TUI; exec sleep 30"}); err != nil {
+		t.Fatal(err)
+	}
+	waitForOutput(t, unnamed, "TUI")
+	if got := unnamed.Info().Title; got == "chat title" {
+		t.Fatalf("chat title applied while a run exists: %q", got)
+	}
+}
+
 func TestOrdinarySessionHasNoHybridInfo(t *testing.T) {
 	t.Parallel()
 	m := shellManager(t)

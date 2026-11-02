@@ -101,7 +101,7 @@ Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固�
 事件为规范化模型，不是 ACP 原文：
 
 - 内容：`message.append`（按 `messageId` 追加，`role` 为 user/agent/thought）、`tool.upsert`（按 `toolCallId` 的字段补丁）。
-- 会话元数据：`plan.set`、`commands.set`、`config.set`、`usage.set`、`info.set`、`compaction.upsert`。
+- 会话元数据：`plan.set`、`commands.set`、`config.set`、`usage.set`、`info.set`（`title` 同时写回会话标题，创建名称仍优先）、`compaction.upsert`。
 - 回合：`turn.start`、`turn.end`（`stopReason` 含 `cancelled`、`error`、`auth_required`）。
 - 请求：`request.open`、`request.close`。
 - 提示与标记：`notice`、`marker`（`loaded`、`switched`、`truncated`、`reconnected`、`resumed`）。

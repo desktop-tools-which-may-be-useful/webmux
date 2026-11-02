@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/attentionkind"
@@ -167,6 +168,49 @@ func TestChatTurnEventSequence(t *testing.T) {
 	// end_turn latches done attention: the session waits for the user.
 	if info := s.Info(); info.Status != session.StatusWaiting || info.Attention == nil {
 		t.Fatalf("status after the turn %s, attention %+v", info.Status, info.Attention)
+	}
+}
+
+func TestChatTitleBecomesSessionTitle(t *testing.T) {
+	h := newHarness(t, 0)
+	in := h.input(omp.Name, SideACP)
+	in.Name = ""
+	s := h.create(in)
+	id := s.Info().ID
+	st := h.follow(id)
+	prompt(t, h, id, "/title")
+	st.until("title event", hasKind(EventInfo))
+	waitFor(t, "session title", func() bool { return s.Info().Title == "fake title" })
+}
+
+func TestChatTitleKeepsCreationName(t *testing.T) {
+	h := newHarness(t, 0)
+	s := h.create(h.input(omp.Name, SideACP))
+	id := s.Info().ID
+	st := h.follow(id)
+	prompt(t, h, id, "/title")
+	st.until("title event", hasKind(EventInfo))
+	if got := s.Info().Title; got != "agent" {
+		t.Fatalf("session title %q, want the creation name", got)
+	}
+}
+
+func TestOverlayTitleBelongsToAgentSession(t *testing.T) {
+	a := &actor{
+		side: SideACP, state: StateActive,
+		cmd:   agentprofile.Command{Profile: &agentprofile.Profile{}},
+		title: "old title", titleSession: "sid-a", agentSessionID: "sid-b",
+	}
+	if got := a.overlay().Title; got != "" {
+		t.Fatalf("title of another agent session %q", got)
+	}
+	a.agentSessionID = "sid-a"
+	if got := a.overlay().Title; got != "old title" {
+		t.Fatalf("title of the shown agent session %q", got)
+	}
+	a.side = SideTUI
+	if got := a.overlay().Title; got != "" {
+		t.Fatalf("chat title on the terminal side %q", got)
 	}
 }
 

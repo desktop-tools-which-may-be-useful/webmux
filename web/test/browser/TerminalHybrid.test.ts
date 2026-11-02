@@ -14,6 +14,7 @@ import {
   claudeConnector,
   claudeSessionIds,
   commands,
+  events,
   installChatFixture,
   respond,
   snapshot,
@@ -321,6 +322,36 @@ test("switching to chat shows its steps, asks after a stuck interrupt and lands 
   expect(sockets.filter((socket) => socket.path === terminalPath)).toHaveLength(
     1,
   );
+});
+
+test("an agent title refreshes the chat side's header", async () => {
+  const { terminal, chat } = await onTerminalSide(tuiState());
+  let title = "creating name";
+  respond(/^GET \/api\/sessions\/hybrid22$/, () =>
+    Response.json({ ...info, generation: "", title }),
+  );
+  // Another device moved the session to the chat side.
+  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
+  terminal.drop(4409);
+  chat.frame({ type: "state", state: chatState() });
+  await expect
+    .element(page.getByText("creating name", { exact: true }))
+    .toBeVisible();
+
+  // The agent names its session: the header re-reads the server info, whose
+  // title wins over the model's, and shows it instead.
+  title = "server title";
+  chat.frame({
+    type: "events",
+    generation: "g1",
+    items: events({ kind: "info.set", info: { title: "agent title" } }),
+  });
+  await expect
+    .element(page.getByText("server title", { exact: true }))
+    .toBeVisible();
+  await expect
+    .element(page.getByText("agent title", { exact: true }))
+    .not.toBeInTheDocument();
 });
 
 test("a session moved by another device shows the chat view; switching back reattaches the terminal", async () => {

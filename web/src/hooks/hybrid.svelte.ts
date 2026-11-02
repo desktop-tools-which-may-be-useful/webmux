@@ -233,7 +233,8 @@ export function useHybrid(
           : restInfo.status;
     return { ...restInfo, status } satisfies SessionInfo;
   });
-  // What the header shows of a session off its terminal side.
+  // What the header shows of a session off its terminal side. The model's
+  // title re-reads the session so the server's name precedence still applies.
   const infoKey = $derived(
     state && where !== "tui"
       ? [
@@ -242,6 +243,7 @@ export function useHybrid(
           state.dormant,
           state.turn.running,
           state.requests.length,
+          chat.model.title ?? "",
         ].join()
       : "",
   );

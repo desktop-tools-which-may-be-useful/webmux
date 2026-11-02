@@ -207,6 +207,15 @@ describe("chat reducer", () => {
     expect([m.truncated, m.next]).toEqual([true, 40]);
   });
 
+  test("info.set replaces the session title", () => {
+    let m = connect();
+    m = applyFrame(
+      m,
+      events([ev({ kind: "info.set", info: { title: "修复排序" } })]),
+    );
+    expect(m.title).toBe("修复排序");
+  });
+
   test("closing a permission request annotates its tool call", () => {
     let m = connect();
     m = applyFrame(

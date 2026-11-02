@@ -234,7 +234,7 @@ func (s *Session) infoLocked() Info {
 		i.ReportedCwd = &reported
 	}
 	if s.overlay != nil {
-		s.overlay.applyTo(&i, s.run == nil)
+		s.overlay.applyTo(&i, s.run == nil, s.userTitle == "")
 	}
 	return i
 }

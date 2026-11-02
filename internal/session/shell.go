@@ -43,13 +43,15 @@ type HybridInfo struct {
 }
 
 // Overlay is what a driver reports for its shell. Hybrid is always shown;
-// Status, Attention and Preview replace the PTY-derived values only while
-// the shell has no run. A zero Status keeps the shell's own.
+// Status, Attention, Preview and Title replace the PTY-derived values only
+// while the shell has no run. A zero Status or empty Title keeps the shell's
+// own.
 type Overlay struct {
 	Hybrid    *HybridInfo
 	Status    Status
 	Attention *Attention
 	Preview   string
+	Title     string
 }
 
 func (h *HybridInfo) clone() *HybridInfo {
@@ -75,7 +77,8 @@ func (o *Overlay) clone() *Overlay {
 }
 
 // applyTo writes the overlay into an Info copy that owns no shared pointers.
-func (o *Overlay) applyTo(i *Info, noRun bool) {
+// Title applies only to an unnamed shell, so a creation name always wins.
+func (o *Overlay) applyTo(i *Info, noRun, unnamed bool) {
 	i.Hybrid = o.Hybrid.clone()
 	if !noRun {
 		return
@@ -89,6 +92,9 @@ func (o *Overlay) applyTo(i *Info, noRun bool) {
 		i.Attention = &attention
 	}
 	i.Preview = o.Preview
+	if o.Title != "" && unnamed {
+		i.Title = o.Title
+	}
 }
 
 func (o *Overlay) side() string {

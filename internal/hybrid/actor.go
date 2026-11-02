@@ -92,7 +92,12 @@ type actor struct {
 	// attention is the latched turn-end attention (done or error); pending
 	// requests take precedence over it.
 	attention *session.Attention
-	preview   preview
+	// title is the last title the agent reported through session_info_update;
+	// titleSession is the agent session it belongs to. It names the shell
+	// while the chat side shows no terminal run.
+	title        string
+	titleSession string
+	preview      preview
 	// switching is the running switch, from its eligibility check on.
 	switching *switchOp
 	// opening: a reconnect or wake is opening the agent session again;
@@ -313,6 +318,12 @@ func (a *actor) overlay() *session.Overlay {
 		info.AgentSessionID = &id
 	}
 	o := &session.Overlay{Hybrid: info}
+	if a.side == SideACP && a.titleSession == a.agentSessionID {
+		// The terminal drives the title on its own side (OSC 0/2), so only
+		// the chat side publishes the agent's session title, and only while
+		// it belongs to the agent session shown.
+		o.Title = a.title
+	}
 	if a.side == SideACP && a.state == StateActive {
 		o.Attention = a.currentAttention()
 		o.Preview = a.preview.text
@@ -366,6 +377,11 @@ func (a *actor) emit(events ...Event) {
 			a.record(false, func(r *Record) { r.Config = values })
 		case EventUsage:
 			a.chat.Usage = e.Usage
+		case EventInfo:
+			if e.Info == nil || e.Info.Title == nil {
+				continue
+			}
+			a.title = *e.Info.Title
 		case EventMessage:
 			if e.Message.Role != RoleAgent || !a.preview.add(e.Message) {
 				continue
@@ -619,6 +635,11 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 		}
 	}
 	a.emit(events...)
+	for _, e := range events {
+		if e.Kind == EventInfo && e.Info != nil && e.Info.Title != nil {
+			a.titleSession = n.SessionID
+		}
+	}
 }
 
 func (a *actor) openRequest(p *pending) {

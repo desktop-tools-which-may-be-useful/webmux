@@ -112,6 +112,23 @@ func TestCapTextKeepsUTF8(t *testing.T) {
 	}
 }
 
+func TestSessionTitleTrimsAndBounds(t *testing.T) {
+	if got := sessionTitle("  chat title \n"); got != "chat title" {
+		t.Fatalf("trimmed title %q", got)
+	}
+	if got := sessionTitle("   "); got != "" {
+		t.Fatalf("blank title %q", got)
+	}
+	if got := sessionTitle(strings.Repeat("a", maxTitleBytes+10)); len(got) != maxTitleBytes {
+		t.Fatalf("title kept %d bytes", len(got))
+	}
+	// A cut inside a multi-byte rune backs off to the previous boundary.
+	edge := strings.Repeat("a", maxTitleBytes-1) + "é"
+	if got := sessionTitle(edge); len(got) != maxTitleBytes-1 || !utf8.ValidString(got) {
+		t.Fatalf("title cut at %d bytes, valid %v", len(got), utf8.ValidString(got))
+	}
+}
+
 func TestTranslateContentAndMessages(t *testing.T) {
 	var tr translator
 	big := strings.Repeat("z", maxFieldBytes+1)
