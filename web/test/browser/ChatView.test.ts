@@ -510,6 +510,7 @@ test("config options are icons with their full name and value on demand", async 
   socket.frame(
     snapshot(
       chatState({
+        agent: "opencode",
         config: [
           {
             id: "model",
@@ -556,29 +557,60 @@ test("config options are icons with their full name and value on demand", async 
   ]);
 });
 
-test("session options stay one scrolling row on a narrow screen", async () => {
+test("OMP models show the full provider/model id", async () => {
+  const socket = await open();
+  socket.frame(
+    snapshot(
+      chatState({
+        config: [
+          {
+            id: "model",
+            name: "Model",
+            category: "model",
+            type: "select",
+            value: "anthropic/claude-haiku-4-5",
+            options: [
+              { value: "anthropic/claude-haiku-4-5", name: "Claude Haiku 4.5" },
+              { value: "bedrock/claude-haiku-4-5", name: "Claude Haiku 4.5" },
+            ],
+          },
+        ],
+      }),
+    ),
+  );
+  await page
+    .getByRole("button", { name: "Model：anthropic/claude-haiku-4-5" })
+    .click();
+  await expect
+    .element(
+      page.getByRole("menuitemradio", { name: "bedrock/claude-haiku-4-5" }),
+    )
+    .toBeVisible();
+});
+
+test("narrow screens move session options into a popover beside the upload button", async () => {
   await page.viewport(320, 800);
   try {
-    const config = Array.from({ length: 12 }, (_, index) => ({
-      id: `option-${index}`,
-      name: `选项 ${index}`,
-      type: "select" as const,
-      value: "a",
-      options: [
-        { value: "a", name: "A" },
-        { value: "b", name: "B" },
-      ],
-    }));
+    const config = [
+      {
+        id: "model",
+        name: "Model",
+        type: "select" as const,
+        value: "a",
+        options: [
+          { value: "a", name: "A" },
+          { value: "b", name: "B" },
+        ],
+      },
+    ];
     const socket = await open();
     socket.frame(snapshot(chatState({ config })));
-    const toolbar = page.getByRole("toolbar", { name: "会话选项" });
-    await expect.element(toolbar).toBeVisible();
-    const element = toolbar.element();
-    const tops = [...element.children].map((child) =>
-      Math.round(child.getBoundingClientRect().top),
-    );
-    expect(new Set(tops).size).toBe(1);
-    expect(element.scrollWidth).toBeGreaterThan(element.clientWidth);
+    await expect
+      .element(page.getByRole("toolbar", { name: "会话选项" }))
+      .not.toBeInTheDocument();
+    await page.getByRole("button", { name: "会话选项" }).click();
+    await expect.element(page.getByLabelText("权限")).toBeVisible();
+    await expect.element(page.getByLabelText("Model")).toBeVisible();
   } finally {
     await page.viewport(1024, 900);
   }

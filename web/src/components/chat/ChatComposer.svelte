@@ -9,7 +9,7 @@
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { Textarea } from "$lib/components/ui/textarea";
-  import type { ChatActions } from "../../chat-api";
+  import type { ChatActions, ConfigValue } from "../../chat-api";
   import { errorMessage } from "../../error";
   import { useTextareaDraft } from "../../hooks/textarea-draft.svelte";
   import type { ChatUploads } from "../../hooks/upload.svelte";
@@ -27,6 +27,7 @@
   import UploadFileInput from "../UploadFileInput.svelte";
   import ChatConfig from "./ChatConfig.svelte";
   import ChatPermissionMode from "./ChatPermissionMode.svelte";
+  import ChatSessionOptions from "./ChatSessionOptions.svelte";
   import UsageRing from "./UsageRing.svelte";
 
   // The chat input. Its text is the session's draft, saved on this device
@@ -164,12 +165,18 @@
       savingMode = false;
     }
   }
+  function setConfig(configId: string, value: ConfigValue) {
+    actions.setConfig(configId, value).then(
+      () => onerror(""),
+      (err: unknown) => onerror(errorMessage(err)),
+    );
+  }
   export function focus() {
     textarea?.focus();
   }
 </script>
 
-<div class="space-y-1.5" data-chat-composer>
+<div class="sm:space-y-1.5" data-chat-composer>
   <!-- The card shows the message box's focus once; the box itself has none. -->
   <div
     class="rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20"
@@ -277,17 +284,29 @@
     <!-- Only what acts on the message stays in the card: context use and the
        send controls (they wrap only at very large text). -->
     <div class="flex flex-wrap items-center justify-end gap-1 px-2 pb-2">
-      <Button
-        variant="ghost"
-        size="icon-touch"
-        class="mr-auto"
-        aria-label="上传文件"
-        title={uploadUnavailable || "上传文件"}
-        disabled={disabled || uploading || !!uploadUnavailable}
-        onclick={() => fileInput?.open()}
-        ><IconPaperclip aria-hidden="true" /></Button
-      >
-      <UploadFileInput bind:this={fileInput} upload={uploads.uploadFiles} />
+      <div class="mr-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-touch"
+          aria-label="上传文件"
+          title={uploadUnavailable || "上传文件"}
+          disabled={disabled || uploading || !!uploadUnavailable}
+          onclick={() => fileInput?.open()}
+          ><IconPaperclip aria-hidden="true" /></Button
+        >
+        <UploadFileInput bind:this={fileInput} upload={uploads.uploadFiles} />
+        <span class="sm:hidden">
+          <ChatSessionOptions
+            agent={chat.agent}
+            mode={chat.permissionMode}
+            config={chat.config}
+            {disabled}
+            modeDisabled={!!unavailable || savingMode}
+            onmodechange={(mode) => void setPermissionMode(mode)}
+            onconfigchange={setConfig}
+          />
+        </span>
+      </div>
       {#if chat.usage}<UsageRing usage={chat.usage} />{/if}
       {#if steerable}
         <Button
@@ -324,7 +343,7 @@
        row at every width, scrolling instead of wrapping when a narrow screen
        or many agent options leave no room. -->
   <div
-    class="-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none]"
+    class="-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] max-sm:hidden"
     role="toolbar"
     aria-label="会话选项"
   >
@@ -334,14 +353,10 @@
       onchange={(mode) => void setPermissionMode(mode)}
     />
     <ChatConfig
+      agent={chat.agent}
       config={chat.config}
       {disabled}
-      onchange={(configId, value) => {
-        actions.setConfig(configId, value).then(
-          () => onerror(""),
-          (err: unknown) => onerror(errorMessage(err)),
-        );
-      }}
+      onchange={setConfig}
     />
   </div>
 </div>

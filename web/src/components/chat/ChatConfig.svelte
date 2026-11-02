@@ -8,6 +8,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
   import type { ConfigValue } from "../../chat-api";
+  import { choicesOf } from "../../chat-config";
   import type { ChatConfig } from "../../schemas";
   import ChatSelect from "./ChatSelect.svelte";
 
@@ -17,10 +18,12 @@
   // category, so the bar stays quiet at every width; the full name and value
   // live in the tooltip, accessible name and menu.
   let {
+    agent,
     config,
     disabled,
     onchange,
   }: {
+    agent: string;
     config: ChatConfig[];
     disabled: boolean;
     onchange: (configId: string, value: ConfigValue) => void;
@@ -55,7 +58,7 @@
     <ChatSelect
       name={option.name}
       value={option.value ?? ""}
-      choices={option.options}
+      choices={choicesOf(agent, option)}
       {disabled}
       onchange={(value) => onchange(option.id, { value })}
     >
