@@ -147,7 +147,9 @@ export function createTerminalSocket(id: string, manageChrome = true) {
         term.reset();
         releaseGraphics?.();
         view.resetFind();
-        replaying = true;
+        // A superseded boundary may run late; it must not reopen the window
+        // after the newer replay already closed it.
+        if (version === restoreVersion) replaying = true;
       });
       let replay = payload;
       if (synchronize) {
@@ -160,7 +162,10 @@ export function createTerminalSocket(id: string, manageChrome = true) {
         // a newer restore started; only the current one may end its update.
         if (synchronize && !disposed && version === restoreVersion)
           endSynchronizedOutput(term);
-        replaying = false;
+        // Only the current replay closes the window: a superseded one may
+        // finish late and must not expose the newer replay's OSC 52 copies
+        // and color queries as live output.
+        if (version === restoreVersion) replaying = false;
         if (payload.length && run) drawn = run;
         if (disposed || version !== restoreVersion) return;
         restoreFrame = requestAnimationFrame(() => {
