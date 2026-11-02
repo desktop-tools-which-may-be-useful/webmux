@@ -39,7 +39,7 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 				}
 			}
 			configPath := filepath.Join(dir, "config.toml")
-			content := fmt.Sprintf("listen = '127.0.0.1:0'\ndefault_cwd = %q\nstate_dir = %q\n", dir, state)
+			content := fmt.Sprintf("listen = '127.0.0.1:0'\ntoken = %q\ndefault_cwd = %q\nstate_dir = %q\n", fixtureToken, dir, state)
 			if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +91,16 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 				t.Fatal("real server did not start in degraded environment")
 			}
 			client := &http.Client{Timeout: 3 * time.Second}
-			response, err := client.Get(url + "/api/config")
+			authorized := func(method, path, body string) (*http.Response, error) {
+				r, err := http.NewRequestWithContext(ctx, method, url+path, strings.NewReader(body))
+				if err != nil {
+					return nil, err
+				}
+				r.Header.Set("Authorization", "Bearer "+fixtureToken)
+				r.Header.Set("Content-Type", "application/json")
+				return client.Do(r)
+			}
+			response, err := authorized("GET", "/api/config", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -103,7 +112,7 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 			if err != nil || settings.Workspace.GitAvailable || settings.Workspace.RegistryAvailable == brokenState {
 				t.Fatalf("degraded capability: %+v %v", settings, err)
 			}
-			response, err = client.Post(url+"/api/sessions", "application/json", strings.NewReader(`{"cmd":["/bin/sh","-c","printf REAL_DEGRADED"]}`))
+			response, err = authorized("POST", "/api/sessions", `{"cmd":["/bin/sh","-c","printf REAL_DEGRADED"]}`)
 			if err != nil {
 				t.Fatal(err)
 			}

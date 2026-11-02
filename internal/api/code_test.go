@@ -74,7 +74,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 		return raw
 	}
 	request("GET", base+"/context", "", "", "", 401)
-	request("GET", base+"/context", "", "secret", "http://evil.example", 403)
+	request("GET", base+"/context", "", "", "http://evil.example", 401)
 	raw := request("GET", base+"/context", "", "secret", "", 200)
 	var context contract.CodeContext
 	json.Unmarshal(raw, &context)
@@ -95,7 +95,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 	request("GET", base+"/file?contextId=wrong&nodeId=Y2xlYW4udHh0", "", "secret", "", 409)
 	request("GET", "/api/sessions/missing/code/context", "", "secret", "", 404)
 	body, _ := json.Marshal(contract.CodeCheckRequest{Context: context.ID, Snapshots: []string{file.Snapshot}})
-	request("POST", base+"/check", string(body), "secret", "http://evil.example", 403)
+	request("POST", base+"/check", string(body), "", "http://evil.example", 401)
 	request("POST", base+"/check", string(body), "secret", "", 200)
 	data, e := os.ReadFile(filepath.Join(c.DefaultCwd, "clean.txt"))
 	if e != nil || string(data) != "unchanged code\n" {
@@ -208,10 +208,10 @@ func TestCodeRawBytesHeadersAndStreaming(t *testing.T) {
 			t.Fatalf("token %q: %d", token, res.StatusCode)
 		}
 	}
-	res = do("GET", raw, "secret", "http://evil.example")
+	res = do("GET", raw, "", "http://evil.example")
 	res.Body.Close()
-	if res.StatusCode != 403 {
-		t.Fatalf("origin: %d", res.StatusCode)
+	if res.StatusCode != 401 {
+		t.Fatalf("foreign origin without token: %d", res.StatusCode)
 	}
 	check(do("GET", raw, "secret", ""), pic.Bytes(), "image/png", "inline", "pic.png")
 	check(do("GET", raw+"?download=1", "secret", ""), pic.Bytes(), "image/png", "attachment", "pic.png")
@@ -345,7 +345,6 @@ func TestCodeFileOperationsAPI(t *testing.T) {
 	jsonBody := func(v any) io.Reader { b, _ := json.Marshal(v); return bytes.NewReader(b) }
 
 	rename := contract.CodeRenameRequest{Context: info.ID, NodeID: id("docs/deep/note.md"), Name: "readme.md"}
-	do("POST", base+"/rename", "application/json", jsonBody(rename), "http://evil.example", 403).Body.Close()
 	if out := mutation(do("POST", base+"/rename", "application/json", jsonBody(rename), "", 200)); out.Nodes[0].Path != "docs/deep/readme.md" {
 		t.Fatalf("rename %+v", out)
 	}
@@ -392,7 +391,6 @@ func TestCodeFileOperationsAPI(t *testing.T) {
 		t.Fatalf("usage %+v", usage)
 	}
 	do("DELETE", base+"/node"+q("docs"), "", nil, "", 409).Body.Close()
-	do("DELETE", base+"/node"+q("docs", "recursive", "1"), "", nil, "http://evil.example", 403).Body.Close()
 	do("DELETE", base+"/node"+q("docs", "recursive", "1"), "", nil, "", 204).Body.Close()
 	if _, e := os.Stat(filepath.Join(root, "docs")); !os.IsNotExist(e) {
 		t.Fatalf("docs still present: %v", e)

@@ -113,6 +113,29 @@ func (a *App) toggleTunnel() {
 	a.fail("开启公网隧道失败", err)
 }
 
+// toggleNetwork opens WebMux to the network after the risk is confirmed, or
+// returns it to its configured address. The server rebinds its listener
+// without ending sessions and persists the choice; the tray stores nothing.
+func (a *App) toggleNetwork() {
+	public := !tray.NetworkEntry(a.snapshot()).Checked
+	if public && !confirm(tray.NetworkWarning) {
+		a.kickUI()
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	_, err := a.svc.Current().SetNetwork(ctx, public)
+	cancel()
+	a.sup.Refresh()
+	if err == nil {
+		return
+	}
+	if public {
+		a.fail("开放到公共网络失败", err)
+	} else {
+		a.fail("关闭公共网络访问失败", err)
+	}
+}
+
 func (a *App) toggleForward(addr string) {
 	a.changeSettings(func(s *tray.Settings) {
 		if i := slices.Index(s.Forward, addr); i >= 0 {

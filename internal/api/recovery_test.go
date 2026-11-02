@@ -153,11 +153,11 @@ func TestHybridRecordEndpoints(t *testing.T) {
 	if w := h.request("GET", "/api/hybrid-sessions", "", "", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("without token: %d", w.Code)
 	}
-	if w := h.request("DELETE", "/api/hybrid-sessions/"+closed, "", "secret", "https://evil.example"); w.Code != http.StatusForbidden {
-		t.Fatalf("foreign origin: %d", w.Code)
+	if w := h.request("DELETE", "/api/hybrid-sessions/"+closed, "", "", "https://evil.example"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("foreign origin without token: %d", w.Code)
 	}
-	if w := h.request("POST", "/api/sessions/"+closed+"/resume", `{"clientRequestId":"api-req-cross","side":"tui"}`, "secret", "https://evil.example"); w.Code != http.StatusForbidden {
-		t.Fatalf("foreign origin resume: %d", w.Code)
+	if w := h.request("POST", "/api/sessions/"+closed+"/resume", `{"clientRequestId":"api-req-cross","side":"tui"}`, "", "https://evil.example"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("foreign origin resume without token: %d", w.Code)
 	}
 
 	if err := h.store.Delete(configID); err != nil {

@@ -57,10 +57,17 @@
     "subscriptions": 1, // 已登记设备数
     "publicOrigin": "https://term.example.com", // 仅当前有效 Named 设置具有主机名时出现，动态跟随设置
   },
+  "network": {
+    // 仅运行中实例经本机 API 返回；未运行或旧版本实例省略
+    "public": false, // 当前是否监听所有接口
+    "listen": "127.0.0.1:7681", // 当前监听地址
+    "saved": false, // 是否来自已保存的开放开关
+    "error": "", // 仅存储故障时出现；此时不能开放
+  },
 }
 ```
 
-链接不带路径、查询参数或 Token。回环监听的远程链接为空数组；通配监听列出启用中的非回环、非链路本地 IPv4 地址，Tailscale（100.64.0.0/10）在前，WSL NAT 模式下的虚拟网卡地址不列出；通配监听且未配置 Token 时 `warnings` 含暴露警告。
+链接不带路径、查询参数或 Token。回环监听的远程链接为空数组；通配监听列出启用中的非回环、非链路本地 IPv4 地址，Tailscale（100.64.0.0/10）在前，WSL NAT 模式下的虚拟网卡地址不列出；通配监听且未配置 Token 时 `warnings` 含暴露警告（当前版本总有 Token，仅旧实例可能出现）。
 
 `stop`：`{"v": 1, "result": "stopped" | "killed" | "not-running" | "refused" | "error", "message": "..."}`。
 

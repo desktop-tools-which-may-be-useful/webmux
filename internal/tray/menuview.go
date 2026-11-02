@@ -226,5 +226,36 @@ func pushGuide(p *contract.PushStatus, local string, webSettings bool) string {
 	return b.String()
 }
 
+// NetworkItem describes the "open to the public network" switch.
+type NetworkItem struct {
+	// Show is false when no instance runs or it cannot switch at runtime.
+	Show, Checked, Enabled bool
+	Title                  string
+	// Info explains a storage fault, or is "".
+	Info string
+}
+
+// NetworkEntry derives the network exposure switch from the running
+// instance. It is checked while WebMux listens on every interface.
+func NetworkEntry(snap Snapshot) NetworkItem {
+	n := snap.Status.Network
+	if !snap.HasStatus || snap.Status.State != contract.StateRunning || n == nil || !snap.Actions().Access {
+		return NetworkItem{}
+	}
+	item := NetworkItem{Show: true, Checked: n.Public, Enabled: true, Title: "开放到公共网络（监听所有网卡）"}
+	if n.Error != "" {
+		item.Info = "网络开放设置无法保存：" + n.Error
+		// Turning exposure on needs the choice persisted; off always works.
+		item.Enabled = n.Public
+	}
+	return item
+}
+
+// NetworkWarning is the confirmation shown before every opening.
+const NetworkWarning = "开放到公共网络后，WebMux 会在所有网卡上监听，同一网络中的设备都能连接到它。\n\n" +
+	"连接使用 HTTP 明文，Token 是唯一的屏障：任何获得 Token 的人都能以你的身份执行命令，同一网络中的窃听者也可能截获 Token。" +
+	"请只在可信网络（家庭局域网、VPN）中开启；需要从外网访问时请改用 Tailscale 或公网隧道。\n\n" +
+	"现有会话不受影响。确定开放？"
+
 // TunnelWarning is the confirmation shown before every enable.
 const TunnelWarning = "开启公网隧道后，WebMux 会通过 Cloudflare 暴露到公网。\n\n任何获得链接和 Token 的人都能以你的身份执行命令。Quick Tunnel 没有额外的身份验证，Token 是唯一的屏障。\n\n确定开启？"

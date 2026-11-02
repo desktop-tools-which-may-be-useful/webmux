@@ -69,7 +69,7 @@ func TestTailscaleSettingsEndpointsRequireAuthAndOrigin(t *testing.T) {
 			token, origin string
 			status        int
 		}{
-			{"", "", 401}, {"wrong", "", 401}, {"login-secret", "https://evil.example", 403},
+			{"", "", 401}, {"wrong", "", 401}, {"", "https://evil.example", 401},
 		} {
 			if w := tunnelAPIRequest(h, endpoint.method, endpoint.path, endpoint.body, auth.token, auth.origin); w.Code != auth.status {
 				t.Fatalf("%s %s with %+v: %d", endpoint.method, endpoint.path, auth, w.Code)

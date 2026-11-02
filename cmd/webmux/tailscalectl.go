@@ -112,8 +112,8 @@ func newTailscaleController(o tailscaleControllerOptions) *tailscaleController {
 
 // enableErrorLocked reports why this process may not publish an entry.
 func (tc *tailscaleController) enableErrorLocked() error {
-	if len(tc.token) < minTunnelTokenLength {
-		return fmt.Errorf("%w: Tailscale Serve/Funnel requires a WebMux token of at least %d characters; run `webmux config init` or set a strong token, then restart WebMux", tailscalesettings.ErrEnableBlocked, minTunnelTokenLength)
+	if len(tc.token) < minTokenLength {
+		return fmt.Errorf("%w: Tailscale Serve/Funnel requires a WebMux token of at least %d characters; run `webmux config init` or set a strong token, then restart WebMux", tailscalesettings.ErrEnableBlocked, minTokenLength)
 	}
 	if tc.listenBlocked != "" {
 		return fmt.Errorf("%w: %s", tailscalesettings.ErrEnableBlocked, tc.listenBlocked)

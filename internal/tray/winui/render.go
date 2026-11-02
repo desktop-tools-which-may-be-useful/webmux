@@ -88,6 +88,17 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	} else {
 		m.copyToken.hide()
 	}
+	if network := tray.NetworkEntry(snap); network.Show && !v.noWSL {
+		m.network.set(network.Title, network.Enabled && !busy, network.Checked)
+		if network.Info != "" {
+			m.networkInfo.set(network.Info, false, false)
+		} else {
+			m.networkInfo.hide()
+		}
+	} else {
+		m.network.hide()
+		m.networkInfo.hide()
+	}
 	if tunnel.Show && !v.noWSL {
 		m.tunnel.set("公网隧道（Cloudflare）", !busy, tunnel.Checked)
 		if tunnel.Info != "" {

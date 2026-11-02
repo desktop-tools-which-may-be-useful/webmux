@@ -4,6 +4,7 @@ import {
   test as base,
   expect,
   type APIRequestContext,
+  type BrowserContext,
   type Page,
 } from "@playwright/test";
 import { startE2EServer, type E2EServer } from "./server.mjs";
@@ -76,6 +77,21 @@ async function cleanLaunchConfigs(request: APIRequestContext) {
   }
 }
 
+/**
+ * Signs a browser context in to server the way a stored login would: the
+ * app reads the token from localStorage on that server's origin only, so
+ * other servers a test starts keep their own login flow.
+ */
+export async function authorize(context: BrowserContext, server: E2EServer) {
+  await context.addInitScript(
+    ({ origin, token }) => {
+      if (location.origin === origin)
+        localStorage.setItem("webmux.token", token);
+    },
+    { origin: new URL(server.baseURL).origin, token: server.token },
+  );
+}
+
 export const test = base.extend<
   { workDir: string; _isolation: void },
   { server: E2EServer }
@@ -94,6 +110,22 @@ export const test = base.extend<
   ],
   baseURL: async ({ server }, use) => {
     await use(server.baseURL);
+  },
+  context: async ({ context, server }, use) => {
+    await authorize(context, server);
+    await use(context);
+  },
+  // Only the API context sends the header; pages authenticate as the app does.
+  request: async ({ playwright, server }, use) => {
+    const request = await playwright.request.newContext({
+      baseURL: server.baseURL,
+      extraHTTPHeaders: { Authorization: `Bearer ${server.token}` },
+    });
+    try {
+      await use(request);
+    } finally {
+      await request.dispose();
+    }
   },
   workDir: async ({ server }, use) => {
     const directory = await mkdtemp(join(server.workDir, "case-"));

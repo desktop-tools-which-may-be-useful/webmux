@@ -121,7 +121,7 @@ hostname = "term.example.com"
 
 补充说明：
 
-- `hostname` 必须与 Cloudflare 的公共主机名完全一致。WebMux 用它做 Host / Origin 校验，不一致时公网请求会被拒绝。
+- `hostname` 必须与 Cloudflare 的公共主机名完全一致。WebMux 用它做 Host 校验（并作为推送的 Origin 锚点），不一致时公网请求会被拒绝。
 - 根 `token` 和 `[tunnel].token` 是两套凭据，见第 8 节。
 - 手工修改 TOML 后需要重启；已有网页覆盖时，先恢复配置文件设置才会重新采用其隧道默认值。通过网页修改隧道配置无需重启。
 - 设置页显示摘要，“管理公网访问”进入完整配置页；页面轮询运行状态与当前有效开关，凭据从不回填。
@@ -140,7 +140,7 @@ WSL 中 WebMux 通常监听 `127.0.0.1:7681`，Cloudflare 的 Service URL 也填
 
 ## 7. 手机推送
 
-Web Push 可从通过 Host/Origin 校验的 HTTPS 入口开启，包括 Named Tunnel 的 `https://<hostname>`、托管 Tailscale Serve/Funnel，以及 `allowed_origins` 中的 HTTPS 反向代理；Quick Tunnel 每次启动都会更换地址，旧订阅会失效，因此不支持。
+Web Push 可从通过 Host 校验、且 Origin 指向该入口的 HTTPS 入口开启，包括 Named Tunnel 的 `https://<hostname>`、托管 Tailscale Serve/Funnel，以及 `allowed_origins` 中的 HTTPS 反向代理；Quick Tunnel 每次启动都会更换地址，旧订阅会失效，因此不支持。
 
 - 网页保存的 Named 凭据和主机名（无覆盖时为 TOML）决定 Named 来源，即使隧道当前没有运行；Tailscale Serve/Funnel 就绪后同样登记为 HTTPS 来源；
 - 手机必须从这个 HTTPS 地址打开 WebMux，再进入 设置 → 通知推送 开启；

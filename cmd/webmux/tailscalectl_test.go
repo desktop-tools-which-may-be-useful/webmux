@@ -169,7 +169,7 @@ func TestUpdateSettingsReplacesEntryAtRuntime(t *testing.T) {
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "auto", IsWSL: func() bool { return false }})
 	ctl := newTailscaleController(tailscaleControllerOptions{
 		Cfg: toml, Store: store, Service: service, StateDir: dir, Public: &api.PublicOrigins{},
-		Token: strings.Repeat("t", minTunnelTokenLength), Out: io.Discard,
+		Token: strings.Repeat("t", minTokenLength), Out: io.Discard,
 		Logger: slog.New(slog.DiscardHandler), IsWSL: func() bool { return false },
 		NetworkingMode: func(context.Context) string { return "unknown" },
 	})

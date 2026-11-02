@@ -169,8 +169,9 @@ func configValidate(args []string, stdout, stderr io.Writer) int {
 	}
 	result := contract.ValidateV1{V: contract.V, OK: true, Errors: []string{}}
 	c, err := client.LoadConfig(path, explicit)
-	if err == nil && (c.Tunnel.Enabled || c.Tailscale.Enabled()) && c.Token != "" && len(c.Token) < minTunnelTokenLength {
-		// The same check serve applies after loading.
+	if err == nil && c.Token != "" {
+		// The same check serve applies after loading; an empty token is
+		// generated at startup and is therefore valid here.
 		err = ensureToken(&c)
 	}
 	if err == nil && c.Tailscale.Provider == "windows" && !wsl.Detected() {

@@ -55,7 +55,7 @@ func TestConfigurationPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	file := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(file, []byte("listen = '127.0.0.1:9000'\ntoken = 'file-token'\n"), 0600); err != nil {
+	if err := os.WriteFile(file, []byte("listen = '127.0.0.1:9000'\ntoken = 'file-token-0123456789-abcdefghijklmnopqrstuv'\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range []struct {
@@ -64,10 +64,10 @@ func TestConfigurationPrecedence(t *testing.T) {
 		listen, token string
 		generated     bool
 	}{
-		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", false},
-		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", false},
-		{"explicit empty token on loopback", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", false},
-		{"explicit empty token on localhost", []string{"--config", file, "--listen", "localhost:9002", "--token="}, "localhost:9002", "", false},
+		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token-0123456789-abcdefghijklmnopqrstuv", false},
+		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token-0123456789-abcdefghijklmnopqrstuv"}, "127.0.0.1:9001", "flag-token-0123456789-abcdefghijklmnopqrstuv", false},
+		{"explicit empty token on loopback", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", true},
+		{"explicit empty token on localhost", []string{"--config", file, "--listen", "localhost:9002", "--token="}, "localhost:9002", "", true},
 		{"explicit empty token on IPv6 wildcard", []string{"--config", file, "--listen", "[::]:9003", "--token="}, "[::]:9003", "", true},
 		{"explicit empty token on VPN address", []string{"--config", file, "--listen", "100.64.0.5:9004", "--token="}, "100.64.0.5:9004", "", true},
 	} {
@@ -77,7 +77,7 @@ func TestConfigurationPrecedence(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(c.TunnelSettings.Close)
-			if c.TokenGenerated != row.generated || row.generated && len(c.Token) < minTunnelTokenLength {
+			if c.TokenGenerated != row.generated || row.generated && len(c.Token) < minTokenLength {
 				t.Fatalf("token generated=%v len=%d, want generated=%v", c.TokenGenerated, len(c.Token), row.generated)
 			}
 			if !row.generated && c.Token != row.token {

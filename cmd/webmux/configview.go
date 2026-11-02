@@ -13,6 +13,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/listensettings"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/settings"
@@ -88,6 +89,8 @@ func configuredView(path string, c config.Config) contract.Configuration {
 			err = push.Inspect(c.StateDir)
 		case statefile.Tunnel:
 			err = te
+		case statefile.ListenSettings:
+			_, _, err = listensettings.Inspect(c.StateDir, c.Listen)
 		case statefile.TailscaleSettings:
 			err = tse
 		case statefile.TailscaleOwnership:
@@ -168,6 +171,8 @@ func effectiveView(c serverRun, record runtime.Record, deps api.Deps) contract.C
 			err = deps.Push.Unavailable()
 		case statefile.Tunnel:
 			err = c.TunnelSettings.Unavailable()
+		case statefile.ListenSettings:
+			err = c.ListenSettings.Unavailable()
 		case statefile.TailscaleSettings:
 			err = c.TailscaleSettings.Unavailable()
 		case statefile.Settings:

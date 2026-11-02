@@ -6,17 +6,18 @@
 - 后端对应的线上类型都在 [`internal/contract`](../internal/contract)（REST 按资源分文件，终端帧与 `/ws/sessions` 事件在 `terminal.go`），由 `internal/wire` 与 Service 类型互相转换。
 - 两边的字段保持一致，`internal/api/testdata/wire` 的快照测试固定了每个端点和帧的 JSON 形状。
 
-## 认证与 Origin
+## 认证与 Host
 
-- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>` 或 Cookie `webmux_token`。
+- Token 始终启用（至少 43 字符）。HTTP 请求只使用 `Authorization: Bearer <token>`；Cookie `webmux_token` 与 query `?token=` 都不被接受。
 - WebSocket 握手不能设置请求头，因此：
   - 前端改为同时提供子协议 `webmux` 与 `webmux.token.<base64url(UTF-8 token)>`（无填充），服务端只选择 `webmux`、不回显 token。
   - 不接受 query `?token=`，token 不进入请求 URL。
   - 前端也不把 token 写入 Cookie，因为 Cookie 不按端口隔离。
 
 - token 以定长摘要做常量时间比较。
-- 带 `Origin` 的请求必须与 `Host` 同源，或在 `allowed_origins` 中。Origin 必须是完整的 HTTP(S) origin，不能含路径、query 或 fragment。
-- 静态页面公开；所有 API 与 WebSocket 都受认证和 Origin 检查保护。认证失败返回 401，Origin 拒绝返回 403。
+- 不检查 `Origin`：凭据只能由页面脚本显式附上，浏览器不会替跨站请求自动携带，因此 Origin 不承担授权。推送订阅仍用 Origin 决定通知链接的锚点，见 [推送](protocol/http-push.md)。
+- `Host` 必须是监听地址、通配监听时的 IP 字面量、`allowed_origins` 中的主机或已登记的公网入口，否则 403（防 DNS 重绑定）。
+- 静态页面公开；所有 API 与 WebSocket 都需要认证，失败返回 401。
 - 错误响应为 JSON `{"error": "..."}`。
 
 ## 文档地图

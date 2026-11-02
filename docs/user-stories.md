@@ -300,7 +300,7 @@ WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端�
 | L    | 开发、验证与发布支持                   | US-L01–US-L11 |
 | M    | 原生终端、CLI 与本机控制面             | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道                    | US-N01–US-N08 |
-| O    | Windows/WSL 托盘管理                   | US-O01–US-O12 |
+| O    | Windows/WSL 托盘管理                   | US-O01–US-O13 |
 | P    | Tailscale Serve / Funnel               | US-P01–US-P07 |
 | Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q16 |
 
@@ -381,3 +381,8 @@ diff 库的行号按压只在主页面 `document` 上等待 pointerup，现由 `
 
 本次局部核对（2026-11-02）：Windows 安装程序对应新增 US-O12，并更新 US-O01（本地缓存与预置服务端离线安装）与 US-O04（安装程序登记登录启动、`webmux-tray.exe quit`）；覆盖索引同步。
 核对依据为 `internal/tray` 的 Go race 测试与在 Windows 11 上实际运行的 `windows-installer-smoke.ps1`（静默安装、`quit`、运行中升级、拒绝其他位置的托盘、架构不符、卸载）；178 个故事 ID 唯一，O 组来源路径有效；未用真实 WSL 发行版验收托盘菜单离线安装，未重新核验其余故事能力。
+
+本次局部核对（2026-11-02）：取消 Origin 校验与 Cookie 认证、Token 一律至少 43 字符、默认监听改为回环并新增托盘“开放到公共网络”开关，对应更新 US-A03、US-K09、US-O08，新增 US-O13，覆盖索引同步。
+
+- 依据：`go test ./internal/api ./cmd/webmux ./internal/tray/... ./internal/listensettings ./internal/archtest`、Windows 交叉 `go vet`，以及本机 Linux 桌面 Chromium E2E。
+- 限制：未在真实 Windows/WSL 上操作托盘菜单；179 个故事 ID 唯一；未重新核验其余故事能力。

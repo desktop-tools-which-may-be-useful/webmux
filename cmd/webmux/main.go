@@ -26,6 +26,7 @@ import (
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/listensettings"
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
@@ -158,6 +159,8 @@ type serverRun struct {
 	// TailscaleSettings holds the web override of [tailscale].
 	TailscaleSettings   *tailscalesettings.Service
 	TailscaleWebManaged bool
+	// ListenSettings holds the network exposure switch; run opens it.
+	ListenSettings *listensettings.Service
 }
 
 // flagParseError marks a flag error already reported by the flag set, so a
@@ -252,7 +255,7 @@ func parseServerRun(name string, args []string, stderr io.Writer) (serverRun, er
 		return run, errors.New(`tailscale.provider "windows" is only valid inside WSL; use "linux" or "auto"`)
 	}
 	hadToken := c.Token != ""
-	if err = ensureStartupToken(&c, run.TunnelWebManaged, run.TailscaleWebManaged); err != nil {
+	if err = ensureToken(&c); err != nil {
 		closeSettings()
 		return run, err
 	}
@@ -261,29 +264,18 @@ func parseServerRun(name string, args []string, stderr io.Writer) (serverRun, er
 	return run, nil
 }
 
-// ensureStartupToken refuses a weak token only for TOML-enabled exposure.
-// Web-managed exposure keeps local access and fails closed in its controller.
-func ensureStartupToken(c *config.Config, tunnelWeb, tailscaleWeb bool) error {
-	tomlExposure := (c.Tunnel.Enabled && !tunnelWeb) || (c.Tailscale.Enabled() && !tailscaleWeb)
-	if !tomlExposure && c.Token != "" && len(c.Token) < minTunnelTokenLength {
-		return nil
-	}
-	return ensureToken(c)
-}
-
-// ensureToken keeps every network entry point authenticated: an empty token
-// is generated for this process unless the server listens only on loopback
-// without a tunnel, and a tunnel token must not be weaker than that form.
+// ensureToken keeps every entry point authenticated. Requests carry no other
+// authority (WebMux does not check Origin), so an empty token is generated
+// for this process and a configured token must be at least as strong as a
+// generated one, whatever the listen address or exposure.
 func ensureToken(c *config.Config) error {
 	if c.Token == "" {
-		if c.Tunnel.Enabled || c.Tailscale.Enabled() || !loopbackListen(c.Listen) {
-			c.Token = generateToken()
-			c.SetSource("token", "generated")
-		}
+		c.Token = generateToken()
+		c.SetSource("token", "generated")
 		return nil
 	}
-	if (c.Tunnel.Enabled || c.Tailscale.Enabled()) && len(c.Token) < minTunnelTokenLength {
-		return fmt.Errorf("tunnel and Tailscale Serve/Funnel require the webmux token to be at least %d characters; leave it empty to generate one, or create one with openssl rand -base64 32", minTunnelTokenLength)
+	if len(c.Token) < minTokenLength {
+		return fmt.Errorf("the webmux token must be at least %d characters; leave it empty to generate one, or create one with openssl rand -base64 32", minTokenLength)
 	}
 	return nil
 }
@@ -360,10 +352,19 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		Logger: slog.Default(), IsWSL: wsl.Detected, NetworkingMode: wsl.NetworkingMode,
 	})
 	defer tsCtl.Close()
-	if err := tsCtl.Prepare(ctx, c.Listen); err != nil {
+	// The saved network exposure switch picks the bind address; c.Listen
+	// stays the configured value so status reports drift against the file.
+	exposure := listensettings.Open(c.StateDir, c.Listen)
+	defer exposure.Close()
+	c.ListenSettings = exposure
+	if err := exposure.Unavailable(); err != nil {
+		slog.Warn("network exposure settings unavailable; staying off the network", "error", err)
+	}
+	bind := startupListen(c.Listen, c.Source("listen"), exposure)
+	if err := tsCtl.Prepare(ctx, bind); err != nil {
 		return err
 	}
-	listener, err := net.Listen("tcp", c.Listen)
+	listener, err := net.Listen("tcp", bind)
 	if err != nil {
 		return err
 	}
@@ -427,7 +428,9 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	deps.Tailscale = tsCtl
-	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels)
+	hostConfig := c.Config
+	hostConfig.Listen = listener.Addr().String()
+	deps.Listen = api.NewListen(hostConfig)
 	server := &http.Server{
 		Handler:           api.New(deps),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -436,7 +439,12 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 	ended := make(chan error, 1)
-	go func() { ended <- server.Serve(listener) }()
+	network := newNetworkController(networkOptions{
+		Server: server, Store: exposure, Hosts: deps.Listen, Configured: c.Listen,
+		Listener: listener, Logger: slog.Default(), Ended: ended,
+	})
+	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels, network)
+	network.Serve()
 	rt.serve()
 	slog.Info("webmux listening", "address", listener.Addr(), "version", version)
 	printConfigNotice(out, c)
@@ -456,6 +464,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	case <-ctx.Done():
 	case err = <-ended:
 	}
+	network.Close()
 	cancel() // Cancel HTTP and hijacked WebSocket handlers before joining sessions.
 	tunnels.Close()
 	tsCtl.Close()
@@ -470,6 +479,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		_ = server.Close()
 		slog.Warn("forced HTTP shutdown", "error", shutdownErr)
 	}
+	network.Wait()
 	rt.close(shutdown)
 	if err != nil && err != http.ErrServerClosed {
 		return err

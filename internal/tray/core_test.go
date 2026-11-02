@@ -201,6 +201,21 @@ func TestPlanForward(t *testing.T) {
 	if plan := PlanForward("nat", unreachable, ifaces); plan.Blocked == "" {
 		t.Fatal("forwarding allowed while Windows cannot reach WebMux")
 	}
+	// A server that reports its exposure must be opened to the network:
+	// its loopback listener refuses the LAN Host names relays carry.
+	private := healthy
+	private.Status.Network = &contract.NetworkStatus{Listen: "127.0.0.1:7681"}
+	if plan := PlanForward("nat", private, ifaces); !plan.Needed || !strings.Contains(plan.Blocked, "开放到公共网络") {
+		t.Fatalf("private server forwards: %+v", plan)
+	}
+	if plan := PlanForward("mirrored", private, ifaces); !strings.Contains(plan.Blocked, "开放到公共网络") {
+		t.Fatalf("mirrored private hint %+v", plan)
+	}
+	opened := healthy
+	opened.Status.Network = &contract.NetworkStatus{Public: true, Listen: "0.0.0.0:7681"}
+	if plan := PlanForward("nat", opened, ifaces); !plan.Needed || plan.Blocked != "" {
+		t.Fatalf("opened server cannot forward: %+v", plan)
+	}
 }
 
 func TestLogRotatesAndRedacts(t *testing.T) {

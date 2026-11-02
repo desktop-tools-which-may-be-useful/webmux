@@ -35,7 +35,7 @@ func TestTunnelFlagAndGeneratedToken(t *testing.T) {
 	}{
 		{"default auto config", nil, false, "persisted", false},
 		{"flag enables", []string{"--config", plain, "--tunnel"}, true, "generated", true},
-		{"flag disables file", []string{"--config", enabled, "--tunnel=false"}, false, "", false},
+		{"flag disables file", []string{"--config", enabled, "--tunnel=false"}, false, "generated", true},
 		{"file enables", []string{"--config", enabled}, true, "generated", true},
 		{"configured token kept", []string{"--config", enabled, "--tunnel", "--token", tunnelTestToken}, true, tunnelTestToken, false},
 	} {

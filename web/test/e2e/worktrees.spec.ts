@@ -6,6 +6,7 @@ import type { Page, Locator } from "@playwright/test";
 import {
   test,
   expect,
+  authorize,
   runCommand,
   expectTerminalLine,
   expectConnected,
@@ -314,11 +315,16 @@ test("without Git an isolated real service still starts and runs a direct shell"
 }) => {
   const isolated = await startE2EServer({ noGit: true });
   try {
+    await authorize(page.context(), isolated);
     await page.goto(isolated.baseURL);
     await expect(
       page.getByRole("button", { name: "添加仓库", exact: true }),
     ).toBeDisabled();
-    const config = await (await fetch(isolated.apiURL + "/api/config")).json();
+    const config = await (
+      await fetch(isolated.apiURL + "/api/config", {
+        headers: { Authorization: `Bearer ${isolated.token}` },
+      })
+    ).json();
     expect(config.workspace.gitAvailable).toBe(false);
     expect(config).not.toHaveProperty("token");
     await page

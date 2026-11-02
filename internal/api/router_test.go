@@ -59,7 +59,7 @@ func TestProtocolAndSecurity(t *testing.T) {
 	for _, row := range []struct {
 		token, origin string
 		want          int
-	}{{"", "", 401}, {"wrong", "", 401}, {"secret", "http://evil.example", 403}, {"secret", "", 200}} {
+	}{{"", "", 401}, {"wrong", "", 401}, {"", "http://evil.example", 401}, {"secret", "http://other.example", 200}, {"secret", "", 200}} {
 		res := request("GET", "/api/health", "", row.token, row.origin)
 		_ = res.Body.Close()
 		if res.StatusCode != row.want {

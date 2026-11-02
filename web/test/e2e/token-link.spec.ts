@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { startE2EServer, type E2EServer } from "./server.mjs";
 
-const token = "e2e a&b#c";
+// At least 43 characters; the separators exercise link encoding.
+const token = "e2e a&b#c-0123456789-abcdefghijklmnopqrstuvwxyz";
 let server: E2EServer;
 
 test.beforeAll(async () => {

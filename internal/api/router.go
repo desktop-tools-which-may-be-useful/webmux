@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 
@@ -46,6 +45,9 @@ type Deps struct {
 	DefaultShell string
 	// Public authorizes runtime HTTPS entry points; nil means no tunnel.
 	Public *PublicOrigins
+	// Listen follows the TCP listen address when the network exposure
+	// switch changes it at runtime; nil checks Host against Config.Listen.
+	Listen *Listen
 	// Push is nil when [push] enabled = false.
 	Push *push.Service
 	// Launch is nil when the launch config store was not opened; its
@@ -187,6 +189,9 @@ func baseHeaders(w http.ResponseWriter) func() {
 }
 func (s *Server) middleware(next http.Handler) http.Handler {
 	hostAllowed := hostCheck(s.Config)
+	if s.Listen != nil {
+		hostAllowed = s.Listen.allowed
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer baseHeaders(w)()
 		if !hostAllowed(r.Host) && !s.Public.hostAllowed(r.Host) {
@@ -196,10 +201,6 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/ws/") {
 			if !s.authorized(r) {
 				failure(w, 401, errors.New("authentication required"))
-				return
-			}
-			if !s.originAllowed(r) {
-				failure(w, 403, errors.New("origin not allowed"))
 				return
 			}
 		}
@@ -214,11 +215,6 @@ func (s *Server) authorized(r *http.Request) bool {
 	scheme, credential, found := strings.Cut(r.Header.Get("Authorization"), " ")
 	if found && strings.EqualFold(scheme, "Bearer") {
 		token = credential
-	}
-	if token == "" {
-		if cookie, err := r.Cookie("webmux_token"); err == nil {
-			token = cookie.Value
-		}
 	}
 	if token == "" && strings.HasPrefix(r.URL.Path, "/ws/") {
 		token = protocolToken(r)
@@ -251,35 +247,6 @@ func protocolToken(r *http.Request) string {
 		}
 	}
 	return ""
-}
-func (s *Server) originAllowed(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-	u, err := url.Parse(origin)
-	if err != nil || u.User != nil || u.Host == "" || u.Path != "" || strings.ContainsAny(origin, "?#") || (u.Scheme != "http" && u.Scheme != "https") {
-		return false
-	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	// Tunnel traffic arrives over plain HTTP, so the scheme inferred from
-	// r.TLS cannot vouch for the public hostname; only its https origin can.
-	if s.Public.hostAllowed(r.Host) {
-		if s.Public.originAllowed(origin, r.Host) {
-			return true
-		}
-	} else if u.Host == r.Host && u.Scheme == scheme {
-		return true
-	}
-	for _, allowed := range s.Config.AllowedOrigins {
-		if origin == allowed {
-			return true
-		}
-	}
-	return false
 }
 func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	var req contract.CreateSessionRequest

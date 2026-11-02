@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -34,6 +35,7 @@ async function stopChild(child) {
  * @property {string} workDir
  * @property {string} stateDir
  * @property {string} config TOML path, for `webmux --config` CLI commands
+ * @property {string} token the login token every request must carry
  * @property {Record<string, string>} env the backend's environment
  * @property {() => Promise<void>} restart
  * @property {() => string} logs
@@ -45,11 +47,14 @@ async function stopChild(child) {
 // The fake agents (global-setup) come first on PATH as omp, opencode, codex,
 // codex-acp, claude and claude-agent-acp, with a session store private to this
 // server that survives its restarts. Connector-missing cases use an isolated
-// per-config PATH instead of changing this shared agent directory.
+// per-config PATH instead of changing this shared agent directory. WebMux
+// always requires a token of at least 43 characters, so a server without an
+// explicit token gets a random one; fixtures.ts hands it to the browser and
+// the API request context.
 /** @param {{noGit?: boolean, token?: string, tunnel?: {cloudflared: string, enabled?: boolean}}} options @returns {Promise<E2EServer>} */
 export async function startE2EServer({
   noGit = false,
-  token = "",
+  token = randomBytes(32).toString("base64url"),
   tunnel,
 } = {}) {
   const binary = process.env.WEBMUX_E2E_BINARY;
@@ -137,7 +142,7 @@ export async function startE2EServer({
         await delay(50);
       }
       const health = await fetch(`http://${address}/api/health`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(10_000),
       });
       if (!health.ok)
@@ -153,6 +158,7 @@ export async function startE2EServer({
       workDir,
       stateDir,
       config,
+      token,
       env,
       logs,
       async restart() {

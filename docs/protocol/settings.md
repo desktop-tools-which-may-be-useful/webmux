@@ -22,7 +22,7 @@
 
 ## 实时事件
 
-`/ws/settings` 使用现有 WebSocket token 子协议与 Origin 校验。首帧为 `{type: "settings", settings: <完整快照>}`；随后为 `{type: "settings.update", revision, updatedAt, changes}`。
+`/ws/settings` 使用现有 WebSocket token 子协议与 Host 校验。首帧为 `{type: "settings", settings: <完整快照>}`；随后为 `{type: "settings.update", revision, updatedAt, changes}`。
 
 快照捕获和订阅注册与提交共用同一服务锁，确保无遗漏。每连接只有一个网络写者；队列有界，慢客户端断开后重连取新快照。客户端遇到修订号缺口重新读取；旧事件不回退快照。
 

@@ -72,15 +72,14 @@ func workspaceRequest(t *testing.T, handler http.Handler, method, path string, b
 }
 func TestWorkspaceAPIRoutesAndErrorBoundaries(t *testing.T) {
 	handler, _, m, root := workspaceAPI(t)
-	for _, status := range []int{401, 403} {
+	for _, origin := range []string{"", "https://evil.example"} {
 		request := httptest.NewRequest("POST", "/api/repositories", strings.NewReader(fmt.Sprintf(`{"path":%q}`, root)))
-		if status == 403 {
-			request.Header.Set("Authorization", "Bearer secret")
-			request.Header.Set("Origin", "https://evil.example")
+		if origin != "" {
+			request.Header.Set("Origin", origin)
 		}
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
-		if recorder.Code != status {
+		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("auth boundary: %d %s", recorder.Code, recorder.Body.String())
 		}
 	}
@@ -131,15 +130,14 @@ func TestWorkspaceAPIRoutesAndErrorBoundaries(t *testing.T) {
 		t.Fatalf("preview JSON: %+v", preview)
 	}
 	workspaceRequest(t, handler, "POST", treeURL+"/remove", contract.RemoveWorktreeRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"}, 409)
-	for _, status := range []int{401, 403} {
+	for _, origin := range []string{"", "https://evil.example"} {
 		request := httptest.NewRequest("POST", treeURL+"/remove", strings.NewReader(`{"mode":"force"}`))
-		if status == 403 {
-			request.Header.Set("Authorization", "Bearer secret")
-			request.Header.Set("Origin", "https://evil.example")
+		if origin != "" {
+			request.Header.Set("Origin", origin)
 		}
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
-		if recorder.Code != status {
+		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("remove auth boundary: %d", recorder.Code)
 		}
 	}

@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  authorize,
   createShell,
   runCommand,
   expectTerminalLine,
@@ -19,6 +20,8 @@ test("isolated desktop and phone synchronize preferences in both directions", as
   });
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   try {
+    await authorize(desktop, server);
+    await authorize(phone, server);
     const a = await desktop.newPage();
     const b = await phone.newPage();
     await Promise.all([

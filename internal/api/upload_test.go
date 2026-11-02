@@ -270,7 +270,7 @@ func TestUploadRequiresLiveSessionAndExistingSecurityMiddleware(t *testing.T) {
 		{"missing authentication", http.StatusUnauthorized},
 		{"wrong authentication", http.StatusUnauthorized},
 		{"query authentication", http.StatusUnauthorized},
-		{"untrusted origin", http.StatusForbidden},
+		{"foreign origin without token", http.StatusUnauthorized},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			handler, manager, item, root, _ := uploadAPI(t)
@@ -295,7 +295,8 @@ func TestUploadRequiresLiveSessionAndExistingSecurityMiddleware(t *testing.T) {
 			case "query authentication":
 				r.Header.Del("Authorization")
 				r.URL.RawQuery = "token=secret"
-			case "untrusted origin":
+			case "foreign origin without token":
+				r.Header.Del("Authorization")
 				r.Header.Set("Origin", "https://evil.example")
 			}
 			w := httptest.NewRecorder()

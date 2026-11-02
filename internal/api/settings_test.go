@@ -30,7 +30,7 @@ func TestSettingsHTTPContract(t *testing.T) {
 		method, body, token, origin string
 		status                      int
 	}{
-		{"GET", "", "", "", 401}, {"PATCH", `{"baseRevision":0,"changes":{"theme":"dark"}}`, "login-secret", "https://foreign.example", 403},
+		{"GET", "", "", "", 401}, {"PATCH", `{"baseRevision":0,"changes":{"theme":"dark"}}`, "", "https://foreign.example", 401},
 		{"GET", "", "login-secret", "", 200},
 		{"PATCH", `{"baseRevision":0,"changes":{"theme":"dark"}}`, "login-secret", "", 200},
 		{"PATCH", `{"baseRevision":0,"changes":{"theme":"light"}}`, "login-secret", "", 409},

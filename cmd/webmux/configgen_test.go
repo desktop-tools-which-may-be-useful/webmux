@@ -48,7 +48,7 @@ func TestLoadConfigCreatesDefaultConfig(t *testing.T) {
 	if match == nil || string(match[1]) != c.Token {
 		t.Fatalf("generated token not persisted: %q", first)
 	}
-	if !bytes.Contains(first, []byte(`listen = "0.0.0.0:7681"`)) {
+	if !bytes.Contains(first, []byte(`listen = "127.0.0.1:7681"`)) {
 		t.Fatalf("generated config lost the default listen:\n%s", first)
 	}
 	loaded, err := config.Load(path, true)
@@ -80,12 +80,12 @@ func TestDefaultConfigWithFlagsKeepsOverridesPerProcess(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	path := defaultConfigPath(home)
 
-	c, err := loadConfig([]string{"--listen", "127.0.0.1:9000", "--token", "flag-token"})
+	c, err := loadConfig([]string{"--listen", "127.0.0.1:9000", "--token", "flag-token-0123456789-abcdefghijklmnopqrstuv"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(c.TunnelSettings.Close)
-	if !c.ConfigCreated || c.Listen != "127.0.0.1:9000" || c.Token != "flag-token" || c.TokenGenerated {
+	if !c.ConfigCreated || c.Listen != "127.0.0.1:9000" || c.Token != "flag-token-0123456789-abcdefghijklmnopqrstuv" || c.TokenGenerated {
 		t.Fatalf("flags were not applied: listen=%q token=%q created=%v", c.Listen, c.Token, c.ConfigCreated)
 	}
 	content, err := os.ReadFile(path)
@@ -93,10 +93,10 @@ func TestDefaultConfigWithFlagsKeepsOverridesPerProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	match := tokenValue.FindSubmatch(content)
-	if match == nil || len(match[1]) != 43 || string(match[1]) == "flag-token" {
+	if match == nil || len(match[1]) != 43 || string(match[1]) == "flag-token-0123456789-abcdefghijklmnopqrstuv" {
 		t.Fatalf("generated file did not keep its own random token: %q", content)
 	}
-	if !bytes.Contains(content, []byte(`listen = "0.0.0.0:7681"`)) {
+	if !bytes.Contains(content, []byte(`listen = "127.0.0.1:7681"`)) {
 		t.Fatalf("command-line listen was written to the generated file:\n%s", content)
 	}
 }
@@ -121,7 +121,7 @@ func TestExplicitConfigLeavesDefaultMissing(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_STATE_HOME", "")
 	custom := filepath.Join(home, "custom.toml")
-	content := []byte("listen = '127.0.0.1:9000'\ntoken = 'custom-token'\n")
+	content := []byte("listen = '127.0.0.1:9000'\ntoken = 'custom-token-0123456789-abcdefghijklmnopqrs'\n")
 	if err := os.WriteFile(custom, content, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestExplicitConfigLeavesDefaultMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(c.TunnelSettings.Close)
-	if c.ConfigCreated || !c.ConfigFound || c.ConfigPath != custom || c.Token != "custom-token" {
+	if c.ConfigCreated || !c.ConfigFound || c.ConfigPath != custom || c.Token != "custom-token-0123456789-abcdefghijklmnopqrs" {
 		t.Fatalf("explicit config: created=%v found=%v path=%q token=%q", c.ConfigCreated, c.ConfigFound, c.ConfigPath, c.Token)
 	}
 	after, err := os.ReadFile(custom)
@@ -151,7 +151,7 @@ func TestExistingDefaultConfigIsNotRewritten(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	content := []byte("listen = '127.0.0.1:9100'\ntoken = 'stable-token'\n")
+	content := []byte("listen = '127.0.0.1:9100'\ntoken = 'stable-token-0123456789-abcdefghijklmnopqrs'\n")
 	if err := os.WriteFile(path, content, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestExistingDefaultConfigIsNotRewritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(c.TunnelSettings.Close)
-	if c.ConfigCreated || !c.ConfigFound || c.Listen != "127.0.0.1:9100" || c.Token != "stable-token" {
+	if c.ConfigCreated || !c.ConfigFound || c.Listen != "127.0.0.1:9100" || c.Token != "stable-token-0123456789-abcdefghijklmnopqrs" {
 		t.Fatalf("existing config: created=%v listen=%q token=%q", c.ConfigCreated, c.Listen, c.Token)
 	}
 	after, err := os.ReadFile(path)

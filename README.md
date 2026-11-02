@@ -85,7 +85,7 @@ OpenCode、omp 与 Codex CLI 的同一段对话可以在原生 TUI 与基于 [AC
 > 截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟）。
 
 > [!WARNING]
-> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认监听所有接口 `0.0.0.0:7681`。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件与随机 token，该 token 会持久化，可用 `webmux status --json --reveal-token` 查看。若现有配置没有 token 且监听地址不是 loopback，则每次启动临时生成 256 位随机 token，并在终端打印带 `#token=` 的本地链接。仅本机使用时可改为 `127.0.0.1:7681`，远程访问建议绑定 Tailscale / WireGuard 等可信 VPN 地址，并用 `webmux config init` 写入固定的共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)；需要固定公网入口时按 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md) 操作。
+> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认只监听本机 `127.0.0.1:7681`，Token 始终必需且至少 43 字符。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件与随机 token，该 token 会持久化，可用 `webmux status --json --reveal-token` 查看。若现有配置没有 token，则每次启动临时生成 256 位随机 token，并在终端打印带 `#token=` 的本地链接。需要其他设备访问时，在 Windows 托盘打开“开放到公共网络”（监听所有接口，明文 HTTP，仅限可信网络），或把 `listen` 绑定到 Tailscale / WireGuard 等可信 VPN 地址，并用 `webmux config init` 写入固定的共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)；需要固定公网入口时按 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md) 操作。
 
 ## 特性
 
@@ -205,17 +205,17 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 服务引用当前二进制的绝对路径，请先将它放到 `~/.local/bin/webmux` 等稳定位置。`webmux service install --dry-run` 可预览服务文件，`--force` 可更新服务定义并重启。`webmux help` 查看全部命令；前台启动也可写成 `webmux serve`。
 
-| 配置项               | 默认值                                 | 说明                                                          |
-| -------------------- | -------------------------------------- | ------------------------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`                         | HTTP / WebSocket 监听地址                                     |
-| `token`              | 空（首次启动自动生成；已有空值见说明） | 共享 token；首次启动自动生成并持久化                          |
-| `scrollback_bytes`   | `2097152`                              | 每会话保留的原始终端字节数                                    |
-| `default_cwd`        | `~`                                    | 新建会话的默认目录                                            |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`               | 仓库清单、启动配置与 Tailscale 状态目录；不保存会话或终端内容 |
-| `idle_after_seconds` | `30`                                   | 无等待特征时判定为空闲的阈值                                  |
-| `prompt_patterns`    | 常见提示符 / 确认模式                  | 判定“可能在等你”的 Go 正则列表                                |
-| `allowed_origins`    | `[]`                                   | 额外允许的完整 Origin（如 HTTPS 反向代理域名）                |
-| `[tailscale]`        | `mode = "off"`                         | 托管 Serve/Funnel；显式 Funnel 才会公网公开                   |
+| 配置项               | 默认值                                 | 说明                                                              |
+| -------------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| `listen`             | `127.0.0.1:7681`                       | HTTP / WebSocket 监听地址                                         |
+| `token`              | 空（首次启动自动生成；已有空值见说明） | 共享 token；首次启动自动生成并持久化                              |
+| `scrollback_bytes`   | `2097152`                              | 每会话保留的原始终端字节数                                        |
+| `default_cwd`        | `~`                                    | 新建会话的默认目录                                                |
+| `state_dir`          | `$XDG_STATE_HOME/webmux`               | 仓库清单、启动配置与 Tailscale 状态目录；不保存会话或终端内容     |
+| `idle_after_seconds` | `30`                                   | 无等待特征时判定为空闲的阈值                                      |
+| `prompt_patterns`    | 常见提示符 / 确认模式                  | 判定“可能在等你”的 Go 正则列表                                    |
+| `allowed_origins`    | `[]`                                   | 额外接受的完整 Origin：其主机通过 Host 校验，HTTPS 条目可订阅推送 |
+| `[tailscale]`        | `mode = "off"`                         | 托管 Serve/Funnel；显式 Funnel 才会公网公开                       |
 
 完整说明、systemd / launchd 服务、Tailscale 与 HTTPS 配置见 [部署指南](docs/deployment.md)。
 

@@ -14,6 +14,7 @@ import (
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/listensettings"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/settings"
@@ -343,6 +344,15 @@ func tailscaleStatus(err error) int {
 	default:
 		return http.StatusConflict
 	}
+}
+
+// networkStatus maps network exposure failures: storage faults are 503 and a
+// failed bind or other refusal is 409.
+func networkStatus(err error) int {
+	if errors.Is(err, listensettings.ErrUnavailable) {
+		return http.StatusServiceUnavailable
+	}
+	return http.StatusConflict
 }
 
 func settingsStatus(err error) int {

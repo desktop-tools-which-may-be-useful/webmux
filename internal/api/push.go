@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/rainchan/webmux/internal/contract"
@@ -27,13 +28,14 @@ var pushOriginErrors = map[string]error{
 }
 
 // pushOrigin decides whether the page that sent r may subscribe. It returns
-// the canonical origin to anchor notification links, or a reason. Any HTTPS
-// origin that reached this handler already passed the Host and Origin checks,
-// so it is an authorized secure entry point: the managed Tailscale or Named
-// Tunnel, or a host listed in allowed_origins. Loopback is accepted over http
-// and https; other plain-http origins and the local socket are not.
+// the canonical origin to anchor notification links, or a reason. Requests
+// are authorized by the token alone, so an Origin header only anchors links
+// after entryOrigin confirms it names an entry point of this server: the
+// managed Tailscale or Named Tunnel, the requested host, or a host listed in
+// allowed_origins. Loopback is accepted over http and https; other
+// plain-http origins and the local socket are not.
 func (s *Server) pushOrigin(r *http.Request) (string, string) {
-	if s.local {
+	if s.local || !s.entryOrigin(r) {
 		return "", pushUnsupportedOrigin
 	}
 	named := s.Config.Tunnel.NamedHostname()
@@ -80,6 +82,33 @@ func (s *Server) pushOrigin(r *http.Request) (string, string) {
 		return "https://" + anchorAuthority(authority), ""
 	}
 	return "", pushUnsupportedOrigin
+}
+
+// entryOrigin reports whether r's Origin, when present, names an entry point
+// of this server. It is not an authorization check: the token authorizes the
+// request. It keeps notification links anchored to an origin that reaches
+// this server rather than to whatever page sent the subscription. The
+// middleware has already vetted r.Host, so an Origin naming that same
+// authority qualifies; a managed public entry point additionally requires
+// its own https origin, because tunnel traffic arrives over plain HTTP.
+func (s *Server) entryOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	if slices.Contains(s.Config.AllowedOrigins, origin) {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.User != nil || u.Host == "" || u.Path != "" || strings.ContainsAny(origin, "?#") || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	if s.Public.hostAllowed(r.Host) {
+		return s.Public.originAllowed(origin, r.Host)
+	}
+	want, ok := normalizeAuthority(r.Host)
+	got, same := normalizeAuthority(u.Host)
+	return ok && same && got == want
 }
 
 // anchorAuthority brackets a bare IPv6 literal so it can prefix an https URL.

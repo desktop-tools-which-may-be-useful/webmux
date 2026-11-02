@@ -19,8 +19,13 @@ import (
 	assets "github.com/rainchan/webmux/web"
 )
 
-func TestAuthenticationAndOriginBoundaries(t *testing.T) {
-	c := config.Config{Token: "secret", AllowedOrigins: []string{"https://trusted.example"}}
+// TestAuthenticationBoundaries pins the only browser-facing credential
+// paths: the bearer header (and, for WebSockets, the token subprotocol). A
+// cookie is ambient and query tokens leak into logs, so both are refused.
+// Origin is not an authority signal: a request with the token is accepted
+// from any Origin, and one without it is refused from the same origin.
+func TestAuthenticationBoundaries(t *testing.T) {
+	c := config.Config{Token: "secret"}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
 	handler := New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
@@ -30,18 +35,13 @@ func TestAuthenticationAndOriginBoundaries(t *testing.T) {
 	}{
 		{"bearer", "Bearer secret", "", "", "http://webmux.example", 200},
 		{"bearer case insensitive", "bearer secret", "", "", "", 200},
-		{"cookie", "", "secret", "", "", 200},
+		{"cookie forbidden", "", "secret", "", "", 401},
+		{"cookie forbidden same origin", "", "secret", "", "http://webmux.example", 401},
 		{"HTTP query forbidden", "", "", "?token=secret", "", 401},
 		{"incorrect bearer", "Bearer wrong", "secret", "", "", 401},
-		{"allowed cross origin", "Bearer secret", "", "", "https://trusted.example", 200},
-		{"untrusted cross origin", "Bearer secret", "", "", "https://evil.example", 403},
-		{"different scheme", "Bearer secret", "", "", "https://webmux.example", 403},
-		{"opaque origin", "Bearer secret", "", "", "null", 403},
-		{"origin query", "Bearer secret", "", "", "http://webmux.example?ignored", 403},
-		{"empty origin query", "Bearer secret", "", "", "http://webmux.example?", 403},
-		{"origin fragment", "Bearer secret", "", "", "http://webmux.example#ignored", 403},
-		{"empty origin fragment", "Bearer secret", "", "", "http://webmux.example#", 403},
-		{"origin credentials", "Bearer secret", "", "", "http://user@webmux.example", 403},
+		{"bearer from cross origin", "Bearer secret", "", "", "https://other.example", 200},
+		{"bearer from opaque origin", "Bearer secret", "", "", "null", 200},
+		{"no token from cross origin", "", "", "", "https://other.example", 401},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "http://webmux.example/api/health"+row.query, nil)
@@ -83,9 +83,10 @@ func TestWebSocketHandshakeBoundaries(t *testing.T) {
 		{"", "", "", nil, 401},
 		{"", "", "", tokenProtocols("wrong"), 401},
 		{"?token=secret", "", server.URL, nil, 401},
-		{"", "", "https://evil.example", secret, 403},
+		{"", "", "https://other.example", nil, 401},
+		{"", "", "https://other.example", secret, 101},
 		{"", "", server.URL, secret, 101},
-		{"", "webmux_token=secret", server.URL, nil, 101},
+		{"", "webmux_token=secret", server.URL, nil, 401},
 	} {
 		header := make(http.Header)
 		header.Set("Cookie", row.cookie)
@@ -145,12 +146,12 @@ func TestPublicOriginBoundaries(t *testing.T) {
 		name, host, origin string
 		want               int
 	}{
-		// 400 means the request passed Host, auth, and Origin and reached the handler.
+		// 400 means the request passed Host and auth and reached the handler.
+		// Only Host decides the public entry point; Origin carries no authority.
 		{"public https origin", host, "https://" + host, http.StatusBadRequest},
 		{"public host without origin", host, "", http.StatusBadRequest},
-		{"public http origin", host, "http://" + host, http.StatusForbidden},
-		{"public origin on direct host", "127.0.0.1:7681", "https://" + host, http.StatusForbidden},
-		{"other public origin", host, "https://evil.trycloudflare.com", http.StatusForbidden},
+		{"public host with other origin", host, "https://other.example", http.StatusBadRequest},
+		{"other public host", "evil.trycloudflare.com", "https://evil.trycloudflare.com", http.StatusForbidden},
 		{"unrelated host", "evil.example", "https://evil.example", http.StatusForbidden},
 		{"direct same origin", "127.0.0.1:7681", "http://127.0.0.1:7681", http.StatusBadRequest},
 	} {

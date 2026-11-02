@@ -27,6 +27,7 @@ var webmux = manifest{
 		"internal/files":             service,
 		"internal/artifacts":         service,
 		"internal/tunnelsettings":    service,
+		"internal/listensettings":    service,
 		"internal/tailscale":         service,
 		"internal/tailscalesettings": service,
 

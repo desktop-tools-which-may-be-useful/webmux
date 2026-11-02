@@ -14,6 +14,7 @@
 | launch              | launch-configs.json      | launch-configs.json.lock      | internal/launch              | unavailable           | 是       |
 | repositories        | repositories.json        | repositories.json.lock        | internal/workspace           | unavailable           | 是       |
 | tunnel              | tunnel-settings.json     | tunnel-settings.json.lock     | internal/tunnelsettings      | fail_closed           | 是       |
+| listen-settings     | listen-settings.json     | listen-settings.json.lock     | internal/listensettings      | fail_closed           | 是       |
 | tailscale-settings  | tailscale-settings.json  | tailscale-settings.json.lock  | internal/tailscalesettings   | fail_closed           | 是       |
 | tailscale-ownership | tailscale-ownership.json | tailscale-ownership.json.lock | cmd/webmux                   | block_start           | 否       |
 | push                | push.json                | push.json.lock                | internal/push                | unavailable           | 是       |
@@ -32,7 +33,7 @@
 - Commit 和 Remove 强制目录同步。发布前失败保留旧状态；发布后同步失败报告 `commit_uncertain` 并冻结写入，不广播成功、不用旧内存覆盖已发布文件。
 - `unavailable` 只禁用对应功能；push 不再改名重建密钥。首次确认文件不存在时仍可初始化。
 - `fail_closed` 表示覆盖文件异常时关闭对应入口，不能从 TOML 回退为启用；紧急关闭仍可停止当前入口，但写盘失败必须报告未持久化。
-- `tunnel-settings.json` 与 `tailscale-settings.json` 共用 `internal/settingsstore` 的打开、读取、提交与 fail-closed 骨架；文件结构、校验与关闭方式由各自包注入，盘点中登记为 `entry-settings` 例外。
+- `tunnel-settings.json`、`listen-settings.json` 与 `tailscale-settings.json` 共用 `internal/settingsstore` 的打开、读取、提交与 fail-closed 骨架；文件结构、校验与关闭方式由各自包注入，盘点中登记为 `entry-settings` 例外。
 - `tailscale-settings.json` 保存用户希望的 mode/port/provider；`tailscale-ownership.json` 保存本实例实际创建的外部入口（精确目标、端口、pending/active），供撤销和重启对账。它们的职责、权限和失败策略不同。
 - 旧 `tailscale.json` 即使损坏或与新文件并存，也在监听前阻止启动。先停止旧版本并核实/撤销其精确外部入口，再整理旧文件；不执行全局 reset。旧 `tunnel.json` 使 Cloudflare 保持关闭。新版不自动迁移文件或旧浏览器偏好。
 - `run/server.json.lock` 仅保护运行时记录和本机控制面；锁冲突退化为 TCP 服务，不能与 Tailscale 安全阻止启动混淆。

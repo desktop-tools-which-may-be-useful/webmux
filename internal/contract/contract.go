@@ -13,6 +13,7 @@ const (
 	PathShutdown = "/local/v1/shutdown"
 	PathToken    = "/local/v1/token"
 	PathTunnel   = "/local/v1/tunnel"
+	PathNetwork  = "/local/v1/network"
 )
 
 // State is the overall result of `webmux status`.
@@ -98,6 +99,26 @@ type StatusV1 struct {
 	// Push is present when the running server supports attention push;
 	// older servers omit it.
 	Push *PushStatus `json:"push,omitempty"`
+	// Network is present when the running server can switch its TCP
+	// listener between every interface and the configured address at
+	// runtime; older servers omit it.
+	Network *NetworkStatus `json:"network,omitempty"`
+}
+
+// NetworkStatus describes the TCP listener's exposure. Public means it binds
+// every interface. Saved is true when the choice comes from the persisted
+// switch rather than the configuration. Error reports a storage fault: the
+// switch then stays off the network and cannot be turned on.
+type NetworkStatus struct {
+	Public bool   `json:"public"`
+	Listen string `json:"listen"`
+	Saved  bool   `json:"saved"`
+	Error  string `json:"error,omitempty"`
+}
+
+// NetworkRequest is the body of POST /local/v1/network.
+type NetworkRequest struct {
+	Public *bool `json:"public"`
 }
 
 // PushStatus describes Web Push on a running server. It never carries

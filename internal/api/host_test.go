@@ -53,3 +53,27 @@ func TestHostTrustBoundary(t *testing.T) {
 		})
 	}
 }
+
+// TestListenFollowsRebind checks that the Host check follows the network
+// exposure switch: interface IP literals are accepted only while the
+// listener binds every interface.
+func TestListenFollowsRebind(t *testing.T) {
+	l := NewListen(config.Config{Listen: "127.0.0.1:7681", AllowedOrigins: []string{"https://proxy.example"}})
+	for _, row := range []struct {
+		listen, host string
+		want         bool
+	}{
+		{"127.0.0.1:7681", "127.0.0.1:7681", true},
+		{"127.0.0.1:7681", "192.168.1.5:7681", false},
+		{"127.0.0.1:7681", "proxy.example", true},
+		{"0.0.0.0:7681", "192.168.1.5:7681", true},
+		{"0.0.0.0:7681", "evil.example", false},
+		{"0.0.0.0:7681", "proxy.example", true},
+		{"127.0.0.1:7681", "192.168.1.5:7681", false},
+	} {
+		l.Set(row.listen)
+		if got := l.allowed(row.host); got != row.want {
+			t.Errorf("listen %s host %s: %v, want %v", row.listen, row.host, got, row.want)
+		}
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/rainchan/webmux/internal/api"
@@ -25,11 +26,14 @@ type localRuntime struct {
 	listener net.Listener
 	server   *http.Server
 	written  bool
+
+	mu     sync.Mutex
+	record runtime.Record
 }
 
 // startRuntime acquires the lock, listens on the socket and writes the
 // record. It must run after the TCP listener is bound and before it serves.
-func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps, shutdown func(), tunnels *tunnelController) *localRuntime {
+func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps, shutdown func(), tunnels *tunnelController, network *networkController) *localRuntime {
 	m, pushes := deps.Manager, deps.Push
 	rt := &localRuntime{dir: runtime.Dir(c.StateDir)}
 	if err := runtime.EnsureDir(rt.dir); err != nil {
@@ -75,12 +79,18 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 		record.Socket = path
 		rt.server = &http.Server{
 			Handler: api.NewLocal(deps, api.Local{
-				Configuration: func() contract.Configuration { return effectiveView(c, record, deps) },
-				Status:        func() contract.StatusV1 { return localStatus(record, c, m, tunnels, pushes) },
-				Launcher:      record.Launcher,
-				Shutdown:      shutdown,
-				InSession:     m.ContainsProcess,
-				Tunnel:        tunnels.SetEnabled,
+				Configuration: func() contract.Configuration { return effectiveView(c, rt.currentRecord(), deps) },
+				Status: func() contract.StatusV1 {
+					s := localStatus(rt.currentRecord(), c, m, tunnels, pushes)
+					network := network.Status()
+					s.Network = &network
+					return s
+				},
+				Launcher:  record.Launcher,
+				Shutdown:  shutdown,
+				InSession: m.ContainsProcess,
+				Tunnel:    tunnels.SetEnabled,
+				Network:   network.SetPublic,
 			}),
 			ReadHeaderTimeout: 10 * time.Second,
 			IdleTimeout:       60 * time.Second,
@@ -88,12 +98,34 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 			ConnContext:       api.LocalConnContext,
 		}
 	}
+	rt.record = record
 	if err := rt.lock.Write(record); err != nil {
 		slog.Warn("runtime record not written", "error", err)
 	} else {
 		rt.written = true
 	}
+	network.onListen = rt.setListen
 	return rt
+}
+
+func (rt *localRuntime) currentRecord() runtime.Record {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	return rt.record
+}
+
+// setListen republishes the record after the network exposure switch
+// rebinds the TCP listener, so status, links and clients follow it.
+func (rt *localRuntime) setListen(addr string) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	rt.record.Listen = addr
+	if !rt.written {
+		return
+	}
+	if err := rt.lock.Write(rt.record); err != nil {
+		slog.Warn("runtime record not updated", "error", err)
+	}
 }
 
 func localStatus(record runtime.Record, c serverRun, m *session.Manager, tunnels *tunnelController, pushes *push.Service) contract.StatusV1 {

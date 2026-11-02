@@ -1,6 +1,6 @@
 # 本机 API（Unix 套接字）
 
-服务端在 `<state_dir>/run/webmux.sock`（路径超过平台 `sun_path` 上限时改用 `$XDG_RUNTIME_DIR/webmux/<摘要>.sock`，实际路径写入运行时记录）上提供与 TCP 完全相同的 `/api/*`、`/ws/*`，认证方式改为对端进程的有效 UID，不检查 Token、Host 与 Origin。示例：
+服务端在 `<state_dir>/run/webmux.sock`（路径超过平台 `sun_path` 上限时改用 `$XDG_RUNTIME_DIR/webmux/<摘要>.sock`，实际路径写入运行时记录）上提供与 TCP 完全相同的 `/api/*`、`/ws/*`，认证方式改为对端进程的有效 UID，不检查 Token 与 Host。示例：
 
 ```sh
 curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessions
@@ -14,6 +14,7 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 | `GET /local/v1/status`        | 状态 JSON（与 `webmux status --json` 契约 v1 相同，`record`、`localApi` 为 `true`，`drift` 由服务端重读配置文件计算）                                                                                                  |
 | `POST /local/v1/shutdown`     | 可选请求体 `{"force": bool}`；systemd / launchd 启动且未设 `force` 时 409 并给出管理命令；否则 202，按 SIGTERM 流程退出。会话内部的连接 403                                                                            |
 | `GET /local/v1/token`         | `{"token": "..."}`；未配置 Token 时 404；会话内部的连接 403                                                                                                                                                            |
+| `POST /local/v1/network`      | 请求体 `{"public": bool}`；开放到公共网络（监听所有接口）或回到配置的监听地址，立即返回 200 与 `NetworkStatus`；无效请求 400，绑定失败 409，设置存储不可用 503，会话内部的连接 403                                     |
 | `POST /local/v1/tunnel`       | 请求体 `{"enabled": bool}`；开启或关闭 Cloudflare Tunnel，立即返回 202 与 `TunnelStatus`；无效请求 400，启用前提不足或控制拒绝 409，设置存储不可用 503，会话内部的连接 403；关闭落盘失败的 503 带 `notPersisted: true` |
 
 本机开关与 Web 设置共用当前有效配置及持久化控制器，定位 cloudflared 的规则相同：
@@ -28,5 +29,12 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 
 - `enabled`：当前进程启用期望，包括命令行覆盖，不是持久磁盘值或运行就绪状态。旧服务缺失时客户端才按 starting/ready 推断开关。
 - `settingsAvailable`：为 `true` 时显式声明 Web 设置页/API 可用。托盘仅凭该能力提供 `/settings/tunnel` 入口，不能从版本号、`enabled` 或存在 `tunnel` 推断；缺失或 false 时仍可使用旧本机开关。
+
+网络开放开关：
+
+- 只替换监听套接字，已建立的连接、WebSocket 与会话不受影响；端口保持本次进程实际绑定的端口。
+- 开放时监听 `0.0.0.0:<port>`（配置本就是通配地址时沿用它）；关闭时回到配置的地址，配置为通配地址时改为 `127.0.0.1:<port>`。Host 校验、运行时记录与状态链接随之更新。
+- 选择保存到 `<state_dir>/listen-settings.json`，下次启动优先于 TOML 的 `listen`；显式 `--listen` 只覆盖本次启动。开放要求能保存，存储损坏或被锁时启动保持不开放；关闭即使保存失败也立即生效并返回 503。
+- `NetworkStatus` 为 `{public, listen, saved, error?}`：`public` 表示当前监听所有接口，`saved` 表示来自已保存的开关，`error` 为存储故障。
 
 `webmux bridge` 把一条套接字连接原样桥接到标准输入输出（HTTP/1.1 keep-alive 与 WebSocket 升级照常工作）；连接失败时不写标准输出，服务未运行退出码 3，其他错误 1。

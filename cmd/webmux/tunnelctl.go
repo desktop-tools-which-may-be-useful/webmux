@@ -56,8 +56,8 @@ func newTunnelController(o tunnelControllerOptions) *tunnelController {
 }
 
 func (tc *tunnelController) enableErrorLocked() error {
-	if len(tc.token) < minTunnelTokenLength {
-		return fmt.Errorf("%w: a public tunnel requires a WebMux token of at least %d characters; run `webmux config init` or set a strong token, then restart WebMux", tunnelsettings.ErrEnableBlocked, minTunnelTokenLength)
+	if len(tc.token) < minTokenLength {
+		return fmt.Errorf("%w: a public tunnel requires a WebMux token of at least %d characters; run `webmux config init` or set a strong token, then restart WebMux", tunnelsettings.ErrEnableBlocked, minTokenLength)
 	}
 	return nil
 }

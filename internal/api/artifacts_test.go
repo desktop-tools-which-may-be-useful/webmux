@@ -31,9 +31,9 @@ func TestArtifactsFolderFollowsTheSession(t *testing.T) {
 		path, token, origin string
 		want                int
 	}{
-		"missing authentication": {path, "", "", http.StatusUnauthorized},
-		"untrusted origin":       {path, "secret", "https://evil.example", http.StatusForbidden},
-		"missing session":        {"/api/sessions/missing0/artifacts", "secret", "", http.StatusNotFound},
+		"missing authentication":  {path, "", "", http.StatusUnauthorized},
+		"foreign origin no token": {path, "", "https://evil.example", http.StatusUnauthorized},
+		"missing session":         {"/api/sessions/missing0/artifacts", "secret", "", http.StatusNotFound},
 	} {
 		if w := request(row.path, row.token, row.origin); w.Code != row.want {
 			t.Errorf("%s: %d %s", name, w.Code, w.Body.String())

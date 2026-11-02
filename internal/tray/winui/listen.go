@@ -54,6 +54,7 @@ func (a *App) listen() {
 		})
 	}
 	on(m.copyToken, a.copyToken)
+	on(m.network, a.toggleNetwork)
 	on(m.tunnel, a.toggleTunnel)
 	on(m.tunnelSettings, a.openTunnelSettings)
 	on(m.copyPublic, func() {

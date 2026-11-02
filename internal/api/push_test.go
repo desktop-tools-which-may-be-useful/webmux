@@ -174,8 +174,10 @@ func TestPushAPI(t *testing.T) {
 	}
 
 	device := browserSubscription(t, pushService.URL+"/device/SECRET-PATH")
-	if code, _ := call("POST", "/api/push/subscriptions", "https://evil.example", "secret", device); code != http.StatusForbidden {
-		t.Fatalf("foreign origin: %d", code)
+	// The token authorizes the request, but a foreign page cannot anchor
+	// notification links outside this server's entry points.
+	if code, out := call("POST", "/api/push/subscriptions", "https://evil.example", "secret", device); code != http.StatusConflict || out["reason"] != pushUnsupportedOrigin {
+		t.Fatalf("foreign origin: %d %v", code, out)
 	}
 	if code, out := call("POST", "/api/push/subscriptions", quickOrigin, "secret", device); code != http.StatusConflict || out["reason"] != pushQuickTunnel || !strings.Contains(out["error"].(string), "Named Tunnel") {
 		t.Fatalf("quick tunnel registration: %d %v", code, out)

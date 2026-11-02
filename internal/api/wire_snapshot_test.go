@@ -762,7 +762,7 @@ func wireBasics(f *wireFixture) {
 	f.call("error-400-session-config-empty", "POST", "/api/sessions", map[string]any{"configId": ""}, 400)
 	f.call("error-400-session-env", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh"}, "env": map[string]string{"WEBMUX_SESSION_ID": "forged"}}, 400)
 	f.call("error-401", "GET", "/api/health", nil, 401, withToken(""))
-	f.call("error-403-origin", "GET", "/api/health", nil, 403, withOrigin("http://evil.example"))
+	f.call("error-401-foreign-origin", "GET", "/api/health", nil, 401, withToken(""), withOrigin("http://evil.example"))
 	f.call("error-404-session", "GET", "/api/sessions/missing", nil, 404)
 	f.call("error-409-session-running", "DELETE", "/api/sessions/"+runningID+"?remove=1", nil, 409)
 

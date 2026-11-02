@@ -4,9 +4,35 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
 
 	"github.com/rainchan/webmux/internal/config"
 )
+
+// Listen holds the Host check for the current TCP listen address. The
+// network exposure switch rebinds the listener at runtime and calls Set, so
+// requests that arrive on the new address are judged against it.
+type Listen struct {
+	base  config.Config
+	check atomic.Pointer[func(string) bool]
+}
+
+// NewListen starts from c.Listen; c also supplies allowed_origins.
+func NewListen(c config.Config) *Listen {
+	l := &Listen{base: c}
+	l.Set(c.Listen)
+	return l
+}
+
+// Set replaces the listen address the Host check follows.
+func (l *Listen) Set(listen string) {
+	c := l.base
+	c.Listen = listen
+	check := hostCheck(c)
+	l.check.Store(&check)
+}
+
+func (l *Listen) allowed(authority string) bool { return (*l.check.Load())(authority) }
 
 // hostCheck establishes the authority boundary independently of Origin: a page
 // loaded from a rebound hostname can supply an Origin matching that hostname.

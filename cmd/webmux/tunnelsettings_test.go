@@ -183,11 +183,11 @@ func TestTunnelStartupWebPrecedenceFlagsAndShortToken(t *testing.T) {
 	}{
 		{"saved off overrides TOML", true, false, "", tunnelTestToken, false, true, false},
 		{"saved on restores", false, true, "", tunnelTestToken, true, true, false},
-		{"short web token soft failure", false, true, "", "short", true, true, false},
+		{"short web token rejected at startup", false, true, "", "short", false, false, true},
 		{"empty web token generated", false, true, "", "", true, true, false},
 		{"explicit enable overrides saved off", false, false, "--tunnel", tunnelTestToken, true, false, false},
 		{"explicit disable overrides saved on", true, true, "--tunnel=false", tunnelTestToken, false, false, false},
-		{"explicit enable keeps legacy token rejection", false, false, "--tunnel", "short", false, false, true},
+		{"explicit enable rejects short token", false, false, "--tunnel", "short", false, false, true},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			state := t.TempDir()
@@ -210,7 +210,7 @@ func TestTunnelStartupWebPrecedenceFlagsAndShortToken(t *testing.T) {
 				if c.Tunnel.Enabled != row.wantEnabled || c.TunnelWebManaged != row.wantWeb {
 					t.Fatalf("startup flags enabled=%v web=%v", c.Tunnel.Enabled, c.TunnelWebManaged)
 				}
-				if row.token == "" && len(c.Token) != minTunnelTokenLength {
+				if row.token == "" && len(c.Token) != minTokenLength {
 					t.Fatal("web startup did not generate login token")
 				}
 				tc := newTunnelController(tunnelControllerOptions{
@@ -328,7 +328,7 @@ func (r *tunnelRun) tunnelRequest(t *testing.T, method, path, body, token string
 }
 
 func TestWebManagedStartupFailureKeepsHTTP(t *testing.T) {
-	for _, token := range []string{"short", tunnelTestToken} {
+	for _, token := range []string{tunnelTestToken} {
 		t.Run(fmt.Sprintf("token-length-%d", len(token)), func(t *testing.T) {
 			state, err := os.MkdirTemp("/tmp", "wmxt")
 			if err != nil {

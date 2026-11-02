@@ -4,8 +4,8 @@
 
 WebMux 以启动服务的系统用户身份执行任意命令，**等同于把一个 shell 暴露到网络上**。它不是进程沙箱，也不提供多用户隔离。安全依赖于网络隔离：
 
-- 默认监听所有接口 `0.0.0.0:7681`；仅本机使用请设为 `127.0.0.1:7681`。远程访问建议绑定 Tailscale / WireGuard 等可信 VPN 地址，并用防火墙限制可访问的接口。
-- 设置随机的共享 `token`。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件和持久化的 256 位 Token；未启用隧道时不会在启动输出中打印该 Token，可用 `webmux status --json --reveal-token` 查看。启用隧道时仍会输出带 Token 的链接和二维码，详见下文；日志中的持久化 Token 不会因重启失效。若现有配置的 token 为空且监听地址不是 loopback（包括默认的 `0.0.0.0`），则每次启动临时生成 256 位随机 Token，终端打印带 `#token=` 的本地链接；以 systemd / launchd 运行时该链接会写入 journal 或日志文件，且重启后更换。只有仅监听 loopback 且未启用隧道时，空 token 才表示不认证。
+- 默认只监听本机回环 `127.0.0.1:7681`。需要从其他设备访问时，可在 Windows 托盘或本机 API 打开“开放到公共网络”（改为监听所有接口，见下文），或把 `listen` 绑定到 Tailscale / WireGuard 等可信 VPN 地址，并用防火墙限制可访问的接口。
+- Token 始终必需，且至少 43 字符。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件和持久化的 256 位 Token；未启用隧道时不会在启动输出中打印该 Token，可用 `webmux status --json --reveal-token` 查看。启用隧道时仍会输出带 Token 的链接和二维码，详见下文；日志中的持久化 Token 不会因重启失效。若现有配置的 token 为空，则无论监听地址如何，每次启动都临时生成 256 位随机 Token，终端打印带 `#token=` 的本地链接；以 systemd / launchd 运行时该链接会写入 journal 或日志文件，且重启后更换。配置了少于 43 字符的 token 时启动失败，可用 `openssl rand -base64 32` 生成。
 - **不要把 WebMux 直接暴露到公网。** 确需公网访问时，只使用受控 Cloudflare Tunnel 入口，并接受下面的风险模型。
 
 ### Cloudflare Tunnel
@@ -16,8 +16,8 @@ WebMux 以启动服务的系统用户身份执行任意命令，**等同于把�
 - 隧道要求至少 43 字符的 WebMux 登录 Token。启动需要认证且未配置时生成 256 位随机 Token；运行时不生成或更换登录 Token。网页配置恢复遇到弱 Token 时保留本地服务且公网保持关闭，修正配置后重启。建议用 `openssl rand -base64 32` 生成。
 - 隧道模式会在终端打印带 `#token=` 的本地与公网链接和二维码。以 systemd / launchd 运行时，这些内容会写入 journal 或日志文件，请限制日志访问权限。首次启动写入配置文件的 Token 会跨重启保留；只有未持久化的临时 Token 会在重启时更换。
 - 公网主机名只接受 Cloudflare 转发的 Host 与该主机的 `https://` Origin，其他 Host 与 `http://` Origin 会被拒绝；cloudflared 退出后立即撤销授权。
-- Token 不进入请求 URL（HTTP 使用 Bearer 头，WebSocket 使用 `webmux.token.*` 子协议），前端也不写入 Cookie（Cookie 不按端口隔离，同一主机其他端口的页面可以读取）；服务端仅为兼容手动设置的客户端仍接受 `webmux_token` Cookie 作为 HTTP 认证，并照常执行 Host 与 Origin 检查；但 Bearer、子协议头与终端输入输出仍会经过 Cloudflare 边缘。
-- 不再需要公网访问时，在网页、托盘或本机 API 中关闭隧道；持久化设置会在下次启动恢复，仅移除 `--tunnel` 不等于关闭。网页 API 保留 Token、Host 和 Origin 校验；本机控制面仅允许同一用户且会话之外的进程修改设置。网页开启前确认公开 shell 风险。
+- Token 不进入请求 URL（HTTP 使用 Bearer 头，WebSocket 使用 `webmux.token.*` 子协议），也不接受 Cookie：浏览器会自动携带 Cookie，且 Cookie 不按端口隔离。但 Bearer、子协议头与终端输入输出仍会经过 Cloudflare 边缘。
+- 不再需要公网访问时，在网页、托盘或本机 API 中关闭隧道；持久化设置会在下次启动恢复，仅移除 `--tunnel` 不等于关闭。网页 API 保留 Token 与 Host 校验；本机控制面仅允许同一用户且会话之外的进程修改设置。网页开启前确认公开 shell 风险。
 - Cloudflare 凭据只写不读，保存于状态目录内 0600 文件，目录为 0700；不要共享该目录。损坏或不可读存储不回退配置文件开启公网。关闭时即使持久化失败也立即撤销公网授权并停止隧道，返回未持久化错误；修复后重新保存，避免重启恢复旧开关。
 - Named Tunnel 的控制台步骤、两个 token 的区别与排错见 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md)。
 
@@ -27,15 +27,16 @@ WebMux 以启动服务的系统用户身份执行任意命令，**等同于把�
 
 - Funnel 必须由用户显式配置，WebMux 不会因为检测到 Tailscale 就自动公开。任何拿到 Funnel 链接与 Token 的人都能执行命令。
 - Serve/Funnel 都要求至少 43 字符的 WebMux 登录 Token；留空时生成本次进程 Token，带 Token 的启动链接可能写入日志。
-- WebMux 只操作 `tailscale.json` 记录的精确端口与 target，不覆盖其他入口，也不调用 `serve reset` / `funnel reset`；退出、失败或切换时先撤销来源授权，正常路径下旧 ts.net Host/Origin 立即返回 403。若此前按手工方案把 ts.net 主机名写入了 `allowed_origins`，该白名单独立于来源注册表，撤销后仍会接受旧 Origin；迁移到托管的 Serve/Funnel 时请删除这些手工条目。
-- `GET /api/tailscale` 不返回 Token、其他入口的 target 或原始 CLI 输出。网页可修改模式、端口与 provider 并立即生效：写端点保留 Token、Host 与 Origin 校验，开启 Funnel 需要显式确认公网风险，登录 Token 少于 43 字符时拒绝开启；WebMux 会话内的进程不能经本机 API 修改。CLI 路径只能在 TOML 中设置；网页设置文件损坏或被锁时托管入口保持关闭。
+- WebMux 只操作 `tailscale.json` 记录的精确端口与 target，不覆盖其他入口，也不调用 `serve reset` / `funnel reset`；退出、失败或切换时先撤销来源授权，正常路径下旧 ts.net Host 立即返回 403。若此前按手工方案把 ts.net 主机名写入了 `allowed_origins`，该白名单独立于来源注册表，撤销后仍会接受旧 Host；迁移到托管的 Serve/Funnel 时请删除这些手工条目。
+- `GET /api/tailscale` 不返回 Token、其他入口的 target 或原始 CLI 输出。网页可修改模式、端口与 provider 并立即生效：写端点保留 Token 与 Host 校验，开启 Funnel 需要显式确认公网风险，登录 Token 少于 43 字符时拒绝开启；WebMux 会话内的进程不能经本机 API 修改。CLI 路径只能在 TOML 中设置；网页设置文件损坏或被锁时托管入口保持关闭。
 - WSL 中的 Windows provider 必须显式选择且要求 mirrored 网络；WebMux 不会自动修改 `.wslconfig`、Windows 防火墙、tailnet ACL 或自动提权。
 - 配置、端口与故障排查见 [Tailscale Serve / Funnel 入口](docs/tailscale.md)。
 
 内置的防护措施：
 
-- 所有 API 与 WebSocket 都需要认证（启用 token 时），token 以常量时间比较。
-- 带 Origin 的请求必须同源或位于 `allowed_origins` 中，防止其他网站通过浏览器发起连接。
+- 所有 API 与 WebSocket 都需要 Token，token 以常量时间比较。Token 只从 `Authorization` 头或 WebSocket 子协议读取，浏览器不会替其他网站自动附上它，因此跨站请求伪造与跨站 WebSocket 劫持拿不到凭据；WebMux 不再检查 `Origin`。
+- Host 必须是监听地址、IP 字面量（仅通配监听时）、`allowed_origins` 中的主机或已登记的公网入口，防止 DNS 重绑定。
+- “开放到公共网络”使用明文 HTTP：同一网络中的窃听者可截获 Token。只在家庭局域网或 VPN 等可信网络中开启，跨网访问请用 Tailscale 或隧道提供的 HTTPS。
 - 终端输入输出不会写入日志；配置接口不返回 token。
 - 响应头包含 `X-Content-Type-Options: nosniff` 与 `Referrer-Policy: no-referrer`。
 

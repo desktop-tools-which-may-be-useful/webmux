@@ -120,6 +120,39 @@ func TestTunnelEntry(t *testing.T) {
 	}
 }
 
+func TestNetworkEntry(t *testing.T) {
+	running := func(network *contract.NetworkStatus) Snapshot {
+		return Snapshot{State: StateRunning, HasStatus: true, Mode: ModeTray, Status: contract.StatusV1{
+			State: contract.StateRunning, URLs: contract.URLs{Local: "http://127.0.0.1:7681"}, Network: network,
+		}}
+	}
+	if got := NetworkEntry(running(&contract.NetworkStatus{Listen: "127.0.0.1:7681"})); !got.Show || got.Checked || !got.Enabled || got.Info != "" {
+		t.Fatalf("private %+v", got)
+	}
+	if got := NetworkEntry(running(&contract.NetworkStatus{Public: true, Listen: "[::]:7681", Saved: true})); !got.Checked || !got.Enabled {
+		t.Fatalf("public %+v", got)
+	}
+	// A storage fault blocks opening but never closing.
+	broken := NetworkEntry(running(&contract.NetworkStatus{Listen: "127.0.0.1:7681", Error: "locked"}))
+	if broken.Enabled || !strings.Contains(broken.Info, "locked") {
+		t.Fatalf("broken private %+v", broken)
+	}
+	if got := NetworkEntry(running(&contract.NetworkStatus{Public: true, Error: "locked"})); !got.Enabled {
+		t.Fatalf("broken public cannot close %+v", got)
+	}
+	if got := NetworkEntry(running(nil)); got.Show {
+		t.Fatalf("old server shows the switch: %+v", got)
+	}
+	stopped := running(&contract.NetworkStatus{})
+	stopped.State, stopped.Status.State = StateStopped, contract.StateStopped
+	if got := NetworkEntry(stopped); got.Show {
+		t.Fatalf("stopped instance shows the switch: %+v", got)
+	}
+	if !strings.Contains(NetworkWarning, "Token") || !strings.Contains(NetworkWarning, "明文") {
+		t.Fatal("warning does not name the risk")
+	}
+}
+
 func TestPushEntry(t *testing.T) {
 	const named = "https://term.example.com"
 	snap := func(push *contract.PushStatus) Snapshot {

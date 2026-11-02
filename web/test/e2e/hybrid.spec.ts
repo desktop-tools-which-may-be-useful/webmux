@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { APIRequestContext, Page } from "@playwright/test";
 import {
+  authorize,
   expect,
   expectTerminalLine,
   openSessionLink,
@@ -313,6 +314,7 @@ test.describe("hybrid sessions with the fake agent", () => {
       deviceScaleFactor,
     });
     try {
+      await authorize(other, server);
       const phone = await other.newPage();
       await openHybrid(phone, id, "acp");
       const devices = [page, phone];

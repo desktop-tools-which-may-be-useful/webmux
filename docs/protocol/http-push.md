@@ -11,7 +11,7 @@
 
 `reason` 取值：`disabled`（`[push] enabled = false`）、`storage`（`<state_dir>/push.json` 不可读写）、`quick_tunnel`（地址每次启动都会变化，请改用 Cloudflare Named Tunnel 或 Tailscale Serve/Funnel 等稳定 HTTPS 入口）、`unsupported_origin`。
 
-来源按请求 `Origin` 判定（没有时由 `Host` 推断，经隧道或 HTTPS 反向代理到达的视为 `https`）：通过 Host/Origin 校验的 HTTPS 入口（例如托管 Tailscale Serve/Funnel、当前有效 Named 设置、`allowed_origins` 中的 HTTPS 条目）与 `127.0.0.1` / `::1` / `localhost` 回环来源可以订阅。
+来源按请求 `Origin` 判定（没有时由 `Host` 推断，经隧道或 HTTPS 反向代理到达的视为 `https`）：通过 Host 校验、且 Origin 指向该入口的 HTTPS 入口（例如托管 Tailscale Serve/Funnel、当前有效 Named 设置、`allowed_origins` 中的 HTTPS 条目）与 `127.0.0.1` / `::1` / `localhost` 回环来源可以订阅。
 
 来源规范化与不可订阅的来源：
 
@@ -21,7 +21,7 @@
 
 订阅来源资格不等于公网 Host/Origin 授权：
 
-- 手工 `tailscale serve` 或其他 TLS 反向代理仍需把 HTTPS origin 加入 `allowed_origins`，否则写请求本身会 403。
+- 手工 `tailscale serve` 或其他 TLS 反向代理仍需把 HTTPS origin 加入 `allowed_origins`，否则 Host 校验返回 403。Origin 不指向本服务入口（与 Host 不同且不在 `allowed_origins` 中）的订阅返回 409 `unsupported_origin`。
 - 托管 Tunnel/Tailscale 的来源仍只在 ready 后授予，停止/失败或重配时撤销。
 - 更改 Named 主机名、切换 Quick 或恢复配置默认后，后续请求立即使用新的有效来源判定，不继续使用启动时 TOML 的旧值。
 

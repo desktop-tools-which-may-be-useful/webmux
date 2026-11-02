@@ -52,7 +52,7 @@ func TestServiceConfigUsesExistingInitializer(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Token) < minTunnelTokenLength {
+	if len(c.Token) < minTokenLength {
 		t.Fatal("service configuration lacks a strong token")
 	}
 	info, err := os.Stat(path)

@@ -37,6 +37,15 @@
       "source": "internal/tunnelsettings/store.go"
     },
     {
+      "id": "listen-settings",
+      "path": "listen-settings.json",
+      "lock": "listen-settings.json.lock",
+      "owner": "internal/listensettings",
+      "failure": "fail_closed",
+      "web": "是",
+      "source": "internal/listensettings/store.go"
+    },
+    {
       "id": "tailscale-settings",
       "path": "tailscale-settings.json",
       "lock": "tailscale-settings.json.lock",
@@ -102,7 +111,7 @@
     "read-only-codeview": "通过 Open/Openat(O_RDONLY/O_PATH/O_NOFOLLOW) 与 NewFile 进行代码只读访问（阅读、下载、打包与复制源）；登记以防新写入入口被漏过。",
     "pty-descriptor": "将已有 PTY 描述符包装为可轮询文件；不是磁盘持久化。",
     "agent-state": "外部 agent 自己的状态文件名与注册记录（Codex 会话写锁、Claude 进程注册）；WebMux 只比较有界读取或已打开路径，从不创建、修改或写入这些状态。",
-    "entry-settings": "internal/settingsstore 是 tunnel 与 tailscale-settings 共用的 fail-closed 打开、读取与提交骨架；文件路径、所有者与失败策略仍由两个存储各自登记。"
+    "entry-settings": "internal/settingsstore 是 tunnel、listen-settings 与 tailscale-settings 共用的 fail-closed 打开、读取与提交骨架；文件路径、所有者与失败策略仍由各存储各自登记。"
   },
   "references": {
     "cmd/baseline/fixture.go|*fixture.close|os.RemoveAll": {
@@ -432,6 +441,10 @@
     "internal/statefile/catalog.go|path|tailscale.json": {
       "count": 1,
       "owner": "atomic-publisher"
+    },
+    "internal/statefile/catalog.go|path|listen-settings.json": {
+      "count": 1,
+      "owner": "listen-settings"
     },
     "internal/statefile/catalog.go|path|tunnel-settings.json": {
       "count": 1,

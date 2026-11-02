@@ -31,6 +31,11 @@ type Local struct {
 	// answer 503, including an emergency stop that was not persisted.
 	// Nil leaves /local/v1/tunnel unrouted.
 	Tunnel func(enabled bool) (contract.TunnelStatus, error)
+	// Network rebinds the TCP listener on every interface (true) or the
+	// configured address (false) and persists the choice. Storage faults
+	// answer 503; a failed bind or other refusal answers 409. Nil leaves
+	// /local/v1/network unrouted.
+	Network func(public bool) (contract.NetworkStatus, error)
 }
 
 type peerKey struct{}
@@ -124,6 +129,28 @@ func NewLocal(d Deps, local Local) http.Handler {
 				return
 			}
 			reply(w, http.StatusAccepted, status)
+		})
+	}
+	if local.Network != nil {
+		mux.HandleFunc("POST "+contract.PathNetwork, func(w http.ResponseWriter, r *http.Request) {
+			if local.fromSession(r) {
+				failure(w, http.StatusForbidden, errors.New("processes inside a WebMux session cannot change network exposure"))
+				return
+			}
+			var req contract.NetworkRequest
+			if !decode(w, r, &req) {
+				return
+			}
+			if req.Public == nil {
+				failure(w, http.StatusBadRequest, errors.New("public is required"))
+				return
+			}
+			status, err := local.Network(*req.Public)
+			if err != nil {
+				failure(w, networkStatus(err), err)
+				return
+			}
+			reply(w, http.StatusOK, status)
 		})
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

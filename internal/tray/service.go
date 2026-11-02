@@ -53,6 +53,9 @@ type Service interface {
 	Install(ctx context.Context) error
 	// SetTunnel starts or stops the running server's Cloudflare Tunnel.
 	SetTunnel(ctx context.Context, enabled bool) (contract.TunnelStatus, error)
+	// SetNetwork opens the running server to the network (true) or returns
+	// it to its configured address (false), keeping sessions.
+	SetNetwork(ctx context.Context, public bool) (contract.NetworkStatus, error)
 }
 
 // WSLService implements Service with wsl.exe through a Runner and the
@@ -285,6 +288,12 @@ func (s *WSLService) SetTunnel(ctx context.Context, enabled bool) (contract.Tunn
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return s.local().SetTunnel(ctx, enabled)
+}
+
+func (s *WSLService) SetNetwork(ctx context.Context, public bool) (contract.NetworkStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return s.local().SetNetwork(ctx, public)
 }
 
 // Keepalive keeps a distribution with a systemd-managed WebMux alive through

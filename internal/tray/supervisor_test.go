@@ -288,6 +288,10 @@ func (f *fakeService) Install(context.Context) error {
 	}
 	return nil
 }
+func (f *fakeService) SetNetwork(_ context.Context, public bool) (contract.NetworkStatus, error) {
+	f.call(fmt.Sprintf("network %v", public))
+	return contract.NetworkStatus{Public: public}, nil
+}
 func (f *fakeService) SetTunnel(_ context.Context, enabled bool) (contract.TunnelStatus, error) {
 	f.call(fmt.Sprintf("tunnel %v", enabled))
 	f.mu.Lock()

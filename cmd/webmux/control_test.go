@@ -25,7 +25,7 @@ import (
 	"github.com/rainchan/webmux/internal/runtime"
 )
 
-const fixtureToken = "fixture-token-0123456789"
+const fixtureToken = "fixture-token-0123456789-abcdefghijklmnopqrs"
 
 // fixture is an isolated HOME, configuration and state directory. Paths sit
 // under /tmp because macOS temporary directories overflow sun_path.

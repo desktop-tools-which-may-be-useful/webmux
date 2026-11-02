@@ -234,8 +234,8 @@ func TestLaunchConfigAuthAndOrigin(t *testing.T) {
 		{"GET", "/api/launch-configs", "", "Bearer wrong", "", 401},
 		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "", "", 401},
 		{"POST", "/api/launch-configs/hybrid-support", `{"cmd":["omp"]}`, "", "", 401},
-		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "Bearer secret", "https://evil.example", 403},
-		{"GET", "/api/launch-configs", "", "Bearer secret", "https://evil.example", 403},
+		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "", "https://evil.example", 401},
+		{"GET", "/api/launch-configs", "", "", "https://evil.example", 401},
 		{"GET", "/api/launch-configs", "", "Bearer secret", "http://webmux.example", 200},
 	} {
 		r := httptest.NewRequest(row.method, "http://webmux.example"+row.path, strings.NewReader(row.body))

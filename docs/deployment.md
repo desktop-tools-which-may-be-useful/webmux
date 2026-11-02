@@ -96,21 +96,21 @@ JSON 输出契约见 [控制面 JSON 契约](protocol/control-json.md#控制面-
 
 ### 配置项
 
-| 配置项               | 默认值                                                     | 说明                                                                                                                                                                                                                                                    |
-| -------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`                                             | HTTP / WebSocket 监听地址                                                                                                                                                                                                                               |
-| `token`              | 空                                                         | 共享 token；首次启动自动生成并持久化，可用 `webmux status --json --reveal-token` 查看；已有配置监听 loopback 且未启用隧道时空表示不认证；其他监听地址或启用隧道且为空时每次启动临时生成，并打印带 `#token=` 的本地链接；隧道模式显式 token 至少 43 字符 |
-| `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                                                                                                                                                                                  |
-| `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                                                                                                                                                                                       |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                                                                                                                                                                                      |
-| `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                                                                                                                                                                            |
-| `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                                                                                                                                                                                          |
-| `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件                                                                                                                                                                       |
-| `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                                                                                                                                                                                   |
-| `program_status`     | `true`                                                     | 识别 `OSC 7501` 程序状态报告，并由服务端应答 `OSC 7501;?` 探测                                                                                                                                                                                          |
-| `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                                                                                                                                                                                    |
-| `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                                                                                                                                                                                |
-| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                                                                                                                                                                                           |
+| 配置项               | 默认值                                                     | 说明                                                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listen`             | `127.0.0.1:7681`                                           | HTTP / WebSocket 监听地址；已保存的“开放到公共网络”开关优先，`--listen` 再优先，见[开放到公共网络](#开放到公共网络)                                                                                  |
+| `token`              | 空                                                         | 共享 token，始终必需且至少 43 字符；首次启动自动生成并持久化，可用 `webmux status --json --reveal-token` 查看；已有配置为空时每次启动临时生成，并打印带 `#token=` 的本地链接；少于 43 字符时启动失败 |
+| `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                                                                                                                               |
+| `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                                                                                                                                    |
+| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                                                                                                                                   |
+| `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                                                                                                                         |
+| `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                                                                                                                                       |
+| `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件                                                                                                                    |
+| `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                                                                                                                                |
+| `program_status`     | `true`                                                     | 识别 `OSC 7501` 程序状态报告，并由服务端应答 `OSC 7501;?` 探测                                                                                                                                       |
+| `allowed_origins`    | `[]`                                                       | 额外接受的完整 Origin，例如 `https://myhost.example`：其主机通过 Host 校验（反向代理），HTTPS 条目可作为推送锚点；不参与请求授权                                                                     |
+| `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                                                                                                                             |
+| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                                                                                                                                        |
 
 所有启动命令都由使用者自定义：在设置页保存“名称 + 完整命令 + 环境变量”，新建会话时选用，或直接填写不保存的临时命令。
 
@@ -274,8 +274,18 @@ Windows 托盘经 `wsl.exe --exec` 启动 WebMux，同样不经过登录 shell�
 
 - 启用隧道时会附带 `#token=<token>`；非隧道模式不附带片段，以免固定的已配置 token 被 service manager 捕获并写入 journal 或日志文件。
 - 片段不会发送到服务器，前端读取并保存 token 后立即从地址栏和当前历史记录中移除。
-- WebSocket 握手通过子协议携带 token，token 不出现在请求 URL 或 Cookie 中。
+- WebSocket 握手通过子协议携带 token，token 不出现在请求 URL 或 Cookie 中；服务端也不接受 Cookie 或查询参数中的 token。
 - 浏览器的自动补全或同步历史仍可能记住带片段的原始链接。
+
+## 开放到公共网络
+
+默认只监听 `127.0.0.1`。“开放到公共网络”把监听改为所有接口（`0.0.0.0:<端口>`），关闭后回到配置的地址：
+
+- Windows 托盘菜单勾选“开放到公共网络（监听所有网卡）”，确认风险后立即生效；其他平台可调用本机 API `POST /local/v1/network`（见 [本机 API](protocol/local-api.md)）。
+- 只替换监听套接字，现有会话、终端连接与 WebSocket 不中断，也不需要重启。
+- 选择保存在 `<state_dir>/listen-settings.json`，下次启动优先于 TOML 的 `listen`；`--listen` 只覆盖本次启动。存储损坏时保持不开放。
+- 连接是明文 HTTP，Token 是唯一屏障，同一网络中的窃听者可能截获 Token；只在可信网络中开启，跨网访问请用 Tailscale 或隧道。
+- WSL NAT 模式下，开放后其他设备仍需经托盘“远程访问”转发 Windows 地址；托盘在未开放时提示先开放，因为回环监听会拒绝局域网 Host。
 
 ## 公网访问（Cloudflare Tunnel）
 
@@ -321,7 +331,7 @@ Cloudflare 控制台步骤、两个 token 的区别、Windows/WSL 托盘操作�
 | 访问地址                                                                 | 能力                                                                                                                 |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | HTTP 局域网或 VPN 地址，如 `http://100.64.0.5:7681`                      | 只能作为普通网页使用：Chromium 不提供安装，没有推送和系统剪贴板 API。iOS Safari 仍可“添加到主屏幕”，但推送仍不可用。 |
-| HTTPS：Tailscale Serve、Cloudflare Named Tunnel、Caddy 等 HTTPS 反向代理 | 完整 PWA 能力：可安装、独立窗口运行、系统剪贴板；推送还要求来源通过 Host/Origin 校验，见下一节。                     |
+| HTTPS：Tailscale Serve、Cloudflare Named Tunnel、Caddy 等 HTTPS 反向代理 | 完整 PWA 能力：可安装、独立窗口运行、系统剪贴板；推送还要求 Origin 指向通过 Host 校验的入口，见下一节。              |
 
 - 设置 → 安装应用显示当前状态。Chrome、Edge（含 Android）提供安装提示时显示“安装 WebMux”按钮；也可从地址栏安装图标或浏览器菜单安装。iOS / iPadOS 在 Safari 中“分享 → 添加到主屏幕”，从主屏幕打开后需重新输入 Token。
 - 当前地址不是安全上下文时，该分区提示“当前地址不能提供完整 PWA 能力”。
@@ -354,7 +364,7 @@ include_title = true # false 时通知标题固定为 WebMux
 
 ## HTTPS
 
-WebMux 不内置 TLS。需要浏览器安全上下文（系统剪贴板 API）时，推荐使用托管的 `[tailscale] mode = "serve"`（仅 tailnet）或 `mode = "funnel"`（显式公网），WebMux 会自动处理证书、端口、Host/Origin 与启动对账，详见 [Tailscale Serve / Funnel 入口](tailscale.md)。
+WebMux 不内置 TLS。需要浏览器安全上下文（系统剪贴板 API）时，推荐使用托管的 `[tailscale] mode = "serve"`（仅 tailnet）或 `mode = "funnel"`（显式公网），WebMux 会自动处理证书、端口、Host 与启动对账，详见 [Tailscale Serve / Funnel 入口](tailscale.md)。
 
 也可以手工使用 `tailscale serve`、Cloudflare Tunnel 或 Caddy 反向代理 HTTPS：
 

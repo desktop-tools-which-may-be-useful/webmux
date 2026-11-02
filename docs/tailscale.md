@@ -62,7 +62,7 @@ tailscale funnel --bg --https=<port> http://127.0.0.1:<实际监听端口>
 
 命令成功不代表生效。WebMux 会回读 `tailscale serve status --json`，确认目标
 端口只有指向当前 target 的 `/` handler；Funnel 还要求
-`AllowFunnel["<dns>:<port>"] == true`。确认后才登记 Host/Origin 来源。
+`AllowFunnel["<dns>:<port>"] == true`。确认后才登记 Host 来源。
 
 `<state_dir>/tailscale-ownership.json`（0600、原子替换、独立锁）记录 provider、节点
 DNS、模式、端口、target 与 `pending`/`active` 状态，是唯一的所有权依据：

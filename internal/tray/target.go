@@ -128,6 +128,10 @@ func (t *TargetService) SetTunnel(ctx context.Context, enabled bool) (contract.T
 	return t.Current().SetTunnel(ctx, enabled)
 }
 
+func (t *TargetService) SetNetwork(ctx context.Context, public bool) (contract.NetworkStatus, error) {
+	return t.Current().SetNetwork(ctx, public)
+}
+
 func (t *TargetService) Close() {
 	t.Current().Close()
 }

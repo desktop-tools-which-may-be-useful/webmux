@@ -20,7 +20,7 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. The short versions i
 - Session creation takes either a saved custom launch `configId` or an explicit full `cmd`/`env`. They are mutually exclusive.
 - There are no built-in launch presets or implicit shell wrappers.
   - Loading `.bashrc` requires an explicit command such as `bash -ic 'exec opencode "$@"' opencode`.
-- Preserve authentication and Origin checks on API/WebSocket paths.
+- Preserve token authentication and Host checks on API/WebSocket paths. Never accept ambient credentials (cookies, query tokens): WebMux does not check Origin, so only explicitly attached credentials keep cross-site requests out.
 - Never log terminal input/output. Never expose tokens through configuration responses.
 
 ## Wire contract
@@ -78,5 +78,5 @@ Run from the repository root.
 - `make format` / `make format-check`: apply/check gofmt and Oxfmt on configured targets.
 
 Vite proxies `/api` and `/ws` to backend port 7681.
-Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its development TOML. Otherwise browser write requests are rejected.
+Run the backend separately and sign in with its token (`webmux status --json --reveal-token`). The Vite proxy forwards a loopback Host, so no `allowed_origins` entry is needed.
 Configuration defaults to `~/.config/webmux/config.toml`. `-config`, `-listen`, and `-token` override startup settings.

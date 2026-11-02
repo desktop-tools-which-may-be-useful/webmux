@@ -59,11 +59,16 @@ type ForwardPlan struct {
 
 // PlanForward applies windows-tray-forwarding: mirrored mode or reported
 // remote links make forwarding unnecessary; otherwise forwarding needs a
-// healthy WebMux with a token that Windows can reach.
+// healthy WebMux with a token that Windows can reach and, on servers that
+// report their network exposure, one opened to the network.
 func PlanForward(networkMode string, snap Snapshot, list []WinInterface) ForwardPlan {
 	status := snap.Status
 	if strings.EqualFold(networkMode, "mirrored") {
-		return ForwardPlan{Headline: "无需转发（镜像网络模式）", Blocked: "镜像网络模式下其他设备可直接访问 WSL"}
+		blocked := "镜像网络模式下其他设备可直接访问 WSL"
+		if n := status.Network; snap.HasStatus && n != nil && !n.Public {
+			blocked = "镜像网络模式下开启“开放到公共网络”后，其他设备即可直接访问 WSL"
+		}
+		return ForwardPlan{Headline: "无需转发（镜像网络模式）", Blocked: blocked}
 	}
 	if snap.HasStatus && len(status.URLs.Remote) > 0 {
 		return ForwardPlan{Headline: "无需转发：WebMux 已提供远程链接", Blocked: "WebMux 已在可访问的地址上监听"}
@@ -84,6 +89,10 @@ func PlanForward(networkMode string, snap Snapshot, list []WinInterface) Forward
 		}
 	case !snap.Reachable:
 		plan.Blocked = "Windows 无法访问 WebMux 本机链接"
+	case status.Network != nil && !status.Network.Public:
+		// A loopback listener refuses the LAN Host names relayed requests
+		// carry, so forwarding needs the server opened to the network.
+		plan.Blocked = "转发需要先开启“开放到公共网络”"
 	}
 	return plan
 }

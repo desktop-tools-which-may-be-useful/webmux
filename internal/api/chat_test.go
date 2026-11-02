@@ -235,9 +235,9 @@ func TestChatSocketAuthOriginAndMissingSessions(t *testing.T) {
 	if err == nil || res == nil || res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("without token: %v %+v", err, res)
 	}
-	_, res, err = dialChat(t, server, path, http.Header{"Origin": {"https://evil.example"}})
-	if err == nil || res == nil || res.StatusCode != http.StatusForbidden {
-		t.Fatalf("foreign origin: %v %+v", err, res)
+	_, res, err = websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+path, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {"https://evil.example"}}})
+	if err == nil || res == nil || res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("foreign origin without token: %v %+v", err, res)
 	}
 
 	ordinary, err := h.manager.Create(session.CreateInput{Cwd: h.cwd, Cmd: []string{"sh", "-c", "sleep 60"}})

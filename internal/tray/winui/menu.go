@@ -83,6 +83,7 @@ type menu struct {
 	open, copyLinks, copyLocal, remoteWarn *item
 	remoteLinks, forwardLinks              []*item
 	copyPublic, copyToken                  *item
+	network, networkInfo                   *item
 	tunnel, tunnelInfo, tunnelSettings     *item
 	pushInfo, pushGuide                    *item
 
@@ -157,6 +158,12 @@ func buildMenu() *menu {
 	m.copyLinks.hide()
 	m.copyToken = add("复制 Token")
 	m.copyToken.hide()
+	m.network = add("开放到公共网络（监听所有网卡）")
+	m.networkInfo = add("")
+	m.networkInfo.mi.Disable()
+	m.networkInfo.enabled = false
+	m.network.hide()
+	m.networkInfo.hide()
 	m.tunnel = add("公网隧道（Cloudflare）")
 	m.tunnelInfo = add("")
 	m.tunnelInfo.mi.Disable()

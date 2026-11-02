@@ -161,6 +161,16 @@ func (c *Client) SetTunnel(ctx context.Context, enabled bool) (contract.TunnelSt
 	return status, err
 }
 
+// SetNetwork rebinds the server's TCP listener on every interface (true) or
+// its configured address (false). It returns *APIError with 503 when the
+// switch cannot be saved, 409 when the bind fails and 403 for callers inside
+// a WebMux session.
+func (c *Client) SetNetwork(ctx context.Context, public bool) (contract.NetworkStatus, error) {
+	var status contract.NetworkStatus
+	err := c.Do(ctx, http.MethodPost, contract.PathNetwork, contract.NetworkRequest{Public: &public}, &status)
+	return status, err
+}
+
 // DialWebSocket opens /ws/* through the same dialer; path includes any query.
 func (c *Client) DialWebSocket(ctx context.Context, path string) (*websocket.Conn, error) {
 	conn, resp, err := websocket.Dial(ctx, "ws://webmux"+path, &websocket.DialOptions{

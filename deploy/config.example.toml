@@ -1,7 +1,10 @@
-# Default listens on all interfaces; restrict access with a firewall/VPN.
-# Use "127.0.0.1:7681" for loopback only.
-listen = "0.0.0.0:7681"
-# Empty generates a new random token on every start unless listen is loopback.
+# Default listens on loopback only. "0.0.0.0:7681" listens on every
+# interface; the Windows tray / local API switch "open to the public network"
+# does the same at runtime and persists in state_dir/listen-settings.json,
+# which takes precedence over this value (--listen takes precedence over both).
+listen = "127.0.0.1:7681"
+# Always required, at least 43 characters. Empty generates a new random token
+# on every start; `webmux config init` writes a persistent one.
 token = ""
 scrollback_bytes = 2097152
 default_cwd = "~"
@@ -11,8 +14,9 @@ default_cwd = "~"
 # state_dir = "~/.local/state/webmux"
 idle_after_seconds = 30
 prompt_patterns = ['[$#%>❯›?:]\s*$', '(?i)\(y/n\)|\[y/n\]|yes.*no|press enter']
-# Exact browser origins, lowercase, no path or trailing slash,
-# e.g. ["http://127.0.0.1:5173"] for the Vite dev server.
+# Exact browser origins, lowercase, no path or trailing slash. Their hosts
+# pass the Host check (reverse proxies), and https entries may subscribe to
+# push. Requests are authorized by the token alone, not by Origin.
 allowed_origins = []
 # Advertise WARP_CLI_AGENT_PROTOCOL_VERSION=1 so agents such as omp report
 # questions, approvals and completion as structured terminal events.

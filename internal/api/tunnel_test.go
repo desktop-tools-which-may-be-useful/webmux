@@ -113,7 +113,7 @@ func TestTunnelEndpointsSecurityAndStrictBodies(t *testing.T) {
 			token, origin string
 			status        int
 		}{
-			{"", "", 401}, {"wrong", "", 401}, {"login-secret", "https://evil.example", 403},
+			{"", "", 401}, {"wrong", "", 401}, {"", "https://evil.example", 401},
 		} {
 			w := tunnelAPIRequest(h, endpoint.method, endpoint.path, endpoint.body, auth.token, auth.origin)
 			if w.Code != auth.status {
@@ -217,8 +217,9 @@ func TestTunnelDynamicConfigAndPushOrigin(t *testing.T) {
 		t.Fatalf("stale config %+v", got)
 	}
 	// The effective Named hostname anchors subscriptions. The stale TOML
-	// hostname is no longer an authorized public source, so the middleware
-	// rejects it even though the generic HTTPS rule would normalize it.
+	// hostname is no longer an authorized public source, so the middleware's
+	// Host check rejects it even though the generic HTTPS rule would
+	// normalize it, and entryOrigin refuses to anchor links there.
 	for _, row := range []struct {
 		host       string
 		authorized bool
@@ -230,7 +231,7 @@ func TestTunnelDynamicConfigAndPushOrigin(t *testing.T) {
 		// Tunnel and reverse-proxy traffic reaches the server over plain HTTP.
 		r := httptest.NewRequest("GET", "http://"+row.host+"/api/push", nil)
 		r.Header.Set("Origin", "https://"+row.host)
-		if got := s.originAllowed(r); got != row.authorized {
+		if got := s.Public.hostAllowed(r.Host) && s.entryOrigin(r); got != row.authorized {
 			t.Fatalf("%s authorized = %v, want %v", row.host, got, row.authorized)
 		}
 		origin, reason := s.pushOrigin(r)
@@ -254,7 +255,6 @@ func TestWireSnapshotsTunnel(t *testing.T) {
 		{"tunnel-reset", "DELETE", "/api/tunnel/settings", "", "login-secret", "", nil},
 		{"tunnel-error-400", "PUT", "/api/tunnel/enabled", `{}`, "login-secret", "", nil},
 		{"tunnel-error-401", "GET", "/api/tunnel", "", "", "", nil},
-		{"tunnel-error-403", "GET", "/api/tunnel", "", "login-secret", "https://evil.example", nil},
 		{"tunnel-error-409", "PUT", "/api/tunnel/enabled", `{"enabled":true}`, "login-secret", "", tunnelsettings.ErrEnableBlocked},
 		{"tunnel-error-503", "PUT", "/api/tunnel/enabled", `{"enabled":false}`, "login-secret", "", errors.Join(tunnelsettings.ErrNotPersisted, tunnelsettings.ErrUnavailable)},
 	} {

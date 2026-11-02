@@ -12,6 +12,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/listensettings"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -229,5 +230,61 @@ func TestLocalSkipsHostOriginAndToken(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if w.Code != http.StatusOK || w.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("local /api/sessions: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestLocalNetworkSwitch(t *testing.T) {
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	inside := map[int]bool{20: true}
+	for _, row := range []struct {
+		name, body string
+		pid        int
+		fail       error
+		want       int
+		calls      []bool
+	}{
+		{"public", `{"public":true}`, 10, nil, 200, []bool{true}},
+		{"private", `{"public":false}`, 10, nil, 200, []bool{false}},
+		{"bind refused", `{"public":true}`, 10, errors.New("address in use"), 409, []bool{true}},
+		{"storage fault", `{"public":true}`, 10, listensettings.ErrUnavailable, 503, []bool{true}},
+		{"session cannot expose", `{"public":true}`, 20, nil, 403, nil},
+		{"unknown peer", `{"public":true}`, 0, nil, 403, nil},
+		{"missing public", `{}`, 10, nil, 400, nil},
+		{"wrong type", `{"public":"yes"}`, 10, nil, 400, nil},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			var calls []bool
+			handler := NewLocal(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{
+				Status:    func() contract.StatusV1 { return contract.StatusV1{V: 1} },
+				InSession: func(pid int) bool { return inside[pid] },
+				Network: func(public bool) (contract.NetworkStatus, error) {
+					calls = append(calls, public)
+					return contract.NetworkStatus{Public: public && row.fail == nil, Listen: "127.0.0.1:7681"}, row.fail
+				},
+			})
+			r := httptest.NewRequest(http.MethodPost, "http://webmux"+contract.PathNetwork, strings.NewReader(row.body))
+			if row.pid != 0 {
+				r = r.WithContext(context.WithValue(r.Context(), peerKey{}, row.pid))
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != row.want || !slices.Equal(calls, row.calls) {
+				t.Fatalf("HTTP %d calls %v: %s", w.Code, calls, w.Body.String())
+			}
+			if row.want == 200 {
+				var status contract.NetworkStatus
+				if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil || status.Public != row.calls[0] {
+					t.Fatalf("status %+v %v", status, err)
+				}
+			}
+		})
+	}
+	// Without a controller the route does not exist.
+	handler := NewLocal(testDeps(t, Deps{Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{Status: func() contract.StatusV1 { return contract.StatusV1{} }})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "http://webmux"+contract.PathNetwork, strings.NewReader(`{"public":true}`)))
+	if w.Code != http.StatusNotFound && w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("unrouted network switch: %d", w.Code)
 	}
 }
