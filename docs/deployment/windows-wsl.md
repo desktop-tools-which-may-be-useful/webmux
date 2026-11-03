@@ -114,7 +114,7 @@ webmux-setup-windows-amd64.exe /S
 | `logFile`       | `~/.local/state/webmux/webmux.log` | 托盘托管方式下的服务日志                               |
 | `startWebMux`   | `true`                             | 托盘启动时自动启动 WebMux                              |
 | `autoRestart`   | `true`                             | 托盘托管方式下意外退出后自动重启（10 分钟内最多 5 次） |
-| `forward`       | `[]`                               | 已勾选的转发地址，由“远程访问”子菜单维护               |
+| `forward`       | `[]`                               | 兼容保留的历史转发地址字段                             |
 | `updateChannel` | `stable`                           | 更新通道：`stable` / `dev`，由“更新通道”子菜单维护     |
 
 路径类设置在下次启动 WebMux 时生效；切换发行版或启动方式会先停止由托盘管理的实例（有会话时先确认）。托盘日志位于 `%LOCALAPPDATA%\WebMux\tray.log`（1 MiB 轮转），不记录 token。
@@ -144,15 +144,14 @@ webmux-setup-windows-amd64.exe /S
 
 ## 远程访问
 
-NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流量不会进入 WSL，手机无法直接访问 WebMux。三种途径，按推荐顺序：
+WebMux 默认仅监听 `127.0.0.1:7681`（不向局域网开放）。托盘菜单提供 **“允许局域网访问”** 开关：
 
-1. **mirrored 网络模式**：在 `.wslconfig` 的 `[wsl2]` 下设置 `networkingMode=mirrored`，WSL 与 Windows 共享网卡，按[部署指南的手机访问](remote-access.md#手机访问tailscale)配置即可。托盘的“远程访问”子菜单会显示“无需转发（镜像网络模式）”。
-2. **在 WSL 内安装 Tailscale**：发行版获得自己的 Tailscale 地址，WebMux 直接监听该地址；状态报告了远程链接时托盘同样提示无需转发。
-3. **托盘转发**：在“远程访问”子菜单中勾选 Windows 主机的地址（Tailscale 地址置顶），托盘在该地址与 WebMux 相同的端口上监听，并把 HTTP 与 WebSocket 原样转给本机链接。
-   - 转发默认关闭，只在 WebMux 运行且健康、配置了 token、Windows 侧可达时启用；条件不满足时暂停，恢复后自动继续。
-   - 只接受 `Host` 与 `Origin` 恰为该地址的请求，认证仍由 WebMux 完成。
-   - 勾选的地址保存在 `tray.json` 中，下次启动自动恢复；端口被占用时该条目显示失败原因。
-   - 转发随托盘退出而停止，需要常驻远程访问时请改用前两种途径。
+- 开启时，托盘通过 `webmux config listen` 将 WSL 配置文件中的 `listen` 设为 `0.0.0.0:<端口>`（若原配置未设置 token 会自动补齐随机 token），并重启受托盘管理的 WebMux 实例（有活动会话时先确认）；关闭时改回 `127.0.0.1:<端口>` 并重启。
+- **mirrored 网络模式**或在 WSL 内安装了 Tailscale 时，WSL 监听 `0.0.0.0:<端口>` 后其他设备即可直接访问，“复制链接”子菜单会列出对应的远程链接。
+- **NAT 网络模式**（WSL 默认）：局域网与 Windows 主机上的 Tailscale 流量不会直接进入 WSL。
+  - 当“允许局域网访问”开启且 WebMux 运行健康、已配置 token、Windows 侧可达时，托盘自动在 Windows 主机的所有候选非回环 IPv4 地址（Tailscale 与局域网网卡）上监听相同端口。
+  - 托盘校验同源 `Origin` 后把 HTTP 与 WebSocket 请求转发给 WSL 本机链接，支持 IP 字面量与 Tailscale MagicDNS 等主机名，认证仍由 WebMux 完成。
+  - 关闭“允许局域网访问”或托盘退出时，转发监听随之停止。
 
 首次在非回环地址上监听时，若没有适用的防火墙规则，Windows 防火墙会弹出授权提示（允许需要管理员确认）。安装版可以在安装时添加规则（见[安装托盘](#安装托盘)），托盘运行时本身不修改防火墙。只为可信网络（如 Tailscale）放行。
 

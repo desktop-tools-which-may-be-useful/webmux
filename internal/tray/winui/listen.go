@@ -71,14 +71,7 @@ func (a *App) listen() {
 		}
 	})
 	on(m.install, a.installWebmux)
-	on(m.fwInit, a.initConfig)
-	for i, it := range m.fwCandidates {
-		on(it, func() {
-			if b := a.bindings(); i < len(b.candidates) {
-				a.toggleForward(b.candidates[i].Address)
-			}
-		})
-	}
+	on(m.lanAccess, a.toggleLANAccess)
 	on(m.start, a.sup.Start)
 	on(m.stop, a.stopWebMux)
 	on(m.restart, a.restartWebMux)

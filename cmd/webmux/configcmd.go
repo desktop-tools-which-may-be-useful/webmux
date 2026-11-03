@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/rainchan/webmux/deploy"
@@ -22,7 +23,7 @@ import (
 	"github.com/rainchan/webmux/internal/wsl"
 )
 
-const configUsage = "usage: webmux config path|show|validate|check|init [--config PATH] [--json]"
+const configUsage = "usage: webmux config path|show|validate|check|init|listen [--config PATH] [--json]"
 
 func configCommand(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
@@ -41,6 +42,8 @@ func configCommand(args []string, stdout, stderr io.Writer) int {
 		return configValidate(args[1:], stdout, stderr)
 	case "init":
 		return configInit(args[1:], stdout, stderr)
+	case "listen":
+		return configListen(args[1:], stdout, stderr)
 	}
 	_, _ = fmt.Fprintf(stderr, "webmux config: unknown subcommand %q\n%s\n", args[0], configUsage)
 	return contract.ExitUsage
@@ -195,8 +198,11 @@ func configValidate(args []string, stdout, stderr io.Writer) int {
 }
 
 var (
-	tokenLine  = regexp.MustCompile(`(?m)^token = .*$`)
-	listenLine = regexp.MustCompile(`(?m)^listen = .*$`)
+	tokenLine       = regexp.MustCompile(`(?m)^token = .*$`)
+	listenLine      = regexp.MustCompile(`(?m)^listen = .*$`)
+	listenEditLine  = regexp.MustCompile(`(?m)^[ \t]*listen[ \t]*=.*$`)
+	emptyTokenLine  = regexp.MustCompile(`(?m)^[ \t]*token[ \t]*=[ \t]*(""|'')[ \t]*(#.*)?$`)
+	tableHeaderLine = regexp.MustCompile(`(?m)^[ \t]*\[`)
 )
 
 // renderConfigTemplate replaces only the token and, if set, listen lines.
@@ -232,7 +238,7 @@ func ensureDefaultConfig(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	err = publishConfig(path, content, false)
+	err = publishConfig(path, content, true, false)
 	if errors.Is(err, os.ErrExist) {
 		return false, nil
 	}
@@ -270,17 +276,103 @@ func configInit(args []string, stdout, stderr io.Writer) int {
 	return contract.ExitOK
 }
 
+func configListen(args []string, stdout, stderr io.Writer) int {
+	positional := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		positional = args[0]
+		args = args[1:]
+	}
+	var flagListen *string
+	path, _, ok := configFlags("listen", args, stderr, func(f *flag.FlagSet) {
+		flagListen = f.String("listen", "", "listen address to write")
+	})
+	if !ok {
+		return contract.ExitUsage
+	}
+	addr := *flagListen
+	if positional != "" {
+		if addr != "" {
+			_, _ = fmt.Fprintln(stderr, "webmux config listen: specify either an address argument or --listen")
+			return contract.ExitUsage
+		}
+		addr = positional
+	}
+	if addr == "" {
+		_, _ = fmt.Fprintln(stderr, "webmux config listen: listen address is required")
+		return contract.ExitUsage
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err == nil {
+		_, err = net.LookupPort("tcp", port)
+	}
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "webmux config listen:", err)
+		return contract.ExitUsage
+	}
+	if err := writeConfigListen(path, addr, host); err != nil {
+		_, _ = fmt.Fprintln(stderr, "webmux config listen:", err)
+		return contract.ExitError
+	}
+	_, _ = fmt.Fprintln(stdout, path)
+	return contract.ExitOK
+}
+
+func writeConfigListen(path, addr, host string) error {
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		content, err := newConfigContent(addr)
+		if err != nil {
+			return err
+		}
+		return publishConfig(path, content, true, false)
+	}
+	if err != nil {
+		return err
+	}
+	existing, err := config.Load(path, true)
+	if err != nil {
+		return fmt.Errorf("%s", describeConfigError(path, err))
+	}
+	if err := existing.Validate(); err != nil {
+		return err
+	}
+	text := string(raw)
+	rootEnd := len(text)
+	if loc := tableHeaderLine.FindStringIndex(text); loc != nil {
+		rootEnd = loc[0]
+	}
+	line := "listen = " + strconv.Quote(addr)
+	if loc := listenEditLine.FindStringIndex(text[:rootEnd]); loc != nil {
+		text = text[:loc[0]] + line + text[loc[1]:]
+		rootEnd += len(line) - (loc[1] - loc[0])
+	} else {
+		text = line + "\n" + text
+		rootEnd += len(line) + 1
+	}
+	ip := net.ParseIP(host)
+	loopback := strings.EqualFold(host, "localhost") || ip.IsLoopback()
+	if existing.Token == "" && !loopback {
+		token := "token = " + strconv.Quote(generateToken())
+		if loc := emptyTokenLine.FindStringIndex(text[:rootEnd]); loc != nil {
+			text = text[:loc[0]] + token + text[loc[1]:]
+		} else {
+			text = token + "\n" + text
+		}
+	}
+	return publishConfig(path, text, false, false)
+}
+
 var errConfigExists = errors.New("configuration file already exists; use --force to replace it (the old file is kept as .bak)")
 
 // publishConfig stages content next to path and publishes it atomically.
-// Without force an existing target is never replaced; with force the existing
-// file is first kept as .bak. Staging means a concurrent reader sees either
-// no file or the complete new one, never a partially written token.
-func publishConfig(path, content string, force bool) error {
+// When exclusive is true an existing target is never replaced; when backup is
+// true the existing file is first kept as .bak. Staging means a concurrent
+// reader sees either no file or the complete new one, never a partial write.
+func publishConfig(path, content string, exclusive, backup bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if force {
+	if backup {
 		if _, err := os.Lstat(path); err == nil {
 			if err := os.Rename(path, path+".bak"); err != nil {
 				return err
@@ -291,12 +383,12 @@ func publishConfig(path, content string, force bool) error {
 	}
 	return statefile.Write(path, []byte(content), statefile.Options{
 		TempPattern: ".config-*",
-		Exclusive:   !force,
+		Exclusive:   exclusive,
 	})
 }
 
 func writeNewConfig(path, content string, force bool) error {
-	err := publishConfig(path, content, force)
+	err := publishConfig(path, content, !force, force)
 	if !force && errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("%s: %w", path, errConfigExists)
 	}

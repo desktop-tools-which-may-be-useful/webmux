@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rainchan/webmux/deploy"
+	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 )
 
@@ -33,7 +34,7 @@ func TestConfigShowAndPath(t *testing.T) {
 	}
 	stdout, _, code = runConfig(t, "show", "--json")
 	var shown contract.ConfigV1
-	if err := json.Unmarshal([]byte(stdout), &shown); err != nil || code != 0 || shown.Exists || shown.Listen != "0.0.0.0:7681" || shown.TokenConfigured || shown.StateDir != filepath.Join(home, ".local", "state", "webmux") {
+	if err := json.Unmarshal([]byte(stdout), &shown); err != nil || code != 0 || shown.Exists || shown.Listen != "127.0.0.1:7681" || shown.TokenConfigured || shown.StateDir != filepath.Join(home, ".local", "state", "webmux") {
 		t.Fatalf("defaults %d %s", code, stdout)
 	}
 	if _, _, code := runConfig(t, "show", "--config", filepath.Join(home, "missing.toml")); code != 1 {
@@ -131,5 +132,73 @@ func TestConfigInit(t *testing.T) {
 	}
 	if strings.Contains(string(second), "100.64.0.5") {
 		t.Fatal("listen written without --listen")
+	}
+}
+
+func TestConfigListen(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	path := filepath.Join(dir, "webmux", "config.toml")
+
+	// Creating from scratch when missing populates a token and the requested listen.
+	stdout, stderr, code := runConfig(t, "listen", "--listen", "0.0.0.0:7681", "--config", path)
+	if code != 0 || stdout != path+"\n" || stderr != "" {
+		t.Fatalf("listen create %d %q %q", code, stdout, stderr)
+	}
+	first, _ := os.ReadFile(path)
+	match := tokenValue.FindSubmatch(first)
+	if match == nil || len(match[1]) != 43 || !bytes.Contains(first, []byte(`listen = "0.0.0.0:7681"`)) {
+		t.Fatalf("created config:\n%s", first)
+	}
+
+	// Updating an existing file preserves the token and comments.
+	stdout, stderr, code = runConfig(t, "listen", "127.0.0.1:7681", "--config", path)
+	if code != 0 || stdout != path+"\n" || stderr != "" {
+		t.Fatalf("listen update %d %q %q", code, stdout, stderr)
+	}
+	second, _ := os.ReadFile(path)
+	next := tokenValue.FindSubmatch(second)
+	if next == nil || !bytes.Equal(next[1], match[1]) || !bytes.Contains(second, []byte(`listen = "127.0.0.1:7681"`)) {
+		t.Fatalf("updated config:\n%s", second)
+	}
+	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
+		t.Fatal("config listen created an unexpected .bak file")
+	}
+
+	// Switching an empty-token config to non-loopback populates a persistent token.
+	emptyTok := filepath.Join(dir, "empty-token.toml")
+	if err := os.WriteFile(emptyTok, []byte("listen = \"127.0.0.1:7681\"\ntoken = \"\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, code := runConfig(t, "listen", "0.0.0.0:7681", "--config", emptyTok); code != 0 {
+		t.Fatalf("empty-token listen update %d %q", code, stderr)
+	}
+	updatedEmpty, _ := os.ReadFile(emptyTok)
+	if m := tokenValue.FindSubmatch(updatedEmpty); m == nil || len(m[1]) != 43 {
+		t.Fatalf("expected token to be populated:\n%s", updatedEmpty)
+	}
+
+	// Missing root token with `[tunnel] token = ""` must not overwrite tunnel.token.
+	tunnelCfg := filepath.Join(dir, "tunnel-empty.toml")
+	if err := os.WriteFile(tunnelCfg, []byte("listen = \"127.0.0.1:7681\"\n\n[tunnel]\nenabled = true\ntoken = \"\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, code := runConfig(t, "listen", "0.0.0.0:7681", "--config", tunnelCfg); code != 0 {
+		t.Fatalf("tunnel-empty listen update %d %q", code, stderr)
+	}
+	loaded, err := config.Load(tunnelCfg, true)
+	if err != nil {
+		t.Fatalf("tunnel-empty load: %v", err)
+	}
+	if err := loaded.Validate(); err != nil {
+		t.Fatalf("tunnel-empty config invalid after listen update: %v", err)
+	}
+	if len(loaded.Token) != 43 || loaded.Tunnel.Token != "" {
+		t.Fatalf("tunnel-empty tokens: root=%q tunnel=%q", loaded.Token, loaded.Tunnel.Token)
+	}
+
+	// Invalid listen address is rejected with ExitUsage without touching the file.
+	if _, _, code := runConfig(t, "listen", "not-a-hostport", "--config", path); code != contract.ExitUsage {
+		t.Fatalf("invalid listen exit %d", code)
 	}
 }

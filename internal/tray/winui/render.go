@@ -120,34 +120,7 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 		m.pushGuide.hide()
 	}
 
-	m.remote.set("远程访问", !v.noWSL, false)
-	headline := v.plan.Headline
-	if headline == "" {
-		headline = "正在检测网络模式"
-	}
-	m.fwHeadline.set(headline, false, false)
-	if v.plan.Blocked != "" {
-		m.fwBlocked.set(v.plan.Blocked, false, false)
-	} else {
-		m.fwBlocked.hide()
-	}
-	if v.plan.OfferInit && !v.noWSL {
-		m.fwInit.set("初始化配置（生成 Token）", true, false)
-	} else {
-		m.fwInit.hide()
-	}
-	b.candidates = forwardCandidates(v)
-	if len(b.candidates) > len(m.fwCandidates) {
-		b.candidates = b.candidates[:len(m.fwCandidates)]
-	}
-	for i, it := range m.fwCandidates {
-		if i < len(b.candidates) {
-			c := b.candidates[i]
-			it.set(c.Title, c.Enabled && !v.noWSL, c.Checked)
-		} else {
-			it.hide()
-		}
-	}
+	m.lanAccess.set("允许局域网访问", !v.noWSL && !busy && snap.HasStatus && !snap.Degraded && snap.Blocker == "", snap.LANEnabled())
 
 	m.start.set("启动", acts.Start, false)
 	m.stop.set("停止", acts.Stop, false)

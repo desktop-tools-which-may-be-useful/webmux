@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net"
 	"runtime"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -341,7 +340,6 @@ func (a *App) update() {
 	}
 	a.reconcileForward(snap, v)
 	v.forwarding = a.relays.listening()
-	v.relayState = a.relays.state
 	v.autostart = AutostartEnabled(a.o.Executable)
 	v.installSupported = a.svc.Current().Digests != nil
 	if a.sup != nil {
@@ -376,17 +374,16 @@ func truncateUTF16(s string, limit int) string {
 	return windows.UTF16ToString(u[:limit])
 }
 
-// reconcileForward listens on the enabled addresses while the plan allows
-// forwarding, following address, port and condition changes.
+// reconcileForward listens on all candidate Windows addresses while LAN access
+// is enabled and NAT forwarding is needed, following address, port and
+// condition changes.
 func (a *App) reconcileForward(snap tray.Snapshot, v view) {
 	want := map[string]string{}
 	target := ""
-	if host, port, ok := tray.ForwardTarget(snap.Status); ok && v.plan.Needed && v.plan.Blocked == "" && snap.HasStatus {
+	if host, port, ok := tray.ForwardTarget(snap.Status); ok && snap.LANEnabled() && v.plan.Needed && v.plan.Blocked == "" && snap.HasStatus {
 		target = net.JoinHostPort(host, port)
 		for _, c := range v.plan.Candidates {
-			if slices.Contains(v.settings.Forward, c.Address) {
-				want[c.Address] = net.JoinHostPort(c.Address, port)
-			}
+			want[c.Address] = net.JoinHostPort(c.Address, port)
 		}
 	}
 	a.relays.reconcile(want, target)

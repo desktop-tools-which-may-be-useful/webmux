@@ -10,6 +10,10 @@ import (
 
 // hostCheck establishes the authority boundary independently of Origin: a page
 // loaded from a rebound hostname can supply an Origin matching that hostname.
+// Loopback listeners (which allow tokenless access) restrict Host to loopback
+// addresses, localhost, and configured allowed_origins; non-loopback listeners
+// always require a token at startup and accept any valid Host authority so LAN
+// and Tailscale MagicDNS hostnames work directly.
 func hostCheck(c config.Config) func(string) bool {
 	// Direct API constructors in tests can omit Listen. Startup always validates
 	// a nonempty listen address before constructing the HTTP handler.
@@ -22,7 +26,11 @@ func hostCheck(c config.Config) func(string) bool {
 	}
 	listenIP := net.ParseIP(listenHost)
 	loopback := strings.EqualFold(listenHost, "localhost") || listenIP.IsLoopback()
-	wildcard := listenHost == "" || listenIP.IsUnspecified()
+	if !loopback {
+		return func(authority string) bool {
+			return authorityHostname(authority) != ""
+		}
+	}
 	hosts := map[string]bool{strings.ToLower(listenHost): true}
 	if listenIP != nil {
 		hosts[listenIP.String()] = true
@@ -41,16 +49,10 @@ func hostCheck(c config.Config) func(string) bool {
 		if host == "" {
 			return false
 		}
-		if hosts[host] {
+		if hosts[host] || host == "localhost" {
 			return true
 		}
-		ip := net.ParseIP(host)
-		if host == "localhost" {
-			return loopback || wildcard
-		}
-		// IP literals cannot be rebound through DNS. Wildcard listeners need
-		// these to support direct access over trusted VPN/interface addresses.
-		return loopback && ip.IsLoopback() || wildcard && ip != nil
+		return net.ParseIP(host).IsLoopback()
 	}
 }
 

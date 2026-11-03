@@ -168,6 +168,22 @@ func TestPublicOriginBoundaries(t *testing.T) {
 			t.Errorf("accepted public origin %q", invalid)
 		}
 	}
+
+	wildcardHandler := New(testDeps(t, Deps{Config: config.Config{Listen: "0.0.0.0:7681", Token: "secret"}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
+	wildcardReq := func(host, origin string) int {
+		r := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/fs/mkdir", strings.NewReader(`{}`))
+		r.Header.Set("Authorization", "Bearer secret")
+		r.Header.Set("Origin", origin)
+		w := httptest.NewRecorder()
+		wildcardHandler.ServeHTTP(w, r)
+		return w.Code
+	}
+	if got := wildcardReq("devbox.tailnet.ts.net:7681", "http://devbox.tailnet.ts.net:7681"); got != http.StatusBadRequest {
+		t.Fatalf("wildcard magicdns same origin: status %d, want 400", got)
+	}
+	if got := wildcardReq("devbox.tailnet.ts.net:7681", "http://evil.example:7681"); got != http.StatusForbidden {
+		t.Fatalf("wildcard magicdns cross origin: status %d, want 403", got)
+	}
 }
 
 func TestPublicOriginWebSocketHandshake(t *testing.T) {

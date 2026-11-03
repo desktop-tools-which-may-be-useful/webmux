@@ -210,7 +210,7 @@ func TestInvocationsAreArgv(t *testing.T) {
 	if got := target.Systemctl("restart").Argv; !slices.Equal(got, []string{"wsl.exe", "-d", "Ubuntu", "--exec", "systemctl", "--user", "restart", "webmux.service"}) {
 		t.Fatalf("systemctl argv %q", got)
 	}
-	for _, inv := range []Invocation{serve, bridge, target.Status(), target.ForceStop(), target.ConfigInit(), target.Probe(), target.Version(), target.Arch(), target.Wslpath(`C:\a b;$(id)`), target.Install("/mnt/c/a b")} {
+	for _, inv := range []Invocation{serve, bridge, target.Status(), target.ForceStop(), target.ConfigInit(), target.ConfigListen("0.0.0.0:7681"), target.Probe(), target.Version(), target.Arch(), target.Wslpath(`C:\a b;$(id)`), target.Install("/mnt/c/a b")} {
 		for _, arg := range inv.Argv {
 			if arg == "sh" || arg == "bash" || arg == "-c" {
 				t.Fatalf("shell in argv %q", inv.Argv)
@@ -289,6 +289,7 @@ func TestPlanForward(t *testing.T) {
 		{Name: "Wi-Fi", Up: true, Addrs: []net.IP{net.ParseIP("192.168.1.20"), net.ParseIP("fe80::1"), net.ParseIP("169.254.1.1")}},
 		{Name: "vEthernet (WSL (Hyper-V firewall))", Up: true, Addrs: []net.IP{net.ParseIP("172.29.0.1")}},
 		{Name: "Tailscale", Up: true, Addrs: []net.IP{net.ParseIP("100.64.0.9")}},
+		{Name: "WAN", Up: true, Addrs: []net.IP{net.ParseIP("203.0.113.5")}},
 		{Name: "Ethernet 2", Up: false, Addrs: []net.IP{net.ParseIP("10.0.0.5")}},
 	}
 	candidates := []Candidate{{"100.64.0.9", "Tailscale", "tailscale"}, {"192.168.1.20", "Wi-Fi", "lan"}}
@@ -323,6 +324,21 @@ func TestPlanForward(t *testing.T) {
 	unreachable.Reachable = false
 	if plan := PlanForward("nat", unreachable, ifaces); plan.Blocked == "" {
 		t.Fatal("forwarding allowed while Windows cannot reach WebMux")
+	}
+
+	loopbackSnap := Snapshot{HasStatus: true, Status: contract.StatusV1{Listen: "127.0.0.1:7681"}}
+	if loopbackSnap.LANEnabled() {
+		t.Fatal("loopback listen treated as LAN enabled")
+	}
+	if got := LANListenAddress(loopbackSnap, true); got != "0.0.0.0:7681" {
+		t.Fatalf("LANListenAddress enable = %q", got)
+	}
+	wildcardSnap := Snapshot{HasStatus: true, Status: contract.StatusV1{Listen: "0.0.0.0:9000"}}
+	if !wildcardSnap.LANEnabled() {
+		t.Fatal("wildcard listen not treated as LAN enabled")
+	}
+	if got := LANListenAddress(wildcardSnap, false); got != "127.0.0.1:9000" {
+		t.Fatalf("LANListenAddress disable = %q", got)
 	}
 }
 

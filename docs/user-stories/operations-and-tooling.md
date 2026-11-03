@@ -13,6 +13,7 @@
   - `config init` 使用模板与随机 token 创建私有目录和 0600 文件，不向输出打印 token；
   - 默认拒绝覆盖，显式 `--force` 时原文件保留为 `.bak`；
   - 支持 `--listen` 和配置路径；
+  - `config listen <地址>` 原子更新配置文件中的 `listen`（文件缺失时按模板与随机 token 初始化，已有文件 `token = ""` 且切到非 loopback 时自动填入随机 token）；
   - `config path` 可显示存在状态或 JSON；
   - 未显式 `--config` 且默认文件缺失时，首次 `serve` / `start` 使用同一模板与 token 生成逻辑自动创建，启动输出说明创建/使用的路径并提示用 `webmux status --json --reveal-token` 查看 token；
   - 并发首次启动通过原子发布只创建一个文件，已有文件不重写；

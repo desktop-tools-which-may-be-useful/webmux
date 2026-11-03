@@ -59,7 +59,7 @@
 
 目标文件已存在时 SHALL 拒绝并以退出码 1 结束；传入 `--force` 时 SHALL 先将原文件保留为同目录下的 `.bak`，再创建新文件。
 
-客户端 SHALL NOT 以程序方式修改已有配置文件中的单个字段；修改配置由用户在编辑器中完成。
+`webmux config listen <addr>`（或 `--listen <addr>`）SHALL 原子更新配置文件中的 `listen` 行（目标文件不存在时按模板与随机 Token 创建；已存在且切换到非回环监听但 `token` 为空时自动补齐随机 Token），供托盘“允许局域网访问”开关或命令行切换监听范围使用。
 
 #### Scenario: 首次初始化
 

@@ -1,7 +1,8 @@
-# Default listens on all interfaces; restrict access with a firewall/VPN.
-# Use "127.0.0.1:7681" for loopback only.
-listen = "0.0.0.0:7681"
-# Empty generates a new random token on every start unless listen is loopback.
+# Default listens on loopback only; use "0.0.0.0:7681" to listen on all interfaces.
+# Restrict access with a firewall/VPN when listening on non-loopback addresses.
+listen = "127.0.0.1:7681"
+# First start or `webmux config init` fills a random token here; if left empty,
+# non-loopback or tunnel listeners generate a temporary token on each start.
 token = ""
 scrollback_bytes = 2097152
 default_cwd = "~"

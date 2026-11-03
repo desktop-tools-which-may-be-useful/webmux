@@ -169,16 +169,20 @@ func TestRelayCarriesRESTAndTerminal(t *testing.T) {
 	}
 }
 
-func TestRelayRejectsForeignHostAndOrigin(t *testing.T) {
+func TestRelayRejectsForeignOriginAndAcceptsSameOriginHostnames(t *testing.T) {
 	b := newBackend(t)
 	logs := &logBuffer{}
 	_, relay := startRelay(t, b.addr, 0, logs)
 	base := "http://" + relay
+	port := strings.Split(relay, ":")[1]
+	magicHost := "devbox.tailnet.ts.net:" + port
+	if resp := request(t, http.MethodGet, base+"/api/sessions", magicHost, "http://"+magicHost, token, nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("MagicDNS same-origin through relay: %d", resp.StatusCode)
+	}
 	for name, row := range map[string]struct{ host, origin string }{
-		"cross-site origin": {"", "https://evil.example"},
-		"other scheme":      {"", "https://" + relay},
-		"DNS rebinding":     {"evil.example:" + strings.Split(relay, ":")[1], ""},
-		"backend host":      {b.addr, ""},
+		"cross-site origin":      {"", "https://evil.example"},
+		"other scheme":           {"", "https://" + relay},
+		"mismatched host/origin": {magicHost, "http://evil.example:" + port},
 	} {
 		before := b.requests.Load()
 		resp := request(t, http.MethodGet, base+"/api/sessions", row.host, row.origin, token, nil)

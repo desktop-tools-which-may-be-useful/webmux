@@ -79,6 +79,9 @@ func (t Target) Bridge() Invocation     { return t.Command("bridge") }
 func (t Target) Status() Invocation     { return t.Command("status", "--json") }
 func (t Target) ForceStop() Invocation  { return t.Command("stop", "--json", "--timeout", "5s") }
 func (t Target) ConfigInit() Invocation { return t.Command("config", "init") }
+func (t Target) ConfigListen(listen string) Invocation {
+	return t.Command("config", "listen", "--listen", listen)
+}
 
 // Probe asks for the server flags; only versions with the local API list
 // -log-file. A flag-first invocation is safe with older versions, where any

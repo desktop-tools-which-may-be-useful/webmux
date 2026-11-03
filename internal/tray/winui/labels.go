@@ -4,7 +4,6 @@ package winui
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/rainchan/webmux/internal/contract"
@@ -72,7 +71,6 @@ type view struct {
 	detected     bool
 	plan         tray.ForwardPlan
 	forwarding   []string // active relay listen addresses
-	relayState   func(addr string) (bool, string)
 	autostart    bool
 	// installSupported: the tray carries release server digests.
 	installSupported bool
@@ -164,35 +162,4 @@ func remoteLinks(snap tray.Snapshot, v view) ([]remoteLink, int) {
 		links = append(links, remoteLink{URL: url, Label: label})
 	}
 	return links, reported
-}
-
-// forwardCandidates lists the plan's addresses, then saved addresses that
-// are currently missing so they can still be unchecked.
-func forwardCandidates(v view) []candidate {
-	usable := v.plan.Needed && v.plan.Blocked == ""
-	var out []candidate
-	seen := map[string]bool{}
-	for _, c := range v.plan.Candidates {
-		seen[c.Address] = true
-		checked := slices.Contains(v.settings.Forward, c.Address)
-		title := fmt.Sprintf("%s（%s · %s）", c.Address, kindLabel(c.Kind), c.Interface)
-		if checked {
-			active, failure := v.relayState(c.Address)
-			switch {
-			case failure != "":
-				title += " — " + failure
-			case active:
-				title += " — 转发中"
-			case !usable:
-				title += " — 已暂停"
-			}
-		}
-		out = append(out, candidate{Address: c.Address, Title: title, Enabled: usable, Checked: checked})
-	}
-	for _, addr := range v.settings.Forward {
-		if !seen[addr] {
-			out = append(out, candidate{Address: addr, Title: addr + " — 地址当前不可用", Enabled: usable, Checked: true})
-		}
-	}
-	return out
 }

@@ -130,22 +130,22 @@ curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/lates
 **2. 运行**，然后在浏览器打开 <http://127.0.0.1:7681>，点击“新建会话”：
 
 ```sh
-webmux --listen 127.0.0.1:7681
+webmux
 ```
 
 **3. 下一步**
 
 - 让服务常驻后台：`webmux start`，或安装为用户服务 `webmux service install`，见 [服务管理](docs/deployment/services.md)。
-- 从手机访问：绑定 Tailscale / WireGuard 等 VPN 地址并启用 token，见 [远程访问](docs/deployment/remote-access.md)。
+- 从手机访问：开启 Tailscale Serve 或在局域网 / VPN 上监听并启用 token，见 [远程访问](docs/deployment/remote-access.md)。
 - 在常用终端里启动 agent：`webmux run -- claude`，`Ctrl+]` 分离后去手机上继续，见 [从终端启动与附着](docs/usage.md#从终端启动与附着)。
 
 其他安装方式：[deb / rpm 安装包](docs/deployment/install-and-upgrade.md#linux-安装包deb--rpm)、[手动下载](docs/deployment/install-and-upgrade.md#手动下载)、[Windows（WSL）托盘](docs/deployment/windows-wsl.md)、[从源码构建](CONTRIBUTING.md#从源码构建)。
 
 > [!WARNING]
 >
-> - WebMux 等同于以当前系统用户身份把 shell 暴露到网络上，默认监听 `0.0.0.0:7681`。
+> - WebMux 等同于以当前系统用户身份执行命令；默认仅监听本机回环 `127.0.0.1:7681`。
 > - 首次启动会生成带随机 token 的 0600 配置文件，可用 `webmux status --json --reveal-token` 查看。
-> - 仅本机使用时请改为 `127.0.0.1:7681`；远程访问请绑定可信 VPN 地址。
+> - 局域网或远程访问可改为 `0.0.0.0:7681`（或 Windows 托盘勾选“允许局域网访问”），请配合可信 VPN / 防火墙使用。
 > - **除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。**
 > - 详见 [安全策略](SECURITY.md) 与 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md)。
 

@@ -269,7 +269,7 @@ for source in "$@"; do
 	esac
 	note ""
 	note "Start WebMux:"
-	note "  $target --listen 127.0.0.1:7681"
+	note "  $target"
 	note "Install it as a user service:"
 	note "  $target service install"
 	exit 0

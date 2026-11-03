@@ -5,7 +5,6 @@ package winui
 import (
 	"context"
 	"errors"
-	"slices"
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
@@ -113,12 +112,28 @@ func (a *App) toggleTunnel() {
 	a.fail("开启公网隧道失败", err)
 }
 
-func (a *App) toggleForward(addr string) {
-	a.changeSettings(func(s *tray.Settings) {
-		if i := slices.Index(s.Forward, addr); i >= 0 {
-			s.Forward = slices.Delete(s.Forward, i, i+1)
-		} else {
-			s.Forward = append(s.Forward, addr)
-		}
-	})
+func (a *App) toggleLANAccess() {
+	snap := a.snapshot()
+	enable := !snap.LANEnabled()
+	if snap.Actions().Restart && !confirmSessions("切换局域网访问需要重启 WebMux，", snap.Sessions) {
+		a.kickUI()
+		return
+	}
+	addr := tray.LANListenAddress(snap, enable)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err := a.svc.Current().ConfigListen(ctx, addr)
+	cancel()
+	if err != nil {
+		a.fail("切换局域网访问失败", err)
+		a.kickUI()
+		return
+	}
+	if snap.Actions().Restart {
+		a.sup.Restart()
+		return
+	}
+	a.sup.Refresh()
+	if snap.State == tray.StateExternal {
+		a.notifier.Show("WebMux", "已更新监听地址，重启外部运行的 WebMux 后生效")
+	}
 }

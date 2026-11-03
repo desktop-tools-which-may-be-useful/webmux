@@ -48,7 +48,7 @@ func TestLoadConfigCreatesDefaultConfig(t *testing.T) {
 	if match == nil || string(match[1]) != c.Token {
 		t.Fatalf("generated token not persisted: %q", first)
 	}
-	if !bytes.Contains(first, []byte(`listen = "0.0.0.0:7681"`)) {
+	if !bytes.Contains(first, []byte(`listen = "127.0.0.1:7681"`)) {
 		t.Fatalf("generated config lost the default listen:\n%s", first)
 	}
 	loaded, err := config.Load(path, true)
@@ -96,7 +96,7 @@ func TestDefaultConfigWithFlagsKeepsOverridesPerProcess(t *testing.T) {
 	if match == nil || len(match[1]) != 43 || string(match[1]) == "flag-token" {
 		t.Fatalf("generated file did not keep its own random token: %q", content)
 	}
-	if !bytes.Contains(content, []byte(`listen = "0.0.0.0:7681"`)) {
+	if !bytes.Contains(content, []byte(`listen = "127.0.0.1:7681"`)) {
 		t.Fatalf("command-line listen was written to the generated file:\n%s", content)
 	}
 }

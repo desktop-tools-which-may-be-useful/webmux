@@ -30,14 +30,14 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 
 无子命令或使用 `--listen` 等服务参数时启动服务，与 `serve` 相同；未知子命令退出码 2。客户端子命令都接受 `--config`，按与服务相同的规则找到状态目录、运行时记录与本机套接字。`webmux start` 在不改变前台默认语义的前提下后台启动，可用 `webmux stop` 停止。
 
-| 命令                                              | 说明                                                                                                                               |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `webmux serve [--log-file PATH]`                  | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                       |
-| `webmux start [--log-file PATH]`                  | 后台启动并按 `serve` 规则加载配置；默认日志为 `<state_dir>/webmux.log`，等待就绪后输出 PID、本机链接与日志路径；已运行时可重复执行 |
-| `webmux status [--json] [--reveal-token]`         | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token            |
-| `webmux stop [--timeout 15s] [--force] [--json]`  | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号            |
-| `webmux bridge`                                   | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                            |
-| `webmux config path\|show\|validate\|check\|init` | 定位、查看生效配置（不含 Token）、校验（含 TOML 行列号）、以模板和随机 Token 初始化（已存在需 `--force`，原文件保留为 `.bak`）     |
+| 命令                                                      | 说明                                                                                                                                                                 |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webmux serve [--log-file PATH]`                          | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                                                         |
+| `webmux start [--log-file PATH]`                          | 后台启动并按 `serve` 规则加载配置；默认日志为 `<state_dir>/webmux.log`，等待就绪后输出 PID、本机链接与日志路径；已运行时可重复执行                                   |
+| `webmux status [--json] [--reveal-token]`                 | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token                                              |
+| `webmux stop [--timeout 15s] [--force] [--json]`          | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号                                              |
+| `webmux bridge`                                           | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                                                              |
+| `webmux config path\|show\|validate\|check\|init\|listen` | 定位、查看生效配置（不含 Token）、校验（含 TOML 行列号）、以模板和随机 Token 初始化（已存在需 `--force`，原文件保留为 `.bak`）、或原子更新配置文件中的 `listen` 地址 |
 
 `webmux config check` 是 `config validate` 的别名；`webmux help` 显示全部命令。
 
@@ -47,7 +47,7 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 
 | 配置项               | 默认值                   | 说明                                                                                                                                                                                                                                                |
 | -------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`           | HTTP / WebSocket 监听地址                                                                                                                                                                                                                           |
+| `listen`             | `127.0.0.1:7681`         | HTTP / WebSocket 监听地址；默认仅监听本机回环，局域网或 VPN 直连可设为 `0.0.0.0:7681`                                                                                                                                                               |
 | `token`              | 空                       | 共享 token；首次启动自动生成并持久化，可用 `webmux status --json --reveal-token` 查看；已有配置监听 loopback 且未启用隧道时空表示不认证；其他监听地址或启用隧道且为空时每次启动临时生成，并打印带 `#token=` 的链接；隧道模式显式 token 至少 43 字符 |
 | `scrollback_bytes`   | `2097152`                | 每会话保留的原始终端字节数（不是行数）                                                                                                                                                                                                              |
 | `default_cwd`        | `~`                      | 新建会话的默认目录，支持 `~` 展开                                                                                                                                                                                                                   |

@@ -278,7 +278,7 @@ func (s *Server) originAllowed(r *http.Request) bool {
 		if s.Public.originAllowed(origin, r.Host) {
 			return true
 		}
-	} else if u.Host == r.Host && u.Scheme == scheme {
+	} else if strings.EqualFold(u.Host, r.Host) && u.Scheme == scheme {
 		return true
 	}
 	for _, allowed := range s.Config.AllowedOrigins {

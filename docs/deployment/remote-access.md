@@ -5,8 +5,8 @@
 ## 手机访问（Tailscale）
 
 1. 在服务器和手机上安装 Tailscale 并加入同一网络。
-2. 推荐在 `[tailscale]` 设置 `mode = "serve"`，让 WebMux 通过 `127.0.0.1` 监听并托管自动证书的 HTTPS 入口；也可以手工把 `listen` 设为服务器 Tailscale 地址（如 `100.64.0.5:7681`）。
-3. 托管 Serve 时手机打开 `https://<节点>.ts.net/`；手工方式打开 `http://<Tailscale IP 或主机名>:7681` 并输入一次 token（保存在浏览器 localStorage 中）。也可以打开启动时打印的访问链接并把主机换成 Tailscale 地址。
+2. 推荐在 `[tailscale]` 设置 `mode = "serve"`，让 WebMux 通过默认的 `127.0.0.1:7681` 监听并托管自动证书的 HTTPS 入口；也可以把 `listen` 设为 `0.0.0.0:7681`（或在 Windows 托盘中勾选“允许局域网访问”）后直连。
+3. 托管 Serve 时手机打开 `https://<节点>.ts.net/`；HTTP 直连时打开 `http://<Tailscale IP 或 MagicDNS 主机名>:7681` 并输入一次 token（保存在浏览器 localStorage 中）。也可以打开启动时打印的访问链接并把主机换成 Tailscale 地址。
 4. 托管 Serve 的 HTTPS 地址可以安装为应用；手工 HTTP 地址只能当作普通网页使用，见 [安装为应用（PWA）](pwa-and-push.md#安装为应用pwa)。
 
 详细配置、端口、WSL Windows provider 与故障排查见 [Tailscale Serve / Funnel 入口](../tailscale.md)。

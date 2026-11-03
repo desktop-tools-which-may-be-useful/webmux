@@ -49,6 +49,7 @@ type Service interface {
 	// Token reads the token for one clipboard copy; callers discard it.
 	Token(ctx context.Context) (string, error)
 	ConfigInit(ctx context.Context) error
+	ConfigListen(ctx context.Context, listen string) error
 	// Install puts the release server matching the tray into WSL.
 	Install(ctx context.Context) error
 	// SetTunnel starts or stops the running server's Cloudflare Tunnel.
@@ -265,6 +266,17 @@ func (s *WSLService) ConfigInit(ctx context.Context) error {
 	}
 	if res.Code != 0 {
 		return fmt.Errorf("webmux config init: %s", strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
+	}
+	return nil
+}
+
+func (s *WSLService) ConfigListen(ctx context.Context, listen string) error {
+	res, err := s.run(ctx, s.Target.ConfigListen(listen), 30*time.Second)
+	if err != nil {
+		return err
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("webmux config listen: %s", strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
 	return nil
 }

@@ -23,14 +23,12 @@ const (
 	DefaultIdleTimeout = 10 * time.Minute
 )
 
-// Handler checks Host and Origin against the listen address and relays to
-// target (the WebMux local link host:port). listen must be an IP literal
-// with a port, so the Host check cannot be bypassed by DNS rebinding.
+// Handler checks that any Origin header matches the request's http://Host and
+// relays to target (the WebMux local link host:port).
 func Handler(listen, target string, logf func(string, ...any)) http.Handler {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	self := "http://" + listen
 	upstream := &url.URL{Scheme: "http", Host: target}
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -54,16 +52,21 @@ func Handler(listen, target string, logf func(string, ...any)) http.Handler {
 		},
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Host != listen {
-			http.Error(w, "host not allowed", http.StatusForbidden)
-			return
-		}
-		if origin := r.Header.Get("Origin"); origin != "" && origin != self {
+		if origin := r.Header.Get("Origin"); origin != "" && !sameOrigin(origin, r.Host) {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
 			return
 		}
 		proxy.ServeHTTP(w, r)
 	})
+}
+
+func sameOrigin(origin, host string) bool {
+	if host == "" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	return err == nil && u.Scheme == "http" && u.User == nil && u.Path == "" &&
+		!strings.ContainsAny(origin, "?#") && strings.EqualFold(u.Host, host)
 }
 
 // Options configure one forwarding listener.

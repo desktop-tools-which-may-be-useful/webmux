@@ -183,12 +183,12 @@
   - 独立从 Windows 回环地址检查可达性，不带 token 且不走系统代理；
   - 故障时提示 localhostForwarding/networkingMode；
   - 不把 WSL 内健康等同于 Windows 浏览器可达。
-- **US-O08 转发可信远程地址**：作为 Windows 使用者，我希望在 NAT 模式下通过选定的主机地址访问 WSL 服务，以便从手机继续操作。
+- **US-O08 允许局域网访问与转发可信远程地址**：作为 Windows 使用者，我希望通过托盘的“允许局域网访问”开关控制 WSL 服务是否向局域网与 Tailscale 开放，以便从手机或其他设备继续操作。
   验收要点：
-  - 转发默认关闭，Tailscale 地址优先展示；
-  - 仅服务健康、配置 token 且 Windows 可达时监听，条件失效暂停、恢复后继续；
-  - 转发 HTTP 与 WebSocket 并校验地址对应 Host/Origin；
-  - 保存地址选择并报告端口冲突，退出托盘即停止；
+  - 开关默认关闭（`127.0.0.1:7681`），切换时通过 `webmux config listen` 修改 WSL `config.toml` 的 `listen`（开启为 `0.0.0.0:<端口>`，关闭为 `127.0.0.1:<端口>`）并自动重启托盘托管的 WebMux；
+  - NAT 模式下开启时自动把当前所有可用 Windows 候选地址（Tailscale 地址优先展示）转发到本机链接，仅在服务健康、配置 token 且 Windows 可达时监听，条件失效暂停、恢复后继续；
+  - 转发 HTTP 与 WebSocket 并按请求 `Host` 校验同源 `Origin`，不限制请求 `Host`，支持任意 IP 或主机名（如 Tailscale MagicDNS）；
+  - 退出托盘即停止本机转发；
   - 托盘运行时不修改防火墙；安装版可在安装时添加专用网络与域网络的放行规则（US-O12），公用网络或未添加规则时由 Windows 原生提示处理。
 - **US-O09 打开和复制受保护入口**：作为 Windows 使用者，我希望从托盘打开页面、在统一的“复制链接”子菜单中复制本机/远程/经托盘转发/公网链接，或复制 token，以便把访问入口带到另一设备。
   验收要点：

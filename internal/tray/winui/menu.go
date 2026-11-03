@@ -11,10 +11,9 @@ import (
 // Pool sizes of the dynamic submenus. fyne.io/systray cannot rebuild a menu
 // cheaply, so every dynamic entry is pre-created and shown or hidden.
 const (
-	remotePool    = 8
-	forwardPool   = 8
-	candidatePool = 12
-	distroPool    = 16
+	remotePool  = 8
+	forwardPool = 8
+	distroPool  = 16
 )
 
 // item caches what fyne.io/systray shows, because updating a hidden item
@@ -70,14 +69,6 @@ type remoteLink struct {
 	URL, Label string
 }
 
-// candidate is one entry of the forwarding addresses.
-type candidate struct {
-	Address string
-	Title   string
-	Enabled bool
-	Checked bool
-}
-
 // menu holds every item; only App.render changes them.
 type menu struct {
 	status1, status2, hint1, hint2 *item
@@ -89,8 +80,7 @@ type menu struct {
 	tunnel, tunnelInfo, tunnelSettings     *item
 	pushInfo, pushGuide                    *item
 
-	remote, fwHeadline, fwBlocked, fwInit *item
-	fwCandidates                          []*item
+	lanAccess *item
 
 	start, stop, restart, install, update *item
 
@@ -110,11 +100,10 @@ type menu struct {
 
 // bindings are what the dynamic items currently stand for.
 type bindings struct {
-	remote     []remoteLink // fills remoteLinks then forwardLinks, in order
-	reported   int          // remote[:reported] fill remoteLinks
-	candidates []candidate
-	distros    []string
-	update     tray.UpdateItem
+	remote   []remoteLink // fills remoteLinks then forwardLinks, in order
+	reported int          // remote[:reported] fill remoteLinks
+	distros  []string
+	update   tray.UpdateItem
 }
 
 func add(title string) *item { return newItem(systray.AddMenuItem(title, ""), title) }
@@ -178,12 +167,7 @@ func buildMenu() *menu {
 	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.tunnelSettings, m.pushInfo, m.pushGuide} {
 		it.hide()
 	}
-	m.remote = add("远程访问")
-	m.fwHeadline = addSub(m.remote, "")
-	m.fwBlocked = addSub(m.remote, "")
-	m.fwInit = addSub(m.remote, "初始化配置（生成 Token）")
-	m.remote.mi.AddSeparator()
-	m.fwCandidates = pool(m.remote, candidatePool)
+	m.lanAccess = add("允许局域网访问")
 	systray.AddSeparator()
 
 	m.start = add("启动")

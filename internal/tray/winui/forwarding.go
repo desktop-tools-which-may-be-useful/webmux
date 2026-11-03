@@ -102,14 +102,6 @@ func failureReason(err error) string {
 	return "启用失败：" + err.Error()
 }
 
-// state reports whether addr forwards now, and its failure reason.
-func (r *relays) state(addr string) (bool, string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	_, ok := r.active[addr]
-	return ok, r.failed[addr]
-}
-
 // listening lists the active listen addresses, sorted.
 func (r *relays) listening() []string {
 	r.mu.Lock()

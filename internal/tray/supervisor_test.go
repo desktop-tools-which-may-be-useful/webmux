@@ -279,6 +279,9 @@ func (f *fakeService) Keepalive(on bool) error {
 }
 func (f *fakeService) Token(context.Context) (string, error) { return "", nil }
 func (f *fakeService) ConfigInit(context.Context) error      { return nil }
+func (f *fakeService) ConfigListen(context.Context, string) error {
+	return nil
+}
 func (f *fakeService) Install(context.Context) error {
 	f.call("install")
 	f.mu.Lock()

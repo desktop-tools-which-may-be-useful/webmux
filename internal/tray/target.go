@@ -120,6 +120,10 @@ func (t *TargetService) ConfigInit(ctx context.Context) error {
 	return t.Current().ConfigInit(ctx)
 }
 
+func (t *TargetService) ConfigListen(ctx context.Context, listen string) error {
+	return t.Current().ConfigListen(ctx, listen)
+}
+
 func (t *TargetService) Install(ctx context.Context) error {
 	return t.Current().Install(ctx)
 }

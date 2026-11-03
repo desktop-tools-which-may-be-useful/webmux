@@ -67,7 +67,7 @@ curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/downl
 - 镜像是第三方服务，能看到请求者 IP。
 - 同源校验只能发现截断和损坏，无法防范同时替换两者的恶意镜像；高保证或离线场景请用 `WEBMUX_SHA256` 固定摘要。
 
-脚本只安装二进制。完成后按提示运行 `webmux --listen 127.0.0.1:7681`。
+脚本只安装二进制。完成后按提示运行 `webmux`（默认监听 `127.0.0.1:7681`）。
 
 - 需要后台服务时再执行 `webmux service install`，首次启动会自动生成配置与 Token。
 - 重复执行脚本会升级二进制；正在运行的服务需手动重启，重启会结束现有会话。

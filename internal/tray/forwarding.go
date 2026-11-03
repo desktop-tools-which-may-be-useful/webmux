@@ -24,8 +24,9 @@ type Candidate struct {
 	Kind string
 }
 
-// WindowsCandidates lists enabled IPv4 addresses, excluding loopback,
-// link-local and the WSL virtual switch, with Tailscale first.
+// WindowsCandidates lists enabled private LAN (RFC 1918) and Tailscale IPv4
+// addresses, excluding loopback, link-local, public addresses, and the WSL
+// virtual switch, with Tailscale first.
 func WindowsCandidates(list []WinInterface) []Candidate {
 	var out []Candidate
 	for _, iface := range list {
@@ -37,7 +38,11 @@ func WindowsCandidates(list []WinInterface) []Candidate {
 			if !ok {
 				continue
 			}
-			out = append(out, Candidate{Address: v4.String(), Interface: iface.Name, Kind: contract.AddressKind(v4)})
+			kind := contract.AddressKind(v4)
+			if !v4.IsPrivate() && kind != "tailscale" {
+				continue
+			}
+			out = append(out, Candidate{Address: v4.String(), Interface: iface.Name, Kind: kind})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Kind == "tailscale" && out[j].Kind != "tailscale" })
@@ -93,4 +98,36 @@ func ForwardTarget(status contract.StatusV1) (host, port string, ok bool) {
 	authority := strings.TrimPrefix(status.URLs.Local, "http://")
 	host, port, err := net.SplitHostPort(authority)
 	return host, port, err == nil && port != ""
+}
+
+// LANEnabled reports whether the reported listen address is open to non-loopback interfaces.
+func (s Snapshot) LANEnabled() bool {
+	if !s.HasStatus || s.Degraded {
+		return false
+	}
+	host, _, err := net.SplitHostPort(s.Status.Listen)
+	if err != nil {
+		return false
+	}
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && !ip.IsLoopback()
+}
+
+// LANListenAddress returns "0.0.0.0:<port>" when enabled or "127.0.0.1:<port>"
+// when disabled, preserving the port of snap.Status.Listen (default 7681).
+func LANListenAddress(snap Snapshot, enabled bool) string {
+	port := "7681"
+	if snap.HasStatus {
+		if _, p, err := net.SplitHostPort(snap.Status.Listen); err == nil && p != "" {
+			port = p
+		}
+	}
+	host := "127.0.0.1"
+	if enabled {
+		host = "0.0.0.0"
+	}
+	return net.JoinHostPort(host, port)
 }
