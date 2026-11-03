@@ -75,3 +75,38 @@ test("returning to the workspace focuses its main region", async ({
   await expect(page.getByRole("searchbox", { name: "搜索会话" })).toBeVisible();
   await expect(page.locator("main")).toBeFocused();
 });
+
+test("returning to the workspace shows the previous list while settings reload", async ({
+  page,
+  workDir,
+}) => {
+  await createShell(page, "Cached return", workDir);
+  await page.getByRole("button", { name: "返回会话列表", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "搜索会话" })).toBeVisible();
+  // Open the session again, then hold the slow settings and Git reads that
+  // a mobile link would still be waiting on.
+  await page.getByText("Cached return").first().click();
+  const config = Promise.withResolvers<void>();
+  const repositories = Promise.withResolvers<void>();
+  await page.route("**/api/config", async (route) => {
+    await config.promise;
+    await route.continue();
+  });
+  await page.route("**/api/repositories", async (route) => {
+    await repositories.promise;
+    await route.continue();
+  });
+  try {
+    await page
+      .getByRole("button", { name: "返回会话列表", exact: true })
+      .click();
+    await expect(
+      page.getByRole("searchbox", { name: "搜索会话" }),
+    ).toBeVisible();
+    await expect(page.getByText("Cached return").first()).toBeVisible();
+    await expect(page.locator('[data-slot="skeleton"]')).toHaveCount(0);
+  } finally {
+    config.resolve();
+    repositories.resolve();
+  }
+});

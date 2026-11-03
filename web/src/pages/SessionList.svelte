@@ -41,12 +41,16 @@
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
-  import { lastRepositories, rememberRepositories } from "../repository-cache";
+  import { homeCache } from "../home-cache";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
 
   let { drafts }: { drafts: TerminalDrafts } = $props();
 
-  let sessions = $state.raw<SessionInfo[]>([]);
+  // Returning from a terminal mounts this page again. The previous session
+  // list, settings and grouping render immediately and are refreshed behind
+  // the page, so a slow link never puts a skeleton back in front of them.
+  const cached = { sessions: homeCache.sessions(), setup: homeCache.setup() };
+  let sessions = $state.raw<SessionInfo[]>(cached.sessions ?? []);
   // Closed and interrupted hybrid sessions; their drafts stay on this device.
   let recoverable = $state.raw<HybridRecord[]>([]);
   let recoverableRequest = 0;
@@ -72,24 +76,26 @@
   }
   // Returning from a terminal mounts this page again; the previous grouping
   // renders immediately instead of flashing ungrouped sessions while Git runs.
-  let repositories = $state.raw<Repository[]>(lastRepositories() ?? []);
+  let repositories = $state.raw<Repository[]>(homeCache.repositories() ?? []);
   // A saved scope is only validated after a read settles; until then an empty
   // or cached list must not discard it.
   let repositoriesSettled = $state(false);
   let launchConfigs = $state<LaunchConfigsState>({ status: "loading" });
-  let cwd = $state("~");
-  let hostname = $state("");
-  let pendingUpdate = $state<PendingUpdate>();
+  let cwd = $state(cached.setup?.cwd ?? "~");
+  let hostname = $state(cached.setup?.hostname ?? "");
+  let pendingUpdate = $state<PendingUpdate | undefined>(
+    cached.setup?.pendingUpdate,
+  );
   let dismissedVersion = $state(dismissedUpdate());
   const updateNotice = $derived(homeUpdate(pendingUpdate, dismissedVersion));
-  let setupSettled = $state(false);
-  let loading = $state(true);
-  let initializing = $state(true);
+  let setupSettled = $state(!!cached.setup);
+  let loading = $state(!cached.sessions);
+  let initializing = $state(!cached.setup);
   let refreshing = $state(false);
   let repositoryError = $state("");
-  let capabilityError = $state("");
-  let gitReady = $state(false);
-  let registryReady = $state(false);
+  let capabilityError = $state(cached.setup?.capabilityError ?? "");
+  let gitReady = $state(cached.setup?.gitReady ?? false);
+  let registryReady = $state(cached.setup?.registryReady ?? false);
   let connection = $state<Connection>("connecting");
   let creating = $state<{
     mode: "direct" | "existing" | "new";
@@ -320,7 +326,7 @@
       );
       if (!disposed && generation === refreshGeneration) {
         repositories = result;
-        rememberRepositories(result);
+        homeCache.rememberRepositories(result);
       }
     } catch (err) {
       if (!disposed && generation === refreshGeneration)
@@ -338,14 +344,19 @@
     const results = await Promise.allSettled([
       api("/config", ConfigSchema, "GET", undefined, signal).then((c) => {
         if (disposed) return;
-        cwd = c.defaultCwd;
-        hostname = c.hostname;
-        pendingUpdate = c.pendingUpdate;
-        gitReady = c.workspace.gitAvailable;
-        registryReady = c.workspace.registryAvailable;
-        capabilityError = [c.workspace.gitError, c.workspace.registryError]
-          .filter(Boolean)
-          .join(" · ");
+        const next = {
+          cwd: c.defaultCwd,
+          hostname: c.hostname,
+          pendingUpdate: c.pendingUpdate,
+          gitReady: c.workspace.gitAvailable,
+          registryReady: c.workspace.registryAvailable,
+          capabilityError: [c.workspace.gitError, c.workspace.registryError]
+            .filter(Boolean)
+            .join(" · "),
+        };
+        ({ cwd, hostname, pendingUpdate, gitReady, registryReady } = next);
+        capabilityError = next.capabilityError;
+        homeCache.rememberSetup(next);
       }),
     ]);
     if (!disposed) {
@@ -378,6 +389,7 @@
           event.type === "removed" &&
           !!sessions.find((session) => session.id === event.id)?.hybrid;
         sessions = applySessionEvent(sessions, event);
+        homeCache.rememberSessions(sessions);
         if (event.type === "snapshot") {
           const ids = event.sessions.map((session) => session.id);
           // Recoverable hybrid sessions still own their drafts; without

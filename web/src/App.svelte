@@ -16,7 +16,7 @@
   import { matchRoute } from "./route";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
   import { browserDraftStorage } from "./draftStorage";
-  import { clearRepositories } from "./repository-cache";
+  import { clearHomeCache } from "./home-cache";
 
   const drafts = createTerminalDrafts({ storage: browserDraftStorage() });
   let uploadNotice = $state("");
@@ -71,7 +71,7 @@
     const auth = () => {
       stopSettings();
       drafts.clearAll();
-      clearRepositories();
+      clearHomeCache();
       uploadNotice = "";
       ready = false;
       checking = false;

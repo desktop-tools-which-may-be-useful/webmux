@@ -213,3 +213,8 @@
 
 - 通过：`keyboard-size-hold` 单元用例、`TerminalTransport` 浏览器用例、桌面与 Pixel 7 软键 E2E、svelte-check、Oxlint、前端架构守卫与文档治理。
 - 限制：Chromium 模拟以缩小视口代替软键盘，未进行 iOS/Android 真机键盘验收；未重新核对其余功能组。
+
+本次局部核对（2026-11-03）：`cache-workspace-on-return` 的返回首页缓存对应更新 US-C01。从终端返回首页时立即显示上次的会话列表、服务端设置与仓库分组，并在后台刷新；缓存仅在当前标签页内存中，令牌失效时清空。
+
+- 通过：`frontend-quality`、`repository-scope`、`workspace-discovery`、`page-stability` 共 40 项 E2E（含挂起 `/api/config` 与 `/api/repositories` 时返回首页仍显示列表且无骨架屏的新用例）、svelte-check、前端架构守卫。
+- 限制：用请求挂起模拟慢速链接，未做真机或真实限速网络验收；未重新核对其余功能组。
