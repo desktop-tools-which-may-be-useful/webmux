@@ -64,9 +64,9 @@ Windows 不是“顺带能用”的平台。
 ### Agent 协作
 
 - **自定义启动配置**：在设置页保存 Shell、Open Code、Claude Code、Codex、omp 等程序的完整命令与环境变量，新建会话时统一选用。
-  - 新安装首次启动时预置 [九款 CLI agent](cli-agents.md)，以及 Shell 和 omp；每项附带本地品牌图标，均可编辑或删除。
-  - Codex CLI、Open Code、omp 与 Claude Code 默认开启混合模式；也可填写一次性命令。
-- **ACP 混合会话**：OpenCode / omp / Codex CLI / Claude Code 对话在原生 TUI 与聊天视图之间切换，支持多设备队列、插话、权限请求、附件、空闲休眠与重启恢复，见下节。
+  - 新安装首次启动时预置 [十一款 CLI agent](cli-agents.md)，以及 Shell 和 omp；每项附带本地品牌图标，均可编辑或删除。
+  - Codex CLI、Open Code、omp、Claude Code、Qoder 与 QoderCN 默认开启混合模式；也可填写一次性命令。
+- **ACP 混合会话**：OpenCode / omp / Codex CLI / Claude Code / Qoder / QoderCN 对话在原生 TUI 与聊天视图之间切换，支持多设备队列、插话、权限请求、附件、空闲休眠与重启恢复，见下节。
 - **需要你介入的提醒**：识别 agent 的终端通知与状态信号，在总览、标签页和手机推送中提示，见 [使用指南](usage.md#需要你介入的提醒)。
 
 ### 代码与仓库
@@ -85,7 +85,7 @@ Windows 不是“顺带能用”的平台。
 
 ## 混合会话（ACP 聊天 ↔ 终端）
 
-OpenCode、omp、Codex CLI 与 Claude Code 的同一段对话可以在原生 TUI 与基于 [ACP（Agent Client Protocol）](https://agentclientprotocol.com) 的聊天视图之间随时切换：电脑上用 TUI 精细操作，手机上切到聊天视图阅读和回复。
+OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 的同一段对话可以在原生 TUI 与基于 [ACP（Agent Client Protocol）](https://agentclientprotocol.com) 的聊天视图之间随时切换：电脑上用 TUI 精细操作，手机上切到聊天视图阅读和回复。
 
 - 切换前后是同一个 WebMux 会话、同一个 agent 会话，历史由 agent 自己保存。
 - 正在执行的回合会先中断，失败自动回到原来的一端。
@@ -100,7 +100,7 @@ OpenCode、omp、Codex CLI 与 Claude Code 的同一段对话可以在原生 TUI
   - 上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
 - **省资源、可恢复**：聊天端空闲后结束 agent 进程（默认 30 分钟），打开会话或发送消息时自动唤醒；服务重启后从首页“可恢复”分组恢复到聊天或终端。
 
-新安装预置的 Open Code、omp、Codex CLI 与 Claude Code 启动配置已开启混合模式，新建会话时选择“从终端开始”或“从聊天开始”即可。详见 [混合会话](hybrid-sessions.md)。
+新安装预置的 Open Code、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 启动配置已开启混合模式，新建会话时选择”从终端开始”或”从聊天开始”即可。详见 [混合会话](hybrid-sessions.md)。
 
 ## 截图
 

@@ -264,6 +264,12 @@ func (a *actor) tracksRegistry() bool {
 }
 
 func (a *actor) identityFallback() bool {
+	// Agents with no session-ID source of their own (no LockTracker, no
+	// ProcessRegistry, no OSC 7501 child record) always need the
+	// session/list candidate probe.
+	if !a.tracksLocks() && !a.tracksRegistry() {
+		return true
+	}
 	return (a.tracksLocks() && a.locks.unknown) || (a.tracksRegistry() && a.registry.unknown)
 }
 
@@ -396,6 +402,8 @@ func (a *actor) observe() {
 
 // identify reads the terminal's identity and the profile's view of it. A
 // lock- or registry-tracking profile gets its session ID from that source.
+// When terminal signals don't identify the agent (e.g. qoder/qodercn don't
+// emit OSC 7501), fall back to process executable matching.
 func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
 	id := a.shell.Identity()
 	ident, known := a.svc.agents.Identify(signals(id))
@@ -405,6 +413,23 @@ func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
 			ident.AgentSessionID = a.lockedSession(id)
 		case a.tracksRegistry():
 			ident.AgentSessionID = a.registeredSession(id)
+		}
+		return id, ident, known
+	}
+	// Fallback: identify from the PTY root process executable.
+	if !known && id.PID != 0 && id.Executable != "" {
+		p := a.cmd.Profile
+		if p.RunsProcess(id.Executable) ||
+			(p.Launcher != "" && id.Executable == p.Launcher &&
+				slices.ContainsFunc(a.shell.RunChildren(), p.RunsProcess)) {
+			fallback := agentprofile.Identity{Agent: p.Name, Cwd: id.Cwd}
+			switch {
+			case a.tracksLocks():
+				fallback.AgentSessionID = a.lockedSession(id)
+			case a.tracksRegistry():
+				fallback.AgentSessionID = a.registeredSession(id)
+			}
+			return id, fallback, true
 		}
 	}
 	return id, ident, known

@@ -59,7 +59,7 @@ WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会
 <table>
   <tr>
     <td width="33%">🔌 <b>断线不断会话</b><br><sub>锁屏、换网、关标签页都不影响；重连只补发缺失的输出。</sub></td>
-    <td width="33%">🤖 <b>原样运行你的 agent</b><br><sub>Claude Code、Codex、omp 等九款 CLI 预置即用，跑在真实 PTY 里。</sub></td>
+    <td width="33%">🤖 <b>原样运行你的 agent</b><br><sub>Claude Code、Codex、omp 等十一款 CLI 预置即用，跑在真实 PTY 里。</sub></td>
     <td width="33%">💬 <b>TUI ↔ 聊天一键切换</b><br><sub>同一段对话，电脑上用 TUI，手机上用聊天视图，历史完整保留。</sub></td>
   </tr>
   <tr>
@@ -103,7 +103,7 @@ WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会
       <br><sub><b>资源管理器</b>：上传、下载、重命名、移动文件</sub></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/cli-agents/after-desktop-dark.png">
       <img src="docs/images/cli-agents/after-desktop-light.png" alt="预置的 CLI agent 启动配置"></picture>
-      <br><sub><b>启动配置</b>：预置九款 CLI agent，可自由编辑</sub></td>
+      <br><sub><b>启动配置</b>：预置十一款 CLI agent，可自由编辑</sub></td>
   </tr>
 </table>
 
@@ -112,7 +112,7 @@ WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会
 ## 功能
 
 - **会话与终端**：持久会话、断线续接、tmux 风格分屏（`Ctrl+B`）、缓冲查找、草稿模式、文件上传、锁定终端尺寸、快捷键参考、Kitty 终端图形。详见 [使用指南](docs/usage.md)、[终端使用](docs/usage/terminal.md)。
-- **Agent 协作**：预置九款 CLI agent 启动配置；“需要你介入”提醒；Claude Code / Codex / OpenCode / omp 在聊天与终端间切换，聊天端支持附件、权限请求作答与 Token 用量。详见 [CLI agent](docs/cli-agents.md)、[混合会话](docs/hybrid-sessions.md)。
+- **Agent 协作**：预置十一款 CLI agent 启动配置；“需要你介入”提醒；Claude Code / Codex / OpenCode / omp / Qoder / QoderCN 在聊天与终端间切换，聊天端支持附件、权限请求作答与 Token 用量。详见 [CLI agent](docs/cli-agents.md)、[混合会话](docs/hybrid-sessions.md)。
 - **代码与仓库**：资源管理器（上传、下载、ZIP、重命名、移动、删除）、Git Diff、多格式预览（Markdown、HTML、表格、JSON、PDF、图片）、[会话临时文件夹](docs/usage/terminal.md#会话临时文件夹)、Git worktree。详见 [代码工作区](docs/usage.md#代码工作区)、[仓库与 worktree](docs/usage.md#仓库与-worktree)。
 - **多设备**：手机软键栏（可锁定 Shift）与聊天视图、PWA 与 Web Push、偏好跨设备同步、`webmux run` / `attach` 在本机终端接续。详见 [移动端](docs/usage.md#移动端)、[从终端启动与附着](docs/usage.md#从终端启动与附着)。
 - **部署与访问**：一键安装、deb / rpm 包、systemd / launchd 用户服务、Windows 安装程序与托盘、Tailscale 与 Cloudflare Tunnel 的 HTTPS 入口。详见 [部署指南](docs/deployment.md)。

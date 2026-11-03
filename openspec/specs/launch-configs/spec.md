@@ -39,13 +39,13 @@
 
 系统 SHALL NOT 提供内置预设：服务端 SHALL NOT 读取 TOML `[[presets]]` 与 `shell`，SHALL NOT 提供 `GET /api/presets`，创建会话请求 SHALL NOT 接受 `preset` 与 `args`。
 
-服务首次启动且 `<state_dir>/launch-configs.json` 不存在时，服务端 SHALL 写入 11 条普通启动配置：Shell、Claude Code、Codex CLI、Gemini CLI、Cursor CLI、GitHub Copilot CLI、Open Code、Qwen Code、Kimi Code CLI、CodeBuddy Code 与 omp。
+服务首次启动且 `<state_dir>/launch-configs.json` 不存在时，服务端 SHALL 写入 13 条普通启动配置：Shell、Claude Code、Codex CLI、Gemini CLI、Cursor CLI、GitHub Copilot CLI、Open Code、Qwen Code、Kimi Code CLI、CodeBuddy Code、omp、Qoder 与 QoderCN。
 这些配置 SHALL 可像其他配置一样编辑或删除；文件已存在（包括删空后的空列表）时 SHALL NOT 补写或改写。
 
 #### Scenario: 首次启动写入默认配置
 
 - **WHEN** 服务首次启动且状态目录中没有 `launch-configs.json`
-- **THEN** 服务创建该文件并写入 11 条默认配置，列表可经 `GET /api/launch-configs` 读取
+- **THEN** 服务创建该文件并写入 13 条默认配置，列表可经 `GET /api/launch-configs` 读取
 
 #### Scenario: 删空后不再补写
 
@@ -239,7 +239,7 @@
 `hybrid` 为 `true` 时，服务端 SHALL 按 `hybrid-agent-profiles` 校验 argv，校验不通过时 SHALL 返回 400 并给出原因，已有数据不变。
 校验 SHALL NOT 检查第三方连接器是否已安装。
 
-新安装预置的 OpenCode、omp、Codex CLI 与 Claude Code 配置 SHALL 为 `hybrid: true`，其 argv（含各自的自动批准参数）SHALL 通过 `hybrid-agent-profiles` 校验。修改已勾选配置的 argv 使其不再受支持时，保存 SHALL 返回 400，用户须先取消勾选。
+新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 配置 SHALL 为 `hybrid: true`，其 argv（含各自的自动批准参数）SHALL 通过 `hybrid-agent-profiles` 校验。修改已勾选配置的 argv 使其不再受支持时，保存 SHALL 返回 400，用户须先取消勾选。
 
 新安装预置的 agent 配置 SHALL 带上各自的自动批准参数，使工具调用无需逐次批准：
 
@@ -255,7 +255,7 @@ Shell 配置 SHALL 不变。已存在的 `launch-configs.json` SHALL NOT 被改�
 
 - **WHEN** 服务首次启动且 `launch-configs.json` 不存在
 - **THEN** 预置的 omp 配置 argv 为 `["bash","-ic","exec -- \"$@\"","webmux","omp","--auto-approve"]`（服务端 `$SHELL` 为 Bash 时），`hybrid` 为 `true`，`hybridSupport` 为 `{supported: true, agent: "omp"}`；
-  OpenCode、Codex CLI 与 Claude Code 配置同样为混合配置，Codex CLI 与 Claude Code 的 `hybridSupport` 带有各自的连接器信息；
+  OpenCode、Codex CLI、Claude Code、Qoder 与 QoderCN 配置同样为混合配置，Codex CLI 与 Claude Code 的 `hybridSupport` 带有各自的连接器信息；
   Gemini CLI 配置带自动批准参数但 `hybrid` 为 `false`
 
 #### Scenario: 已有安装不改写

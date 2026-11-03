@@ -197,20 +197,20 @@ jq -nc --arg seq "$seq" '{terminalSequence: $seq}'
 - **已有工作树**：在已登记仓库的某个工作树（或其子目录）中启动；仓库和工作树均使用与启动命令相同主题的下拉框，显示名称与路径，不使用浏览器原生菜单。
 - **新工作树**：先创建 Git worktree，再启动会话。
 
-“启动命令”通过两个 Tab 区分命令来源，两者都只使用自定义命令；新安装首次启动会预置 Shell、九款 CLI agent 和 omp 启动配置，可在设置页编辑或删除。完整列表见 [CLI agent 接入](cli-agents.md)。
+“启动命令”通过两个 Tab 区分命令来源，两者都只使用自定义命令；新安装首次启动会预置 Shell、十一款 CLI agent 和 omp 启动配置，可在设置页编辑或删除。完整列表见 [CLI agent 接入](cli-agents.md)。
 
-Claude Code、Codex CLI、Gemini CLI、Open Code 和 omp 的预置配置带有自动批准工具调用的参数，其中 Codex 参数同时关闭其沙箱；需要逐次批准时在设置页删掉对应参数。
+Claude Code、Codex CLI、Gemini CLI、Open Code、Qoder、QoderCN 和 omp 的预置配置带有自动批准工具调用的参数，其中 Codex 参数同时关闭其沙箱；需要逐次批准时在设置页删掉对应参数。
 
 Cursor、Copilot、Qwen、Kimi 和 CodeBuddy 的新增配置使用各 CLI 默认的授权行为。各项参数与已有安装的添加方式见 [CLI agent 接入](cli-agents.md)。
 
-Open Code、omp、Codex CLI 与 Claude Code 预置配置默认开启[混合模式](hybrid-sessions.md)。已有安装的 `launch-configs.json` 不会被改写：
+Open Code、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 预置配置默认开启[混合模式](hybrid-sessions.md)。已有安装的 `launch-configs.json` 不会被改写：
 
 - **预先输入**：从下拉框选择在设置页保存的启动配置。选中框和展开的每个选项同时显示图标、名称与命令，并展示环境变量数量（不显示值）；长命令可通过完整提示查看。配置保存在服务端，换浏览器或设备后仍可选用。
 - **手动填写**：直接填写一次性命令，不会写入服务端；没有保存配置或配置存储不可用时也可使用。切换命令来源 Tab 时保留已选配置与手动输入，新建会话页在当前浏览器记住上次成功使用的选择和临时命令。手动命令为空或引号未闭合时不能创建会话，不会误用另一个 Tab 中的配置。
 
 命令按 argv 直接执行，**不经 shell 展开**；引号、空参数与参数边界会保留。需要管道、变量等 shell 语法时，请显式写成 `bash -lc 'npm run dev | tee dev.log'`。WebMux 不会自动安装 agent。
 
-在设置页可为每条启动配置选择 **图标**：自动匹配、通用终端、九款 CLI 品牌图标或 Pi / omp。默认 agent 图标来自本地打包的 LobeHub；旧配置也会自动匹配，可随时手动覆盖。新建或编辑时还可设置：
+在设置页可为每条启动配置选择 **图标**：自动匹配、通用终端、十一款 CLI 品牌图标或 Pi / omp。默认 agent 图标来自本地打包的 LobeHub；旧配置也会自动匹配，可随时手动覆盖。新建或编辑时还可设置：
 
 - **“输出预览”**：单独设置行数与跳过末尾行数；不设置时跟随服务端全局预览。
 - **“加载 shell 启动文件”**：勾选后可选 Bash（`~/.bashrc`）或 Zsh（`~/.zshrc`），保存为 `bash -ic 'exec -- "$@"' webmux …` 或 `zsh -ic 'exec -- "$@"' webmux …` 的完整 argv；命令与参数原样传给 `exec`，不展开 `$HOME`、管道或命令替换。
@@ -219,7 +219,7 @@ Open Code、omp、Codex CLI 与 Claude Code 预置配置默认开启[混合模�
 
 启动配置存储不可用（文件损坏或同一状态目录有另一实例）时，设置页显示原因与文件路径，仍可填写临时命令启动。旧版 TOML `[[presets]]` 与 `shell` 不再提供启动命令，请在设置页重新保存需要的配置；首次启动的默认预设只在 `launch-configs.json` 不存在时写入，删除后不会重新出现。
 
-勾选了 **混合模式** 的配置（预置的 Open Code、omp、Codex CLI 与 Claude Code 默认已勾选）会创建混合会话，可在聊天视图与终端之间切换、关闭后从首页“可恢复”分组恢复，见 [混合会话](hybrid-sessions.md)。聊天输入框的附件规则如下：
+勾选了 **混合模式** 的配置（预置的 Open Code、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 默认已勾选）会创建混合会话，可在聊天视图与终端之间切换、关闭后从首页”可恢复”分组恢复，见 [混合会话](hybrid-sessions.md)。聊天输入框的附件规则如下：
 
 - 支持上传、拖放或粘贴附件。
 - agent 声明图片或嵌入上下文能力时原生发送，否则按服务器路径降级并提示。

@@ -61,7 +61,11 @@ func Run(t *testing.T, a agentprofile.Agent, f Fixture) {
 			t.Fatalf("ResumeArgv = %q", resume)
 		}
 		acpArgv, _ := cmd.ACPArgv()
-		want := []string{"/opt/bin/" + exe, "acp"}
+		acpArg := p.ACPArg
+		if acpArg == "" {
+			acpArg = "acp"
+		}
+		want := []string{"/opt/bin/" + exe, acpArg}
 		if p.Connector != nil {
 			want = []string{p.Connector.Executable}
 		}

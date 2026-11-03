@@ -222,6 +222,10 @@ type Profile struct {
 	// ResumeFlag opens a session in the terminal UI: an option or a
 	// subcommand, followed by the session ID.
 	ResumeFlag string
+	// ACPArg is the argument that starts the built-in ACP server. Empty
+	// means the default "acp" subcommand; set to "--acp" for agents whose
+	// ACP mode is a flag rather than a subcommand.
+	ACPArg string
 	// TUIInject are options every terminal run needs.
 	TUIInject []string
 	// PassToACP writes the kept options into the ACP command too.

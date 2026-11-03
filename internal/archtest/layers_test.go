@@ -39,6 +39,8 @@ var webmux = manifest{
 		"internal/agentprofile/codex":      shared,
 		"internal/agentprofile/omp":        shared,
 		"internal/agentprofile/opencode":   shared,
+		"internal/agentprofile/qoder":      shared,
+		"internal/agentprofile/qodercn":    shared,
 		"internal/contract":                shared,
 		"internal/config":                  shared,
 		"internal/runtime":                 shared,

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-让 webmux 识别 CLI agent 通过 OSC 7501 Program Status Protocol 主动上报的运行状态，并在没有浏览器附着时也能应答协议探测。这样 Claude Code、Codex、OpenCode、omp 等 agent 不需要 hook 或修改配置，就能给出准确的工作、阻塞、完成和出错状态。
+让 webmux 识别 CLI agent 通过 OSC 7501 Program Status Protocol 主动上报的运行状态，并在没有浏览器附着时也能应答协议探测。这样 Claude Code、Codex、OpenCode、omp、Qoder、QoderCN 等 agent 不需要 hook 或修改配置，就能给出准确的工作、阻塞、完成和出错状态。
 
 ## Requirements
 

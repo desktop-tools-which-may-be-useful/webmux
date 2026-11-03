@@ -10,6 +10,7 @@
   import IconKimi from "~icons/lobe/kimi";
   import IconCodeBuddy from "~icons/lobe/codebuddy";
   import IconPi from "~icons/lobe/pi";
+  import IconQoder from "~icons/lobe/qoder";
 
   let { icon }: { icon: string } = $props();
   const icons = {
@@ -24,6 +25,7 @@
     kimi: IconKimi,
     codebuddy: IconCodeBuddy,
     pi: IconPi,
+    qoder: IconQoder,
   };
   const Glyph = $derived(
     Object.hasOwn(icons, icon)

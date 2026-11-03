@@ -74,7 +74,7 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 	if err := s.Seed(Presets("/bin/zsh")); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"Shell", "Claude Code", "Codex CLI", "Gemini CLI", "Cursor CLI", "GitHub Copilot CLI", "Open Code", "Qwen Code", "Kimi Code CLI", "CodeBuddy Code", "omp"}
+	want := []string{"Shell", "Claude Code", "Codex CLI", "Gemini CLI", "Cursor CLI", "GitHub Copilot CLI", "Open Code", "Qwen Code", "Kimi Code CLI", "CodeBuddy Code", "omp", "Qoder", "QoderCN"}
 	if got := names(s); !reflect.DeepEqual(got, want) {
 		t.Fatalf("seeded %v", got)
 	}
@@ -86,14 +86,14 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantIcons := []string{"terminal", "claudecode", "codex", "geminicli", "cursor", "githubcopilot", "opencode", "qwen", "kimi", "codebuddy", "pi"}
+	wantIcons := []string{"terminal", "claudecode", "codex", "geminicli", "cursor", "githubcopilot", "opencode", "qwen", "kimi", "codebuddy", "pi", "qoder", "qoder"}
 	for i, c := range list {
 		if c.Icon != wantIcons[i] {
 			t.Fatalf("preset %s icon %q", c.Name, c.Icon)
 		}
 		// Only the agents with a hybrid profile start as hybrid sessions,
 		// and their seeded commands, auto-approve flag included, qualify.
-		hybrid := c.Name == "Claude Code" || c.Name == "Codex CLI" || c.Name == "Open Code" || c.Name == "omp"
+		hybrid := c.Name == "Claude Code" || c.Name == "Codex CLI" || c.Name == "Open Code" || c.Name == "omp" || c.Name == "Qoder" || c.Name == "QoderCN"
 		if c.Hybrid != hybrid || (hybrid && !c.HybridSupport.Supported) {
 			t.Fatalf("preset %s hybrid %v support %+v", c.Name, c.Hybrid, c.HybridSupport)
 		}

@@ -63,13 +63,13 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 
 所有启动命令都由使用者自定义：在设置页保存“名称 + 完整命令 + 环境变量”，新建会话时选用，或直接填写不保存的临时命令。
 
-- 新安装首次启动（`launch-configs.json` 不存在）时自动写入 Shell（`$SHELL -l -i`，未设置时为 `/bin/sh`）、九款 CLI agent 和 omp，共 11 条启动配置。完整列表见 [CLI agent 接入](../cli-agents.md)。
+- 新安装首次启动（`launch-configs.json` 不存在）时自动写入 Shell（`$SHELL -l -i`，未设置时为 `/bin/sh`）、十一款 CLI agent 和 omp，共 13 条启动配置。完整列表见 [CLI agent 接入](../cli-agents.md)。
 - agent 预设按服务端 `$SHELL` 的 basename 选择启动文件包装：`bash -ic 'exec -- "$@"' webmux <程序>` 读取 `~/.bashrc`，`zsh -ic 'exec -- "$@"' webmux <程序>` 读取 `~/.zshrc`；未设置时使用 Bash，fish、nu 等其他 shell 直接执行。
 - 它们是普通配置，可编辑或删除。不再读取 `[[presets]]` 或 `shell`；旧配置请改为在设置页保存。
 
 新安装的 omp 启动配置额外预置 `PI_FORCE_IMAGE_PROTOCOL=kitty`，以在浏览器终端启用 Kitty 图片传输；其他 agent 配置不增加该环境变量。已经存在的 `launch-configs.json` 不自动修改，升级后可手动编辑自己的 omp 配置。
 
-新安装的 Claude Code、Codex CLI、Open Code 与 omp 配置默认勾选混合模式。Codex 与 Claude 的聊天端分别由第三方连接器提供，webmux 不会自动安装 Node 或连接器：
+新安装的 Claude Code、Codex CLI、Open Code、omp、Qoder 与 QoderCN 配置默认勾选混合模式。Codex 与 Claude 的聊天端分别由第三方连接器提供，webmux 不会自动安装 Node 或连接器：
 
 ```sh
 npm install -g @agentclientprotocol/codex-acp

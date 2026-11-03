@@ -2,9 +2,9 @@
 
 ## Q. 混合会话（聊天 ↔ 终端）
 
-- **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI 或 Claude Code 会话能在聊天视图与终端之间切换。
+- **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI、Claude Code、Qoder 或 QoderCN 会话能在聊天视图与终端之间切换。
   验收要点：
-  - 新安装预置的 OpenCode、omp、Codex CLI 与 Claude Code 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
+  - 新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
   - 设置页编辑器提供“混合模式（聊天 ↔ 终端）”勾选框，可用性只取服务端判定（打开时用配置的 `hybridSupport`，改命令后去抖查询 `hybrid-support`）；
   - 不可用时禁用并显示原因：未识别的 agent、命令写法、会话库或目录参数、非交互参数、`codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等打开已有会话的参数，以及 Claude 的 `--worktree`/`--tmux`、`--no-session-persistence`/`--environment` 与非交互参数；
   - 未识别的 agent 与勾选框说明列出服务端返回的受支持 agent（`supportedAgents`，来自 agent 注册表）；

@@ -5,7 +5,7 @@ import "github.com/rainchan/webmux/internal/agentprofile"
 // Presets returns the launch configs seeded into a new installation: a login
 // shell and common CLI agents. Agents load the startup file of the service's
 // default shell; permission flags are explicit parts of the editable
-// commands. Claude Code, Codex CLI, OpenCode and omp start as hybrid
+// commands. Claude Code, Codex CLI, OpenCode, omp, Qoder and QoderCN start as hybrid
 // sessions. They are ordinary configs the user may edit or delete. shell is
 // the login shell path; empty means /bin/sh.
 func Presets(shell string) []Input {
@@ -29,5 +29,7 @@ func Presets(shell string) []Input {
 		{Name: "Kimi Code CLI", Icon: "kimi", Cmd: command("kimi")},
 		{Name: "CodeBuddy Code", Icon: "codebuddy", Cmd: command("codebuddy")},
 		{Name: "omp", Icon: "pi", Cmd: command("omp", "--auto-approve"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}, Hybrid: true},
+		{Name: "Qoder", Icon: "qoder", Cmd: command("qoder", "--dangerously-skip-permissions"), Hybrid: true},
+		{Name: "QoderCN", Icon: "qoder", Cmd: command("qodercn", "--dangerously-skip-permissions"), Hybrid: true},
 	}
 }

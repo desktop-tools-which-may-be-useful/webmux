@@ -14,6 +14,8 @@ import (
 	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/agentprofile/opencode"
+	"github.com/rainchan/webmux/internal/agentprofile/qoder"
+	"github.com/rainchan/webmux/internal/agentprofile/qodercn"
 )
 
 var registry = agents.Default()
@@ -23,6 +25,8 @@ const (
 	OpenCode   = opencode.Name
 	Codex      = codex.Name
 	ClaudeCode = claudecode.Name
+	Qoder      = qoder.Name
+	QoderCN    = qodercn.Name
 )
 
 var wrapped = func(args ...string) []string {
@@ -85,6 +89,15 @@ func TestCheck(t *testing.T) {
 		{name: "claude print", argv: []string{"claude", "-p", "总结改动"}, reason: ReasonNonInteractive, arg: "-p"},
 		{name: "claude subcommand", argv: []string{"claude", "agents", "list"}, reason: ReasonNonInteractive, arg: "agents"},
 		{name: "claude bare remains interactive", argv: []string{"claude", "--bare"}, agent: ClaudeCode},
+		{name: "qoder preset", argv: wrapped("qoder", "--dangerously-skip-permissions"), agent: Qoder},
+		{name: "qoder direct", argv: []string{"qoder", "--model", "gpt-4"}, agent: Qoder},
+		{name: "qoder resume", argv: []string{"qoder", "--resume", "abc-123"}, agent: Qoder},
+		{name: "qoder worktree", argv: []string{"qoder", "--worktree", "feature"}, reason: ReasonDirectoryArg, arg: "--worktree"},
+		{name: "qoder print", argv: []string{"qoder", "-p", "fix bug"}, reason: ReasonNonInteractive, arg: "-p"},
+		{name: "qoder subcommand", argv: []string{"qoder", "commit"}, reason: ReasonNonInteractive, arg: "commit"},
+		{name: "qodercn preset", argv: wrapped("qodercn", "--dangerously-skip-permissions"), agent: QoderCN},
+		{name: "qodercn direct", argv: []string{"qodercn", "--model", "qwen-max"}, agent: QoderCN},
+		{name: "qoderclicn direct", argv: []string{"qoderclicn"}, agent: QoderCN},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -273,6 +286,22 @@ func TestACPArgv(t *testing.T) {
 			want: []string{"zsh", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "codex-acp"},
 			fd3:  true,
 		},
+		{
+			name: "qoder uses --acp flag",
+			argv: []string{"qoder", "--dangerously-skip-permissions"},
+			want: []string{"qoder", "--acp"},
+		},
+		{
+			name: "qoder bashrc uses --acp flag with fd 3",
+			argv: wrapped("qoder", "--dangerously-skip-permissions"),
+			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "qoder", "--acp"},
+			fd3:  true,
+		},
+		{
+			name: "qodercn uses --acp flag",
+			argv: []string{"qodercn", "--model", "qwen-max"},
+			want: []string{"qodercn", "--acp"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -329,6 +358,24 @@ func TestIdentify(t *testing.T) {
 			name: "claude names no session in its signals",
 			in:   Signals{ProgramApp: "claude-code", RootCwd: "/p"},
 			want: Identity{Agent: ClaudeCode, Cwd: "/p"},
+			ok:   true,
+		},
+		{
+			name: "qoder from program app",
+			in:   Signals{ProgramApp: "qoder", RootCwd: "/p"},
+			want: Identity{Agent: Qoder, Cwd: "/p"},
+			ok:   true,
+		},
+		{
+			name: "qodercn from program app",
+			in:   Signals{ProgramApp: "qodercn", RootCwd: "/p"},
+			want: Identity{Agent: QoderCN, Cwd: "/p"},
+			ok:   true,
+		},
+		{
+			name: "qodercn from qoder-cli-cn app",
+			in:   Signals{ProgramApp: "qoder-cli-cn", RootCwd: "/p"},
+			want: Identity{Agent: QoderCN, Cwd: "/p"},
 			ok:   true,
 		},
 		{name: "unknown", in: Signals{ProgramApp: "other-agent", WarpSessionID: "x"}},

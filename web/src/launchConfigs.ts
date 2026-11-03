@@ -79,6 +79,7 @@ export const LAUNCH_ICON_OPTIONS = [
   { value: "kimi", label: "Kimi Code CLI" },
   { value: "codebuddy", label: "CodeBuddy Code" },
   { value: "pi", label: "Pi / omp" },
+  { value: "qoder", label: "Qoder" },
 ] as const;
 
 /** Old configs get a display default without rewriting their saved commands. */
@@ -116,6 +117,11 @@ export function launchConfigIcon(config: {
     case "omp":
     case "pi":
       return "pi";
+    case "qoder":
+    case "qodercn":
+    case "qoderclicn":
+    case "qoder-cn":
+      return "qoder";
     default:
       return "terminal";
   }

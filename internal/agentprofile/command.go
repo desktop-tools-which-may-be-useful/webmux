@@ -285,16 +285,21 @@ func (c Command) ResumeArgv(agentSessionID string) (argv, dropped []string) {
 }
 
 // ACPArgv starts the agent's ACP server in the original form: the agent's
-// acp subcommand, or the profile's connector without arguments. A startup-
-// file form writes ACP to fd 3, which the caller must connect to the
-// protocol pipe (ProtocolOnFD3). Unsupported lists kept options that
-// change behaviour but do not reach the chat side, for the user to be told.
+// acp subcommand (or ACPArg if set), or the profile's connector without
+// arguments. A startup-file form writes ACP to fd 3, which the caller must
+// connect to the protocol pipe (ProtocolOnFD3). Unsupported lists kept
+// options that change behaviour but do not reach the chat side, for the
+// user to be told.
 func (c Command) ACPArgv() (argv, unsupported []string) {
 	_, unsupported = c.ChatConfig()
 	if connector := c.Profile.Connector; connector != nil {
 		return c.wrapExec(startupACPScript, connector.Executable), unsupported
 	}
-	args := []string{"acp"}
+	acpArg := c.Profile.ACPArg
+	if acpArg == "" {
+		acpArg = "acp"
+	}
+	args := []string{acpArg}
 	if c.Profile.PassToACP {
 		args = append(args, c.kept...)
 	}

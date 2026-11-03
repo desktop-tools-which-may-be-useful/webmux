@@ -40,7 +40,7 @@ func TestPresetsFollowDefaultShell(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			presets := Presets(tt.shell)
-			if len(presets) != 11 || presets[0].Name != "Shell" || !slices.Equal(presets[0].Cmd, tt.wantLogin) {
+			if len(presets) != 13 || presets[0].Name != "Shell" || !slices.Equal(presets[0].Cmd, tt.wantLogin) {
 				t.Fatalf("login shell preset = %+v", presets[:min(1, len(presets))])
 			}
 			for _, preset := range presets {

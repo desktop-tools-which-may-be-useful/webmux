@@ -1,10 +1,10 @@
 # 混合会话（聊天 ↔ 终端）
 
-混合会话让 OpenCode、omp、Codex CLI 或 Claude Code 的同一段对话在两种界面之间切换：原生 TUI（终端端）适合在电脑上精细操作，聊天视图适合在手机上阅读和回复。切换前后是同一个 webmux 会话与同一个 agent 会话，历史由 agent 自己保存。接口见 [混合会话协议](protocol/http-hybrid.md)。
+混合会话让 OpenCode、omp、Codex CLI、Claude Code、Qoder 或 QoderCN 的同一段对话在两种界面之间切换：原生 TUI（终端端）适合在电脑上精细操作，聊天视图适合在手机上阅读和回复。切换前后是同一个 webmux 会话与同一个 agent 会话，历史由 agent 自己保存。接口见 [混合会话协议](protocol/http-hybrid.md)。
 
 ## 开启
 
-1. 新安装首次启动时预置的 OpenCode、omp、Codex CLI 与 Claude Code 配置已勾选 **“混合模式（聊天 ↔ 终端）”**，可直接选用。其他配置在“设置 → 启动配置”编辑并勾选；勾选框是否可用由服务端判定，不可用时旁边会显示原因。已有安装的配置不会被自动改写。
+1. 新安装首次启动时预置的 OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 配置已勾选 **“混合模式（聊天 ↔ 终端）”**，可直接选用。其他配置在“设置 → 启动配置”编辑并勾选；勾选框是否可用由服务端判定，不可用时旁边会显示原因。已有安装的配置不会被自动改写。
 2. 新建会话时选择这条配置，再选择“从终端开始”或“从聊天开始”（默认终端，按浏览器记住上一次的选择）。
 
 能开启混合模式的命令：
@@ -62,7 +62,7 @@ npm install -g @agentclientprotocol/claude-agent-acp
 - agent 需要第三方连接器时（Codex 的 codex-acp、Claude Code 的 claude-agent-acp），连接器已安装。
 - 它是会话 PTY 的根进程（不是从 shell 里再启动的；Codex 与 Claude Code 也接受 npm 安装的 `node` 启动器直接拉起的原生 agent）。
 - 已得到 agent 会话 ID：
-  - OpenCode、omp、Codex 与 Claude Code 都要在发出首条消息后，`session/list` 才包含可加载的会话。
+  - OpenCode、omp、Codex、Claude Code、Qoder 与 QoderCN 都要在发出首条消息后，`session/list` 才包含可加载的会话。
   - Codex 的会话 ID 取自它打开的写锁文件（`$CODEX_HOME/thread-writer-locks/`），Claude Code 取自进程注册记录。
   - 读不到时按本次 TUI 启动后更新过的会话判定，有多个候选时让你选择。
   - 由 webmux 切换或恢复打开的 TUI 直接沿用它恢复的会话 ID，不必先发消息就能切回。

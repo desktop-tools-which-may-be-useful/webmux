@@ -25,8 +25,8 @@
 
 - [使用指南](usage.md)：会话、新建会话、后台启动、终端附着、草稿、代码工作区、仓库与 worktree、移动端。
   - [终端使用](usage/terminal.md)：查找、分屏、复制粘贴、终端图形与文件上传。
-- [混合会话](hybrid-sessions.md)：OpenCode / omp / Codex CLI / Claude Code 在聊天视图与终端间切换。
-- [CLI agent 接入](cli-agents.md)：预置的九款 CLI agent 启动配置与提醒。
+- [混合会话](hybrid-sessions.md)：OpenCode / omp / Codex CLI / Claude Code / Qoder / QoderCN 在聊天视图与终端间切换。
+- [CLI agent 接入](cli-agents.md)：预置的十一款 CLI agent 启动配置与提醒。
 
 ## 开发与架构
 
