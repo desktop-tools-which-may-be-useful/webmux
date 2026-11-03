@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"compress/flate"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -140,7 +142,7 @@ func sideOf(info session.Info) string {
 // Attach owns the only data writer. Its reader is cancelled and joined on all exits.
 // A hybrid session attaches only on its terminal side: in the chat, dormant
 // or switching it refuses with 4409, even while a run still exists.
-func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o session.AttachOptions) {
+func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o session.AttachOptions, deflateReplay bool) {
 	if h := s.Info().Hybrid; h != nil && (h.Side != string(contract.HybridSideTUI) || h.Dormant) {
 		_ = c.Close(contract.CloseMoved, movedReason(h.Side))
 		return
@@ -258,7 +260,7 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 		<-readerDone
 		<-inputDone
 	}()
-	writeMessages(ctx, c, sub)
+	writeMessages(ctx, c, sub, deflateReplay)
 }
 
 // Output pacing. An idle connection sends output at once, so a keystroke echo
@@ -268,18 +270,54 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 // the frame deadline passes, the frame reaches maxOutputFrame, or a control
 // message must keep its place. The browser then parses and paints a redraw in
 // a few large frames instead of hundreds of fragments.
+//
+// A replay is exempt: it is one bounded transfer the client waits for, so its
+// frames go out as fast as the connection takes them, and the first live
+// output after it is not delayed either. When the client asked for it and the
+// WebSocket itself is not compressed, the snapshot frame is DEFLATEd here, which
+// is what shortens a restore over a slow or high-latency link.
 const (
 	maxOutputFrame      = 1 + 64*1024
 	outputFrameInterval = 16 * time.Millisecond
 	outputQuietGap      = 4 * time.Millisecond
+	replayDeflateMin    = 512
 )
 
+var deflaters = sync.Pool{New: func() any {
+	w, _ := flate.NewWriter(nil, flate.DefaultCompression)
+	return w
+}}
+
+// deflateFrame wraps frame in a FrameDeflate frame, or returns it unchanged
+// when it is small or does not shrink.
+func deflateFrame(frame []byte) []byte {
+	if len(frame) < replayDeflateMin {
+		return frame
+	}
+	buf := bytes.NewBuffer(make([]byte, 1, len(frame)/2))
+	buf.Bytes()[0] = contract.FrameDeflate
+	w := deflaters.Get().(*flate.Writer)
+	w.Reset(buf)
+	_, err := w.Write(frame)
+	if err == nil {
+		err = w.Close()
+	}
+	deflaters.Put(w)
+	if err != nil || buf.Len() >= len(frame) {
+		return frame
+	}
+	return buf.Bytes()
+}
+
 // writeMessages is the sole terminal data writer, including aggregation.
-func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscriber) {
+func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscriber, deflateReplay bool) {
 	var pending session.Message
 	var hasPending bool
 	var combinedBuffer []byte
 	var lastOutput time.Time
+	// replaying holds from a position frame to the state frame that ends a
+	// replay; both are queued under one lock, so nothing else lies between.
+	var replaying bool
 	timer := time.NewTimer(time.Hour)
 	timer.Stop()
 	for {
@@ -308,13 +346,20 @@ func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscrib
 			_ = c.Close(websocket.StatusInternalError, "invalid session message")
 			return
 		}
+		switch {
+		case m.Position != nil:
+			replaying = true
+			lastOutput = time.Time{}
+		case m.Info != nil:
+			replaying = false
+		}
 		output := m.Frame != nil && frame[0] == contract.FrameOutput
 		if output {
 			if combinedBuffer == nil {
 				combinedBuffer = make([]byte, 0, maxOutputFrame)
 			}
 			var deadline time.Time
-			if since := time.Since(lastOutput); since < outputFrameInterval {
+			if since := time.Since(lastOutput); !replaying && since < outputFrameInterval {
 				deadline = lastOutput.Add(outputFrameInterval)
 			}
 			var ok bool
@@ -323,11 +368,14 @@ func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscrib
 				return
 			}
 		}
+		if replaying && deflateReplay && m.Frame != nil && frame[0] == contract.FrameSnapshot {
+			frame = deflateFrame(frame)
+		}
 		if write(ctx, c, websocket.MessageBinary, frame) != nil {
 			_ = c.Close(4408, "write timeout")
 			return
 		}
-		if output {
+		if output && !replaying {
 			lastOutput = time.Now()
 		}
 		if exit {

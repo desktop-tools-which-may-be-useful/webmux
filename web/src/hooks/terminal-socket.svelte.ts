@@ -1,4 +1,5 @@
 import { SvelteMap, SvelteURLSearchParams } from "svelte/reactivity";
+import { inflateSync } from "fflate";
 import type { Terminal } from "@xterm/xterm";
 import {
   ControlStateSchema,
@@ -17,7 +18,12 @@ import {
   newSubmissionId,
   preparePaste,
 } from "../terminalProtocol";
-import { connect, type Connection, type SocketConnection } from "../ws";
+import {
+  connect,
+  wsCompression,
+  type Connection,
+  type SocketConnection,
+} from "../ws";
 import { osc52CopyText } from "../terminalClipboard";
 import { createOutputBudget } from "../terminal-output";
 import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
@@ -208,11 +214,16 @@ export function createTerminalSocket(id: string, manageChrome = true) {
           query.set("generation", generation);
           query.set("offset", String(offset));
         }
+        // permessage-deflate already compresses a compress=1 connection;
+        // otherwise the server DEFLATEs the replay itself.
+        if (!wsCompression()) query.set("zreplay", "1");
         return `/ws/s/${id}?${query}`;
       },
       (data) => {
         if (typeof data === "string") return;
-        const frame = new Uint8Array(data);
+        // A DEFLATE frame wraps one whole server frame, type byte included.
+        let frame = new Uint8Array(data);
+        if (frame[0] === 7) frame = inflateSync(frame.subarray(1));
         const payload = frame.subarray(1);
         if (frame[0] === 0) {
           const viewportY =

@@ -2,9 +2,11 @@ package hub
 
 import (
 	"bytes"
+	"compress/flate"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,7 +67,7 @@ func writerClient(t *testing.T, messages []session.Message) (context.Context, *w
 			return
 		}
 		defer func() { _ = connection.CloseNow() }()
-		writeMessages(ctx, connection, sub)
+		writeMessages(ctx, connection, sub, false)
 	}))
 	t.Cleanup(server.Close)
 	client, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
@@ -160,7 +162,7 @@ func TestWriterPacesOutputBursts(t *testing.T) {
 			return
 		}
 		defer func() { _ = connection.CloseNow() }()
-		writeMessages(ctx, connection, sub)
+		writeMessages(ctx, connection, sub, false)
 	}))
 	defer server.Close()
 	client, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
@@ -228,5 +230,77 @@ func TestWriterPacesOutputBursts(t *testing.T) {
 	// one per stall: not one frame per fragment.
 	if limit := paced + 1 + result.stalls; frames > limit {
 		t.Fatalf("%s of output was sent as %d frames, want at most %d", result.elapsed, frames, limit)
+	}
+}
+
+// Replay frames are DEFLATEd only when the client asked, only between the
+// position and state frames, and live output after the replay stays raw.
+func TestWriterDeflatesReplayOnly(t *testing.T) {
+	snapshot := append([]byte{contract.FrameSnapshot}, bytes.Repeat([]byte("replayed line\r\n"), 400)...)
+	live := append([]byte{contract.FrameOutput}, bytes.Repeat([]byte("live line\r\n"), 400)...)
+	for _, ask := range []bool{true, false} {
+		t.Run(fmt.Sprint("ask=", ask), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			sub := &session.Subscriber{Out: make(chan session.Message, 8), Slow: make(chan struct{})}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				connection, err := websocket.Accept(w, r, nil)
+				if err != nil {
+					return
+				}
+				defer func() { _ = connection.CloseNow() }()
+				writeMessages(ctx, connection, sub, ask)
+			}))
+			defer server.Close()
+			client, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = client.CloseNow() }()
+			code := 0
+			sub.Out <- session.Message{Position: &session.Position{Mode: "reset"}}
+			sub.Out <- session.Message{Frame: snapshot}
+			sub.Out <- session.Message{Frame: live}
+			sub.Out <- session.Message{Info: &session.Info{}}
+			sub.Out <- session.Message{Frame: live}
+			sub.Out <- session.Message{Exit: &code}
+			var kinds []byte
+			for {
+				_, frame, err := client.Read(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				kinds = append(kinds, frame[0])
+				switch frame[0] {
+				case contract.FrameDeflate:
+					inflated, err := io.ReadAll(flate.NewReader(bytes.NewReader(frame[1:])))
+					if err != nil || !bytes.Equal(inflated, snapshot) {
+						t.Fatalf("deflated frame does not restore the snapshot: %v", err)
+					}
+					if len(frame) >= len(snapshot) {
+						t.Fatalf("deflated frame is %d bytes, snapshot %d", len(frame), len(snapshot))
+					}
+				case contract.FrameSnapshot:
+					if !bytes.Equal(frame, snapshot) {
+						t.Fatal("snapshot changed")
+					}
+				case contract.FrameOutput:
+					if !bytes.Equal(frame, live) {
+						t.Fatal("live output changed")
+					}
+				}
+				if frame[0] == contract.FrameExit {
+					break
+				}
+			}
+			snapshotKind := contract.FrameSnapshot
+			if ask {
+				snapshotKind = contract.FrameDeflate
+			}
+			want := []byte{contract.FramePosition, snapshotKind, contract.FrameOutput, contract.FrameState, contract.FrameOutput, contract.FrameExit}
+			if !bytes.Equal(kinds, want) {
+				t.Fatalf("frame kinds %v, want %v", kinds, want)
+			}
+		})
 	}
 }

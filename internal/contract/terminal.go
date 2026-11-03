@@ -18,6 +18,7 @@ const (
 	FramePosition   byte = 4 // StreamPosition
 	FrameSubmission byte = 5 // SubmissionStatus
 	FrameControl    byte = 6 // ControlState
+	FrameDeflate    byte = 7 // raw DEFLATE of one complete server frame, type byte included; only sent to clients that asked with zreplay=1
 
 	// Client to server.
 	FrameInput  byte = 0 // raw user input

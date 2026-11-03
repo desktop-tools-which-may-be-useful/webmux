@@ -385,5 +385,8 @@ func (s *Server) terminalWS(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(4404, "session not found")
 		return
 	}
-	hub.Attach(r.Context(), item, c, hub.AttachOptions(r.URL.Query()))
+	// permessage-deflate already compresses a compress=1 connection; zreplay=1
+	// asks for application-level DEFLATE of replay frames where it is off.
+	q := r.URL.Query()
+	hub.Attach(r.Context(), item, c, hub.AttachOptions(q), q.Get("zreplay") == "1" && q.Get("compress") != "1")
 }
