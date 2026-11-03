@@ -15,6 +15,9 @@
   } from "../artifactPrompt";
   import { clipboardFiles, copyText as writeClipboard } from "../clipboard";
   import { useTerminal } from "../hooks/terminal.svelte";
+  import { createKeyboardSizeHold } from "../hooks/keyboard-size-hold";
+  import { keyboardSizeHold } from "../hooks/keyboard-size-hold-preference.svelte";
+  import type { KeyboardVisibility } from "../hooks/viewport.svelte";
   import { useHybrid } from "../hooks/hybrid.svelte";
   import { useChatUpload, useUpload } from "../hooks/upload.svelte";
   import { useFullscreen } from "../hooks/fullscreen.svelte";
@@ -58,6 +61,8 @@
     active,
     paneActions,
     keyboardDismissed,
+    keyboardVisibility,
+    viewportHeight,
     oninfo,
     onremoved,
   }: {
@@ -70,6 +75,8 @@
     active: boolean;
     paneActions: Snippet;
     keyboardDismissed: () => boolean;
+    keyboardVisibility: () => KeyboardVisibility;
+    viewportHeight: () => number;
     oninfo: (
       info: import("../schemas").SessionInfo,
       connection: string,
@@ -305,6 +312,33 @@
     else error = "";
   }
   let sizeLocked = $state(stored("sizeLocked") === "1");
+  let keyboardHeld = $state(false);
+  const hold = createKeyboardSizeHold({
+    canHold: () => keyboardSizeHold.enabled && hasTouchInput(),
+    keyboardStays: () => {
+      const active = document.activeElement;
+      return (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+      );
+    },
+    onActive: (value) => {
+      keyboardHeld = value;
+    },
+    release: () => {
+      void tick().then(() => t.fit());
+    },
+  });
+  $effect(() => {
+    viewportHeight();
+    hold.update(keyboardVisibility());
+  });
+  // The preference is device-wide: turning it off in any pane ends its holds.
+  $effect(() => {
+    if (!keyboardSizeHold.enabled) hold.cancel();
+  });
+  $effect(() => () => hold.dispose());
   const t = useTerminal(
     () => container!,
     untrack(() => id),
@@ -331,11 +365,15 @@
     () => sizeLocked,
     () => active,
     false,
+    () => keyboardHeld,
   );
   function setSizeLocked(value: boolean) {
     sizeLocked = value;
     store("sizeLocked", value ? "1" : "0");
     void tick().then(() => t.fit());
+  }
+  function setKeyboardSizeHold(value: boolean) {
+    keyboardSizeHold.enabled = value;
   }
   const sendUnavailable = $derived(
     t.connection === "missing"
@@ -616,6 +654,8 @@
     {desktop}
     {sizeLocked}
     {setSizeLocked}
+    keyboardSizeHold={keyboardSizeHold.enabled}
+    {setKeyboardSizeHold}
     bind:codeShown
     bind:forceSoftKeys={
       () => forceSoftKeys, (value) => changeSettings({ forceSoftKeys: value })
@@ -673,7 +713,7 @@
           bind:container
           terminal={t}
           visible={terminalVisible()}
-          {sizeLocked}
+          sizeLocked={sizeLocked || keyboardHeld}
           {findOpen}
           {uploads}
           {quickMenu}
@@ -688,8 +728,8 @@
           }}
           {paste}
           keyboard={() => {
-            if (draft.enabled) composer?.keyboard();
-            else t.keyboard();
+            if (draft.enabled) composer?.keyboard(hold.begin);
+            else t.keyboard(hold.begin);
           }}
         >
           {#snippet findBar()}

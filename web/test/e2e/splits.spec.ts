@@ -144,6 +144,43 @@ test("nested splits preserve terminal state, isolate input and restore layout", 
   }
 });
 
+test("the keyboard size hold preference applies to every mounted pane", async ({
+  page,
+  workDir,
+}, testInfo) => {
+  const id = await createShell(page, "Hold preference", workDir);
+  const first = page.locator(`[data-session-id="${id}"]`);
+  await split(first, "左右");
+  await expect(page.locator(".split-terminal")).toHaveCount(2);
+  const second = page.locator(".split-terminal").nth(1);
+  await ready(second);
+  const menu = (pane: Locator) =>
+    pane.getByRole("button", { name: "终端菜单", exact: true });
+  // The dropdown renders in a portal outside the pane.
+  const option = page.getByRole("menuitemcheckbox", {
+    name: "键盘弹出时保持尺寸",
+    exact: true,
+  });
+  // Narrow layouts show one pane at a time behind the pane switcher.
+  const showPane = async (index: number) => {
+    if (testInfo.project.use.isMobile)
+      await page
+        .getByRole("button", { name: new RegExp(`切换到窗格 ${index}`) })
+        .click();
+  };
+
+  await showPane(2);
+  await menu(second).click();
+  await expect(option).toBeChecked();
+  await option.click();
+  await expect(option).not.toBeChecked();
+  await page.keyboard.press("Escape");
+
+  await showPane(1);
+  await menu(first).click();
+  await expect(option).not.toBeChecked();
+});
+
 test("tmux prefix splits, focuses, zooms and closes only the pane", async ({
   page,
   request,

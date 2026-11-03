@@ -208,3 +208,8 @@
 
 - 依据：`internal/hybrid` 的 `TestPromptTitle`、`TestFirstPromptTitle` 与 `TestFirstPromptTitleSkipped`（已命名、只有附件、由终端切来的会话不设置），使用 fake agent；`hybrid.spec.ts` 新增的临时标题用例通过。
 - 限制：未用真实 agent 验收；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：`hold-terminal-size-on-keyboard-button` 的软键栏键盘按钮暂时保持终端尺寸对应更新 US-H06。键盘经按钮或系统方式收起且视口高度稳定后才结束保持，保持期间宽度与字号变化照常适配；终端菜单新增“键盘弹出时保持尺寸”开关（默认开启）。
+
+- 通过：`keyboard-size-hold` 单元用例、`TerminalTransport` 浏览器用例、桌面与 Pixel 7 软键 E2E、svelte-check、Oxlint、前端架构守卫与文档治理。
+- 限制：Chromium 模拟以缩小视口代替软键盘，未进行 iOS/Android 真机键盘验收；未重新核对其余功能组。

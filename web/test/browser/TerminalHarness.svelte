@@ -20,13 +20,20 @@
     keyboardDismissed?: () => boolean;
     // Simulates the menu's locked terminal size.
     sizeLocked?: () => boolean;
+    // Simulates the keyboard button's height-only hold.
+    heightHeld?: () => boolean;
   };
   const props: Props = $props();
-  const { userInput, onPaste, expose, keyboardDismissed, sizeLocked } = untrack(
-    () => ({
-      ...props,
-    }),
-  );
+  const {
+    userInput,
+    onPaste,
+    expose,
+    keyboardDismissed,
+    sizeLocked,
+    heightHeld,
+  } = untrack(() => ({
+    ...props,
+  }));
 
   let container: HTMLDivElement;
   let copied = $state("");
@@ -66,6 +73,9 @@
     userInput,
     keyboardDismissed,
     sizeLocked,
+    () => true,
+    true,
+    heightHeld,
   );
   expose?.(terminal);
 </script>

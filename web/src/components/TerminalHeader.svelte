@@ -50,6 +50,8 @@
     desktop,
     sizeLocked,
     setSizeLocked,
+    keyboardSizeHold,
+    setKeyboardSizeHold,
     codeShown = $bindable(),
     forceSoftKeys = $bindable(),
     quickMenu,
@@ -73,6 +75,8 @@
     desktop: boolean;
     sizeLocked: boolean;
     setSizeLocked: (value: boolean) => void;
+    keyboardSizeHold: boolean;
+    setKeyboardSizeHold: (value: boolean) => void;
     codeShown: boolean;
     forceSoftKeys: boolean;
     quickMenu: Snippet<["top" | "bottom"]>;
@@ -329,6 +333,12 @@
           onCheckedChange={(value) => setSizeLocked(value === true)}
         >
           锁定尺寸
+        </DropdownMenu.CheckboxItem>
+        <DropdownMenu.CheckboxItem
+          checked={keyboardSizeHold}
+          onCheckedChange={(value) => setKeyboardSizeHold(value === true)}
+        >
+          键盘弹出时保持尺寸
         </DropdownMenu.CheckboxItem>
         <DropdownMenu.CheckboxItem bind:checked={forceSoftKeys}>
           强制显示底部工具栏

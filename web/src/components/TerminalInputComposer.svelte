@@ -60,7 +60,8 @@
   export function focus() {
     textarea?.focus({ preventScroll: true });
   }
-  export function keyboard() {
+  // Toggles the soft keyboard; `beforeOpen` runs just before focusing.
+  export function keyboard(beforeOpen?: (target: HTMLElement) => void) {
     const focused = document.activeElement === textarea;
     if (focused && keyboardDismissed() && !keyboardReopenAttempted) {
       // Android can hide the IME with Back while the textarea keeps focus;
@@ -68,6 +69,7 @@
       // still declines, the next press toggles normally.
       keyboardReopenAttempted = true;
       textarea?.blur();
+      if (textarea) beforeOpen?.(textarea);
       focus();
       return;
     }
@@ -76,6 +78,7 @@
       textarea?.blur();
       return;
     }
+    if (textarea) beforeOpen?.(textarea);
     focus();
   }
   export function editKey(input: string) {

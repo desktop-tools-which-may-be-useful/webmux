@@ -395,6 +395,8 @@
             {onUploadNotice}
             {visible}
             {keyboardDismissed}
+            keyboardVisibility={() => viewport.keyboard}
+            viewportHeight={() => viewport.height}
             active={active === pane.sessionId}
             reopen={() => {
               revisions[pane.sessionId] = (revisions[pane.sessionId] ?? 0) + 1;

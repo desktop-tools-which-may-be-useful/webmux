@@ -268,6 +268,131 @@ test("locking the terminal size keeps the PTY grid when the mobile viewport shri
   expect(promptBox.y + promptBox.height).toBeLessThanOrEqual(keyboardHeight);
 });
 
+test("opening the keyboard from the keyboard button keeps the PTY grid until it closes", async ({
+  page,
+  workDir,
+}, testInfo) => {
+  test.skip(!testInfo.project.use.isMobile, "Requires the mobile viewport");
+  const frames: Buffer[] = [];
+  page.on("websocket", (socket) =>
+    socket.on("framesent", ({ payload }) => {
+      frames.push(Buffer.isBuffer(payload) ? payload : Buffer.from(payload));
+    }),
+  );
+  await createShell(page, "Keyboard size hold", workDir);
+  const screen = page.locator(".xterm-screen");
+  const input = page.locator(".xterm-helper-textarea");
+  const keyboard = page
+    .getByRole("complementary", { name: "终端软键" })
+    .getByRole("button", { name: "唤起或收起键盘" });
+  const grid = (await screen.boundingBox())!;
+  const sizeFrames = () => frames.filter((frame) => frame[0] === 1).length;
+  const viewport = page.viewportSize()!;
+  const keyboardHeight = viewport.height - 300;
+  // Chromium emulation has no soft keyboard; shrinking the viewport stands in
+  // for its open and close animation.
+  const openKeyboard = () =>
+    page.setViewportSize({ width: viewport.width, height: keyboardHeight });
+  const closeKeyboard = () => page.setViewportSize(viewport);
+
+  const baseline = sizeFrames();
+  await keyboard.tap();
+  await expect(input).toBeFocused();
+  await openKeyboard();
+  await page.waitForTimeout(400);
+  expect(sizeFrames()).toBe(baseline);
+  expect((await screen.boundingBox())!.height).toBe(grid.height);
+  const prompt = page
+    .locator(".xterm-rows > div", { hasText: "webmux-e2e$" })
+    .last();
+  const promptBox = (await prompt.boundingBox())!;
+  expect(promptBox.y + promptBox.height).toBeLessThanOrEqual(keyboardHeight);
+
+  // The button blurs before the keyboard animates away; the hold outlasts it.
+  await keyboard.tap();
+  await expect(input).not.toBeFocused();
+  await page.waitForTimeout(300);
+  await closeKeyboard();
+  await page.waitForTimeout(600);
+  expect(sizeFrames()).toBe(baseline);
+
+  const menu = page.getByRole("button", { name: "终端菜单", exact: true });
+  const option = page.getByRole("menuitemcheckbox", {
+    name: "键盘弹出时保持尺寸",
+    exact: true,
+  });
+  await menu.tap();
+  await expect(option).toBeChecked();
+  await option.tap();
+  await expect(option).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(screen).toBeVisible();
+  await menu.tap();
+  await expect(option).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(option).toBeHidden();
+
+  const unheld = sizeFrames();
+  await keyboard.tap();
+  await expect(input).toBeFocused();
+  await openKeyboard();
+  await expect.poll(sizeFrames).toBeGreaterThan(unheld);
+});
+
+test("opening the paste dialog while the keyboard is held does not resize the PTY", async ({
+  page,
+  workDir,
+}, testInfo) => {
+  test.skip(!testInfo.project.use.isMobile, "Requires the mobile viewport");
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.clipboard, "readText", {
+      value: () =>
+        Promise.reject(
+          new DOMException("Permission denied", "NotAllowedError"),
+        ),
+    });
+  });
+  const frames: Buffer[] = [];
+  page.on("websocket", (socket) =>
+    socket.on("framesent", ({ payload }) => {
+      frames.push(Buffer.isBuffer(payload) ? payload : Buffer.from(payload));
+    }),
+  );
+  await createShell(page, "Paste while held", workDir);
+  const screen = page.locator(".xterm-screen");
+  const input = page.locator(".xterm-helper-textarea");
+  const bar = page.getByRole("complementary", { name: "终端软键" });
+  const keyboard = bar.getByRole("button", { name: "唤起或收起键盘" });
+  const paste = bar.getByRole("button", { name: "粘贴", exact: true });
+  const sizeFrames = () => frames.filter((frame) => frame[0] === 1).length;
+  const viewport = page.viewportSize()!;
+  const keyboardHeight = viewport.height - 300;
+  const grid = (await screen.boundingBox())!;
+
+  const baseline = sizeFrames();
+  await keyboard.tap();
+  await expect(input).toBeFocused();
+  await page.setViewportSize({ width: viewport.width, height: keyboardHeight });
+  await page.waitForTimeout(400);
+  expect(sizeFrames()).toBe(baseline);
+
+  // The dialog takes focus while the simulated keyboard stays up; the hold
+  // must outlast the close limit instead of fitting the compressed area.
+  await paste.tap();
+  const dialog = page.getByRole("dialog", { name: "粘贴到终端" });
+  await expect(dialog).toBeVisible();
+  await page.waitForTimeout(1500);
+  expect(sizeFrames()).toBe(baseline);
+  expect((await screen.boundingBox())!.height).toBe(grid.height);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await page.setViewportSize(viewport);
+  await page.waitForTimeout(600);
+  expect(sizeFrames()).toBe(baseline);
+});
+
 test("desktop devices can force the soft-key toolbar on and off through the terminal menu", async ({
   page,
   workDir,

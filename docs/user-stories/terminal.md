@@ -333,6 +333,9 @@
   - 页面按可见视口适配；
   - 终端菜单可锁定尺寸，锁定后键盘、浏览器地址栏、窗口或旋转引起的宽高变化都不改变 PTY 行列，终端按锁定时的网格显示，网格超出可用区域时由终端区域显示滚动条（不再叠加 xterm 自带滚动条）并默认贴住底部使最新输出与输入行可见，可滚动查看被挡住的部分；
   - 锁定时调整字号只缩放显示、不改变行列，关闭锁定后按当前可见视口重新适配；
+  - 触屏设备用软键栏键盘按钮唤起键盘（直接或草稿模式）时，默认暂时保持 PTY 行列，并按锁定尺寸的方式贴底显示；
+  - 键盘经按钮或系统方式（返回键、输入法收起键、iOS“完成”、失焦）收起且视口高度稳定后才结束保持，开合一次不发送尺寸变化；焦点转到粘贴弹窗、查找栏等其他输入框时不结束，等键盘真正收起；约 1.5 秒未检测到键盘也结束；
+  - 保持期间宽度与字号变化照常适配；终端菜单“键盘弹出时保持尺寸”可关闭，选择保存在本机浏览器并对所有会话生效；
   - 终端输入关闭自动大写、纠错和拼写检查；
   - 支持浏览器添加到主屏幕或安装为应用后的独立显示；
   - 依赖平台的键盘、选择菜单与锁屏行为仍需真机验证。
@@ -370,6 +373,7 @@ US-H09 图标验收：应用图标与页头标志一致。maskable 版本为系�
 - [Manifest](../../web/public/manifest.webmanifest)、[Manifest 与图标用例](../../internal/api/static_test.go)、[软键栏](../../web/src/components/SoftKeys.svelte)
 - [触摸手势](../../web/src/hooks/touch.ts)
 - [触摸检测](../../web/src/touchInput.ts)、[视口与键盘可见性](../../web/src/hooks/viewport.svelte.ts)、[终端输入与键盘切换](../../web/src/hooks/terminal.svelte.ts)
+- [键盘按钮暂时保持尺寸](../../web/src/hooks/keyboard-size-hold.ts)、[保持状态机用例](../../web/test/keyboard-size-hold.test.ts)
 - [草稿输入框](../../web/src/components/TerminalInputComposer.svelte)、[终端页面](../../web/src/pages/Terminal.svelte)、[Web 应用清单](../../web/public/manifest.webmanifest)。
 
 偏好同步依据：[服务](../../internal/settings/service.go)、[统一前端入口](../../web/src/settings.svelte.ts)、[操作重放](../../web/src/settings-intent.ts)、[双客户端验收](../../web/test/e2e/settings-sync.spec.ts)。

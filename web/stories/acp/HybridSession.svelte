@@ -387,6 +387,8 @@
     desktop={desktopMedia.current}
     sizeLocked={false}
     setSizeLocked={() => {}}
+    keyboardSizeHold={true}
+    setKeyboardSizeHold={() => {}}
     bind:codeShown
     forceSoftKeys={false}
     {quickMenu}

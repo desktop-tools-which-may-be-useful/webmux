@@ -80,7 +80,8 @@ export interface TerminalController {
   toggleModifier(key: keyof Modifiers): void;
   lockModifier(key: "shift"): void;
   paste(text: string): boolean;
-  keyboard(): void;
+  // Toggles the soft keyboard; `beforeOpen` runs just before focusing.
+  keyboard(beforeOpen?: (target: HTMLElement) => void): void;
   clear(): void;
   resync(): void;
   // Reattaches after the session moved back to its terminal side.
@@ -103,6 +104,9 @@ export function useTerminal(
   isSizeLocked: () => boolean = () => false,
   isActive: () => boolean = () => true,
   manageChrome = true,
+  // A soft keyboard opened from the keyboard button: keep the grid while
+  // only the host height changes. Width and font changes still refit.
+  isHeightHeld: () => boolean = () => false,
 ): TerminalController {
   let terminal: Terminal | undefined;
   let renderer: TerminalRenderer | undefined;
@@ -115,6 +119,12 @@ export function useTerminal(
   // `atBottom` because a host resize moves the grid under a stationary
   // scrollTop; only a user scroll may stop following the tail.
   let follow = true;
+  // Host width and font the grid was last fitted at, for the height hold.
+  // offsetWidth includes a scrollbar the held grid itself may cause.
+  let fitWidth = 0;
+  let fitFont = 0;
+  // Locked and held grids may exceed the host; both scroll it to the tail.
+  const gridFixed = () => isSizeLocked() || isHeightHeld();
   const stream = createTerminalSocket(id, manageChrome);
   const defaultFont = matchMedia("(pointer: coarse)").matches ? 13 : 14;
   let fontDraft = $state<number | null>(null);
@@ -214,6 +224,11 @@ export function useTerminal(
       // Observers render the controller's grid and scroll it, never fit.
       const control = stream.control;
       const locked = isSizeLocked();
+      const held =
+        isHeightHeld() &&
+        sized &&
+        parent.offsetWidth === fitWidth &&
+        terminal?.options.fontSize === fitFont;
       parent.classList.toggle("observing", stream.observing);
       if (control && stream.observing) {
         if (
@@ -227,11 +242,15 @@ export function useTerminal(
         // Taking control later must fit this host instead of pushing the
         // previous controller's grid onto the PTY.
         sized = false;
-      } else if (!locked || !sized) {
+      } else if (!sized || (!locked && !held)) {
         renderer?.fit();
-        if (renderer) sized = true;
+        if (renderer) {
+          sized = true;
+          fitWidth = parent.offsetWidth;
+          fitFont = terminal?.options.fontSize ?? 0;
+        }
       }
-      if ((scrollOnFit || (locked && follow)) && terminal) {
+      if ((scrollOnFit || (gridFixed() && follow)) && terminal) {
         // A locked grid may exceed the host: scroll it like an observer so
         // the newest rows, where prompts appear, stay visible.
         anchorBottom(parent);
@@ -249,8 +268,7 @@ export function useTerminal(
     if (!terminal || !parent) return;
     const buffer = terminal.buffer.active;
     // Observers and locked grids scroll their host past the xterm viewport.
-    const scrollsHost =
-      parent.classList.contains("observing") || isSizeLocked();
+    const scrollsHost = parent.classList.contains("observing") || gridFixed();
     atBottom =
       buffer.viewportY >= buffer.baseY &&
       (!scrollsHost ||
@@ -533,7 +551,7 @@ export function useTerminal(
       }
       return pasteResult;
     },
-    keyboard() {
+    keyboard(beforeOpen) {
       const textarea = terminal?.textarea;
       if (!terminal || !textarea) return;
       const focused = document.activeElement === textarea;
@@ -544,6 +562,7 @@ export function useTerminal(
         keyboardReopenAttempted = true;
         stream.claim();
         textarea.blur();
+        beforeOpen?.(textarea);
         terminal.focus();
         return;
       }
@@ -553,6 +572,7 @@ export function useTerminal(
         return;
       }
       stream.claim();
+      beforeOpen?.(textarea);
       terminal.focus();
     },
     clear() {
