@@ -38,20 +38,22 @@ test("mobile soft keys stay in one row with paste visible and all keys reachable
         .locator(".terminal-header")
         .getByRole("button", { name: "快捷指令" }),
     ).toBeHidden();
-    const edges = await bar.evaluate((element) => ({
-      row: element.querySelector(".soft-row")!.getBoundingClientRect().right,
-      quick: element
-        .querySelector(".soft-trailing button")!
-        .getBoundingClientRect().left,
-    }));
+    const edges = {
+      row: await bar.evaluate(
+        (element) =>
+          element.querySelector(".soft-row")!.getBoundingClientRect().right,
+      ),
+      quick: (await quick.boundingBox())!.x,
+    };
     expect(
       edges.quick,
       "Quick commands sit right of the soft keys",
     ).toBeGreaterThanOrEqual(edges.row);
     const layout = await bar.evaluate((element) => {
-      const buttons = [...element.querySelectorAll("button")].map((button) =>
-        button.getBoundingClientRect(),
-      );
+      // The draft switch is hidden from 640px up and has no box.
+      const buttons = [...element.querySelectorAll("button")]
+        .map((button) => button.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0);
       return {
         height: element.getBoundingClientRect().height,
         verticalSpread:

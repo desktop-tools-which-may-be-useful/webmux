@@ -450,12 +450,22 @@ test("the chat view names its agent beside the title, icon only on a phone", asy
   expect(badge.title).toBe("Agent：omp");
   expect(badge.querySelector('[data-launch-icon="pi"] svg')).not.toBeNull();
   expect(badge.innerText).toBe("omp");
-  // Title, agent, then the status dot.
+  // Wide headers read title, agent, then the status dot (phones put the dot
+  // first, by CSS order).
+  await page.viewport(1024, 800);
+  await expect.element(page.getByText(title, { exact: true })).toBeVisible();
+  const heading = page
+    .getByText(title, { exact: true })
+    .element() as HTMLElement;
+  const dot = badge.closest("header")!.querySelector(".status-dot")!;
   await expect
-    .poll(() => badge.previousElementSibling?.textContent)
-    .toBe(title);
-  const heading = badge.previousElementSibling as HTMLElement;
-  expect(badge.nextElementSibling?.classList).toContain("status-dot");
+    .poll(
+      () =>
+        heading.getBoundingClientRect().right <=
+          badge.getBoundingClientRect().left &&
+        badge.getBoundingClientRect().right <= dot.getBoundingClientRect().left,
+    )
+    .toBe(true);
 
   await page.viewport(390, 844);
   await expect.poll(() => badge.innerText).toBe("");

@@ -33,6 +33,7 @@
     sizeLocked = false,
     uploads,
     quickMenu,
+    draftToggle,
     send,
     toggle,
     lock,
@@ -49,6 +50,8 @@
     sizeLocked?: boolean;
     uploads: ViewportUploads;
     quickMenu: Snippet<["top" | "bottom"]>;
+    // Phones keep the draft switch beside the quick commands.
+    draftToggle: Snippet;
     send: (input: string) => void;
     toggle: (key: keyof Modifiers) => void;
     lock: (key: "shift") => void;
@@ -134,6 +137,8 @@
     }}
     {keyboard}
   >
-    {#snippet trailing()}{@render quickMenu("top")}{/snippet}
+    {#snippet trailing()}{@render draftToggle()}{@render quickMenu(
+        "top",
+      )}{/snippet}
   </SoftKeys>
 </div>

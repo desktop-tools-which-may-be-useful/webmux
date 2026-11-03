@@ -407,8 +407,9 @@
               connections[value.id] = connection;
             }}
           >
-            {#snippet paneActions()}
+            {#snippet paneActions(inline: boolean)}
               <TerminalSplitMenu
+                {inline}
                 busy={splitBusy}
                 limit={ids.length >= MAX_PANES}
                 ready={!!info[pane.sessionId]}

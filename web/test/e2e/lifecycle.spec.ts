@@ -221,10 +221,10 @@ test("replay and the header action return to latest output without typing", asyn
   await expectTerminalLine(page, marker);
   await expectTerminalLine(page, "webmux-e2e$");
   const narrow = info.project.use.isMobile;
-  // Wide headers show the button; narrow ones keep it in the terminal menu.
+  // Wide headers show the button; phones use the floating button instead.
   const latestEnabled = async () => {
-    await expect(await headerAction(page, "滚动到最新位置")).toBeEnabled();
-    if (narrow) await page.keyboard.press("Escape");
+    if (!narrow)
+      await expect(await headerAction(page, "滚动到最新位置")).toBeEnabled();
   };
   const floating = page.getByRole("button", { name: "回到最新", exact: true });
   const scrollBack = async () => {
@@ -337,8 +337,9 @@ test("replay and the header action return to latest output without typing", asyn
       .getByRole("button", { name: "终端", exact: true })
       .click();
   // Nothing was missed, so the reading position stays until the header
-  // action returns to the latest output.
-  await (await headerAction(page, "滚动到最新位置")).click();
+  // action (the floating button on phones) returns to the latest output.
+  if (narrow) await floating.click();
+  else await (await headerAction(page, "滚动到最新位置")).click();
   await expectTerminalLine(page, marker);
 
   if (info.project.use.isMobile) {
@@ -347,9 +348,13 @@ test("replay and the header action return to latest output without typing", asyn
       .locator(".terminal-header")
       .getByRole("button", { name: "代码", exact: true })
       .click();
-    // From the narrow code view, the menu entry switches back to the terminal.
-    await (await headerAction(page, "滚动到最新位置")).click();
+    // From the narrow code view, the view switch returns to the terminal.
+    await page
+      .locator(".terminal-header")
+      .getByRole("button", { name: "终端", exact: true })
+      .click();
     await expect(page.locator(".terminal-host")).toBeVisible();
+    await floating.click();
     await expectTerminalLine(page, marker);
   }
   await runCommand(page, "exit");

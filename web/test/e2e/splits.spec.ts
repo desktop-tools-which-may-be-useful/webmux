@@ -1,8 +1,8 @@
-import { test, expect, createShell } from "./fixtures";
+import { test, expect, createShell, openPaneMenu } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 async function split(pane: Locator, direction: "左右" | "上下") {
-  await pane.getByRole("button", { name: "分屏", exact: true }).click();
+  await openPaneMenu(pane);
   await pane
     .page()
     .getByRole("menuitem", { name: `${direction}分屏 · 新建 Shell` })
@@ -243,7 +243,7 @@ test("existing sessions can join a split and missing panes can be dismissed", as
   });
   expect(response.ok()).toBe(true);
   const existing = await response.json();
-  await page.getByRole("button", { name: "分屏", exact: true }).click();
+  await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
   await page.getByRole("button", { name: "上下分屏", exact: true }).click();
   await page.getByRole("button", { name: /Existing agent/ }).click();
@@ -262,7 +262,7 @@ test("existing sessions can join a split and missing panes can be dismissed", as
   await request.delete(`/api/sessions/${existing.id}?remove=1`);
   await page.reload();
   await expect(joined).toContainText("会话不存在或已被移除");
-  await joined.getByRole("button", { name: "分屏", exact: true }).click();
+  await openPaneMenu(joined);
   await page.getByRole("menuitem", { name: "关闭窗格（保留会话）" }).click();
   await expect(page.locator(".split-terminal")).toHaveCount(1);
   await expect(page.locator(`[data-session-id="${id}"]`)).toBeVisible();
@@ -318,7 +318,7 @@ test("a split preserves hybrid chat and terminal switching beside a shell", asyn
   });
   expect(created.status()).toBe(201);
   const chatId = (await created.json()).id;
-  await anchor.getByRole("button", { name: "分屏", exact: true }).click();
+  await openPaneMenu(anchor);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
   await page.getByRole("button", { name: /Chat agent/ }).click();
   const chat = page.locator(`[data-session-id="${chatId}"]`);

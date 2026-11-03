@@ -15,10 +15,12 @@
   import type { SessionInfo } from "../schemas";
   import type { TerminalDraft } from "../terminal-draft.svelte";
   import type { Connection } from "../ws";
+  import DraftToggle from "./DraftToggle.svelte";
   import HybridSideSwitch from "./HybridSideSwitch.svelte";
   import LaunchConfigIcon, { hasLaunchIcon } from "./LaunchConfigIcon.svelte";
   import UploadFileInput from "./UploadFileInput.svelte";
   import TerminalShortcuts from "./TerminalShortcuts.svelte";
+  import ViewSegment from "./ViewSegment.svelte";
 
   interface HeaderTerminal {
     readonly info: SessionInfo | undefined;
@@ -89,10 +91,11 @@
     close: () => void;
     showFind: () => void;
     hybrid?: HeaderHybrid;
-    paneActions?: Snippet;
+    paneActions?: Snippet<[boolean]>;
   } = $props();
   let fileInput = $state<{ open(): void }>();
   let openingFind = false;
+  let shortcutsOpen = $state(false);
   // Off the terminal side there is no PTY: terminal-only actions are hidden;
   // fullscreen, the code panel and closing the session stay.
   const terminalShown = $derived(!hybrid || hybrid.view === "terminal");
@@ -126,7 +129,7 @@
 >
   <Button
     variant="ghost"
-    size="icon-sm"
+    size="icon-touch"
     aria-label="返回会话列表"
     title="返回会话列表"
     onclick={() => navigate("/")}
@@ -134,13 +137,37 @@
     <IconArrowLeft class="size-4" aria-hidden="true" />
   </Button>
   <!-- The title and the session's state read as one unit; the actions keep
-       their places while the title truncates. -->
-  <div class="flex min-w-0 flex-1 items-center gap-2">
-    <span class="min-w-0 truncate text-sm font-medium"
-      >{t.info?.title || "终端"}</span
-    >
+       their places while the title truncates. Phones put the dot first and
+       move a connection problem to a second line, so it never pushes the
+       title out. -->
+  <div class="flex min-w-8 flex-1 items-center gap-2">
+    {#if t.info}<span
+        class={`status-dot shrink-0 status-${t.info.status} sm:order-3`}
+        class:status-failed={t.info.status === "exited" &&
+          t.info.exitCode !== null &&
+          t.info.exitCode !== 0}
+        class:motion-safe:animate-pulse={t.connection !== "connected"}
+        role="img"
+        aria-label={`${sessionStatusText(t.info)} · ${connectionText}`}
+        title={`${sessionStatusText(t.info)} · ${connectionText}`}
+
+      ></span>{:else}<!-- Holds the dot's place on phones, where it leads the
+           title, so the title does not shift when the session loads. -->
+      <span class="shrink-0 sm:hidden" aria-hidden="true"
+        ><span class="status-dot invisible"></span></span
+      >{/if}
+    <div class="relative flex min-w-0 flex-col sm:order-1">
+      <span class="h-5 min-w-0 truncate text-sm leading-5 font-medium"
+        >{t.info?.title || "终端"}</span
+      >
+      <!-- Overlaid under the title, so a status change never moves it. -->
+      {#if !t.info || t.connection !== "connected"}<span
+          class="absolute top-full left-0 -mt-0.5 max-w-full truncate text-xs leading-none text-muted-foreground sm:hidden"
+          role="status">{connectionText}</span
+        >{/if}
+    </div>
     {#if chatAgent}<span
-        class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+        class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground sm:order-2"
         role="img"
         aria-label={`Agent：${chatAgent.agentTitle}`}
         title={`Agent：${chatAgent.agentTitle}`}
@@ -151,17 +178,8 @@
           /><span class="max-sm:hidden">{chatAgent.agentTitle}</span
           >{:else}<span>{chatAgent.agentTitle}</span>{/if}</span
       >{/if}
-    {#if t.info}<span
-        class={`status-dot shrink-0 status-${t.info.status}`}
-        class:status-failed={t.info.status === "exited" &&
-          t.info.exitCode !== null &&
-          t.info.exitCode !== 0}
-        role="img"
-        aria-label={`${sessionStatusText(t.info)} · ${connectionText}`}
-        title={`${sessionStatusText(t.info)} · ${connectionText}`}
-      ></span>{/if}
     {#if !t.info || t.connection !== "connected"}<span
-        class="shrink-0 text-xs whitespace-nowrap text-muted-foreground"
+        class="shrink-0 text-xs whitespace-nowrap text-muted-foreground max-sm:hidden sm:order-4"
         role="status">{connectionText}</span
       >{/if}
   </div>
@@ -174,6 +192,7 @@
       switching={hybrid.view === "switching"}
       chatUnavailable={hybrid.chatUnavailable}
       request={(to) => hybrid.request(to)}
+      code={{ shown: codeShown, set: (value) => (codeShown = value) }}
     />{/if}
   {#if terminalShown}
     <Button
@@ -202,35 +221,30 @@
   {#if hybrid?.view === "chat"}{@render quickMenu("bottom")}{/if}
   {#if terminalShown}
     <div class="quick-commands-header flex">{@render quickMenu("bottom")}</div>
-    <Button
-      variant={draft.enabled ? "default" : "outline"}
-      size="sm"
-      aria-label={draft.scratch.length
-        ? `草稿模式，${draft.scratch.length} 条暂存`
-        : "草稿模式"}
-      aria-pressed={draft.enabled}
+    <DraftToggle
+      class="max-sm:hidden"
+      {draft}
+      {draftSaved}
+      {scratchSaved}
       disabled={t.connection === "missing"}
-      title={draft.enabled
-        ? "关闭只隐藏草稿，不发送或清空"
-        : draft.scratchUpdatedWhileHidden
-          ? `暂存已更新，开启查看；${scratchSaved}`
-          : draft.scratch.length
-            ? `开启查看草稿与 ${draft.scratch.length} 条暂存；${scratchSaved}`
-            : draft.updatedWhileHidden
-              ? `隐藏草稿已更新，开启查看；${draftSaved}`
-              : draft.text
-                ? `开启查看保留的草稿；${draftSaved}`
-                : "开启草稿模式"}
-      onclick={toggleDraft}
-      >草稿{#if !draft.enabled && draft.scratch.length}
-        ·{draft.scratch
-          .length}{:else if !draft.enabled && (draft.text || draft.updatedWhileHidden)}
-        ·{/if}</Button
-    >
+      toggle={toggleDraft}
+    />
+  {/if}
+  <!-- Phones: both destinations stay visible. A hybrid session's chat/terminal
+       switch carries the code tab itself. -->
+  {#if !(hybrid?.side || hybrid?.target)}
+    <div class="sm:hidden">
+      <ViewSegment
+        first={terminalShown ? "终端" : "聊天"}
+        code={codeShown}
+        onchange={(value) => (codeShown = value)}
+      />
+    </div>
   {/if}
   <Button
     variant="outline"
     size="sm"
+    class="max-sm:hidden"
     aria-pressed={codeShown}
     onclick={() => (codeShown = !codeShown)}
     >{codeShown
@@ -257,13 +271,15 @@
       {#if fullscreen.active}<IconMinimize class="size-4" aria-hidden="true" />
       {:else}<IconMaximize class="size-4" aria-hidden="true" />{/if}
     </Button>{/if}
-  {#if paneActions}{@render paneActions()}{/if}
+  {#if paneActions}<div class="max-sm:hidden">
+      {@render paneActions(false)}
+    </div>{/if}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger>
       {#snippet child({ props })}<Button
           {...props}
           variant="ghost"
-          size="icon-sm"
+          size="icon-touch"
           aria-label={terminalShown ? "终端菜单" : "会话菜单"}
           title={terminalShown ? "终端菜单" : "会话菜单"}>⋯</Button
         >{/snippet}
@@ -277,73 +293,104 @@
         }
       }}
     >
-      <!-- Narrow headers keep only frequent actions; these mirror the
-           buttons hidden below 640px. -->
+      <!-- Grouped by purpose. Below 640px the header keeps only the view
+           switch and this menu, so the entries of the hidden buttons live
+           here (marked sm:hidden). -->
       {#if fullscreen.offered}<DropdownMenu.Item
           class="sm:hidden"
           disabled={fullscreen.busy}
           onSelect={() => {
             void fullscreen.toggle();
           }}>{fullscreen.active ? "退出全屏" : "全屏"}</DropdownMenu.Item
-        >{/if}
+        >{#if terminalShown}<DropdownMenu.Separator
+            class="sm:hidden"
+          />{/if}{/if}
       {#if terminalShown}
-        <DropdownMenu.Item
-          class="sm:hidden"
-          disabled={uploadDisabled}
-          onSelect={() => fileInput?.open()}>上传文件</DropdownMenu.Item
-        >
-        <DropdownMenu.Item
-          class="sm:hidden"
-          disabled={t.restoring}
-          onSelect={scrollToLatest}>滚动到最新位置</DropdownMenu.Item
-        >
-        <DropdownMenu.Separator class="sm:hidden" />
-        <DropdownMenu.Item
-          disabled={!t.canFind}
-          onSelect={() => {
-            openingFind = true;
-            showFind();
-          }}><IconSearch aria-hidden="true" />查找</DropdownMenu.Item
-        >
-        <DropdownMenu.Item
-          onSelect={() => {
-            void copy();
-          }}
-          >{t.historyTruncated
-            ? "复制全部缓冲（更早输出已被覆盖）"
-            : "复制全部缓冲"}</DropdownMenu.Item
-        >
-        <DropdownMenu.Item
-          onSelect={() => {
-            void paste();
-          }}>粘贴</DropdownMenu.Item
-        >
-        <DropdownMenu.Item onSelect={showScratch}
-          >暂存{draft.scratch.length
-            ? ` (${draft.scratch.length})`
-            : ""}</DropdownMenu.Item
-        >
-        <DropdownMenu.Item onSelect={() => t.clear()}>清屏</DropdownMenu.Item>
-        <DropdownMenu.Item onSelect={() => t.resync()}
-          >重新同步</DropdownMenu.Item
-        >
-        <DropdownMenu.Item onSelect={showFontSize}>字体大小</DropdownMenu.Item>
-        <DropdownMenu.CheckboxItem
-          checked={sizeLocked}
-          onCheckedChange={(value) => setSizeLocked(value === true)}
-        >
-          锁定尺寸
-        </DropdownMenu.CheckboxItem>
-        <DropdownMenu.CheckboxItem
-          checked={keyboardSizeHold}
-          onCheckedChange={(value) => setKeyboardSizeHold(value === true)}
-        >
-          键盘弹出时保持尺寸
-        </DropdownMenu.CheckboxItem>
-        <DropdownMenu.CheckboxItem bind:checked={forceSoftKeys}>
-          强制显示底部工具栏
-        </DropdownMenu.CheckboxItem>
+        <DropdownMenu.Group>
+          <DropdownMenu.GroupHeading>会话</DropdownMenu.GroupHeading>
+          <DropdownMenu.CheckboxItem
+            class="sm:hidden"
+            closeOnSelect
+            checked={draft.enabled}
+            disabled={t.connection === "missing"}
+            onCheckedChange={toggleDraft}
+            >草稿模式{draft.scratch.length
+              ? `（${draft.scratch.length} 条暂存）`
+              : ""}</DropdownMenu.CheckboxItem
+          >
+          <DropdownMenu.Item
+            disabled={!t.canFind}
+            onSelect={() => {
+              openingFind = true;
+              showFind();
+            }}><IconSearch aria-hidden="true" />查找</DropdownMenu.Item
+          >
+          <DropdownMenu.Item onSelect={showScratch}
+            >暂存{draft.scratch.length
+              ? ` (${draft.scratch.length})`
+              : ""}</DropdownMenu.Item
+          >
+          <DropdownMenu.Item
+            class="sm:hidden"
+            disabled={uploadDisabled}
+            onSelect={() => fileInput?.open()}>上传文件</DropdownMenu.Item
+          >
+        </DropdownMenu.Group>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Group>
+          <DropdownMenu.GroupHeading>剪贴板</DropdownMenu.GroupHeading>
+          <DropdownMenu.Item
+            onSelect={() => {
+              void copy();
+            }}
+            >{t.historyTruncated
+              ? "复制全部缓冲（更早输出已被覆盖）"
+              : "复制全部缓冲"}</DropdownMenu.Item
+          >
+          <DropdownMenu.Item
+            onSelect={() => {
+              void paste();
+            }}>粘贴</DropdownMenu.Item
+          >
+        </DropdownMenu.Group>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Group>
+          <DropdownMenu.GroupHeading>终端</DropdownMenu.GroupHeading>
+          <DropdownMenu.Item onSelect={() => t.clear()}>清屏</DropdownMenu.Item>
+          <DropdownMenu.Item onSelect={() => t.resync()}
+            >重新同步</DropdownMenu.Item
+          >
+          <DropdownMenu.Item onSelect={showFontSize}>字体大小</DropdownMenu.Item
+          >
+          <DropdownMenu.Item
+            class="sm:hidden"
+            onSelect={() => (shortcutsOpen = true)}>快捷键</DropdownMenu.Item
+          >
+        </DropdownMenu.Group>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Group>
+          <DropdownMenu.GroupHeading>显示</DropdownMenu.GroupHeading>
+          <DropdownMenu.CheckboxItem
+            checked={sizeLocked}
+            onCheckedChange={(value) => setSizeLocked(value === true)}
+          >
+            锁定尺寸
+          </DropdownMenu.CheckboxItem>
+          <DropdownMenu.CheckboxItem
+            checked={keyboardSizeHold}
+            onCheckedChange={(value) => setKeyboardSizeHold(value === true)}
+          >
+            键盘弹出时保持尺寸
+          </DropdownMenu.CheckboxItem>
+          <DropdownMenu.CheckboxItem bind:checked={forceSoftKeys}>
+            强制显示底部工具栏
+          </DropdownMenu.CheckboxItem>
+        </DropdownMenu.Group>
       {/if}
+      {#if paneActions}<div role="presentation" class="hidden max-sm:contents">
+          <DropdownMenu.Separator />
+          {@render paneActions(true)}
+        </div>{/if}
       <DropdownMenu.Separator />
       <DropdownMenu.Item
         variant="destructive"
@@ -353,5 +400,8 @@
       >
     </DropdownMenu.Content>
   </DropdownMenu.Root>
-  {#if terminalShown}<TerminalShortcuts />{/if}
+  {#if terminalShown}<TerminalShortcuts
+      bind:open={shortcutsOpen}
+      class="max-sm:hidden"
+    />{/if}
 </header>

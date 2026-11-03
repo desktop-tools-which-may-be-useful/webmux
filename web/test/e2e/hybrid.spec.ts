@@ -133,6 +133,38 @@ async function switchTo(page: Page, side: Side, confirm = false) {
 }
 
 test.describe("hybrid sessions with the fake agent", () => {
+  test("phones switch chat, terminal and code in one control", async ({
+    page,
+    request,
+    workDir,
+  }, testInfo) => {
+    test.skip(!testInfo.project.use.isMobile, "One control is a phone layout");
+    const id = await createHybrid(request, workDir, "acp");
+    await page.setViewportSize({ width: 393, height: 851 });
+    await openHybrid(page, id, "acp");
+    const views = page.getByRole("tablist", { name: "会话视图", exact: true });
+    await expect(views.getByRole("tab")).toHaveText(["聊天", "终端", "代码"]);
+    // Code replaces the pane without moving the session.
+    const code = views.getByRole("tab", { name: "代码", exact: true });
+    await code.click();
+    await expect(code).toHaveAttribute("aria-selected", "true");
+    await expect(
+      page.getByRole("region", { name: "代码工作区" }),
+    ).toBeVisible();
+    await expect(sideTab(page, "acp")).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    // Choosing the side the session is already on only leaves the code view.
+    await sideTab(page, "acp").click();
+    await expectSide(page, "acp");
+    await expect(page.getByRole("region", { name: "代码工作区" })).toBeHidden();
+    // A second control for code would be redundant.
+    await expect(
+      page.locator(".terminal-header").getByRole("button", { name: "代码" }),
+    ).toHaveCount(0);
+  });
+
   for (const { start, agent } of [
     { start: "acp", agent: "omp" },
     { start: "tui", agent: "opencode" },

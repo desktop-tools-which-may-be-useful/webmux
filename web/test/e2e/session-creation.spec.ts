@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { APIRequestContext, Page } from "@playwright/test";
-import { test, expect } from "./fixtures";
+import { test, expect, openPaneMenu } from "./fixtures";
 
 const exec = promisify(execFile);
 
@@ -151,7 +151,7 @@ test("full split creation uses saved configs and keeps the launch subdirectory a
     .locator(".xterm")
     .evaluate((element) => element.setAttribute("data-retained", "yes"));
   const open = async () => {
-    await pane.getByRole("button", { name: "分屏", exact: true }).click();
+    await openPaneMenu(pane);
     await page
       .getByRole("menuitem", { name: "新建会话…", exact: true })
       .click();
@@ -183,11 +183,7 @@ test("full split creation uses saved configs and keeps the launch subdirectory a
     configId: config.id,
     workspace: { repositoryId: repo.id },
   });
-  await page
-    .locator(".split-terminal")
-    .last()
-    .getByRole("button", { name: "分屏", exact: true })
-    .click();
+  await openPaneMenu(page.locator(".split-terminal").last());
   await page.getByRole("menuitem", { name: "左右分屏 · 新建 Shell" }).click();
   await expect(page.locator(".split-terminal")).toHaveCount(3);
   const all = await (await request.get("/api/sessions")).json();
@@ -206,7 +202,7 @@ test("split creation retains a new worktree across repository changes after comm
   });
   const original = await response.json();
   await page.goto(`/s/${original.id}`);
-  await page.getByRole("button", { name: "分屏", exact: true }).click();
+  await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "新建会话…", exact: true }).click();
   await page.getByRole("tab", { name: "新工作树", exact: true }).click();
   const repository = page.getByRole("combobox", { name: "仓库", exact: true });

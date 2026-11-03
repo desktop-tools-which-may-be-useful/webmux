@@ -61,7 +61,7 @@ async function openDiff(page: Page) {
 test("narrow headers keep one row and move rare actions into the menu", async ({
   page,
   workDir,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 393, height: 851 });
   await createShell(page, "demo-agent", workDir);
   const title = header(page).getByText("demo-agent", { exact: true });
@@ -79,6 +79,15 @@ test("narrow headers keep one row and move rare actions into the menu", async ({
         await expect(
           header(page).getByRole("button", { name, exact: true }),
         ).toBeHidden();
+      // The phone header keeps back, title, the view switch and the menu.
+      await expect(
+        header(page).getByRole("button", { name: /^草稿模式/ }),
+      ).toBeHidden();
+      await expect(
+        header(page)
+          .getByRole("group", { name: "会话视图" })
+          .getByRole("button", { name: "终端", exact: true }),
+      ).toHaveAttribute("aria-pressed", view === "代码" ? "true" : "false");
       await expect(
         header(page).getByRole("button", { name: "返回会话列表" }),
       ).toBeVisible();
@@ -87,13 +96,37 @@ test("narrow headers keep one row and move rare actions into the menu", async ({
         .click();
     }
   }
+  // Soft keys exist on touch devices; a narrow desktop window has the menu.
+  if (testInfo.project.use.isMobile) {
+    const draft = page
+      .getByRole("complementary", { name: "终端软键" })
+      .getByRole("button", { name: /^草稿模式/ });
+    await draft.click();
+    await expect(draft).toHaveAttribute("aria-pressed", "true");
+    await draft.click();
+    await expect(draft).toHaveAttribute("aria-pressed", "false");
+  }
   await header(page)
     .getByRole("button", { name: "终端菜单", exact: true })
     .click();
-  for (const name of ["全屏", "上传文件", "滚动到最新位置"])
+  // Draft mode left the phone header for the soft keys and this menu.
+  for (const name of ["全屏", "上传文件"])
     await expect(
       page.getByRole("menuitem", { name, exact: true }),
     ).toBeEnabled();
+  await expect(
+    page.getByRole("menuitem", { name: "滚动到最新位置", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("menuitemcheckbox", { name: /^草稿模式/ }),
+  ).toBeVisible();
+  // Splitting is rare on a phone: no header button, a "窗格" group instead.
+  await expect(
+    header(page).getByRole("button", { name: "分屏", exact: true }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("menuitem", { name: "新建会话…", exact: true }),
+  ).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("menuitem", { name: "上传文件", exact: true }).click();
   await chooser;

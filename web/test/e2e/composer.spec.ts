@@ -13,6 +13,13 @@ import {
 } from "./fixtures";
 
 const mode = (page: Page) => page.getByRole("button", { name: /^草稿模式/ });
+// Phones keep the switch beside the soft keys; while those are hidden (the
+// code view) it lives in the terminal menu.
+async function toggleMode(page: Page) {
+  if (await mode(page).isVisible()) return mode(page).click();
+  await page.getByRole("button", { name: "终端菜单", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: /^草稿模式/ }).click();
+}
 const draft = (page: Page) =>
   page.getByRole("textbox", {
     name: "草稿内容",
@@ -141,8 +148,10 @@ test("code references and uploaded paths join the same draft without PTY input",
       .click();
   await expect(page.getByRole("region", { name: "代码工作区" })).toBeVisible();
   await expect(draft(page)).toBeHidden();
-  await expect(mode(page)).toHaveAttribute("aria-pressed", "false");
-  await mode(page).click();
+  // The phone header has no draft button while the soft keys are hidden.
+  if (!info.project.use.isMobile)
+    await expect(mode(page)).toHaveAttribute("aria-pressed", "false");
+  await toggleMode(page);
   await expect(draft(page)).toHaveValue("");
   await info.attach("composer-code.png", {
     body: await page.screenshot(),
@@ -211,9 +220,9 @@ test("draft splits the terminal column while code stays full height", async ({
       resizedTerminal.height + resizedDraft.height,
     );
   }
-  await mode(page).click();
+  await toggleMode(page);
   expect(await code.boundingBox()).toEqual(codeBounds);
-  await mode(page).click();
+  await toggleMode(page);
   expect(await code.boundingBox()).toEqual(codeBounds);
   if (info.project.use.isMobile)
     await page

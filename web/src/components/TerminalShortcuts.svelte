@@ -112,10 +112,17 @@
       ],
     },
   ];
+
+  // The trigger stays beside the header actions; phones hide it and open the
+  // dialog from the terminal menu instead.
+  let {
+    open = $bindable(false),
+    class: className,
+  }: { open?: boolean; class?: string } = $props();
 </script>
 
-<Dialog.Root>
-  <div class="shrink-0">
+<Dialog.Root bind:open>
+  <div class={["shrink-0", className]}>
     <Dialog.Trigger>
       {#snippet child({ props })}
         <Button

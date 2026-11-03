@@ -1,4 +1,4 @@
-import { test, expect, createShell } from "./fixtures";
+import { test, expect, createShell, openPaneMenu } from "./fixtures";
 
 test("compact split code view retains quick commands on a wide touch screen", async ({
   page,
@@ -11,7 +11,7 @@ test("compact split code view retains quick commands on a wide touch screen", as
   ).toBe(true);
   const id = await createShell(page, "Wide touch quick commands", workDir);
   const original = page.locator(`[data-session-id="${id}"]`);
-  await original.getByRole("button", { name: "分屏", exact: true }).click();
+  await openPaneMenu(original);
   await page.getByRole("menuitem", { name: "左右分屏 · 新建 Shell" }).click();
   await expect(page.locator(".split-terminal:visible")).toHaveCount(2);
   const second = page.locator(".split-terminal").nth(1);

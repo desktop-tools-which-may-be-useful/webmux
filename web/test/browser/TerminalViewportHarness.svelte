@@ -33,6 +33,7 @@
 </script>
 
 {#snippet quickMenu()}<span></span>{/snippet}
+{#snippet draftToggle()}<span></span>{/snippet}
 
 <div style="position: relative; width: 400px; height: 200px">
   <TerminalViewport
@@ -40,6 +41,7 @@
     visible
     {uploads}
     {quickMenu}
+    {draftToggle}
     send={() => {}}
     toggle={() => {}}
     lock={() => {}}

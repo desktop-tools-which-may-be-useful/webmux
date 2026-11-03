@@ -6,8 +6,10 @@ for (const theme of ["light", "dark"] as const) {
     page,
     workDir,
   }, testInfo) => {
+    // Phones below 640px hide the shortcut button; test the narrowest size
+    // that shows it.
     if (testInfo.project.use.isMobile)
-      await page.setViewportSize({ width: 320, height: 740 });
+      await page.setViewportSize({ width: 640, height: 740 });
     await page.emulateMedia({ colorScheme: theme });
     await createShell(page, "Shortcut reference", workDir);
     const trigger = page.getByRole("button", { name: "快捷键", exact: true });
@@ -62,7 +64,11 @@ for (const theme of ["light", "dark"] as const) {
 test("help traps keyboard input, preserves drafts and returns focus on Escape", async ({
   page,
   workDir,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.use.isMobile,
+    "Phones below 640px hide the shortcut help: no physical keyboard",
+  );
   await createShell(page, "Help input isolation", workDir);
   const path = await recordInput(page, workDir);
   const trigger = page.getByRole("button", { name: "快捷键", exact: true });
@@ -89,4 +95,23 @@ test("help traps keyboard input, preserves drafts and returns focus on Escape", 
   await expect(trigger).toBeFocused();
   await expect(draft).toHaveValue("Keep this unsent draft");
   expect(await readFile(path, "utf8")).toBe("");
+});
+
+test("phones open the shortcut help from the terminal menu", async ({
+  page,
+  workDir,
+}, testInfo) => {
+  test.skip(!testInfo.project.use.isMobile, "Desktop keeps the header button");
+  await page.setViewportSize({ width: 320, height: 740 });
+  await createShell(page, "Phone shortcut help", workDir);
+  await expect(
+    page.getByRole("button", { name: "快捷键", exact: true }),
+  ).toBeHidden();
+  await page.getByRole("button", { name: "终端菜单", exact: true }).click();
+  await page.getByRole("menuitem", { name: "快捷键", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "快捷键", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 });

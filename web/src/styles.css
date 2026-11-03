@@ -316,6 +316,7 @@
 .soft-trailing {
   display: flex;
   flex-shrink: 0;
+  gap: 0.35rem;
 }
 .soft-keys {
   display: none;
@@ -418,12 +419,6 @@
 .session-terminal:has(.terminal-workspace.mobile-code) .quick-commands-header {
   display: flex;
 }
-.session-terminal .terminal-header {
-  overflow-x: auto;
-}
-.session-terminal .terminal-header > div:first-of-type {
-  min-width: 2rem;
-}
 @container terminal-pane (max-width: 1023px) {
   .code-navigation {
     @apply code-overlay-navigation;
@@ -490,10 +485,11 @@
     min-height: var(--control-touch-compact);
     min-width: var(--control-touch-compact);
   }
-  /* Dense terminal toolbars reserve space for the terminal and scrollable keys. */
+  /* Header controls stay compact so the title keeps its room; the back and
+     menu buttons use the full touch size through icon-touch. */
   .terminal-header .wm-control {
-    min-height: var(--control-sm);
-    min-width: var(--control-sm);
+    min-height: var(--control-touch-compact);
+    min-width: var(--control-touch-compact);
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -38,6 +38,7 @@
   import type CodePanelComponent from "../components/CodePanel.svelte";
   import ScratchPanel from "../components/ScratchPanel.svelte";
   import TerminalCopyDialog from "../components/TerminalCopyDialog.svelte";
+  import DraftToggle from "../components/DraftToggle.svelte";
   import TerminalFontDialog from "../components/TerminalFontDialog.svelte";
   import TerminalHeader from "../components/TerminalHeader.svelte";
   import TerminalInputComposer from "../components/TerminalInputComposer.svelte";
@@ -73,7 +74,7 @@
     reopen: () => void;
     visible: boolean;
     active: boolean;
-    paneActions: Snippet;
+    paneActions: Snippet<[boolean]>;
     keyboardDismissed: () => boolean;
     keyboardVisibility: () => KeyboardVisibility;
     viewportHeight: () => number;
@@ -628,6 +629,16 @@
     onCloseAutoFocus={focusTerminal}
   />
 {/snippet}
+{#snippet draftToggle()}
+  <DraftToggle
+    class="sm:hidden"
+    {draft}
+    {draftSaved}
+    {scratchSaved}
+    disabled={t.connection === "missing"}
+    toggle={toggleDraft}
+  />
+{/snippet}
 
 {#snippet recovery()}
   {#if hybrid.recoverable}<HybridRecovery
@@ -717,6 +728,7 @@
           {findOpen}
           {uploads}
           {quickMenu}
+          {draftToggle}
           send={softInput}
           toggle={(key) => {
             if (draft.enabled) controlNotice();
