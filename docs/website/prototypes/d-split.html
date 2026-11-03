@@ -1,0 +1,791 @@
+<!doctype html>
+<!-- 由设计画布的原型导出；可编辑的源在维护者的 Design 画布中。图片与字体指向仓库内文件。 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>方案 D · 双屏对偶</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      @font-face {
+        font-family: "Inter";
+        src: url("../../../web/public/fonts/inter-latin-3100e775.woff2")
+          format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Maple Mono NF CN";
+        src: url("../../../web/public/fonts/maple-400-latin-0909c56b.woff2")
+          format("woff2");
+        font-weight: 400;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Maple Mono NF CN";
+        src: url("../../../web/public/fonts/maple-700-latin-9c0a39e5.woff2")
+          format("woff2");
+        font-weight: 700;
+        font-display: swap;
+      }
+      body {
+        margin: 0;
+        background: #f7f9f8;
+        color: #19211c;
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          "Noto Sans CJK SC",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: #217346;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .mono {
+        font-family:
+          "Maple Mono NF CN", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      style="
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        background: #f7f9f8;
+      "
+    >
+      <header style="background: #ffffff; border-bottom: 1px solid #dce3df">
+        <div
+          style="
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+          "
+        >
+          <img
+            src="../../images/brand/webmux-logo-light.svg"
+            alt="WebMux"
+            style="height: 28px; width: auto"
+          />
+          <nav
+            aria-label="主导航"
+            style="
+              display: flex;
+              gap: 24px;
+              font-size: 14px;
+              font-weight: 500;
+              flex-wrap: wrap;
+            "
+          >
+            <a href="#features" style="color: #34443b">功能</a>
+            <a href="#install" style="color: #34443b">下载</a>
+            <a href="#docs" style="color: #34443b">文档</a>
+            <a href="#faq" style="color: #34443b">FAQ</a>
+            <a href="#compare" style="color: #34443b">对比</a>
+          </nav>
+          <div
+            style="
+              margin-left: auto;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            "
+          >
+            <span
+              class="mono"
+              style="
+                display: inline-flex;
+                align-items: center;
+                height: 28px;
+                padding: 0 10px;
+                border-radius: 4px;
+                background: #eef2f0;
+                color: #34443b;
+                font-size: 12px;
+              "
+              >v0.10.1</span
+            >
+            <a
+              href="https://github.com/mzdluo123/webmux"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                height: 36px;
+                padding: 0 12px;
+                border: 1px solid #dce3df;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #34443b;
+                background: #ffffff;
+              "
+            >
+              <svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"
+                />
+              </svg>
+              GitHub
+            </a>
+            <a
+              href="#en"
+              aria-label="Switch to English"
+              style="
+                display: inline-flex;
+                align-items: center;
+                height: 36px;
+                padding: 0 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #34443b;
+              "
+              >EN</a
+            >
+          </div>
+        </div>
+      </header>
+
+      <section
+        style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))"
+      >
+        <div
+          style="
+            background: #ffffff;
+            padding: 88px 56px 72px 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 24px;
+            border-right: 1px solid #dce3df;
+          "
+        >
+          <div
+            style="
+              max-width: 520px;
+              margin-left: auto;
+              width: 100%;
+              display: flex;
+              flex-direction: column;
+              gap: 24px;
+            "
+          >
+            <span class="mono" style="font-size: 13px; color: #217346"
+              >desktop · 电脑上开工</span
+            >
+            <h1
+              style="
+                margin: 0;
+                font-size: 46px;
+                line-height: 1.15;
+                font-weight: 700;
+                letter-spacing: -0.015em;
+              "
+            >
+              让 agent 在服务器上一直跑，你在任何设备上随时接管。
+            </h1>
+            <p
+              style="
+                margin: 0;
+                font-size: 17px;
+                line-height: 1.7;
+                color: #5f6d65;
+              "
+            >
+              在浏览器里持续运行的终端。会话放在服务端，电脑、手机和本机终端只是附着上去。合上笔记本，Claude
+              Code、Codex 照样干活。
+            </p>
+            <div
+              style="
+                display: flex;
+                align-items: stretch;
+                border: 1px solid #dce3df;
+                border-radius: 6px;
+                background: #f7f9f8;
+                overflow: hidden;
+              "
+            >
+              <code
+                class="mono"
+                style="
+                  flex: 1 1 auto;
+                  min-width: 0;
+                  padding: 12px 14px;
+                  font-size: 13px;
+                  line-height: 1.5;
+                  color: #24292f;
+                  white-space: nowrap;
+                  overflow-x: auto;
+                "
+                >curl -fsSL
+                https://github.com/mzdluo123/webmux/releases/latest/download/install.sh
+                | sh</code
+              >
+              <button
+                type="button"
+                style="
+                  flex: 0 0 auto;
+                  padding: 0 16px;
+                  border: 0;
+                  border-left: 1px solid #dce3df;
+                  background: #217346;
+                  color: #ffffff;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  font-family: inherit;
+                "
+              >
+                复制
+              </button>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: #5f6d65">
+              Linux · macOS · Windows（WSL 2）· 单二进制约 20 MB · MIT ·
+              <a href="#install">其他安装方式</a>
+            </p>
+          </div>
+        </div>
+        <div
+          style="
+            background: #111814;
+            color: #eef2f0;
+            padding: 56px 24px 0 56px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            overflow: hidden;
+          "
+        >
+          <div
+            style="
+              max-width: 520px;
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+            "
+          >
+            <span class="mono" style="font-size: 13px; color: #85d9a5"
+              >mobile · 手机上接管</span
+            >
+            <p
+              style="
+                margin: 0;
+                font-size: 20px;
+                line-height: 1.5;
+                font-weight: 600;
+              "
+            >
+              它停下来问你一个问题，锁屏推送叫你回来；回一句话它就继续。
+            </p>
+            <p
+              style="
+                margin: 0;
+                font-size: 14px;
+                line-height: 1.7;
+                color: #a5b4ab;
+              "
+            >
+              同一段对话：电脑上用原生 TUI，手机上切到聊天视图，历史完整保留。
+            </p>
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 20px;
+              align-items: flex-start;
+              margin-top: auto;
+            "
+          >
+            <img
+              src="../../images/mobile-omp.png"
+              alt="手机上遥控 omp，底部是软键栏"
+              style="
+                display: block;
+                width: 46%;
+                height: auto;
+                border-radius: 8px 8px 0 0;
+                border: 1px solid #34443b;
+                border-bottom: 0;
+              "
+            />
+            <img
+              src="../../images/mobile-chat.png"
+              alt="移动端混合会话聊天视图"
+              style="
+                display: block;
+                width: 46%;
+                height: auto;
+                border-radius: 8px 8px 0 0;
+                border: 1px solid #34443b;
+                border-bottom: 0;
+                margin-top: 48px;
+              "
+            />
+          </div>
+        </div>
+      </section>
+
+      <section
+        style="
+          background: #ffffff;
+          border-top: 1px solid #dce3df;
+          border-bottom: 1px solid #dce3df;
+        "
+      >
+        <div
+          style="
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          "
+        >
+          <div
+            style="
+              padding: 20px 24px 20px 0;
+              border-right: 1px solid #dce3df;
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            "
+          >
+            <span
+              class="mono"
+              style="font-size: 22px; font-weight: 700; color: #217346"
+              >9</span
+            ><span style="font-size: 13px; color: #5f6d65"
+              >款 CLI agent 预置即用</span
+            >
+          </div>
+          <div
+            style="
+              padding: 20px 24px;
+              border-right: 1px solid #dce3df;
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            "
+          >
+            <span
+              class="mono"
+              style="font-size: 22px; font-weight: 700; color: #217346"
+              >~13 MB</span
+            ><span style="font-size: 13px; color: #5f6d65">空闲常驻内存</span>
+          </div>
+          <div
+            style="
+              padding: 20px 24px;
+              border-right: 1px solid #dce3df;
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            "
+          >
+            <span
+              class="mono"
+              style="font-size: 22px; font-weight: 700; color: #217346"
+              >2 MiB</span
+            ><span style="font-size: 13px; color: #5f6d65"
+              >每会话环形缓冲，重连只补缺失部分</span
+            >
+          </div>
+          <div
+            style="
+              padding: 20px 0 20px 24px;
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            "
+          >
+            <span
+              class="mono"
+              style="font-size: 22px; font-weight: 700; color: #217346"
+              >0</span
+            ><span style="font-size: 13px; color: #5f6d65"
+              >需要的 root、tmux、数据库或 Node 运行时</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="features"
+        style="
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 72px 24px;
+          display: grid;
+          grid-template-columns: repeat(12, minmax(0, 1fr));
+          gap: 32px;
+          align-items: start;
+        "
+      >
+        <div
+          style="
+            grid-column: span 5;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: sticky;
+            top: 24px;
+          "
+        >
+          <span class="mono" style="font-size: 13px; color: #217346"
+            >desktop · 回到电脑审阅</span
+          >
+          <h2
+            style="
+              margin: 0;
+              font-size: 32px;
+              line-height: 1.25;
+              font-weight: 700;
+              letter-spacing: -0.01em;
+            "
+          >
+            写代码的工作台，不只是终端
+          </h2>
+          <p
+            style="margin: 0; font-size: 16px; line-height: 1.7; color: #5f6d65"
+          >
+            终端旁直接看 Diff，一键把 路径:行号 发给 agent；分屏、草稿模式、Git
+            worktree、终端里显示图片。
+          </p>
+          <ul
+            style="
+              margin: 8px 0 0;
+              padding: 0;
+              list-style: none;
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+              font-size: 15px;
+            "
+          >
+            <li style="display: flex; gap: 10px; align-items: flex-start">
+              <span aria-hidden="true" class="mono" style="color: #217346"
+                >▸</span
+              ><span
+                ><strong>断线不断会话</strong
+                >：锁屏、换网、关标签页都不影响。</span
+              >
+            </li>
+            <li style="display: flex; gap: 10px; align-items: flex-start">
+              <span aria-hidden="true" class="mono" style="color: #217346"
+                >▸</span
+              ><span
+                ><strong>原样运行你的 agent</strong>：跑在真实 PTY
+                里，无插件、无改写。</span
+              >
+            </li>
+            <li style="display: flex; gap: 10px; align-items: flex-start">
+              <span aria-hidden="true" class="mono" style="color: #217346"
+                >▸</span
+              ><span
+                ><strong>它在等你时会告诉你</strong
+                >：总览标记、标签页提示、锁屏推送。</span
+              >
+            </li>
+            <li style="display: flex; gap: 10px; align-items: flex-start">
+              <span aria-hidden="true" class="mono" style="color: #217346"
+                >▸</span
+              ><span
+                ><strong>轻到可以忘了它</strong>：单二进制，无需 root，Windows
+                经 WSL 2 一等支持。</span
+              >
+            </li>
+          </ul>
+        </div>
+        <div
+          style="
+            grid-column: span 7;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          "
+        >
+          <img
+            src="../../images/desktop-diff.png"
+            alt="代码工作区：在终端旁查看 agent 改动的 Git Diff"
+            style="
+              display: block;
+              width: 100%;
+              height: auto;
+              border-radius: 8px;
+              border: 1px solid #dce3df;
+              background: #ffffff;
+            "
+          />
+          <img
+            src="../../images/desktop-overview.png"
+            alt="会话总览：多个 agent 会话按仓库分组，显示运行状态与屏幕预览"
+            style="
+              display: block;
+              width: 100%;
+              height: auto;
+              border-radius: 8px;
+              border: 1px solid #dce3df;
+              background: #ffffff;
+            "
+          />
+        </div>
+      </section>
+
+      <section id="install" style="background: #111814; color: #eef2f0">
+        <div
+          style="
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 72px 24px;
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 32px;
+          "
+        >
+          <div
+            style="
+              grid-column: span 4;
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+            "
+          >
+            <span class="mono" style="font-size: 13px; color: #85d9a5"
+              >install · 两分钟装好</span
+            >
+            <h2
+              style="
+                margin: 0;
+                font-size: 32px;
+                line-height: 1.25;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+              "
+            >
+              装到用户目录，不需要 sudo
+            </h2>
+            <p
+              style="
+                margin: 0;
+                font-size: 15px;
+                line-height: 1.7;
+                color: #a5b4ab;
+              "
+            >
+              脚本自动识别架构并校验 SHA-256，不改写 shell
+              配置。重复执行即升级。
+            </p>
+            <a href="#download" style="color: #85d9a5; font-size: 14px"
+              >deb / rpm、手动下载与 Windows 安装程序 →</a
+            >
+          </div>
+          <div
+            style="
+              grid-column: span 8;
+              display: flex;
+              flex-direction: column;
+              gap: 16px;
+            "
+          >
+            <div
+              role="tablist"
+              aria-label="安装方式"
+              style="display: flex; gap: 8px; flex-wrap: wrap"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected="true"
+                style="
+                  height: 36px;
+                  padding: 0 14px;
+                  border: 1px solid #85d9a5;
+                  border-radius: 6px;
+                  background: #85d9a5;
+                  color: #111814;
+                  font-size: 13px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  font-family: inherit;
+                "
+              >
+                Linux / macOS
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                style="
+                  height: 36px;
+                  padding: 0 14px;
+                  border: 1px solid #34443b;
+                  border-radius: 6px;
+                  background: transparent;
+                  color: #eef2f0;
+                  font-size: 13px;
+                  font-weight: 500;
+                  cursor: pointer;
+                  font-family: inherit;
+                "
+              >
+                Windows（WSL）
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                style="
+                  height: 36px;
+                  padding: 0 14px;
+                  border: 1px solid #34443b;
+                  border-radius: 6px;
+                  background: transparent;
+                  color: #eef2f0;
+                  font-size: 13px;
+                  font-weight: 500;
+                  cursor: pointer;
+                  font-family: inherit;
+                "
+              >
+                deb / rpm
+              </button>
+              <label
+                style="
+                  margin-left: auto;
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 8px;
+                  font-size: 13px;
+                  color: #a5b4ab;
+                "
+                ><input
+                  type="checkbox"
+                  style="width: 16px; height: 16px; accent-color: #85d9a5"
+                />
+                国内镜像</label
+              >
+            </div>
+            <pre
+              class="mono"
+              style="
+                margin: 0;
+                padding: 20px;
+                border-radius: 8px;
+                background: #0d1117;
+                border: 1px solid #34443b;
+                color: #c9d1d9;
+                font-size: 13px;
+                line-height: 1.8;
+                overflow-x: auto;
+              "
+            ><span style="color: #a5b4ab;"># 1. 安装</span>
+curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.sh | sh
+
+<span style="color: #a5b4ab;"># 2. 运行，然后打开 http://127.0.0.1:7681</span>
+webmux --listen 127.0.0.1:7681</pre>
+            <div
+              style="
+                display: flex;
+                gap: 12px;
+                padding: 14px 16px;
+                border-radius: 8px;
+                border: 1px solid #895b0a;
+                background: #1b1810;
+                color: #f2c66d;
+                font-size: 13px;
+                line-height: 1.6;
+              "
+            >
+              <svg
+                aria-hidden="true"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#f2c66d"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="flex: 0 0 auto; margin-top: 2px"
+              >
+                <path
+                  d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"
+                />
+              </svg>
+              <span
+                ><strong>安全边界</strong>&nbsp; WebMux 等同于以当前用户身份把
+                shell 暴露到网络。仅本机使用请监听 127.0.0.1；远程访问请绑定可信
+                VPN；不要直接开放到公网。<a
+                  href="#security"
+                  style="color: #85d9a5"
+                  >阅读安全模型 →</a
+                ></span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer
+        style="
+          margin-top: auto;
+          background: #ffffff;
+          border-top: 1px solid #dce3df;
+        "
+      >
+        <div
+          style="
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            align-items: center;
+            font-size: 13px;
+            color: #5f6d65;
+          "
+        >
+          <img
+            src="../../images/brand/webmux-logo-light.svg"
+            alt="WebMux"
+            style="height: 22px; width: auto"
+          />
+          <a href="#docs" style="color: #34443b">文档中心</a>
+          <a href="#changelog" style="color: #34443b">更新日志</a>
+          <a href="#security" style="color: #34443b">安全策略</a>
+          <a href="https://github.com/mzdluo123/webmux" style="color: #34443b"
+            >GitHub</a
+          >
+          <span style="margin-left: auto"
+            >MIT 许可 · 开源项目，与 agent 厂商无隶属关系</span
+          >
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

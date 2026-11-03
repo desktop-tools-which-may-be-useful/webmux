@@ -46,6 +46,10 @@
 - [CI 耗时优化与验收](ci-performance.md)：CI 墙钟时间的优化记录。
 - [产品能力 baseline](../baseline/README.md)：可复现评测、统计口径与量化结果。
 
+## 官网与推广
+
+- [官网建设指南](website.md)：定位、静态站点生成器选型、页面清单、视觉规范、交互与 SEO 规则、站点功能与验收清单。
+
 ## 文档与 Agent 规则
 
 - [文档治理](doc-governance.md)：文档规模、链接可达性与 README 预算。

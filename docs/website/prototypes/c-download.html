@@ -1,0 +1,1182 @@
+<!doctype html>
+<!-- 由设计画布的原型导出；可编辑的源在维护者的 Design 画布中。图片与字体指向仓库内文件。 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>方案 C · 下载与安装</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      @font-face {
+        font-family: "Inter";
+        src: url("../../../web/public/fonts/inter-latin-3100e775.woff2")
+          format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Maple Mono NF CN";
+        src: url("../../../web/public/fonts/maple-400-latin-0909c56b.woff2")
+          format("woff2");
+        font-weight: 400;
+        font-display: swap;
+      }
+      body {
+        margin: 0;
+        background: #ffffff;
+        color: #19211c;
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          "Noto Sans CJK SC",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: #217346;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      a:hover {
+        color: #1a5c38;
+      }
+      .mono {
+        font-family:
+          "Maple Mono NF CN", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      style="
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        background: #ffffff;
+      "
+    >
+      <header>
+        <div
+          style="
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            gap: 40px;
+          "
+        >
+          <img
+            src="../../images/brand/webmux-logo-light.svg"
+            alt="WebMux"
+            style="height: 26px; width: auto"
+          />
+          <nav
+            aria-label="主导航"
+            style="display: flex; gap: 28px; font-size: 15px; flex-wrap: wrap"
+          >
+            <a href="#story" style="color: #34443b; text-decoration: none"
+              >它怎么工作</a
+            >
+            <a
+              href="#install"
+              aria-current="page"
+              style="color: #19211c; font-weight: 600; text-decoration: none"
+              >安装</a
+            >
+            <a href="#docs" style="color: #34443b; text-decoration: none"
+              >文档</a
+            >
+            <a href="#faq" style="color: #34443b; text-decoration: none"
+              >常见问题</a
+            >
+          </nav>
+          <div
+            style="
+              margin-left: auto;
+              display: flex;
+              align-items: center;
+              gap: 20px;
+              font-size: 14px;
+            "
+          >
+            <a
+              href="https://github.com/mzdluo123/webmux"
+              style="color: #34443b; text-decoration: none"
+              >GitHub</a
+            >
+            <a
+              href="#en"
+              aria-label="Switch to English"
+              style="color: #5f6d65; text-decoration: none"
+              >EN</a
+            >
+          </div>
+        </div>
+      </header>
+
+      <section
+        style="
+          max-width: 1040px;
+          margin: 0 auto;
+          padding: 72px 24px 40px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        "
+      >
+        <nav aria-label="面包屑" style="font-size: 14px; color: #5f6d65">
+          <a href="#home" style="color: #5f6d65; text-decoration: none">首页</a>
+          <span aria-hidden="true">/</span> 下载与安装
+        </nav>
+        <h1
+          style="
+            margin: 0;
+            font-size: 48px;
+            line-height: 1.15;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+          "
+        >
+          下载与安装
+        </h1>
+        <div
+          style="
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 28px;
+            align-items: center;
+            font-size: 15px;
+            color: #34443b;
+          "
+        >
+          <span
+            ><strong>最新版本</strong> <span class="mono">v0.10.1</span></span
+          >
+          <span>2026-11-02 发布</span>
+          <a href="#sha256sums">SHA256SUMS</a>
+          <a href="#changelog">更新日志</a>
+          <a href="https://github.com/mzdluo123/webmux/releases/tag/v0.10.1"
+            >GitHub Release</a
+          >
+        </div>
+      </section>
+
+      <section
+        id="install"
+        style="
+          max-width: 1040px;
+          margin: 0 auto;
+          padding: 0 24px 72px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+          width: 100%;
+          box-sizing: border-box;
+        "
+      >
+        <div
+          role="tablist"
+          aria-label="安装方式"
+          style="
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid #dce3df;
+            font-size: 15px;
+          "
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            style="
+              padding: 0 0 12px;
+              border: 0;
+              border-bottom: 2px solid #217346;
+              margin-bottom: -1px;
+              background: transparent;
+              color: #19211c;
+              font-weight: 600;
+              cursor: pointer;
+              font-family: inherit;
+              font-size: inherit;
+            "
+          >
+            Linux / macOS
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            style="
+              padding: 0 0 12px;
+              border: 0;
+              border-bottom: 2px solid transparent;
+              margin-bottom: -1px;
+              background: transparent;
+              color: #5f6d65;
+              cursor: pointer;
+              font-family: inherit;
+              font-size: inherit;
+            "
+          >
+            Windows（WSL）
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            style="
+              padding: 0 0 12px;
+              border: 0;
+              border-bottom: 2px solid transparent;
+              margin-bottom: -1px;
+              background: transparent;
+              color: #5f6d65;
+              cursor: pointer;
+              font-family: inherit;
+              font-size: inherit;
+            "
+          >
+            deb / rpm
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            style="
+              padding: 0 0 12px;
+              border: 0;
+              border-bottom: 2px solid transparent;
+              margin-bottom: -1px;
+              background: transparent;
+              color: #5f6d65;
+              cursor: pointer;
+              font-family: inherit;
+              font-size: inherit;
+            "
+          >
+            从源码构建
+          </button>
+        </div>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 40px;
+          "
+        >
+          <div
+            style="
+              grid-column: span 8;
+              display: flex;
+              flex-direction: column;
+              gap: 20px;
+            "
+          >
+            <p
+              style="
+                margin: 0;
+                font-size: 16px;
+                line-height: 1.7;
+                color: #34443b;
+              "
+            >
+              脚本自动识别 Linux / macOS 与 amd64 / arm64，下载对应二进制与
+              <span class="mono">SHA256SUMS</span
+              >，校验通过后才原子替换目标文件。默认安装到
+              <span class="mono">~/.local/bin/webmux</span>，不需要 sudo，不改写
+              shell 配置。
+            </p>
+            <div
+              style="
+                display: flex;
+                align-items: stretch;
+                border: 1px solid #dce3df;
+                border-radius: 6px;
+                overflow: hidden;
+              "
+            >
+              <code
+                class="mono"
+                style="
+                  flex: 1 1 auto;
+                  min-width: 0;
+                  padding: 14px 16px;
+                  font-size: 14px;
+                  color: #24292f;
+                  background: #f7f9f8;
+                  white-space: nowrap;
+                  overflow-x: auto;
+                "
+                >curl -fsSL
+                https://github.com/mzdluo123/webmux/releases/latest/download/install.sh
+                | sh</code
+              >
+              <button
+                type="button"
+                aria-label="复制安装命令"
+                title="复制安装命令"
+                style="
+                  width: 48px;
+                  border: 0;
+                  border-left: 1px solid #dce3df;
+                  background: #ffffff;
+                  color: #217346;
+                  cursor: pointer;
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                "
+              >
+                <svg
+                  aria-hidden="true"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="8" y="8" width="12" height="12" rx="2" />
+                  <path
+                    d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                  />
+                </svg>
+              </button>
+            </div>
+            <details
+              style="border: 1px solid #dce3df; border-radius: 8px; padding: 0"
+            >
+              <summary
+                style="
+                  padding: 12px 16px;
+                  font-size: 15px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  list-style: none;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                "
+              >
+                <svg
+                  aria-hidden="true"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+                更多选项：国内镜像、固定版本、安装目录
+              </summary>
+              <div
+                style="
+                  padding: 4px 16px 16px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 14px;
+                  font-size: 14px;
+                  line-height: 1.7;
+                  color: #34443b;
+                "
+              >
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <label
+                    style="display: inline-flex; align-items: center; gap: 8px"
+                    ><input
+                      type="checkbox"
+                      style="width: 16px; height: 16px; accent-color: #217346"
+                    />
+                    使用国内镜像（ghfast.top 代理同一 Release 资产）</label
+                  >
+                  <span style="color: #5f6d65"
+                    >镜像是第三方服务，能看到请求者 IP；二进制与 SHA256SUMS
+                    必须来自同一来源并通过校验。</span
+                  >
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <label for="ver">固定版本（留空为最新）</label>
+                  <input
+                    id="ver"
+                    type="text"
+                    placeholder="0.10.1"
+                    style="
+                      height: 40px;
+                      max-width: 240px;
+                      padding: 0 12px;
+                      border: 1px solid #b7c4bc;
+                      border-radius: 6px;
+                      font-size: 15px;
+                      font-family: inherit;
+                    "
+                  />
+                </div>
+                <pre
+                  class="mono"
+                  style="
+                    margin: 0;
+                    padding: 12px 14px;
+                    border-radius: 6px;
+                    background: #f7f9f8;
+                    border: 1px solid #dce3df;
+                    color: #24292f;
+                    font-size: 13px;
+                    line-height: 1.6;
+                    overflow-x: auto;
+                  "
+                >
+curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/latest/download/install.sh \
+  | WEBMUX_VERSION=0.10.1 WEBMUX_INSTALL_DIR="$HOME/bin" sh</pre>
+              </div>
+            </details>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <span style="font-size: 15px; color: #34443b"
+                ><strong>然后运行</strong>，在浏览器打开
+                http://127.0.0.1:7681，点击“新建会话”：</span
+              >
+              <pre
+                class="mono"
+                style="
+                  margin: 0;
+                  padding: 14px 16px;
+                  border-radius: 6px;
+                  background: #f7f9f8;
+                  border: 1px solid #dce3df;
+                  color: #24292f;
+                  font-size: 14px;
+                  line-height: 1.6;
+                  overflow-x: auto;
+                "
+              >
+webmux --listen 127.0.0.1:7681</pre>
+            </div>
+          </div>
+          <aside
+            style="
+              grid-column: span 4;
+              display: flex;
+              flex-direction: column;
+              gap: 16px;
+              padding: 20px;
+              background: #f7f9f8;
+              border: 1px solid #eef2f0;
+              border-radius: 8px;
+              font-size: 14px;
+              line-height: 1.7;
+              color: #34443b;
+              align-self: start;
+            "
+          >
+            <h2 style="margin: 0; font-size: 16px; font-weight: 600">下一步</h2>
+            <ul
+              style="
+                margin: 0;
+                padding-left: 18px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+              "
+            >
+              <li>
+                让服务常驻后台：<span class="mono">webmux start</span>，或
+                <a href="#service">安装为用户服务</a>。
+              </li>
+              <li>
+                从手机访问：绑定 Tailscale / WireGuard 地址并启用 token，见
+                <a href="#remote">远程访问</a>。
+              </li>
+              <li>
+                在常用终端里启动 agent：<span class="mono"
+                  >webmux run -- claude</span
+                >，<span class="mono">Ctrl+]</span> 分离后去手机上继续。
+              </li>
+            </ul>
+            <p
+              style="
+                margin: 0;
+                padding-top: 12px;
+                border-top: 1px solid #dce3df;
+              "
+            >
+              <strong>升级提示</strong
+              >：重复执行脚本即升级；正在运行的服务需手动重启，重启会结束所有终端会话，先让
+              agent 告一段落。
+            </p>
+          </aside>
+        </div>
+      </section>
+
+      <section
+        id="assets"
+        style="
+          background: #f7f9f8;
+          border-top: 1px solid #eef2f0;
+          border-bottom: 1px solid #eef2f0;
+        "
+      >
+        <div
+          style="
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 72px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              align-items: baseline;
+              gap: 16px;
+              flex-wrap: wrap;
+            "
+          >
+            <h2
+              style="
+                margin: 0;
+                font-size: 34px;
+                line-height: 1.25;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+              "
+            >
+              全部下载
+            </h2>
+            <span style="font-size: 14px; color: #5f6d65"
+              >v0.10.1 · 数据来自 GitHub Releases，构建时自动更新</span
+            >
+          </div>
+          <div
+            style="
+              overflow-x: auto;
+              border: 1px solid #dce3df;
+              border-radius: 8px;
+              background: #ffffff;
+            "
+          >
+            <table
+              style="width: 100%; border-collapse: collapse; font-size: 14px"
+            >
+              <thead>
+                <tr style="text-align: left; color: #5f6d65; font-size: 13px">
+                  <th
+                    scope="col"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                    "
+                  >
+                    文件
+                  </th>
+                  <th
+                    scope="col"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                    "
+                  >
+                    平台 / 架构
+                  </th>
+                  <th
+                    scope="col"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                      text-align: right;
+                    "
+                  >
+                    大小
+                  </th>
+                  <th
+                    scope="col"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                    "
+                  >
+                    SHA-256
+                  </th>
+                  <th
+                    scope="col"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                    "
+                  >
+                    <span
+                      style="
+                        position: absolute;
+                        width: 1px;
+                        height: 1px;
+                        overflow: hidden;
+                        clip: rect(0 0 0 0);
+                      "
+                      >下载</span
+                    >
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th
+                    scope="row"
+                    colspan="5"
+                    style="
+                      padding: 10px 16px;
+                      text-align: left;
+                      font-size: 12px;
+                      font-weight: 600;
+                      color: #5f6d65;
+                      background: #f7f9f8;
+                      border-bottom: 1px solid #dce3df;
+                    "
+                  >
+                    服务端
+                  </th>
+                </tr>
+                <tr>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    webmux-linux-amd64
+                  </td>
+                  <td
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    Linux · x86-64
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    19.4 MiB
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      color: #5f6d65;
+                    "
+                  >
+                    6ca0c509…
+                    <button
+                      type="button"
+                      aria-label="复制 SHA-256"
+                      title="复制 SHA-256"
+                      style="
+                        border: 0;
+                        background: transparent;
+                        color: #217346;
+                        cursor: pointer;
+                        padding: 0;
+                        vertical-align: middle;
+                      "
+                    >
+                      <svg
+                        aria-hidden="true"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="8" y="8" width="12" height="12" rx="2" />
+                        <path
+                          d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                        />
+                      </svg>
+                    </button>
+                  </td>
+                  <td
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/webmux-linux-amd64"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    webmux-linux-arm64
+                  </td>
+                  <td
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    Linux · ARM64
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    18.5 MiB
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      color: #5f6d65;
+                    "
+                  >
+                    3e0e3e18…
+                  </td>
+                  <td
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/webmux-linux-arm64"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    webmux-darwin-arm64
+                  </td>
+                  <td
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    macOS · Apple Silicon
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    18.8 MiB
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      color: #5f6d65;
+                    "
+                  >
+                    3beb1685…
+                  </td>
+                  <td
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/webmux-darwin-arm64"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    webmux-darwin-amd64
+                  </td>
+                  <td
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    macOS · Intel
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    19.7 MiB
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      color: #5f6d65;
+                    "
+                  >
+                    40be6ea9…
+                  </td>
+                  <td
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/webmux-darwin-amd64"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <th
+                    scope="row"
+                    colspan="5"
+                    style="
+                      padding: 10px 16px;
+                      text-align: left;
+                      font-size: 12px;
+                      font-weight: 600;
+                      color: #5f6d65;
+                      background: #f7f9f8;
+                      border-bottom: 1px solid #dce3df;
+                    "
+                  >
+                    Windows（托盘与控制台客户端，服务端运行在 WSL 2）
+                  </th>
+                </tr>
+                <tr>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    webmux-tray-windows-amd64.exe
+                  </td>
+                  <td
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    Windows 托盘 · x86-64
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    7.7 MiB
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      color: #5f6d65;
+                    "
+                  >
+                    5effaef8…
+                  </td>
+                  <td
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/webmux-tray-windows-amd64.exe"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    webmux-windows-amd64.exe
+                  </td>
+                  <td
+                    style="padding: 12px 16px; border-bottom: 1px solid #eef2f0"
+                  >
+                    控制台客户端 · x86-64
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    6.6 MiB
+                  </td>
+                  <td
+                    class="mono"
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      color: #5f6d65;
+                    "
+                  >
+                    9b8cdeec…
+                  </td>
+                  <td
+                    style="
+                      padding: 12px 16px;
+                      border-bottom: 1px solid #eef2f0;
+                      text-align: right;
+                    "
+                  >
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/webmux-windows-amd64.exe"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <th
+                    scope="row"
+                    colspan="5"
+                    style="
+                      padding: 10px 16px;
+                      text-align: left;
+                      font-size: 12px;
+                      font-weight: 600;
+                      color: #5f6d65;
+                      background: #f7f9f8;
+                      border-bottom: 1px solid #dce3df;
+                    "
+                  >
+                    校验与脚本
+                  </th>
+                </tr>
+                <tr>
+                  <td class="mono" style="padding: 12px 16px">SHA256SUMS</td>
+                  <td style="padding: 12px 16px">全部资产的摘要</td>
+                  <td
+                    class="mono"
+                    style="padding: 12px 16px; text-align: right"
+                  >
+                    793 B
+                  </td>
+                  <td style="padding: 12px 16px; color: #5f6d65">—</td>
+                  <td style="padding: 12px 16px; text-align: right">
+                    <a
+                      href="https://github.com/mzdluo123/webmux/releases/download/v0.10.1/SHA256SUMS"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        height: 32px;
+                        padding: 0 12px;
+                        border: 1px solid #dce3df;
+                        border-radius: 6px;
+                        color: #217346;
+                        font-weight: 600;
+                        text-decoration: none;
+                      "
+                      >下载</a
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin: 0; font-size: 14px; color: #5f6d65">
+            表中只列出常用资产；ARM64 Windows 客户端、Windows 安装程序与 deb /
+            rpm 包见
+            <a href="https://github.com/mzdluo123/webmux/releases/tag/v0.10.1"
+              >GitHub Release</a
+            >。手动校验：
+          </p>
+          <pre
+            class="mono"
+            style="
+              margin: 0;
+              padding: 14px 16px;
+              border-radius: 6px;
+              background: #ffffff;
+              border: 1px solid #dce3df;
+              color: #24292f;
+              font-size: 13px;
+              line-height: 1.6;
+              overflow-x: auto;
+            "
+          >
+sha256sum --check --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS</pre>
+        </div>
+      </section>
+
+      <section
+        style="
+          max-width: 1040px;
+          margin: 0 auto;
+          padding: 56px 24px 72px;
+          width: 100%;
+          box-sizing: border-box;
+        "
+      >
+        <p
+          style="
+            margin: 0;
+            max-width: 760px;
+            padding: 16px 20px;
+            border: 1px solid #f2c66d;
+            border-radius: 8px;
+            background: #fff8e8;
+            color: #5a3d06;
+            font-size: 14px;
+            line-height: 1.7;
+          "
+        >
+          <strong>安全边界。</strong>WebMux 等同于以当前用户身份把 shell
+          暴露到网络，默认监听 0.0.0.0:7681。仅本机使用请改为
+          127.0.0.1；远程访问请绑定可信 VPN；除非明确使用隧道并接受“Token
+          是唯一入口屏障”的风险，不要开放到公网。<a href="#security"
+            >阅读安全模型</a
+          >
+        </p>
+      </section>
+
+      <footer style="margin-top: auto">
+        <div
+          style="
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 28px;
+            align-items: center;
+            font-size: 14px;
+            color: #5f6d65;
+          "
+        >
+          <img
+            src="../../images/brand/webmux-logo-light.svg"
+            alt="WebMux"
+            style="height: 22px; width: auto"
+          />
+          <a href="#docs" style="color: #34443b; text-decoration: none"
+            >文档中心</a
+          >
+          <a href="#changelog" style="color: #34443b; text-decoration: none"
+            >更新日志</a
+          >
+          <a href="#security" style="color: #34443b; text-decoration: none"
+            >安全策略</a
+          >
+          <a
+            href="https://github.com/mzdluo123/webmux"
+            style="color: #34443b; text-decoration: none"
+            >GitHub</a
+          >
+          <span style="margin-left: auto"
+            >MIT 许可 · 开源项目，与 agent 厂商无隶属关系</span
+          >
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

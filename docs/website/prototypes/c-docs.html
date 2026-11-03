@@ -1,0 +1,773 @@
+<!doctype html>
+<!-- 由设计画布的原型导出；可编辑的源在维护者的 Design 画布中。图片与字体指向仓库内文件。 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>方案 C · 文档镜像页</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      @font-face {
+        font-family: "Inter";
+        src: url("../../../web/public/fonts/inter-latin-3100e775.woff2")
+          format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Maple Mono NF CN";
+        src: url("../../../web/public/fonts/maple-400-latin-0909c56b.woff2")
+          format("woff2");
+        font-weight: 400;
+        font-display: swap;
+      }
+      body {
+        margin: 0;
+        background: #ffffff;
+        color: #19211c;
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          "Noto Sans CJK SC",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: #217346;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      a:hover {
+        color: #1a5c38;
+      }
+      .mono {
+        font-family:
+          "Maple Mono NF CN", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      style="
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        background: #ffffff;
+      "
+    >
+      <header style="border-bottom: 1px solid #eef2f0">
+        <div
+          style="
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+          "
+        >
+          <img
+            src="../../images/brand/webmux-logo-light.svg"
+            alt="WebMux"
+            style="height: 24px; width: auto"
+          />
+          <nav
+            aria-label="主导航"
+            style="display: flex; gap: 24px; font-size: 15px"
+          >
+            <a href="#story" style="color: #34443b; text-decoration: none"
+              >它怎么工作</a
+            >
+            <a href="#install" style="color: #34443b; text-decoration: none"
+              >安装</a
+            >
+            <a
+              href="#docs"
+              aria-current="page"
+              style="color: #19211c; font-weight: 600; text-decoration: none"
+              >文档</a
+            >
+            <a href="#faq" style="color: #34443b; text-decoration: none"
+              >常见问题</a
+            >
+          </nav>
+          <form
+            role="search"
+            style="
+              margin-left: auto;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              height: 40px;
+              padding: 0 12px;
+              border: 1px solid #dce3df;
+              border-radius: 6px;
+              background: #f7f9f8;
+              width: 300px;
+              box-sizing: border-box;
+            "
+          >
+            <svg
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#5f6d65"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-4-4" />
+            </svg>
+            <label
+              for="q"
+              style="
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+              "
+              >搜索文档</label
+            >
+            <input
+              id="q"
+              type="search"
+              placeholder="搜索文档…"
+              style="
+                flex: 1 1 auto;
+                min-width: 0;
+                border: 0;
+                background: transparent;
+                font-size: 14px;
+                font-family: inherit;
+                color: #19211c;
+                outline: none;
+              "
+            />
+            <kbd
+              class="mono"
+              style="
+                font-size: 11px;
+                color: #5f6d65;
+                border: 1px solid #dce3df;
+                border-radius: 4px;
+                padding: 1px 5px;
+                background: #ffffff;
+              "
+              >/</kbd
+            >
+          </form>
+          <a
+            href="https://github.com/mzdluo123/webmux"
+            style="color: #34443b; text-decoration: none; font-size: 14px"
+            >GitHub</a
+          >
+          <a
+            href="#en"
+            aria-label="Switch to English"
+            style="color: #5f6d65; text-decoration: none; font-size: 14px"
+            >EN</a
+          >
+        </div>
+      </header>
+
+      <div
+        style="
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 24px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0;
+          width: 100%;
+          box-sizing: border-box;
+        "
+      >
+        <nav
+          aria-label="文档目录"
+          style="
+            flex: 0 0 260px;
+            padding: 32px 24px 48px 0;
+            border-right: 1px solid #eef2f0;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          "
+        >
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span
+              style="
+                font-size: 12px;
+                font-weight: 600;
+                color: #5f6d65;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+              "
+              >了解 WebMux</span
+            >
+            <a
+              href="#overview"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >项目介绍</a
+            >
+            <a
+              href="#stories"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >User Stories</a
+            >
+            <a
+              href="#faq"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >常见问题与获取帮助</a
+            >
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span
+              style="
+                font-size: 12px;
+                font-weight: 600;
+                color: #5f6d65;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+              "
+              >安装与部署</span
+            >
+            <a
+              href="#deploy"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >部署指南</a
+            >
+            <a
+              href="#install"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >安装与升级</a
+            >
+            <a
+              href="#config"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >配置</a
+            >
+            <a
+              href="#services"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >服务管理与平台差异</a
+            >
+            <a
+              href="#remote"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >远程访问与 HTTPS</a
+            >
+            <a
+              href="#pwa"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >安装为应用与手机推送</a
+            >
+            <a
+              href="#wsl"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >Windows（WSL）部署</a
+            >
+            <a
+              href="#cloudflare"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >Cloudflare Named Tunnel</a
+            >
+            <a
+              href="#tailscale"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >Tailscale Serve / Funnel</a
+            >
+            <a
+              href="#security"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >安全策略</a
+            >
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span
+              style="
+                font-size: 12px;
+                font-weight: 600;
+                color: #5f6d65;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+              "
+              >日常使用</span
+            >
+            <a
+              href="#usage"
+              aria-current="page"
+              style="
+                color: #217346;
+                font-weight: 600;
+                text-decoration: none;
+                padding: 4px 0 4px 10px;
+                border-left: 2px solid #217346;
+                margin-left: -12px;
+              "
+              >使用指南</a
+            >
+            <a
+              href="#terminal"
+              style="
+                color: #34443b;
+                text-decoration: none;
+                padding: 4px 0 4px 12px;
+              "
+              >终端使用</a
+            >
+            <a
+              href="#hybrid"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >混合会话</a
+            >
+            <a
+              href="#agents"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >CLI agent 接入</a
+            >
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span
+              style="
+                font-size: 12px;
+                font-weight: 600;
+                color: #5f6d65;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+              "
+              >开发与架构</span
+            >
+            <a
+              href="#contributing"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >参与贡献</a
+            >
+            <a
+              href="#architecture"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >架构设计</a
+            >
+            <a
+              href="#protocol"
+              style="color: #34443b; text-decoration: none; padding: 4px 0"
+              >API 与协议</a
+            >
+          </div>
+        </nav>
+
+        <article
+          style="
+            flex: 999 1 560px;
+            min-width: 0;
+            padding: 32px 40px 64px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            max-width: 760px;
+            box-sizing: border-box;
+          "
+        >
+          <nav
+            aria-label="面包屑"
+            style="
+              font-size: 13px;
+              color: #5f6d65;
+              display: flex;
+              gap: 8px;
+              align-items: center;
+            "
+          >
+            <a href="#docs" style="color: #5f6d65; text-decoration: none"
+              >文档</a
+            ><span aria-hidden="true">/</span> <span>日常使用</span
+            ><span aria-hidden="true">/</span>
+            <span style="color: #19211c">使用指南</span>
+          </nav>
+          <h1
+            style="
+              margin: 0;
+              font-size: 40px;
+              line-height: 1.2;
+              font-weight: 700;
+              letter-spacing: -0.02em;
+            "
+          >
+            使用指南
+          </h1>
+          <div
+            style="
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px 20px;
+              font-size: 13px;
+              color: #5f6d65;
+              padding-bottom: 16px;
+              border-bottom: 1px solid #eef2f0;
+            "
+          >
+            <span>基于 <span class="mono">v0.10.1</span> 的文档</span>
+            <a
+              href="https://github.com/mzdluo123/webmux/blob/main/docs/usage.md"
+              >在 GitHub 上查看</a
+            >
+            <a
+              href="https://github.com/mzdluo123/webmux/edit/main/docs/usage.md"
+              >编辑此页</a
+            >
+          </div>
+
+          <h2
+            id="session-list"
+            style="
+              margin: 16px 0 0;
+              font-size: 26px;
+              line-height: 1.3;
+              font-weight: 700;
+              letter-spacing: -0.01em;
+            "
+          >
+            会话列表
+          </h2>
+          <p
+            style="margin: 0; font-size: 16px; line-height: 1.8; color: #34443b"
+          >
+            首页按仓库 / 工作树分组展示所有会话，实时显示标题、状态（运行中 /
+            可能在等你 / 空闲 / 已退出）和终端屏幕预览。同时跑多个 agent
+            时，总览里一眼看出谁在干活、谁在等你。
+          </p>
+          <img
+            src="../../images/desktop-overview.png"
+            alt="会话总览：多个 agent 会话按仓库分组，显示运行状态与屏幕预览"
+            style="
+              display: block;
+              width: 100%;
+              height: auto;
+              border-radius: 8px;
+              border: 1px solid #dce3df;
+            "
+          />
+
+          <h3
+            id="attention"
+            style="
+              margin: 8px 0 0;
+              font-size: 20px;
+              line-height: 1.4;
+              font-weight: 600;
+            "
+          >
+            需要你介入的提醒
+          </h3>
+          <p
+            style="margin: 0; font-size: 16px; line-height: 1.8; color: #34443b"
+          >
+            程序主动发出的终端信号优先于启发式：一旦收到，会话显示具体提醒并保持“等待”，即使
+            agent 仍在刷新 spinner、计时器或状态栏。
+          </p>
+          <div
+            style="
+              overflow-x: auto;
+              border: 1px solid #dce3df;
+              border-radius: 8px;
+            "
+          >
+            <table
+              style="width: 100%; border-collapse: collapse; font-size: 14px"
+            >
+              <thead>
+                <tr style="text-align: left; background: #f7f9f8">
+                  <th
+                    scope="col"
+                    style="
+                      padding: 10px 14px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                    "
+                  >
+                    提醒
+                  </th>
+                  <th
+                    scope="col"
+                    style="
+                      padding: 10px 14px;
+                      border-bottom: 1px solid #dce3df;
+                      font-weight: 600;
+                    "
+                  >
+                    来源
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td
+                    style="padding: 10px 14px; border-bottom: 1px solid #eef2f0"
+                  >
+                    需要回答
+                  </td>
+                  <td
+                    style="padding: 10px 14px; border-bottom: 1px solid #eef2f0"
+                  >
+                    <span class="mono">OSC 7501</span> 状态
+                    <span class="mono">blocked</span>（<span class="mono"
+                      >kind=question</span
+                    >、<span class="mono">auth</span> 或未注明）
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style="padding: 10px 14px; border-bottom: 1px solid #eef2f0"
+                  >
+                    等待授权
+                  </td>
+                  <td
+                    style="padding: 10px 14px; border-bottom: 1px solid #eef2f0"
+                  >
+                    <span class="mono">OSC 7501</span> 状态
+                    <span class="mono">blocked</span> 且
+                    <span class="mono">kind=permission</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style="padding: 10px 14px; border-bottom: 1px solid #eef2f0"
+                  >
+                    本轮完成
+                  </td>
+                  <td
+                    style="padding: 10px 14px; border-bottom: 1px solid #eef2f0"
+                  >
+                    <span class="mono">OSC 7501</span> 状态
+                    <span class="mono">done</span>；Warp 结构化事件
+                    <span class="mono">stop</span> /
+                    <span class="mono">idle_prompt</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 14px">响铃提醒</td>
+                  <td style="padding: 10px 14px">
+                    终端响铃（BEL），在你最后一次输入 1 秒后才计入
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 12px;
+              padding: 14px 16px;
+              border: 1px solid #91c4ff;
+              border-radius: 8px;
+              background: #eef5ff;
+              color: #1b4a80;
+              font-size: 14px;
+              line-height: 1.7;
+            "
+          >
+            <svg
+              aria-hidden="true"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#2563a6"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="flex: 0 0 auto; margin-top: 3px"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8h.01M11 12h1v4h1" />
+            </svg>
+            <span
+              ><strong>说明</strong>&nbsp; <span class="mono">OSC 7501</span> 是
+              Program Status
+              Protocol：程序直接报告自己处于空闲、工作中、阻塞、完成还是出错。webmux
+              只读取 <span class="mono">state</span> 与
+              <span class="mono">kind</span>，正文从不解析、保存或下发。</span
+            >
+          </div>
+          <p
+            style="margin: 0; font-size: 16px; line-height: 1.8; color: #34443b"
+          >
+            <strong>Claude Code</strong>（2.1.295
+            及以上）：无需配置。它在启动时发出
+            <span class="mono">OSC 7501;?</span> 探测，得到 webmux
+            的应答后报告状态。
+          </p>
+          <pre
+            class="mono"
+            style="
+              margin: 0;
+              padding: 14px 16px;
+              border-radius: 6px;
+              background: #f7f9f8;
+              border: 1px solid #dce3df;
+              color: #24292f;
+              font-size: 13px;
+              line-height: 1.6;
+              overflow-x: auto;
+            "
+          >
+webmux run -- claude      # 在常用终端里启动，Ctrl+] 分离后去手机上继续
+webmux attach &lt;ID&gt;        # 回到电脑后接续同一个进程</pre>
+
+          <nav
+            aria-label="上一篇 / 下一篇"
+            style="
+              margin-top: 24px;
+              padding-top: 20px;
+              border-top: 1px solid #eef2f0;
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              font-size: 14px;
+            "
+          >
+            <a
+              href="#faq"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                text-decoration: none;
+                color: #34443b;
+              "
+              ><span style="font-size: 12px; color: #5f6d65">← 上一篇</span
+              ><span style="font-weight: 600">常见问题与获取帮助</span></a
+            >
+            <a
+              href="#terminal"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                text-decoration: none;
+                color: #34443b;
+                text-align: right;
+              "
+              ><span style="font-size: 12px; color: #5f6d65">下一篇 →</span
+              ><span style="font-weight: 600">终端使用</span></a
+            >
+          </nav>
+        </article>
+
+        <nav
+          aria-label="本页目录"
+          style="
+            flex: 0 0 200px;
+            padding: 40px 0 48px 24px;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-self: flex-start;
+          "
+        >
+          <span style="font-weight: 600; color: #5f6d65">本页</span>
+          <a
+            href="#session-list"
+            style="color: #217346; text-decoration: none; font-weight: 600"
+            >会话列表</a
+          >
+          <a
+            href="#attention"
+            style="color: #34443b; text-decoration: none; padding-left: 12px"
+            >需要你介入的提醒</a
+          >
+          <a href="#new-session" style="color: #34443b; text-decoration: none"
+            >新建会话</a
+          >
+          <a href="#background" style="color: #34443b; text-decoration: none"
+            >后台启动</a
+          >
+          <a href="#attach" style="color: #34443b; text-decoration: none"
+            >从终端启动与附着</a
+          >
+          <a href="#scratch" style="color: #34443b; text-decoration: none"
+            >草稿模式</a
+          >
+          <a href="#code" style="color: #34443b; text-decoration: none"
+            >代码工作区</a
+          >
+          <a href="#mobile" style="color: #34443b; text-decoration: none"
+            >移动端</a
+          >
+        </nav>
+      </div>
+
+      <footer style="margin-top: auto; border-top: 1px solid #eef2f0">
+        <div
+          style="
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 32px 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 28px;
+            align-items: center;
+            font-size: 14px;
+            color: #5f6d65;
+          "
+        >
+          <img
+            src="../../images/brand/webmux-logo-light.svg"
+            alt="WebMux"
+            style="height: 22px; width: auto"
+          />
+          <a href="#download" style="color: #34443b; text-decoration: none"
+            >下载</a
+          >
+          <a href="#changelog" style="color: #34443b; text-decoration: none"
+            >更新日志</a
+          >
+          <a href="#security" style="color: #34443b; text-decoration: none"
+            >安全策略</a
+          >
+          <a
+            href="https://github.com/mzdluo123/webmux"
+            style="color: #34443b; text-decoration: none"
+            >GitHub</a
+          >
+          <span style="margin-left: auto"
+            >MIT 许可 · 开源项目，与 agent 厂商无隶属关系</span
+          >
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
