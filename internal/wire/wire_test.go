@@ -39,6 +39,7 @@ func TestRequiredArraysAndNullableCollections(t *testing.T) {
 		{"empty env", LaunchConfig(launch.Config{Env: map[string]string{}}), []string{`"env":{}`}},
 		{"nil env", LaunchConfig(launch.Config{}), []string{`"env":{}`}},
 		{"nil env names", LaunchSummaries([]launch.Summary{{}}), []string{`"envNames":[]`, `"cmd":[]`}},
+		{"nil preset arrays", LaunchPresets([]launch.Preset{{}}), []string{`"envNames":[]`, `"cmd":[]`}},
 		{"nil branches", Branches(workspace.Branches{Branches: []workspace.Branch{{}}}), []string{`"worktreePaths":[]`, `"bases":[]`}},
 		{"nil preview arrays", Preview(workspace.Preview{}), []string{`"sessions":[]`, `"blockers":[]`}},
 		{"nil report arrays", PushTestReport(push.TestReport{}), []string{`"removed":[]`, `"errors":[]`}},

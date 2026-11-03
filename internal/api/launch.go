@@ -19,6 +19,26 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 		}
 		reply(w, http.StatusOK, wire.LaunchSummaries(list))
 	})
+	mux.HandleFunc("GET /api/launch-configs/presets", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.Launch.Presets()
+		if err != nil {
+			launchFailure(w, err)
+			return
+		}
+		reply(w, http.StatusOK, wire.LaunchPresets(list))
+	})
+	mux.HandleFunc("POST /api/launch-configs/presets", func(w http.ResponseWriter, r *http.Request) {
+		var req contract.RestoreLaunchPresetsRequest
+		if !decode(w, r, &req) {
+			return
+		}
+		list, err := s.Launch.RestorePresets(req.Name)
+		if err != nil {
+			launchFailure(w, err)
+			return
+		}
+		reply(w, http.StatusOK, wire.LaunchSummaries(list))
+	})
 	// Read-only: the settings page asks whether an edited command can use
 	// hybrid mode, so the browser never mirrors the profile rules.
 	mux.HandleFunc("POST /api/launch-configs/hybrid-support", func(w http.ResponseWriter, r *http.Request) {

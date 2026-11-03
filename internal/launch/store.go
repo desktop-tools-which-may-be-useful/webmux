@@ -34,6 +34,7 @@ type Service struct {
 	path    string
 	store   *statefile.Handle[storedFile]
 	configs []Config
+	presets []Input
 	// fresh reports that launch-configs.json did not exist at Open and has not
 	// been written since; only then does Seed fill it.
 	fresh bool
@@ -122,6 +123,7 @@ func (s *Service) Close() {
 		s.broken = errors.New("服务已关闭")
 	}
 	s.configs = nil
+	s.presets = nil
 }
 
 // Path is the absolute path of launch-configs.json.
@@ -172,11 +174,15 @@ func (s *Service) List() ([]Summary, error) {
 		return nil, err
 	}
 	defer s.mu.Unlock()
+	return s.summariesLocked(), nil
+}
+
+func (s *Service) summariesLocked() []Summary {
 	out := make([]Summary, 0, len(s.configs))
 	for _, c := range s.configs {
 		out = append(out, c.summary())
 	}
-	return out, nil
+	return out
 }
 
 // Get returns a copy of one full config.
@@ -224,32 +230,33 @@ func (s *Service) Create(in Input) (Config, error) {
 // Seed creates launch-configs.json with ins when the file did not exist at
 // Open, so a new installation starts with ready-made configs. Once the file
 // exists, including as an empty list after the user deleted every config,
-// Seed does nothing.
+// Seed records ins as the restorable presets without rewriting the file.
 func (s *Service) Seed(ins []Input) error {
 	if err := s.lockAvailable(); err != nil {
 		return err
 	}
 	defer s.mu.Unlock()
+	presets, err := normalizePresets(ins)
+	if err != nil {
+		return err
+	}
+	if s.presets == nil {
+		s.presets = presets
+	}
 	if !s.fresh {
 		return nil
 	}
 	now := time.Now().UTC()
-	configs := make([]Config, 0, len(ins))
-	for _, in := range ins {
-		in, err := normalize(in)
-		if err != nil {
-			return err
-		}
-		if slices.ContainsFunc(configs, func(c Config) bool { return c.Name == in.Name }) {
-			return ErrDuplicate
-		}
+	configs := make([]Config, 0, len(presets))
+	for _, in := range presets {
 		id, err := newID(func(id string) bool {
 			return slices.ContainsFunc(configs, func(c Config) bool { return c.ID == id })
 		})
 		if err != nil {
 			return err
 		}
-		configs = append(configs, Config{ID: id, Name: in.Name, Icon: in.Icon, Cmd: in.Cmd, Env: in.Env, Preview: in.Preview, Hybrid: in.Hybrid, CreatedAt: now, UpdatedAt: now})
+		c := Config{ID: id, Name: in.Name, Icon: in.Icon, Cmd: in.Cmd, Env: in.Env, Preview: in.Preview, Hybrid: in.Hybrid, CreatedAt: now, UpdatedAt: now}
+		configs = append(configs, c.clone())
 	}
 	if err := s.saveLocked(configs); err != nil {
 		return err

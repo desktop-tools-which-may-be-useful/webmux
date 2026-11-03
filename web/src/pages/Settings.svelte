@@ -25,9 +25,11 @@
   import {
     ConfigSchema,
     LaunchConfigsSchema,
+    LaunchPresetsSchema,
     NoContentSchema,
     PreviewSettingsSchema,
     type LaunchConfigSummary,
+    type LaunchPreset,
     type PendingUpdate,
     type QuickCommand,
   } from "../schemas";
@@ -37,6 +39,7 @@
     type StartupShell,
   } from "../launchConfigs";
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
+  import LaunchPresetMenu from "../components/LaunchPresetMenu.svelte";
   import {
     defaultPreviewSettings,
     previewSettings,
@@ -101,8 +104,11 @@
   // Launch configs live on the server; a load failure (for example 503 when
   // the state file is corrupt or locked) only disables this card.
   let launchConfigs = $state<LaunchConfigSummary[]>([]);
+  let launchPresets = $state<LaunchPreset[]>([]);
   let launchState = $state<"loading" | "ready" | "unavailable">("loading");
   let launchError = $state("");
+  let launchPresetBusy = $state(false);
+  let launchPresetError = $state("");
   let launchDialogOpen = $state(false);
   let launchEditing = $state<string>();
   let launchDeleting = $state<LaunchConfigSummary>();
@@ -120,6 +126,34 @@
     } catch (err) {
       launchError = errorMessage(err);
       launchState = "unavailable";
+    }
+  }
+  async function loadLaunchPresets() {
+    try {
+      launchPresets = await api("/launch-configs/presets", LaunchPresetsSchema);
+      launchPresetError = "";
+    } catch (err) {
+      // An empty list disables the menu; keep the reason so the card can
+      // explain why and offer a retry.
+      launchPresets = [];
+      launchPresetError = errorMessage(err);
+    }
+  }
+  async function restoreLaunchPresets(name?: string) {
+    if (launchPresetBusy) return;
+    launchPresetBusy = true;
+    launchPresetError = "";
+    try {
+      launchConfigs = await api(
+        "/launch-configs/presets",
+        LaunchConfigsSchema,
+        "POST",
+        name ? { name } : {},
+      );
+    } catch (err) {
+      launchPresetError = errorMessage(err);
+    } finally {
+      launchPresetBusy = false;
     }
   }
   function editLaunchConfig(id?: string) {
@@ -199,6 +233,7 @@
   onMount(() => {
     setBrowserChrome("WebMux · 设置", false);
     void loadLaunchConfigs();
+    void loadLaunchPresets();
     void loadConfig();
   });
 </script>
@@ -212,6 +247,20 @@
     disabled={!settings.ready}
     {onclick}><IconTrash aria-hidden="true" /></Button
   >
+{/snippet}
+{#snippet launchCreateActions(
+  variant: "default" | "outline",
+  disabled: boolean,
+)}
+  <Button {variant} {disabled} onclick={() => editLaunchConfig()}
+    ><IconPlus aria-hidden="true" />新建启动配置</Button
+  >
+  <LaunchPresetMenu
+    presets={launchPresets}
+    configs={launchConfigs}
+    busy={disabled || launchPresetBusy}
+    onrestore={restoreLaunchPresets}
+  />
 {/snippet}
 
 <div class="safe-area-page min-h-dvh">
@@ -382,9 +431,9 @@
                 >
               </Empty.Header>
               <Empty.Content>
-                <Button disabled
-                  ><IconPlus aria-hidden="true" />新建启动配置</Button
-                >
+                <div class="flex flex-wrap items-center justify-center gap-2">
+                  {@render launchCreateActions("default", true)}
+                </div>
               </Empty.Content>
             </Empty.Root>
           {:else if launchState === "unavailable"}
@@ -392,8 +441,12 @@
               <p>启动配置暂不可用，新建、编辑与删除已停用：</p>
               <p class="mt-1 font-mono text-xs">{launchError}</p>
             </InlineNotice>
-            <Button variant="outline" onclick={() => loadLaunchConfigs()}
-              >重新读取</Button
+            <Button
+              variant="outline"
+              onclick={() => {
+                void loadLaunchConfigs();
+                void loadLaunchPresets();
+              }}>重新读取</Button
             >
           {:else if launchConfigs.length === 0}
             <Empty.Root variant="outline">
@@ -407,9 +460,9 @@
                 >
               </Empty.Header>
               <Empty.Content>
-                <Button onclick={() => editLaunchConfig()}
-                  ><IconPlus aria-hidden="true" />新建启动配置</Button
-                >
+                <div class="flex flex-wrap items-center justify-center gap-2">
+                  {@render launchCreateActions("default", false)}
+                </div>
               </Empty.Content>
             </Empty.Root>
           {:else}
@@ -458,16 +511,29 @@
               {/each}
             </Item.Group>
             <div class="flex flex-wrap items-center gap-3">
-              <Button
-                variant="outline"
-                disabled={launchFull}
-                onclick={() => editLaunchConfig()}
-                ><IconPlus aria-hidden="true" />新建启动配置</Button
-              >
+              {@render launchCreateActions("outline", launchFull)}
               {#if launchFull}<span class="text-xs text-muted-foreground"
                   >最多 {LAUNCH_CONFIGS_LIMIT} 条，请先删除一条</span
                 >{/if}
             </div>
+          {/if}
+          {#if launchPresetError && launchState !== "unavailable"}
+            <InlineNotice tone="danger">
+              <p>
+                {launchPresets.length === 0
+                  ? "系统预设暂不可用，恢复菜单已停用："
+                  : "补回预设失败："}{launchPresetError}
+              </p>
+              {#if launchPresets.length === 0}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="mt-2"
+                  onclick={() => void loadLaunchPresets()}
+                  >重新读取系统预设</Button
+                >
+              {/if}
+            </InlineNotice>
           {/if}
           <ChatIdleSleepSetting />
         </Card.Content>

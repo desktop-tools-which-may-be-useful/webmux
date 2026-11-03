@@ -1,0 +1,181 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "cmd": [
+        "/bin/sh",
+        "-l",
+        "-i"
+      ],
+      "envNames": [],
+      "hybrid": false,
+      "icon": "terminal",
+      "name": "Shell"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "claude",
+        "--dangerously-skip-permissions"
+      ],
+      "envNames": [],
+      "hybrid": true,
+      "icon": "claudecode",
+      "name": "Claude Code"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "codex",
+        "--dangerously-bypass-approvals-and-sandbox"
+      ],
+      "envNames": [],
+      "hybrid": true,
+      "icon": "codex",
+      "name": "Codex CLI"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "agy",
+        "--dangerously-skip-permissions"
+      ],
+      "envNames": [],
+      "hybrid": true,
+      "icon": "antigravity",
+      "name": "Antigravity CLI"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "agent"
+      ],
+      "envNames": [],
+      "hybrid": false,
+      "icon": "cursor",
+      "name": "Cursor CLI"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "copilot"
+      ],
+      "envNames": [],
+      "hybrid": false,
+      "icon": "githubcopilot",
+      "name": "GitHub Copilot CLI"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "opencode",
+        "--auto"
+      ],
+      "envNames": [],
+      "hybrid": true,
+      "icon": "opencode",
+      "name": "Open Code"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "qwen"
+      ],
+      "envNames": [],
+      "hybrid": false,
+      "icon": "qwen",
+      "name": "Qwen Code"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "kimi"
+      ],
+      "envNames": [],
+      "hybrid": false,
+      "icon": "kimi",
+      "name": "Kimi Code CLI"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "codebuddy"
+      ],
+      "envNames": [],
+      "hybrid": false,
+      "icon": "codebuddy",
+      "name": "CodeBuddy Code"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "omp",
+        "--auto-approve"
+      ],
+      "envNames": [
+        "PI_FORCE_IMAGE_PROTOCOL"
+      ],
+      "hybrid": true,
+      "icon": "pi",
+      "name": "omp"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "qoder",
+        "--dangerously-skip-permissions"
+      ],
+      "envNames": [],
+      "hybrid": true,
+      "icon": "qoder",
+      "name": "Qoder"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "qodercn",
+        "--dangerously-skip-permissions"
+      ],
+      "envNames": [],
+      "hybrid": true,
+      "icon": "qoder",
+      "name": "QoderCN"
+    }
+  ]
+}

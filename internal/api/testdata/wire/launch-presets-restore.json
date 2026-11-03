@@ -1,0 +1,65 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "cmd": [
+        "/bin/sh",
+        "-c",
+        "sleep 60"
+      ],
+      "createdAt": "<time>",
+      "envNames": [],
+      "hybrid": false,
+      "hybridSupport": {
+        "reason": "unknown_agent",
+        "supported": false,
+        "supportedAgents": [
+          "omp",
+          "OpenCode",
+          "Codex CLI",
+          "Claude Code",
+          "Qoder",
+          "QoderCN",
+          "Antigravity CLI"
+        ]
+      },
+      "id": "<id#2>",
+      "name": "Shell",
+      "preview": null,
+      "updatedAt": "<time>"
+    },
+    {
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "omp",
+        "--auto-approve"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "PI_FORCE_IMAGE_PROTOCOL"
+      ],
+      "hybrid": true,
+      "hybridSupport": {
+        "agent": "omp",
+        "supported": true,
+        "supportedAgents": [
+          "omp",
+          "OpenCode",
+          "Codex CLI",
+          "Claude Code",
+          "Qoder",
+          "QoderCN",
+          "Antigravity CLI"
+        ]
+      },
+      "icon": "pi",
+      "id": "<id#4>",
+      "name": "omp",
+      "preview": null,
+      "updatedAt": "<time>"
+    }
+  ]
+}

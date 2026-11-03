@@ -176,6 +176,49 @@ func TestLaunchConfigCRUD(t *testing.T) {
 	}
 }
 
+func TestLaunchConfigPresets(t *testing.T) {
+	store := openLaunchStore(t)
+	if err := store.Seed(launch.Presets("/bin/zsh")); err != nil {
+		t.Fatal(err)
+	}
+	h := newLaunchHarness(t, store)
+	var presets []contract.LaunchPreset
+	if err := json.Unmarshal(h.expect("GET", "/api/launch-configs/presets", "", 200), &presets); err != nil {
+		t.Fatal(err)
+	}
+	if len(presets) != 13 || presets[0].Name != "Shell" || !reflect.DeepEqual(presets[0].Cmd, []string{"/bin/zsh", "-l", "-i"}) {
+		t.Fatalf("presets = %+v", presets)
+	}
+	var current []contract.LaunchConfigSummary
+	if err := json.Unmarshal(h.expect("GET", "/api/launch-configs", "", 200), &current); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range current {
+		if c.Name == "Shell" {
+			continue
+		}
+		h.expect("DELETE", "/api/launch-configs/"+c.ID, "", 204)
+	}
+	var afterOne []contract.LaunchConfigSummary
+	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/presets", `{"name":"omp"}`, 200), &afterOne); err != nil {
+		t.Fatal(err)
+	}
+	if len(afterOne) != 2 || afterOne[0].Name != "Shell" || afterOne[1].Name != "omp" || !afterOne[1].Hybrid || !reflect.DeepEqual(afterOne[1].EnvNames, []string{"PI_FORCE_IMAGE_PROTOCOL"}) {
+		t.Fatalf("after restore omp = %+v", afterOne)
+	}
+	h.expect("POST", "/api/launch-configs/presets", `{"name":"Shell"}`, 409)
+	h.expect("POST", "/api/launch-configs/presets", `{"name":"unknown"}`, 404)
+	h.expect("POST", "/api/launch-configs/presets", `{"unknown":1}`, 400)
+
+	var afterAll []contract.LaunchConfigSummary
+	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/presets", `{}`, 200), &afterAll); err != nil {
+		t.Fatal(err)
+	}
+	if len(afterAll) != 13 || afterAll[0].ID != current[0].ID {
+		t.Fatalf("after restore all = %+v", afterAll)
+	}
+}
+
 func TestLaunchConfigHybrid(t *testing.T) {
 	h := newLaunchHarness(t, openLaunchStore(t))
 	var created struct {
@@ -233,6 +276,9 @@ func TestLaunchConfigAuthAndOrigin(t *testing.T) {
 	}{
 		{"GET", "/api/launch-configs", "", "", "", 401},
 		{"GET", "/api/launch-configs", "", "Bearer wrong", "", 401},
+		{"GET", "/api/launch-configs/presets", "", "", "", 401},
+		{"POST", "/api/launch-configs/presets", `{}`, "", "", 401},
+		{"POST", "/api/launch-configs/presets", `{}`, "Bearer secret", "https://evil.example", 403},
 		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "", "", 401},
 		{"POST", "/api/launch-configs/hybrid-support", `{"cmd":["omp"]}`, "", "", 401},
 		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "Bearer secret", "https://evil.example", 403},
@@ -279,13 +325,18 @@ func TestLaunchConfigUnavailable(t *testing.T) {
 			h := newLaunchHarness(t, row.store)
 			for _, req := range [][2]string{
 				{"GET", "/api/launch-configs"},
+				{"GET", "/api/launch-configs/presets"},
+				{"POST", "/api/launch-configs/presets"},
 				{"GET", "/api/launch-configs/abcdefgh"},
 				{"POST", "/api/launch-configs"},
 				{"PUT", "/api/launch-configs/abcdefgh"},
 				{"DELETE", "/api/launch-configs/abcdefgh"},
 			} {
 				body := ""
-				if req[0] == "POST" || req[0] == "PUT" {
+				switch {
+				case req[1] == "/api/launch-configs/presets" && req[0] == "POST":
+					body = `{"name":"Shell"}`
+				case req[0] == "POST" || req[0] == "PUT":
 					body = `{"name":"x","cmd":["x"]}`
 				}
 				raw := h.expect(req[0], req[1], body, 503)

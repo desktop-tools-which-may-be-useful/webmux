@@ -68,3 +68,19 @@ type LaunchConfigInput struct {
 	Preview *PreviewSettings  `json:"preview"`
 	Hybrid  bool              `json:"hybrid"`
 }
+
+// LaunchPreset describes one built-in launch preset that can be restored.
+type LaunchPreset struct {
+	Name     string   `json:"name"`
+	Icon     string   `json:"icon,omitempty"`
+	Cmd      []string `json:"cmd"`
+	EnvNames []string `json:"envNames"`
+	Hybrid   bool     `json:"hybrid"`
+}
+
+// RestoreLaunchPresetsRequest is the body of POST /api/launch-configs/presets.
+// An empty Name restores every missing preset; a set Name restores that
+// preset alone.
+type RestoreLaunchPresetsRequest struct {
+	Name string `json:"name,omitempty"`
+}

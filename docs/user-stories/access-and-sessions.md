@@ -127,7 +127,7 @@
     - Shell 为通用终端，agent 使用本地打包的 LobeHub 图标（Antigravity CLI 为 `antigravity`，同时保留旧 `geminicli` 兼容渲染），omp 使用 Pi；
     - agent 预设按服务端 `$SHELL` 经“加载 shell 启动文件”包裹（Bash 或 Zsh，未设置时 Bash，其他 shell 直接执行）；
     - 各命令的授权参数见接入说明，Claude Code、Codex CLI、Antigravity CLI、Open Code、omp、Qoder 与 QoderCN 为混合模式，可编辑或删除；
-  - 文件已存在时（包括用户编辑或删空后）不再补写或覆盖；
+  - 文件已存在时启动服务（包括用户编辑或删空后）不再自动补写或覆盖，但可在设置页「新建启动配置」旁的「添加系统预设」菜单中补回单个或全部缺失的系统预设（已有同名配置时菜单项置灰并标记“已存在”，不覆盖用户已修改的配置）；
   - 配置跨重启与设备共享，环境变量值默认遮挡；
   - 按配置 ID 启动，修改或删除配置不影响运行中会话的命令与环境，会话信息保留配置 ID 供首页解析预览；
   - 存储不可用时显示原因，临时命令仍可用。编辑器可勾选混合模式，可用性由服务端判定并显示原因，列表显示“混合”标记（US-Q01）。
@@ -135,7 +135,7 @@
 依据：
 
 - [启动图标](../../web/src/components/LaunchConfigIcon.svelte)、[LobeHub 图标来源与许可](../../web/src/icons/lobehub/README.md)、[新建会话](../../web/src/components/NewSessionSheet.svelte)
-- [启动配置编辑](../../web/src/components/LaunchConfigDialog.svelte)、[启动配置存储](../../internal/launch/store.go)、[首次启动预设](../../internal/launch/presets.go)
+- [启动配置编辑](../../web/src/components/LaunchConfigDialog.svelte)、[系统预设菜单](../../web/src/components/LaunchPresetMenu.svelte)、[启动配置存储](../../internal/launch/store.go)、[首次启动预设](../../internal/launch/presets.go)
 - [启动配置接口](../../internal/api/launch.go)、[CLI agent 接入](../cli-agents.md)
 - [会话标题来源](../../internal/hybrid/actor.go)、[会话覆盖层](../../internal/session/shell.go)、[聊天页头](../../web/src/hooks/hybrid.svelte.ts)
 - [目录选择](../../web/src/components/DirectoryPicker.svelte)、[命令解析](../../internal/session/command.go)、[工作区会话创建](../../internal/workspace/sessions.go)。

@@ -143,6 +143,15 @@ export const LaunchConfigsSchema = z
       new Set(configs.map((config) => config.id)).size === configs.length,
     "启动配置 ID 不能重复",
   );
+export const LaunchPresetSchema = z.object({
+  name: launchConfigFields.name,
+  icon: launchConfigFields.icon,
+  cmd: launchConfigFields.cmd,
+  envNames: z.array(z.string()),
+  hybrid: z.boolean(),
+});
+export type LaunchPreset = z.infer<typeof LaunchPresetSchema>;
+export const LaunchPresetsSchema = z.array(LaunchPresetSchema);
 
 export const SessionEventSchema = z.discriminatedUnion("type", [
   z.object({

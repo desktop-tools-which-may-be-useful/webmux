@@ -35,6 +35,8 @@ function serve(list: () => Response) {
       const method = init?.method ?? "GET";
       requests.push(`${method} ${path}`);
       if (path === "/api/launch-configs" && method === "GET") return list();
+      if (path === "/api/launch-configs/presets" && method === "GET")
+        return Response.json([]);
       if (path === `/api/launch-configs/${config.id}` && method === "DELETE")
         return new Response(null, { status: 204 });
       // Other cards (push, tunnel) degrade on their own; not under test here.
@@ -175,4 +177,155 @@ test("hybrid configs are marked and the chat idle sleep saves to the server", as
   await expect
     .element(page.getByText("请输入 0–1440 之间的整数。"))
     .toBeVisible();
+});
+
+test("an unavailable presets endpoint explains why the menu is disabled", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input), location.href).pathname;
+      const method = init?.method ?? "GET";
+      if (path === "/api/settings")
+        return Response.json({
+          revision: 0,
+          updatedAt: "",
+          values: emptySettings,
+        });
+      if (path === "/api/launch-configs" && method === "GET")
+        return Response.json([]);
+      if (path === "/api/launch-configs/presets" && method === "GET")
+        return Response.json({ error: "系统预设暂不可用" }, { status: 503 });
+      return Response.json({ error: "not found" }, { status: 404 });
+    }),
+  );
+  stopSettings();
+  await reloadSettings();
+  render(Settings);
+  await expect
+    .element(card().getByRole("alert"))
+    .toMatchTextContent(/系统预设暂不可用/);
+  await expect
+    .element(
+      card().getByRole("button", { name: "重新读取系统预设", exact: true }),
+    )
+    .toBeVisible();
+  await expect
+    .element(card().getByRole("button", { name: "添加系统预设", exact: true }))
+    .toBeDisabled();
+});
+
+test("preset menu marks existing configs and restores one or all missing presets", async () => {
+  const presets = [
+    {
+      name: "Shell",
+      icon: "terminal",
+      cmd: ["/bin/bash", "-l", "-i"],
+      envNames: [],
+      hybrid: false,
+    },
+    {
+      name: "Claude Code",
+      icon: "claudecode",
+      cmd: ["claude", "--dangerously-skip-permissions"],
+      envNames: [],
+      hybrid: true,
+    },
+    {
+      name: "omp",
+      icon: "pi",
+      cmd: ["omp", "--auto-approve"],
+      envNames: ["PI_FORCE_IMAGE_PROTOCOL"],
+      hybrid: true,
+    },
+  ];
+  let configs = [
+    {
+      ...config,
+      id: "abcdefg2",
+      name: "Shell",
+      icon: "terminal",
+      cmd: ["/bin/zsh", "-l"],
+      envNames: [],
+    },
+  ];
+  const restoredCalls: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input), location.href).pathname;
+      const method = init?.method ?? "GET";
+      if (path === "/api/settings")
+        return Response.json({
+          revision: 0,
+          updatedAt: "",
+          values: emptySettings,
+        });
+      if (path === "/api/launch-configs" && method === "GET")
+        return Response.json(configs);
+      if (path === "/api/launch-configs/presets" && method === "GET")
+        return Response.json(presets);
+      if (path === "/api/launch-configs/presets" && method === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          name?: string;
+        };
+        restoredCalls.push(body);
+        const toAdd = body.name
+          ? presets.filter((p) => p.name === body.name)
+          : presets.filter((p) => !configs.some((c) => c.name === p.name));
+        configs = [
+          ...configs,
+          ...toAdd.map((p, index) => ({
+            ...config,
+            id: `abcd234${"bcdefgh"[configs.length + index]}`,
+            name: p.name,
+            icon: p.icon,
+            cmd: p.cmd,
+            envNames: p.envNames,
+            hybrid: p.hybrid,
+          })),
+        ];
+        return Response.json(configs);
+      }
+      return Response.json({ error: "not found" }, { status: 404 });
+    }),
+  );
+  stopSettings();
+  await reloadSettings();
+  render(Settings);
+
+  const menuButton = card().getByRole("button", {
+    name: "添加系统预设",
+    exact: true,
+  });
+  await expect.element(menuButton).toBeEnabled();
+  await menuButton.click();
+
+  const existingItem = page.getByRole("menuitem", {
+    name: "Shell（已存在）",
+    exact: true,
+  });
+  await expect.element(existingItem).toHaveAttribute("aria-disabled", "true");
+  await expect
+    .element(page.getByRole("menuitem", { name: /补回全部缺失预设/ }))
+    .toMatchTextContent(/2 项/);
+
+  await page
+    .getByRole("menuitem", { name: "添加预设 omp", exact: true })
+    .click();
+  await expect
+    .element(card().getByRole("button", { name: "编辑 omp" }))
+    .toBeVisible();
+  expect(restoredCalls).toEqual([{ name: "omp" }]);
+
+  await menuButton.click();
+  await page.getByRole("menuitem", { name: /补回全部缺失预设/ }).click();
+  await expect
+    .element(card().getByRole("button", { name: "编辑 Claude Code" }))
+    .toBeVisible();
+  expect(restoredCalls).toEqual([{ name: "omp" }, {}]);
+
+  // Existing customized Shell command was not overwritten.
+  await expect
+    .element(card().getByRole("button", { name: "编辑 Shell" }))
+    .toMatchTextContent(/\/bin\/zsh -l/);
 });

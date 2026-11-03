@@ -51,7 +51,11 @@ const groups: Array<[z.ZodType, string[]]> = [
     S.LaunchConfigSchema,
     ["launch-create-no-env", "launch-create", "launch-get", "launch-update"],
   ],
-  [S.LaunchConfigsSchema, ["launch-list-empty", "launch-list"]],
+  [
+    S.LaunchConfigsSchema,
+    ["launch-list-empty", "launch-list", "launch-presets-restore"],
+  ],
+  [S.LaunchPresetsSchema, ["launch-presets"]],
   [
     S.PushStatusSchema,
     [

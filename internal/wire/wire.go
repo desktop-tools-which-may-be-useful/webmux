@@ -191,6 +191,14 @@ func LaunchInput(r contract.LaunchConfigInput) launch.Input {
 	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview), Hybrid: r.Hybrid}
 }
 
+func LaunchPresets(in []launch.Preset) []contract.LaunchPreset {
+	return each(in, func(p launch.Preset) contract.LaunchPreset {
+		return contract.LaunchPreset{
+			Name: p.Name, Icon: p.Icon, Cmd: required(p.Cmd), EnvNames: required(p.EnvNames), Hybrid: p.Hybrid,
+		}
+	})
+}
+
 func HybridSupport(s agentprofile.Support) contract.HybridSupport {
 	return contract.HybridSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason), Connector: AgentConnector(s.Connector),
 		SupportedAgents: required(s.Agents),

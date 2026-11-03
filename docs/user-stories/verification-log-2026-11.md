@@ -223,3 +223,8 @@
 
 - 通过：`ws.test.ts` 默认值与显式选择用例，以及前端检查（见 PR）。
 - 限制：未做真机移动网络测速；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：设置页「新建启动配置」旁新增「添加系统预设」下拉菜单，支持单独补回或一键补回全部缺失的系统预设，对应更新 US-B08，不新增故事或改变覆盖索引。
+
+- 依据：`internal/launch`、`internal/wire`、`internal/api` 的 Go race 测试与线上快照，`wireArrays`、`wire-contract` 单元用例，以及 `LaunchConfigsSettings` 浏览器组件测试。
+- 限制：未重新核验其余故事能力。

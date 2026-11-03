@@ -116,7 +116,7 @@ func wireSchema(name string) wireRules {
 	case "launch-create", "launch-create-no-env", "launch-get", "launch-update":
 		add("", "id", "id")
 		add("", "time", "createdAt", "updatedAt")
-	case "launch-list", "launch-list-empty":
+	case "launch-list", "launch-list-empty", "launch-presets-restore":
 		add("/*", "id", "id")
 		add("/*", "time", "createdAt", "updatedAt")
 	case "repository-register", "repository-register-again", "repository-worktrees":
@@ -810,6 +810,8 @@ func wireLaunch(f *wireFixture) {
 	f.call("session-create-from-config", "POST", "/api/sessions", map[string]any{"configId": str(shell, "id"), "cwd": f.root}, 201)
 	f.call("error-404-session-config", "POST", "/api/sessions", map[string]any{"configId": "zzzzzzzz"}, 404)
 	f.call("launch-delete", "DELETE", "/api/launch-configs/"+launchID, nil, 204)
+	f.call("launch-presets", "GET", "/api/launch-configs/presets", nil, 200)
+	f.call("launch-presets-restore", "POST", "/api/launch-configs/presets", map[string]any{"name": "omp"}, 200)
 }
 
 func wireWorkspace(f *wireFixture) {
