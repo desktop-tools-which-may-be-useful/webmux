@@ -199,7 +199,7 @@ jq -nc --arg seq "$seq" '{terminalSequence: $seq}'
 
 “启动命令”通过两个 Tab 区分命令来源，两者都只使用自定义命令；新安装首次启动会预置 Shell、十一款 CLI agent 和 omp 启动配置，可在设置页编辑或删除。完整列表见 [CLI agent 接入](cli-agents.md)。
 
-Claude Code、Codex CLI、Gemini CLI、Open Code、Qoder、QoderCN 和 omp 的预置配置带有自动批准工具调用的参数，其中 Codex 参数同时关闭其沙箱；需要逐次批准时在设置页删掉对应参数。
+Claude Code、Codex CLI、Antigravity CLI、Open Code、Qoder、QoderCN 和 omp 的预置配置带有自动批准工具调用的参数，其中 Codex 参数同时关闭其沙箱；需要逐次批准时在设置页删掉对应参数。
 
 Cursor、Copilot、Qwen、Kimi 和 CodeBuddy 的新增配置使用各 CLI 默认的授权行为。各项参数与已有安装的添加方式见 [CLI agent 接入](cli-agents.md)。
 

@@ -184,3 +184,15 @@
   - `internal/tray/...`（含 `LANEnabled`、`LANListenAddress`、转发器同源校验）与 `cmd/webmux`（含 `TestConfigListen`）的 Go race 测试；
   - `cmd/webmux-tray` 与 `internal/tray/...` 的 Windows amd64 交叉 vet 与编译。
 - 限制：未在真实 Windows 11 主机上运行新版托盘菜单点击流程；未重新核验其余故事能力。
+本次局部核对（2026-11-03）：`add-antigravity-acp-hybrid` 新增 Antigravity CLI（`agy`）混合会话适配器与默认启动配置，对应更新 US-B01、US-B08、US-Q01、US-Q03–US-Q05、US-Q08、US-Q11；不新增或重编号故事，覆盖索引同步。
+
+- 内容：新安装默认预置 `Antigravity CLI`（`agy --dangerously-skip-permissions`，混合模式，图标 `antigravity`，保留旧 `geminicli` 兼容），`OSC 7501` 子记录段长放宽到 64 字节以提取 36 字符 UUID 会话 ID，跨进程加载后补齐 `model`/`thought_level`，活动回合忽略回显的 `user_message_chunk`。
+- 依据：`internal/session`、`internal/agentprofile/...`、`internal/acp`、`internal/hybrid`、`internal/launch`、`internal/api` 的 Go race 测试与线上快照，`launchConfigs` 单元与 `LaunchConfigDialog` 浏览器测试，以及 `baseline.md` 中的 `agy 1.4.12` 实测基线。
+- 限制：自动化测试使用 `fakeagent --profile agy` 替身验证；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：PR #273 审查回归修复，对应 US-B01、US-B08 与 US-Q03，更新 US-Q03 的首次切换验收，其他故事内容和覆盖索引不变。
+
+- `agy` 首次从终端切到聊天时，将原命令的 `--model` 与 `--effort` 分别继承为 `model` 与 `thought_level`，不再静默回到 ACP 默认值；`--mode` 仍明确列入不支持参数。
+- 旧 `geminicli` 图标在编辑对话框中显示“Gemini CLI（旧配置）”，可保存并重新选择；同步补齐 README、概览、部署与索引中的 Antigravity CLI 混合能力列表。
+- 依据：`go test -race ./internal/agentprofile/...`；`LaunchConfigDialog` 浏览器测试 22 项、`launchConfigs` 单元测试 57 项；前端类型与架构检查、OpenSpec strict 校验、文档与格式检查均通过。
+- 限制：未重新运行完整产品套件，未重新核验其余故事能力。

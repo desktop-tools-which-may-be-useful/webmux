@@ -3,17 +3,17 @@
 新安装首次创建 `launch-configs.json` 时，WebMux 写入以下十一款 CLI 的启动配置，以及 Shell 和 omp，共 13 项。
 这些是可编辑、可删除的普通配置，不会自动安装或认证 CLI。
 
-Gemini CLI 默认入口按原名单保留，但自 2026-06-18 起已停止为免费个人账号及 Google AI Pro/Ultra 处理请求，个人 Google 登录不可用。
-该入口面向付费 Gemini API Key 或仍在支持期内的 Gemini Code Assist Standard/Enterprise 认证用户。
+旧版安装的 `launch-configs.json` 仍可能保留 Gemini CLI（`gemini --yolo`），但自 2026-06-18 起已停止为免费个人账号及 Google AI Pro/Ultra 处理请求，个人 Google 登录不可用。
+新安装默认预置已替换为 Antigravity CLI（`agy --dangerously-skip-permissions`，混合模式）。
 详情见[个人账号退役公告](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)、
 [企业订阅退役安排](https://docs.cloud.google.com/gemini/docs/codeassist/sunset)与[认证说明](https://geminicli.com/docs/get-started/authentication/)。
-WebMux 不承诺账号套餐或额度可用；个人账号用户可按公告迁移到 Antigravity CLI，并自行保存启动配置。
+WebMux 不承诺账号套餐或额度可用；已有安装的 `geminicli` 图标与配置仍兼容读取。
 
 | CLI                          | 交互式命令  | 初始参数                                               | 官方说明                                                                                    |
 | ---------------------------- | ----------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | Claude Code                  | `claude`    | `--dangerously-skip-permissions`，混合模式             | [使用说明](https://code.claude.com/docs/en/overview)                                        |
 | Codex CLI                    | `codex`     | `--dangerously-bypass-approvals-and-sandbox`，混合模式 | [使用说明](https://developers.openai.com/codex/cli/)                                        |
-| Gemini CLI                   | `gemini`    | `--yolo`                                               | [快速开始](https://geminicli.com/docs/get-started/)                                         |
+| Antigravity CLI              | `agy`       | `--dangerously-skip-permissions`，混合模式             | [使用说明](https://antigravity.google/docs)                                                 |
 | Cursor CLI                   | `agent`     | 无                                                     | [使用说明](https://cursor.com/docs/cli/overview)                                            |
 | GitHub Copilot CLI           | `copilot`   | 无                                                     | [使用说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview) |
 | OpenCode（配置名 Open Code） | `opencode`  | `--auto`，混合模式                                     | [使用说明](https://opencode.ai/docs/)                                                       |
@@ -36,7 +36,7 @@ Kimi 对应当前 Kimi Code CLI，旧 Kimi CLI 用户应先按官方说明迁移
 这使 CLI 能读取 `~/.bashrc` 或 `~/.zshrc` 中的 PATH 和环境。新安装按服务端 `$SHELL` 的 basename 选择 Bash 或 Zsh；未设置时使用 Bash，fish、nu 等其他 shell 不包装。也可编辑配置为可执行文件的绝对路径，取消该包装。
 命令经 argv 传递，空参数、空格和字面量 `$HOME` 等字符不被当作脚本求值。
 
-Claude Code、Codex、Gemini、OpenCode、Qoder、QoderCN 和 omp 的原有初始参数会自动批准工具调用；Codex 参数还关闭其沙箱。
+Claude Code、Codex、Antigravity CLI、OpenCode、Qoder、QoderCN 和 omp 的原有初始参数会自动批准工具调用；Codex 参数还关闭其沙箱。
 需要逐次授权时在设置页移除这些参数。新增的 Cursor、Copilot、Qwen、Kimi 和 CodeBuddy 配置保留 CLI 默认授权行为。
 
 CLI 使用服务用户的权限、账号、环境和配置。WebMux 不代管模型密钥，不为这些命令增加进程沙箱。
@@ -55,7 +55,7 @@ CLI 使用服务用户的权限、账号、环境和配置。WebMux 不代管模
 ## 终端、混合会话与提醒
 
 十一款 CLI 都使用持久 PTY 终端：浏览器断线不会结束进程，可重新连接并回放缓冲；服务重启会结束会话。
-十一款中 Claude Code、Codex CLI、OpenCode、Qoder 与 QoderCN 提供 WebMux 的混合会话支持，可在终端与聊天视图之间切换；原有 omp 也继续支持混合会话。
+十一款中 Claude Code、Codex CLI、Antigravity CLI、OpenCode、Qoder 与 QoderCN 提供 WebMux 的混合会话支持，可在终端与聊天视图之间切换；原有 omp 也继续支持混合会话。
 Claude Code 与 Codex CLI 的聊天端需要另外安装第三方 ACP 连接器，见 [混合会话](hybrid-sessions.md#开启)。
 Qoder 与 QoderCN 使用内置 `--acp` 标志启动 ACP，无需额外连接器。
 其他五款使用终端视图，不能仅凭其提供 ACP 接口就视为已适配 WebMux 的切换和恢复行为。

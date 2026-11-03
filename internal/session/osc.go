@@ -20,7 +20,7 @@ const (
 	maxIdentityCwd  = 4096
 	// OSC 7501 id bounds: segments, their length, and the whole id.
 	maxProgramIDSegments = 8
-	maxProgramIDSegment  = 32
+	maxProgramIDSegment  = 64
 	maxProgramID         = 128
 )
 
@@ -330,7 +330,7 @@ func parseProgramReport(body string) (report programReport, ok bool) {
 }
 
 // programIDFirstSegment validates an OSC 7501 id, slash-separated segments of
-// [A-Za-z0-9_.+-]{1,32}, at most 8 deep and 128 bytes, and returns its first
+// [A-Za-z0-9_.+-]{1,64}, at most 8 deep and 128 bytes, and returns its first
 // segment.
 func programIDFirstSegment(id string) (string, bool) {
 	if len(id) > maxProgramID {

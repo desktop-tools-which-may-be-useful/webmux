@@ -10,7 +10,7 @@
 | REST API、列表和终端 WebSocket                                                                      | US-A05；US-C02；US-D01–US-D06                       |
 | 统一上下文新建会话、十一款 CLI 启动配置、目录浏览与创建、名称和命令                                 | US-B01–US-B07                                       |
 | 设置页自定义启动配置与图标、启动配置 API 与按配置启动                                               | US-B01；US-B08                                      |
-| 混合模式勾选、Claude Code 默认混合、hybrid-support 判定、起始端选择                                 | US-Q01–US-Q02；US-B01；US-B08                       |
+| 混合模式勾选、Claude Code 与 Antigravity CLI 默认混合、hybrid-support 判定、起始端选择              | US-Q01–US-Q02；US-B01；US-B08                       |
 | 终端 ↔ 聊天切换、Claude 注册记录身份/候选/外部占用、中断等待、草稿退回与回滚                        | US-Q03–US-Q04                                       |
 | 聊天视图时间线、权限与表单、权限模式、配置项、命令菜单及 Claude 恢复后配置重应用                    | US-Q05–US-Q07                                       |
 | 聊天端服务端队列、去重与 omp/Codex/Claude 插话                                                      | US-Q08                                              |

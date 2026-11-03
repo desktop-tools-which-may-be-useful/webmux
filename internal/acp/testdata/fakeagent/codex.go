@@ -137,6 +137,19 @@ var (
 			{Value: "low", Name: "Low"}, {Value: "medium", Name: "Medium"}, {Value: "high", Name: "High"},
 		}},
 	}
+	// agyOptions are Antigravity CLI's options. Both model and thought_level
+	// reset to defaults on cross-process session/load and session/resume.
+	agyOptions = []selectOption{
+		{id: "model", name: "Model", category: "model", def: "gemini-4-argon", values: []acp.ConfigSelectOption{
+			{Value: "gemini-4-argon", Name: "Gemini 4 Argon"},
+			{Value: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"},
+		}},
+		{id: "thought_level", name: "Thinking Level", category: "thought_level", def: "medium", values: []acp.ConfigSelectOption{
+			{Value: "low", Name: "low"},
+			{Value: "medium", Name: "medium"},
+			{Value: "high", Name: "high"},
+		}},
+	}
 )
 
 func profileOptions(profile string) []selectOption {
@@ -145,6 +158,8 @@ func profileOptions(profile string) []selectOption {
 		return codexOptions
 	case "claudecode":
 		return claudeOptions
+	case "agy":
+		return agyOptions
 	default:
 		return defaultOptions
 	}

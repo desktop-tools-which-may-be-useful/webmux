@@ -163,14 +163,23 @@ const (
 
 // Option is how an agent treats one command-line option.
 type Option struct {
-	Class ArgClass
-	Arity Arity
+	Class     ArgClass
+	Arity     Arity
+	PassToACP bool
 }
 
 // Options builds an option table entry for each name.
 func Options(table map[string]Option, class ArgClass, arity Arity, names ...string) {
 	for _, name := range names {
 		table[name] = Option{Class: class, Arity: arity}
+	}
+}
+
+// PassthroughOptions builds an ArgKeep option table entry for each name that
+// is also passed through to the agent's acp subcommand.
+func PassthroughOptions(table map[string]Option, arity Arity, names ...string) {
+	for _, name := range names {
+		table[name] = Option{Class: ArgKeep, Arity: arity, PassToACP: true}
 	}
 }
 

@@ -6,6 +6,6 @@ The SVG files are unmodified upstream assets and licensed under the adjacent MIT
 
 `pi.svg` represents the Pi-based omp CLI. `qoder.svg` is a custom icon (Qoder is not in the upstream LobeHub set). The generic Shell icon comes from the existing Tabler collection.
 
-Bundled CLI brands: Claude Code, Codex, Gemini CLI, Cursor, GitHub Copilot,
+Bundled CLI brands: Antigravity, Claude Code, Codex, Gemini CLI, Cursor, GitHub Copilot,
 OpenCode, Qwen, Kimi, CodeBuddy, Pi / omp, and Qoder / QoderCN. Cursor CLI uses the `agent`
 executable; its icon also matches the older `cursor-agent` name.

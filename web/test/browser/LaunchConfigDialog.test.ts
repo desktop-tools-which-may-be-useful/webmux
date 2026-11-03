@@ -54,7 +54,8 @@ afterEach(async () => {
 const save = () => page.getByRole("button", { name: "保存", exact: true });
 
 test.each([
-  ["Gemini CLI", "geminicli"],
+  ["Antigravity CLI", "antigravity"],
+  ["Gemini CLI（旧配置）", "geminicli"],
   ["Cursor CLI", "cursor"],
   ["GitHub Copilot CLI", "githubcopilot"],
   ["Qwen Code", "qwen"],
@@ -85,6 +86,29 @@ test.each([
     expect((requests.at(-1)!.body as { icon?: string }).icon).toBe(icon);
   },
 );
+
+test("shows the legacy Gemini icon as a labeled option", async () => {
+  serve({
+    "/api/launch-configs/abcdefg2": () =>
+      Response.json({ ...saved, icon: "geminicli" }),
+  });
+  render(LaunchConfigDialog, {
+    open: true,
+    configId: saved.id,
+    onsaved: () => {},
+  });
+  const picker = page.getByRole("combobox", { name: "图标", exact: true });
+  await expect.element(picker).toMatchTextContent("Gemini CLI（旧配置）");
+  await picker.click();
+  await expect
+    .element(
+      page.getByRole("option", {
+        name: "Gemini CLI（旧配置）",
+        exact: true,
+      }),
+    )
+    .toBeVisible();
+});
 
 test("masks env values by default and validates variable names", async () => {
   serve({});

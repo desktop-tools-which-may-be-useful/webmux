@@ -424,7 +424,7 @@ func (a *agent) serve(ctx context.Context, m rpcMessage) (any, error) {
 		}
 		return a.setConfig(p)
 	case methodSteering:
-		if a.cfg.profile == "opencode" {
+		if a.cfg.profile == "opencode" || a.cfg.profile == "agy" {
 			break
 		}
 		var p acp.PromptRequest
@@ -466,10 +466,13 @@ func (a *agent) initialize() (any, error) {
 	if a.cfg.profile == "claudecode" {
 		resp.AgentInfo = &acp.Implementation{Name: "@agentclientprotocol/claude-agent-acp", Title: "Claude Code", Version: a.cfg.connectorVersion}
 	}
+	if a.cfg.profile == "agy" {
+		resp.AgentInfo = &acp.Implementation{Name: "Antigravity ACP Server", Version: "1.4.12"}
+	}
 	if a.cfg.noResume {
 		resp.AgentCapabilities.SessionCapabilities.Resume = nil
 	}
-	if a.cfg.profile != "opencode" {
+	if a.cfg.profile != "opencode" && a.cfg.profile != "agy" {
 		resp.Meta = json.RawMessage(`{"steering":{"supported":true}}`)
 	}
 	return resp, nil
@@ -508,7 +511,7 @@ func (a *agent) reopen(id string, load bool) (*session, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	switch {
-	case a.cfg.profile == "codex":
+	case a.cfg.profile == "codex" || a.cfg.profile == "agy":
 		maps.Copy(ss.Config, defaultConfig(a.cfg.profile))
 	case a.cfg.profile == "omp" && load:
 		ss.Config["mode"] = defaultConfig(a.cfg.profile)["mode"]
@@ -705,6 +708,12 @@ func (a *agent) pause(ctx context.Context) bool {
 }
 
 func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string) {
+	if a.cfg.profile == "agy" {
+		// Like real agy acp, echo the user's prompt as a user_message_chunk
+		// without a messageId at the start of the active turn.
+		echo := acp.ContentChunk{Content: acp.TextBlock(text)}
+		a.update(sid, (*acp.UserMessageChunk)(&echo))
+	}
 	thought := acp.ContentChunk{Content: acp.TextBlock("thinking about it")}
 	a.update(sid, (*acp.AgentThoughtChunk)(&thought))
 	crashAt(a.cfg, "prompt-mid")

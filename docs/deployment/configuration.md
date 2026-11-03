@@ -69,7 +69,7 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 
 新安装的 omp 启动配置额外预置 `PI_FORCE_IMAGE_PROTOCOL=kitty`，以在浏览器终端启用 Kitty 图片传输；其他 agent 配置不增加该环境变量。已经存在的 `launch-configs.json` 不自动修改，升级后可手动编辑自己的 omp 配置。
 
-新安装的 Claude Code、Codex CLI、Open Code、omp、Qoder 与 QoderCN 配置默认勾选混合模式。Codex 与 Claude 的聊天端分别由第三方连接器提供，webmux 不会自动安装 Node 或连接器：
+新安装的 Claude Code、Codex CLI、Antigravity CLI、Open Code、omp、Qoder 与 QoderCN 配置默认勾选混合模式。Codex 与 Claude 的聊天端分别由第三方连接器提供，webmux 不会自动安装 Node 或连接器：
 
 ```sh
 npm install -g @agentclientprotocol/codex-acp

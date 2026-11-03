@@ -28,6 +28,7 @@ type tui struct {
 	cwd    string
 	codex  bool
 	claude bool
+	agy    bool
 
 	outMu sync.Mutex
 	out   io.Writer
@@ -49,7 +50,7 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 		return err
 	}
 	t := &tui{
-		cfg: cfg, st: st, cwd: cwd, codex: cfg.profile == "codex", claude: cfg.profile == "claudecode",
+		cfg: cfg, st: st, cwd: cwd, codex: cfg.profile == "codex", claude: cfg.profile == "claudecode", agy: cfg.profile == "agy",
 		out: out, turnDone: make(chan bool, 1), queryPending: cfg.profile == "claudecode",
 	}
 	defer func() {
@@ -70,6 +71,8 @@ func runTUI(cfg config, st *store, in io.Reader, out io.Writer) error {
 	} else if t.claude {
 		// Claude waits for the capability answer before publishing idle.
 		t.emit7501("?")
+	} else if t.agy {
+		t.emit7501("state=idle:app=antigravity")
 	} else {
 		t.emit7501("state=idle:app=" + cfg.profile)
 	}
@@ -158,9 +161,9 @@ func (t *tui) printf(format string, args ...any) {
 
 func (t *tui) emit7501(body string) { t.printf("\x1b]7501;%s\x1b\\", body) }
 
-// warp sends a Warp cli-agent event; Codex and Claude send none.
+// warp sends a Warp cli-agent event; Codex, Claude and Antigravity send none.
 func (t *tui) warp(event string) {
-	if t.codex || t.claude {
+	if t.codex || t.claude || t.agy {
 		return
 	}
 	ev := map[string]any{"v": 1, "event": event, "agent": t.cfg.profile, "plugin_version": pluginVersion, "cwd": t.cwd}
@@ -221,8 +224,14 @@ func (t *tui) open(ss *session) error {
 	// Codex and Claude never report it.
 	if t.cfg.profile == "omp" {
 		t.emit7501("state=idle:id=" + ss.ID)
+	} else if t.agy && t.hasTitleHook() {
+		t.emit7501("state=working:id=" + ss.ID)
 	}
 	return nil
+}
+
+func (t *tui) hasTitleHook() bool {
+	return strings.Contains(t.cfg.settings, "conversation_id") || strings.Contains(t.cfg.settings, "7501")
 }
 
 // holdLock keeps a Codex thread's writer lock until the process exits, as
@@ -389,7 +398,7 @@ func (t *tui) finishTurn(interrupted bool) {
 		t.printf("error: %v\r\n", err)
 	}
 	t.printf("\r\n")
-	if t.claude && !interrupted {
+	if (t.claude || t.agy) && !interrupted {
 		t.status("done")
 	} else {
 		t.status("idle")
@@ -399,7 +408,8 @@ func (t *tui) finishTurn(interrupted bool) {
 }
 
 // status reports a turn's state: Codex and Claude in their root records only,
-// the others in the root and the session's child record.
+// Antigravity in its root record plus the child record when the title hook is
+// active, and the others in the root and the session's child record.
 func (t *tui) status(state string) {
 	if t.codex {
 		t.emit7501("state=" + state + ":app=codex")
@@ -407,6 +417,13 @@ func (t *tui) status(state string) {
 	}
 	if t.claude {
 		t.emit7501("state=" + state + ":app=claude-code")
+		return
+	}
+	if t.agy {
+		t.emit7501("state=" + state + ":app=antigravity")
+		if t.cur != nil && t.hasTitleHook() {
+			t.emit7501("state=working:id=" + t.cur.ID)
+		}
 		return
 	}
 	t.emit7501("state=" + state)

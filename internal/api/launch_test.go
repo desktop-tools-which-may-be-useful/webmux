@@ -202,6 +202,7 @@ func TestLaunchConfigHybrid(t *testing.T) {
 		want contract.HybridSupport
 	}{
 		{`{"cmd":["opencode"]}`, contract.HybridSupport{Supported: true, Agent: "opencode", SupportedAgents: titles}},
+		{`{"cmd":["agy","--dangerously-skip-permissions"]}`, contract.HybridSupport{Supported: true, Agent: "agy", SupportedAgents: titles}},
 		{`{"cmd":["opencode","/home/u/proj"]}`, contract.HybridSupport{Reason: "directory_arg", SupportedAgents: titles}},
 		{`{"cmd":["/bin/bash","-l"]}`, contract.HybridSupport{Reason: "unknown_agent", SupportedAgents: titles}},
 		{`{"cmd":[]}`, contract.HybridSupport{Reason: "unknown_agent", SupportedAgents: titles}},

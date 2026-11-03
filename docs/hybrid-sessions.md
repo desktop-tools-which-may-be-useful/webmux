@@ -1,21 +1,23 @@
 # 混合会话（聊天 ↔ 终端）
 
-混合会话让 OpenCode、omp、Codex CLI、Claude Code、Qoder 或 QoderCN 的同一段对话在两种界面之间切换：原生 TUI（终端端）适合在电脑上精细操作，聊天视图适合在手机上阅读和回复。切换前后是同一个 webmux 会话与同一个 agent 会话，历史由 agent 自己保存。接口见 [混合会话协议](protocol/http-hybrid.md)。
+混合会话让 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI（`agy`）、Qoder 或 QoderCN 的同一段对话在两种界面之间切换：原生 TUI（终端端）适合在电脑上精细操作，聊天视图适合在手机上阅读和回复。
+
+切换前后是同一个 webmux 会话与同一个 agent 会话，历史由 agent 自己保存。接口见 [混合会话协议](protocol/http-hybrid.md)。
 
 ## 开启
 
-1. 新安装首次启动时预置的 OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 配置已勾选 **“混合模式（聊天 ↔ 终端）”**，可直接选用。其他配置在“设置 → 启动配置”编辑并勾选；勾选框是否可用由服务端判定，不可用时旁边会显示原因。已有安装的配置不会被自动改写。
+1. 新安装首次启动时预置的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 配置已勾选 **“混合模式（聊天 ↔ 终端）”**，可直接选用。其他配置在“设置 → 启动配置”编辑并勾选；勾选框是否可用由服务端判定，不可用时旁边会显示原因。已有安装的配置不会被自动改写。
 2. 新建会话时选择这条配置，再选择“从终端开始”或“从聊天开始”（默认终端，按浏览器记住上一次的选择）。
 
 能开启混合模式的命令：
 
-- 直接执行 `opencode …` / `omp …` / `codex …` / `claude …`，或用“加载 shell 启动文件”保存的 Bash/Zsh 包装；其他 shell 包装与 `env` 前缀不受支持。
+- 直接执行 `opencode …` / `omp …` / `codex …` / `claude …` / `agy …`，或用“加载 shell 启动文件”保存的 Bash/Zsh 包装；其他 shell 包装与 `env` 前缀不受支持。
 - 不能在命令里指定工作目录（OpenCode 的位置参数、omp 的 `--cwd`、Codex 的 `-C`/`--cd` 与 `--worktree`、Claude Code 的 `-w`/`--worktree` 与 `--tmux`），请在新建会话时选择目录。
-- 不能使用让两端看到不同会话库的参数：omp 的 `--session-dir`、`--no-session`，OpenCode 的 `--server`，Codex 的 `--remote`，Claude Code 的 `--no-session-persistence`、`--environment`。
+- 不能使用让两端看到不同会话库的参数：omp 的 `--session-dir`、`--no-session`，OpenCode 的 `--server`，Codex 的 `--remote`，Claude Code 的 `--no-session-persistence`、`--environment`，Antigravity CLI 的 `--project`、`--new-project`。
 - 不能使用不启动交互界面的参数（`-p`/`--print`、`--version`、非交互子命令等）或打开已有会话的参数（`codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等）。
 - Claude Code 的 `CLAUDE_CONFIG_DIR` 可在启动配置环境中设置，两端会使用同一个配置目录。
 
-已验证的版本为 OpenCode 2.1.4（2.2.0 参数相同）、omp 18.13.1、Codex CLI 0.165.0 与 codex-acp 2.3.0、Claude Code 2.1.316 与 claude-agent-acp 0.99.1；更低版本只在聊天视图显示提示，不阻止切换，更高版本不自动视为已验证。
+已验证的版本为 OpenCode 2.1.4（2.2.0 参数相同）、omp 18.13.1、Codex CLI 0.165.0 与 codex-acp 2.3.0、Claude Code 2.1.316 与 claude-agent-acp 0.99.1、Antigravity CLI 1.4.12；更低版本只在聊天视图显示提示，不阻止切换，更高版本不自动视为已验证。
 
 ### Codex CLI 与 codex-acp
 
@@ -62,8 +64,8 @@ npm install -g @agentclientprotocol/claude-agent-acp
 - agent 需要第三方连接器时（Codex 的 codex-acp、Claude Code 的 claude-agent-acp），连接器已安装。
 - 它是会话 PTY 的根进程（不是从 shell 里再启动的；Codex 与 Claude Code 也接受 npm 安装的 `node` 启动器直接拉起的原生 agent）。
 - 已得到 agent 会话 ID：
-  - OpenCode、omp、Codex、Claude Code、Qoder 与 QoderCN 都要在发出首条消息后，`session/list` 才包含可加载的会话。
-  - Codex 的会话 ID 取自它打开的写锁文件（`$CODEX_HOME/thread-writer-locks/`），Claude Code 取自进程注册记录。
+  - OpenCode、omp、Codex、Claude Code、Antigravity CLI、Qoder 与 QoderCN 都要在发出首条消息后，`session/list` 才包含可加载的会话。
+  - Codex 的会话 ID 取自它打开的写锁文件（`$CODEX_HOME/thread-writer-locks/`），Claude Code 取自进程注册记录，Antigravity CLI 由注入的会话级 `--settings` `title` 钩子经 `OSC 7501` 子记录上报。
   - 读不到时按本次 TUI 启动后更新过的会话判定，有多个候选时让你选择。
   - 由 webmux 切换或恢复打开的 TUI 直接沿用它恢复的会话 ID，不必先发消息就能切回。
 - agent 的会话列表能查到它。
@@ -81,14 +83,14 @@ Claude Code 的主身份来源是 `<CLAUDE_CONFIG_DIR>/sessions/<pid>.json`（�
 
 TUI 正在执行回合时，webmux 先发送中断键并等待空闲；10 秒仍未空闲时让你选择继续等待、强制切换或取消。
 
-- 中断键：omp、Codex 与 Claude Code 为一次 Esc；OpenCode 为两次相隔 150 毫秒的 Esc，一次写入的两个 Esc 会被当作 Alt+Esc。
+- 中断键：omp、Codex、Claude Code 与 Antigravity CLI 为一次 Esc；OpenCode 为两次相隔 150 毫秒的 Esc，一次写入的两个 Esc 会被当作 Alt+Esc。
 - Codex 启动后的几秒内会报告“工作中”，这段时间不按回合处理；Claude Code 没有这段启动静默期，OSC 7501 应答后报告实际空闲或回合状态。
 - Claude Code 的取消只中断当前回合，已经启动的后台 Bash 或子任务可能继续运行。强制切换会终止连接器并等待其受管后代退出，但不保证清理任意自行 daemonize、已脱离受管进程树的程序。
 - 切换期间所有设备的输入暂时禁用，已附着的原生终端以“已切换到聊天视图”断开。
 
 **切到终端**时，正在运行的回合会被取消（页面会先确认）；排队中尚未发送的消息合并后退回发起切换的设备的输入草稿，不会自动发给 TUI。
 
-终端用恢复命令重新打开同一个 agent 会话（Claude Code 为 `claude --resume <ID>`）。只保留模型、配置、批准方式等参数；提示词与 `--continue`/`--resume` 等会话参数会在页面列出为“未保留”。
+终端用恢复命令重新打开同一个 agent 会话（Claude Code 为 `claude --resume <ID>`，Antigravity CLI 为 `agy --conversation <ID>`）。只保留模型、配置、批准方式等参数；提示词与 `--continue`/`--resume`/`--conversation`/`--settings` 等会话参数会在页面列出为“未保留”。
 
 Claude 的 `session/cancel` 不等于后台任务已清理。切换还会结束连接器并等待受管后代退出，自行脱离进程树的任务不在保证范围内。
 

@@ -134,6 +134,7 @@ type config struct {
 	profile          string
 	resume           string
 	session          string
+	settings         string
 	prompt           string // Codex TUI: submitted at start
 	version          bool   // Codex/Claude: print the version and exit
 	codexVersion     string
@@ -230,6 +231,8 @@ func profileFromName(argv0 string) string {
 		return "codex"
 	case "claude", claudeConnectorName:
 		return "claudecode"
+	case "agy":
+		return "agy"
 	}
 	return "omp"
 }
@@ -322,20 +325,32 @@ func parseArgs(args []string) (config, bool, error) {
 		fs.StringVar(&cfg.profile, "profile", cfg.profile, "")
 		fs.StringVar(&cfg.resume, "resume", "", "")
 		fs.StringVar(&cfg.resume, "r", "", "")
+		fs.StringVar(&cfg.resume, "conversation", "", "")
 		fs.StringVar(&cfg.session, "s", "", "")
 		fs.StringVar(&cfg.session, "session", "", "")
+		fs.StringVar(&cfg.settings, "settings", "", "")
 		// Real agent flags the hybrid profiles keep or pass through.
 		fs.StringVar(&approval, "approval-mode", "", "")
 		fs.BoolVar(&yolo, "yolo", false, "")
+		fs.BoolVar(&yolo, "dangerously-skip-permissions", false, "")
 		fs.BoolVar(&autoApprove, "auto-approve", false, "")
 		fs.BoolVar(&auto, "auto", false, "")
 		fs.Bool("standalone", false, "")
 		fs.Bool("login", false, "")
 		fs.Bool("c", false, "")
 		fs.Bool("continue", false, "")
+		fs.Bool("sandbox", false, "")
+		fs.Bool("remote-control", false, "")
 		fs.String("config", "", "")
 		fs.String("model", "", "")
 		fs.String("thinking", "", "")
+		fs.String("effort", "", "")
+		fs.String("mode", "", "")
+		fs.String("agent", "", "")
+		fs.String("add-dir", "", "")
+		fs.String("log-file", "", "")
+		fs.String("i", "", "")
+		fs.String("prompt-interactive", "", "")
 	}
 
 	// Third-party connectors take no arguments: their names select ACP mode.
@@ -373,7 +388,7 @@ func parseArgs(args []string) (config, bool, error) {
 	if cfg.store == "" {
 		return cfg, false, fmt.Errorf("--store or FAKEAGENT_STORE is required")
 	}
-	if cfg.profile != "omp" && cfg.profile != "opencode" && cfg.profile != "codex" && cfg.profile != "claudecode" {
+	if cfg.profile != "omp" && cfg.profile != "opencode" && cfg.profile != "codex" && cfg.profile != "claudecode" && cfg.profile != "agy" {
 		return cfg, false, fmt.Errorf("unknown profile %q", cfg.profile)
 	}
 	if cfg.profile == "claudecode" && os.Getenv("FAKEAGENT_CONNECTOR_VERSION") == "" {

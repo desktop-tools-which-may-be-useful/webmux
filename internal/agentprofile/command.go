@@ -125,6 +125,7 @@ type Command struct {
 	Executable string
 	args       []string
 	kept       []string
+	acpKept    []string
 	keptOpts   []KeptOption
 	dropped    []string
 }
@@ -200,6 +201,9 @@ func (c *Command) classify() error {
 		switch opt.Class {
 		case ArgKeep:
 			c.kept = append(c.kept, taken...)
+			if p.PassToACP || opt.PassToACP {
+				c.acpKept = append(c.acpKept, taken...)
+			}
 			kept := KeptOption{Name: name, Value: inlineValue, Token: strings.Join(taken, " ")}
 			if len(taken) > 1 {
 				kept.Value = taken[1]
@@ -260,19 +264,65 @@ const LookupMarker = "\x01webmux-path:"
 
 // injected returns the profile's TUI options that args does not already hold.
 func (c Command) injected(args []string) []string {
-	var missing []string
-	for _, option := range c.Profile.TUIInject {
-		if !slices.Contains(args, option) {
-			missing = append(missing, option)
+	if len(c.Profile.TUIInject) == 0 || hasSubslice(args, c.Profile.TUIInject) {
+		return nil
+	}
+	return slices.Clone(c.Profile.TUIInject)
+}
+
+func hasSubslice(args, sub []string) bool {
+	if len(sub) > len(args) {
+		return false
+	}
+	for i := 0; i <= len(args)-len(sub); i++ {
+		if slices.Equal(args[i:i+len(sub)], sub) {
+			return true
 		}
 	}
-	return missing
+	return false
+}
+
+// withoutOverriddenInject removes user-supplied instances of a two-token
+// TUIInject option (such as --settings <json>) from args so a later option in
+// the initial TUI launch cannot override the injected setting.
+func (c Command) withoutOverriddenInject(args []string) []string {
+	if len(c.Profile.TUIInject) != 2 {
+		return args
+	}
+	flag, want := c.Profile.TUIInject[0], c.Profile.TUIInject[1]
+	var out []string
+	optionsDone := false
+	for i := 0; i < len(args); i++ {
+		token := args[i]
+		if !optionsDone && token == "--" {
+			optionsDone = true
+			out = append(out, token)
+			continue
+		}
+		if !optionsDone {
+			if token == flag {
+				if i+1 < len(args) {
+					if args[i+1] == want {
+						out = append(out, token, args[i+1])
+					}
+					i++
+				}
+				continue
+			}
+			if strings.HasPrefix(token, flag+"=") {
+				continue
+			}
+		}
+		out = append(out, token)
+	}
+	return out
 }
 
 // TUIArgv is the first terminal launch: the original command plus the
 // profile's required TUI options, in the original form.
 func (c Command) TUIArgv() []string {
-	return c.wrap(startupScript, append(c.injected(c.args), c.args...)...)
+	cleaned := c.withoutOverriddenInject(c.args)
+	return c.wrap(startupScript, append(c.injected(cleaned), cleaned...)...)
 }
 
 // ResumeArgv opens agentSessionID in the terminal UI, keeping only the
@@ -299,10 +349,7 @@ func (c Command) ACPArgv() (argv, unsupported []string) {
 	if acpArg == "" {
 		acpArg = "acp"
 	}
-	args := []string{acpArg}
-	if c.Profile.PassToACP {
-		args = append(args, c.kept...)
-	}
+	args := append([]string{acpArg}, c.acpKept...)
 	return c.wrap(startupACPScript, args...), unsupported
 }
 

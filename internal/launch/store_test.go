@@ -74,7 +74,7 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 	if err := s.Seed(Presets("/bin/zsh")); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"Shell", "Claude Code", "Codex CLI", "Gemini CLI", "Cursor CLI", "GitHub Copilot CLI", "Open Code", "Qwen Code", "Kimi Code CLI", "CodeBuddy Code", "omp", "Qoder", "QoderCN"}
+	want := []string{"Shell", "Claude Code", "Codex CLI", "Antigravity CLI", "Cursor CLI", "GitHub Copilot CLI", "Open Code", "Qwen Code", "Kimi Code CLI", "CodeBuddy Code", "omp", "Qoder", "QoderCN"}
 	if got := names(s); !reflect.DeepEqual(got, want) {
 		t.Fatalf("seeded %v", got)
 	}
@@ -86,14 +86,14 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantIcons := []string{"terminal", "claudecode", "codex", "geminicli", "cursor", "githubcopilot", "opencode", "qwen", "kimi", "codebuddy", "pi", "qoder", "qoder"}
+	wantIcons := []string{"terminal", "claudecode", "codex", "antigravity", "cursor", "githubcopilot", "opencode", "qwen", "kimi", "codebuddy", "pi", "qoder", "qoder"}
 	for i, c := range list {
 		if c.Icon != wantIcons[i] {
 			t.Fatalf("preset %s icon %q", c.Name, c.Icon)
 		}
 		// Only the agents with a hybrid profile start as hybrid sessions,
 		// and their seeded commands, auto-approve flag included, qualify.
-		hybrid := c.Name == "Claude Code" || c.Name == "Codex CLI" || c.Name == "Open Code" || c.Name == "omp" || c.Name == "Qoder" || c.Name == "QoderCN"
+		hybrid := c.Name == "Claude Code" || c.Name == "Codex CLI" || c.Name == "Antigravity CLI" || c.Name == "Open Code" || c.Name == "omp" || c.Name == "Qoder" || c.Name == "QoderCN"
 		if c.Hybrid != hybrid || (hybrid && !c.HybridSupport.Supported) {
 			t.Fatalf("preset %s hybrid %v support %+v", c.Name, c.Hybrid, c.HybridSupport)
 		}
@@ -247,6 +247,11 @@ func TestIconsPersistAndLegacyConfigsRemainReadable(t *testing.T) {
 	cleared, err := s.Update(a.ID, Input{Name: a.Name, Cmd: a.Cmd})
 	if err != nil || cleared.Icon != "" {
 		t.Fatalf("cleared icon %q: %v", cleared.Icon, err)
+	}
+	for _, icon := range []string{"antigravity", "geminicli"} {
+		if _, err := s.Create(Input{Name: "Icon " + icon, Icon: icon, Cmd: []string{"bash"}}); err != nil {
+			t.Fatalf("rejected supported icon %q: %v", icon, err)
+		}
 	}
 	for _, icon := range []string{"unknown", "https://example.com/icon.svg", "../icon", "<svg>"} {
 		_, err := s.Create(Input{Name: "Invalid", Icon: icon, Cmd: []string{"bash"}})

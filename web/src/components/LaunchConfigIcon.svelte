@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import IconTerminal from "~icons/tabler/terminal-2";
+  import IconAntigravity from "~icons/lobe/antigravity";
   import IconClaudeCode from "~icons/lobe/claudecode";
   import IconCodex from "~icons/lobe/codex";
   import IconGeminiCLI from "~icons/lobe/geminicli";
@@ -14,6 +15,7 @@
 
   const icons = {
     terminal: IconTerminal,
+    antigravity: IconAntigravity,
     claudecode: IconClaudeCode,
     codex: IconCodex,
     geminicli: IconGeminiCLI,

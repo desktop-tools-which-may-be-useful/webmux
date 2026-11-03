@@ -11,6 +11,7 @@ describe("launch icons", () => {
   test.each([
     ["claude", "claudecode"],
     ["codex", "codex"],
+    ["agy", "antigravity"],
     ["gemini", "geminicli"],
     ["agent", "cursor"],
     ["/usr/local/bin/cursor-agent", "cursor"],

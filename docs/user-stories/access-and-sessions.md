@@ -57,17 +57,17 @@
 - **US-B01 启动 Shell 或 agent**：作为使用者，我希望通过自定义启动配置或显式命令运行 Shell、Open Code、Claude Code、Codex、omp 等程序，以便快速开始终端工作或遥控 agent。
   验收要点：
   - 启动命令通过“预先输入 / 手动填写”Tab 区分来源，新安装预置常见 agent 的启动配置，没有不可修改的内置预设；
-  - Claude Code、Codex CLI、Gemini CLI、Open Code、Qoder、QoderCN 与 omp 的预置配置默认自动批准工具调用：
+  - Claude Code、Codex CLI、Antigravity CLI、Open Code、Qoder、QoderCN 与 omp 的预置配置默认自动批准工具调用：
     - Claude Code `--dangerously-skip-permissions`；
     - Codex CLI `--dangerously-bypass-approvals-and-sandbox`；
-    - Gemini CLI `--yolo`；
+    - Antigravity CLI `--dangerously-skip-permissions`；
     - Open Code `--auto`；
     - Qoder `--dangerously-skip-permissions`；
     - QoderCN `--dangerously-skip-permissions`；
     - omp `--auto-approve`；
   - Cursor、Copilot、Qwen、Kimi、CodeBuddy 使用各自默认授权行为；
   - 十一款 CLI 的启动命令见 [接入说明](../cli-agents.md)；
-  - Claude Code、Codex CLI、Open Code、omp、Qoder 与 QoderCN 预置配置默认为混合模式（US-Q01）；
+  - Claude Code、Codex CLI、Antigravity CLI、Open Code、omp、Qoder 与 QoderCN 预置配置默认为混合模式（US-Q01）；
   - 预先输入以可键盘操作的下拉框选择，选中框和每个选项同时显示图标、名称与命令，长命令保留完整提示；
   - 保存的配置按 ID 启动，临时命令按完整 argv 启动，均创建真实 PTY；
   - Open Code 可通过“加载 shell 启动文件”保存为 Bash（`~/.bashrc`）或 Zsh（`~/.zshrc`）包装，新安装按服务端 `$SHELL` 预选，其他 shell 回退为不包装或手动选择，不自动安装程序；
@@ -124,9 +124,9 @@
   - 包装参数计入 argv 上限；
   - 可为每条配置选择跟随全局默认或单独设置输出预览行数与跳过末尾行数；
   - 新安装首次启动时自动写入 Shell、十一款 CLI agent 与 omp 共 13 条带图标的启动配置（完整列表见 [接入说明](../cli-agents.md)），其中 omp 附带 `PI_FORCE_IMAGE_PROTOCOL=kitty` 以启用 US-D12 图片显示；
-    - Shell 为通用终端，agent 使用本地打包的 LobeHub 图标，omp 使用 Pi；
+    - Shell 为通用终端，agent 使用本地打包的 LobeHub 图标（Antigravity CLI 为 `antigravity`，同时保留旧 `geminicli` 兼容渲染），omp 使用 Pi；
     - agent 预设按服务端 `$SHELL` 经“加载 shell 启动文件”包裹（Bash 或 Zsh，未设置时 Bash，其他 shell 直接执行）；
-    - 各命令的授权参数见接入说明，Claude Code、Codex CLI、Open Code、omp、Qoder 与 QoderCN 为混合模式，可编辑或删除；
+    - 各命令的授权参数见接入说明，Claude Code、Codex CLI、Antigravity CLI、Open Code、omp、Qoder 与 QoderCN 为混合模式，可编辑或删除；
   - 文件已存在时（包括用户编辑或删空后）不再补写或覆盖；
   - 配置跨重启与设备共享，环境变量值默认遮挡；
   - 按配置 ID 启动，修改或删除配置不影响运行中会话的命令与环境，会话信息保留配置 ID 供首页解析预览；

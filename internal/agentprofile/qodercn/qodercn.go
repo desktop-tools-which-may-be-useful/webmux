@@ -28,6 +28,7 @@ type adapter struct {
 var profile = &ap.Profile{
 	Name:              Name,
 	Title:             "QoderCN",
+	Icon:              "qoder",
 	Executables:       []string{"qodercn", "qoderclicn", "qoder-cn"},
 	ProcessExecutable: qoderProcess,
 	VerifiedVersion:   "1.1.81",

@@ -263,6 +263,8 @@ func TestIdentityExtraction(t *testing.T) {
 			Identity{WarpAgent: "omp", WarpPluginVersion: "18.13.1", WarpSessionID: "01JX-abc", WarpCwd: "/home/u/项目"}},
 		{"root app", "\x1b]7501;state=idle:app=omp\a", Identity{ProgramApp: "omp"}},
 		{"opencode child", "\x1b]7501;state=working:id=ses_abc:app=opencode:title=dGl0bGU=\x1b\\", Identity{ProgramChildID: "ses_abc"}},
+		{"antigravity uuid child", "\x1b]7501;state=idle:app=antigravity\a\x1b]7501;state=working:id=89c9a933-60f6-46ad-977b-a8daf22f8e4d\a",
+			Identity{ProgramApp: "antigravity", ProgramChildID: "89c9a933-60f6-46ad-977b-a8daf22f8e4d"}},
 		{"child first segment", "\x1b]7501;state=blocked:kind=question:id=ses_abc/task.1/x+y-z\a", Identity{ProgramChildID: "ses_abc"}},
 		{"child clear", "\x1b]7501;state=clear:id=ses_abc\a", Identity{ProgramChildID: "ses_abc"}},
 		{"later child wins", "\x1b]7501;state=working:id=ses_a\a\x1b]7501;state=working:id=ses_b\a", Identity{ProgramChildID: "ses_b"}},

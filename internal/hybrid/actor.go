@@ -650,6 +650,11 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 	if epoch != a.epoch || a.stopped {
 		return
 	}
+	if a.turn != nil {
+		if _, ok := n.Update.(*acp.UserMessageChunk); ok {
+			return
+		}
+	}
 	events := a.tr.update(n.Update)
 	if hidden := a.cmd.Profile.HiddenCommands; len(hidden) > 0 {
 		for i := range events {

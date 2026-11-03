@@ -71,7 +71,8 @@ export const LAUNCH_ICON_OPTIONS = [
   { value: "terminal", label: "终端" },
   { value: "claudecode", label: "Claude Code" },
   { value: "codex", label: "Codex" },
-  { value: "geminicli", label: "Gemini CLI" },
+  { value: "antigravity", label: "Antigravity CLI" },
+  { value: "geminicli", label: "Gemini CLI（旧配置）" },
   { value: "cursor", label: "Cursor CLI" },
   { value: "githubcopilot", label: "GitHub Copilot CLI" },
   { value: "opencode", label: "OpenCode" },
@@ -99,6 +100,8 @@ export function launchConfigIcon(config: {
       return "claudecode";
     case "codex":
       return "codex";
+    case "agy":
+      return "antigravity";
     case "gemini":
       return "geminicli";
     case "agent":

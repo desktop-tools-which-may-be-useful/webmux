@@ -65,7 +65,7 @@ WebMux 是持续运行的终端工作台。视觉方向为克制的开发工具�
 ## Icons
 
 - **统一使用 Iconify。** 新增或调整 UI 图标时使用 Iconify，优先选用 `tabler` 图标集，保持线条、尺寸和视觉风格一致；已有直接依赖图标库的实现随相关 UI 调整逐步迁移。
-- **CLI 品牌标志。** 启动配置的 Claude Code、Codex、Gemini CLI、Cursor、GitHub Copilot、OpenCode、Qwen、Kimi、CodeBuddy、Pi / omp 与 Qoder / QoderCN 使用 LobeHub 单色 SVG，
+- **CLI 品牌标志。** 启动配置的 Antigravity CLI、Claude Code、Codex、Gemini CLI、Cursor、GitHub Copilot、OpenCode、Qwen、Kimi、CodeBuddy、Pi / omp 与 Qoder / QoderCN 使用 LobeHub 单色 SVG，
   经同一个 `unplugin-icons` 管线编译为 Svelte 组件；来源版本与 MIT 许可保存在 [图标目录](../web/src/icons/lobehub/README.md)。通用终端仍使用 Tabler。
 - **图标随应用打包。** 仅引入所需图标数据，在本地构建时打包，运行时不依赖公共 Iconify API 或 CDN，保证离线和受限网络下仍可显示。
 - **用图标简化常用操作。** 清空、删除、排序、关闭等含义明确的操作可使用纯图标按钮；发送、添加等主要操作或含义不明确的动作保留必要文字。同一动作使用同一图标，不混用 emoji 或另画一套通用操作图标。

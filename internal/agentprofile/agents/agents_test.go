@@ -10,6 +10,7 @@ import (
 
 	. "github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
+	"github.com/rainchan/webmux/internal/agentprofile/agy"
 	"github.com/rainchan/webmux/internal/agentprofile/claudecode"
 	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
@@ -27,6 +28,7 @@ const (
 	ClaudeCode = claudecode.Name
 	Qoder      = qoder.Name
 	QoderCN    = qodercn.Name
+	Agy        = agy.Name
 )
 
 var wrapped = func(args ...string) []string {
@@ -98,6 +100,13 @@ func TestCheck(t *testing.T) {
 		{name: "qodercn preset", argv: wrapped("qodercn", "--dangerously-skip-permissions"), agent: QoderCN},
 		{name: "qodercn direct", argv: []string{"qodercn", "--model", "qwen-max"}, agent: QoderCN},
 		{name: "qoderclicn direct", argv: []string{"qoderclicn"}, agent: QoderCN},
+		{name: "preset bashrc agy", argv: wrapped("agy", "--dangerously-skip-permissions"), agent: Agy},
+		{name: "preset zsh agy", argv: wrappedZsh("agy", "--dangerously-skip-permissions"), agent: Agy},
+		{name: "agy project", argv: []string{"agy", "--project", "cloud"}, reason: ReasonSessionStore, arg: "--project"},
+		{name: "agy new-project", argv: []string{"agy", "--new-project=cloud"}, reason: ReasonSessionStore, arg: "--new-project"},
+		{name: "agy print", argv: []string{"agy", "-p", "总结改动"}, reason: ReasonNonInteractive, arg: "-p"},
+		{name: "agy subcommand", argv: []string{"agy", "mcp"}, reason: ReasonNonInteractive, arg: "mcp"},
+		{name: "agy disable slash commands", argv: []string{"agy", "--disable-slash-commands"}, reason: ReasonNonInteractive, arg: "--disable-slash-commands"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,6 +208,13 @@ func TestResumeArgv(t *testing.T) {
 			want:    wrapped("codex", "--no-daemon", "--search", "resume", "01b"),
 			dropped: []string{"-i a.png"},
 		},
+		{
+			name:    "agy injects settings and drops session/prompt args",
+			argv:    []string{"agy", "--dangerously-skip-permissions", "--model", "gemini-3.8-flash", "--settings", "{}", "-c", "修 bug"},
+			id:      "89c9a933-60f6-46ad-977b-a8daf22f8e4d",
+			want:    []string{"agy", "--settings", agy.TUISettingsJSON, "--dangerously-skip-permissions", "--model", "gemini-3.8-flash", "--conversation", "89c9a933-60f6-46ad-977b-a8daf22f8e4d"},
+			dropped: []string{"--settings {}", "-c", "修 bug"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,6 +242,9 @@ func TestTUIArgv(t *testing.T) {
 		{[]string{"omp", "--continue", "hi"}, []string{"omp", "--continue", "hi"}},
 		{wrapped("codex", "-m", "x"), wrapped("codex", "--no-daemon", "-m", "x")},
 		{wrappedZsh("codex", "-m", "x"), wrappedZsh("codex", "--no-daemon", "-m", "x")},
+		{wrapped("agy", "--dangerously-skip-permissions"), wrapped("agy", "--settings", agy.TUISettingsJSON, "--dangerously-skip-permissions")},
+		{[]string{"agy", "--settings", agy.TUISettingsJSON}, []string{"agy", "--settings", agy.TUISettingsJSON}},
+		{[]string{"agy", "--dangerously-skip-permissions", "--settings", "{}"}, []string{"agy", "--settings", agy.TUISettingsJSON, "--dangerously-skip-permissions"}},
 	}
 	for _, tt := range tests {
 		cmd, err := registry.Parse(tt.argv)
@@ -301,6 +320,12 @@ func TestACPArgv(t *testing.T) {
 			name: "qodercn uses --acp flag",
 			argv: []string{"qodercn", "--model", "qwen-max"},
 			want: []string{"qodercn", "--acp"},
+		},
+		{
+			name:        "agy passes subset to acp and reports mode unsupported",
+			argv:        []string{"agy", "--dangerously-skip-permissions", "--sandbox", "--agent", "coder", "--add-dir", "/tmp", "--log-file=/tmp/a.log", "--model", "gemini-3.8-flash", "--effort", "low", "--mode", "plan"},
+			want:        []string{"agy", "acp", "--dangerously-skip-permissions", "--sandbox", "--agent", "coder", "--add-dir", "/tmp", "--log-file=/tmp/a.log"},
+			unsupported: []string{"--mode"},
 		},
 	}
 	for _, tt := range tests {
@@ -378,6 +403,18 @@ func TestIdentify(t *testing.T) {
 			want: Identity{Agent: QoderCN, Cwd: "/p"},
 			ok:   true,
 		},
+		{
+			name: "agy uuid child record and root cwd",
+			in:   Signals{ProgramApp: "antigravity", ProgramChildID: "89c9a933-60f6-46ad-977b-a8daf22f8e4d", RootCwd: "/p"},
+			want: Identity{Agent: Agy, AgentSessionID: "89c9a933-60f6-46ad-977b-a8daf22f8e4d", Cwd: "/p"},
+			ok:   true,
+		},
+		{
+			name: "agy ignores non-uuid child record",
+			in:   Signals{ProgramApp: "antigravity", ProgramChildID: "ses_e7fb", RootCwd: "/p"},
+			want: Identity{Agent: Agy, Cwd: "/p"},
+			ok:   true,
+		},
 		{name: "unknown", in: Signals{ProgramApp: "other-agent", WarpSessionID: "x"}},
 	}
 	for _, tt := range tests {
@@ -393,6 +430,7 @@ func TestIdentify(t *testing.T) {
 func TestBelowVerified(t *testing.T) {
 	ompProfile := omp.Agent.Profile()
 	opencodeProfile := opencode.Agent.Profile()
+	agyProfile := agy.Agent.Profile()
 	tests := []struct {
 		profile *Profile
 		version string
@@ -407,11 +445,25 @@ func TestBelowVerified(t *testing.T) {
 		{ompProfile, "", false},
 		{opencodeProfile, "2.2.0", false},
 		{opencodeProfile, "2.1.3", true},
+		{agyProfile, "1.3.0", true},
+		{agyProfile, "1.4.12", false},
 	}
 	for _, tt := range tests {
 		if got := tt.profile.BelowVerified(tt.version); got != tt.want {
 			t.Errorf("%s.BelowVerified(%q) = %v, want %v", tt.profile.Name, tt.version, got, tt.want)
 		}
+	}
+}
+
+func TestAgyChatConfig(t *testing.T) {
+	cmd := mustParse(t, "agy", "--model=gemini-3.8-flash", "--effort", "low", "--mode", "plan")
+	seeds, unsupported := cmd.ChatConfig()
+	wantSeeds := []Seed{
+		{ConfigID: "model", Value: "gemini-3.8-flash", Arg: "--model=gemini-3.8-flash"},
+		{ConfigID: "thought_level", Value: "low", Arg: "--effort low"},
+	}
+	if !slices.Equal(seeds, wantSeeds) || !slices.Equal(unsupported, []string{"--mode"}) {
+		t.Fatalf("ChatConfig = %+v %q, want %+v [--mode]", seeds, unsupported, wantSeeds)
 	}
 }
 

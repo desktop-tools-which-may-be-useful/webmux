@@ -19,6 +19,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/acp"
 	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agy"
 	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/agentprofile/opencode"
@@ -61,7 +62,7 @@ func agentPath(t *testing.T, profile string) string {
 		}
 		// A separate file per profile, not a hard link: macOS reports a
 		// hard-linked executable under either name, breaking the root check.
-		for _, name := range []string{omp.Name, opencode.Name, codex.Name, "codex-acp", "claude", "claude-agent-acp", "node"} {
+		for _, name := range []string{omp.Name, opencode.Name, codex.Name, "codex-acp", "claude", "claude-agent-acp", "node", agy.Name} {
 			out, err := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent").CombinedOutput()
 			if err != nil {
 				fakeAgent.err = fmt.Errorf("go build: %w\n%s", err, out)

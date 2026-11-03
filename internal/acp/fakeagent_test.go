@@ -973,3 +973,69 @@ func TestFakeAgentClaudeModeFallback(t *testing.T) {
 	}
 	a.exit(t)
 }
+
+func TestFakeAgentAgyACPAndTUI(t *testing.T) {
+	ctx := context.Background()
+	e := newFakeEnv(t, "FAKEAGENT_PROFILE=agy")
+	a := e.startACP(t, newRecorder())
+	init := a.initialize(t)
+	if init.ProtocolVersion != 1 || init.AgentInfo == nil ||
+		init.AgentInfo.Name != "Antigravity ACP Server" || init.AgentInfo.Version != "1.4.12" ||
+		!init.AgentCapabilities.LoadSession || init.AgentCapabilities.SessionCapabilities.List == nil ||
+		init.AgentCapabilities.SessionCapabilities.Resume == nil || len(init.Meta) != 0 {
+		t.Fatalf("initialize = %+v", init)
+	}
+	created, err := a.conn.NewSession(ctx, NewSessionRequest{Cwd: e.cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := created.SessionID
+	if fakeConfigValue(created.ConfigOptions, "model") != "gemini-4-argon" ||
+		fakeConfigValue(created.ConfigOptions, "thought_level") != "medium" {
+		t.Fatalf("initial config = %+v", created.ConfigOptions)
+	}
+	for _, setting := range []struct{ id, value string }{{"model", "gemini-3.8-flash"}, {"thought_level", "low"}} {
+		response, err := a.conn.SetConfigOption(ctx, SetConfigOptionRequest{SessionID: id, ConfigID: setting.id, Value: ConfigValue{ID: setting.value}})
+		if err != nil || fakeConfigValue(response.ConfigOptions, setting.id) != setting.value {
+			t.Fatalf("set %s=%s: %+v, %v", setting.id, setting.value, response, err)
+		}
+	}
+	a.rec.drain()
+	response, err := a.conn.Prompt(ctx, PromptRequest{SessionID: id, Prompt: []ContentBlock{TextBlock("hello agy")}})
+	if err != nil || response.StopReason != StopEndTurn {
+		t.Fatalf("prompt = %+v, %v", response, err)
+	}
+	echoed := false
+	for _, u := range a.rec.drain() {
+		if chunk, ok := u.(*UserMessageChunk); ok && chunk.Content.Text == "hello agy" && chunk.MessageID == "" {
+			echoed = true
+		}
+	}
+	if !echoed {
+		t.Fatal("agy prompt did not echo user_message_chunk without messageId")
+	}
+	if err := a.conn.CloseSession(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	a.exit(t)
+
+	// Cold load resets model and thought_level to defaults.
+	a = e.startACP(t, newRecorder())
+	a.initialize(t)
+	loaded, err := a.conn.LoadSession(ctx, LoadSessionRequest{SessionID: id, Cwd: e.cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fakeConfigValue(loaded.ConfigOptions, "model") != "gemini-4-argon" ||
+		fakeConfigValue(loaded.ConfigOptions, "thought_level") != "medium" {
+		t.Fatalf("cold load config = %+v", loaded.ConfigOptions)
+	}
+	a.exit(t)
+
+	// TUI with injected --settings emits app=antigravity and child UUID.
+	tui := e.startTUI(t, "--settings", `{"title":{"type":"command","command":"conversation_id"}}`, "--conversation", id)
+	tui.waitFor("state=idle:app=antigravity", 1)
+	tui.waitFor("state=working:id="+id, 1)
+	tui.waitFor("> hello agy", 1)
+	tui.exit()
+}

@@ -2,11 +2,14 @@
 
 ## Q. 混合会话（聊天 ↔ 终端）
 
-- **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI、Claude Code、Qoder 或 QoderCN 会话能在聊天视图与终端之间切换。
+- **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 或 QoderCN 会话能在聊天视图与终端之间切换。
   验收要点：
-  - 新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
+  - 新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
   - 设置页编辑器提供“混合模式（聊天 ↔ 终端）”勾选框，可用性只取服务端判定（打开时用配置的 `hybridSupport`，改命令后去抖查询 `hybrid-support`）；
-  - 不可用时禁用并显示原因：未识别的 agent、命令写法、会话库或目录参数、非交互参数、`codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等打开已有会话的参数，以及 Claude 的 `--worktree`/`--tmux`、`--no-session-persistence`/`--environment` 与非交互参数；
+  - 不可用时禁用并显示原因：
+    - 未识别的 agent、命令写法、会话库或目录参数、非交互参数；
+    - `codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等打开已有会话的参数；
+    - Claude 的 `--worktree`/`--tmux`、`--no-session-persistence`/`--environment`，以及 Antigravity CLI 的 `--project`/`--new-project` 与非交互参数；
   - 未识别的 agent 与勾选框说明列出服务端返回的受支持 agent（`supportedAgents`，来自 agent 注册表）；
   - 勾选不受支持的命令保存返回 400，保存不检查第三方连接器是否已安装；
   - Claude Code 使用稳定档案 ID `claudecode`，允许 `CLAUDE_CONFIG_DIR` 环境但不允许命令内会话参数；
@@ -25,12 +28,17 @@
     - 受支持的 agent；
     - 档案需要的第三方连接器已安装；
     - 是 PTY 根进程（Codex 与 Claude Code 也接受 npm 的 `node` 启动器及其唯一直接原生 agent 子进程）；
-    - 已有 agent 会话 ID：Codex 取自写锁；Claude 取自 `<CLAUDE_CONFIG_DIR>/sessions/<pid>.json`，采用前核对 PID、UUID、规范化 cwd、进程启动标识与 PID domain，失效时退回 cwd + 启动时间的 `session/list` 候选，多个候选时让用户选择；首条消息前即使已有注册 UUID，list 不含可加载会话仍不可切换；
+    - 已有 agent 会话 ID：
+      - Codex 取自写锁；Antigravity CLI 由注入的会话级 `--settings` `title` 钩子经 `OSC 7501` 子记录上报 36 字符 UUID；
+      - Claude 取自 `<CLAUDE_CONFIG_DIR>/sessions/<pid>.json`，采用前核对 PID、UUID、规范化 cwd、进程启动标识与 PID domain，失效时退回 cwd + 启动时间的 `session/list` 候选，多个候选时让用户选择；
+      - 首条消息前即使已有注册 UUID，list 不含可加载会话仍不可切换；
     - 会话列表能查到；
     - 未被其他会话占用；
-  - TUI 在回合中时先发中断键并等待空闲（Claude Code 为一次 Esc；Codex 启动阶段的“工作中”不算回合，Claude 无启动静默期），10 秒后可选继续等待、强制切换或取消（强制切换的损失说明取自服务端 `forceSwitchNote`，由各 agent 适配器提供）；
+  - TUI 在回合中时先发中断键并等待空闲（Claude Code 与 Antigravity CLI 为一次 Esc；Codex 启动阶段的“工作中”不算回合，Claude 无启动静默期），10 秒后可选继续等待、强制切换或取消（强制切换的损失说明取自服务端 `forceSwitchNote`，由各 agent 适配器提供）；
   - 进入目标端前确认 TUI 进程组已退出；
-  - 聊天视图回放完整历史，模型等配置与切换前一致（按档案补齐 omp 的 mode 与 Codex 的模式、模型、推理强度，Codex 首次切换按启动参数推导；Claude 首次从 argv 推导 model/effort/mode，冷 load 与 resume 后重应用 model/effort，mode 保留连接器从 transcript 恢复的实际值，回退显示实际配置与通知）；
+  - 聊天视图回放完整历史，模型等配置与切换前一致：
+    - 按档案补齐 omp 的 mode、Antigravity CLI 的 model 与 thought_level，以及 Codex 的模式、模型、推理强度；Antigravity CLI 与 Codex 首次切换按启动参数推导配置；
+    - Claude 首次从 argv 推导 model/effort/mode，冷 load 与 resume 后重应用 model/effort，mode 保留连接器从 transcript 恢复的实际值，回退显示实际配置与通知；
   - 会话被 webmux 之外的 Codex 客户端或被有效注册记录识别的 Claude 进程占用时回到终端并提示 `occupied_external`，当前/退出/陈旧 Claude 记录不误报，来源不可读时仅保留内部检测且不保证发现所有外部写者；
   - Claude 注册读取有频率/大小/条目上限，普通会话不扫描，路径、PID、启动标识、记录正文与凭据不进入客户端负载、混合记录或日志；
   - 已附着的终端以 4409 断开。
@@ -38,14 +46,14 @@
   验收要点：
   - 回合进行中先确认，再取消回合并把挂起的请求答复为取消；
   - 排队中未发送的消息合并后退回发起设备的草稿，其他设备只收到提示，不自动发给 TUI；
-  - agent 支持时 `session/close` 后结束 ACP 进程并等待退出，再以恢复命令在同一会话 ID 下启动新运行代际（Claude 为 `--resume <id>`）；
+  - agent 支持时 `session/close` 后结束 ACP 进程并等待退出，再以恢复命令在同一会话 ID 下启动新运行代际（Claude 为 `--resume <id>`，Antigravity CLI 为 `--conversation <id>`）；
   - Claude 的 cancel 只中断当前回合，后台 Bash 或子任务可能存活，切换须终止连接器并等待受管后代退出，不保证任意自行 daemonize 的进程已清理；
   - 切换期间显示“中断、退出、启动、连接终端”进度，直到新运行在本页输出首屏（最多 10 秒）才淡入终端，不显示空白终端；
   - 页面列出恢复时未保留的参数；
   - 任一步失败自动回到原端并显示原因。
 - **US-Q05 阅读聊天时间线**：作为手机上的使用者，我希望以对话形式阅读 agent 的输出，以便比滚动终端更容易理解进度。
   验收要点：
-  - 用户消息为气泡、agent 消息为正文，思考默认折叠；
+  - 用户消息为气泡、agent 消息为正文，思考默认折叠；活动 `session/prompt` 回合期间忽略 agent 回显的 `user_message_chunk` 通知，仅在 `session/load` 回放阶段转换，避免实时回显产生重复的用户消息气泡；
   - 工具调用显示一行摘要可展开，连续读取与搜索合并为“已浏览 N 项”，diff 显示增删行数并可在代码面板查看，同一 `toolCallId` 的更新只保留一行；
   - 回合状态由服务端记录 `startedAt` / `endedAt`，进行中每秒显示已用时间，结束后保留总用时，刷新、重连与其他设备不重新计时；
   - 计划、用量（输入框旁的上下文用量环，点击弹出已用、上下文窗口、剩余 token 与费用）、压缩、提示与回合结束（已中断、错误）分别呈现；
@@ -77,7 +85,7 @@
   - 队列可编辑、上移、删除、二次确认后立即发送；
   - 回合被停止、出错或拒绝时队列暂停并提示继续或清空；
   - 按 `clientRequestId` 去重，重试不重复发送；
-  - 只有档案与 agent 都声明支持（omp、Codex、Claude Code）且回合进行中时显示“插话”，OpenCode 没有插话；
+  - 只有档案与 agent 都声明支持（omp、Codex、Claude Code）且回合进行中时显示“插话”，OpenCode 与 Antigravity CLI 没有插话；
   - Codex 与 Claude 的插话在回合已结束时返回 `promptRequired`（Claude 可为 `noRunningTurn`），这条消息排到队首作为下一回合发送，不产生 webmux 不知道的回合。
 - **US-Q09 聊天端提醒**：作为离开页面的使用者，我希望聊天端的回合状态像终端会话一样提醒我，以便及时回来批准或继续。
   验收要点：
@@ -96,7 +104,7 @@
 - **US-Q11 空闲休眠与唤醒**：作为部署者，我希望无人使用的聊天端会话释放 agent 进程，以便节省服务器资源而不丢失会话。
   验收要点：
   - 聊天端没有回合、待答复请求与排队消息且 `chatIdleSleepMinutes` 分钟无命令时结束 ACP 进程并标记休眠，仍是运行中会话；
-  - 打开聊天通道或提交命令时自动唤醒（支持时用 `session/resume` 保持事件连续，否则 `session/load` 并换代），休眠期间提交的消息在唤醒后发送；
+  - 打开聊天通道或提交命令时自动唤醒（支持时用 `session/resume` 保持事件连续，Antigravity CLI 与 Claude 唤醒后按档案重应用记录的配置项；否则 `session/load` 并换代），休眠期间提交的消息在唤醒后发送；
   - 设置页可修改，默认 30、0 为不休眠，网页修改立即生效并在设备间同步。
 - **US-Q12 关闭后恢复**：作为使用者，我希望关闭或因重启中断的混合会话之后还能接着聊，以便服务重启不再意味着失去 agent 对话。
   验收要点：
@@ -148,7 +156,7 @@
 
 - [混合会话服务](../../internal/hybrid/)、[连接器检查](../../internal/hybrid/connector.go)、[agent 适配器核心](../../internal/agentprofile/)、[ACP 客户端](../../internal/acp/)
 - [agent 注册表](../../internal/agentprofile/agents/agents.go)、[Codex 适配器](../../internal/agentprofile/codex/codex.go)、[适配器契约测试](../../internal/agentprofile/agenttest/agenttest.go)
-- [Claude Code 适配器](../../internal/agentprofile/claudecode/claudecode.go)、[Claude 注册记录](../../internal/agentprofile/claudecode/registry.go)
+- [Claude Code 适配器](../../internal/agentprofile/claudecode/claudecode.go)、[Claude 注册记录](../../internal/agentprofile/claudecode/registry.go)、[Antigravity CLI 适配器](../../internal/agentprofile/agy/agy.go)
 - [会话外壳与伴随进程](../../internal/session/shell.go)、[进程事实](../../internal/session/process_facts.go)、[聊天接口](../../internal/api/chat.go)、[聊天通道](../../internal/hub/chat.go)
 - [启动配置](../../internal/launch/types.go)、[聊天视图](../../web/src/components/chat/)、[会话页](../../web/src/pages/Terminal.svelte)
 - [可恢复分组](../../web/src/components/RecoverableSessions.svelte)、[安装提示](../../web/src/components/ConnectorInstallHint.svelte)、[原生附着](../../internal/attach/attach.go)、[使用说明](../hybrid-sessions.md)、[协议](../protocol/http-hybrid.md)、[端到端测试](../../web/test/e2e/hybrid.spec.ts)。

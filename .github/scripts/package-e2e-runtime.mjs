@@ -54,6 +54,7 @@ for (const [platform, arch] of [
     "codex-acp",
     "claude",
     "claude-agent-acp",
+    "agy",
   ])
     await copyFile(join(agents, "omp"), join(agents, name));
 }

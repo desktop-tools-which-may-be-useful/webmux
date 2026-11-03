@@ -527,15 +527,15 @@ func TestIdentityKeepsAttentionAndStatus(t *testing.T) {
 
 func TestIdentityNeverInInfo(t *testing.T) {
 	s := attentionSession()
-	feedSignals(s, identityOutput)
-	if s.identity.WarpSessionID == "" || s.identity.ProgramChildID == "" {
+	feedSignals(s, identityOutput+"\x1b]7501;state=working:id=89c9a933-60f6-46ad-977b-a8daf22f8e4d\a")
+	if s.identity.WarpSessionID == "" || s.identity.ProgramChildID != "89c9a933-60f6-46ad-977b-a8daf22f8e4d" {
 		t.Fatalf("identity not collected: %+v", s.identity)
 	}
 	encoded, err := json.Marshal(s.infoLocked())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, leak := range []string{"omp-session-secret", "/identity/cwd/secret", "ses_childsecret", "18.13.1", "omp", "opencode"} {
+	for _, leak := range []string{"omp-session-secret", "/identity/cwd/secret", "ses_childsecret", "89c9a933-60f6-46ad-977b-a8daf22f8e4d", "18.13.1", "omp", "opencode"} {
 		if strings.Contains(string(encoded), leak) {
 			t.Fatalf("info carries identity field %q: %s", leak, encoded)
 		}
