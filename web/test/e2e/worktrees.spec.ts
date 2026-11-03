@@ -169,8 +169,7 @@ test("repository → two worktrees → shared PTYs → guarded force removal ret
     exact: true,
   });
   await expect(force).toBeDisabled();
-  await page.getByLabel("输入完整路径以确认删除").fill(first.path);
-  await expect(force).toBeDisabled();
+  await expect(page.getByLabel("输入完整路径以确认删除")).toHaveCount(0);
   await page.getByRole("checkbox").check();
   await force.click();
   await expect(page.getByRole("dialog")).toBeHidden();

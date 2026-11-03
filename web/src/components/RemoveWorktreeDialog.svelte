@@ -11,7 +11,6 @@
     type Worktree,
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
-  import { Textarea } from "$lib/components/ui/textarea";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
@@ -25,7 +24,6 @@
   let busy = $state(false);
   let error = $state("");
   let force = $state(false);
-  let confirmPath = $state("");
   let closeSessions = $state(false);
   const route = $derived(
     `/repositories/${worktree.repositoryId}/worktrees/${worktree.id}`,
@@ -35,7 +33,6 @@
     error = "";
     preview = null;
     force = false;
-    confirmPath = "";
     closeSessions = false;
     try {
       preview = await api(
@@ -67,7 +64,9 @@
         {
           confirmationId: preview.confirmationId,
           mode: force ? "force" : "safe",
-          ...(force ? { confirmPath, closeSessions } : {}),
+          ...(force
+            ? { confirmPath: preview.worktree.path, closeSessions }
+            : {}),
         },
         undefined,
         RemoveWorktreeRequestSchema,
@@ -147,21 +146,6 @@
         5 分钟内有效；目标或会话变化后必须重新预览。
       </p>
       {#if force}
-        <div class="space-y-2">
-          <Label for="confirm-worktree-path">输入完整路径以确认删除</Label>
-          <Textarea
-            id="confirm-worktree-path"
-            bind:value={confirmPath}
-            rows={2}
-            mono
-            class="break-all"
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck={false}
-            disabled={busy}
-          />
-        </div>
         <Label class="items-start">
           <Checkbox
             bind:checked={closeSessions}
@@ -191,16 +175,13 @@
           disabled={busy}
           onclick={() => {
             force = false;
-            confirmPath = "";
             closeSessions = false;
           }}>返回安全预览</Button
         >
         <Button
           type="submit"
           variant="destructive"
-          disabled={busy ||
-            confirmPath !== preview.worktree.path ||
-            !closeSessions}>关闭会话并强制删除</Button
+          disabled={busy || !closeSessions}>关闭会话并强制删除</Button
         >
       {:else if !preview.blockers.length}
         <Button type="submit" disabled={busy}>确认安全删除</Button>
