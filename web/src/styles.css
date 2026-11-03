@@ -365,6 +365,16 @@
   width: max-content;
   height: auto;
 }
+/* Observers and locked grids pan the host. xterm's scrollbar is positioned at
+   the grid edge and follows the buffer, so it floats inside the visible area
+   or duplicates the host scrollbar; keep only the host's. Wheel, touch and the
+   position badge still reach the history. */
+.terminal-host.observing .xterm-scrollable-element > .scrollbar,
+.terminal-host.size-locked:not(.observing)
+  .xterm-scrollable-element
+  > .scrollbar {
+  display: none;
+}
 /* A locked host scrolls, so focusing the iOS helper would reveal it at the
    grid's top and hide the newest rows. The helper box has no height of its own,
    so anchor it and the textarea to the grid's bottom; focus and IME updates

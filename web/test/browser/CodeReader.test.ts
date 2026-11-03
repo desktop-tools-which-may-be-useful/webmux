@@ -315,6 +315,17 @@ test("captured reading state restores in a new reader, also one mounted hidden",
   await page.getByRole("textbox", { name: "跳转到行" }).fill("200");
   await userEvent.keyboard("{Enter}");
   const host = document.querySelector<HTMLElement>("[data-code-reader]")!;
+  // goto queues its scroll on a frame. Nudging line 200 before that render
+  // lands lets the queued center scroll overwrite the nudge, so wait until the
+  // row reaches the requested centered position first.
+  const centered = () => {
+    const line = row(200);
+    if (!line) return false;
+    const box = host.getBoundingClientRect();
+    const rect = line.getBoundingClientRect();
+    return rect.top + rect.height / 2 >= box.top + box.height / 2 - rect.height;
+  };
+  await expect.poll(centered).toBe(true);
   const scrollIntoLine = () => {
     const line = row(200);
     if (!line) return false;
