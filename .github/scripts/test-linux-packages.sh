@@ -60,7 +60,7 @@ printf 'ok - %s installs, runs and removes on Debian\n' "$deb"
 docker run --rm -e VERSION="$version" -v "$dir:/pkgs:ro" "$fedora_image" sh -euc "
 	test -z \"\$(rpm -qp --scripts /pkgs/$rpm)\"
 	test \"\$(rpm -qpl /pkgs/$rpm | tr '\n' ' ')\" = '/usr/bin/webmux /usr/lib/systemd/user/webmux.service '
-	rpm -i /pkgs/$rpm
+	rpm -i --nosignature /pkgs/$rpm
 	$checks
 	rpm -e webmux
 	$removed
