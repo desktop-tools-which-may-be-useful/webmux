@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rainchan/webmux/internal/fetch"
+	"github.com/rainchan/webmux/internal/update"
 	"github.com/rainchan/webmux/internal/wslclient"
 )
 
@@ -20,9 +21,6 @@ var (
 	linuxAMD64SHA256 string
 	linuxARM64SHA256 string
 )
-
-// ReleaseRepo is the GitHub owner/name serving release assets.
-var ReleaseRepo = "mzdluo123/webmux"
 
 var (
 	// ErrInstallUnsupported means this tray carries no server digests.
@@ -44,7 +42,7 @@ func BuiltinDigests() map[string]string {
 type Installer struct {
 	Runner  Runner
 	Target  Target
-	Version string // tray version; the release tag is "v"+Version
+	Version string // tray version; its release holds the server
 	// Dir holds verified downloads on the Windows side.
 	Dir        string
 	Digests    map[string]string // by architecture; nil means unsupported
@@ -56,7 +54,7 @@ type Installer struct {
 // installed file reports the tray version. The existing file in WSL is
 // untouched unless a verified download is ready.
 func (i Installer) Install(ctx context.Context) error {
-	if i.Digests == nil || !releaseVersion(i.Version) {
+	if _, ok := update.ParseVersion(i.Version); i.Digests == nil || !ok {
 		return ErrInstallUnsupported
 	}
 	arch, err := i.arch(ctx)
@@ -67,16 +65,21 @@ func (i Installer) Install(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("不支持的 WSL 架构 %s", arch)
 	}
-	name := "webmux-linux-" + arch
+	name := update.AssetName(i.Version, "webmux-linux-"+arch)
 	// deploy/windows/webmux.nsi pre-seeds this cache name; keep them equal.
 	local := filepath.Join(i.Dir, "webmux-"+i.Version+"-linux-"+arch)
 	if sum, err := fetch.FileSHA256(local); err != nil || sum != digest {
 		if err := os.MkdirAll(i.Dir, 0o700); err != nil {
 			return fmt.Errorf("下载目录：%w", err)
 		}
-		asset := fetch.Asset{Path: "/" + ReleaseRepo + "/releases/download/v" + i.Version + "/" + name, SHA256: digest}
+		asset := fetch.Asset{Path: "/" + update.Repo + "/releases/download/" + update.ReleaseTag(i.Version) + "/" + name, SHA256: digest}
 		source, err := i.Downloader.Download(ctx, asset, local)
 		if err != nil {
+			// Release dev keeps only two builds; an older dev tray's server
+			// is gone and only a newer tray can install one.
+			if update.IsDevVersion(i.Version) && missingOnGitHub(err) {
+				return fmt.Errorf("开发版 %s 的服务端已不在 dev Release，请先更新托盘：%w", i.Version, err)
+			}
 			return fmt.Errorf("下载 %s %s：%w", name, i.Version, err)
 		}
 		i.logf("downloaded %s %s from %s", name, i.Version, source)
@@ -139,6 +142,15 @@ func output(res Result) string {
 	return strings.TrimSpace(wslclient.DecodeOutput(res.Stderr) + wslclient.DecodeOutput(res.Stdout))
 }
 
+// missingOnGitHub reports that GitHub, the first source, answered that the
+// file does not exist.
+func missingOnGitHub(err error) bool {
+	var sources *fetch.SourcesError
+	var status *fetch.StatusError
+	return errors.As(err, &sources) && len(sources.Errs) > 0 &&
+		errors.As(sources.Errs[0], &status) && status.Code == http.StatusNotFound
+}
+
 // ParseVersion extracts the version from `webmux version` output
 // ("webmux 0.2.0"); it returns "" when the output has another shape.
 func ParseVersion(out string) string {
@@ -147,25 +159,4 @@ func ParseVersion(out string) string {
 		return ""
 	}
 	return fields[1]
-}
-
-func releaseVersion(v string) bool {
-	_, ok := semver(v)
-	return ok
-}
-
-func semver(v string) ([3]int, bool) {
-	var out [3]int
-	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return out, false
-	}
-	for n, p := range parts {
-		x, err := strconv.Atoi(p)
-		if err != nil || x < 0 || p != strconv.Itoa(x) {
-			return out, false
-		}
-		out[n] = x
-	}
-	return out, true
 }

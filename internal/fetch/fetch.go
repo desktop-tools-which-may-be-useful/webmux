@@ -67,17 +67,31 @@ type Downloader struct {
 // SourcesError reports that every source failed.
 type SourcesError struct {
 	Failures []string // "<host>: <reason>"
+	// Errs holds the error of each source in Failures order; Download fills
+	// it for every source of Sources, so Errs[0] is GitHub's.
+	Errs []error
 }
 
 func (e *SourcesError) Error() string {
 	return "failed from every source (" + strings.Join(e.Failures, "; ") + ")"
 }
 
+// StatusError is a source's answer with a non-2xx HTTP status.
+type StatusError struct {
+	Code   int
+	Status string // e.g. "404 Not Found"
+}
+
+func (e *StatusError) Error() string { return "HTTP " + e.Status }
+
 // Download installs a verified executable (0755) at target, trying GitHub,
 // then each mirror. It returns the host that served it. A context error is
 // returned unwrapped; target is untouched unless a source succeeds.
 func (d Downloader) Download(ctx context.Context, a Asset, target string) (string, error) {
-	var failures []string
+	var (
+		failures []string
+		errs     []error
+	)
 	for _, source := range d.Sources(a.Path) {
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -92,8 +106,9 @@ func (d Downloader) Download(ctx context.Context, a Asset, target string) (strin
 		}
 		d.logger().Warn(d.Name+" download source failed", "source", host, "error", err)
 		failures = append(failures, host+": "+err.Error())
+		errs = append(errs, err)
 	}
-	return "", &SourcesError{Failures: failures}
+	return "", &SourcesError{Failures: failures, Errs: errs}
 }
 
 // Sources lists the URLs tried for a GitHub path: GitHub, then each mirror.
@@ -210,7 +225,7 @@ func (d Downloader) stream(parent context.Context, source string, consume func(i
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return fmt.Errorf("HTTP %s", res.Status)
+		return &StatusError{Code: res.StatusCode, Status: res.Status}
 	}
 	if !watchdog.Stop() {
 		return ctx.Err()

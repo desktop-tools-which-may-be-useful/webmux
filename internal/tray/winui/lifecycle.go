@@ -134,7 +134,8 @@ func (a *App) installed(err error) {
 }
 
 // updateTray runs the update entry: an installed tray checks and installs
-// the latest release, a portable one opens the release page.
+// the latest release, first moving to the dev channel when asked; a
+// portable one opens the release page.
 func (a *App) updateTray() {
 	entry := a.bindings().update
 	if !entry.Show || !entry.Enabled {
@@ -143,6 +144,8 @@ func (a *App) updateTray() {
 	switch entry.Action {
 	case tray.UpdateInstall:
 		a.updater.Install()
+	case tray.UpdateSwitchToDev:
+		a.updater.SwitchToDev()
 	case tray.UpdateOpenRelease:
 		if err := OpenURL(entry.URL); err != nil {
 			a.fail("无法打开浏览器", err)

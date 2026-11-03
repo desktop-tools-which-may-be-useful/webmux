@@ -55,6 +55,9 @@ type Settings struct {
 	// install; it stays until that release runs, so a tray the installer
 	// restarted after a failure knows about it.
 	UpdateAttempt UpdateAttempt `json:"updateAttempt,omitzero"`
+	// UpdateChannel is "stable" or "dev"; files lacking it mean stable.
+	// Read it with Channel.
+	UpdateChannel update.Channel `json:"updateChannel"`
 }
 
 // UpdateAttempt is one start of the installer of a tray release.
@@ -66,15 +69,29 @@ type UpdateAttempt struct {
 // IsZero reports that no attempt is recorded.
 func (a UpdateAttempt) IsZero() bool { return a.Version == "" && a.At.IsZero() }
 
+// Channel is the channel the tray's own update follows. An unrecognised
+// value means stable; warn then says why, and the file keeps the value
+// until the user picks a channel.
+func (s Settings) Channel() (ch update.Channel, warn error) {
+	if ch, ok := update.ParseChannel(string(s.UpdateChannel)); ok {
+		return ch, nil
+	}
+	if s.UpdateChannel == "" {
+		return update.ChannelStable, nil
+	}
+	return update.ChannelStable, fmt.Errorf("updateChannel %q is not stable or dev; using stable", s.UpdateChannel)
+}
+
 func DefaultSettings() Settings {
 	return Settings{
-		Mode:        ModeAuto,
-		Webmux:      "~/.local/bin/webmux",
-		LogFile:     "~/.local/state/webmux/webmux.log",
-		StartWebMux: true,
-		AutoRestart: true,
-		Forward:     []string{},
-		AutoUpdate:  true,
+		Mode:          ModeAuto,
+		Webmux:        "~/.local/bin/webmux",
+		LogFile:       "~/.local/state/webmux/webmux.log",
+		StartWebMux:   true,
+		AutoRestart:   true,
+		Forward:       []string{},
+		AutoUpdate:    true,
+		UpdateChannel: update.ChannelStable,
 	}
 }
 
@@ -82,9 +99,10 @@ func DefaultSettings() Settings {
 // when the previous run was an older release, else "". failed is the
 // recorded update attempt when it names a release newer than version: that
 // install failed. An attempt at version or older is cleared. changed
-// reports that s must be saved. Development versions are never recorded.
+// reports that s must be saved. Versions that are neither releases nor
+// development builds of main are never recorded.
 func RecordVersion(s Settings, version string) (next Settings, updated string, failed UpdateAttempt, changed bool) {
-	if !releaseVersion(version) {
+	if _, ok := update.ParseVersion(version); !ok {
 		return s, "", UpdateAttempt{}, false
 	}
 	if s.LastVersion != version {

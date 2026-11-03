@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/update"
 )
 
 func TestInstallEntry(t *testing.T) {
@@ -65,7 +66,7 @@ func TestVersionHintAndUpdateEntry(t *testing.T) {
 			t.Errorf("%s: hint %q, want %q", tc.name, got, tc.hint)
 		}
 		got := UpdateEntry(tc.snap, portable)
-		if got.Show != (tc.download != "") || (got.Show && (got.Title != "下载托盘 "+tc.download || got.URL != "https://github.com/"+ReleaseRepo+"/releases/tag/v"+tc.download || got.Action != UpdateOpenRelease || !got.Enabled)) {
+		if got.Show != (tc.download != "") || (got.Show && (got.Title != "下载托盘 "+tc.download || got.URL != "https://github.com/"+update.Repo+"/releases/tag/v"+tc.download || got.Action != UpdateOpenRelease || !got.Enabled)) {
 			t.Errorf("%s: portable entry %+v", tc.name, got)
 		}
 		// An installed release tray installs instead of opening a page.
@@ -106,10 +107,11 @@ func TestSelfUpdateEntries(t *testing.T) {
 		check CheckItem
 	}{
 		{"nothing", Snapshot{Tray: tray}, SelfUpdateView{Release: true, Installed: true}, UpdateItem{}, CheckItem{Enabled: true, Title: "检查更新"}},
-		{"development build", newerWSL, SelfUpdateView{Installed: true}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.4.0", URL: ReleasePage("0.4.0"), Action: UpdateOpenRelease}, CheckItem{Title: "检查更新（此构建不是发布构建，不支持更新）"}},
+		{"development build", newerWSL, SelfUpdateView{Installed: true}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.4.0", URL: "https://github.com/mzdluo123/webmux/releases/tag/v0.4.0", Action: UpdateOpenRelease}, CheckItem{Title: "检查更新（此构建不是发布构建，不支持更新）"}},
 		{"installed, auto off", Snapshot{Tray: tray}, SelfUpdateView{Release: true, Installed: true, Latest: "0.5.0", Status: "有新版本 0.5.0"}, UpdateItem{Show: true, Enabled: true, Title: "更新到 0.5.0", Action: UpdateInstall}, CheckItem{Enabled: true, Title: "检查更新"}},
 		{"installing", newerWSL, SelfUpdateView{Release: true, Installed: true, Busy: true, Latest: "0.5.0"}, UpdateItem{Show: true, Title: "更新到 0.5.0", Action: UpdateInstall}, CheckItem{Title: "检查更新（正在进行）"}},
-		{"portable", newerWSL, SelfUpdateView{Release: true, Latest: "0.5.0"}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.5.0", URL: ReleasePage("0.5.0"), Action: UpdateOpenRelease}, CheckItem{Enabled: true, Title: "检查更新"}},
+		{"portable", newerWSL, SelfUpdateView{Release: true, Latest: "0.5.0"}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.5.0", URL: "https://github.com/mzdluo123/webmux/releases/tag/v0.5.0", Action: UpdateOpenRelease}, CheckItem{Enabled: true, Title: "检查更新"}},
+		{"portable, dev build", newerWSL, SelfUpdateView{Release: true, Channel: update.ChannelDev, Latest: "0.10.3-dev.4"}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.10.3-dev.4", URL: "https://github.com/mzdluo123/webmux/releases/tag/dev", Action: UpdateOpenRelease}, CheckItem{Enabled: true, Title: "检查更新"}},
 		{"installed, WSL newer", newerWSL, SelfUpdateView{Release: true, Installed: true}, UpdateItem{Show: true, Enabled: true, Title: "更新托盘", Action: UpdateInstall}, CheckItem{Enabled: true, Title: "检查更新"}},
 	} {
 		if got := UpdateEntry(tc.snap, tc.view); got != tc.want {
@@ -117,6 +119,62 @@ func TestSelfUpdateEntries(t *testing.T) {
 		}
 		if got := CheckEntry(tc.view); got != tc.check {
 			t.Errorf("%s: check %+v, want %+v", tc.name, got, tc.check)
+		}
+	}
+}
+
+// A newer development build in WSL is never offered on the stable channel:
+// the status line says so, and an installed tray offers to switch to the
+// dev channel instead of "更新托盘". On the dev channel, or for a newer
+// release, nothing changes; a portable tray links Release dev.
+func TestDevServerOnStableChannel(t *testing.T) {
+	tray := BuildInfo{Version: "0.10.2", Contract: 1}
+	snap := func(version string) Snapshot {
+		installed := BuildInfo{Version: version, Contract: 1}
+		return Snapshot{State: StateRunning, Tray: tray, Installed: installed, Compat: Classify(tray, installed)}
+	}
+	devWSL, releaseWSL := snap("0.10.3-dev.7"), snap("0.10.3")
+	installed := func(ch update.Channel) SelfUpdateView {
+		return SelfUpdateView{Release: true, Installed: true, Channel: ch}
+	}
+	const hint = "WSL 中为开发版 0.10.3-dev.7，托盘使用正式版通道"
+	for _, tc := range []struct {
+		name string
+		snap Snapshot
+		view SelfUpdateView
+		hint string
+		want UpdateItem
+	}{
+		{"stable", devWSL, installed(update.ChannelStable), hint, UpdateItem{Show: true, Enabled: true, Title: "切换到开发版通道并更新托盘", Action: UpdateSwitchToDev}},
+		{"stable, updating", devWSL, SelfUpdateView{Release: true, Installed: true, Channel: update.ChannelStable, Busy: true}, hint, UpdateItem{Show: true, Title: "切换到开发版通道并更新托盘", Action: UpdateSwitchToDev}},
+		{"dev", devWSL, installed(update.ChannelDev), "", UpdateItem{Show: true, Enabled: true, Title: "更新托盘", Action: UpdateInstall}},
+		{"stable, newer release", releaseWSL, installed(update.ChannelStable), "", UpdateItem{Show: true, Enabled: true, Title: "更新托盘", Action: UpdateInstall}},
+		{"portable", devWSL, SelfUpdateView{Release: true, Channel: update.ChannelStable}, hint, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.10.3-dev.7", URL: "https://github.com/mzdluo123/webmux/releases/tag/dev", Action: UpdateOpenRelease}},
+	} {
+		if got := ChannelHint(tc.snap, tc.view); got != tc.hint {
+			t.Errorf("%s: hint %q, want %q", tc.name, got, tc.hint)
+		}
+		if got := UpdateEntry(tc.snap, tc.view); got != tc.want {
+			t.Errorf("%s: entry %+v, want %+v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The "更新通道" radio items follow the setting; a development build cannot
+// update, so the menu is disabled with the reason.
+func TestChannelEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		view SelfUpdateView
+		want ChannelItem
+	}{
+		{"stable", SelfUpdateView{Release: true, Channel: update.ChannelStable}, ChannelItem{Enabled: true, Title: "更新通道", Stable: true}},
+		{"dev", SelfUpdateView{Release: true, Channel: update.ChannelDev}, ChannelItem{Enabled: true, Title: "更新通道", Dev: true}},
+		{"development build", SelfUpdateView{Channel: update.ChannelStable}, ChannelItem{Title: "更新通道（此构建不是发布构建，不支持更新）", Stable: true}},
+		{"updating", SelfUpdateView{Release: true, Installed: true, Busy: true, Channel: update.ChannelDev}, ChannelItem{Title: "更新通道（正在进行）", Dev: true}},
+	} {
+		if got := ChannelEntry(tc.view); got != tc.want {
+			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
 }

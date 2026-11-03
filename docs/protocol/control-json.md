@@ -73,4 +73,9 @@ fields 为字段名到 `{value, source}` 的映射，stores 包含 `{id, path, s
 
 `config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。
 
-`update check`：`{"v": 1, "current": "0.5.0", "latest": "0.6.0", "available": true, "installMethod": "deb"}`。`latest` 取自签名验证通过的发布清单，`available` 表示它高于 `current`，`installMethod` 为 `deb | rpm | other`。非发布构建或检查失败时以 `1` 退出，标准输出为空。
+`update check`：`{"v": 1, "current": "0.5.0", "latest": "0.6.0", "available": true, "installMethod": "deb", "channel": "stable"}`。
+
+- `latest` 取自签名验证通过的发布清单，`available` 表示它高于 `current`。
+- `installMethod` 为 `deb | rpm | other`。
+- `channel` 为当前更新通道 `stable | dev`；早于更新通道的版本不输出该字段，消费方应把缺失视为 `stable`。
+- 非发布构建或检查失败时以 `1` 退出，标准输出为空。

@@ -2,10 +2,12 @@
 ; server of the same build, pre-seeded where the tray looks for downloads.
 ;
 ; Built by `make installer`; every input comes from -D:
-;   VERSION  release version, x.y.z
+;   VERSION  release version, x.y.z or x.y.z-dev.n
 ;   ARCH     amd64 | arm64 (Windows and pre-seeded Linux server)
-;   TRAY     absolute path of webmux-tray-windows-<ARCH>.exe
-;   SERVER   absolute path of webmux-linux-<ARCH>
+;   TRAY     absolute path of the tray for ARCH (webmux-tray-windows-<ARCH>.exe,
+;            webmux-<VERSION>-tray-windows-<ARCH>.exe for a development version)
+;   SERVER   absolute path of the Linux server for ARCH (webmux-linux-<ARCH>,
+;            webmux-<VERSION>-linux-<ARCH> for a development version)
 ;   ICON     absolute path of the installer icon
 ;   OUTFILE  absolute output path
 ;
@@ -50,12 +52,21 @@ AllowSkipFiles off
 !define CACHE_DIR "$LOCALAPPDATA\WebMux\downloads"
 !define CACHE_FILE "webmux-${VERSION}-linux-${ARCH}"
 
+; The version resource takes four numbers: the part of VERSION before "-".
+!searchparse "-${VERSION}-" "-" VERSION_NUMBER "-"
+
 !if "${ARCH}" == "amd64"
   !define OTHER_ARCH "arm64"
 !else if "${ARCH}" == "arm64"
   !define OTHER_ARCH "amd64"
 !else
   !error "ARCH must be amd64 or arm64"
+!endif
+; Same file names as the Makefile's release artifacts.
+!if "${VERSION_NUMBER}" == "${VERSION}"
+  !define OTHER_SETUP "webmux-setup-windows-${OTHER_ARCH}.exe"
+!else
+  !define OTHER_SETUP "webmux-${VERSION}-setup-windows-${OTHER_ARCH}.exe"
 !endif
 
 Name "WebMux"
@@ -64,8 +75,8 @@ InstallDir "$LOCALAPPDATA\Programs\WebMux"
 InstallDirRegKey HKCU "${UNINST_KEY}" "InstallLocation"
 BrandingText "WebMux ${VERSION}"
 
-VIProductVersion "${VERSION}.0"
-VIFileVersion "${VERSION}.0"
+VIProductVersion "${VERSION_NUMBER}.0"
+VIFileVersion "${VERSION_NUMBER}.0"
 VIAddVersionKey /LANG=2052 "ProductName" "WebMux"
 VIAddVersionKey /LANG=2052 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=2052 "FileVersion" "${VERSION}"
@@ -152,7 +163,7 @@ Function .onInit
     ${IfNot} ${IsNativeARM64}
   !endif
     IfSilent +2
-    MessageBox MB_OK|MB_ICONSTOP "此安装包适用于 ${ARCH} 版 Windows，当前设备请改用 webmux-setup-windows-${OTHER_ARCH}.exe。"
+    MessageBox MB_OK|MB_ICONSTOP "此安装包适用于 ${ARCH} 版 Windows，当前设备请改用 ${OTHER_SETUP}。"
     SetErrorLevel 2
     Quit
   ${EndIf}

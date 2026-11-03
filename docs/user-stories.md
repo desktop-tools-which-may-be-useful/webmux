@@ -29,11 +29,11 @@
 | H    | 手机、平板与触摸操作、慢速网络         | US-H01–US-H11 |
 | I    | 代码工作区、Diff、引用与文件操作       | US-I01–US-I19 |
 | J    | 仓库登记与 worktree 管理               | US-J01–US-J11 |
-| K    | 配置、运行与服务管理                   | US-K01–US-K16 |
-| L    | 开发、验证与发布支持                   | US-L01–US-L13 |
+| K    | 配置、运行与服务管理                   | US-K01–US-K17 |
+| L    | 开发、验证与发布支持                   | US-L01–US-L14 |
 | M    | 原生终端、CLI 与本机控制面             | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道                    | US-N01–US-N08 |
-| O    | Windows/WSL 托盘管理                   | US-O01–US-O13 |
+| O    | Windows/WSL 托盘管理                   | US-O01–US-O14 |
 | P    | Tailscale Serve / Funnel               | US-P01–US-P07 |
 | Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q16 |
 

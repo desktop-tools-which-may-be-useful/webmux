@@ -76,6 +76,7 @@
   - 提供 POSIX `sh` 脚本，支持 Linux/macOS 的 amd64/arm64；
   - Rosetta 终端优先选择 arm64，Windows 明确引导到 exe/托盘；
   - 默认最新 Release，`WEBMUX_VERSION` 可固定版本，`WEBMUX_INSTALL_DIR` 覆盖目录且不自动 sudo；
+  - `WEBMUX_CHANNEL=dev` 从 `dev` Release 当前清单安装匹配的开发版，`WEBMUX_VERSION` 只接受当前开发版，通道与版本矛盾时报错，`dev` Release 自带同一份 `install.sh`；
   - 先 GitHub 直连，再按 `WEBMUX_MIRRORS`（默认 `ghfast.top`、`gh-proxy.com`，空值只用 GitHub）回退，每源有连接、低速与总时限；
   - 二进制和同源 `SHA256SUMS` 校验通过才原子安装，失败保留旧文件并汇总来源错误，`WEBMUX_SHA256` 可固定摘要；
   - 安装入口使用 Release 资产、jsDelivr 或 gh-proxy 镜像，不依赖 `raw.githubusercontent.com`，并说明镜像可看到 IP、同源校验不能证明镜像可信；
@@ -110,11 +111,11 @@
   - 不触碰任何用户的 `webmux.service`。
 - **US-K15 检查更新与验证签名**：作为部署者，我希望随时查看是否有新版本，并能独立验证下载的发布文件来自官方，以便在任何安装方式下判断是否升级以及下载是否可信。
   验收要点：
-  - `webmux update check` 在任意安装方式下输出当前版本、最新版本、是否有更新，`--json` 输出 `{v,current,latest,available,installMethod}`，不下载、不改文件，失败时非零；
+  - `webmux update check` 在任意安装方式下输出当前版本、最新版本、是否有更新，`--json` 输出 `{v,current,latest,available,installMethod,channel}`（读取方把缺少 `channel` 的旧输出按 `stable` 理解），不下载、不改文件，失败时非零；
   - `install.sh` 或手动安装时提示重新运行 `install.sh`，deb/rpm 时提示定时器与 `sudo webmux update apply`；
   - 非发布构建报告“此构建不是发布构建，不支持更新”且不联网；
-  - 每个 Release 附带 `SHA256SUMS.minisig`，可信注释 `webmux <版本>`，文档公布公钥，`minisign -Vm` 可手动验证；
-  - 更新程序只信任内置公钥，GitHub 与镜像返回的清单都须验证签名，版本取自签名注释；GitHub 不可用时采用各镜像中最高的已验证版本。
+  - 每个 Release 附带 `SHA256SUMS.minisig`，可信注释 `webmux <版本>`，文档分别公布正式版与开发版公钥，`minisign -Vm` 可手动验证；
+  - 更新程序只信任内置公钥，正式版密钥只签 `X.Y.Z`、开发版密钥只签 `X.Y.Z-dev.N`；GitHub 与镜像返回的清单都须验证签名，版本取自签名注释；GitHub 不可用时采用各镜像中最高的已验证版本。
 - **US-K16 待生效版本提示**：作为使用者，我希望在服务端可执行文件被更新后得知新版本需要重启才生效、重启会结束会话，以便自己选择合适的时机重启。
   验收要点：
   - 运行中的服务端在状态被查询时（距上次至少 60 秒且文件标识变化）以 argv 运行自身路径的 `version --json` 得到已安装版本，读取失败时下次检查重试；
@@ -122,6 +123,13 @@
   - Web UI 主页顶部与设置页显示已安装版本、重启后生效、重启结束所有会话，并按启动方给出 `systemctl --user restart webmux`、`webmux service restart`、托盘菜单重启或重新运行；
   - 主页提示可按版本关闭（设备本地），设置页始终显示；
   - 不提供重启按钮，服务端从不因此自动重启。
+- **US-K17 命令行选择更新通道**：作为 Linux 或 macOS 上的部署者，我希望选择跟随正式版还是开发版，以便在正式发布前尝试 main 上的新构建，并能随时退回正式版而不被降级打断。
+  验收要点：
+  - `webmux update channel` 显示当前通道，`webmux update channel stable|dev` 需要 root，必要时创建 `/etc/webmux`（0755），以临时文件加改名写入 0644 的 `/etc/webmux/update-channel`，下次检查生效；
+  - 文件缺失时按正式版且不警告；内容无法识别、不归 root 所有或组、其他用户可写时按正式版并记录警告；
+  - `update check` 与 `update apply` 都按该文件选择通道；开发版通道同时读取 `dev` 与 latest 清单，采用较高的已验证版本；
+  - deb/rpm 开发版安装包文件名为 `-dev.N`，包内版本为 `X.Y.Z~dev.N`，排在 `X.Y.Z` 之前；
+  - 只升级不降级：从开发版切回正式版且当前开发版高于最新正式版时不安装，说明“当前开发版 X 高于最新正式版 Y，正式版超过它后自动更新”。
 
 依据：
 
@@ -130,6 +138,7 @@
 - [安装包配置](../../deploy/linux/nfpm.yaml)、[包内用户单元](../../deploy/linux/webmux.service)、[安装包测试](../../.github/scripts/test-linux-packages.sh)
 - [更新命令](../../cmd/webmux/updatecmd.go)、[签名与更新](../../internal/update/)、[自动更新单元](../../deploy/linux/webmux-update.service)、[定时器](../../deploy/linux/webmux-update.timer)
 - [安装脚本](../../deploy/linux/postinstall.sh)、[自动更新说明](../deployment/updates.md)
+- [通道文件](../../internal/update/channel_unix.go)、[通道命令](../../cmd/webmux/updatecmd.go)
 - [已安装版本识别](../../internal/update/installed.go)、[状态输出](../../internal/sessioncmd/status.go)、[待生效提示组件](../../web/src/components/PendingUpdateNotice.svelte)
 - [提示逻辑](../../web/src/pendingUpdate.ts)、[提示用例](../../web/test/pendingUpdate.test.ts)
 - [部署指南](../deployment.md)、[设置页](../../web/src/pages/Settings.svelte)、[设置导航](../../web/src/components/SettingsNavigation.svelte)
@@ -240,13 +249,20 @@
   - 文档入口见 [文档中心](../README.md)，项目介绍见 [项目介绍](../overview.md)，帮助见 [常见问题与获取帮助](../faq.md)，规格索引见 [OpenSpec 规格索引](../specs.md)。
 - **US-L13 发布签名**：作为维护者，我希望每次发布自动签名校验和文件并在发布前验证，以便自动更新与用户手动校验都有独立于镜像和下载来源的信任根。
   验收要点：
-  - `make release` 在构建前检查 `WEBMUX_RELEASE_SIGNING_KEY`，缺失即失败，依次执行 `release-build` 与 `release-sign`；
+  - `make release` 在构建前检查签名私钥（正式版为 `WEBMUX_RELEASE_SIGNING_KEY`，开发版为 `WEBMUX_DEV_SIGNING_KEY`），缺失即失败，依次执行 `release-build` 与 `release-sign`；
   - 所有发布二进制注入发布构建标记，本地构建不带；
   - 生成 `SHA256SUMS` 后 `releasesign sign` 产出 minisign `Ed` 格式的 `SHA256SUMS.minisig`（可信注释 `webmux <版本>`，不列入 `SHA256SUMS`），再以内置公钥 `verify`；
   - 发布 workflow 分为 build、sign、publish 三个 job，只有 sign 读取私钥，它在全新 runner 上只拿到 `SHA256SUMS`、不恢复缓存也不运行第三方构建代码，publish 再次验证后上传签名；
   - `releasesign keygen` 以 0600 新建私钥文件并输出公钥；
   - 轮换时先发布同时内置新旧公钥的版本；
   - 签名与 minisign 0.12 互通。
+- **US-L14 发布开发版**：作为维护者，我希望 main 上每个通过 CI 的提交自动发布为签名的开发版，以便尝鲜用户在正式发布前拿到新构建，同时不让正式版用户收到它。
+  验收要点：
+  - `test.yml` 在 main 的 push 上成功后触发，构建通过测试的那个提交，版本为最近正式标签补丁号加 1 再加 `-dev.<提交数>`；提交数为 0、已不是 main 最新提交、版本不高于已发布开发版，或自 `dev` 标签以来只改了文档时跳过；
+  - 只发布到预发布 Release `dev`（不设为 latest），产物名带版本号，`install.sh` 为固定文件名；先上传新产物，再替换 `install.sh` 与签名清单，移动 `dev` 标签，最后删除既不在本次也不在上一次清单中的文件；
+  - 签名 job 用独立的 `WEBMUX_DEV_SIGNING_KEY`，`releasesign` 按版本选择私钥与公钥组，sign 与 publish 不可取消；
+  - 正式版发布说明从上一个 `v*` 标签生成，不以 `dev` 标签为起点；
+  - 文档公布开发版公钥与轮换流程，说明正式标签须在 main 可达提交上、更新本地 `dev` 标签需 `git fetch --tags --force`。
 
 依据：
 
@@ -274,5 +290,7 @@ Pullfrog 依据：[workflow](../../.github/workflows/pullfrog.yml)、[订阅模�
 持久化守卫依据：[扫描器](../../internal/archtest/persistence_scan_test.go)、[清单校验](../../internal/archtest/persistence_test.go)、[负向样例](../../internal/archtest/persistence_rules_test.go)、[机器清单](../../internal/archtest/persistence_inventory.json)、[治理说明](../persistence.md)。
 
 发布签名依据：[签名工具](../../cmd/internal/releasesign/main.go)、[签名格式与验证](../../internal/update/minisign.go)、[Makefile](../../Makefile)、[发布 workflow](../../.github/workflows/release.yml)、[密钥轮换](../deployment/updates.md#密钥轮换维护者)。
+
+开发版发布依据：[开发版 workflow](../../.github/workflows/dev-release.yml)、[开发版 Release 说明](../deployment/updates.md#开发版-release)、[版本与通道](../../internal/update/channel.go)、[清单与产物](../../internal/update/update.go)。
 
 配置诊断依据：[来源投影](../../internal/config/view.go)、[只读与活快照](../../cmd/webmux/configview.go)、[诊断测试](../../cmd/webmux/configview_test.go)、[共享存储](../../internal/statefile/store.go)。

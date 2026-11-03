@@ -40,8 +40,46 @@ func sumLine(content, name string) string {
 }
 
 func TestBuiltInKeysParse(t *testing.T) {
-	if len(Keys()) == 0 {
-		t.Fatal("no release keys")
+	if len(StableKeys()) == 0 || len(DevKeys()) == 0 {
+		t.Fatal("missing built-in keys")
+	}
+	for _, s := range StableKeys() {
+		for _, d := range DevKeys() {
+			if s.ID == d.ID {
+				t.Fatalf("key %s is in both groups", IDString(s.ID))
+			}
+		}
+	}
+}
+
+// A development key signs only -dev.N versions and a stable key only
+// release versions; the stable channel passes no development keys at all.
+func TestVerifyManifestKeyGroups(t *testing.T) {
+	stable, dev := testKey(t), testKey(t)
+	sums := sumLine("payload", "webmux-linux-amd64")
+	stableKeys, devKeys := []PublicKey{stable.Public()}, []PublicKey{dev.Public()}
+	cases := []struct {
+		name    string
+		key     SecretKey
+		version string
+		dev     []PublicKey
+		want    error
+	}{
+		{"stable signs release", stable, "0.10.2", devKeys, nil},
+		{"dev signs dev build", dev, "0.10.3-dev.4", devKeys, nil},
+		{"dev key signs release", dev, "9.9.9", devKeys, ErrBadSignature},
+		{"stable key signs dev build", stable, "0.10.3-dev.4", devKeys, ErrBadSignature},
+		{"stable channel ignores dev key", dev, "0.10.3-dev.4", nil, ErrUnknownKey},
+		{"unsupported suffix", stable, "0.11.0-rc.1", devKeys, ErrBadSignature},
+	}
+	for _, c := range cases {
+		m, err := VerifyManifest([]byte(sums), signed(t, c.key, sums, "webmux "+c.version), stableKeys, c.dev)
+		if c.want == nil && (err != nil || m.Version != c.version) {
+			t.Errorf("%s: %v %q", c.name, err, m.Version)
+		}
+		if c.want != nil && !errors.Is(err, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, err, c.want)
+		}
 	}
 }
 
@@ -51,7 +89,7 @@ func TestVerifyManifest(t *testing.T) {
 	keys := []PublicKey{k.Public()}
 	sums := sumLine("payload", "webmux-linux-amd64")
 
-	m, err := VerifyManifest([]byte(sums), signed(t, k, sums, "webmux 0.5.0"), keys)
+	m, err := VerifyManifest([]byte(sums), signed(t, k, sums, "webmux 0.5.0"), keys, nil)
 	if err != nil || m.Version != "0.5.0" {
 		t.Fatalf("valid manifest: %v %+v", err, m)
 	}
@@ -72,7 +110,7 @@ func TestVerifyManifest(t *testing.T) {
 		"truncated sig":    {[]byte(sums), sig[:len(sig)/2], ErrBadSignature},
 	}
 	for name, c := range cases {
-		if _, err := VerifyManifest(c.sums, c.sig, keys); !errors.Is(err, c.want) {
+		if _, err := VerifyManifest(c.sums, c.sig, keys, nil); !errors.Is(err, c.want) {
 			t.Errorf("%s: got %v, want %v", name, err, c.want)
 		}
 	}
@@ -91,9 +129,17 @@ func TestSecretKeyRoundTrip(t *testing.T) {
 }
 
 func TestVersions(t *testing.T) {
-	for _, bad := range []string{"", "dev", "1.2", "1.2.3.4", "v1.2.3", "01.2.3", "1.2.-3", "1.2.3-rc1"} {
+	for _, bad := range []string{"", "dev", "1.2", "1.2.3.4", "v1.2.3", "01.2.3", "1.2.-3", "1.2.3-rc1",
+		"1.2.3-rc.1", "1.2.3-dev", "1.2.3-dev.", "1.2.3-dev.0", "1.2.3-dev.01", "1.2.3-dev.1.2", "1.2.3-dev.-1"} {
 		if _, ok := ParseVersion(bad); ok {
 			t.Errorf("%q parsed", bad)
+		}
+	}
+	// Each version is strictly above the one before it.
+	order := []string{"0.10.2", "0.10.3-dev.1", "0.10.3-dev.2", "0.10.3-dev.10", "0.10.3", "0.11.0-dev.1", "0.11.0", "1.0.0"}
+	for i := 1; i < len(order); i++ {
+		if !Newer(order[i], order[i-1]) || Newer(order[i-1], order[i]) {
+			t.Errorf("%s should be above %s", order[i], order[i-1])
 		}
 	}
 	cases := []struct {
@@ -104,12 +150,44 @@ func TestVersions(t *testing.T) {
 		{"0.10.0", "0.9.0", true},
 		{"1.0.0", "0.99.99", true},
 		{"0.5.0", "0.5.0", false},
+		{"0.10.3-dev.4", "0.10.3-dev.4", false},
 		{"0.4.0", "0.5.0", false},
 		{"0.5.0", "dev", false},
 	}
 	for _, c := range cases {
 		if got := Newer(c.latest, c.current); got != c.newer {
 			t.Errorf("Newer(%s, %s) = %v", c.latest, c.current, got)
+		}
+	}
+}
+
+func TestAssetNamesAndTags(t *testing.T) {
+	if got := AssetName("0.10.2", "webmux-setup-windows-amd64.exe"); got != "webmux-setup-windows-amd64.exe" {
+		t.Errorf("stable asset %q", got)
+	}
+	if got := AssetName("0.10.3-dev.2", "webmux-setup-windows-amd64.exe"); got != "webmux-0.10.3-dev.2-setup-windows-amd64.exe" {
+		t.Errorf("dev asset %q", got)
+	}
+	if ReleasePage("0.10.2") != "https://github.com/"+Repo+"/releases/tag/v0.10.2" ||
+		ReleasePage("0.10.3-dev.2") != "https://github.com/"+Repo+"/releases/tag/dev" {
+		t.Error("release pages")
+	}
+}
+
+func TestAheadOfStable(t *testing.T) {
+	if AheadOfStable(ChannelStable, "0.10.3-dev.4", "0.10.2") == "" {
+		t.Error("dev build above stable not explained")
+	}
+	for _, c := range []struct {
+		ch              Channel
+		current, latest string
+	}{
+		{ChannelDev, "0.10.3-dev.4", "0.10.2"},
+		{ChannelStable, "0.10.3-dev.4", "0.10.3"},
+		{ChannelStable, "0.10.2", "0.10.2"},
+	} {
+		if msg := AheadOfStable(c.ch, c.current, c.latest); msg != "" {
+			t.Errorf("%v %s %s: %q", c.ch, c.current, c.latest, msg)
 		}
 	}
 }
@@ -165,7 +243,7 @@ func TestLatestFallsBackAcrossSources(t *testing.T) {
 	mirrorURL := serve(t, mirror)
 	c := Client{
 		Downloader: fetch.Downloader{GitHubBase: serve(t, gh), Mirrors: []string{mirrorURL}},
-		Keys:       []PublicKey{k.Public()},
+		StableKeys: []PublicKey{k.Public()},
 	}
 	m, host, err := c.Latest(context.Background())
 	if err != nil || m.Version != "0.6.0" || !strings.Contains(mirrorURL, host) {
@@ -225,7 +303,7 @@ func TestLatestPrefersNewestMirror(t *testing.T) {
 				m.paths = nil
 				mirrors = append(mirrors, serve(t, m))
 			}
-			c := Client{Downloader: fetch.Downloader{GitHubBase: gh, Mirrors: mirrors}, Keys: []PublicKey{k.Public()}}
+			c := Client{Downloader: fetch.Downloader{GitHubBase: gh, Mirrors: mirrors}, StableKeys: []PublicKey{k.Public()}}
 			m, host, err := c.Latest(context.Background())
 			want := gh
 			if tc.host >= 0 {
@@ -253,7 +331,7 @@ func TestOldManifestIsNotNew(t *testing.T) {
 		"SHA256SUMS":         []byte(sums),
 		"SHA256SUMS.minisig": signed(t, k, sums, "webmux 0.4.0"),
 	}}
-	c := Client{Downloader: fetch.Downloader{GitHubBase: serve(t, src), Mirrors: []string{}}, Keys: []PublicKey{k.Public()}}
+	c := Client{Downloader: fetch.Downloader{GitHubBase: serve(t, src), Mirrors: []string{}}, StableKeys: []PublicKey{k.Public()}}
 	m, _, err := c.Latest(context.Background())
 	if err != nil || m.Version != "0.4.0" {
 		t.Fatalf("latest %v %q", err, m.Version)
@@ -266,7 +344,7 @@ func TestOldManifestIsNotNew(t *testing.T) {
 func TestFetchDiscardsMismatchedAsset(t *testing.T) {
 	k := testKey(t)
 	sums := sumLine("good", "pkg.deb")
-	m, err := VerifyManifest([]byte(sums), signed(t, k, sums, "webmux 0.6.0"), []PublicKey{k.Public()})
+	m, err := VerifyManifest([]byte(sums), signed(t, k, sums, "webmux 0.6.0"), []PublicKey{k.Public()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,5 +361,78 @@ func TestFetchDiscardsMismatchedAsset(t *testing.T) {
 	}
 	if _, err := c.Fetch(context.Background(), m, "missing.deb", filepath.Join(dir, "x"), 0o644); err == nil {
 		t.Fatal("unlisted asset fetched")
+	}
+}
+
+// channelReleases serves the rolling dev release and the latest release
+// from separate file sets, recording requested paths.
+type channelReleases struct {
+	dev, latest *fakeRelease
+}
+
+func (r *channelReleases) handler(w http.ResponseWriter, req *http.Request) {
+	if strings.Contains(req.URL.Path, "/releases/download/dev/") {
+		r.dev.handler(w, req)
+		return
+	}
+	r.latest.handler(w, req)
+}
+
+func TestLatestDevChannel(t *testing.T) {
+	stable, dev := testKey(t), testKey(t)
+	sums := sumLine("x", "webmux-0.10.3-dev.4-linux-amd64")
+	release := func(k SecretKey, version string) *fakeRelease {
+		return &fakeRelease{files: map[string][]byte{
+			"SHA256SUMS":         []byte(sums),
+			"SHA256SUMS.minisig": signed(t, k, sums, "webmux "+version),
+		}}
+	}
+	for _, tc := range []struct {
+		name        string
+		ch          Channel
+		dev, latest *fakeRelease
+		want        string
+	}{
+		{"dev build above stable", ChannelDev, release(dev, "0.10.3-dev.4"), release(stable, "0.10.2"), "0.10.3-dev.4"},
+		{"stable release supersedes dev builds", ChannelDev, release(dev, "0.10.3-dev.4"), release(stable, "0.10.3"), "0.10.3"},
+		{"dev list unavailable", ChannelDev, &fakeRelease{}, release(stable, "0.10.2"), "0.10.2"},
+		{"stable channel never reads dev", ChannelStable, release(dev, "0.10.3-dev.4"), release(stable, "0.10.2"), "0.10.2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &channelReleases{dev: tc.dev, latest: tc.latest}
+			srv := httptest.NewServer(http.HandlerFunc(r.handler))
+			t.Cleanup(srv.Close)
+			c := Client{
+				Downloader: fetch.Downloader{GitHubBase: srv.URL, Mirrors: []string{}},
+				Channel:    tc.ch,
+				StableKeys: []PublicKey{stable.Public()},
+				DevKeys:    []PublicKey{dev.Public()},
+			}
+			m, _, err := c.Latest(context.Background())
+			if err != nil || m.Version != tc.want {
+				t.Fatalf("latest: %v %q, want %q", err, m.Version, tc.want)
+			}
+			if tc.ch == ChannelStable && len(tc.dev.paths) != 0 {
+				t.Fatalf("stable channel read the dev release: %v", tc.dev.paths)
+			}
+		})
+	}
+}
+
+func TestFetchDevAssetFromDevRelease(t *testing.T) {
+	dev := testKey(t)
+	asset := "webmux-0.10.3-dev.4-linux-amd64"
+	sums := sumLine("dev binary", asset)
+	src := &fakeRelease{files: map[string][]byte{asset: []byte("dev binary")}}
+	m, err := VerifyManifest([]byte(sums), signed(t, dev, sums, "webmux 0.10.3-dev.4"), nil, []PublicKey{dev.Public()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Client{Downloader: fetch.Downloader{GitHubBase: serve(t, src), Mirrors: []string{}}}
+	if _, err := c.Fetch(context.Background(), m, AssetName(m.Version, "webmux-linux-amd64"), filepath.Join(t.TempDir(), "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := src.paths[len(src.paths)-1]; got != "/"+Repo+"/releases/download/dev/"+asset {
+		t.Fatalf("asset path %q", got)
 	}
 }

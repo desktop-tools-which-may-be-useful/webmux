@@ -58,8 +58,9 @@ type Options struct {
 	// UpdatesDir is %LOCALAPPDATA%\WebMux\updates, where the tray keeps
 	// the installer of its own update.
 	UpdatesDir string
-	// Releases reads signed releases for the tray's own update.
-	Releases tray.ReleaseClient
+	// Releases returns the client reading signed releases of a channel
+	// for the tray's own update.
+	Releases func(update.Channel) tray.ReleaseClient
 }
 
 // App is the running tray.
@@ -113,6 +114,9 @@ func Run(o Options) {
 		a.log.Printf("tray settings: %v", err)
 		a.settingsWarn = invalidSetting
 	}
+	if _, warn := settings.Channel(); warn != nil {
+		a.log.Printf("tray settings: %v", warn)
+	}
 	updated, failed := "", tray.UpdateAttempt{}
 	if err == nil {
 		// An invalid file is never rewritten without a menu action.
@@ -130,6 +134,8 @@ func Run(o Options) {
 		Installed:     installed,
 		Dir:           o.UpdatesDir,
 		Client:        o.Releases,
+		Channel:       a.channel,
+		SetChannel:    a.setChannel,
 		AutoUpdate:    a.autoUpdate,
 		Idle:          a.updateIdle,
 		RecordAttempt: a.recordAttempt,
@@ -181,6 +187,17 @@ func (a *App) autoUpdate() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.settings.AutoUpdate
+}
+
+func (a *App) channel() (update.Channel, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.settings.Channel()
+}
+
+// setChannel saves the update channel the user picked.
+func (a *App) setChannel(ch update.Channel) {
+	a.changeSettings(func(s *tray.Settings) { s.UpdateChannel = ch })
 }
 
 // updateIdle reports that the installer may close the tray now: no server

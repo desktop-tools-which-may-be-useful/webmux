@@ -26,7 +26,10 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	m.status1.set(tray.StatusLine(snap), false, false)
 	m.status2.set("发行版："+distroLabel(v)+" · 启动方式："+modeLabel(snap, v), false, false)
 	hint := snap.Reason
-	if version := tray.VersionHint(snap); version != "" {
+	for _, version := range []string{tray.VersionHint(snap), tray.ChannelHint(snap, v.selfUpdate)} {
+		if version == "" {
+			continue
+		}
 		if hint != "" {
 			hint += "；"
 		}
@@ -217,6 +220,10 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	m.editSettings.set("编辑托盘设置", !v.noWSL, false)
 	m.autostart.set("登录时自动启动", !v.noWSL, v.autostart)
 	m.autoUpdate.set("自动更新", true, v.settings.AutoUpdate)
+	channel := tray.ChannelEntry(v.selfUpdate)
+	m.channel.set(channel.Title, channel.Enabled, false)
+	m.channelStable.set("正式版", channel.Enabled, channel.Stable)
+	m.channelDev.set("开发版", channel.Enabled, channel.Dev)
 	check := tray.CheckEntry(v.selfUpdate)
 	m.checkUpdate.set(check.Title, check.Enabled, false)
 	m.quit.set("退出", true, false)

@@ -13,18 +13,69 @@ WebMux 的更新只替换磁盘上的文件，从不自动重启 WebMux：**重�
 
 自动更新从第一个包含该功能的版本开始生效。更早的版本没有更新程序，需要手动升级一次：deb / rpm 用 `apt install ./webmux_<版本>-1_<架构>.deb` 或 `dnf install ./webmux-<版本>-1.<架构>.rpm` 安装新包，Windows 运行新的安装程序。之后的版本按上表自动更新。
 
+## 更新通道
+
+更新分两个通道，默认正式版（stable）：
+
+- **正式版**：只接受 `X.Y.Z` 版本，来自维护者推送 `v*` 标签发布的 Release。
+- **开发版**（dev）：main 上每个通过 CI 的提交都会发布为开发版，版本号为 `X.Y.Z-dev.N`：`X.Y.Z` 是最近正式标签的补丁号加 1，`N` 是该标签之后的提交数，例如 v0.10.2 之后第 2 个提交为 `0.10.3-dev.2`。开发版通道同时读取开发版与正式版清单，采用较高的已验证版本，所以正式版发布后会自动升到正式版。
+
+版本顺序遵循 semver 预发布规则：`0.10.2 < 0.10.3-dev.1 < 0.10.3-dev.2 < 0.10.3 < 0.11.0-dev.1`。
+
+### 在 Linux 与 macOS 上切换
+
+```sh
+webmux update channel            # 显示当前通道
+sudo webmux update channel dev   # 切到开发版
+sudo webmux update channel stable
+```
+
+- 通道保存在 `/etc/webmux/update-channel`，内容为 `stable` 或 `dev`。它不属于任何软件包，升级与卸载都不改动它；下一次检查即生效。
+- 文件缺失时按正式版处理；内容无法识别、文件不归 root 所有或可被组、其他用户写入时，按正式版处理并记录警告，避免非特权用户改变 root 更新服务信任的来源。
+- `webmux update check` 与 `update apply` 都读取该文件，所以 `install.sh` 安装的开发版也能让检查跟随开发版。
+
+### 在 Windows 托盘中切换
+
+托盘菜单“更新通道”下有“正式版”“开发版”两个单选项，对应 `tray.json` 的 `updateChannel`；切换后立即保存并检查一次。开发版托盘会把 WSL 中较旧的 webmux 升级到同一次开发版构建，见 [Windows（WSL）](windows-wsl.md)。
+
+### 切回正式版不降级
+
+切换通道只升级不降级。从开发版切回正式版时，若当前开发版高于最新正式版，不安装任何东西，检查结果与日志说明“当前开发版 X 高于最新正式版 Y，正式版超过它后自动更新”。
+
+### 开发版安装包
+
+deb / rpm 文件名使用 `-dev.N`（GitHub 会改写文件名中的 `~`），例如 `webmux_0.10.3-dev.2-1_amd64.deb`、`webmux-0.10.3-dev.2-1.x86_64.rpm`；包内版本为 `0.10.3~dev.2`，`~` 使它排在 `0.10.3` 之前。dpkg 与 rpm 只依据包内版本排序。
+
+## 开发版 Release
+
+开发版只发布到一个固定的预发布 Release，标签为 `dev`，不会成为 latest：
+
+- 二进制、托盘与安装程序名为 `webmux-<版本>-<正式版文件名去掉 webmux- 前缀>`，例如 `webmux-0.10.3-dev.2-linux-amd64`、`webmux-0.10.3-dev.2-setup-windows-amd64.exe`；`install.sh` 使用固定文件名。
+- Release 中保留当前与上一次构建的产物；`SHA256SUMS` 只列当前构建（包括 `install.sh`）。读到旧清单的客户端仍能下载完成，更早的产物会被删除。
+- 只发布通过测试且仍是 main 最新提交的构建；版本不高于已发布开发版、恰好是正式标签，或自上次发布以来只改了文档时不发布。跳过的提交仍计入 `N`，版本号会跳号。
+- 每次发布都会移动 `dev` 标签。本地已有该标签的贡献者需要 `git fetch --tags --force` 才能更新它。
+- 正式标签必须打在 main 可达的提交上，否则 main 上的开发版版本号推导不到它，会低于该正式版。
+
 ## 发布签名
 
-每个 Release 附带 `SHA256SUMS.minisig`：用发布私钥对 `SHA256SUMS` 做的 [minisign](https://jedisct1.github.io/minisign/) 签名，可信注释为 `webmux <版本>`。更新程序只信任内置的公钥：
+每个 Release 附带 `SHA256SUMS.minisig`：用发布私钥对 `SHA256SUMS` 做的 [minisign](https://jedisct1.github.io/minisign/) 签名，可信注释为 `webmux <版本>`。更新程序只信任内置的公钥，正式版与开发版使用不同的密钥：
 
 ```text
 untrusted comment: minisign public key 4AF7A1E8058C841C
 RWQchIwF6KH3SuZyvOfqZZAoobboXxcEAyyLB3YptnKdLs7vUvxLHm4e
 ```
 
+开发版公钥（ID 20F3DFEB4670F0B3）：
+
+```text
+untrusted comment: minisign public key 20F3DFEB4670F0B3
+RWSz8HBG69/zIIBeRUfEmjRf51vJmk7zueyTFeYAUemipmf+GU9cCiLr
+```
+
+- 正式版密钥只能签不带后缀的版本，开发版密钥只能签 `-dev.N` 版本，不匹配视为签名无效。正式版通道只信任正式版密钥，所以开发版密钥即使泄露也影响不到正式版用户。
 - 来源顺序为 GitHub，然后是 `ghfast.top`、`gh-proxy.com` 镜像。每个来源的 `SHA256SUMS` 都必须通过签名验证，所以镜像只影响能否下载，不能改变内容。
 - GitHub 的清单验证通过就直接采用；GitHub 不可用时会读取所有镜像，采用签名有效且版本最高的那份，所以一个缓存了旧清单的镜像不会挡住其他镜像上的新版本。
-- 签名里的版本号决定清单的版本，安装产物从 `v<该版本>` 标签下载；只安装严格高于当前版本的发布，不会降级。
+- 签名里的版本号决定清单的版本，正式版产物从 `v<该版本>` 标签下载，开发版产物从 `dev` 标签下载带版本号的文件；只安装严格高于当前版本的发布，不会降级。
 
 手动验证下载（任意平台安装 minisign 0.11 及以上）：
 
@@ -33,16 +84,16 @@ minisign -Vm SHA256SUMS -P RWQchIwF6KH3SuZyvOfqZZAoobboXxcEAyyLB3YptnKdLs7vUvxLH
 sha256sum -c --ignore-missing SHA256SUMS
 ```
 
-第一条输出 `Trusted comment: webmux <版本>`，应与你下载的 Release 一致。
+第一条输出 `Trusted comment: webmux <版本>`，应与你下载的 Release 一致。开发版 Release 改用开发版公钥：`minisign -Vm SHA256SUMS -P RWSz8HBG69/zIIBeRUfEmjRf51vJmk7zueyTFeYAUemipmf+GU9cCiLr`。
 
 ## 检查更新
 
 ```sh
 webmux update check          # 当前版本、最新版本、是否有可用更新
-webmux update check --json   # {"v":1,"current":…,"latest":…,"available":…,"installMethod":"deb|rpm|other"}
+webmux update check --json   # {"v":1,"current":…,"latest":…,"available":…,"installMethod":"deb|rpm|other","channel":"stable|dev"}
 ```
 
-该命令不下载安装产物、不改写文件；检查失败时退出码非零。
+该命令不下载安装产物、不改写文件；检查失败时退出码非零。读取 `--json` 时，旧版本输出中缺少 `channel` 按 `stable` 理解。
 
 ## Linux 安装包的自动更新
 
@@ -105,3 +156,10 @@ WebMux 只在有人查询状态或配置时检查，两次检查至少间隔 60 
 发布私钥是 GitHub Actions 密钥 `WEBMUX_RELEASE_SIGNING_KEY`，内容为 `go run ./cmd/internal/releasesign keygen -secret <文件>` 生成的一行 Base64，需要离线备份；缺失时发布失败。发布 workflow 的构建 job 看不到它，只有单独的签名 job 在全新 runner 上读取它，并且只签 `SHA256SUMS`。
 
 更换密钥分两步：先发布一个同时内置新旧公钥（`internal/update` 的 `releaseKeys`）、仍用旧私钥签名的版本，下一个版本再改用新私钥。私钥丢失后，已安装的版本无法再自动更新，用户需要手动升级一次。
+
+开发版私钥是另一个 Actions 密钥 `WEBMUX_DEV_SIGNING_KEY`，只签 `-dev.N` 版本，由开发版发布 workflow 的签名 job 读取；`releasesign sign` 按版本自动选择读取哪个密钥。开发版密钥泄露或需要更换时：
+
+1. 用 `go run ./cmd/internal/releasesign keygen -secret <文件>` 生成新密钥对；
+2. 把新公钥加到 `internal/update` 的 `devKeys` 中，与旧公钥并列，合入 main；
+3. 把 Actions 密钥 `WEBMUX_DEV_SIGNING_KEY` 设为新私钥；
+4. 新密钥签名的开发版发布之后，再从 `devKeys` 中删除旧公钥，并更新本页公布的开发版公钥。

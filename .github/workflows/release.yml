@@ -119,7 +119,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Full history and tags, to find the previous release tag.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -140,12 +143,18 @@ jobs:
           sha256sum -c SHA256SUMS
           if grep -q 'SHA256SUMS.minisig' SHA256SUMS; then echo 'SHA256SUMS must not list its signature' >&2; exit 1; fi
           (cd .. && go run ./cmd/internal/releasesign verify -version ${{ needs.build.outputs.version }} bin/SHA256SUMS)
+      # The generated notes start at the previous v* release, not at the
+      # rolling `dev` tag, which is usually the closest earlier tag.
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
         working-directory: bin
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "WebMux $GITHUB_REF_NAME" --generate-notes \
+          notes=()
+          if previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude '*-*' "$GITHUB_SHA^" 2>/dev/null); then
+            notes=(--notes-start-tag "$previous")
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "WebMux $GITHUB_REF_NAME" --generate-notes "${notes[@]}" \
             webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
             webmux-windows-amd64.exe webmux-windows-arm64.exe \
             webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \

@@ -112,7 +112,7 @@ func run() error {
 		Instance:     instance,
 		Executable:   exe,
 		UpdatesDir:   filepath.Join(localAppData, "WebMux", "updates"),
-		Releases:     update.Client{},
+		Releases:     func(ch update.Channel) tray.ReleaseClient { return update.Client{Channel: ch} },
 	})
 	return nil
 }

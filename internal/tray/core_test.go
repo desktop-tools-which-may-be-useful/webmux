@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/update"
 )
 
 func TestSettings(t *testing.T) {
@@ -85,6 +86,32 @@ func TestSettingsWithoutAutoUpdate(t *testing.T) {
 	}
 }
 
+// A file without updateChannel follows stable without a warning; an
+// unrecognised value follows stable with one and keeps the other settings.
+func TestSettingsUpdateChannel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tray.json")
+	for _, tc := range []struct {
+		name, field string
+		want        update.Channel
+		warn        bool
+	}{
+		{"older file", ``, update.ChannelStable, false},
+		{"stable", `,"updateChannel":"stable"`, update.ChannelStable, false},
+		{"dev", `,"updateChannel":"dev"`, update.ChannelDev, false},
+		{"unrecognised", `,"updateChannel":"beta"`, update.ChannelStable, true},
+	} {
+		file := `{"distro":"Ubuntu","mode":"tray","webmux":"~/.local/bin/webmux","config":"","logFile":"~/w.log","startWebMux":true,"autoRestart":true,"forward":[]` + tc.field + `}`
+		if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s, err := LoadSettings(path)
+		ch, warn := s.Channel()
+		if err != nil || s.Distro != "Ubuntu" || ch != tc.want || (warn != nil) != tc.warn {
+			t.Errorf("%s: %+v %v, channel %s warn %v", tc.name, s, err, ch, warn)
+		}
+	}
+}
+
 func TestRecordVersion(t *testing.T) {
 	for _, tc := range []struct {
 		name, last, version string
@@ -97,6 +124,8 @@ func TestRecordVersion(t *testing.T) {
 		{"downgraded", "0.6.0", "0.5.0", "", true},
 		{"from a development build", "dev", "0.5.0", "", true},
 		{"development build", "0.5.0", "dev", "", false},
+		{"to a dev build", "0.10.2", "0.10.3-dev.2", "0.10.3-dev.2", true},
+		{"to the release after a dev build", "0.10.3-dev.2", "0.10.3", "0.10.3", true},
 	} {
 		s := DefaultSettings()
 		s.LastVersion = tc.last

@@ -31,18 +31,35 @@ curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/lates
 curl -fsSL https://cdn.jsdelivr.net/gh/mzdluo123/webmux@main/install.sh | sh
 ```
 
-| 变量                 | 默认值                                    | 说明                                                            |
-| -------------------- | ----------------------------------------- | --------------------------------------------------------------- |
-| `WEBMUX_VERSION`     | 最新 Release                              | 指定 `x.y.z`（可带 `v` 前缀），从 `releases/download/v...` 下载 |
-| `WEBMUX_INSTALL_DIR` | `~/.local/bin`                            | 目标目录；不可写时明确报错，不自动 sudo                         |
-| `WEBMUX_MIRRORS`     | `https://ghfast.top https://gh-proxy.com` | 空格分隔的 gh-proxy 前缀；空值表示只用 GitHub                   |
-| `WEBMUX_SHA256`      | 空                                        | 固定二进制 SHA-256，跳过同源 `SHA256SUMS`                       |
-| `WEBMUX_BASE_URL`    | `https://github.com/mzdluo123/webmux`     | GitHub 仓库地址，主要用于测试和自建镜像                         |
+| 变量                 | 默认值                                    | 说明                                                                                              |
+| -------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `WEBMUX_VERSION`     | 最新 Release                              | 指定 `x.y.z`（可带 `v` 前缀），从 `releases/download/v...` 下载；也可指定当前开发版 `x.y.z-dev.N` |
+| `WEBMUX_CHANNEL`     | `stable`                                  | `dev` 安装 `dev` Release 中的当前开发版；只影响本次安装，不写配置                                 |
+| `WEBMUX_INSTALL_DIR` | `~/.local/bin`                            | 目标目录；不可写时明确报错，不自动 sudo                                                           |
+| `WEBMUX_MIRRORS`     | `https://ghfast.top https://gh-proxy.com` | 空格分隔的 gh-proxy 前缀；空值表示只用 GitHub                                                     |
+| `WEBMUX_SHA256`      | 空                                        | 固定二进制 SHA-256，跳过同源 `SHA256SUMS`                                                         |
+| `WEBMUX_BASE_URL`    | `https://github.com/mzdluo123/webmux`     | GitHub 仓库地址，主要用于测试和自建镜像                                                           |
 
 ```sh
 curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.sh \
   | WEBMUX_VERSION=0.2.0 WEBMUX_INSTALL_DIR="$HOME/bin" sh
 ```
+
+### 安装开发版
+
+开发版发布在预发布 Release `dev` 中（见[自动更新](updates.md#更新通道)），它自带同一份 `install.sh`：
+
+```sh
+curl -fsSL https://github.com/mzdluo123/webmux/releases/download/dev/install.sh | WEBMUX_CHANNEL=dev sh
+
+# 国内网络
+curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/download/dev/install.sh | WEBMUX_CHANNEL=dev sh
+```
+
+- 脚本读取 `dev` Release 的 `SHA256SUMS`，找出与本机系统、架构匹配的 `webmux-<x.y.z-dev.N>-<系统>-<架构>`，同样只核对同源摘要。
+- `WEBMUX_VERSION=x.y.z-dev.N` 隐含开发版，且只接受 `dev` Release 当前清单中的版本；其他版本报错并给出当前开发版版本。
+- `WEBMUX_CHANNEL=dev` 搭配 `x.y.z`，或 `WEBMUX_CHANNEL=stable` 搭配开发版版本时报错退出。
+- 要让之后的 `webmux update check` 也跟随开发版，执行 `sudo webmux update channel dev`。
 
 下载顺序为 GitHub 直连，然后依次尝试镜像（地址为 `<前缀>/https://github.com/...`），每个来源都有连接、低速和总时限。
 

@@ -45,6 +45,9 @@ const (
 	UpdateOpenRelease UpdateAction = iota + 1
 	// UpdateInstall checks for the latest release and installs it.
 	UpdateInstall
+	// UpdateSwitchToDev moves the tray to the dev channel, then checks
+	// and installs as UpdateInstall does.
+	UpdateSwitchToDev
 )
 
 // UpdateItem describes the single entry updating the tray.
@@ -57,22 +60,43 @@ type UpdateItem struct {
 // UpdateEntry offers a newer tray: the release found by the update check
 // first, else the version of a newer WSL webmux. An installed tray
 // installs it; a portable one only opens the release page. Only release
-// versions have a release page.
+// and development versions have a release page. A newer development build
+// in WSL is never offered on the stable channel, so an installed tray
+// offers to switch to the dev channel instead.
 func UpdateEntry(snap Snapshot, u SelfUpdateView) UpdateItem {
 	if u.Latest != "" {
 		if !u.Installed {
-			return UpdateItem{Show: true, Enabled: true, Title: "下载托盘 " + u.Latest, URL: ReleasePage(u.Latest), Action: UpdateOpenRelease}
+			return UpdateItem{Show: true, Enabled: true, Title: "下载托盘 " + u.Latest, URL: update.ReleasePage(u.Latest), Action: UpdateOpenRelease}
 		}
 		return UpdateItem{Show: true, Enabled: !u.Busy, Title: "更新到 " + u.Latest, Action: UpdateInstall}
 	}
 	version := snap.Installed.Version
-	if !snap.Compat.Newer() || !releaseVersion(version) {
+	if _, ok := update.ParseVersion(version); !ok || !snap.Compat.Newer() {
 		return UpdateItem{}
 	}
 	if u.Installed && u.Release {
+		if devAhead(snap, u) {
+			return UpdateItem{Show: true, Enabled: !u.Busy, Title: "切换到开发版通道并更新托盘", Action: UpdateSwitchToDev}
+		}
 		return UpdateItem{Show: true, Enabled: !u.Busy, Title: "更新托盘", Action: UpdateInstall}
 	}
-	return UpdateItem{Show: true, Enabled: true, Title: "下载托盘 " + version, URL: ReleasePage(version), Action: UpdateOpenRelease}
+	return UpdateItem{Show: true, Enabled: true, Title: "下载托盘 " + version, URL: update.ReleasePage(version), Action: UpdateOpenRelease}
+}
+
+// ChannelHint is the status line explaining why a newer development build
+// in WSL is not offered: the tray follows the stable channel. It is ""
+// otherwise.
+func ChannelHint(snap Snapshot, u SelfUpdateView) string {
+	if !devAhead(snap, u) {
+		return ""
+	}
+	return "WSL 中为开发版 " + snap.Installed.Version + "，托盘使用正式版通道"
+}
+
+// devAhead reports a WSL webmux that is a newer development build while
+// the tray follows the stable channel.
+func devAhead(snap Snapshot, u SelfUpdateView) bool {
+	return snap.Compat.Newer() && update.IsDevVersion(snap.Installed.Version) && u.Channel != update.ChannelDev
 }
 
 // CheckItem describes the "检查更新" entry.
@@ -93,9 +117,24 @@ func CheckEntry(u SelfUpdateView) CheckItem {
 	return CheckItem{Enabled: true, Title: "检查更新"}
 }
 
-// ReleasePage is the GitHub release page of a version.
-func ReleasePage(version string) string {
-	return "https://github.com/" + ReleaseRepo + "/releases/tag/v" + version
+// ChannelItem describes the "更新通道" submenu and its two radio items.
+type ChannelItem struct {
+	Enabled     bool
+	Title       string
+	Stable, Dev bool // which radio item is checked
+}
+
+// ChannelEntry is disabled with the reason in a development build and while
+// an update runs, so a switch never races a download or install.
+func ChannelEntry(u SelfUpdateView) ChannelItem {
+	item := ChannelItem{Enabled: true, Title: "更新通道", Stable: u.Channel != update.ChannelDev, Dev: u.Channel == update.ChannelDev}
+	switch {
+	case !u.Release:
+		item.Enabled, item.Title = false, "更新通道（"+update.ErrNotRelease.Error()+"）"
+	case u.Busy:
+		item.Enabled, item.Title = false, "更新通道（正在进行）"
+	}
+	return item
 }
 
 // VersionHint is the status line of the version check: the older side when

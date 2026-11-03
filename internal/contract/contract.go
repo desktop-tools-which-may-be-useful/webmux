@@ -217,13 +217,15 @@ type VersionV1 struct {
 }
 
 // UpdateCheckV1 is printed by `webmux update check --json`.
-// InstallMethod is "deb", "rpm" or "other".
+// InstallMethod is "deb", "rpm" or "other"; Channel is "stable" or "dev".
+// Output from versions before channels lacks Channel, meaning "stable".
 type UpdateCheckV1 struct {
 	V             int    `json:"v"`
 	Current       string `json:"current"`
 	Latest        string `json:"latest"`
 	Available     bool   `json:"available"`
 	InstallMethod string `json:"installMethod"`
+	Channel       string `json:"channel"`
 }
 
 // Exit codes shared by every client command.

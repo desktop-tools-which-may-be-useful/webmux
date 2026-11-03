@@ -67,12 +67,20 @@ func Apply(ctx context.Context, o ApplyOptions) error {
 	}
 	netCtx, cancel := context.WithTimeout(ctx, DownloadTimeout)
 	defer cancel()
-	logf(o.Out, "当前版本 %s（%s 安装）", o.Current, method)
+	channel := o.Client.Channel
+	if channel == "" {
+		channel = ChannelStable
+	}
+	logf(o.Out, "当前版本 %s（%s 安装，%s 通道）", o.Current, method, channel)
 	m, host, err := o.Client.Latest(netCtx)
 	if err != nil {
 		return fmt.Errorf("检查更新失败：%w", err)
 	}
 	if !Newer(m.Version, o.Current) {
+		if ahead := AheadOfStable(channel, o.Current, m.Version); ahead != "" {
+			logf(o.Out, "%s（来源 %s）", ahead, host)
+			return nil
+		}
 		logf(o.Out, "已是最新版本 %s（来源 %s）", o.Current, host)
 		return nil
 	}

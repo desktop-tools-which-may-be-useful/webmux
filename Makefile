@@ -26,11 +26,19 @@ MAKENSIS ?= makensis
 # Pinned nfpm, run through the Go toolchain so no separate install is needed.
 # v2.47+ requires a newer Go than go.mod pins for CI (GOTOOLCHAIN=local).
 NFPM ?= $(GO) run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3
+# A development version (X.Y.Z-dev.N) names its binaries, trays and
+# installers webmux-<version>-<release name without "webmux-">, so the
+# rolling `dev` Release can hold two builds side by side (internal/update
+# AssetName). Package file names keep the version as is; nfpm writes the
+# package version as X.Y.Z~dev.N, which sorts before X.Y.Z.
+DEV_VERSION = $(findstring -dev.,$(VERSION))
+ASSET_PREFIX = webmux-$(if $(DEV_VERSION),$(VERSION)-)
+SIGNING_KEY_ENV = $(if $(DEV_VERSION),WEBMUX_DEV_SIGNING_KEY,WEBMUX_RELEASE_SIGNING_KEY)
 LINUX_PACKAGES = webmux_$(VERSION)-1_amd64.deb webmux_$(VERSION)-1_arm64.deb \
 	webmux-$(VERSION)-1.x86_64.rpm webmux-$(VERSION)-1.aarch64.rpm
-RELEASE_FILES = webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
-	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
-	webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe $(LINUX_PACKAGES)
+RELEASE_FILES = $(addprefix $(ASSET_PREFIX),linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 \
+	windows-amd64.exe windows-arm64.exe tray-windows-amd64.exe tray-windows-arm64.exe \
+	setup-windows-amd64.exe setup-windows-arm64.exe) $(LINUX_PACKAGES)
 
 .PHONY: web build tray installer linux-packages release release-build release-sign check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
 web:
@@ -44,56 +52,62 @@ build: web
 # come from the committed cmd/webmux-tray/rsrc_windows_*.syso files. A plain
 # `make tray` carries no server digests and therefore cannot install webmux.
 tray:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS) $(TRAY_LDFLAGS) -H=windowsgui" -o bin/webmux-tray-windows-amd64.exe ./cmd/webmux-tray
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS) $(TRAY_LDFLAGS) -H=windowsgui" -o bin/webmux-tray-windows-arm64.exe ./cmd/webmux-tray
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS) $(TRAY_LDFLAGS) -H=windowsgui" -o bin/$(ASSET_PREFIX)tray-windows-amd64.exe ./cmd/webmux-tray
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS) $(TRAY_LDFLAGS) -H=windowsgui" -o bin/$(ASSET_PREFIX)tray-windows-arm64.exe ./cmd/webmux-tray
 
-# Packages bin/webmux-tray-windows-<arch>.exe and bin/webmux-linux-<arch>
+# Packages bin/<prefix>tray-windows-<arch>.exe and bin/<prefix>linux-<arch>
 # as they are, so each installer holds the release artifacts byte for byte.
 # Needs NSIS 3 (`makensis`); see deploy/windows/webmux.nsi.
 installer:
 	for arch in amd64 arm64; do \
 		$(MAKENSIS) -V2 -INPUTCHARSET UTF8 -DVERSION=$(VERSION) -DARCH=$$arch \
-			"-DTRAY=$(abspath bin)/webmux-tray-windows-$$arch.exe" \
-			"-DSERVER=$(abspath bin)/webmux-linux-$$arch" \
+			"-DTRAY=$(abspath bin)/$(ASSET_PREFIX)tray-windows-$$arch.exe" \
+			"-DSERVER=$(abspath bin)/$(ASSET_PREFIX)linux-$$arch" \
 			"-DICON=$(abspath internal/tray/winui/icons/running.ico)" \
-			"-DOUTFILE=$(abspath bin)/webmux-setup-windows-$$arch.exe" \
+			"-DOUTFILE=$(abspath bin)/$(ASSET_PREFIX)setup-windows-$$arch.exe" \
 			deploy/windows/webmux.nsi || exit 1; \
 	done
 
-# Packages bin/webmux-linux-<arch> as /usr/bin/webmux plus the systemd user
-# unit into $(LINUX_PACKAGES); see deploy/linux/nfpm.yaml.
+# Packages bin/<prefix>linux-<arch> as /usr/bin/webmux plus the systemd
+# units into $(LINUX_PACKAGES); see deploy/linux/nfpm.yaml. The file names
+# are given explicitly: nfpm's own names would carry the "~" of a
+# development package version, which GitHub rewrites on upload.
 linux-packages:
 	for arch in amd64 arm64; do \
-		for format in deb rpm; do \
-			VERSION=$(VERSION) ARCH=$$arch $(NFPM) package --config deploy/linux/nfpm.yaml \
-				--packager $$format --target bin/ || exit 1; \
-		done; \
+		case $$arch in amd64) rpm_arch=x86_64 ;; arm64) rpm_arch=aarch64 ;; esac; \
+		VERSION=$(VERSION) ARCH=$$arch SERVER=bin/$(ASSET_PREFIX)linux-$$arch $(NFPM) package --config deploy/linux/nfpm.yaml \
+			--packager deb --target bin/webmux_$(VERSION)-1_$$arch.deb || exit 1; \
+		VERSION=$(VERSION) ARCH=$$arch SERVER=bin/$(ASSET_PREFIX)linux-$$arch $(NFPM) package --config deploy/linux/nfpm.yaml \
+			--packager rpm --target bin/webmux-$(VERSION)-1.$$rpm_arch.rpm || exit 1; \
 	done
 	cd bin && ls $(LINUX_PACKAGES) >/dev/null
 
 # Linux servers first: the tray embeds their digests, and SHA256SUMS lists
-# every artifact. `release` checks the signing key before building anything
-# so a missing secret fails fast. Sub-makes inherit both the environment and
-# command-line variables (through MAKEFLAGS), so release-build runs without
-# the variable and with an empty override; only release-sign sees the key.
-# CI runs release-build without the key and signs in a separate job.
+# every artifact plus install.sh, which keeps its name in every Release.
+# `release` checks the signing key before building anything so a missing
+# secret fails fast; a development version signs with
+# $WEBMUX_DEV_SIGNING_KEY, a release with $WEBMUX_RELEASE_SIGNING_KEY.
+# Sub-makes inherit both the environment and command-line variables
+# (through MAKEFLAGS), so release-build runs without either key variable and
+# with empty overrides; only release-sign sees the key. CI runs
+# release-build without the key and signs in a separate job.
 release:
-	@test -n "$$WEBMUX_RELEASE_SIGNING_KEY" || { echo 'release: WEBMUX_RELEASE_SIGNING_KEY is not set; cannot sign SHA256SUMS' >&2; exit 1; }
-	env -u WEBMUX_RELEASE_SIGNING_KEY $(MAKE) release-build WEBMUX_RELEASE_SIGNING_KEY=
+	@test -n "$$$(SIGNING_KEY_ENV)" || { echo 'release: $(SIGNING_KEY_ENV) is not set; cannot sign SHA256SUMS' >&2; exit 1; }
+	env -u WEBMUX_RELEASE_SIGNING_KEY -u WEBMUX_DEV_SIGNING_KEY $(MAKE) release-build WEBMUX_RELEASE_SIGNING_KEY= WEBMUX_DEV_SIGNING_KEY=
 	$(MAKE) release-sign
 
 release-build:
 	$(MAKE) web
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-linux-amd64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-linux-arm64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-darwin-amd64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-darwin-arm64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-windows-amd64.exe ./cmd/webmux-windows
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-windows-arm64.exe ./cmd/webmux-windows
-	amd64=$$(sha256sum bin/webmux-linux-amd64 | cut -d' ' -f1) && \
-	arm64=$$(sha256sum bin/webmux-linux-arm64 | cut -d' ' -f1) && \
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/$(ASSET_PREFIX)linux-amd64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/$(ASSET_PREFIX)linux-arm64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/$(ASSET_PREFIX)darwin-amd64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/$(ASSET_PREFIX)darwin-arm64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/$(ASSET_PREFIX)windows-amd64.exe ./cmd/webmux-windows
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/$(ASSET_PREFIX)windows-arm64.exe ./cmd/webmux-windows
+	amd64=$$(sha256sum bin/$(ASSET_PREFIX)linux-amd64 | cut -d' ' -f1) && \
+	arm64=$$(sha256sum bin/$(ASSET_PREFIX)linux-arm64 | cut -d' ' -f1) && \
 	$(MAKE) tray TRAY_LDFLAGS="-X $(UPDATE_PKG).release=1 -X $(TRAY_PKG).linuxAMD64SHA256=$$amd64 -X $(TRAY_PKG).linuxARM64SHA256=$$arm64" && \
-	for exe in bin/webmux-tray-windows-amd64.exe bin/webmux-tray-windows-arm64.exe; do \
+	for exe in bin/$(ASSET_PREFIX)tray-windows-amd64.exe bin/$(ASSET_PREFIX)tray-windows-arm64.exe; do \
 		grep -qaF "$$amd64" $$exe && grep -qaF "$$arm64" $$exe || { echo "$$exe lacks the server digests" >&2; exit 1; }; \
 	done
 	$(MAKE) installer
@@ -101,8 +115,9 @@ release-build:
 	cp install.sh bin/install.sh
 	cd bin && sha256sum $(RELEASE_FILES) install.sh > SHA256SUMS
 
-# Signs bin/SHA256SUMS with $WEBMUX_RELEASE_SIGNING_KEY into
-# SHA256SUMS.minisig, then proves the built-in public keys accept it.
+# Signs bin/SHA256SUMS into SHA256SUMS.minisig with
+# $WEBMUX_RELEASE_SIGNING_KEY, or $WEBMUX_DEV_SIGNING_KEY for a development
+# version, then proves the built-in public keys of that group accept it.
 release-sign:
 	$(RELEASESIGN) sign -version $(VERSION) bin/SHA256SUMS
 	$(RELEASESIGN) verify -version $(VERSION) bin/SHA256SUMS

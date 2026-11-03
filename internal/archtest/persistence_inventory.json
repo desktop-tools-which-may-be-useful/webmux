@@ -95,7 +95,7 @@
     "atomic-publisher": "统一原子写实现自身必须创建临时文件并发布；并非额外领域存储。",
     "benchmark": "cmd/baseline 的隔离实验数据、门闩与结果 JSON，不属于服务端状态目录。",
     "release-tooling": "cmd/internal/releasesign 在发布流水线中创建签名密钥文件与 SHA256SUMS.minisig；不属于服务端状态目录。",
-    "package-update": "deb/rpm 系统级自动更新（root）的 /run/webmux-update.lock 文件锁，以及 /var/cache/webmux-update 中安装后即删除的已校验安装包；不属于用户状态目录。",
+    "package-update": "deb/rpm 系统级自动更新（root）的 /run/webmux-update.lock 文件锁、/var/cache/webmux-update 中安装后即删除的已校验安装包，以及 root 以临时文件加改名写入的 /etc/webmux/update-channel（0644，供非 root 读取通道）；不属于用户状态目录。",
     "tray-local": "Windows 托盘 tray.json、keepalive.json、临时日志与 updates 中待运行或已运行的已校验安装程序属于设备本地状态；不纳入服务器偏好同步。",
     "download-cache": "下载与解压 cloudflared 可执行缓存；不属于用户设置或所有权 JSON。",
     "user-files": "用户上传文件、失败后的临时目录清理，以及代码树文件操作（描述符相对的上传、新建、重命名、复制、移动与删除）；目标为用户工作区或临时文件夹而非服务端状态。",
@@ -128,6 +128,18 @@
       "owner": "package-update"
     },
     "internal/update/apply_unix.go|lock|syscall.Flock": {
+      "count": 1,
+      "owner": "package-update"
+    },
+    "internal/update/channel_unix.go|WriteChannel|os.CreateTemp": {
+      "count": 1,
+      "owner": "package-update"
+    },
+    "internal/update/channel_unix.go|WriteChannel|os.Remove": {
+      "count": 1,
+      "owner": "package-update"
+    },
+    "internal/update/channel_unix.go|WriteChannel|os.Rename": {
       "count": 1,
       "owner": "package-update"
     },

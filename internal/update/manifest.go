@@ -1,6 +1,8 @@
 package update
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,15 +22,27 @@ func (m Manifest) SHA256(name string) (string, bool) {
 }
 
 // VerifyManifest authenticates SHA256SUMS with its minisign signature. The
-// trusted comment must be "webmux <MAJOR.MINOR.PATCH>".
-func VerifyManifest(sums, signature []byte, keys []PublicKey) (Manifest, error) {
-	trusted, err := Verify(sums, signature, keys)
+// trusted comment must be "webmux <version>". A stable key may only sign a
+// release version and a development key only a "-dev.N" version, so a leaked
+// development key can never produce a list a stable client accepts; pass nil
+// devKeys to trust the stable keys alone.
+func VerifyManifest(sums, signature []byte, stableKeys, devKeys []PublicKey) (Manifest, error) {
+	trusted, err := Verify(sums, signature, stableKeys)
+	devSigned := false
+	if errors.Is(err, ErrUnknownKey) && len(devKeys) > 0 {
+		trusted, err = Verify(sums, signature, devKeys)
+		devSigned = true
+	}
 	if err != nil {
 		return Manifest{}, err
 	}
 	version, ok := strings.CutPrefix(trusted, "webmux ")
-	if _, valid := ParseVersion(version); !ok || !valid {
+	v, valid := ParseVersion(version)
+	if !ok || !valid {
 		return Manifest{}, fmt.Errorf("%w: trusted comment %q", ErrBadSignature, trusted)
+	}
+	if v.IsDev() != devSigned {
+		return Manifest{}, fmt.Errorf("%w: version %s signed by the wrong key group", ErrBadSignature, version)
 	}
 	parsed, err := ParseSums(sums)
 	if err != nil {
@@ -55,44 +69,83 @@ func ParseSums(b []byte) (map[string]string, error) {
 	return sums, nil
 }
 
-// Version is a release version MAJOR.MINOR.PATCH.
-type Version [3]int
+// Version is a release version MAJOR.MINOR.PATCH, or the development build
+// MAJOR.MINOR.PATCH-dev.N built from main before that release. Dev is 0 for
+// a release.
+type Version struct {
+	Core [3]int
+	Dev  int
+}
 
-// ParseVersion accepts exactly three non-negative decimal components.
+// devSuffix is the only pre-release label release builds carry.
+const devSuffix = "-dev."
+
+// ParseVersion accepts three non-negative decimal components, optionally
+// followed by "-dev.N" with N a positive integer. Leading zeros and any other
+// suffix are rejected.
 func ParseVersion(s string) (Version, bool) {
 	var v Version
-	parts := strings.Split(s, ".")
+	core, dev, isDev := strings.Cut(s, devSuffix)
+	if isDev {
+		n, ok := decimal(dev)
+		if !ok || n == 0 {
+			return Version{}, false
+		}
+		v.Dev = n
+	}
+	parts := strings.Split(core, ".")
 	if len(parts) != 3 {
-		return v, false
+		return Version{}, false
 	}
 	for i, p := range parts {
-		if p == "" || strings.Trim(p, "0123456789") != "" || (len(p) > 1 && p[0] == '0') {
-			return v, false
+		n, ok := decimal(p)
+		if !ok {
+			return Version{}, false
 		}
-		n, err := strconv.Atoi(p)
-		if err != nil {
-			return v, false
-		}
-		v[i] = n
+		v.Core[i] = n
 	}
 	return v, true
 }
 
-// Compare returns -1, 0 or 1.
+// decimal parses a non-negative integer without sign or leading zeros.
+func decimal(p string) (int, bool) {
+	if p == "" || strings.Trim(p, "0123456789") != "" || (len(p) > 1 && p[0] == '0') {
+		return 0, false
+	}
+	n, err := strconv.Atoi(p)
+	return n, err == nil
+}
+
+// IsDev reports whether v is a development build.
+func (v Version) IsDev() bool { return v.Dev > 0 }
+
+// Compare returns -1, 0 or 1 by semver precedence: a development build sorts
+// below the release with the same MAJOR.MINOR.PATCH.
 func (v Version) Compare(o Version) int {
-	for i := range v {
-		switch {
-		case v[i] < o[i]:
-			return -1
-		case v[i] > o[i]:
-			return 1
+	for i := range v.Core {
+		if c := cmp.Compare(v.Core[i], o.Core[i]); c != 0 {
+			return c
 		}
 	}
-	return 0
+	switch {
+	case v.Dev == o.Dev:
+		return 0
+	case v.Dev == 0:
+		return 1
+	case o.Dev == 0:
+		return -1
+	}
+	return cmp.Compare(v.Dev, o.Dev)
+}
+
+// IsDevVersion reports whether s is a valid development build version.
+func IsDevVersion(s string) bool {
+	v, ok := ParseVersion(s)
+	return ok && v.IsDev()
 }
 
 // Newer reports whether latest is strictly above current; both must be
-// release versions.
+// release or development versions.
 func Newer(latest, current string) bool {
 	l, ok1 := ParseVersion(latest)
 	c, ok2 := ParseVersion(current)

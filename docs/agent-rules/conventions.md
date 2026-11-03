@@ -66,7 +66,8 @@ Run from the repository root.
 - `pnpm --dir web install --frozen-lockfile`: install locked frontend dependencies.
 - `make web`: install dependencies, run Svelte/TypeScript checks, and build `web/dist`.
 - `make build`: build the frontend first, then the embedded Go executable `bin/webmux`.
-- `make release`: build every release artifact into `bin/`: Linux, macOS and Windows binaries, Windows trays and NSIS installers, deb/rpm packages, `install.sh` and `SHA256SUMS`.
+- `make release`: build every release artifact into `bin/`: Linux, macOS and Windows binaries, Windows trays and NSIS installers, deb/rpm packages, `install.sh` and `SHA256SUMS`, then sign it.
+  - `VERSION=X.Y.Z-dev.N` builds a development release with versioned file names, signed with `WEBMUX_DEV_SIGNING_KEY` instead of `WEBMUX_RELEASE_SIGNING_KEY`.
 - `./bin/webmux --listen 127.0.0.1:7681`: run the backend and embedded production app.
 - `pnpm --dir web dev`: run Vite at `http://127.0.0.1:5173`.
 - `pnpm --dir web check`: check Svelte/TypeScript without building.

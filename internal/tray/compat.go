@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/update"
 )
 
 // SupportedContracts are the control contract versions this tray speaks.
@@ -57,8 +58,9 @@ func (c Compat) Newer() bool {
 }
 
 // Classify decides compatibility by the control contract and, when
-// compatible, correspondence by the version number alone: builds of the same
-// version from different commits match.
+// compatible, correspondence by the version number alone (a development
+// build sorts below the release of its MAJOR.MINOR.PATCH): builds of the
+// same version from different commits match.
 func Classify(tray, server BuildInfo) Compat {
 	switch {
 	case server.Contract < slices.Min(SupportedContracts):
@@ -66,18 +68,16 @@ func Classify(tray, server BuildInfo) Compat {
 	case server.Contract > slices.Max(SupportedContracts):
 		return CompatIncompatibleNewer
 	}
-	t, ok1 := semver(tray.Version)
-	w, ok2 := semver(server.Version)
+	t, ok1 := update.ParseVersion(tray.Version)
+	w, ok2 := update.ParseVersion(server.Version)
 	if !ok1 || !ok2 {
 		return CompatUnknown
 	}
-	for n := range t {
-		if w[n] != t[n] {
-			if w[n] < t[n] {
-				return CompatServerOlder
-			}
-			return CompatServerNewer
-		}
+	switch w.Compare(t) {
+	case -1:
+		return CompatServerOlder
+	case 1:
+		return CompatServerNewer
 	}
 	return CompatMatched
 }

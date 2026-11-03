@@ -103,6 +103,8 @@ type menu struct {
 	editSettings              *item
 	autostart                 *item
 	autoUpdate, checkUpdate   *item
+	channel                   *item
+	channelStable, channelDev *item
 	quit                      *item
 }
 
@@ -211,6 +213,9 @@ func buildMenu() *menu {
 
 	m.autostart = add("登录时自动启动")
 	m.autoUpdate = add("自动更新")
+	m.channel = add("更新通道")
+	m.channelStable = addSub(m.channel, "正式版")
+	m.channelDev = addSub(m.channel, "开发版")
 	m.checkUpdate = add("检查更新")
 	systray.AddSeparator()
 

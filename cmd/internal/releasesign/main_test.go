@@ -72,3 +72,46 @@ func TestSignVerifyRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A development version is signed with the dev key from its own variable,
+// and a signature verifies only in the key group its version selects.
+func TestDevSigningUsesDevKeyGroup(t *testing.T) {
+	dir := t.TempDir()
+	keygen := func(name string) (secret, public string) {
+		var pub bytes.Buffer
+		path := filepath.Join(dir, name)
+		if err := run([]string{"keygen", "-secret", path}, &pub); err != nil {
+			t.Fatal(err)
+		}
+		key, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimSpace(pub.String()), "\n")
+		return string(key), lines[len(lines)-1]
+	}
+	stableSecret, _ := keygen("stable")
+	devSecret, devPub := keygen("dev")
+	sums := filepath.Join(dir, "SHA256SUMS")
+	if err := os.WriteFile(sums, []byte(strings.Repeat("a", 64)+"  webmux-0.10.3-dev.2-linux-amd64\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv(keyEnv, stableSecret)
+	t.Setenv(devKeyEnv, "")
+	if err := run([]string{"sign", "-version", "0.10.3-dev.2", sums}, nil); err == nil {
+		t.Fatal("dev version signed with the stable key")
+	}
+	t.Setenv(devKeyEnv, devSecret)
+	if err := run([]string{"sign", "-version", "0.10.3-dev.2", sums}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"verify", "-pubkey", devPub, "-version", "0.10.3-dev.2", sums}, &out); err != nil {
+		t.Fatal(err)
+	}
+	// The same key in the stable group must not accept a dev version.
+	if err := run([]string{"verify", "-pubkey", devPub, sums}, &out); err == nil {
+		t.Fatal("dev-signed list verified in the stable group")
+	}
+}

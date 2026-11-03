@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,30 +53,49 @@ func eventually(t *testing.T, what string, ok func() bool) {
 	}
 }
 
-// fakeReleases serves one release; Fetch writes the installer.
+// fakeReleases serves one release, and through channel also a dev build;
+// Fetch writes the installer.
 type fakeReleases struct {
 	mu        sync.Mutex
 	latest    string
+	dev       string
 	latestErr error
 	checks    int
 	fetches   int
+	// channels lists the channel of each check.
+	channels []update.Channel
 }
 
-func (f *fakeReleases) Latest(context.Context) (update.Manifest, string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.checks++
-	return update.Manifest{Version: f.latest}, "github.com", f.latestErr
+func (f *fakeReleases) Latest(ctx context.Context) (update.Manifest, string, error) {
+	return f.channel(update.ChannelStable).Latest(ctx)
 }
 
-func (f *fakeReleases) Fetch(_ context.Context, m update.Manifest, asset, target string, _ os.FileMode) (string, error) {
+func (f *fakeReleases) Fetch(_ context.Context, m update.Manifest, _, target string, _ os.FileMode) (string, error) {
 	f.mu.Lock()
 	f.fetches++
 	f.mu.Unlock()
-	if asset != "webmux-setup-windows-amd64.exe" || m.Version != f.latest {
-		return "", errors.New("unexpected asset " + asset)
+	return "github.com", os.WriteFile(target, []byte("installer "+m.Version), 0o600)
+}
+
+// channel returns the client of ch: the dev build counts only on the dev
+// channel, and only when it is higher than the release.
+func (f *fakeReleases) channel(ch update.Channel) ReleaseClient { return channelReleases{f, ch} }
+
+type channelReleases struct {
+	*fakeReleases
+	ch update.Channel
+}
+
+func (c channelReleases) Latest(context.Context) (update.Manifest, string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.checks++
+	c.channels = append(c.channels, c.ch)
+	version := c.latest
+	if c.ch == update.ChannelDev && update.Newer(c.dev, version) {
+		version = c.dev
 	}
-	return "github.com", os.WriteFile(target, []byte("installer"), 0o600)
+	return update.Manifest{Version: version}, "github.com", c.latestErr
 }
 
 func (f *fakeReleases) counts() (checks, fetches int) {
@@ -85,14 +105,17 @@ func (f *fakeReleases) counts() (checks, fetches int) {
 }
 
 type updateHarness struct {
-	t        *testing.T
-	clock    *fakeClock
-	dir      string
-	auto     atomic.Bool
-	idle     atomic.Bool
-	mu       sync.Mutex
-	launched []string
-	attempts []UpdateAttempt
+	t       *testing.T
+	clock   *fakeClock
+	dir     string
+	auto    atomic.Bool
+	idle    atomic.Bool
+	mu      sync.Mutex
+	channel update.Channel
+	// channelSaves counts SetChannel calls.
+	channelSaves int
+	launched     []string
+	attempts     []UpdateAttempt
 	// recordErr fails RecordAttempt; launchErr fails Launch.
 	recordErr, launchErr error
 	// exits ends the running installer with a code.
@@ -100,9 +123,10 @@ type updateHarness struct {
 	u     *SelfUpdater
 }
 
-// newUpdateHarness builds an updater; edit, when set, adjusts its options.
+// newUpdateHarness builds an updater on the stable channel whose checks
+// all use client; edit, when set, adjusts its options.
 func newUpdateHarness(t *testing.T, installed bool, client ReleaseClient, edit func(*SelfUpdateOptions)) *updateHarness {
-	h := &updateHarness{t: t, clock: newFakeClock(), dir: filepath.Join(t.TempDir(), "updates"), exits: make(chan int, 1)}
+	h := &updateHarness{t: t, clock: newFakeClock(), dir: filepath.Join(t.TempDir(), "updates"), exits: make(chan int, 1), channel: update.ChannelStable}
 	h.auto.Store(true)
 	h.idle.Store(true)
 	o := SelfUpdateOptions{
@@ -111,7 +135,9 @@ func newUpdateHarness(t *testing.T, installed bool, client ReleaseClient, edit f
 		Release:    true,
 		Installed:  installed,
 		Dir:        h.dir,
-		Client:     client,
+		Client:     func(update.Channel) ReleaseClient { return client },
+		Channel:    h.currentChannel,
+		SetChannel: h.setChannel,
 		Clock:      h.clock,
 		AutoUpdate: h.auto.Load,
 		Idle:       h.idle.Load,
@@ -152,6 +178,25 @@ func (h *updateHarness) recorded() []UpdateAttempt {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return append([]UpdateAttempt(nil), h.attempts...)
+}
+
+// currentChannel reads the stored channel as Settings.Channel does.
+func (h *updateHarness) currentChannel() (update.Channel, error) {
+	return Settings{UpdateChannel: h.storedChannel()}.Channel()
+}
+
+func (h *updateHarness) storedChannel() update.Channel {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.channel
+}
+
+// setChannel stores ch as the menu or a settings file edit would.
+func (h *updateHarness) setChannel(ch update.Channel) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.channel = ch
+	h.channelSaves++
 }
 
 // settled waits until no check runs and the schedule waits for its timer.
@@ -283,7 +328,7 @@ func TestSelfUpdatePortableNeverDownloads(t *testing.T) {
 	}
 	v := h.u.View()
 	entry := UpdateEntry(Snapshot{}, v)
-	if v.Status != "有新版本 0.5.0" || entry.Title != "下载托盘 0.5.0" || entry.URL != ReleasePage("0.5.0") || entry.Action != UpdateOpenRelease {
+	if v.Status != "有新版本 0.5.0" || entry.Title != "下载托盘 0.5.0" || entry.URL != "https://github.com/mzdluo123/webmux/releases/tag/v0.5.0" || entry.Action != UpdateOpenRelease {
 		t.Fatalf("portable %+v %+v", v, entry)
 	}
 	if _, err := os.Stat(h.dir); !errors.Is(err, os.ErrNotExist) {
@@ -352,7 +397,7 @@ func TestSelfUpdateRunsOnlyVerifiedInstallers(t *testing.T) {
 			release := &signedRelease{key: tc.signer, sums: sums, installer: tc.served}
 			client := update.Client{
 				Downloader: fetch.Downloader{GitHubBase: release.serve(t), Mirrors: []string{}},
-				Keys:       []update.PublicKey{trusted.Public()},
+				StableKeys: []update.PublicKey{trusted.Public()},
 			}
 			h := newUpdateHarness(t, true, client, nil)
 			h.u.Start()
@@ -380,7 +425,7 @@ func TestSelfUpdateRunsOnlyVerifiedInstallers(t *testing.T) {
 	release := &signedRelease{key: trusted, sums: sums, installer: installer}
 	client := update.Client{
 		Downloader: fetch.Downloader{GitHubBase: release.serve(t), Mirrors: []string{}},
-		Keys:       []update.PublicKey{trusted.Public()},
+		StableKeys: []update.PublicKey{trusted.Public()},
 	}
 	h := newUpdateHarness(t, true, client, nil)
 	h.u.Check()
@@ -621,5 +666,279 @@ func TestSelfUpdateLaunchFailureClearsAttempt(t *testing.T) {
 	}
 	if got := h.recorded(); len(got) != 2 || got[0].Version != "0.5.0" || !got[1].IsZero() {
 		t.Fatalf("recorded %+v", got)
+	}
+}
+
+// Picking "开发版" saves the channel and checks at once: an installed tray
+// with automatic updates on downloads the dev build's installer from
+// Release dev, verified against the dev keys, and runs it. Picking the
+// current channel does nothing.
+func TestSelfUpdateSelectDevChannel(t *testing.T) {
+	stableKey, devKey := testReleaseKey(t), testReleaseKey(t)
+	installer := []byte("MZ dev installer")
+	const devAsset = "webmux-0.10.3-dev.4-setup-windows-amd64.exe"
+	stableSums := sum([]byte("MZ installer")) + "  webmux-setup-windows-amd64.exe\n"
+	devSums := sum(installer) + "  " + devAsset + "\n"
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requests.Add(1)
+		signed := func(k update.SecretKey, sums, version string) []byte {
+			sig, err := k.Sign([]byte(sums), "webmux "+version)
+			if err != nil {
+				t.Error(err)
+			}
+			return sig
+		}
+		base := "/" + update.Repo + "/releases/"
+		var body []byte
+		switch req.URL.Path {
+		case base + "latest/download/SHA256SUMS":
+			body = []byte(stableSums)
+		case base + "latest/download/SHA256SUMS.minisig":
+			body = signed(stableKey, stableSums, "0.10.2")
+		case base + "download/dev/SHA256SUMS":
+			body = []byte(devSums)
+		case base + "download/dev/SHA256SUMS.minisig":
+			body = signed(devKey, devSums, "0.10.3-dev.4")
+		case base + "download/dev/" + devAsset:
+			body = installer
+		default:
+			http.NotFound(w, req)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.2"
+		o.Client = func(ch update.Channel) ReleaseClient {
+			return update.Client{
+				Downloader: fetch.Downloader{GitHubBase: srv.URL, Mirrors: []string{}},
+				Channel:    ch,
+				StableKeys: []update.PublicKey{stableKey.Public()},
+				DevKeys:    []update.PublicKey{devKey.Public()},
+			}
+		}
+	})
+	h.u.SelectChannel(update.ChannelStable)
+	time.Sleep(10 * time.Millisecond)
+	if n := requests.Load(); n != 0 {
+		t.Fatalf("picking the current channel checked: %d requests", n)
+	}
+	h.u.SelectChannel(update.ChannelDev)
+	eventually(t, "installer", func() bool { return len(h.launches()) == 1 })
+	if ch := h.storedChannel(); ch != update.ChannelDev {
+		t.Fatalf("channel %s", ch)
+	}
+	if got := h.launches()[0]; got != filepath.Join(h.dir, devAsset) {
+		t.Fatalf("launched %q", got)
+	}
+	if data, err := os.ReadFile(h.launches()[0]); err != nil || string(data) != string(installer) {
+		t.Fatalf("installer %q %v", data, err)
+	}
+	if v := h.u.View(); v.Channel != update.ChannelDev || v.Status != "正在安装托盘 0.10.3-dev.4…" {
+		t.Fatalf("view %+v", v)
+	}
+}
+
+// Leaving the dev channel never downgrades: the dev build stays, the
+// status line says why, and the release that passes it installs.
+func TestSelfUpdateBackToStableKeepsDevBuild(t *testing.T) {
+	releases := &fakeReleases{latest: "0.10.2", dev: "0.10.3-dev.4"}
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.3-dev.4"
+		o.Client = releases.channel
+	})
+	h.setChannel(update.ChannelDev)
+	h.u.SelectChannel(update.ChannelStable)
+	eventually(t, "check", func() bool { c, _ := releases.counts(); return c == 1 && !h.u.View().Busy })
+	v := h.u.View()
+	if _, fetches := releases.counts(); fetches != 0 || len(h.launches()) != 0 || v.Latest != "" ||
+		v.Status != "当前开发版 0.10.3-dev.4 高于最新正式版 0.10.2，正式版超过它后自动更新" {
+		t.Fatalf("after switching back %+v, launched %v", v, h.launches())
+	}
+	releases.mu.Lock()
+	releases.latest = "0.10.3"
+	releases.mu.Unlock()
+	h.u.Check()
+	eventually(t, "installer", func() bool { return len(h.launches()) == 1 })
+	if got := h.launches()[0]; got != filepath.Join(h.dir, "webmux-setup-windows-amd64.exe") {
+		t.Fatalf("launched %q", got)
+	}
+}
+
+// A newer dev build in WSL is never offered on the stable channel, so it
+// starts no automatic check there. "切换到开发版通道并更新托盘" saves the
+// dev channel and installs at once, like "更新到": with automatic updates
+// off and right after a failed attempt at that build.
+func TestSelfUpdateSwitchToDevForDevServer(t *testing.T) {
+	releases := &fakeReleases{latest: "0.10.2", dev: "0.10.3-dev.7"}
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.2"
+		o.Client = releases.channel
+		o.FailedAttempt = UpdateAttempt{Version: "0.10.3-dev.7", At: o.Clock.Now()}
+	})
+	tray := BuildInfo{Version: "0.10.2", Contract: 1}
+	devWSL := Snapshot{Tray: tray, Installed: BuildInfo{Version: "0.10.3-dev.7", Contract: 1}}
+	devWSL.Compat = Classify(devWSL.Tray, devWSL.Installed)
+	h.u.Observe(devWSL)
+	time.Sleep(10 * time.Millisecond)
+	if checks, _ := releases.counts(); checks != 0 {
+		t.Fatalf("stable channel checked for a dev server: %d", checks)
+	}
+	h.auto.Store(false)
+	if entry := UpdateEntry(devWSL, h.u.View()); entry.Action != UpdateSwitchToDev || !entry.Enabled {
+		t.Fatalf("entry %+v", entry)
+	}
+	h.u.SwitchToDev()
+	eventually(t, "installer", func() bool { return len(h.launches()) == 1 })
+	if ch := h.storedChannel(); ch != update.ChannelDev {
+		t.Fatalf("channel %s", ch)
+	}
+	if got := h.launches()[0]; got != filepath.Join(h.dir, "webmux-0.10.3-dev.7-setup-windows-amd64.exe") {
+		t.Fatalf("launched %q", got)
+	}
+	if got := h.recorded(); len(got) != 1 || got[0].Version != "0.10.3-dev.7" {
+		t.Fatalf("recorded %+v", got)
+	}
+}
+
+func (f *fakeReleases) checked() []update.Channel {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.channels)
+}
+
+// Switching channels while a downloaded dev build waits to install forgets
+// it at once, never launches or records it, and checks the new channel as
+// soon as the running operation ends.
+func TestSelfUpdateSwitchDuringInstallDropsOldChannelBuild(t *testing.T) {
+	releases := &fakeReleases{latest: "0.10.2", dev: "0.10.3-dev.4"}
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.2"
+		o.Client = releases.channel
+	})
+	h.setChannel(update.ChannelDev)
+	h.idle.Store(false)
+	h.u.Check()
+	eventually(t, "download", func() bool { return h.clock.pending() == 1 })
+	if v := h.u.View(); v.Latest != "0.10.3-dev.4" {
+		t.Fatalf("before the switch %+v", v)
+	}
+	h.u.SelectChannel(update.ChannelStable)
+	if v := h.u.View(); v.Latest != "" || v.Status != "" || !v.Busy {
+		t.Fatalf("after the switch %+v", v)
+	}
+	h.idle.Store(true)
+	h.clock.jump(UpdateIdlePoll)
+	eventually(t, "stable check", func() bool { c, _ := releases.counts(); return c == 2 && !h.u.View().Busy })
+	if got := releases.checked(); !slices.Equal(got, []update.Channel{update.ChannelDev, update.ChannelStable}) {
+		t.Fatalf("checked %v", got)
+	}
+	if len(h.launches()) != 0 || len(h.recorded()) != 0 {
+		t.Fatalf("launched %v, recorded %+v", h.launches(), h.recorded())
+	}
+	if v := h.u.View(); v.Latest != "" || v.Status != "托盘已是最新版本 0.10.2" {
+		t.Fatalf("after the stable check %+v", v)
+	}
+}
+
+// "切换到开发版通道并更新托盘" while a stable build waits to install drops
+// that build and installs the dev build once the operation ends.
+func TestSelfUpdateSwitchToDevQueuesInstall(t *testing.T) {
+	releases := &fakeReleases{latest: "0.10.2", dev: "0.10.3-dev.4"}
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.1"
+		o.Client = releases.channel
+	})
+	h.auto.Store(false)
+	h.idle.Store(false)
+	h.u.Install()
+	eventually(t, "download", func() bool { return h.clock.pending() == 1 })
+	h.u.SwitchToDev()
+	h.idle.Store(true)
+	h.clock.jump(UpdateIdlePoll)
+	eventually(t, "installer", func() bool { return len(h.launches()) == 1 })
+	if got := h.launches()[0]; got != filepath.Join(h.dir, "webmux-0.10.3-dev.4-setup-windows-amd64.exe") {
+		t.Fatalf("launched %q", got)
+	}
+	if got := h.recorded(); len(got) != 1 || got[0].Version != "0.10.3-dev.4" {
+		t.Fatalf("recorded %+v", got)
+	}
+}
+
+// Editing updateChannel in tray.json while a dev build waits to install
+// acts like a switch from the menu: the build is forgotten at once, never
+// launched, and the new channel is checked once the operation ends.
+func TestSelfUpdateChannelChangedInSettingsFile(t *testing.T) {
+	releases := &fakeReleases{latest: "0.10.2", dev: "0.10.3-dev.4"}
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.2"
+		o.Client = releases.channel
+	})
+	h.setChannel(update.ChannelDev)
+	h.idle.Store(false)
+	h.u.Check()
+	eventually(t, "download", func() bool { return h.clock.pending() == 1 })
+	if v := h.u.View(); v.Status != "托盘 0.10.3-dev.4 已下载，当前操作完成后安装" {
+		t.Fatalf("waiting %+v", v)
+	}
+	h.setChannel(update.ChannelStable) // the reloaded file
+	h.u.ChannelChanged()
+	if v := h.u.View(); v.Latest != "" || v.Status != "" || !v.Busy {
+		t.Fatalf("after the reload %+v", v)
+	}
+	h.idle.Store(true)
+	h.clock.jump(UpdateIdlePoll)
+	eventually(t, "stable check", func() bool { c, _ := releases.counts(); return c == 2 && !h.u.View().Busy })
+	if got := releases.checked(); !slices.Equal(got, []update.Channel{update.ChannelDev, update.ChannelStable}) {
+		t.Fatalf("checked %v", got)
+	}
+	if len(h.launches()) != 0 || len(h.recorded()) != 0 {
+		t.Fatalf("launched %v, recorded %+v", h.launches(), h.recorded())
+	}
+}
+
+// The last of several switches made while busy decides the queued check:
+// "正式版" picked after "切换到开发版通道并更新托盘" does not inherit its
+// install, so with automatic updates off it only reports the release.
+func TestSelfUpdateLastQueuedSwitchDecides(t *testing.T) {
+	releases := &fakeReleases{latest: "0.10.2", dev: "0.10.3-dev.4"}
+	h := newUpdateHarness(t, true, nil, func(o *SelfUpdateOptions) {
+		o.Version = "0.10.1"
+		o.Client = releases.channel
+	})
+	h.setChannel(update.ChannelDev)
+	h.auto.Store(false)
+	h.idle.Store(false)
+	h.u.Install()
+	eventually(t, "download", func() bool { return h.clock.pending() == 1 })
+	h.u.SwitchToDev()
+	h.u.SelectChannel(update.ChannelStable)
+	h.idle.Store(true)
+	h.clock.jump(UpdateIdlePoll)
+	eventually(t, "stable check", func() bool { c, _ := releases.counts(); return c == 2 && !h.u.View().Busy })
+	if len(h.launches()) != 0 || len(h.recorded()) != 0 {
+		t.Fatalf("launched %v, recorded %+v", h.launches(), h.recorded())
+	}
+	if v := h.u.View(); v.Latest != "0.10.2" || v.Status != "有新版本 0.10.2" {
+		t.Fatalf("after the stable check %+v", v)
+	}
+}
+
+// An unrecognised stored channel counts as stable; picking "正式版" saves
+// it without a check, and picking it again does nothing.
+func TestSelfUpdateSelectChannelRewritesUnrecognisedValue(t *testing.T) {
+	releases := &fakeReleases{latest: "0.4.0"}
+	h := newUpdateHarness(t, true, releases, nil)
+	h.setChannel("beta")
+	h.u.SelectChannel(update.ChannelStable)
+	h.u.SelectChannel(update.ChannelStable)
+	time.Sleep(10 * time.Millisecond)
+	h.mu.Lock()
+	stored, saves := h.channel, h.channelSaves
+	h.mu.Unlock()
+	if checks, _ := releases.counts(); stored != update.ChannelStable || saves != 2 || checks != 0 {
+		t.Fatalf("stored %q after %d saves, %d checks", stored, saves, checks)
 	}
 }

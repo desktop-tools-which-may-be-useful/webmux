@@ -29,6 +29,13 @@ for file in "$deb" "$rpm"; do
 	}
 done
 
+# A development version X.Y.Z-dev.N is packaged as X.Y.Z~dev.N, which dpkg
+# and rpm sort before X.Y.Z; file names keep the "-".
+case $version in
+*-*) package_version="${version%%-*}~${version#*-}-1" ;;
+*) package_version="$version-1" ;;
+esac
+
 # Shared checks after installation: the four files, their modes, the units'
 # commands and the version the binary reports.
 checks='
@@ -66,6 +73,7 @@ timer_calls='
 
 docker run --rm -e VERSION="$version" -v "$dir:/pkgs:ro" "$debian_image" sh -euc "
 	test -z \"\$(dpkg-deb -f /pkgs/$deb Depends)\"
+	test \"\$(dpkg-deb -f /pkgs/$deb Version)\" = '$package_version'
 	test \"\$(dpkg-deb -c /pkgs/$deb | awk '\$1 !~ /^d/ {print \$6}' | sort | tr '\n' ' ')\" = './usr/bin/webmux ./usr/lib/systemd/system/webmux-update.service ./usr/lib/systemd/system/webmux-update.timer ./usr/lib/systemd/user/webmux.service '
 
 	# Without systemd: installs and removes quietly, enabling nothing.
@@ -100,6 +108,7 @@ printf 'ok - %s installs, upgrades, runs and removes on Debian\n' "$deb"
 docker run --rm -e VERSION="$version" -v "$dir:/pkgs:ro" "$fedora_image" sh -euc "
 	test \"\$(rpm -qpl /pkgs/$rpm | tr '\n' ' ')\" = '/usr/bin/webmux /usr/lib/systemd/system/webmux-update.service /usr/lib/systemd/system/webmux-update.timer /usr/lib/systemd/user/webmux.service '
 	test -z \"\$(rpm -qpR /pkgs/$rpm | grep -v '^rpmlib(' | grep -v '^/bin/sh' || true)\"
+	test \"\$(rpm -qp --qf '%{VERSION}-%{RELEASE}' /pkgs/$rpm)\" = '$package_version'
 
 	rpm -i --nosignature /pkgs/$rpm
 	$checks

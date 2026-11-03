@@ -6,6 +6,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/rainchan/webmux/internal/tray"
+	"github.com/rainchan/webmux/internal/update"
 )
 
 func (a *App) bindings() bindings {
@@ -37,6 +38,8 @@ func (a *App) listen() {
 	on(m.update, a.updateTray)
 	on(m.checkUpdate, a.updater.Check)
 	on(m.autoUpdate, func() { a.changeSettings(func(s *tray.Settings) { s.AutoUpdate = !s.AutoUpdate }) })
+	on(m.channelStable, func() { a.updater.SelectChannel(update.ChannelStable) })
+	on(m.channelDev, func() { a.updater.SelectChannel(update.ChannelDev) })
 	if a.sup == nil {
 		return
 	}

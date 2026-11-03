@@ -1,6 +1,7 @@
 # nfpm configuration for the WebMux deb and rpm packages; `make
-# linux-packages` runs it once per format and architecture with VERSION and
-# ARCH (amd64 | arm64) set. Paths are relative to the repository root.
+# linux-packages` runs it once per format and architecture with VERSION,
+# ARCH (amd64 | arm64) and SERVER (that architecture's Linux binary) set.
+# Paths are relative to the repository root.
 name: webmux
 arch: ${ARCH}
 platform: linux
@@ -19,7 +20,7 @@ vendor: WebMux
 homepage: https://github.com/mzdluo123/webmux
 license: MIT
 contents:
-  - src: bin/webmux-linux-${ARCH}
+  - src: ${SERVER}
     dst: /usr/bin/webmux
     expand: true
     file_info:

@@ -17,6 +17,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/fetch"
+	"github.com/rainchan/webmux/internal/update"
 )
 
 // installRunner plays a distribution: uname, wslpath, install, version.
@@ -106,7 +107,7 @@ func TestInstallerInstallsVerifiedRelease(t *testing.T) {
 	if err := in.Install(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if got := <-srv.paths; got != "/"+ReleaseRepo+"/releases/download/v0.2.0/webmux-linux-arm64" {
+	if got := <-srv.paths; got != "/"+update.Repo+"/releases/download/v0.2.0/webmux-linux-arm64" {
 		t.Fatalf("release path %q", got)
 	}
 	installs := runner.program("install")
@@ -117,6 +118,53 @@ func TestInstallerInstallsVerifiedRelease(t *testing.T) {
 	// A verified download is reused for the next install.
 	if err := in.Install(context.Background()); err != nil || srv.hits.Load() != 1 {
 		t.Fatalf("reinstall: %v, %d downloads", err, srv.hits.Load())
+	}
+}
+
+// A dev tray installs the server of its own build from Release dev under
+// the versioned name; the cache keeps the usual name.
+func TestInstallerDevBuild(t *testing.T) {
+	srv := newReleaseServer(t, serverBinary)
+	runner := &installRunner{machine: "x86_64", installed: "0.10.3-dev.4"}
+	in := testInstaller(t, runner, srv.URL, map[string]string{"amd64": sum(serverBinary), "arm64": "unused"})
+	in.Version = "0.10.3-dev.4"
+	if err := in.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-srv.paths; got != "/mzdluo123/webmux/releases/download/dev/webmux-0.10.3-dev.4-linux-amd64" {
+		t.Fatalf("release path %q", got)
+	}
+	if installs := runner.program("install"); len(installs) != 1 || !slices.Contains(installs[0], "/mnt/c/dl/webmux-0.10.3-dev.4-linux-amd64") {
+		t.Fatalf("install argv %q", installs)
+	}
+}
+
+// Release dev keeps two builds. When GitHub no longer has an older dev
+// tray's server, the reason says to update the tray first and still lists
+// every source; a release tray's missing file is reported as before.
+func TestInstallerDevBuildGone(t *testing.T) {
+	gone := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(gone.Close)
+	mirror := newReleaseServer(t, []byte("not found page"))
+	for _, tc := range []struct {
+		version string
+		gone    bool
+	}{
+		{"0.10.3-dev.4", true},
+		{"0.10.2", false},
+	} {
+		runner := &installRunner{machine: "x86_64", installed: tc.version}
+		in := testInstaller(t, runner, gone.URL, map[string]string{"amd64": sum(serverBinary), "arm64": "unused"})
+		in.Version = tc.version
+		in.Downloader.Mirrors = []string{mirror.URL}
+		err := in.Install(context.Background())
+		msg := "开发版 0.10.3-dev.4 的服务端已不在 dev Release，请先更新托盘"
+		if err == nil || strings.Contains(err.Error(), msg) != tc.gone || !strings.Contains(err.Error(), "HTTP 404") || !strings.Contains(err.Error(), "sha256 mismatch") {
+			t.Errorf("%s: %v", tc.version, err)
+		}
+		if len(runner.program("install")) != 0 {
+			t.Errorf("%s: installed without a download", tc.version)
+		}
 	}
 }
 

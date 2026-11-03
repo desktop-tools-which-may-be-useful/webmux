@@ -98,7 +98,7 @@ func applyRelease(t *testing.T, latest string) (Client, *atomic.Int32) {
 		_, _ = w.Write(b)
 	}))
 	t.Cleanup(srv.Close)
-	return Client{Downloader: fetch.Downloader{GitHubBase: srv.URL, Mirrors: []string{}}, Keys: []PublicKey{k.Public()}}, &hits
+	return Client{Downloader: fetch.Downloader{GitHubBase: srv.URL, Mirrors: []string{}}, StableKeys: []PublicKey{k.Public()}}, &hits
 }
 
 // applyOptions runs Apply in a temporary directory, which also holds the
@@ -168,6 +168,50 @@ func TestApplyUpToDateDownloadsNothing(t *testing.T) {
 	for _, c := range sys.calls {
 		if c.name == "dpkg" {
 			t.Fatal("installed while up to date")
+		}
+	}
+}
+
+// Back on the stable channel, a development build above the newest stable
+// release is kept and explained; there is no downgrade.
+func TestApplyKeepsDevBuildAboveStable(t *testing.T) {
+	asRelease(t)
+	c, _ := applyRelease(t, "0.10.2")
+	sys := &fakeSystem{owner: MethodDeb}
+	o, out := applyOptions(t, c, sys, "0.10.3-dev.4", "amd64")
+	if err := Apply(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "当前开发版 0.10.3-dev.4 高于最新正式版 0.10.2") {
+		t.Fatalf("log %q", out.String())
+	}
+	for _, c := range sys.calls {
+		if c.name == "dpkg" {
+			t.Fatal("downgraded to the stable release")
+		}
+	}
+}
+
+// On the dev channel a development build installs from its versioned
+// package name (-dev.N in the file name, ~dev.N only inside the package).
+func TestApplyInstallsDevPackage(t *testing.T) {
+	asRelease(t)
+	for _, tc := range []struct {
+		owner      Method
+		arch, want string
+	}{
+		{MethodDeb, "amd64", "deb-bytes"},
+		{MethodRPM, "arm64", "rpm-bytes"},
+	} {
+		c, _ := applyRelease(t, "0.10.3-dev.4")
+		c.Channel, c.DevKeys, c.StableKeys = ChannelDev, c.StableKeys, []PublicKey{testKey(t).Public()}
+		sys := &fakeSystem{owner: tc.owner}
+		o, out := applyOptions(t, c, sys, "0.10.2", tc.arch)
+		if err := Apply(context.Background(), o); err != nil {
+			t.Fatalf("%s: %v", tc.owner, err)
+		}
+		if string(sys.installed) != tc.want || !strings.Contains(out.String(), "已安装 0.10.3-dev.4") {
+			t.Fatalf("%s installed %q, log %q", tc.owner, sys.installed, out.String())
 		}
 	}
 }

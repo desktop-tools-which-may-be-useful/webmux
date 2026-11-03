@@ -161,3 +161,11 @@
 - 复现：Fedora 45 容器中直接 `rpm -U` 测试包报 “does not verify: no signature”，版本不变。
 - 验证：同一容器中 `webmux update apply` 从本地签名的测试 Release 把 0.0.1 升到 0.0.2，`rpm -Va webmux` 无差异；`dnf install` 本地包照常可用。
 - 限制：未在 Fedora 45 的 systemd 环境中经定时器运行；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：新增开发版更新通道（OpenSpec `add-dev-update-channel`），新增 US-K17、US-L14、US-O14，更新 US-K11、US-K15、US-O01、US-O11 与覆盖索引。
+
+- 依据：变更的规格与设计、`internal/update`、`cmd/webmux`、`internal/tray`、发布脚本的实现，以及部署文档。
+- 已运行：`make check`、`make test-fast`、`make test-install` 通过；本地 `make release-build VERSION=0.10.3-dev.2` 产出带版本号的全部产物，deb/rpm 包内版本为 `0.10.3~dev.2-1`。
+- 已运行（US-K15、US-K17）：Debian 容器中以 root 和本地签名的测试 Release（正式版 0.10.2、开发版 0.10.3-dev.4）执行 `webmux update channel` 与 `update check --json`：切到 dev 后发现 0.10.3-dev.4，未知通道退出码 2，文件 0666 时按 stable 并警告，非 root 写入被拒。
+- 已运行（US-K17）：同一测试 Release 上 deb 0.10.2 切到 dev 后 `update apply` 安装 `webmux_0.10.3-dev.4-1_amd64.deb`（`dpkg-query` 报告 `0.10.3~dev.4-1`）；切回 stable 不降级并提示；发布 0.10.3 后升级到 `0.10.3-1`。
+- 待验证：未经 systemd 定时器运行；`dev-release.yml` 只经 actionlint 与模拟验证，未在 GitHub 上运行（US-L14）；Windows 托盘未在真实 Windows 上验证（US-O01、US-O11、US-O14）。

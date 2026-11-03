@@ -66,6 +66,7 @@ Commands:
   service logs      Show recent logs; add --follow (-f) to stream
   update check      Check for a newer signed release; --json for scripts
   update apply      Install a newer deb/rpm release (root; used by webmux-update.timer)
+  update channel    Show the update channel, or set it to stable|dev (root)
   run               Create a terminal session
   attach            Attach to a terminal session
   ls                List terminal sessions
@@ -78,7 +79,7 @@ Server options: --config PATH, --listen HOST:PORT, --token TOKEN,
 Service install options: --config PATH, --force, --dry-run
 
 Services: Linux uses systemd --user; macOS uses a launchd LaunchAgent. Do not
-use sudo for them. Only "update apply" runs as root.
+use sudo for them. Only "update apply" and "update channel <stable|dev>" run as root.
 Run "webmux <command> --help" for command options.
 `
 

@@ -4,18 +4,29 @@
 # Usage:
 #   curl -fsSL <install.sh URL> | sh
 #   curl -fsSL <install.sh URL> | WEBMUX_VERSION=0.2.0 sh
+#   curl -fsSL <install.sh URL> | WEBMUX_CHANNEL=dev sh
 #
 # Environment:
-#   WEBMUX_VERSION      Release version without the leading "v" (default: latest)
+#   WEBMUX_CHANNEL      stable (default): the latest release; dev: the
+#                       current development build from the rolling "dev"
+#                       Release. Applies to this install only; nothing is saved.
+#   WEBMUX_VERSION      X.Y.Z, or X.Y.Z-dev.N for the current development
+#                       build (implies WEBMUX_CHANNEL=dev); a leading "v" is
+#                       ignored (default: the latest of the channel)
 #   WEBMUX_INSTALL_DIR  Directory for the webmux binary (default: ~/.local/bin)
 #   WEBMUX_MIRRORS      Space-separated gh-proxy prefixes; empty disables fallback
-#   WEBMUX_SHA256       Pin the binary digest instead of reading SHA256SUMS
+#   WEBMUX_SHA256       Pin the binary digest instead of reading it from SHA256SUMS
 #   WEBMUX_BASE_URL     GitHub repository URL (mainly for tests and mirrors)
 #
 # GitHub is tried first, then the mirrors. Every source must serve a binary
 # whose SHA-256 matches SHA256SUMS from that same source before it is installed,
 # so a mirror affects availability, not the expected content. The script never
 # fetches from raw.githubusercontent.com; callers choose where to read this file.
+#
+# The "dev" Release keeps the current and the previous development build, but
+# its SHA256SUMS lists only the current one: the dev channel installs the one
+# webmux-<X.Y.Z-dev.N>-<os>-<arch> listed there (reading SHA256SUMS even with
+# WEBMUX_SHA256), and a WEBMUX_VERSION other than that version fails.
 
 set -eu
 
@@ -65,11 +76,43 @@ if [ "$os" = darwin ] && [ "$arch" = amd64 ]; then
 	fi
 fi
 
+channel=${WEBMUX_CHANNEL:-}
+case $channel in
+'' | stable | dev) ;;
+*) die "invalid WEBMUX_CHANNEL: $channel (use stable or dev)" ;;
+esac
+
+# version_kind prints "stable" for MAJOR.MINOR.PATCH, "dev" for
+# MAJOR.MINOR.PATCH-dev.N and nothing for anything else.
+version_kind() {
+	case $1 in
+	*[!0-9a-z.-]*) return 0 ;;
+	esac
+	printf '%s\n' "$1" | awk '
+		/^[0-9]+\.[0-9]+\.[0-9]+$/ { print "stable" }
+		/^[0-9]+\.[0-9]+\.[0-9]+-dev\.[1-9][0-9]*$/ { print "dev" }
+	'
+}
+
+version=""
 if [ -n "${WEBMUX_VERSION:-}" ]; then
 	version=${WEBMUX_VERSION#v}
-	case $version in
-	'' | *[!0-9A-Za-z._+-]*) die "invalid WEBMUX_VERSION: $WEBMUX_VERSION" ;;
+	case $(version_kind "$version") in
+	stable)
+		[ "$channel" != dev ] || die "WEBMUX_VERSION=$WEBMUX_VERSION is a release, not a development version; unset WEBMUX_CHANNEL=dev to install it"
+		;;
+	dev)
+		[ "$channel" != stable ] || die "WEBMUX_VERSION=$WEBMUX_VERSION is a development version; it cannot be installed with WEBMUX_CHANNEL=stable"
+		channel=dev
+		;;
+	*) die "invalid WEBMUX_VERSION: $WEBMUX_VERSION (use X.Y.Z or X.Y.Z-dev.N)" ;;
 	esac
+fi
+channel=${channel:-stable}
+
+if [ "$channel" = dev ]; then
+	release_base="$repo_base/releases/download/dev"
+elif [ -n "$version" ]; then
 	release_base="$repo_base/releases/download/v$version"
 	release_label="v$version"
 else
@@ -77,7 +120,6 @@ else
 	release_label="latest"
 fi
 
-asset="webmux-$os-$arch"
 pinned=""
 if [ -n "${WEBMUX_SHA256:-}" ]; then
 	pinned=$(printf '%s' "$WEBMUX_SHA256" | tr '[:upper:]' '[:lower:]')
@@ -99,6 +141,19 @@ digest() {
 
 sums_digest() {
 	awk -v name="$2" '{ n=$2; sub(/^\*/, "", n); if (n == name) { print $1; exit } }' "$1"
+}
+
+# dev_versions prints the version of every webmux-<X.Y.Z-dev.N>-<os>-<arch>
+# line in the SHA256SUMS file $1 for os $2 and arch $3.
+dev_versions() {
+	awk -v suffix="-$2-$3" '{
+		n = $2
+		sub(/^\*/, "", n)
+		if (substr(n, 1, 7) != "webmux-" || length(n) <= 7 + length(suffix)) next
+		if (substr(n, length(n) - length(suffix) + 1) != suffix) next
+		v = substr(n, 8, length(n) - 7 - length(suffix))
+		if (v ~ /^[0-9]+\.[0-9]+\.[0-9]+-dev\.[1-9][0-9]*$/) print v
+	}' "$1"
 }
 
 download() {
@@ -124,9 +179,39 @@ done
 
 failures=""
 for source in "$@"; do
-	asset_path="$tmp_dir/$asset"
 	sums_path="$tmp_dir/SHA256SUMS"
-	rm -f "$asset_path" "$sums_path"
+	rm -f "$tmp_dir"/webmux-* "$sums_path"
+
+	asset="webmux-$os-$arch"
+	if [ "$channel" = dev ]; then
+		if ! download "$source/SHA256SUMS" "$sums_path" 60; then
+			failures="$failures
+  $source: SHA256SUMS download failed"
+			continue
+		fi
+		build=$(dev_versions "$sums_path" "$os" "$arch")
+		case $build in
+		'')
+			failures="$failures
+  $source: SHA256SUMS lists no webmux-<X.Y.Z-dev.N>-$os-$arch"
+			continue
+			;;
+		*'
+'*)
+			failures="$failures
+  $source: SHA256SUMS lists several webmux-<X.Y.Z-dev.N>-$os-$arch"
+			continue
+			;;
+		esac
+		if [ -n "$version" ] && [ "$version" != "$build" ]; then
+			failures="$failures
+  $source: development version $version is no longer available; the current development version is $build"
+			continue
+		fi
+		asset="webmux-$build-$os-$arch"
+		release_label=$build
+	fi
+	asset_path="$tmp_dir/$asset"
 
 	if ! download "$source/$asset" "$asset_path" 600; then
 		failures="$failures
@@ -135,7 +220,7 @@ for source in "$@"; do
 	fi
 
 	if [ -z "$pinned" ]; then
-		if ! download "$source/SHA256SUMS" "$sums_path" 60; then
+		if [ "$channel" != dev ] && ! download "$source/SHA256SUMS" "$sums_path" 60; then
 			failures="$failures
   $source: SHA256SUMS download failed"
 			continue

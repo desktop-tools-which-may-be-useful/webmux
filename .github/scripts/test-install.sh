@@ -64,6 +64,30 @@ mkdir -p "$www/bad/releases/latest/download"
 printf 'bad binary\n' > "$www/bad/releases/latest/download/webmux-linux-amd64"
 printf '%064d  webmux-linux-amd64\n' 0 > "$www/bad/releases/latest/download/SHA256SUMS"
 
+# The rolling dev Release: the current build 0.10.3-dev.4 and the previous
+# 0.10.3-dev.3, whose files remain but are no longer in SHA256SUMS.
+dev_dir=$www/releases/download/dev
+mkdir -p "$dev_dir"
+for build in 0.10.3-dev.3 0.10.3-dev.4; do
+	for asset in linux-amd64 linux-arm64 darwin-arm64 tray-windows-amd64.exe; do
+		asset=webmux-$build-$asset
+		printf '#!/bin/sh\n# %s dev\nprintf "webmux %s\\n"\n' "$asset" "$build" > "$dev_dir/$asset"
+		chmod 755 "$dev_dir/$asset"
+	done
+done
+cp "$repo/install.sh" "$dev_dir/install.sh"
+(
+	cd "$dev_dir"
+	for file in webmux-0.10.3-dev.4-* install.sh; do
+		printf '%s  %s\n' "$(digest "$file")" "$file"
+	done > SHA256SUMS
+)
+
+# A dev SHA256SUMS listing two builds for linux-amd64 and none for linux-arm64.
+mkdir -p "$www/ambiguous/releases/download/dev"
+cp "$dev_dir"/webmux-*-linux-amd64 "$www/ambiguous/releases/download/dev/"
+write_sums "$www/ambiguous/releases/download/dev"
+
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 python3 -m http.server "$port" --bind 127.0.0.1 --directory "$www" >/dev/null 2>&1 &
 server_pid=$!
@@ -211,6 +235,58 @@ run_install "$work/uname-linux-amd64" >"$work/mirror.log" 2>&1 || {
 }
 grep -q 'webmux-linux-amd64 latest' "$work/out/webmux" || fail "mirror fallback installed the wrong asset"
 
+# expect_failure LOG MESSAGE UNAME_DIR [VAR=value...]: install.sh must fail,
+# report MESSAGE and leave the installed binary and directory as they were.
+expect_failure() {
+	log=$1
+	message=$2
+	shift 2
+	reset_out
+	printf 'old binary\n' > "$work/out/webmux"
+	chmod 755 "$work/out/webmux"
+	if run_install "$@" >"$log" 2>&1; then
+		fail "$log: installation unexpectedly succeeded"
+	fi
+	grep -qF -- "$message" "$log" || fail "$log: expected '$message', got: $(cat "$log")"
+	[ "$(cat "$work/out/webmux")" = "old binary" ] || fail "$log: replaced the installed binary"
+	[ "$(ls -A "$work/out")" = webmux ] || fail "$log: left files in the install directory"
+}
+
+base=$server
+mirrors=
+reset_out
+run_install "$work/uname-linux-amd64" WEBMUX_CHANNEL=dev >"$work/dev.log" 2>&1 || {
+	cat "$work/dev.log"
+	fail "dev channel installation failed"
+}
+grep -q 'webmux-0.10.3-dev.4-linux-amd64 dev' "$work/out/webmux" || fail "dev channel installed the wrong asset"
+grep -qF '0.10.3-dev.4' "$work/dev.log" || fail "dev channel did not report the installed version"
+
+reset_out
+run_install "$work/uname-darwin-arm64" WEBMUX_VERSION=0.10.3-dev.4 >"$work/dev-pinned.log" 2>&1 || {
+	cat "$work/dev-pinned.log"
+	fail "installing the current development version failed"
+}
+grep -q 'webmux-0.10.3-dev.4-darwin-arm64 dev' "$work/out/webmux" || fail "current development version installed the wrong asset"
+
+expect_failure "$work/dev-stale.log" 'the current development version is 0.10.3-dev.4' \
+	"$work/uname-linux-amd64" WEBMUX_VERSION=0.10.3-dev.3
+expect_failure "$work/dev-release-version.log" 'WEBMUX_VERSION=0.2.0 is a release' \
+	"$work/uname-linux-amd64" WEBMUX_CHANNEL=dev WEBMUX_VERSION=0.2.0
+expect_failure "$work/stable-dev-version.log" 'cannot be installed with WEBMUX_CHANNEL=stable' \
+	"$work/uname-linux-amd64" WEBMUX_CHANNEL=stable WEBMUX_VERSION=0.10.3-dev.4
+expect_failure "$work/bad-channel.log" 'invalid WEBMUX_CHANNEL: beta' \
+	"$work/uname-linux-amd64" WEBMUX_CHANNEL=beta
+expect_failure "$work/bad-version.log" 'invalid WEBMUX_VERSION: 0.10.3-rc.1' \
+	"$work/uname-linux-amd64" WEBMUX_VERSION=0.10.3-rc.1
+
+base=$server/ambiguous
+expect_failure "$work/dev-several.log" 'lists several webmux-<X.Y.Z-dev.N>-linux-amd64' \
+	"$work/uname-linux-amd64" WEBMUX_CHANNEL=dev
+fake_uname "$work/uname-linux-arm64" Linux aarch64
+expect_failure "$work/dev-none.log" 'lists no webmux-<X.Y.Z-dev.N>-linux-arm64' \
+	"$work/uname-linux-arm64" WEBMUX_CHANNEL=dev
+
 fake_uname "$work/uname-windows" MINGW64_NT-10.0 x86_64
 if run_install "$work/uname-windows" >"$work/windows.log" 2>&1; then
 	fail "Windows installation unexpectedly succeeded"
@@ -223,4 +299,4 @@ if run_install "$work/uname-freebsd" >"$work/freebsd.log" 2>&1; then
 fi
 grep -q 'unsupported operating system' "$work/freebsd.log" || fail "unsupported OS error was unclear"
 
-printf 'install.sh: platform, checksum, mirror and error-path checks passed\n'
+printf 'install.sh: platform, channel, checksum, mirror and error-path checks passed\n'
