@@ -18,7 +18,7 @@ test("a #token= link signs in and leaves no token in the address or history", as
   // Listen before navigating: the snapshot frame arrives with the page.
   const sessions = new Promise<string>((resolve) =>
     page.on("websocket", (socket) => {
-      if (socket.url().endsWith("/ws/sessions"))
+      if (new URL(socket.url()).pathname === "/ws/sessions")
         socket.once("framereceived", () => resolve(socket.url()));
     }),
   );

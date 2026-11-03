@@ -141,31 +141,34 @@ test("background hybrid choice waits for pane activation", async ({
   expect(created.status()).toBe(201);
   const agentId = (await created.json()).id;
   let ask: (() => void) | undefined;
-  await page.routeWebSocket(`**/ws/s/${agentId}/chat`, (socket) => {
-    let awaiting = false;
-    const server = socket.connectToServer();
-    server.onMessage((message) => {
-      if (awaiting) return;
-      socket.send(message);
-      const frame = JSON.parse(message.toString()) as ChatFrame;
-      if (frame.type !== "events") {
-        // The same frame arrives when a different device starts the switch.
-        ask = () => {
-          awaiting = true;
-          socket.send(
-            JSON.stringify({
-              type: "state",
-              state: {
-                ...frame.state,
-                side: "switching",
-                phase: "awaiting_choice",
-              },
-            }),
-          );
-        };
-      }
-    });
-  });
+  await page.routeWebSocket(
+    new RegExp(`/ws/s/${agentId}/chat(\\?|$)`),
+    (socket) => {
+      let awaiting = false;
+      const server = socket.connectToServer();
+      server.onMessage((message) => {
+        if (awaiting) return;
+        socket.send(message);
+        const frame = JSON.parse(message.toString()) as ChatFrame;
+        if (frame.type !== "events") {
+          // The same frame arrives when a different device starts the switch.
+          ask = () => {
+            awaiting = true;
+            socket.send(
+              JSON.stringify({
+                type: "state",
+                state: {
+                  ...frame.state,
+                  side: "switching",
+                  phase: "awaiting_choice",
+                },
+              }),
+            );
+          };
+        }
+      });
+    },
+  );
   await foreground.getByRole("button", { name: "分屏", exact: true }).click();
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
   await page.getByRole("button", { name: /Pending agent/ }).click();

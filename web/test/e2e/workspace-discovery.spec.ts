@@ -235,7 +235,7 @@ test("a disconnected session list reconnects and restores the latest snapshot", 
   let blockReconnect = false;
   let blockedReconnects = 0;
   let disconnect: (() => Promise<void>) | undefined;
-  await page.routeWebSocket("**/ws/sessions", async (socket) => {
+  await page.routeWebSocket(/\/ws\/sessions(\?|$)/, async (socket) => {
     if (blockReconnect) {
       blockedReconnects++;
       await socket.close();

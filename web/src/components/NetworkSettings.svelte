@@ -30,7 +30,7 @@
     <p id="ws-compression-help" class="text-xs text-muted-foreground">
       切换后已打开的终端与列表连接会立即重连，输出从断点续传。小于 128
       字节的消息（如按键回显）不压缩，不增加输入延迟；每个连接在服务端多占约 1.3
-      MB 内存。
+      MB 内存。手机与平板在未选择时默认开启。
     </p>
   </Card.Content>
 </Card.Root>

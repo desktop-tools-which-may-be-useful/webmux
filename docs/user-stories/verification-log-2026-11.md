@@ -218,3 +218,8 @@
 
 - 通过：`frontend-quality`、`repository-scope`、`workspace-discovery`、`page-stability` 共 40 项 E2E（含挂起 `/api/config` 与 `/api/repositories` 时返回首页仍显示列表且无骨架屏的新用例）、svelte-check、前端架构守卫。
 - 限制：用请求挂起模拟慢速链接，未做真机或真实限速网络验收；未重新核对其余功能组。
+
+本次局部核对（2026-11-03）：`default-mobile-ws-compression` 使实时连接压缩在手机与平板（主指针为粗指针）上默认开启，对应更新 US-H10；显式选择优先，桌面默认仍关闭，服务端协商不变。
+
+- 通过：`ws.test.ts` 默认值与显式选择用例，以及前端检查（见 PR）。
+- 限制：未做真机移动网络测速；未重新核验其余故事能力。

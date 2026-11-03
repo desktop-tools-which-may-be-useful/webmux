@@ -3,6 +3,7 @@ import {
   connect,
   protocols,
   setWsCompression,
+  wsCompression,
   type SocketConnection,
 } from "../src/ws";
 
@@ -245,5 +246,39 @@ describe("WebSocket compression opt-in", () => {
     ]);
     list.close();
     terminal.close();
+  });
+});
+
+describe("WebSocket compression default", () => {
+  const items = new Map<string, string>();
+  const device = (coarse: boolean) =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: coarse && query === "(pointer: coarse)",
+    }));
+
+  beforeEach(() => {
+    items.clear();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => items.set(key, value),
+    });
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is on for coarse-pointer devices and off for fine ones until chosen", () => {
+    device(true);
+    expect(wsCompression()).toBe(true);
+    device(false);
+    expect(wsCompression()).toBe(false);
+  });
+
+  it("lets an explicit choice override the device default", () => {
+    device(true);
+    setWsCompression(false);
+    expect(wsCompression()).toBe(false);
+    device(false);
+    setWsCompression(true);
+    expect(wsCompression()).toBe(true);
   });
 });
