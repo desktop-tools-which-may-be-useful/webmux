@@ -102,7 +102,16 @@ type Branches struct {
 	Bases              []Base   `json:"bases"`
 	DefaultBase        *string  `json:"defaultBase"`
 	DefaultBaseSubject string   `json:"defaultBaseSubject"`
+	DefaultBranch      *string  `json:"defaultBranch"`
 	DefaultParent      string   `json:"defaultParent"`
+}
+type BranchBaseRefresh struct {
+	Branch       string `json:"branch"`
+	Base         string `json:"base"`
+	BaseSubject  string `json:"baseSubject"`
+	BaseSource   string `json:"baseSource"`
+	Upstream     string `json:"upstream"`
+	FetchWarning string `json:"fetchWarning"`
 }
 type Reference struct {
 	RepositoryID string

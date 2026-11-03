@@ -441,6 +441,76 @@ test("multiple repositories keep every session visible through local failure, co
   await page.getByRole("button", { name: "取消", exact: true }).click();
 });
 
+test("upstream refresh selects remote commits and falls back to a creatable local base", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  const root = await repository(workDir);
+  const localHead = await git(root, "rev-parse", "main");
+  const remote = join(workDir, "remote.git");
+  await git(root, "clone", "--bare", root, remote);
+  await git(root, "remote", "add", "origin", remote);
+  await git(root, "push", "-u", "origin", "main");
+  const other = join(workDir, "upstream clone");
+  await git(root, "clone", remote, other);
+  const advance = async (subject: string) => {
+    await writeFile(join(other, "remote.txt"), subject + "\n");
+    await git(other, "add", "remote.txt");
+    await git(
+      other,
+      "-c",
+      "user.name=WebMux QA",
+      "-c",
+      "user.email=qa@example.invalid",
+      "commit",
+      "-m",
+      subject,
+    );
+    await git(other, "push", "origin", "main");
+    return git(other, "rev-parse", "HEAD");
+  };
+  const remoteOne = await advance("remote one");
+  await page.goto("/");
+  await register(page, root);
+  await openWorktreeCreation(page, false);
+  const base = page.getByLabel("起始提交", { exact: true });
+  await expect(base).toHaveValue(remoteOne);
+  await expect(
+    page.getByRole("status", { name: "上游刷新状态" }),
+  ).toContainText("远程最新 · origin/main · remote one");
+
+  const remoteTwo = await advance("remote two");
+  await page.getByRole("button", { name: "刷新上游", exact: true }).click();
+  await expect(base).toHaveValue(remoteTwo);
+  await expect(
+    page.getByRole("status", { name: "上游刷新状态" }),
+  ).toContainText("remote two");
+
+  await git(root, "remote", "set-url", "origin", join(workDir, "missing.git"));
+  await page.getByRole("button", { name: "刷新上游", exact: true }).click();
+  await expect(base).toHaveValue("initial（当前主工作区）");
+  await expect(
+    page.getByRole("status", { name: "上游刷新警告" }),
+  ).toContainText("保留本地基线");
+  await page
+    .getByLabel("新分支名称", { exact: true })
+    .fill("feature/from-local");
+  const path = await page
+    .getByLabel("新工作树完整路径", { exact: true })
+    .inputValue();
+  await page.getByRole("button", { name: "创建工作树", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  const repo = (await (await request.get("/api/repositories")).json())[0];
+  const created = repo.worktrees.find(
+    (item: { path: string }) => item.path === path,
+  );
+  expect(created).toMatchObject({
+    branch: "feature/from-local",
+    head: localHead,
+  });
+});
+
 test("existing branch creation, safe removal and stale destructive confirmation require fresh consent", async ({
   page,
   request,

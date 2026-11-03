@@ -46,6 +46,16 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 			reply(w, 200, wire.Branches(branches))
 		}
 	})
+	mux.HandleFunc("POST /api/repositories/{id}/branches/refresh", func(w http.ResponseWriter, r *http.Request) {
+		var req contract.RefreshBranchBaseRequest
+		if !decode(w, r, &req) {
+			return
+		}
+		result, err := s.Workspace.RefreshBranchBase(r.Context(), r.PathValue("id"), req.Branch)
+		if !workspaceFailure(w, err) {
+			reply(w, 200, wire.RefreshBranchBase(result))
+		}
+	})
 	mux.HandleFunc("POST /api/repositories/{id}/worktrees", func(w http.ResponseWriter, r *http.Request) {
 		var req contract.CreateWorktreeRequest
 		if !decode(w, r, &req) {

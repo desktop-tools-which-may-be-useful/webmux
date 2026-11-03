@@ -406,7 +406,19 @@ export const BranchesSchema = z.object({
   ),
   defaultBase: z.string().nullable(),
   defaultBaseSubject: z.string(),
+  defaultBranch: z.string().nullable(),
   defaultParent: z.string(),
+});
+export const RefreshBranchBaseRequestSchema = z.object({
+  branch: z.string().min(1),
+});
+export const RefreshBranchBaseResponseSchema = z.object({
+  branch: z.string(),
+  base: z.string(),
+  baseSubject: z.string(),
+  baseSource: z.enum(["local", "remote"]),
+  upstream: z.string(),
+  fetchWarning: z.string(),
 });
 export const CreateWorktreeRequestSchema = z.object({
   path: z.string(),

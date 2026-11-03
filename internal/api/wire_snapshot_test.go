@@ -823,6 +823,7 @@ func wireWorkspace(f *wireFixture) {
 	f.call("repositories", "GET", "/api/repositories", nil, 200)
 	f.call("repository-worktrees", "GET", base+"/worktrees", nil, 200)
 	f.call("repository-branches", "GET", base+"/branches", nil, 200)
+	f.call("repository-branch-refresh", "POST", base+"/branches/refresh", map[string]string{"branch": "main"}, 200)
 	linked := filepath.Join(filepath.Dir(f.root), "linked")
 	f.norm.path(linked, "<linked>")
 	tree := f.call("worktree-create", "POST", base+"/worktrees", map[string]string{"path": linked, "mode": "new", "branch": "linked", "base": "HEAD"}, 201)

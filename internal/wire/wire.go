@@ -131,8 +131,13 @@ func Branches(b workspace.Branches) contract.Branches {
 		Bases:              bases,
 		DefaultBase:        b.DefaultBase,
 		DefaultBaseSubject: b.DefaultBaseSubject,
+		DefaultBranch:      b.DefaultBranch,
 		DefaultParent:      b.DefaultParent,
 	}
+}
+
+func RefreshBranchBase(r workspace.BranchBaseRefresh) contract.RefreshBranchBaseResponse {
+	return contract.RefreshBranchBaseResponse(r)
 }
 
 func Preview(p workspace.Preview) contract.RemovalPreview {

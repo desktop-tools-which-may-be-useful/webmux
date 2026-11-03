@@ -58,7 +58,23 @@ type Branches struct {
 	Bases              []BranchBase `json:"bases"`
 	DefaultBase        *string      `json:"defaultBase"`
 	DefaultBaseSubject string       `json:"defaultBaseSubject"`
+	DefaultBranch      *string      `json:"defaultBranch"`
 	DefaultParent      string       `json:"defaultParent"`
+}
+
+// RefreshBranchBaseRequest selects the local branch whose upstream is fetched.
+type RefreshBranchBaseRequest struct {
+	Branch string `json:"branch"`
+}
+
+// RefreshBranchBaseResponse describes a remote base or a local fallback.
+type RefreshBranchBaseResponse struct {
+	Branch       string `json:"branch"`
+	Base         string `json:"base"`
+	BaseSubject  string `json:"baseSubject"`
+	BaseSource   string `json:"baseSource"`
+	Upstream     string `json:"upstream"`
+	FetchWarning string `json:"fetchWarning"`
 }
 
 // RegisterRepositoryRequest is the body of POST /api/repositories.

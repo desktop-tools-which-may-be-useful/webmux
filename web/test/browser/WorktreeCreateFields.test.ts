@@ -65,14 +65,54 @@ const branches = {
   bases: [{ name: "refs/heads/main", head, subject: "修复终端重连" }],
   defaultBase: head,
   defaultBaseSubject: "修复终端重连",
+  defaultBranch: "main",
   defaultParent: "/repos/project.worktrees",
 };
 
-function serve(status = 200, response = branches) {
+type RefreshHandler = (
+  branch: string,
+  signal: AbortSignal | null,
+) => Response | Promise<Response>;
+
+function localRefresh(response: typeof branches, branch: string) {
+  const selected = response.branches.find((item) => item.name === branch);
+  return {
+    branch,
+    base: selected?.head || response.defaultBase || "",
+    baseSubject:
+      response.bases.find((item) => item.name === `refs/heads/${branch}`)
+        ?.subject || response.defaultBaseSubject,
+    baseSource: "local",
+    upstream: "",
+    fetchWarning: "该分支未配置上游，保留本地基线",
+  };
+}
+
+function remoteRefresh(branch: string, base: string, subject = "remote") {
+  return {
+    branch,
+    base,
+    baseSubject: subject,
+    baseSource: "remote",
+    upstream: `origin/${branch}`,
+    fetchWarning: "",
+  };
+}
+
+function deferred<T>() {
+  return Promise.withResolvers<T>();
+}
+
+function serve(status = 200, response = branches, onrefresh?: RefreshHandler) {
   vi.stubGlobal(
     "fetch",
-    vi.fn<typeof fetch>(async (input) => {
+    vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input), location.href);
+      if (url.pathname === "/api/repositories/repo-1/branches/refresh") {
+        const body = JSON.parse(String(init?.body)) as { branch: string };
+        if (onrefresh) return onrefresh(body.branch, init?.signal ?? null);
+        return Response.json(localRefresh(response, body.branch));
+      }
       if (url.pathname !== "/api/repositories/repo-1/branches") {
         throw new Error(`Unexpected request: ${url.pathname}`);
       }
@@ -89,6 +129,11 @@ const branchInput = () =>
 const pathInput = () =>
   page.getByRole("textbox", { name: "新工作树完整路径", exact: true });
 const ready = () => page.getByRole("status", { name: "表单就绪" });
+const baseInput = () =>
+  page.getByRole("combobox", { name: "起始提交", exact: true });
+const startBranchInput = () =>
+  page.getByRole("combobox", { name: "起始分支", exact: true });
+const reference = () => page.getByRole("status", { name: "提交引用" });
 
 afterEach(async () => {
   try {
@@ -145,6 +190,7 @@ test("shows a detached default title without branch candidates", async () => {
     ...branches,
     bases: [],
     defaultBaseSubject: "独立提交 <title> & 引号",
+    defaultBranch: null,
   });
   render(Harness, { repository });
   await expect
@@ -270,4 +316,138 @@ test("search selects the literal branch and ignores occupied matches without los
   await expect
     .element(pathInput())
     .toHaveValue("/repos/project.worktrees/branch-042");
+});
+
+test("upstream refresh stays nonblocking and manual refresh updates the default", async () => {
+  const first = deferred<Response>();
+  const remoteHead = "b".repeat(40);
+  const manualHead = "c".repeat(40);
+  let calls = 0;
+  serve(200, branches, (branch) => {
+    calls += 1;
+    return calls === 1
+      ? first.promise
+      : Response.json(remoteRefresh(branch, manualHead, "手动刷新"));
+  });
+  render(Harness, { repository });
+
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/正在获取 main/);
+  await expect.element(reference()).toHaveTextContent(head);
+  await expect.element(ready()).toHaveTextContent("ready");
+  first.resolve(Response.json(remoteRefresh("main", remoteHead)));
+  await expect.element(reference()).toHaveTextContent(remoteHead);
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/远程最新 · origin\/main/);
+
+  await page.getByRole("button", { name: "刷新上游", exact: true }).click();
+  await expect.element(reference()).toHaveTextContent(manualHead);
+  expect(calls).toBe(2);
+});
+
+test("a late response cannot replace a newer branch selection", async () => {
+  const main = deferred<Response>();
+  const selectedHead = "b".repeat(40);
+  let mainSignal: AbortSignal | null = null;
+  serve(200, branches, (branch, signal) => {
+    if (branch === "main") {
+      mainSignal = signal;
+      return main.promise;
+    }
+    return Response.json(remoteRefresh(branch, selectedHead));
+  });
+  render(Harness, { repository });
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/正在获取 main/);
+
+  await startBranchInput().selectOptions("wt/taken-branch");
+  await expect.element(reference()).toHaveTextContent(selectedHead);
+  expect(mainSignal?.aborted).toBe(true);
+  const lateResponse = Response.json(remoteRefresh("main", "c".repeat(40)));
+  const lateRead = vi.spyOn(lateResponse, "json");
+  main.resolve(lateResponse);
+  await vi.waitFor(() => expect(lateRead).toHaveBeenCalled());
+  await Promise.resolve();
+  await expect.element(reference()).toHaveTextContent(selectedHead);
+  await expect.element(startBranchInput()).toHaveValue("wt/taken-branch");
+});
+
+test("a refresh response preserves manual base edits made after the request", async () => {
+  const pending = deferred<Response>();
+  serve(200, branches, () => pending.promise);
+  render(Harness, { repository });
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/正在获取 main/);
+  const manual = "d".repeat(40);
+  await baseInput().fill(manual);
+  const response = Response.json(remoteRefresh("main", "b".repeat(40)));
+  const responseRead = vi.spyOn(response, "json");
+  pending.resolve(response);
+  await vi.waitFor(() => expect(responseRead).toHaveBeenCalled());
+  await Promise.resolve();
+  await expect.element(reference()).toHaveTextContent(manual);
+  await expect.element(baseInput()).toHaveValue(manual);
+});
+
+test("a failed manual refresh clears the previous remote-latest label", async () => {
+  const remoteHead = "b".repeat(40);
+  let calls = 0;
+  serve(200, branches, (branch) => {
+    calls += 1;
+    return calls === 1
+      ? Response.json(remoteRefresh(branch, remoteHead))
+      : Response.json({ error: "fetch failed" }, { status: 500 });
+  });
+  render(Harness, { repository });
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/远程最新/);
+  await page.getByRole("button", { name: "刷新上游", exact: true }).click();
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新警告" }))
+    .toMatchTextContent(/保留当前基线/);
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .not.toBeInTheDocument();
+  await expect.element(reference()).toHaveTextContent(remoteHead);
+});
+
+test("failed refreshes keep the local base and form availability", async () => {
+  serve(200, branches, () =>
+    Response.json({ error: "fetch failed" }, { status: 500 }),
+  );
+  render(Harness, { repository });
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新警告" }))
+    .toMatchTextContent(/保留当前基线/);
+  await expect.element(reference()).toHaveTextContent(head);
+  await expect.element(ready()).toHaveTextContent("ready");
+});
+
+test("mode switches and unmount abort pending refreshes", async () => {
+  const pending = deferred<Response>();
+  const signals: Array<AbortSignal | null> = [];
+  serve(200, branches, (_branch, signal) => {
+    signals.push(signal);
+    return pending.promise;
+  });
+  render(Harness, { repository });
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/正在获取 main/);
+  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  expect(signals).toHaveLength(1);
+  expect(signals[0]?.aborted).toBe(true);
+
+  await page.getByRole("button", { name: "创建新分支", exact: true }).click();
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(/正在获取 main/);
+  expect(signals).toHaveLength(2);
+  await cleanup();
+  expect(signals[1]?.aborted).toBe(true);
 });

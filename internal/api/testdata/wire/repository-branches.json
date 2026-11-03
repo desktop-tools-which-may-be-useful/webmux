@@ -19,6 +19,7 @@
     ],
     "defaultBase": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
     "defaultBaseSubject": "initial",
+    "defaultBranch": "main",
     "defaultParent": "<repo>.worktrees"
   }
 }

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/hybrid"
@@ -40,12 +41,13 @@ type snapshotFlight struct {
 	waiters    int
 }
 type Service struct {
-	manager    *session.Manager
-	launches   *launch.Service
-	hybrids    *hybrid.Service
-	defaultCwd string
-	gitPath    string
-	stateDir   string
+	manager      *session.Manager
+	launches     *launch.Service
+	hybrids      *hybrid.Service
+	defaultCwd   string
+	gitPath      string
+	fetchTimeout time.Duration
+	stateDir     string
 	// worktreeGate bounds concurrent worktree status reads across every
 	// repository in a list, not just within one repository.
 	worktreeGate chan struct{}
@@ -69,7 +71,7 @@ func New(stateDir string, manager *session.Manager, launches *launch.Service, de
 	if stateDir == "" {
 		stateDir = config.DefaultStateDir()
 	}
-	s := &Service{manager: manager, launches: launches, defaultCwd: defaultCwd, stateDir: stateDir, worktreeGate: make(chan struct{}, 4), starts: make(map[string]int), reservations: make(map[string]bool), changed: make(chan struct{}), confirmations: make(map[string]confirmation)}
+	s := &Service{manager: manager, launches: launches, defaultCwd: defaultCwd, stateDir: stateDir, fetchTimeout: branchFetchTimeout, worktreeGate: make(chan struct{}, 4), starts: make(map[string]int), reservations: make(map[string]bool), changed: make(chan struct{}), confirmations: make(map[string]confirmation)}
 	git, err := exec.LookPath("git")
 	if err != nil {
 		s.capability.GitError = "Git 不可用: " + err.Error()

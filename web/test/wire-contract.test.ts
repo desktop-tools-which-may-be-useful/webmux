@@ -65,6 +65,7 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.PushTestResultSchema, ["push-test"]],
   [S.RepositoriesSchema, ["repositories-empty", "repositories"]],
   [S.BranchesSchema, ["repository-branches"]],
+  [S.RefreshBranchBaseResponseSchema, ["repository-branch-refresh"]],
   [
     S.RepositorySchema,
     [

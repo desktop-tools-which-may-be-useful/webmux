@@ -2,17 +2,28 @@
 
 ## 仓库与 worktree
 
-| 方法       | 路径                                                            | 说明                                                                                       |
-| ---------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| GET / POST | `/api/repositories`                                             | 列出仓库快照；POST `{path}` 登记仓库（新增 201，已存在 200）                               |
-| DELETE     | `/api/repositories/{id}`                                        | 仅移除登记，204                                                                            |
-| GET        | `/api/repositories/{id}/worktrees`                              | 刷新仓库快照（含 `checkedAt` 与 `worktrees`）                                              |
-| GET        | `/api/repositories/{id}/branches`                               | `{branches, bases, defaultBase, defaultBaseSubject, defaultParent}`，不 fetch              |
-| POST       | `/api/repositories/{id}/worktrees`                              | `{path, mode: "new", branch, base}` 或 `{path, mode: "existing", branch}`，201             |
-| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, blockers, forceAllowed}`        |
-| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204 |
+| 方法       | 路径                                                            | 说明                                                                                         |
+| ---------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| GET / POST | `/api/repositories`                                             | 列出仓库快照；POST `{path}` 登记仓库（新增 201，已存在 200）                                 |
+| DELETE     | `/api/repositories/{id}`                                        | 仅移除登记，204                                                                              |
+| GET        | `/api/repositories/{id}/worktrees`                              | 刷新仓库快照（含 `checkedAt` 与 `worktrees`）                                                |
+| GET        | `/api/repositories/{id}/branches`                               | `{branches, bases, defaultBase, defaultBaseSubject, defaultBranch, defaultParent}`，不 fetch |
+| POST       | `/api/repositories/{id}/branches/refresh`                       | `{branch}`；fetch 已配置上游并返回远程基线或本地回退                                         |
+| POST       | `/api/repositories/{id}/worktrees`                              | `{path, mode: "new", branch, base}` 或 `{path, mode: "existing", branch}`，201               |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, blockers, forceAllowed}`          |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204   |
 
-`bases` 每项为 `{name, head, subject}`，`subject` 是引用指向的提交标题。`defaultBase` 保持为主工作区的精确提交 OID，`defaultBaseSubject` 是对应标题（无默认提交时为空字符串）。浏览器用标题展示候选项，创建请求的 `base` 仍传引用或 OID。
+`bases` 每项为 `{name, head, subject}`，`subject` 是引用指向的提交标题。浏览器用标题展示候选项，创建请求的 `base` 仍传引用或 OID。
+
+- `defaultBase` 是主工作区的精确提交 OID，`defaultBaseSubject` 是对应标题；无默认提交时分别为 `null` 和空字符串。
+- `defaultBranch` 是主工作区当前本地分支。detached HEAD、无提交或 bare 仓库为 `null`，不会根据相同 OID 猜测。
+
+分支刷新仅接受已存在的本地分支及其已配置上游，不回退到同名 remote。
+
+- 请求：30 秒非交互 `git fetch --no-tags`，不会切换或重置本地分支。
+- 成功：`{branch, base, baseSubject, baseSource: "remote", upstream, fetchWarning: ""}`；仅当本地尖端是上游提交的祖先时，`base` 是本次上游跟踪引用的精确 OID。本地领先或分叉时保留本地尖端并说明。
+- 降级：无上游、上游为本机仓库、fetch 失败或超时仍返回 200。`baseSource` 为 `"local"`，`base` 回退到所选本地分支，`fetchWarning` 给出非阻断说明。
+- 安全：响应不包含 remote URL、命令行或原始 stderr；普通 GET 分支清单始终无网络行为。
 
 错误码：400 输入错误，404 不存在，409 冲突或确认过期，503 Git / 清单不可用，504 超时，500 存储或非预期错误。JSON 结构见 `internal/contract/workspace.go`。
 

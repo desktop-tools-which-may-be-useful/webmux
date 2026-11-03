@@ -386,6 +386,7 @@ func (s *Service) branches(ctx context.Context, r *repositoryState, repository R
 	for _, tree := range repository.Worktrees {
 		if tree.Kind == "main" && tree.Head != nil {
 			result.DefaultBase = tree.Head
+			result.DefaultBranch = tree.Branch
 			subject, err := s.git(ctx, r.entry.AnchorPath, "log", "-1", "--no-show-signature", "--format=%s", *tree.Head, "--")
 			if err != nil {
 				return result, err

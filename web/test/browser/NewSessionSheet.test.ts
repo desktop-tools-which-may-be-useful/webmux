@@ -112,7 +112,18 @@ beforeEach(() => {
           ],
           defaultBase: "a".repeat(40),
           defaultBaseSubject: "initial",
+          defaultBranch: "main",
           defaultParent: "/repos/project.worktrees",
+        });
+      }
+      if (path === "/api/repositories/repo-1/branches/refresh") {
+        return Response.json({
+          branch: "main",
+          base: "a".repeat(40),
+          baseSubject: "initial",
+          baseSource: "remote",
+          upstream: "origin/main",
+          fetchWarning: "",
         });
       }
       // Directory suggestions are irrelevant to these launch-choice tests.

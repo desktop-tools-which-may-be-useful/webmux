@@ -162,6 +162,78 @@ func TestWorkspaceAPIRoutesAndErrorBoundaries(t *testing.T) {
 		t.Fatal("legacy JSON missing explicit null workspace")
 	}
 }
+func gitWorkspaceAPI(t *testing.T, cwd string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", cwd}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Git fixture %v: %v %s", args, err, out)
+	}
+}
+
+func TestWorkspaceBranchRefreshAPI(t *testing.T) {
+	handler, _, _, root := workspaceAPI(t)
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)
+	var repository contract.Repository
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	base := "/api/repositories/" + repository.ID
+	refreshURL := base + "/branches/refresh"
+	for _, status := range []int{401, 403} {
+		request := httptest.NewRequest("POST", refreshURL, strings.NewReader(`{"branch":"main"}`))
+		if status == 403 {
+			request.Header.Set("Authorization", "Bearer secret")
+			request.Header.Set("Origin", "https://evil.example")
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != status {
+			t.Fatalf("refresh auth boundary: got %d want %d", recorder.Code, status)
+		}
+	}
+
+	listed := workspaceRequest(t, handler, "GET", base+"/branches", nil, 200)
+	var branches contract.Branches
+	if err := json.Unmarshal(listed.Body.Bytes(), &branches); err != nil {
+		t.Fatal(err)
+	}
+	if branches.DefaultBranch == nil || *branches.DefaultBranch != "main" {
+		t.Fatalf("default branch: %+v", branches)
+	}
+	gitWorkspaceAPI(t, root, "branch", "standalone")
+	workspaceRequest(t, handler, "POST", refreshURL, contract.RefreshBranchBaseRequest{}, 400)
+	workspaceRequest(t, handler, "POST", refreshURL, contract.RefreshBranchBaseRequest{Branch: "missing"}, 404)
+	noUpstream := workspaceRequest(t, handler, "POST", refreshURL, contract.RefreshBranchBaseRequest{Branch: "standalone"}, 200)
+	var fallback contract.RefreshBranchBaseResponse
+	if err := json.Unmarshal(noUpstream.Body.Bytes(), &fallback); err != nil {
+		t.Fatal(err)
+	}
+	if fallback.BaseSource != "local" || fallback.FetchWarning == "" || fallback.Upstream != "" {
+		t.Fatalf("no-upstream response: %+v", fallback)
+	}
+
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	gitWorkspaceAPI(t, root, "clone", "--bare", root, remote)
+	gitWorkspaceAPI(t, root, "remote", "add", "origin", remote)
+	gitWorkspaceAPI(t, root, "push", "-u", "origin", "main")
+	refreshed := workspaceRequest(t, handler, "POST", refreshURL, contract.RefreshBranchBaseRequest{Branch: "main"}, 200)
+	var remoteBase contract.RefreshBranchBaseResponse
+	if err := json.Unmarshal(refreshed.Body.Bytes(), &remoteBase); err != nil {
+		t.Fatal(err)
+	}
+	if remoteBase.BaseSource != "remote" || remoteBase.Upstream != "origin/main" || remoteBase.FetchWarning != "" || remoteBase.Base == "" {
+		t.Fatalf("remote response: %+v", remoteBase)
+	}
+	gitWorkspaceAPI(t, root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "missing.git"))
+	failed := workspaceRequest(t, handler, "POST", refreshURL, contract.RefreshBranchBaseRequest{Branch: "main"}, 200)
+	if err := json.Unmarshal(failed.Body.Bytes(), &fallback); err != nil {
+		t.Fatal(err)
+	}
+	if fallback.BaseSource != "local" || fallback.Base != remoteBase.Base || fallback.FetchWarning == "" || strings.Contains(fallback.FetchWarning, "missing.git") {
+		t.Fatalf("failed-fetch response: %+v", fallback)
+	}
+}
+
 func TestWorkspaceAPIConfigDegradationAndTimeout(t *testing.T) {
 	cwd := t.TempDir()
 	t.Setenv("PATH", t.TempDir())

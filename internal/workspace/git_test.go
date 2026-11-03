@@ -105,6 +105,22 @@ func TestBareUnbornAndBranchBaselines(t *testing.T) {
 		t.Fatalf("bare linked create: %+v %v", tree, err)
 	}
 }
+func TestBranchesDefaultBranchUsesMainWorktree(t *testing.T) {
+	t.Parallel()
+	isolateGit(t)
+	root := initRepo(t)
+	gitTest(t, root, "branch", "same-head")
+	s, _ := testService(t, t.TempDir(), root)
+	r := registerTest(t, s, root)
+	branches, err := s.Branches(context.Background(), r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branches.DefaultBranch == nil || *branches.DefaultBranch != "main" {
+		t.Fatalf("default branch guessed from shared OID: %+v", branches)
+	}
+}
+
 func TestBranchesDescribeCommitsIncludingDetachedDefault(t *testing.T) {
 	t.Parallel()
 	isolateGit(t)
@@ -120,7 +136,7 @@ func TestBranchesDescribeCommitsIncludingDetachedDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if branches.DefaultBase == nil || *branches.DefaultBase != head || branches.DefaultBaseSubject != "独立提交 <title> & 引号" {
+	if branches.DefaultBase == nil || *branches.DefaultBase != head || branches.DefaultBaseSubject != "独立提交 <title> & 引号" || branches.DefaultBranch != nil {
 		t.Fatalf("detached default: %+v", branches)
 	}
 	subjects := map[string]string{}

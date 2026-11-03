@@ -2,10 +2,17 @@
   import { errorMessage } from "../error";
   import { api } from "../api";
   import { suggestWorktreeBranch } from "../branchName";
-  import { BranchesSchema, type Repository } from "../schemas";
+  import {
+    BranchesSchema,
+    RefreshBranchBaseRequestSchema,
+    RefreshBranchBaseResponseSchema,
+    type Repository,
+  } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import * as NativeSelect from "$lib/components/ui/native-select";
+  import IconRefresh from "~icons/tabler/refresh";
   import * as Command from "$lib/components/ui/command";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import type { z } from "zod";
@@ -27,6 +34,16 @@
   let data = $state<z.infer<typeof BranchesSchema> | null>(null);
   let error = $state("");
   let loading = $state(false);
+  let startBranch = $state("");
+  let refreshing = $state(false);
+  let refreshWarning = $state("");
+  let upstream = $state("");
+  let baseSource = $state<"local" | "remote" | "">("");
+  let baseSubject = $state("");
+  let lastRefreshedAt = $state<Date | null>(null);
+  let refreshGeneration = 0;
+  let baseEditVersion = 0;
+  let refreshController: AbortController | null = null;
   let pathEdited = $state(false);
   let branchEdited = $state(false);
   const baseChoices = $derived([
@@ -60,10 +77,91 @@
     branch = suggestedBranch();
   }
 
+  function clearRefresh() {
+    refreshGeneration += 1;
+    refreshController?.abort();
+    refreshController = null;
+    refreshing = false;
+    refreshWarning = "";
+    upstream = "";
+    lastRefreshedAt = null;
+  }
+
+  function refreshUpstream(branchName: string) {
+    const generation = ++refreshGeneration;
+    const editVersion = baseEditVersion;
+    const repositoryID = repository.id;
+    refreshController?.abort();
+    const controller = new AbortController();
+    refreshController = controller;
+    refreshing = true;
+    refreshWarning = "";
+    void api(
+      `/repositories/${repositoryID}/branches/refresh`,
+      RefreshBranchBaseResponseSchema,
+      "POST",
+      { branch: branchName },
+      controller.signal,
+      RefreshBranchBaseRequestSchema,
+    )
+      .then((value) => {
+        if (
+          generation !== refreshGeneration ||
+          mode !== "new" ||
+          repository.id !== repositoryID ||
+          startBranch !== branchName
+        )
+          return;
+        upstream = value.upstream;
+        refreshWarning = value.fetchWarning;
+        lastRefreshedAt = value.baseSource === "remote" ? new Date() : null;
+        if (editVersion === baseEditVersion) {
+          base = value.base;
+          baseSource = value.baseSource;
+          baseSubject = value.baseSubject;
+        }
+      })
+      .catch((err: unknown) => {
+        if (generation !== refreshGeneration) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        refreshWarning = "上游刷新失败，保留当前基线；请重试";
+        baseSource = "";
+        upstream = "";
+        lastRefreshedAt = null;
+      })
+      .finally(() => {
+        if (generation !== refreshGeneration) return;
+        refreshing = false;
+        refreshController = null;
+      });
+  }
+
+  function chooseStartBranch(name: string) {
+    startBranch = name;
+    clearRefresh();
+    const selected = data?.branches.find((item) => item.name === name);
+    if (!selected) {
+      base = data?.defaultBase || "";
+      baseSource = "";
+      baseSubject = data?.defaultBaseSubject || "";
+      return;
+    }
+    base = selected.head;
+    baseSource = "local";
+    baseSubject =
+      data?.bases.find((item) => item.name === `refs/heads/${name}`)?.subject ||
+      "";
+    refreshUpstream(name);
+  }
+
   $effect(() => {
     const id = repository.id;
     let active = true;
+    clearRefresh();
     data = null;
+    startBranch = "";
+    baseSource = "";
+    baseSubject = "";
     error = "";
     loading = true;
     pathEdited = false;
@@ -75,7 +173,10 @@
         if (!active) return;
         data = value;
         base = value.defaultBase || "";
+        baseSubject = value.defaultBaseSubject;
         fillSuggestedBranch();
+        startBranch = value.defaultBranch || "";
+        if (mode === "new" && startBranch) chooseStartBranch(startBranch);
       })
       .catch((err) => {
         if (active) error = errorMessage(err);
@@ -85,6 +186,7 @@
       });
     return () => {
       active = false;
+      clearRefresh();
     };
   });
   $effect(() => {
@@ -115,6 +217,7 @@
           branchEdited = false;
           branch = "";
           fillSuggestedBranch();
+          if (startBranch) chooseStartBranch(startBranch);
         }}>创建新分支</Button
       >
       <Button
@@ -124,6 +227,8 @@
         onclick={() => {
           if (mode === "existing") return;
           mode = "existing";
+          clearRefresh();
+          baseSource = "";
           branch = "";
         }}>使用已有分支</Button
       >
@@ -134,6 +239,71 @@
       {error}
     </p>{/if}
   {#if mode === "new"}
+    <div class="space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <Label for="worktree-start-branch">起始分支</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!startBranch || refreshing || disabled}
+          aria-busy={refreshing}
+          onclick={() => refreshUpstream(startBranch)}
+          ><IconRefresh
+            class={refreshing ? "animate-spin motion-reduce:animate-none" : ""}
+            aria-hidden="true"
+          />{refreshing ? "正在刷新" : "刷新上游"}</Button
+        >
+      </div>
+      <NativeSelect.Root
+        id="worktree-start-branch"
+        class="w-full"
+        value={startBranch}
+        disabled={disabled || loading || !data}
+        onchange={(event) => chooseStartBranch(event.currentTarget.value)}
+      >
+        {#if !startBranch}<NativeSelect.Option value=""
+            >选择本地分支</NativeSelect.Option
+          >{/if}
+        {#each data?.branches || [] as item (item.name)}
+          <NativeSelect.Option value={item.name}
+            >{item.name}</NativeSelect.Option
+          >
+        {/each}
+      </NativeSelect.Root>
+      {#if refreshing}
+        <p
+          role="status"
+          aria-label="上游刷新状态"
+          class="text-xs text-muted-foreground"
+        >
+          正在获取 {startBranch} 对应的上游最新提交；可继续编辑或创建。
+        </p>
+      {:else if baseSource === "remote" && upstream}
+        <p
+          role="status"
+          aria-label="上游刷新状态"
+          class="break-all text-xs text-muted-foreground"
+        >
+          远程最新 · {upstream} · {baseSubject || "无标题提交"}
+          {#if lastRefreshedAt}
+            · 最近刷新 {lastRefreshedAt.toLocaleTimeString()}{/if}
+        </p>
+      {:else if baseSource === "local" && startBranch}
+        <p
+          role="status"
+          aria-label="上游刷新状态"
+          class="break-all text-xs text-muted-foreground"
+        >
+          本地：{startBranch}
+        </p>
+      {/if}
+      {#if refreshWarning}
+        <p role="status" aria-label="上游刷新警告" class="text-xs text-warning">
+          {refreshWarning}
+        </p>
+      {/if}
+    </div>
     <div class="space-y-2">
       <div class="flex items-center justify-between gap-2">
         <Label for="worktree-branch">新分支名称</Label>
@@ -171,6 +341,11 @@
         value={baseLabel}
         oninput={(event) => {
           const value = event.currentTarget.value;
+          baseEditVersion += 1;
+          baseSource = "";
+          baseSubject = "";
+          upstream = "";
+          lastRefreshedAt = null;
           base =
             baseChoices.find((item) => item.label === value)?.value ?? value;
         }}
@@ -288,7 +463,7 @@
     </p>
   </div>
   <p class="text-xs text-muted-foreground">
-    仅检出版本控制内容；不会 fetch、复制 .env
+    仅检出版本控制内容；只会在刷新起始分支上游时 fetch，不会复制 .env
     或安装依赖。创建成功后即使命令启动失败，工作树与分支仍保留。
   </p>
 </div>
