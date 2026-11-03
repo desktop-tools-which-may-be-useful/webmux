@@ -362,10 +362,11 @@ test("4x CPU: settings and a large code file stay usable and stable", async ({
   await expect(
     page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("export const value0");
-  const editor = page.locator("[data-code-reader]:visible");
-  await editor.evaluate(
-    (element) => (element.scrollTop = element.scrollHeight),
-  );
+  // Reach the end with real input, as a user would. A programmatic scrollTop
+  // jump is not input, so the virtualised rows it repositions only count as
+  // expected while the earlier file click is under 500 ms old.
+  await page.locator("[data-code-reader]:visible").focus();
+  await page.keyboard.press("End");
   await expect(
     page.locator("[data-code-reader]:visible [data-content]"),
   ).toContainText("export const value2999");
