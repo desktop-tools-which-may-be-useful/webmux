@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The Release workflow runs the complete suite before publishing.
+  workflow_call:
+    inputs:
+      full:
+        description: Skip change detection and run every job
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -11,7 +18,7 @@ permissions:
 # A newer push to the same pull request supersedes its running checks; main
 # runs always finish so every merged commit keeps a complete result.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: test-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Platform-independent suites run on Ubuntu. macOS re-runs only what the OS
@@ -41,6 +48,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          FORCE_FULL: ${{ inputs.full }}
         run: |
           base="${BASE_SHA:-}"
           head="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
@@ -54,6 +62,9 @@ jobs:
             echo "classify: full run ($1)"
             exit 0
           }
+          if [ "${FORCE_FULL:-}" = true ]; then
+            full_run "forced by caller"
+          fi
           # The rules that decide which tests to skip must not come from the
           # pull request under test. Validate the base here, force a full run
           # for any tooling change independently of the classifier, then run

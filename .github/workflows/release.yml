@@ -18,6 +18,15 @@ concurrency:
 # runner, receives nothing but SHA256SUMS and executes no third-party build
 # code, so no build dependency can read the key.
 jobs:
+  # The complete Test suite (every platform, E2E, Storybook, performance),
+  # with change detection disabled. Nothing is signed or published unless it
+  # passes.
+  checks:
+    name: Checks
+    uses: ./.github/workflows/test.yml
+    with:
+      full: true
+
   build:
     name: Build and test
     runs-on: ubuntu-latest
@@ -83,7 +92,7 @@ jobs:
 
   sign:
     name: Sign SHA256SUMS
-    needs: build
+    needs: [build, checks]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -113,7 +122,7 @@ jobs:
 
   publish:
     name: Publish the Release
-    needs: [build, sign]
+    needs: [build, checks, sign]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
