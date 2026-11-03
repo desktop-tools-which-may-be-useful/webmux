@@ -7,6 +7,8 @@ import (
 	"errors"
 	"time"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/tray"
 )
@@ -27,7 +29,7 @@ func (a *App) openLocal() {
 func (a *App) openTunnelSettings() {
 	if url := tray.TunnelEntry(a.snapshot()).SettingsURL; url != "" {
 		if err := OpenURL(url); err != nil {
-			a.fail("无法打开公网访问设置", err)
+			a.fail("无法打开 Cloudflare 设置", err)
 		}
 	}
 }
@@ -106,7 +108,7 @@ func (a *App) toggleTunnel() {
 	}
 	snap := a.snapshot()
 	if tray.TunnelEntry(snap).SettingsURL != "" {
-		messageBox("开启公网隧道失败："+err.Error()+"\n\n请打开“公网访问设置”查看状态。WebMux 登录 Token 需要至少 43 个字符，登录 Token 仍由配置文件或配置命令管理。", 0)
+		messageBox("开启公网隧道失败："+err.Error()+"\n\n请打开“公网访问 → Cloudflare 设置…”查看状态。WebMux 登录 Token 需要至少 43 个字符，登录 Token 仍由配置文件或配置命令管理。", 0)
 		return
 	}
 	a.fail("开启公网隧道失败", err)
@@ -135,5 +137,98 @@ func (a *App) toggleLANAccess() {
 	a.sup.Refresh()
 	if snap.State == tray.StateExternal {
 		a.notifier.Show("WebMux", "已更新监听地址，重启外部运行的 WebMux 后生效")
+	}
+}
+
+// toggleTailscale turns the managed Tailscale entry off, or on as Serve in
+// one click. When detection shows Tailscale is not ready, or applying the
+// entry fails, it offers the web settings page instead.
+func (a *App) toggleTailscale() {
+	snap := a.snapshot()
+	entry := tray.TailscaleEntry(snap)
+	if !entry.Show {
+		return
+	}
+	svc := a.svc.Current()
+	if entry.Checked {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, err := svc.SetTailscale(ctx, tray.TailscaleDisable(*snap.Status.Tailscale))
+		cancel()
+		a.sup.Refresh()
+		if err != nil {
+			a.fail("关闭 Tailscale 失败", err)
+		}
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	status, err := svc.Tailscale(ctx)
+	cancel()
+	if err != nil {
+		a.fail("检测 Tailscale 失败", err)
+		return
+	}
+	if problem := tray.TailscaleEnableProblem(status); problem != "" {
+		a.offerTailscaleSettings("Tailscale 尚未配置好："+problem, entry.SettingsURL)
+		return
+	}
+	update, consent := tray.TailscaleEnable(status)
+	if consent != "" && !confirm(consent) {
+		a.kickUI()
+		return
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	_, err = svc.SetTailscale(ctx, update)
+	cancel()
+	a.sup.Refresh()
+	if err != nil {
+		a.offerTailscaleSettings("开启 Tailscale Serve 失败："+err.Error(), entry.SettingsURL)
+		return
+	}
+	if result := a.awaitTailscale(svc); result.State == contract.TailscaleFailed {
+		a.offerTailscaleSettings("开启 Tailscale Serve 失败："+result.Error, entry.SettingsURL)
+	} else if result.State == contract.TailscaleReady {
+		a.notifier.Show("WebMux", "Tailscale Serve 已开启："+result.PublicURL)
+	}
+}
+
+// awaitTailscale follows the applied entry for up to a minute, returning
+// its last reported summary.
+func (a *App) awaitTailscale(svc *tray.WSLService) contract.TailscaleSummary {
+	var last contract.TailscaleSummary
+	for range 60 {
+		time.Sleep(time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		status, err := svc.Status(ctx)
+		cancel()
+		if err != nil || status.Tailscale == nil {
+			continue
+		}
+		last = *status.Tailscale
+		if last.State != contract.TailscaleStarting {
+			break
+		}
+	}
+	a.sup.Refresh()
+	return last
+}
+
+// offerTailscaleSettings explains the problem and opens the web settings
+// page when the user agrees.
+func (a *App) offerTailscaleSettings(problem, url string) {
+	if url == "" {
+		messageBox(problem, windows.MB_OK|windows.MB_ICONWARNING)
+		return
+	}
+	if messageBox(problem+"\n\n是否在浏览器中打开 WebMux 的 Tailscale 设置完成配置？", windows.MB_YESNO|windows.MB_ICONWARNING) == idYes {
+		a.openTailscaleSettings(url)
+	}
+}
+
+func (a *App) openTailscaleSettings(url string) {
+	if url == "" {
+		return
+	}
+	if err := OpenURL(url); err != nil {
+		a.fail("无法打开 Tailscale 设置", err)
 	}
 }

@@ -439,7 +439,9 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	deps.Tailscale = tsCtl
-	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels)
+	// Remote-access systems report their links through one interface; a new
+	// forwarding system only needs to be appended here.
+	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels, tsCtl, []accessProvider{tunnels, tsCtl})
 	server := &http.Server{
 		Handler:           api.New(deps),
 		ReadHeaderTimeout: 10 * time.Second,

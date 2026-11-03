@@ -44,7 +44,8 @@
   - 优先本机 API，必要时使用运行时记录与 TCP 健康检查；
   - 区分运行、未运行、无响应或错误并给出退出码；
   - `--json` 提供版本化结果，只有同时 `--reveal-token` 才揭示 token；
-  - 提示 listen/token 配置与运行实例的差异。
+  - 提示 listen/token 配置与运行实例的差异；
+  - 经本机 API 时在 `urls.access` 与文本 `Access:` 行列出服务端托管且已就绪的远程访问入口（Cloudflare Tunnel、Tailscale Serve/Funnel），不含 token。
 - **US-M07 停止指定实例**：作为部署者，我希望可靠地停止自己启动的服务，以便清理后台运行实例。
   验收要点：
   - `stop` 优先经本机控制面关闭，必要时验证运行记录后退回 SIGTERM 和超时 SIGKILL；
@@ -190,10 +191,11 @@
   - 转发 HTTP 与 WebSocket 并按请求 `Host` 校验同源 `Origin`，不限制请求 `Host`，支持任意 IP 或主机名（如 Tailscale MagicDNS）；
   - 退出托盘即停止本机转发；
   - 托盘运行时不修改防火墙；安装版可在安装时添加专用网络与域网络的放行规则（US-O12），公用网络或未添加规则时由 Windows 原生提示处理。
-- **US-O09 打开和复制受保护入口**：作为 Windows 使用者，我希望从托盘打开页面、在统一的“复制链接”子菜单中复制本机/远程/经托盘转发/公网链接，或复制 token，以便把访问入口带到另一设备。
+- **US-O09 打开和复制受保护入口**：作为 Windows 使用者，我希望从托盘打开页面、在统一的“复制链接”子菜单中复制本机/远程/经托盘转发链接以及所有已就绪的远程访问入口（Cloudflare Tunnel、Tailscale Serve/Funnel 等）的域名链接，或复制 token，以便把访问入口带到另一设备。
   验收要点：
   - 操作时从 WSL 获取 token，不在 Windows 配置中保存；
   - 复制链接可带 `#token=`，不配置 token 时复制普通链接；
+  - 远程访问入口按服务端 `urls.access` 的顺序逐项显示“URL（入口名称 · 公网/仅私有网络）”，托盘不按入口类型写专门代码，新入口无需修改托盘；旧服务端缺少该字段时回退为就绪的 Cloudflare 公网链接；
   - 仅服务明确返回 `settingsAvailable: true` 时提供“公网访问设置”，打开本机 `/settings/tunnel` 并沿用 token 片段交接；
   - 敏感剪贴板排除历史和云同步，60 秒后仅在内容未被替换时清空；
   - 通知只显示无 token 地址。
@@ -324,6 +326,16 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
   - 恢复配置文件设置前确认，删除覆盖并关闭本实例入口，TOML 下次启动生效；
   - 设置文件损坏或被锁时禁止写入且托管保持关闭；
   - 会话内进程经本机 API 修改返回 403。
+- **US-P08 托盘一键开启 Tailscale**：作为 Windows 托盘使用者，我希望在托盘“公网访问”子菜单中一键开启或关闭 Tailscale Serve，以便不打开网页就能得到 tailnet HTTPS 入口。
+  验收要点：
+  - 托盘把 Cloudflare Tunnel 与 Tailscale 的开关、状态行和各自设置入口收进“公网访问”二级菜单；
+  - `/local/v1/status` 的 `tailscale` 提供不触发检测的模式、端口、provider、状态、地址与错误，旧服务端缺少该字段时不显示 Tailscale 项；
+  - 勾选跟随保存的模式，failed 仍勾选以便一键关闭；
+  - 开启前经本机 API 刷新检测，未安装或未登录、未运行、HTTPS 证书未就绪、WSL 非 mirrored 却只有 Windows 节点、设置不可保存或 Token 过弱时弹窗说明原因并可打开 `/settings/tailscale`；
+  - 只开启 Serve（Funnel 仍由网页确认），保留已配置端口；
+  - 配置为 `auto` 而只检测到 Windows 节点时先确认，同意后才以 `provider = "windows"` 保存；
+  - 保存失败或应用后转为 failed 同样引导到网页，ready 时通知地址；
+  - 会话内进程经本机 API 修改仍为 403。
 
 依据：
 
@@ -332,3 +344,4 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
 - [启动与 Token](../../cmd/webmux/main.go)、[来源注册表](../../internal/api/public.go)
 - [状态与设置 API](../../internal/api/tailscale.go)、[API 用例](../../internal/api/tailscale_test.go)、[设置页](../../web/src/pages/TailscaleSettingsPage.svelte)
 - [设置表单](../../web/src/components/TailscaleConfiguration.svelte)、[设置卡片](../../web/src/components/TailscaleSettings.svelte)、[Tailscale 指南](../tailscale.md)。
+- 托盘一键开启：[托盘菜单视图](../../internal/tray/menuview.go)、[视图用例](../../internal/tray/menuview_test.go)、[托盘操作](../../internal/tray/winui/links.go)、[本机客户端](../../internal/localclient/client.go)、[本机状态](../../cmd/webmux/local.go)。

@@ -218,8 +218,8 @@ type TunnelItem struct {
 	// Show is false when no instance runs or it cannot control its tunnel.
 	Show, Checked bool
 	SettingsURL   string
-	// Info is the state line; PublicURL is set only when ready.
-	Info, PublicURL string
+	// Info is the state line.
+	Info string
 }
 
 // TunnelEntry derives the tunnel entries from the running instance.
@@ -237,11 +237,132 @@ func TunnelEntry(snap Snapshot) TunnelItem {
 		item.Info = "公网隧道：正在连接"
 	case contract.TunnelReady:
 		item.Info = "公网隧道：" + t.PublicURL
-		item.PublicURL = t.PublicURL
 	case contract.TunnelFailed:
 		item.Info = "公网隧道失败：" + t.Error
 	}
 	return item
+}
+
+// TailscaleItem describes the Tailscale Serve/Funnel entries.
+type TailscaleItem struct {
+	// Show is false when no instance runs or it predates Tailscale control.
+	Show, Checked bool
+	// Title names the toggle; Info is the state line or "".
+	Title, Info string
+	SettingsURL string
+}
+
+// TailscaleEntry derives the Tailscale entries from the running instance.
+// Checked follows the saved mode, so a failed entry stays checked.
+func TailscaleEntry(snap Snapshot) TailscaleItem {
+	t := snap.Status.Tailscale
+	if !snap.HasStatus || snap.Status.State != contract.StateRunning || t == nil || !snap.Actions().Access {
+		return TailscaleItem{}
+	}
+	item := TailscaleItem{Show: true, Checked: t.Mode != "" && t.Mode != "off", Title: "Tailscale Serve（仅 tailnet）"}
+	if t.Mode == "funnel" {
+		item.Title = "Tailscale Funnel（公网）"
+	}
+	if snap.Status.URLs.Local != "" {
+		item.SettingsURL = strings.TrimRight(snap.Status.URLs.Local, "/") + "/settings/tailscale"
+	}
+	switch t.State {
+	case contract.TailscaleStarting:
+		item.Info = "Tailscale：正在应用"
+	case contract.TailscaleReady:
+		item.Info = "Tailscale：" + t.PublicURL
+	case contract.TailscaleFailed:
+		item.Info = "Tailscale 失败：" + t.Error
+	}
+	return item
+}
+
+// TailscaleEnableProblem explains why one-click Serve cannot work with the
+// detected Tailscale, or returns "" when it can be enabled.
+func TailscaleEnableProblem(st contract.TailscaleStatus) string {
+	switch {
+	case st.Provider == "" || st.Provider == "none" || st.BackendState == "unavailable":
+		return "未检测到可用的 Tailscale，请先安装并登录"
+	case st.BackendState == "needs-login":
+		return "Tailscale 尚未登录"
+	case st.BackendState != "running":
+		return "Tailscale 未运行（状态：" + st.BackendState + "）"
+	case !st.HTTPSReady:
+		return "节点的 HTTPS 证书未就绪，请在 Tailscale 管理台启用 MagicDNS 与 HTTPS"
+	case st.WSL != nil && st.Provider == "windows" && st.WSL.NetworkingMode != "mirrored":
+		return "WSL 不是 mirrored 网络模式，无法托管 Windows 上的 Tailscale"
+	case !st.StorageAvailable:
+		return "设置无法保存：" + st.StorageError
+	case !st.CanEnable:
+		return st.EnableBlockedReason
+	}
+	return ""
+}
+
+// TailscaleEnable is the one-click update for the detected status st: Serve
+// (tailnet only; Funnel stays a web-page decision) with the configured port.
+// Configured "auto" never manages the Windows node, so when only Windows
+// Tailscale serves this WSL instance the update names provider "windows"
+// and consent is the question the user must accept first.
+func TailscaleEnable(st contract.TailscaleStatus) (update contract.TailscaleSettingsUpdate, consent string) {
+	update = contract.TailscaleSettingsUpdate{Mode: "serve", Port: st.Port, Provider: st.ConfiguredProvider}
+	if update.Provider == "" {
+		update.Provider = "auto"
+	}
+	if st.WSL != nil && st.Provider == "windows" && update.Provider != "windows" {
+		update.Provider = "windows"
+		node := st.DNSName
+		if node == "" {
+			node = "Windows 节点"
+		}
+		consent = "检测到的是 Windows 上的 Tailscale（" + node + "）。\n\nWebMux 将在该 Windows 节点上添加 Tailscale Serve 入口（仅 tailnet 内可访问），并把 Tailscale 来源设置为 Windows。\n\n确定开启？"
+	}
+	return update, consent
+}
+
+// TailscaleDisable turns the entry off, keeping the configured port and
+// provider.
+func TailscaleDisable(t contract.TailscaleSummary) contract.TailscaleSettingsUpdate {
+	provider := t.Provider
+	if provider == "" {
+		provider = "auto"
+	}
+	return contract.TailscaleSettingsUpdate{Mode: "off", Port: t.Port, Provider: provider}
+}
+
+// AccessItem is one copyable link of a remote-access provider.
+type AccessItem struct {
+	URL, Label string
+}
+
+// AccessEntries lists the ready links of every remote-access provider the
+// running instance reports (Cloudflare Tunnel, Tailscale Serve/Funnel, ...)
+// in server order. Providers need no tray-side code: the label comes from
+// the server. Servers that predate URLs.Access only report the tunnel URL.
+func AccessEntries(snap Snapshot) []AccessItem {
+	if !snap.HasStatus || snap.Status.State != contract.StateRunning || !snap.Actions().Access {
+		return nil
+	}
+	links := snap.Status.URLs.Access
+	if t := snap.Status.Tunnel; len(links) == 0 && t != nil && t.State == contract.TunnelReady && t.PublicURL != "" {
+		links = []contract.AccessLink{{Provider: "cloudflare", Label: "Cloudflare Tunnel", URL: t.PublicURL, Public: true}}
+	}
+	items := make([]AccessItem, 0, len(links))
+	for _, l := range links {
+		if l.URL == "" {
+			continue
+		}
+		reach := "仅私有网络"
+		if l.Public {
+			reach = "公网"
+		}
+		label := l.Label
+		if label == "" {
+			label = l.Provider
+		}
+		items = append(items, AccessItem{URL: l.URL, Label: fmt.Sprintf("%s（%s · %s）", l.URL, label, reach)})
+	}
+	return items
 }
 
 // PushItem describes the phone push hint under the tunnel entries.
@@ -279,7 +400,7 @@ func PushEntry(snap Snapshot) PushItem {
 }
 
 const pushPhoneSteps = "在手机上开启推送：\n" +
-	"1. 点击托盘“复制链接 → 公网链接”，在手机浏览器中打开；\n" +
+	"1. 在托盘“复制链接”中点击 Cloudflare Tunnel 的 https 链接，在手机浏览器中打开；\n" +
 	"2. iPhone / iPad（iOS 16.4 以上）：在 Safari 中点“分享 → 添加到主屏幕”，从主屏幕图标打开 WebMux 并输入 Token；\n" +
 	"3. 进入 设置 → 通知推送，打开开关。"
 
@@ -300,7 +421,7 @@ func pushGuide(p *contract.PushStatus, local string, webSettings bool) string {
 				"3. 保存并启用公网访问，无需重启 WebMux。\n\n")
 		} else {
 			b.WriteString("2. 当前服务端尚不支持网页公网访问设置，请升级服务端，或在配置文件的 [tunnel] 中写入 token（tunnel.token）与 hostname（tunnel.hostname）；\n" +
-				"3. 修改旧版服务端配置后重启 WebMux，再开启“公网隧道（Cloudflare）”。\n\n")
+				"3. 修改旧版服务端配置后重启 WebMux，再在托盘“公网访问”中开启“Cloudflare Tunnel”。\n\n")
 		}
 	} else {
 		b.WriteString("公网地址：" + p.PublicOrigin + "\n\n")

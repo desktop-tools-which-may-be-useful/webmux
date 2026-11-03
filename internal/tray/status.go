@@ -233,7 +233,9 @@ func (s *Supervisor) schedule(ls *loopState, now time.Time) {
 	case StateRestarting, StateStopping:
 	default:
 		ls.nextStatus = now.Add(StatusInterval)
-		if t := ls.Status.Tunnel; ls.HasStatus && t != nil && t.State == contract.TunnelStarting {
+		tunnelStarting := ls.Status.Tunnel != nil && ls.Status.Tunnel.State == contract.TunnelStarting
+		tailscaleStarting := ls.Status.Tailscale != nil && ls.Status.Tailscale.State == contract.TailscaleStarting
+		if ls.HasStatus && (tunnelStarting || tailscaleStarting) {
 			ls.nextStatus = now.Add(StartingInterval)
 		}
 	}

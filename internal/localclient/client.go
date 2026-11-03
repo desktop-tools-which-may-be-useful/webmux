@@ -161,6 +161,27 @@ func (c *Client) SetTunnel(ctx context.Context, enabled bool) (contract.TunnelSt
 	return status, err
 }
 
+// Tailscale returns the full Tailscale view, including detection and enable
+// preconditions; refresh bypasses the server's detection cache.
+func (c *Client) Tailscale(ctx context.Context, refresh bool) (contract.TailscaleStatus, error) {
+	path := "/api/tailscale"
+	if refresh {
+		path += "?refresh=1"
+	}
+	var status contract.TailscaleStatus
+	err := c.Do(ctx, http.MethodGet, path, nil, &status)
+	return status, err
+}
+
+// SetTailscale saves and applies Tailscale settings like the web settings
+// page. It returns *APIError with 400 for invalid settings, 409 when the
+// entry point cannot be enabled and 403 for callers inside a WebMux session.
+func (c *Client) SetTailscale(ctx context.Context, update contract.TailscaleSettingsUpdate) (contract.TailscaleStatus, error) {
+	var status contract.TailscaleStatus
+	err := c.Do(ctx, http.MethodPut, "/api/tailscale/settings", update, &status)
+	return status, err
+}
+
 // DialWebSocket opens /ws/* through the same dialer; path includes any query.
 func (c *Client) DialWebSocket(ctx context.Context, path string) (*websocket.Conn, error) {
 	conn, resp, err := websocket.Dial(ctx, "ws://webmux"+path, &websocket.DialOptions{

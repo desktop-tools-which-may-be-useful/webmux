@@ -339,6 +339,29 @@ func (tc *tailscaleController) Refresh() {
 	tc.svc.Refresh()
 }
 
+// Summary is the detection-free view reported by /local/v1/status.
+func (tc *tailscaleController) Summary() contract.TailscaleSummary {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	out := contract.TailscaleSummary{
+		Mode: tc.cfg.Mode, Port: tc.cfg.Port, Provider: tc.cfg.Provider,
+		State: tc.state, PublicURL: tc.url, Error: tc.blocked,
+	}
+	if out.Error == "" {
+		out.Error = tc.reason
+	}
+	if out.Mode == "" {
+		out.Mode = config.TailscaleOff
+	}
+	if out.State == "" {
+		out.State = contract.TailscaleOff
+	}
+	if tc.storageErr != nil && tc.cfg.Enabled() {
+		out.State, out.Error = contract.TailscaleFailed, tc.storageErr.Error()
+	}
+	return out
+}
+
 // Status is the read-only API view. Detection is cached by the service.
 func (tc *tailscaleController) Status() contract.TailscaleStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

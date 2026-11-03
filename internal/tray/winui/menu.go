@@ -13,6 +13,7 @@ import (
 const (
 	remotePool  = 8
 	forwardPool = 8
+	accessPool  = 8
 	distroPool  = 16
 )
 
@@ -75,9 +76,11 @@ type menu struct {
 	updateInfo                     *item
 
 	open, copyLinks, copyLocal, remoteWarn *item
-	remoteLinks, forwardLinks              []*item
-	copyPublic, copyToken                  *item
+	remoteLinks, forwardLinks, accessLinks []*item
+	copyToken                              *item
+	public                                 *item
 	tunnel, tunnelInfo, tunnelSettings     *item
+	tailscale, tailscaleInfo, tsSettings   *item
 	pushInfo, pushGuide                    *item
 
 	lanAccess *item
@@ -102,6 +105,7 @@ type menu struct {
 type bindings struct {
 	remote   []remoteLink // fills remoteLinks then forwardLinks, in order
 	reported int          // remote[:reported] fill remoteLinks
+	access   []tray.AccessItem
 	distros  []string
 	update   tray.UpdateItem
 }
@@ -141,7 +145,8 @@ func buildMenu() *menu {
 
 	m.open = add("打开 WebMux")
 	// Every copyable link lives in one submenu: local, then the exposure
-	// warning and remote links, then the public tunnel link.
+	// warning and remote links, then the links of remote-access providers
+	// such as Cloudflare Tunnel and Tailscale Serve/Funnel.
 	m.copyLinks = add("复制链接")
 	m.copyLocal = addSub(m.copyLinks, "本机链接")
 	m.remoteWarn = addSub(m.copyLinks, exposedWarning)
@@ -150,21 +155,28 @@ func buildMenu() *menu {
 	m.remoteWarn.hide()
 	m.remoteLinks = pool(m.copyLinks, remotePool)
 	m.forwardLinks = pool(m.copyLinks, forwardPool)
-	m.copyPublic = addSub(m.copyLinks, "公网链接")
-	m.copyPublic.hide()
+	m.accessLinks = pool(m.copyLinks, accessPool)
 	m.copyLinks.hide()
 	m.copyToken = add("复制 Token")
 	m.copyToken.hide()
-	m.tunnel = add("公网隧道（Cloudflare）")
-	m.tunnelInfo = add("")
-	m.tunnelInfo.mi.Disable()
-	m.tunnelInfo.enabled = false
-	m.tunnelSettings = add("打开公网访问设置…")
+	// Every managed entry point is one toggle, a state line and its web
+	// settings inside the "公网访问" submenu.
+	m.public = add("公网访问")
+	m.tunnel = addSub(m.public, "Cloudflare Tunnel")
+	m.tunnelInfo = addSub(m.public, "")
+	m.tunnelSettings = addSub(m.public, "Cloudflare 设置…")
+	m.tailscale = addSub(m.public, "Tailscale Serve")
+	m.tailscaleInfo = addSub(m.public, "")
+	m.tsSettings = addSub(m.public, "Tailscale 设置…")
+	for _, it := range []*item{m.tunnelInfo, m.tailscaleInfo} {
+		it.mi.Disable()
+		it.enabled = false
+	}
 	m.pushInfo = add("")
 	m.pushInfo.mi.Disable()
 	m.pushInfo.enabled = false
 	m.pushGuide = add("手机推送设置说明…")
-	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.tunnelSettings, m.pushInfo, m.pushGuide} {
+	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.tunnelSettings, m.tailscale, m.tailscaleInfo, m.tsSettings, m.public, m.pushInfo, m.pushGuide} {
 		it.hide()
 	}
 	m.lanAccess = add("允许局域网访问")

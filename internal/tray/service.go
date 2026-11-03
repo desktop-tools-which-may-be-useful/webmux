@@ -299,6 +299,20 @@ func (s *WSLService) SetTunnel(ctx context.Context, enabled bool) (contract.Tunn
 	return s.local().SetTunnel(ctx, enabled)
 }
 
+// Tailscale reads the running server's Tailscale view with fresh detection.
+func (s *WSLService) Tailscale(ctx context.Context) (contract.TailscaleStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return s.local().Tailscale(ctx, true)
+}
+
+// SetTailscale saves and applies Tailscale settings on the running server.
+func (s *WSLService) SetTailscale(ctx context.Context, update contract.TailscaleSettingsUpdate) (contract.TailscaleStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return s.local().SetTailscale(ctx, update)
+}
+
 // Keepalive keeps a distribution with a systemd-managed WebMux alive through
 // a detached `sleep infinity` that survives the tray. Its PID and creation
 // identity are stored so a restarted tray can find and end it.

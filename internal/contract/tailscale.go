@@ -52,6 +52,24 @@ type TailscaleEntry struct {
 	Public bool   `json:"public"`
 }
 
+// TailscaleSummary is the detection-free Tailscale part of StatusV1: the
+// effective settings and runtime state only, cheap enough for every poll.
+// GET /api/tailscale reports detection and enable preconditions.
+type TailscaleSummary struct {
+	// Mode is off, serve or funnel.
+	Mode string `json:"mode"`
+	// Port is the configured port, 0 when automatic.
+	Port int `json:"port"`
+	// Provider is the configured value: auto, linux or windows.
+	Provider string `json:"provider"`
+	// State is off, starting, ready or failed.
+	State string `json:"state"`
+	// PublicURL is the ready HTTPS entry point.
+	PublicURL string `json:"publicUrl,omitempty"`
+	// Error is why the entry point failed or is blocked.
+	Error string `json:"error,omitempty"`
+}
+
 // TailscaleSettingsUpdate is the PUT /api/tailscale/settings body. Switching
 // to funnel requires ConfirmFunnel; the CLI command stays TOML-only.
 type TailscaleSettingsUpdate struct {

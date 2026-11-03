@@ -62,9 +62,15 @@ func (a *App) listen() {
 	on(m.copyToken, a.copyToken)
 	on(m.tunnel, a.toggleTunnel)
 	on(m.tunnelSettings, a.openTunnelSettings)
-	on(m.copyPublic, func() {
-		a.copyLink(tray.TunnelEntry(a.snapshot()).PublicURL)
-	})
+	on(m.tailscale, a.toggleTailscale)
+	on(m.tsSettings, func() { a.openTailscaleSettings(tray.TailscaleEntry(a.snapshot()).SettingsURL) })
+	for i, it := range m.accessLinks {
+		on(it, func() {
+			if b := a.bindings(); i < len(b.access) {
+				a.copyLink(b.access[i].URL)
+			}
+		})
+	}
 	on(m.pushGuide, func() {
 		if guide := tray.PushEntry(a.snapshot()).Guide; guide != "" {
 			messageBox(guide, windows.MB_OK|windows.MB_ICONINFORMATION)

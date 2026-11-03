@@ -38,6 +38,9 @@ func PrintStatus(w io.Writer, s contract.StatusV1) {
 		for _, remote := range s.URLs.Remote {
 			line("Remote:   %s (%s, %s)", remote.URL, remote.Interface, remote.Kind)
 		}
+		for _, access := range s.URLs.Access {
+			line("Access:   %s (%s)", access.URL, access.Label)
+		}
 	}
 	if s.Config.Path != "" {
 		exists := ""

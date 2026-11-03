@@ -33,6 +33,19 @@ WebMux 先撤销旧来源、移除不再符合新设置的本实例入口，再�
 - CLI 路径 `command` 只能在 TOML 中设置。WebMux 会话内的进程不能通过本机
   API 修改 Tailscale 设置。
 
+## Windows 托盘一键开启
+
+托盘“公网访问”子菜单提供 Tailscale 开关，与网页共用同一份设置：
+
+- 勾选时刷新检测，满足前提才保存为 Serve（仅 tailnet，保留已配置端口）；
+  Funnel 仍需在网页确认公网风险后开启。
+- 未安装或未登录、未运行、HTTPS 证书未就绪、WSL 不是 mirrored 却只有
+  Windows 节点、设置不可保存或 token 过弱时，托盘弹窗说明原因，可直接打开
+  “设置 → Tailscale”完成配置。应用后转为失败同样引导到网页。
+- `provider = "auto"` 永不代管 Windows 节点；只检测到 Windows 节点时，托盘先
+  说明将修改该节点的 Serve 入口，确认后才以 `provider = "windows"` 保存。
+- 取消勾选保存 `mode = "off"` 并移除本实例入口。
+
 ## 配置文件
 
 ```toml

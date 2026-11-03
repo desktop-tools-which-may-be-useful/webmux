@@ -58,10 +58,27 @@ type RemoteURL struct {
 	Kind string `json:"kind"`
 }
 
+// AccessLink is one ready entry point published by a remote-access provider
+// that this server manages (Cloudflare Tunnel, Tailscale Serve/Funnel, ...).
+// Clients list them generically, so a new provider needs no client change.
+type AccessLink struct {
+	// Provider is a stable identifier such as "cloudflare" or "tailscale".
+	Provider string `json:"provider"`
+	// Label names the entry point for people, e.g. "Tailscale Funnel".
+	Label string `json:"label"`
+	URL   string `json:"url"`
+	// Public reports whether the link is reachable from the internet rather
+	// than only from the provider's private network.
+	Public bool `json:"public"`
+}
+
 // URLs never carry a token, path or query.
 type URLs struct {
 	Local  string      `json:"local"`
 	Remote []RemoteURL `json:"remote"`
+	// Access lists ready provider links; only the local API reports them and
+	// older servers omit the field.
+	Access []AccessLink `json:"access,omitempty"`
 }
 
 type ConfigRef struct {
@@ -102,6 +119,9 @@ type StatusV1 struct {
 	// when it is known and differs from Version: it takes effect after a
 	// restart. Older servers omit it.
 	InstalledVersion string `json:"installedVersion,omitempty"`
+	// Tailscale is present when the running server manages Tailscale
+	// Serve/Funnel; older servers omit it.
+	Tailscale *TailscaleSummary `json:"tailscale,omitempty"`
 }
 
 // PushStatus describes Web Push on a running server. It never carries

@@ -27,7 +27,8 @@ type localRuntime struct {
 
 // startRuntime acquires the lock, listens on the socket and writes the
 // record. It must run after the TCP listener is bound and before it serves.
-func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps, shutdown func(), tunnels *tunnelController) *localRuntime {
+// providers supply the access links of /local/v1/status, in display order.
+func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps, shutdown func(), tunnels *tunnelController, tailscale *tailscaleController, providers []accessProvider) *localRuntime {
 	m := deps.Manager
 	rt := &localRuntime{dir: runtime.Dir(c.StateDir)}
 	if err := runtime.EnsureDir(rt.dir); err != nil {
@@ -74,7 +75,7 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 		rt.server = &http.Server{
 			Handler: api.NewLocal(deps, api.Local{
 				Configuration: func() contract.Configuration { return effectiveView(c, record, deps) },
-				Status:        func() contract.StatusV1 { return localStatus(record, c, deps, tunnels) },
+				Status:        func() contract.StatusV1 { return localStatus(record, c, deps, tunnels, tailscale, providers) },
 				Shutdown:      shutdown,
 				InSession:     m.ContainsProcess,
 				Tunnel:        tunnels.SetEnabled,
@@ -93,7 +94,7 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 	return rt
 }
 
-func localStatus(record runtime.Record, c serverRun, deps api.Deps, tunnels *tunnelController) contract.StatusV1 {
+func localStatus(record runtime.Record, c serverRun, deps api.Deps, tunnels *tunnelController, tailscale *tailscaleController, providers []accessProvider) contract.StatusV1 {
 	m, pushes := deps.Manager, deps.Push
 	s := client.FromRecord(record, client.NetInterfaces)
 	s.State = contract.StateRunning
@@ -102,8 +103,11 @@ func localStatus(record runtime.Record, c serverRun, deps api.Deps, tunnels *tun
 	s.Sessions = &sessions
 	s.Health = contract.Health{Status: contract.HealthOK}
 	client.ApplyConfig(&s, record, c.ConfigPath, c.ConfigExplicit)
+	s.URLs.Access = accessLinks(providers)
 	tunnel := tunnels.Status()
 	s.Tunnel = &tunnel
+	ts := tailscale.Summary()
+	s.Tailscale = &ts
 	state := pushes.Status()
 	s.Push = &contract.PushStatus{Enabled: state.Enabled, Available: state.Available, Error: state.Error, Subscriptions: state.Subscriptions}
 	if host := tunnels.Settings().Hostname; host != "" {
