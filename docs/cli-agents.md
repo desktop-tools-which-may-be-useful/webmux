@@ -9,17 +9,17 @@ Gemini CLI 默认入口按原名单保留，但自 2026-06-18 起已停止为免
 [企业订阅退役安排](https://docs.cloud.google.com/gemini/docs/codeassist/sunset)与[认证说明](https://geminicli.com/docs/get-started/authentication/)。
 WebMux 不承诺账号套餐或额度可用；个人账号用户可按公告迁移到 Antigravity CLI，并自行保存启动配置。
 
-| CLI                          | 交互式命令  | 初始参数                                     | 官方说明                                                                                    |
-| ---------------------------- | ----------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Claude Code                  | `claude`    | `--dangerously-skip-permissions`             | [使用说明](https://code.claude.com/docs/en/overview)                                        |
-| Codex CLI                    | `codex`     | `--dangerously-bypass-approvals-and-sandbox` | [使用说明](https://developers.openai.com/codex/cli/)                                        |
-| Gemini CLI                   | `gemini`    | `--yolo`                                     | [快速开始](https://geminicli.com/docs/get-started/)                                         |
-| Cursor CLI                   | `agent`     | 无                                           | [使用说明](https://cursor.com/docs/cli/overview)                                            |
-| GitHub Copilot CLI           | `copilot`   | 无                                           | [使用说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview) |
-| OpenCode（配置名 Open Code） | `opencode`  | `--auto`，混合模式                           | [使用说明](https://opencode.ai/docs/)                                                       |
-| Qwen Code                    | `qwen`      | 无                                           | [官方仓库](https://github.com/QwenLM/qwen-code)                                             |
-| Kimi Code CLI                | `kimi`      | 无                                           | [官方仓库](https://github.com/MoonshotAI/kimi-code)                                         |
-| CodeBuddy Code               | `codebuddy` | 无                                           | [快速开始](https://www.codebuddy.ai/docs/cli/quickstart)                                    |
+| CLI                          | 交互式命令  | 初始参数                                               | 官方说明                                                                                    |
+| ---------------------------- | ----------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Claude Code                  | `claude`    | `--dangerously-skip-permissions`，混合模式             | [使用说明](https://code.claude.com/docs/en/overview)                                        |
+| Codex CLI                    | `codex`     | `--dangerously-bypass-approvals-and-sandbox`，混合模式 | [使用说明](https://developers.openai.com/codex/cli/)                                        |
+| Gemini CLI                   | `gemini`    | `--yolo`                                               | [快速开始](https://geminicli.com/docs/get-started/)                                         |
+| Cursor CLI                   | `agent`     | 无                                                     | [使用说明](https://cursor.com/docs/cli/overview)                                            |
+| GitHub Copilot CLI           | `copilot`   | 无                                                     | [使用说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview) |
+| OpenCode（配置名 Open Code） | `opencode`  | `--auto`，混合模式                                     | [使用说明](https://opencode.ai/docs/)                                                       |
+| Qwen Code                    | `qwen`      | 无                                                     | [官方仓库](https://github.com/QwenLM/qwen-code)                                             |
+| Kimi Code CLI                | `kimi`      | 无                                                     | [官方仓库](https://github.com/MoonshotAI/kimi-code)                                         |
+| CodeBuddy Code               | `codebuddy` | 无                                                     | [快速开始](https://www.codebuddy.ai/docs/cli/quickstart)                                    |
 
 命令按 2026-10-31 的官方资料核对。Cursor 使用 `agent`，不是编辑器启动命令 `cursor`；旧 `cursor-agent` 命令也能自动匹配品牌图标。
 Kimi 对应当前 Kimi Code CLI，旧 Kimi CLI 用户应先按官方说明迁移。
@@ -53,8 +53,9 @@ CLI 使用服务用户的权限、账号、环境和配置。WebMux 不代管模
 ## 终端、混合会话与提醒
 
 九款 CLI 都使用持久 PTY 终端：浏览器断线不会结束进程，可重新连接并回放缓冲；服务重启会结束会话。
-目前九款中只有 OpenCode 提供 WebMux 的混合会话支持，可在终端与聊天视图之间切换；原有 omp 也继续支持混合会话。
-其他八款使用终端视图，不能仅凭其提供 ACP 接口就视为已适配 WebMux 的切换和恢复行为。
+九款中 Claude Code、Codex CLI 与 OpenCode 提供 WebMux 的混合会话支持，可在终端与聊天视图之间切换；原有 omp 也继续支持混合会话。
+Claude Code 与 Codex CLI 的聊天端需要另外安装第三方 ACP 连接器，见 [混合会话](hybrid-sessions.md#开启)。
+其他六款使用终端视图，不能仅凭其提供 ACP 接口就视为已适配 WebMux 的切换和恢复行为。
 
 运行、空闲与等待状态使用通用终端判断；具体的回答、授权与完成提醒取决于 CLI 发出的结构化事件、OSC 通知或 BEL。
 现有 Claude Code、Codex 和 omp 提醒配置见 [使用指南](usage.md#需要你介入的提醒)。

@@ -6,17 +6,26 @@
 // repository with uncommitted changes, runs real shells and the `omp` agent
 // (from the seeded hybrid preset, then switched to the chat view), and
 // captures desktop and mobile (Pixel 7) viewports with Playwright.
+//
+// The omp conversation is replayed from screenshots/omp-session.jsonl by
+// default: omp resumes the recorded session from an isolated agent directory,
+// so no model or API key is needed. With WEBMUX_SCREENSHOTS_RECORD=1 omp asks
+// a logged-in model instead, and the new session is exported to that file.
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import {
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -30,6 +39,97 @@ const root = realpathSync(mkdtempSync(join(tmpdir(), "webmux-shots-")));
 // A short, stable path keeps temp-directory noise out of the screenshots.
 const demo = "/tmp/demo/bookshelf-api";
 const config = join(root, "config.toml");
+
+const record = process.env.WEBMUX_SCREENSHOTS_RECORD === "1";
+const sessionFixture = join(
+  webRoot,
+  "scripts",
+  "screenshots",
+  "omp-session.jsonl",
+);
+// omp files sessions under its agent directory by working directory.
+const ompSessions = (agentDir) =>
+  join(agentDir, "sessions", demo.replaceAll("/", "-"));
+const SUMMARY_PROMPT =
+  "Summarize the uncommitted changes in this repo in three short bullets and point out anything risky.";
+const FOLLOW_UP_PROMPT =
+  "Which of those risks should I fix first? Answer in two sentences.";
+
+// Replay gives omp its own agent directory holding only the recorded session
+// and a config that skips first-run setup. Returns the omp environment and
+// the session ID to resume.
+function prepareReplay() {
+  const agentDir = join(root, "omp-agent");
+  const header = readFileSync(sessionFixture, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .find((entry) => entry.type === "session");
+  if (header?.cwd !== demo)
+    throw new Error(
+      `${sessionFixture} is not an omp session recorded in ${demo}`,
+    );
+  const dir = ompSessions(agentDir);
+  mkdirSync(dir, { recursive: true });
+  const stamp = header.timestamp.replaceAll(/[:.]/g, "-");
+  copyFileSync(sessionFixture, join(dir, `${stamp}_${header.id}.jsonl`));
+  writeFileSync(
+    join(agentDir, "config.yml"),
+    "startup:\n  setupWizard: false\nmodelRoles:\n  default: anthropic/claude-opus-5-5\n",
+  );
+  return {
+    env: {
+      PI_CODING_AGENT_DIR: agentDir,
+      // omp's ACP side needs a configured model to load a session, but loading
+      // makes no model request. A placeholder key also keeps a real one in the
+      // caller's environment from ever being used.
+      ANTHROPIC_API_KEY: "webmux-screenshot-replay",
+    },
+    sessionId: header.id,
+  };
+}
+
+// Copies the newest omp session recorded in the demo repository to the
+// fixture, so later runs can replay it.
+function exportSession() {
+  const dir = ompSessions(
+    process.env.PI_CODING_AGENT_DIR || join(homedir(), ".omp", "agent"),
+  );
+  const newest = readdirSync(dir)
+    .filter((name) => name.endsWith(".jsonl"))
+    .map((name) => join(dir, name))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+  if (!newest) throw new Error(`no omp session recorded in ${dir}`);
+  mkdirSync(dirname(sessionFixture), { recursive: true });
+  copyFileSync(newest, sessionFixture);
+  console.log("exported", sessionFixture);
+}
+
+// Points the seeded omp launch configuration at the recorded session.
+async function resumeOmpConfig(baseURL, sessionId) {
+  const headers = { Origin: baseURL, "Content-Type": "application/json" };
+  const list = await (await fetch(`${baseURL}/api/launch-configs`)).json();
+  const summary = list.find((item) => item.name === "omp");
+  if (!summary) throw new Error("seeded omp launch configuration is missing");
+  const url = `${baseURL}/api/launch-configs/${summary.id}`;
+  const full = await (await fetch(url)).json();
+  const response = await fetch(url, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({
+      name: full.name,
+      icon: full.icon,
+      cmd: [...full.cmd, "--resume", sessionId],
+      env: full.env,
+      preview: full.preview,
+      hybrid: full.hybrid,
+    }),
+  });
+  if (!response.ok)
+    throw new Error(
+      `update omp launch configuration: ${await response.text()}`,
+    );
+}
 
 const gitEnv = {
   ...process.env,
@@ -185,7 +285,7 @@ async function freePort() {
   return port;
 }
 
-async function startBackend() {
+async function startBackend(extraEnv) {
   const port = await freePort();
   writeFileSync(
     config,
@@ -194,7 +294,7 @@ async function startBackend() {
   const child = spawn(binary, ["--config", config], {
     cwd: demo,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, SHELL: "/bin/bash" },
+    env: { ...process.env, ...extraEnv, SHELL: "/bin/bash" },
   });
   let output = "";
   child.stdout.on("data", (c) => (output += c));
@@ -212,7 +312,7 @@ async function startBackend() {
 
 // Fixed colours and a short prompt keep the shell screenshots tidy.
 const PROMPT =
-  "export PS1='\\[\\e[1;32m\\]rain@dev\\[\\e[0m\\]:\\[\\e[1;34m\\]~/bookshelf-api\\[\\e[0m\\]\\$ '; clear";
+  "export PS1='\\[\\e[1;32m\\]rain@dev\\[\\e[0m\\]:\\[\\e[1;34m\\]~/bookshelf-api\\[\\e[0m\\]$ '; clear";
 
 async function createSession(page, command, name) {
   await page.goto("/");
@@ -283,8 +383,14 @@ async function shoot(page, name) {
 async function main() {
   mkdirSync(outDir, { recursive: true });
   seedRepository();
-  const { child, baseURL } = await startBackend();
-  const browser = await chromium.launch({ args: ["--disable-webgl"] });
+  const replay = record ? undefined : prepareReplay();
+  const { child, baseURL } = await startBackend(replay?.env);
+  if (replay) await resumeOmpConfig(baseURL, replay.sessionId);
+  const browser = await chromium.launch({
+    args: ["--disable-webgl"],
+    // Lets a preinstalled Chromium stand in for Playwright's own download.
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+  });
   try {
     const contexts = {
       desktop: await browser.newContext({
@@ -329,14 +435,16 @@ async function main() {
       'for i in $(seq 1 300); do echo "compiling package $i/300"; sleep 1; done',
     );
 
-    // omp agent session from the seeded hybrid preset, started on the TUI.
+    // omp agent session from the seeded hybrid preset, started on the TUI:
+    // either resuming the recorded conversation or asking the model.
     const ompId = await createFromConfig(desktop, "omp", "omp");
-    await delay(4000);
-    await type(
-      desktop,
-      "Summarize the uncommitted changes in this repo in three short bullets and point out anything risky.",
-    );
-    await delay(75000);
+    if (replay) {
+      await delay(8000);
+    } else {
+      await delay(4000);
+      await type(desktop, SUMMARY_PROMPT);
+      await delay(75000);
+    }
     await shoot(desktop, "desktop-omp.png");
 
     // Shell session.
@@ -407,11 +515,15 @@ async function main() {
       null,
       { timeout: 60_000 },
     );
-    await composer.fill(
-      "Which of those risks should I fix first? Answer in two sentences.",
-    );
-    await desktop.getByRole("button", { name: /^(发送|加入排队)$/ }).click();
-    await chatIdle(desktop);
+    if (replay) {
+      // The recorded session already holds the follow-up turn.
+      await desktop.getByRole("list", { name: "对话", exact: true }).waitFor();
+      await delay(2000);
+    } else {
+      await composer.fill(FOLLOW_UP_PROMPT);
+      await desktop.getByRole("button", { name: /^(发送|加入排队)$/ }).click();
+      await chatIdle(desktop);
+    }
     await shoot(desktop, "desktop-chat.png");
     await mobile.goto(`/s/${ompId}`);
     await mobile.getByRole("list", { name: "对话", exact: true }).waitFor();
@@ -439,6 +551,7 @@ async function main() {
       .first()
       .waitFor();
     await shoot(mobile, "mobile-diff.png");
+    if (record) exportSession();
   } finally {
     await browser.close();
     child.kill("SIGTERM");

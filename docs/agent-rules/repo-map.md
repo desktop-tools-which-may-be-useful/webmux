@@ -35,6 +35,8 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. Read it when you nee
 - Frontend architecture guard: `web/eslint.config.mjs`, `web/.dependency-cruiser.cjs`, `web/.jscpd.json`, `web/knip.json`, `web/test/architecture.test.ts`.
   - Baselines: `web/eslint-suppressions.json`, `web/.dependency-cruiser-known-violations.json`, `web/.jscpd-baseline.json`.
 - `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level. Confirm implementation details against source.
+  - Start from [docs/README.md](../README.md), the documentation hub; `docs/overview.md` holds the full feature introduction and `docs/faq.md` the FAQ and help channels that the root `README.md` summarizes.
+  - `docs/specs.md` indexes every `openspec/specs/<capability>/spec.md`; add new capabilities there.
   - Maintain `docs/user-stories.md` (index) and `docs/user-stories/` (group files) under [user-stories-maintenance.md](user-stories-maintenance.md).
   - Follow [doc-governance.md](../doc-governance.md) for file size and tree layout, and update other documentation when relevant.
 - `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.

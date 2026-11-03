@@ -29,6 +29,7 @@
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:e2e": "playwright test --config playwright.config.ts",
     "screenshots": "node scripts/screenshots.mjs",
+    "screenshots:hero": "node scripts/hero.mjs",
     "test:e2e:report": "playwright show-report playwright-report/e2e",
     "storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open",
     "check:storybook": "svelte-check --tsconfig .storybook/tsconfig.json --fail-on-warnings",

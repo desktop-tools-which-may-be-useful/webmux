@@ -15,269 +15,152 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%28WSL%29-lightgrey)
 [![License](https://img.shields.io/github/license/mzdluo123/webmux)](LICENSE)
 
-[设计理念](#设计理念) · [快速开始](#快速开始) · [使用指南](docs/usage.md) · [部署](docs/deployment.md) · [公网隧道](docs/cloudflare-tunnel.md) · [架构](docs/architecture.md) · [协议](docs/protocol.md) · [参与贡献](CONTRIBUTING.md)
+[三步看懂](#三步看懂) · [界面一览](#界面一览) · [功能](#功能) · [快速开始](#快速开始) · [文档](#文档) · [获取帮助](#获取帮助) · [参与贡献](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有，浏览器只是“附着”上去：手机锁屏、切换网络、关闭标签页都不会结束正在运行的 agent，重新打开即可回放断线期间的全部输出。
-
-与 ttyd 等工具不同，WebMux 把会话生命周期与浏览器连接解耦；与 tmux 方案不同，它不依赖额外的终端复用器，并针对手机和平板做了完整适配。服务运行在 Linux、macOS 或 Windows 的 WSL 2 中；Windows 端提供托盘程序和原生控制台客户端。
-
 <div align="center">
 
-<img src="docs/images/desktop-omp.png" alt="在 WebMux 中运行 omp：会话持续运行，工具调用与回答完整渲染" width="900">
+<img src="docs/images/hero.jpg" alt="同一个 omp 会话：电脑浏览器里是原生 TUI，手机上切到聊天视图继续对话" width="900">
+
+### 让 agent 在服务器上一直跑，你在任何设备上随时接管。
 
 </div>
 
-主题、字号、预览、代码阅读、快捷指令、主页工作树和底部工具栏偏好由服务端保存并跨设备同步；设备凭据与草稿仍保留在本机。详见 [使用说明](docs/usage.md)。
+你在电脑前让 Claude Code 重构一个模块，然后得出门。合上笔记本，agent 还在干活；地铁上手机亮起，它停下来问你一个问题，回一句话它就继续；到了公司打开浏览器，改动的 Diff 已经摆在终端旁边，审完在同一个终端里接着干。**这一路是同一个进程，一行输出都不会丢。**
 
-## 设计理念
+WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会话放在服务端，浏览器、手机和本机终端都只是“附着”上去。
 
-- **第一级别的 WSL 支持**：Windows 不是“顺带能用”的平台。WebMux 运行在 WSL 2 发行版中，Windows 托盘负责安装 / 升级（校验发布摘要）、启动、监控、自动重启和远程访问转发；`webmux.exe` 控制台客户端在 PowerShell / Windows Terminal 中直接 `run` / `attach` WSL 里的会话。Windows 客户端经 `wsl.exe --exec webmux bridge` 访问本机 API，无需 Token，也不依赖 WSL 的 localhost 转发或网络模式；当前 Windows 目录自动换算为 WSL 路径。
-- **低侵入性**：一个静态二进制，以当前用户身份运行，不需要 root 或管理员权限，不改写 shell 配置，不依赖 tmux、数据库或语言运行时。用户级服务由 `webmux service` 管理（systemd --user / launchd），卸载时保留配置；会话只在内存中，状态目录只保存显式登记的仓库清单与用户保存的启动配置。托盘不静默安装或升级，也不修改防火墙。
-- **融入现有终端 agent 工作流**：Claude Code、Codex、omp 等 agent 原样运行在真实 PTY 中，无需插件、适配器或改写其配置；原始字节直通 xterm.js，TUI 渲染与原生终端一致。在习惯的终端里 `webmux run -- claude` 启动，`Ctrl+]` 分离后在手机上继续，回到电脑 `webmux attach <ID>` 接续，全程是同一个进程。
-- **高性能、低占用**：服务端只转发 PTY 原始字节，不做终端仿真；每会话固定大小的字节环形缓冲（默认 2 MiB），重连只补发缺失部分；慢客户端被断开，而不会阻塞 PTY 读取。含前端的 Linux amd64 二进制约 15 MB，实测空闲常驻内存约 13 MB、运行一个 shell 会话约 18 MB；CI 在 4 倍 CPU 降速下检查布局位移与交互延迟。
+### 三步看懂
+
+<table>
+  <tr>
+    <th width="34%">① 电脑上开工</th>
+    <th width="32%">② 手机上接管</th>
+    <th width="34%">③ 回到电脑审阅</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/desktop-overview.png" alt="会话总览：多个 agent 会话按仓库分组，显示运行状态与屏幕预览"></td>
+    <td><img src="docs/images/mobile-overview.png" alt="手机上的会话总览" width="48%">
+      <img src="docs/images/mobile-omp.png" alt="手机上遥控 omp，底部是软键栏" width="48%"></td>
+    <td><img src="docs/images/desktop-diff.png" alt="代码工作区：在终端旁查看 agent 改动的 Git Diff"></td>
+  </tr>
+  <tr>
+    <td><sub>同时跑多个 agent，总览里一眼看出谁在干活、谁在<b>等你</b>。</sub></td>
+    <td><sub>锁屏推送叫你回来；软键栏、触摸滚动，TUI 照样好用。</sub></td>
+    <td><sub>终端旁直接看 Diff，一键把 <code>路径:行号</code> 发给 agent。</sub></td>
+  </tr>
+</table>
+
+### 为什么会爱上它
+
+<table>
+  <tr>
+    <td width="33%">🔌 <b>断线不断会话</b><br><sub>锁屏、换网、关标签页都不影响；重连只补发缺失的输出。</sub></td>
+    <td width="33%">🤖 <b>原样运行你的 agent</b><br><sub>Claude Code、Codex、Gemini 等九款 CLI 预置即用，跑在真实 PTY 里。</sub></td>
+    <td width="33%">💬 <b>TUI ↔ 聊天一键切换</b><br><sub>同一段对话，电脑上用 TUI，手机上用聊天视图，历史完整保留。</sub></td>
+  </tr>
+  <tr>
+    <td>🔔 <b>它在等你时会告诉你</b><br><sub>识别 agent 的提问与授权请求：总览标记、标签页提示、锁屏推送。</sub></td>
+    <td>🧑‍💻 <b>写代码的工作台</b><br><sub>分屏、草稿模式、代码与 Diff 浏览、Git worktree、终端里显示图片。</sub></td>
+    <td>🪶 <b>轻到可以忘了它</b><br><sub>单二进制、空闲约 13 MB 内存，无需 root、tmux 或数据库；Windows 经 WSL 2 一等支持。</sub></td>
+  </tr>
+</table>
+
+完整的设计理念与特性清单见 [项目介绍](docs/overview.md)。
 
 ## 界面一览
 
-### 桌面端
-
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/desktop-terminal.png" alt="桌面端终端：Shell 会话"><br><sub><b>终端</b>：原生 PTY，字节流直通 xterm.js</sub></td>
-    <td width="50%"><img src="docs/images/desktop-diff.png" alt="桌面端代码工作区：Git Diff"><br><sub><b>Diff</b>：终端旁只读查看 Git 修改，一键把 <code>路径:行号</code> 发送到终端</sub></td>
+    <td width="50%" colspan="3"><img src="docs/images/desktop-chat.png" alt="混合会话：同一段对话切换到聊天视图"><br><sub><b>混合会话</b>：同一段对话在 TUI 与聊天视图间切换</sub></td>
+    <td width="50%" colspan="3"><img src="docs/images/desktop-terminal.png" alt="桌面端 Shell 终端"><br><sub><b>终端</b>：原生 PTY，字节流直通 xterm.js</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/images/desktop-overview.png" alt="会话总览"><br><sub><b>会话总览</b>：按仓库分组，实时显示状态与终端屏幕预览</sub></td>
+    <td width="33%" colspan="2"><img src="docs/images/mobile-terminal.png" alt="移动端终端与软键栏"><br><sub><b>终端 + 软键栏</b></sub></td>
+    <td width="33%" colspan="2"><img src="docs/images/mobile-chat.png" alt="移动端混合会话聊天视图"><br><sub><b>聊天视图</b></sub></td>
+    <td width="33%" colspan="2"><img src="docs/images/mobile-diff.png" alt="移动端 Diff 查看"><br><sub><b>Diff 审阅</b></sub></td>
   </tr>
 </table>
 
-### 混合会话（ACP 聊天 ↔ 终端）
-
-OpenCode、omp 与 Codex CLI 的同一段对话可以在原生 TUI 与基于 [ACP（Agent Client Protocol）](https://agentclientprotocol.com) 的聊天视图之间随时切换：电脑上用 TUI 精细操作，手机上切到聊天视图阅读和回复。切换前后是同一个 WebMux 会话、同一个 agent 会话，历史由 agent 自己保存；正在执行的回合会先中断，失败自动回到原来的一端。Codex 的聊天端需要另外安装 [codex-acp](https://github.com/agentclientprotocol/codex-acp)，未安装时页面给出安装命令。
-
-- **聊天视图**：消息、思考（默认折叠）与工具调用（可展开，diff 可在代码面板查看）按时间线展示；输入框下方选择模型、模式与权限（“自动批准”或“每次询问”），圆环显示上下文用量，点击查看 Token 详情。
-- **多设备协作**：回合进行中的消息进入所有设备共享的队列，omp 与 Codex 还支持插话；权限请求与表单在所有设备同步。上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
-- **省资源、可恢复**：聊天端空闲后结束 agent 进程（默认 30 分钟），打开会话或发送消息时自动唤醒；服务重启后从首页“可恢复”分组恢复到聊天或终端。
-
-新安装预置的 Open Code、omp 与 Codex CLI 启动配置已开启混合模式，新建会话时选择“从终端开始”或“从聊天开始”即可。详见 [混合会话](docs/hybrid-sessions.md)。
+<details>
+<summary><b>更多功能截图</b>：分屏、终端图形、资源管理器、启动配置</summary>
 
 <table>
   <tr>
-    <td width="70%"><img src="docs/images/desktop-chat.png" alt="桌面端混合会话：omp 对话切换到聊天视图"><br><sub><b>桌面聊天视图</b>：同一段 omp 对话从 TUI 切到聊天，历史完整保留</sub></td>
-    <td width="30%"><img src="docs/images/mobile-chat.png" alt="移动端混合会话聊天视图"><br><sub><b>手机聊天视图</b></sub></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/terminal-splits/after-desktop-dark.jpg">
+      <img src="docs/images/terminal-splits/after-desktop-light.jpg" alt="终端分屏与草稿模式"></picture>
+      <br><sub><b>终端分屏 + 草稿</b>：最多 8 个窗格，<code>Ctrl+B</code> 前缀操作</sub></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/kitty-graphics/after-desktop-dark.png">
+      <img src="docs/images/kitty-graphics/after-desktop-light.png" alt="浏览器终端中显示 Kitty 协议图片"></picture>
+      <br><sub><b>终端图形</b>：Kitty 图形协议，agent 可直接显示图片</sub></td>
   </tr>
-</table>
-
-### 移动端
-
-<table>
   <tr>
-    <td width="25%"><img src="docs/images/mobile-overview.png" alt="移动端会话总览"><br><sub><b>总览</b></sub></td>
-    <td width="25%"><img src="docs/images/mobile-terminal.png" alt="移动端终端与软键栏"><br><sub><b>终端 + 软键栏</b></sub></td>
-    <td width="25%"><img src="docs/images/mobile-omp.png" alt="移动端运行 omp"><br><sub><b>omp 遥控</b></sub></td>
-    <td width="25%"><img src="docs/images/mobile-diff.png" alt="移动端 Diff"><br><sub><b>Diff 查看</b></sub></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/file-explorer/after-desktop-dark.png">
+      <img src="docs/images/file-explorer/after-desktop-light.png" alt="代码工作区资源管理器"></picture>
+      <br><sub><b>资源管理器</b>：上传、下载、重命名、移动文件</sub></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/cli-agents/after-desktop-dark.png">
+      <img src="docs/images/cli-agents/after-desktop-light.png" alt="预置的 CLI agent 启动配置"></picture>
+      <br><sub><b>启动配置</b>：预置九款 CLI agent，可自由编辑</sub></td>
   </tr>
 </table>
 
-> 截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟）。
+</details>
 
-> [!WARNING]
-> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认监听所有接口 `0.0.0.0:7681`。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件与随机 token，该 token 会持久化，可用 `webmux status --json --reveal-token` 查看。若现有配置没有 token 且监听地址不是 loopback，则每次启动临时生成 256 位随机 token，并在终端打印带 `#token=` 的本地链接。仅本机使用时可改为 `127.0.0.1:7681`，远程访问建议绑定 Tailscale / WireGuard 等可信 VPN 地址，并用 `webmux config init` 写入固定的共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)；需要固定公网入口时按 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md) 操作。
+## 功能
 
-## 特性
-
-- **持久会话**：浏览器断开后会话继续运行；短暂断线或回到前台时只续接缺失的输出，否则清屏并回放服务端缓冲（默认每会话 2 MiB）。
-- **会话总览**：按仓库 / 工作树分组展示所有会话，实时显示标题、状态（运行中 / 可能在等你 / 空闲 / 已退出）和终端屏幕预览。
-- **ACP 混合会话**：OpenCode / omp / Codex CLI 对话在原生 TUI 与聊天视图之间切换，支持多设备队列、插话、权限请求、附件、空闲休眠与重启恢复，详见 [混合会话](#混合会话acp-聊天--终端)。
-- **终端分屏**：同一页面左右 / 上下嵌套最多 8 个窗格，拖动调整比例，tmux 风格 `Ctrl+B` 前缀切换、放大和关闭窗格；终端菜单可锁定尺寸，避免手机键盘弹出导致 TUI 重绘。
-- **自定义启动配置**：在设置页保存 Shell、Open Code、Claude Code、Codex、omp 等程序的完整命令与环境变量，新建会话时统一选用；新安装首次启动时预置 [九款 CLI agent](docs/cli-agents.md)，以及 Shell 和 omp；每项附带本地品牌图标，均可编辑或删除，Codex CLI、Open Code 与 omp 默认开启混合模式；也可填写一次性命令。
-- **Git worktree 管理**：登记已有仓库，创建 / 安全删除 worktree，并在其中直接启动 agent。
-- **代码工作区**：在终端旁只读浏览文件和 Git 修改、查看 Diff，预览 Markdown 与图片，把 `路径:行号` 引用一键插入终端；资源管理器右键即可上传、下载（目录打包 ZIP）、重命名、复制、移动和删除文件。
-- **草稿模式**：先在多行输入框里编写、组合引用和上传路径，再一次性发送给 agent；草稿保存在本机，发送有送达确认。
-- **移动端优先**：软键栏（Esc / Ctrl / Alt / Shift / 方向键等）、触摸滚动、双指缩放、长按选词复制、虚拟键盘视口适配。
-- **文件上传**：选择、拖放或粘贴文件 / 图片，上传后自动把服务器路径插入终端。
-- **原生终端附着**：`webmux run` / `attach` / `ls` / `open` 在本机终端中创建、附着和接续会话，与浏览器共享同一个 PTY 与控制权。
-- **Windows（WSL）**：托盘程序管理 WSL 中的服务与访问入口，控制台客户端在 PowerShell / Windows Terminal 中附着会话。
-- **零运行时依赖**：前端嵌入 Go 二进制，运行端只需 Linux、macOS 或 WSL 2 与一个 shell，无需 Node.js、Go、tmux 或数据库。
+- **会话与终端**：持久会话、断线续接、分屏、查找、草稿模式、文件上传、终端图形。详见 [使用指南](docs/usage.md)、[终端使用](docs/usage/terminal.md)。
+- **Agent 协作**：预置 CLI agent 启动配置；“需要你介入”提醒；OpenCode / omp / Codex / Claude Code 在聊天与终端间切换。详见 [CLI agent](docs/cli-agents.md)、[混合会话](docs/hybrid-sessions.md)。
+- **代码与仓库**：只读浏览文件与 Diff、预览 Markdown 与图片、引用代码行、管理 Git worktree。详见 [代码工作区](docs/usage.md#代码工作区)、[仓库与 worktree](docs/usage.md#仓库与-worktree)。
+- **多设备**：手机软键栏与聊天视图、PWA 与 Web Push、偏好跨设备同步、`webmux run` / `attach` 在本机终端接续。详见 [移动端](docs/usage.md#移动端)、[从终端启动与附着](docs/usage.md#从终端启动与附着)。
+- **部署与访问**：一键安装、systemd / launchd 用户服务、Windows 托盘、Tailscale 与 Cloudflare Tunnel 的 HTTPS 入口。详见 [部署指南](docs/deployment.md)。
 
 ## 快速开始
 
-### 一键安装（Linux / macOS）
+**1. 安装**（Linux / macOS，自动识别架构并校验 SHA-256，安装到 `~/.local/bin/webmux`）：
 
 ```sh
-# GitHub 直连；install.sh 随 Release 发布
 curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.sh | sh
-
-# 国内网络：jsDelivr 读取脚本，或 ghfast.top 代理同一 Release 资产
-curl -fsSL https://cdn.jsdelivr.net/gh/mzdluo123/webmux@main/install.sh | sh
+# 国内网络可改用镜像：
 curl -fsSL https://ghfast.top/https://github.com/mzdluo123/webmux/releases/latest/download/install.sh | sh
 ```
 
-脚本自动识别 Linux/macOS 与 amd64/arm64，下载二进制和 `SHA256SUMS`，校验后安装到 `~/.local/bin/webmux`。GitHub 不可用时依次回退 `ghfast.top`、`gh-proxy.com`；脚本入口不依赖 `raw.githubusercontent.com`。可用 `WEBMUX_VERSION`、`WEBMUX_INSTALL_DIR`、`WEBMUX_MIRRORS`、`WEBMUX_SHA256` 覆盖版本、目录、镜像和固定摘要。Windows 请下载 exe 或使用托盘（见 [Windows（WSL）](#windowswsl)）。完整说明见 [部署指南](docs/deployment/install-and-upgrade.md#安装)。
-
-Debian / Ubuntu 与 Fedora 等发行版也可以从 Release 下载 deb / rpm 安装包，用 `sudo apt install ./webmux_<版本>-1_amd64.deb` 或 `sudo dnf install ./webmux-<版本>-1.x86_64.rpm` 安装，之后由包管理器升级；需要开机自启时执行 `systemctl --user enable --now webmux`。见 [Linux 安装包](docs/deployment/install-and-upgrade.md#linux-安装包deb--rpm)。
-
-也可以手动下载并校验。服务端为 `webmux-{linux,darwin}-{amd64,arm64}`；Windows 托盘与控制台客户端为 `webmux-tray-windows-{amd64,arm64}.exe`、`webmux-windows-{amd64,arm64}.exe`：
-
-```sh
-curl -LO https://github.com/mzdluo123/webmux/releases/latest/download/webmux-linux-amd64
-curl -LO https://github.com/mzdluo123/webmux/releases/latest/download/SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
-install -m 755 webmux-linux-amd64 ~/.local/bin/webmux
-```
-
-### 运行
+**2. 运行**，然后在浏览器打开 <http://127.0.0.1:7681>，点击“新建会话”：
 
 ```sh
 webmux --listen 127.0.0.1:7681
 ```
 
-浏览器打开 <http://127.0.0.1:7681>，点击“新建会话”即可开始。
+**3. 下一步**
 
-需要让服务脱离当前终端继续运行时，执行 `webmux start` 后台启动；之后用 `webmux status` 查看、`webmux stop` 停止。没有 systemd / launchd 的容器或 WSL 环境尤其适合这种方式。
+- 让服务常驻后台：`webmux start`，或安装为用户服务 `webmux service install`，见 [服务管理](docs/deployment/services.md)。
+- 从手机访问：绑定 Tailscale / WireGuard 等 VPN 地址并启用 token，见 [远程访问](docs/deployment/remote-access.md)。
+- 在常用终端里启动 agent：`webmux run -- claude`，`Ctrl+]` 分离后去手机上继续，见 [从终端启动与附着](docs/usage.md#从终端启动与附着)。
 
-通过 VPN 远程访问时，绑定 VPN 地址并启用 token：
+其他安装方式：[deb / rpm 安装包](docs/deployment/install-and-upgrade.md#linux-安装包deb--rpm)、[手动下载](docs/deployment/install-and-upgrade.md#手动下载)、[Windows（WSL）托盘](docs/deployment/windows-wsl.md)、[从源码构建](CONTRIBUTING.md#从源码构建)。
 
-```sh
-webmux --listen 100.64.0.5:7681 --token "$(openssl rand -hex 24)"
-```
-
-### Windows（WSL）
-
-服务运行在 WSL 2 发行版中。需要 Windows 10 22H2+ 或 Windows 11，以及 Microsoft Store 版 WSL（`wsl --update`）和至少一个发行版，无需管理员权限：
-
-1. 下载 `webmux-tray-windows-amd64.exe`（arm64 设备用 `-arm64.exe`），放到固定位置（如 `%LOCALAPPDATA%\Programs\WebMux\`）后双击运行。
-2. 在托盘菜单中点击“安装 WSL 中的 webmux”：托盘下载与自身同版本、匹配发行版架构的 Linux 二进制，校验 SHA-256 后安装到 `~/.local/bin/webmux`；再点击“初始化配置（生成 Token）”。
-3. 托盘在 WSL 中启动服务后，点击“打开 WebMux”或“复制链接”子菜单中的本机、远程或公网链接。可勾选“登录时自动启动”。
-
-可选：把 `webmux-windows-amd64.exe` 重命名为 `webmux.exe` 并放入 `PATH`，即可在 PowerShell / Windows Terminal 中操作 WSL 里的会话：
-
-```powershell
-webmux run -- claude   # 在 WSL 中以当前目录创建会话并附着；Ctrl+] 分离
-webmux run --launch-config omp --detach  # 按名称使用 Web 端保存的启动配置创建
-webmux ls
-webmux attach <ID>
-```
-
-启动方式、发行版选择、远程转发与故障诊断见 [部署指南](docs/deployment/windows-wsl.md) 与 [使用指南](docs/usage.md#在-windows-终端中使用)。
-
-### 从源码构建
-
-需要 Go 1.26+、Node.js 26.12.1（Current，版本固定在 `.nvmrc`）、pnpm 12.11.2 与 GNU Make：
-
-使用 [pnpm 官方独立安装脚本](https://pnpm.io/installation#using-a-standalone-script)安装指定版本：
-
-```sh
-curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.11.2 sh -
-```
-
-安装完成后重新打开终端，再构建项目：
-
-```sh
-git clone https://github.com/mzdluo123/webmux.git
-cd webmux
-make build          # 产物：bin/webmux
-make install        # 安装到 ~/.local/bin/webmux
-```
-
-## 配置
-
-默认读取 `~/.config/webmux/config.toml`。未显式指定 `--config` 且文件不存在时，首次 `webmux` / `webmux serve` / `webmux start` 会用内置模板生成 0600 配置文件与随机 token，再使用它启动；启动输出会说明生成或使用的路径，并提示 `webmux status --json --reveal-token`。显式 `--config PATH` 只读取 PATH，缺失时启动失败且不会创建文件。命令行参数 `--listen`、`--token` 优先于配置文件，但只影响本次进程，不写入新生成的配置。
-
-```sh
-webmux config init   # 也可手动预生成 0600 配置文件；不覆盖已有文件
-webmux config path   # 查看配置路径，读取文件中的 token 后在浏览器登录
-webmux config check  # 校验配置
-```
-
-安装为当前用户的后台服务（Linux systemd / macOS launchd，无需 sudo）：
-
-```sh
-webmux service install       # 安装并启动；缺少默认配置时自动创建
-webmux service status
-webmux service logs -f
-webmux service restart       # 重启会结束所有终端会话
-webmux service stop
-webmux service start
-webmux service uninstall     # 停止并移除服务，保留配置、日志和状态目录
-```
-
-服务引用当前二进制的绝对路径，请先将它放到 `~/.local/bin/webmux` 等稳定位置。`webmux service install --dry-run` 可预览服务文件，`--force` 可更新服务定义并重启。`webmux help` 查看全部命令；前台启动也可写成 `webmux serve`。
-
-| 配置项               | 默认值                                 | 说明                                                          |
-| -------------------- | -------------------------------------- | ------------------------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`                         | HTTP / WebSocket 监听地址                                     |
-| `token`              | 空（首次启动自动生成；已有空值见说明） | 共享 token；首次启动自动生成并持久化                          |
-| `scrollback_bytes`   | `2097152`                              | 每会话保留的原始终端字节数                                    |
-| `default_cwd`        | `~`                                    | 新建会话的默认目录                                            |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`               | 仓库清单、启动配置与 Tailscale 状态目录；不保存会话或终端内容 |
-| `idle_after_seconds` | `30`                                   | 无等待特征时判定为空闲的阈值                                  |
-| `prompt_patterns`    | 常见提示符 / 确认模式                  | 判定“可能在等你”的 Go 正则列表                                |
-| `allowed_origins`    | `[]`                                   | 额外允许的完整 Origin（如 HTTPS 反向代理域名）                |
-| `[tailscale]`        | `mode = "off"`                         | 托管 Serve/Funnel；显式 Funnel 才会公网公开                   |
-
-完整说明、systemd / launchd 服务、Tailscale 与 HTTPS 配置见 [部署指南](docs/deployment.md)。
+> [!WARNING]
+>
+> - WebMux 等同于以当前系统用户身份把 shell 暴露到网络上，默认监听 `0.0.0.0:7681`。
+> - 首次启动会生成带随机 token 的 0600 配置文件，可用 `webmux status --json --reveal-token` 查看。
+> - 仅本机使用时请改为 `127.0.0.1:7681`；远程访问请绑定可信 VPN 地址。
+> - **除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。**
+> - 详见 [安全策略](SECURITY.md) 与 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md)。
 
 ## 文档
 
-| 文档                                             | 内容                                                                    |
-| ------------------------------------------------ | ----------------------------------------------------------------------- |
-| [User Stories](docs/user-stories.md)             | 各项功能的用户目的、验收要点、分组文档与功能覆盖索引                    |
-| [使用指南](docs/usage.md)                        | 会话、终端、草稿模式、代码工作区、worktree、移动端                      |
-| [混合会话](docs/hybrid-sessions.md)              | OpenCode / omp / Codex CLI 在聊天视图与终端间切换、队列、恢复与注意事项 |
-| [部署指南](docs/deployment.md)                   | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异        |
-| [Cloudflare 公网隧道](docs/cloudflare-tunnel.md) | Named Tunnel 的创建、token、公共主机名、验证与排错                      |
-| [Tailscale Serve / Funnel](docs/tailscale.md)    | 自动 HTTPS 入口、端口、证书、WSL Windows provider 与精确移除            |
-| [架构设计](docs/architecture.md)                 | 会话模型、缓冲与回放、状态探测、并发与资源                              |
-| [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码（按主题分页）                        |
-| [文档治理](docs/doc-governance.md)               | 文档与 spec 的行数、单行长度、体积、目录扇出与树状组织规则              |
-| [参与贡献](CONTRIBUTING.md)                      | 开发环境、测试、代码规范、OpenSpec 工作流                               |
-| [安全策略](SECURITY.md)                          | 安全模型与漏洞报告                                                      |
-| [产品能力 baseline](baseline/README.md)          | 可复现评测、统计口径与首次量化结果                                      |
+- **了解项目**：[项目介绍](docs/overview.md)、[User Stories](docs/user-stories.md)；**安装与访问**：[部署指南](docs/deployment.md)、[配置](docs/deployment/configuration.md)。
+- **日常使用**：[使用指南](docs/usage.md)、[混合会话](docs/hybrid-sessions.md)；**开发**：[架构设计](docs/architecture.md)、[API 与协议](docs/protocol.md)。
+- **全部文档**：[文档中心](docs/README.md)。
 
-## 常见问题
+## 获取帮助
 
-<details>
-<summary><b>重启服务后会话去哪了？</b></summary>
-
-会话、PTY 和缓冲只保存在内存中，服务重启即结束所有会话。这是有意的设计边界：WebMux 不使用数据库、不做守护进程分离，也不与 tmux 互通。只有显式登记的仓库清单会持久保存。例外是 [混合会话](docs/hybrid-sessions.md)：WebMux 记录它与 agent 会话的对应关系，重启后可从首页“可恢复”分组恢复，对话本身由 agent 保存。
-
-</details>
-
-<details>
-<summary><b>创建会话时找不到 claude / codex？</b></summary>
-
-systemd 和 launchd 不会加载你的交互 shell 配置。可在自定义启动配置中显式使用 `bash -ic 'exec opencode "$@"' opencode` 来加载 `~/.bashrc` 中的 PATH 和环境变量，或把程序目录加入服务的 `PATH`，参见 [部署指南](docs/deployment/services.md#agent-的-path)。
-
-</details>
-
-<details>
-<summary><b>两台设备同时打开同一会话，布局互相影响？</b></summary>
-
-两端共享同一个 PTY，但只有控制端决定终端尺寸：先打开的设备控制，后打开的设备观察（按原网格显示、可平移）。在观察端输入或点击“接管控制”即可切换。
-
-</details>
-
-<details>
-<summary><b>粘贴 / 复制没有权限？</b></summary>
-
-HTTP 不是浏览器安全上下文，Clipboard API 不可用。WebMux 会回退到文本框手动粘贴 / 复制；也可以通过 `tailscale serve` 或 Caddy 提供 HTTPS。
-
-</details>
-
-<details>
-<summary><b>重连后首行有少量乱码？</b></summary>
-
-缓冲按字节环形存储，最旧的数据可能从多字节字符或转义序列中间开始，属于设计允许范围。
-
-</details>
-
-## 技术栈
-
-Go（`creack/pty`、`coder/websocket`）· Svelte 5 · TypeScript · Vite · xterm.js · shadcn-svelte · Tailwind CSS · Zod · CodeMirror · @pierre/diffs
+- **先查** [常见问题与排障入口](docs/faq.md)：会话为何在重启后消失、找不到 `claude` 命令、复制粘贴受限等。
+- **提问或报告问题**：[GitHub Issues](https://github.com/mzdluo123/webmux/issues)，请附上 `webmux version` 与复现步骤。
+- **安全漏洞**：不要公开提交，按 [安全策略](SECURITY.md#报告漏洞) 私下报告。
+- **参与贡献**：欢迎 issue 与 PR，开发环境、测试与规范见 [参与贡献](CONTRIBUTING.md)；agent 协作的规则入口是 [AGENTS.md](AGENTS.md)。
 
 ## 许可证
 

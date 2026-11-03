@@ -1,6 +1,7 @@
-// Package docguard enforces the documentation size and tree-layout rules in
-// docs/doc-governance.md. It is test-only: TestDocsGovernance runs the rules on
-// this repository, and TestRules exercises them on an in-memory tree.
+// Package docguard enforces the documentation rules in docs/doc-governance.md.
+// It is test-only: TestDocsGovernance checks size and tree layout and
+// TestDocsNavigation checks links, reachability and the README budget on this
+// repository; TestRules and TestNavigationRules exercise them on in-memory trees.
 package docguard
 
 import (

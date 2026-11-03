@@ -54,6 +54,20 @@ curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.
 - 需要后台服务时再执行 `webmux service install`，首次启动会自动生成配置与 Token。
 - 重复执行脚本会升级二进制；正在运行的服务需手动重启，重启会结束现有会话。
 
+### 手动下载
+
+也可以不用脚本，手动下载并校验 Release 资产：
+
+- 服务端：`webmux-{linux,darwin}-{amd64,arm64}`。
+- Windows 托盘：`webmux-tray-windows-{amd64,arm64}.exe`；控制台客户端：`webmux-windows-{amd64,arm64}.exe`，见 [Windows（WSL）部署](windows-wsl.md)。
+
+```sh
+curl -LO https://github.com/mzdluo123/webmux/releases/latest/download/webmux-linux-amd64
+curl -LO https://github.com/mzdluo123/webmux/releases/latest/download/SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+install -m 755 webmux-linux-amd64 ~/.local/bin/webmux
+```
+
 ### Linux 安装包（deb / rpm）
 
 Release 中提供 amd64、arm64 的 deb 与 rpm 包，二进制与同一 Release 的 `webmux-linux-<架构>` 相同，安装需要 sudo，之后由 apt / dnf 升级与卸载。

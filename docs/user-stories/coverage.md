@@ -76,6 +76,7 @@
 | 本地开发、构建/安装、测试、格式/静态检查与 Go 规范门禁                                              | US-L01–US-L02                                       |
 | 文档与 spec 行数、单行长度、体积、目录树治理                                                        | US-L08                                              |
 | `AGENTS.md` 体积预算与规则下沉到 `docs/agent-rules/`                                                | US-L11                                              |
+| 文档可达性、相对链接与锚点、README 首页预算                                                         | US-L12                                              |
 | Storybook、截图、baseline、CI 与 release                                                            | US-L03–US-L04                                       |
 | 分层架构测试、线上 JSON 快照、必填数组 Zod 契约与重新录制                                           | US-L05                                              |
 | agent 适配器接口、注册表、Claude 进程注册记录与隐私边界、契约测试与 agent 名称守卫                  | US-L05；US-Q01；US-Q03                              |

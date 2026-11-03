@@ -27,6 +27,17 @@ make test-browsers-install   # 安装 Playwright Chromium（Linux 上同时安�
 
 前端依赖由 `web/pnpm-lock.yaml` 锁定。请使用 pnpm，不要使用 npm、Yarn 或 Bun 管理依赖。
 
+### 从源码构建
+
+只想自己编译、不参与开发时，装好上述工具后执行：
+
+```sh
+git clone https://github.com/mzdluo123/webmux.git
+cd webmux
+make build          # 产物：bin/webmux
+make install        # 安装到 ~/.local/bin/webmux
+```
+
 ## 本地开发
 
 前后端分开运行，Vite 会把 `/api` 和 `/ws` 代理到 `127.0.0.1:7681`：
@@ -47,7 +58,17 @@ pnpm --dir web dev    # http://127.0.0.1:5173
 
 ## 更新 README 截图
 
-`make build && pnpm --dir web screenshots` 会启动临时后端和演示仓库，用 Playwright 重新生成 `docs/images/` 下的截图。脚本会运行本机真实的 `omp` 并发送一次只读提问，因此需要本机已安装并登录 `omp`。
+`make build && pnpm --dir web screenshots` 会启动临时后端和演示仓库，用 Playwright 重新生成 `docs/images/` 下的截图。README 与 [项目介绍](docs/overview.md) 引用这些截图；README 还展示 `docs/images/<主题>/` 下的部分功能截图，替换时保持图片存在，`make docs-check` 会校验 README 的图片与链接。
+
+omp 的对话默认从 `web/scripts/screenshots/omp-session.jsonl` 回放，不调用模型、不需要 API key：
+
+- 脚本把录制的会话放进临时的 omp 目录（`PI_CODING_AGENT_DIR`），让预置的 omp 启动配置以 `--resume` 打开它，再切到聊天视图。
+- 回放时注入占位的 `ANTHROPIC_API_KEY`：omp 加载会话需要已配置的模型，但不会发出请求；占位值也保证不会误用调用方环境中的真实 key。
+- 仍需要本机能运行 `omp`，且进程可执行文件名为 `omp`（官方发布的单文件二进制即可）。经 npm/Bun 安装时进程名是 `bun`，WebMux 不会把它识别为 omp，聊天切换不可用。
+
+需要换一段对话时设置 `WEBMUX_SCREENSHOTS_RECORD=1`：omp 以已登录的模型真实回答两轮提问，结束后把新会话导出到上述文件。提交前检查文件里只有演示仓库的内容。
+
+README 顶部的合成主图 `docs/images/hero.jpg`（浏览器窗口 + 手机外框）由 `pnpm --dir web screenshots:hero` 从 `desktop-omp.png` 与 `mobile-chat.png` 合成，不需要后端或 agent；重新生成截图后请一并运行。两个脚本都可以用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指定预装的 Chromium。
 
 ## 常用命令
 

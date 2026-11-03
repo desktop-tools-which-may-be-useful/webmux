@@ -1,6 +1,8 @@
 # 文档与 spec 治理
 
-WebMux 由 Agent 主导开发，单个 Markdown 文件过长会让模型一次读取的成本过高，也会掩盖主题边界。`internal/docguard` 用可执行的测试约束 `docs/` 与 `openspec/` 的规模与树状结构；失败信息直接写给下一个 Agent，说明要拆分、合并还是重新分组，并要求信息完整保留：整理是重构，不是压缩。
+WebMux 由 Agent 主导开发，单个 Markdown 文件过长会让模型一次读取的成本过高，也会掩盖主题边界；读者找不到的文档、失效的链接和过长的首页同样会让文档失去作用。
+
+`internal/docguard` 用可执行的测试约束 `docs/` 与 `openspec/` 的规模与树状结构，以及全部文档的链接与可达性。失败信息直接写给下一个 Agent，说明要拆分、合并、重新分组还是补登记链接，并要求信息完整保留：整理是重构，不是压缩。
 
 ## 适用范围
 
@@ -11,9 +13,33 @@ WebMux 由 Agent 主导开发，单个 Markdown 文件过长会让模型一次�
 | `openspec/changes/**/*.md`（未归档） | 校验      | 不校验   | 校验     |
 | `openspec/changes/archive/**/*.md`   | 不校验    | 不校验   | 不校验   |
 
-归档变更是不可改写的记录；OpenSpec 允许在途变更的 proposal、design、tasks 与 delta 很短，因此它们没有行数下限。单行长度上限适用于上表中除归档外的 Markdown（即 `docs/` 与 `openspec/` 下的文件；仓库根目录的 `README.md`、`AGENTS.md` 等不在守卫范围内），仅围栏代码块内的内容豁免；表格行不豁免。
+归档变更是不可改写的记录；OpenSpec 允许在途变更的 proposal、design、tasks 与 delta 很短，因此它们没有行数下限。
+
+单行长度上限适用于上表中除归档外的 Markdown，即 `docs/` 与 `openspec/` 下的文件；仅围栏代码块内的内容豁免，表格行不豁免。仓库根目录的 `README.md` 另有 [README 预算](#readme-预算)，`AGENTS.md` 等其余根目录文件不受规模检查。
 
 `AGENTS.md` 虽不在守卫范围内，但有单独的 10 KiB 体积预算，由 `internal/archtest` 的 `TestAgentsGuideSize` 检查。超限时把最不常用的规则原文迁入 `docs/agent-rules/`，索引见 [Agent 规则](agent-rules.md)。
+
+## 链接与可达性
+
+所有文档都必须能从两个入口沿相对链接找到：面向人的 [`README.md`](../README.md) 与面向 Agent 的 [`AGENTS.md`](../AGENTS.md)。文档总入口是 [文档中心](README.md)，OpenSpec 主规格的入口是 [OpenSpec 规格索引](specs.md)。
+
+- **必须可达**：`docs/**/*.md`、`baseline/*.md`、`openspec/specs/*/spec.md` 与根目录 `*.md`。链接到目录视为到达该目录的 `README.md`（GitHub 浏览目录时渲染它）。
+- **不要求可达**：在途的 `openspec/changes/` 由 OpenSpec CLI 列出、归档时会移动，手写索引必然过时；`openspec/changes/archive/` 是历史记录。
+- **链接有效**：上述文件与在途变更中的相对链接必须指向存在的文件；指向 Markdown 的 `#锚点` 必须匹配目标文件的标题锚点或 HTML `id`/`name`。
+  - 锚点按 GitHub 规则生成：去掉行内标记，小写，删除标点（含全角标点），空格变连字符；同名标题依次追加 `-1`、`-2`。
+  - 围栏代码块与行内代码里的链接是示例，不受检查；外部 URL 与以 `/` 开头的路径不受检查。
+  - 归档变更不改写，保留原有链接；指向已归档变更时改为 `openspec/changes/archive/<日期>-<名称>/`。
+- **新增文档**：在语义最近的索引中加一行链接并说明用途——`docs/` 下的主题文档登记在 [文档中心](README.md) 的对应分组，拆分出的子文件登记在同名索引，新的 capability 登记在 [OpenSpec 规格索引](specs.md)。不要把链接堆进根目录 `README.md`。
+
+## README 预算
+
+根目录 `README.md` 是仓库首页，面向第一次来的访客：一句话定位、核心卖点、截图、最短的快速开始、文档与帮助入口。详细内容放在 `docs/`，首页只留摘要和链接。
+
+- **规模**：不超过 170 行、14 KiB；单行不超过 300 列（规则同下文，HTML 表格单元格可拆成多行书写）。
+- **必备章节**：二级标题中须含“快速开始”“文档”“获取帮助”。
+- **必备链接**：[项目介绍](overview.md)、[文档中心](README.md)、[常见问题与获取帮助](faq.md)、[安全策略](../SECURITY.md) 与 [参与贡献](../CONTRIBUTING.md)。
+- **截图**：至少引用 4 张 `docs/images/` 下的界面截图（品牌图除外），全部图片不超过 20 张；每张 `<img>` 与 Markdown 图片都要有描述内容的替代文本。更多截图放到 [项目介绍](overview.md)。
+- **超限时**：按“重构而不是压缩”的原则把段落原文迁到 `docs/overview.md`、`docs/faq.md` 或 `docs/deployment/`，不要删减安全提示或截图来过线。
 
 ## 阈值
 
@@ -78,17 +104,18 @@ make docs-check          # go test -count=1 ./internal/docguard
 make check               # 同时覆盖格式、前端、Go 与文档治理
 ```
 
-CI 的格式/构建 job 会单独运行 `make docs-check`，让失败点直接可读。校验失败时，`internal/docguard` 会为每项违规输出：
+CI 的格式/构建 job 会单独运行 `make docs-check`，让失败点直接可读。`TestDocsGovernance` 检查规模与树状结构，`TestDocsNavigation` 检查链接、可达性与 README 预算。校验失败时，`internal/docguard` 会为每项违规输出：
 
 - 文件或目录路径、实测行数/字节数/单行长度/子目录数与阈值；
 - 应该拆分、合并、分段或重新分组的目标位置；
 - 保留旧路径为树状索引、更新引用以及子文件规模的要求；
-- 信息原文迁移、不得压缩的要求，以及 PR 中说明新旧位置对应的要求。
+- 信息原文迁移、不得压缩的要求，以及 PR 中说明新旧位置对应的要求；
+- 失效链接的行号与原因、不可达文档应登记的索引位置，以及 README 超限时内容的去向。
 
-`internal/docguard/doc_test.go` 中的 `TestRules` 用内存目录树固定了超长、单行超宽、超体积、过短、扇出以及各类豁免场景；修改规则时同步更新该样例与本文件。
+`internal/docguard/doc_test.go` 中的 `TestRules` 用内存目录树固定了超长、单行超宽、超体积、过短、扇出以及各类豁免场景；`links_test.go` 中的 `TestNavigationRules` 与 `TestSlug` 固定了可达性、失效链接与锚点、代码豁免和 README 各项规则。修改规则时同步更新这些样例与本文件。
 
 ## 维护约定
 
-- 新增或调整阈值、例外与提示文本时，同时更新 `internal/docguard`、本文件与 `docs/user-stories/operations-and-tooling.md` 的 US-L08。
+- 新增或调整阈值、例外与提示文本时，同时更新 `internal/docguard`、本文件与 `docs/user-stories/operations-and-tooling.md` 的 US-L08（规模与树状结构）或 US-L12（导航与 README）。
 - 不要通过放宽阈值或增加忽略标记来绕过校验；确实需要调整时，在 PR 中说明原因并同步更新测试。
 - 文档按主题分层，不按版本或临时任务分层；归档的 OpenSpec 记录保持不变。

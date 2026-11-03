@@ -203,7 +203,7 @@ Claude Code、Codex CLI、Gemini CLI、Open Code 和 omp 的预置配置带有�
 
 Cursor、Copilot、Qwen、Kimi 和 CodeBuddy 的新增配置使用各 CLI 默认的授权行为。各项参数与已有安装的添加方式见 [CLI agent 接入](cli-agents.md)。
 
-Open Code 与 omp 预置配置默认开启[混合模式](hybrid-sessions.md)。已有安装的 `launch-configs.json` 不会被改写：
+Open Code、omp、Codex CLI 与 Claude Code 预置配置默认开启[混合模式](hybrid-sessions.md)。已有安装的 `launch-configs.json` 不会被改写：
 
 - **预先输入**：从下拉框选择在设置页保存的启动配置。选中框和展开的每个选项同时显示图标、名称与命令，并展示环境变量数量（不显示值）；长命令可通过完整提示查看。配置保存在服务端，换浏览器或设备后仍可选用。
 - **手动填写**：直接填写一次性命令，不会写入服务端；没有保存配置或配置存储不可用时也可使用。切换命令来源 Tab 时保留已选配置与手动输入，新建会话页在当前浏览器记住上次成功使用的选择和临时命令。手动命令为空或引号未闭合时不能创建会话，不会误用另一个 Tab 中的配置。

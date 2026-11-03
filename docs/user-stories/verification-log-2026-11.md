@@ -96,3 +96,24 @@
 - 迁移：`docs/user-stories.md` 中的核对记录原文迁入本目录的三个核对记录文件，索引只保留产品边界、功能索引与分组表；`docs/deployment.md` 按主题拆到 `docs/deployment/`，章节标题与锚点不变，外部链接已更新。
 - 依据：对应 US-L08 新增的“超限时重构而不是压缩”整理原则。
 - 验证：已运行 `make docs-check`、Oxfmt 检查、迁移前后的逐行对账与相对链接/锚点检查。
+
+本次局部核对（2026-11-02）：文档导航治理与 README 重写，对应新增 US-L12，覆盖索引与功能索引同步。
+
+- 迁移：README 中的设计理念、完整特性、混合会话说明、截图生成说明与技术栈原文迁入 `docs/overview.md`，常见问题迁入 `docs/faq.md`。
+  - 手动下载步骤迁入 `docs/deployment/install-and-upgrade.md#手动下载`，从源码构建迁入 `CONTRIBUTING.md#从源码构建`。
+  - 配置项表、服务命令、Windows 托盘步骤与安装脚本变量已由 `docs/deployment/` 完整覆盖，README 中只保留链接。
+- 新增：`docs/README.md`（文档中心）与 `docs/specs.md`（64 个 capability 的规格索引），原先不可达的 `docs/performance.md`、`docs/page-performance.md`、`docs/binary-size.md` 与全部主规格由此可达。
+- 修正：`docs/persistence.md` 指向已归档变更的失效链接；`docs/cli-agents.md` 与 `docs/usage.md` 中“只有 OpenCode / omp 默认混合”的过时描述，按 `internal/launch/presets.go` 改为 Claude Code、Codex CLI、OpenCode 与 omp。
+- 验证：已运行 `make docs-check`（含新增的 `TestDocsNavigation`、`TestNavigationRules`、`TestSlug`）与 Oxfmt 检查；未重新核对其余故事。
+
+本次局部核对（2026-11-02）：README 首屏改版，对应 US-L03（新增 `screenshots:hero` 合成主图）与 US-L12（README 预算不变）。
+
+- 首屏改为合成主图、一句话主张、使用场景叙述、“三步看懂”截图流程与六项亮点；README 仍为 170 行以内。
+- 验证：以预装 Chromium 运行 `pnpm --dir web screenshots:hero` 生成 `docs/images/hero.jpg`，并用本地 Markdown 渲染截图目视检查首屏；已运行 `make docs-check` 与 Oxfmt 检查。未在 GitHub 页面上实际渲染。
+
+本次局部核对（2026-11-02）：重新生成 README 截图与主图，截图脚本新增回放模式，对应 US-L03。
+
+- 录制：以真实 omp 18.15.0（Opus 5.5）运行 `WEBMUX_SCREENSHOTS_RECORD=1` 流程，导出两轮对话到 `web/scripts/screenshots/omp-session.jsonl`；文件只含演示仓库内容。
+- 回放：在未设置任何 API key 的环境中运行 `pnpm --dir web screenshots`，十张截图全部生成；再运行 `screenshots:hero` 更新 `docs/images/hero.jpg`。
+- 发现：经 npm/Bun 安装的 omp 进程名为 `bun`，混合会话判定为 `not_root`，聊天切换不可用；本次用以 `omp` 命名的 Bun 运行时启动同一安装包绕过。产品侧的识别规则未改动。
+- 限制：截图在 Linux 容器中以预装 Chromium 生成，未在 macOS 上运行脚本。

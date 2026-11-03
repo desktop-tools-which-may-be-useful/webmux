@@ -135,7 +135,8 @@
   验收要点：
   - Storybook 提供设计系统、工作区与溢出场景；
   - 浏览器检查布局与可达性；
-  - 截图脚本运行真实后端；
+  - 截图脚本运行真实后端；omp 对话默认从仓库内录制的会话回放，不调用模型，`WEBMUX_SCREENSHOTS_RECORD=1` 时真实录制并导出新会话；
+  - `screenshots:hero` 由已生成的桌面与手机截图合成 README 主图，缺图时失败；
   - 可见 UI 的 PR 按项目要求附最终实现截图。
 - **US-L04 基线评测与多平台发布**：作为维护者，我希望可复现地测量核心能力并构建各平台产物，以便比较回归和交付版本。
   验收要点：
@@ -196,6 +197,16 @@
   - `TestAgentsSizeViolationMessage` 验证恰好超限一字节即失败并包含上述指令；
   - `TestAgentsRulePagesExist` 保证索引页链接的下沉页面都存在；
   - 下沉页面见 [Agent 规则](../agent-rules.md)。
+- **US-L12 文档导航与首页**：作为初次访问者、使用者或 coding agent，我希望从 `README.md` 或 `AGENTS.md` 出发总能沿链接找到任何一份文档，首页保持简短并直接给出项目介绍、截图、快速开始与获取帮助的入口，以便快速了解项目并在遇到问题时找到答案。
+  验收要点：
+  - `make docs-check` 运行 `TestDocsNavigation`：从 `README.md`、`AGENTS.md` 沿相对链接遍历，链接到目录时视为到达其 `README.md`；
+  - `docs/**/*.md`、`baseline/*.md`、`openspec/specs/*/spec.md` 与根目录 `*.md` 必须可达；在途 `openspec/changes/` 与归档不要求可达；
+  - 上述文件与在途变更中的相对链接必须指向存在的文件，指向 Markdown 的锚点必须匹配 GitHub 生成的标题锚点或 HTML `id`/`name`；围栏代码块与行内代码中的示例不受检查；
+  - `README.md` 不超过 170 行、14 KiB，单行不超过 300 列；须含“快速开始”“文档”“获取帮助”二级标题，链接 `docs/overview.md`、`docs/README.md`、`docs/faq.md`、`SECURITY.md` 与 `CONTRIBUTING.md`；
+  - `README.md` 至少引用 4 张 `docs/images/` 下的界面截图（品牌图除外）、至多 20 张图片，每张 `<img>` 与 Markdown 图片都有替代文本；
+  - 失败信息写明失效链接的行号与原因、不可达文档应登记的索引位置，以及 README 超限时把详细内容迁往 `docs/` 的去向；
+  - `TestNavigationRules` 与 `TestSlug` 用内存目录树固定可达性、失效链接、锚点、代码豁免与 README 各项规则；
+  - 文档入口见 [文档中心](../README.md)，项目介绍见 [项目介绍](../overview.md)，帮助见 [常见问题与获取帮助](../faq.md)，规格索引见 [OpenSpec 规格索引](../specs.md)。
 
 依据：
 
@@ -209,6 +220,7 @@
 - [线上快照测试](../../internal/api/wire_snapshot_test.go)、[归一化回归测试](../../internal/api/wire_normalizer_test.go)、[分层说明](../architecture.md#分层与架构测试)
 - [前端架构守卫](../frontend-architecture.md)
 - [AGENTS.md 体积测试](../../internal/archtest/agents_size_test.go)、[Agent 规则索引](../agent-rules.md)
+- [文档导航守卫](../../internal/docguard/links_test.go)、[文档中心](../README.md)、[首页](../../README.md)
 - [ESLint 架构规则](../../web/eslint.config.mjs)、[前端分层规则](../../web/.dependency-cruiser.cjs)、[前端架构测试](../../web/test/architecture.test.ts)、[文档治理](../doc-governance.md)、[文档治理规则与样例](../../internal/docguard/doc_test.go)。
 
 质量基线补充依据：
