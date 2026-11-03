@@ -37,7 +37,7 @@ interface TunnelSettings {
 
 设置的存储与优先级：
 
-- 保存在 `<state_dir>/tunnel.json`，目录 0700、文件 0600，持有独占锁并原子持久化。
+- 保存在 `<state_dir>/tunnel-settings.json`，目录 0700、文件 0600，持有独占锁（`tunnel-settings.json.lock`）并原子持久化。
 - 已保存的 Web 模式、主机名、凭据与开关优先于 TOML；cloudflared 路径、下载镜像等运维配置仍由 TOML 管理。
 - 显式 `--tunnel` 仅覆盖当前进程开关，不写盘。因此 `enabled` 描述当前进程期望：启动失败时可为 true，关闭写盘失败时为 false。
 - 删除覆盖成功后当前进程保持 off，即使 TOML 默认启用也要下次启动才生效。
@@ -62,5 +62,3 @@ interface TunnelSettings {
 - [线上字段](../../internal/contract/tunnel.go)、[HTTP 处理器](../../internal/api/tunnel.go)
 - [持久化服务](../../internal/tunnelsettings/store.go)、[运行时控制](../../cmd/webmux/tunnelctl.go)
 - [端点与动态来源测试用例](../../internal/api/tunnel_test.go)。
-
-终端缓冲查找完全在浏览器 xterm 中完成，不使用新的搜索 API，也不扩大 `/api/sessions/{id}/buffer` 的保留范围。

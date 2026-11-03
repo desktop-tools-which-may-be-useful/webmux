@@ -55,7 +55,7 @@ interface TailscaleSettingsUpdate {
 
 设置的存储与应用：
 
-- 托管入口记录在 `<state_dir>/tailscale.json`，网页设置保存在 `<state_dir>/tailscale-settings.json`，均为 0600、原子替换、独立锁。
+- 托管入口记录在 `<state_dir>/tailscale-ownership.json`，网页设置保存在 `<state_dir>/tailscale-settings.json`，均为 0600、原子替换、独立锁。
 - 网页设置优先于 TOML 的 `mode`、`port`、`provider`；CLI 路径只来自 TOML。请求体中的未知字段返回 400。
 - 保存后先撤销来源、移除不再符合新设置的本实例入口，再应用新设置；移除失败时状态为 `failed` 且不应用新设置。
 

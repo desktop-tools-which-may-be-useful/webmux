@@ -39,7 +39,7 @@ E2E 的 worker 数从 2 调到 4，Storybook 从 2 调到 6，使用同一台机
 - Storybook 在 CI 只为首次重试记录 trace，与 E2E 一致；失败截图、报告和本地失败 trace 保留。Storybook 重试只用于诊断，flaky 仍使 CI 失败；速度比较也拒绝 flaky 结果。
 - CI 安装 Chromium 及其 headless shell，覆盖通知与常规浏览器用例。macOS 原生 Go race 与两个桌面 E2E 分片使用独立 runner，任一失败都令最终检查失败。E2E 通过显式 `WEBMUX_E2E_DIST` 复用刚生成的生产产物，默认仍从源码构建。`Test result` 要求已执行 job 成功，并接受变更裁剪跳过的 job。
 - E2E 运行时由独立的 `E2E runtime` job 统一构建，并通过同轮 artifact 分发给 Ubuntu 四个、macOS 两个分片；两个平台的 Go race 也依赖该 job 取得前端产物。
-  - 构建内容：当前提交的内嵌程序，以及按 `omp`、`opencode` 命名的假 ACP agent（`.ci-runtime/<平台>/agents/`，由 `.github/scripts/package-e2e-runtime.mjs` 构建）；使用 tar 保留可执行权限。
+  - 构建内容：当前提交的内嵌程序，以及按 `omp`、`opencode`、`codex`、`codex-acp`、`claude`、`claude-agent-acp` 命名的假 ACP agent（`.ci-runtime/<平台>/agents/`，由 `.github/scripts/package-e2e-runtime.mjs` 构建）；使用 tar 保留可执行权限。
   - 分片通过 `WEBMUX_E2E_BINARY` 使用该程序，从其旁边的 `agents/` 取得假 agent；不安装 Go、不恢复 Go 缓存，也不重复构建前端或后端。
   - 显式路径无效或缺少假 agent 时直接失败；本地未指定时仍从源码构建。
   - 分片的后端进程、HOME、目录、端口、假 agent 会话库和 PTY 仍各自独立。Node/pnpm 安装与浏览器系统依赖仍由每个 runner 准备。
@@ -127,7 +127,7 @@ baseline，再比较候选运行。在真实 runner 完成此验收前，整体 
 
 第七轮（2026-11-01）有意收窄双平台范围，只在 macOS 重复操作系统可能改变结果的部分。以运行 [41284391271](https://github.com/mzdluo123/webmux/actions/runs/41284391271) 为参照（6 分 37 秒）：
 
-- E2E 运行时原在格式/构建 job 末尾（约 170 秒）产出，九个分片空等约 160 秒。改由 Go job 在前端构建后、race 测试前产出，lint、类型与架构检查不再位于 E2E 关键路径。
+- E2E 运行时原在格式/构建 job 末尾（约 170 秒）产出，九个分片空等约 160 秒。改由 Go job 在前端构建后、race 测试前产出（后续已拆为独立的 `E2E runtime` job，见上文），lint、类型与架构检查不再位于 E2E 关键路径。
 - macOS E2E 只运行 `chromium-desktop`（146 个用例，原 292 个），由三片减为两片。移动端仿真是同一 Chromium 的视口与触摸逻辑，与宿主系统无关；macOS 慢机上它曾以 flaky 判失败（如 [41283675836](https://github.com/mzdluo123/webmux/actions/runs/41283675836)）。慢机时序由 Ubuntu 的 4x CPU 性能 job 覆盖。
 - macOS Go race 排除 `archtest`、`docguard`（静态检查）与 `tray`、`wsl`、`wslclient`（Windows 托盘/WSL 客户端）；其余包默认全部运行，新增包自动纳入。
 - Ubuntu E2E 由六片减为四片：原各片测试段 43–132 秒，空等占 runner 时间的大头；分片开始时间提前后，关键路径仍为 macOS Go race。

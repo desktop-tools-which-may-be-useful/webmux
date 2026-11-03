@@ -21,7 +21,7 @@ Run from the repository root; the full list is in [conventions](docs/agent-rules
 
 - `make web`: install frontend dependencies, run Svelte/TypeScript checks, build `web/dist`.
 - `make build`: build the frontend, then the embedded Go binary `bin/webmux`. Rebuild the frontend before compiling Go (`web/embed.go` embeds `web/dist`).
-- `make check`: build the frontend, check test types and formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint` (needs golangci-lint v2.15.0).
+- `make check`: build the frontend, check test types and formatting, run the doc and persistence guards, Oxlint, the architecture guard, `go vet` and `golangci-lint` (needs golangci-lint v2.15.0).
 - `make format`: apply gofmt and Oxfmt.
 - `pnpm --dir web check:arch`: frontend architecture guard; run it before finishing frontend work.
 - `pnpm --dir web dev`: Vite at `http://127.0.0.1:5173`, proxying `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its TOML or browser writes are rejected.

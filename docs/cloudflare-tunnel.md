@@ -101,7 +101,7 @@ token = "Cloudflare 隧道 Token"
 hostname = "term.example.com"
 ```
 
-网页和托盘开关保存到 `<state_dir>/tunnel.json`，文件权限 0600、目录权限 0700，原子写入并使用独立锁。文件存在时，其开关、模式、凭据和主机名覆盖 TOML；`cloudflared` 与 `download_mirrors` 仍由 TOML 管理。不会改写 `config.toml`。
+网页和托盘开关保存到 `<state_dir>/tunnel-settings.json`，文件权限 0600、目录权限 0700，原子写入并使用独立锁。文件存在时，其开关、模式、凭据和主机名覆盖 TOML；`cloudflared` 与 `download_mirrors` 仍由 TOML 管理。不会改写 `config.toml`。
 
 - `--tunnel` / `--tunnel=false` 只覆盖本次进程，不改持久化开关；之后网页或托盘操作以新选择为准。
 - “恢复配置文件设置”删除网页覆盖并停止当前隧道；下次启动按 TOML 决定是否开启。

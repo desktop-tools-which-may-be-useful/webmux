@@ -71,7 +71,6 @@
 | 所有 TOML 配置项：访问、会话、提醒、存储                                                            | US-A03；US-K03–US-K04；US-K08–US-K09；US-N01–US-N04 |
 | service install/--dry-run/--force/start/stop/restart/status/logs/uninstall                          | US-K05–US-K07                                       |
 | version/version --json/help、VPN/HTTPS 代理与升级                                                   | US-K09                                              |
-| 本地开发、构建/安装、测试、格式/静态检查                                                            | US-L01–US-L02                                       |
 | 持久化文件、锁、写入入口与清单防漂移                                                                | US-L10                                              |
 | 本地开发、构建/安装、测试、格式/静态检查与 Go 规范门禁                                              | US-L01–US-L02                                       |
 | 文档与 spec 行数、单行长度、体积、目录树治理                                                        | US-L08                                              |

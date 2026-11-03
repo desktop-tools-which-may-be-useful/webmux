@@ -73,7 +73,7 @@
 
 ### Requirement: 设置持久化与配置文件优先级
 
-系统 SHALL 把网页保存的隧道设置持久化到 `<state_dir>/tunnel.json`，目录权限 MUST 为 0700，文件权限 MUST 为 0600，写入 MUST 原子替换并 fsync。文件 SHALL 包含版本、`enabled`、`mode`、`hostname` 与可选凭据，并使用独立 `tunnel-config.lock` flock 阻止同一状态目录的第二个实例写入。
+系统 SHALL 把网页保存的隧道设置持久化到 `<state_dir>/tunnel-settings.json`，目录权限 MUST 为 0700，文件权限 MUST 为 0600，写入 MUST 原子替换并 fsync。文件 SHALL 包含版本、`enabled`、`mode`、`hostname` 与可选凭据，并使用独立 `tunnel-settings.json.lock` flock 阻止同一状态目录的第二个实例写入。
 
 文件存在时，其 `enabled`、`mode`、`hostname` 与凭据 SHALL 覆盖 TOML `[tunnel]` 的同名项；`cloudflared` 与 `download_mirrors` SHALL 继续来自 TOML。文件不存在时，系统 MUST 完全沿用 TOML 行为且不创建文件。系统 MUST NOT 改写 `config.toml`。
 
@@ -87,8 +87,8 @@
 
 #### Scenario: 首次保存创建文件
 
-- **WHEN** 状态目录中没有 `tunnel.json`，用户在网页保存 Named 设置
-- **THEN** 系统创建 0600 的 `tunnel.json`，之后重启仍使用该设置
+- **WHEN** 状态目录中没有 `tunnel-settings.json`，用户在网页保存 Named 设置
+- **THEN** 系统创建 0600 的 `tunnel-settings.json`，之后重启仍使用该设置
 
 #### Scenario: 网页覆盖配置文件
 
@@ -98,16 +98,16 @@
 #### Scenario: 恢复配置文件设置
 
 - **WHEN** 用户确认“恢复配置文件设置”
-- **THEN** `tunnel.json` 被删除，当前隧道停止，页面显示 TOML 中的模式、主机名与开关来源
+- **THEN** `tunnel-settings.json` 被删除，当前隧道停止，页面显示 TOML 中的模式、主机名与开关来源
 
 #### Scenario: 损坏的设置文件
 
-- **WHEN** `tunnel.json` 不是合法 JSON
+- **WHEN** `tunnel-settings.json` 不是合法 JSON
 - **THEN** WebMux 正常启动并保持隧道关闭，读接口报告存储不可用，写接口返回 503，原文件不被覆盖
 
 #### Scenario: 第二个实例
 
-- **WHEN** 另一个 WebMux 实例持有同一 `state_dir` 的 `tunnel-config.lock`
+- **WHEN** 另一个 WebMux 实例持有同一 `state_dir` 的 `tunnel-settings.json.lock`
 - **THEN** 本实例正常启动但保持隧道关闭，读接口报告存储被占用，写接口返回 503
 
 ### Requirement: 隧道设置接口
@@ -237,7 +237,7 @@
 #### Scenario: 一次性覆盖
 
 - **WHEN** 持久化设置为关闭，用户以 `--tunnel` 启动
-- **THEN** 本次进程开启隧道但不改写 `tunnel.json`，下次启动仍按持久化设置
+- **THEN** 本次进程开启隧道但不改写 `tunnel-settings.json`，下次启动仍按持久化设置
 
 ### Requirement: 凭据与公开访问安全
 
@@ -258,4 +258,4 @@
 #### Scenario: 状态文件权限
 
 - **WHEN** 首次保存设置后检查状态目录
-- **THEN** `tunnel.json` 权限为 0600，目录为 0700，锁文件为 0600
+- **THEN** `tunnel-settings.json` 权限为 0600，目录为 0700，锁文件 `tunnel-settings.json.lock` 为 0600

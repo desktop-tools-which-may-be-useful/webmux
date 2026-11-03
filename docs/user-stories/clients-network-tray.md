@@ -70,7 +70,7 @@
   验收要点：
   - 可在 Web 设置页保存 Quick 模式并确认启用，也可用 `--tunnel` 或 `[tunnel].enabled`；
   - 无需 Cloudflare 账号，获得随机 HTTPS 地址，不承诺固定地址或 SLA；
-  - 未启用时不创建隧道。Web 设置在服务器 `<state_dir>/tunnel.json` 原子保存（目录 0700、文件 0600、独占锁），跨浏览器与重启生效并优先于 TOML 的模式、主机名、凭据及开关；
+  - 未启用时不创建隧道。Web 设置在服务器 `<state_dir>/tunnel-settings.json` 原子保存（目录 0700、文件 0600、独占锁），跨浏览器与重启生效并优先于 TOML 的模式、主机名、凭据及开关；
   - 显式 `--tunnel` 只覆盖当前进程开关，不改写磁盘。
 - **US-N02 固定域名隧道**：作为已有 Cloudflare 配置的部署者，我希望使用 Named Tunnel，以便通过预设的公共主机名访问。
   验收要点：

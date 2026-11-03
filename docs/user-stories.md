@@ -48,6 +48,8 @@
 | [代码工作区与工作树](user-stories/code-and-worktrees.md)         | I–J                |
 | [配置、运行与贡献者工具](user-stories/operations-and-tooling.md) | K–L                |
 | [原生客户端、隧道与托盘](user-stories/clients-network-tray.md)   | M–P                |
+| [终端分屏用户故事](user-stories/terminal-splits.md)              | D13–D14            |
+| [网络压缩用户故事](user-stories/terminal-network.md)             | H10–H11            |
 | [混合会话](user-stories/hybrid-sessions.md)                      | Q                  |
 | [功能覆盖核对与后续维护](user-stories/coverage.md)               | 覆盖索引与维护约定 |
 

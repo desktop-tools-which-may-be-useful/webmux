@@ -66,13 +66,17 @@ Run from the repository root.
 - `pnpm --dir web install --frozen-lockfile`: install locked frontend dependencies.
 - `make web`: install dependencies, run Svelte/TypeScript checks, and build `web/dist`.
 - `make build`: build the frontend first, then the embedded Go executable `bin/webmux`.
-- `make release`: build Linux and macOS (darwin) amd64 and arm64 binaries.
+- `make release`: build every release artifact into `bin/`: Linux, macOS and Windows binaries, Windows trays and NSIS installers, deb/rpm packages, `install.sh` and `SHA256SUMS`.
 - `./bin/webmux --listen 127.0.0.1:7681`: run the backend and embedded production app.
 - `pnpm --dir web dev`: run Vite at `http://127.0.0.1:5173`.
 - `pnpm --dir web check`: check Svelte/TypeScript without building.
 - `pnpm --dir web check:test`: type-check `web/src` and top-level `web/test/*.test.ts` with Svelte support.
-- `make check`: build the frontend, check test types and formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint`.
+- `make check`: build the frontend, check test types and formatting, run the doc and persistence guards, Oxlint, the architecture guard, `go vet` and `golangci-lint`.
 - `make docs-check`: run the documentation/spec size and tree-layout guard (`internal/docguard`).
+- `make persistence-check`: run the persistence inventory guard (`TestPersistence*` in `internal/archtest`).
+- `make go-lint`: run `golangci-lint` after verifying the pinned release.
+- `make test`, `make test-fast`, `make test-go`, `make test-unit`, `make test-browser`, `make test-e2e`, `make test-performance`: see [testing](testing.md).
+- `make tray`, `make installer`, `make linux-packages`: build the Windows tray, the NSIS installers and the deb/rpm packages (also run by `make release`).
 - `pnpm --dir web lint`: run Oxlint, including type-aware Promise rules, on frontend code.
 - `pnpm --dir web check:arch`: run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test).
 - `make format` / `make format-check`: apply/check gofmt and Oxfmt on configured targets.

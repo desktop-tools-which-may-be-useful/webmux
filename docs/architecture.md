@@ -72,6 +72,13 @@ flowchart LR
 | `internal/tray`                               | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与日志                        |
 | `internal/tray/forward`                       | 托盘转发：同源校验后把请求中转到 WebMux 的 TCP 监听                                             |
 | `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
+| `internal/hybrid`                             | 混合会话：每会话一个 actor、记录持久化、聊天事件规范化、切换与恢复                              |
+| `internal/artifacts`                          | 会话交互产物目录（系统临时目录下的私有文件夹，含 `uploads/`）的创建与清理                       |
+| `internal/settingsstore`                      | 隧道与 Tailscale 设置共用的打开、读取、提交与 fail-closed 骨架                                  |
+| `internal/acp`                                | 只依赖标准库的 ACP v1 客户端与协议边界                                                          |
+| `internal/agentprofile`                       | agent 中立的档案核心与各 agent 适配器（`agents` 注册表）                                        |
+| `internal/tunnel`                             | Cloudflare 隧道：cloudflared 定位、下载与子进程管理                                             |
+| `internal/service`                            | 当前用户的 systemd --user / launchd 服务渲染与管理                                              |
 | `web/`                                        | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
 
 `cmd/webmux` 负责依赖装配：各模块通过构造函数显式依赖，不使用全局状态，HTTP 控制器不直接访问状态文件。
@@ -92,13 +99,13 @@ Tailscale 控制器的生命周期：
 
 后端分为五层，`internal/archtest` 用 `golang.org/x/tools/go/packages` 加载带类型信息的源码检查规则；违规让 `go test ./...` 失败，一次列出全部违规，每条形如 `文件:行 [Rn] 消息 — 修复提示`。规则基于类型解析，导入别名、点导入和函数值都绕不过。
 
-| 层             | 包                                                                                                                | 职责                                                                               |
-| -------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 装配根         | `cmd/...`                                                                                                         | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
-| Controller     | `internal/api`、`internal/hub`、`internal/wire`                                                                   | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
-| Service        | `session`、`workspace`、`launch`、`push`、`codeview`、`files`、`tunnelsettings`、`tailscale`、`tailscalesettings` | 业务规则、状态、文件系统与进程                                                     |
-| 共享           | `contract`、`config`、`runtime`、`statefile`、`fetch`、`pathutil`、`attentionkind`                                | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
-| 服务器外客户端 | `client`、`localclient`、`attach`、`sessioncmd`、`tray/...`、`wslclient`、`tunnel`、`service`                     | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
+| 层             | 包                                                                                                                                                   | 职责                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 装配根         | `cmd/...`                                                                                                                                            | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
+| Controller     | `internal/api`、`internal/hub`、`internal/wire`                                                                                                      | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
+| Service        | `session`、`hybrid`、`workspace`、`settings`、`launch`、`push`、`codeview`、`files`、`artifacts`、`tunnelsettings`、`tailscale`、`tailscalesettings` | 业务规则、状态、文件系统与进程                                                     |
+| 共享           | `contract`、`config`、`runtime`、`jsonutil`、`statefile`、`settingsstore`、`fetch`、`pathutil`、`attentionkind`、`wsl`、`acp`、`agentprofile/...`    | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
+| 服务器外客户端 | `client`、`localclient`、`attach`、`sessioncmd`、`tray/...`、`wslclient`、`tunnel`、`service`                                                        | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
 
 | 规则 | 检查                                                                                                                                                                                                                                                                                          |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -129,7 +136,7 @@ Tailscale 控制器的生命周期：
 
 - 动态时间、随机 ID、主机名及临时路径只按端点/帧的明确 JSON 路径处理，路径替换检查边界。
 - 业务正文、确定性 Git OID、版本摘要和固定输入保留。
-- 六组场景各自持有夹具、期限和归一化状态，可用 `-run '^TestWireSnapshots$/codeview$'` 等单独运行。
+- 九组场景（sessions-terminal、basics-errors-fs-upload、launch、workspace、codeview、push、settings、hybrid、hybrid-records）各自持有夹具、期限和归一化状态，可用 `-run '^TestWireSnapshots$/codeview$'` 等单独运行；隧道另有 `TestWireSnapshotsTunnel`。
 
 线上形状变化会给出 JSON 差异；有意的协议变更同时修改 `web/src/schemas.ts` 并重新录制：
 
@@ -164,7 +171,7 @@ flowchart LR
 - **会话与连接解耦**：Session 的生命周期只由子进程决定；WebSocket 连接只是观察者，可以有零个或多个。
 - **服务端只传字节**：PTY 原始字节直接进入缓冲并转发给 xterm.js，服务端不做终端仿真；OSC 标题与屏幕预览只是旁路解析。
 - **重连优先增量续接**：输出有绝对字节 offset 与会话运行代际；客户端带着已渲染的位置重连，服务端仍保留后续字节时只补发缺失部分，否则清屏全量回放。服务端仍不做终端仿真。
-- **会话只在内存中**：无数据库；仓库清单、启动配置、推送设置与隧道设置写入状态目录，Git 自己持有 worktree 与分支状态。
+- **会话只在内存中**：无数据库；仓库清单、启动配置、偏好设置、推送、隧道与 Tailscale 设置、混合会话记录写入状态目录（清单见 [配置与持久化清单](persistence.md)），Git 自己持有 worktree 与分支状态。
 - **控制端决定尺寸**：多端同时附着时，只有控制端的 resize 生效；用户输入取得控制，控制端离开后不自动转交。终端自动回复只写入一个连接的回答。
 
 ## 会话生命周期
@@ -196,7 +203,7 @@ flowchart LR
 - **agent 适配器**：`internal/agentprofile` 是 agent 中立的核心，`hybrid` 只依赖其中的接口。
   - `Agent` 接口提供档案数据（命令写法、参数分类、恢复与 ACP 命令）、身份识别与中断键。
   - 只有部分 agent 具备的行为是可选小接口，`hybrid` 以类型断言使用：`Resumer`、`ConfigReapplier`、`Steerer`、`LockTracker`、`ForceSwitchNoter`。
-  - 每个 agent 是一个子包（`opencode`、`omp`、`codex`），`agentprofile/agents` 用显式列表组成不可变注册表；`agentprofile/agenttest` 是每个适配器都运行的契约测试。
+  - 每个 agent 是一个子包（`opencode`、`omp`、`codex`、`claudecode`），`agentprofile/agents` 用显式列表组成不可变注册表；`agentprofile/agenttest` 是每个适配器都运行的契约测试。
   - 新增 agent 只需新增子包并在注册表登记（启动预设、图标与文档另行添加）；`internal/archtest` 守住 `acp`、`hybrid`、核心包与 `web/src` 不出现 agent 名称。
 - **生命周期**：从终端或聊天开始，协议见 [混合会话接口](protocol/http-hybrid.md)。
   - 切换失败自动回到原端；TUI 自行退出或回滚失败标记 `interrupted`。

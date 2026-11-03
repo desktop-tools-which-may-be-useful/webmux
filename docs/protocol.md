@@ -15,7 +15,7 @@
   - 前端也不把 token 写入 Cookie，因为 Cookie 不按端口隔离。
 
 - token 以定长摘要做常量时间比较。
-- 带 `Origin` 的请求必须与 `Host` 同源，或在 `allowed_origins` 中。Origin 必须是完整的 HTTP(S) origin，不能含路径、query 或 fragment。
+- 带 `Origin` 的请求必须与 `Host` 同源，或在 `allowed_origins` 中。Origin 必须是完整的 HTTP(S) origin，不能含路径、query 或 fragment；`allowed_origins` 条目另须全小写，不带末尾斜杠与默认端口（`:80`、`:443`），否则启动失败。
 - 静态页面公开；所有 API 与 WebSocket 都受认证和 Origin 检查保护。认证失败返回 401，Origin 拒绝返回 403。
 - 错误响应为 JSON `{"error": "..."}`。
 

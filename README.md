@@ -59,12 +59,12 @@ WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会
 <table>
   <tr>
     <td width="33%">🔌 <b>断线不断会话</b><br><sub>锁屏、换网、关标签页都不影响；重连只补发缺失的输出。</sub></td>
-    <td width="33%">🤖 <b>原样运行你的 agent</b><br><sub>Claude Code、Codex、Gemini 等九款 CLI 预置即用，跑在真实 PTY 里。</sub></td>
+    <td width="33%">🤖 <b>原样运行你的 agent</b><br><sub>Claude Code、Codex、omp 等九款 CLI 预置即用，跑在真实 PTY 里。</sub></td>
     <td width="33%">💬 <b>TUI ↔ 聊天一键切换</b><br><sub>同一段对话，电脑上用 TUI，手机上用聊天视图，历史完整保留。</sub></td>
   </tr>
   <tr>
     <td>🔔 <b>它在等你时会告诉你</b><br><sub>识别 agent 的提问与授权请求：总览标记、标签页提示、锁屏推送。</sub></td>
-    <td>🧑‍💻 <b>写代码的工作台</b><br><sub>分屏、草稿模式、代码与 Diff 浏览、Git worktree、终端里显示图片。</sub></td>
+    <td>🧑‍💻 <b>写代码的工作台</b><br><sub>分屏、草稿模式、资源管理器与 Diff、多格式预览、Git worktree、终端里显示图片。</sub></td>
     <td>🪶 <b>轻到可以忘了它</b><br><sub>单二进制、空闲约 13 MB 内存，无需 root、tmux 或数据库；Windows 经 WSL 2 一等支持。</sub></td>
   </tr>
 </table>
@@ -111,11 +111,11 @@ WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会
 
 ## 功能
 
-- **会话与终端**：持久会话、断线续接、分屏、查找、草稿模式、文件上传、终端图形。详见 [使用指南](docs/usage.md)、[终端使用](docs/usage/terminal.md)。
-- **Agent 协作**：预置 CLI agent 启动配置；“需要你介入”提醒；OpenCode / omp / Codex / Claude Code 在聊天与终端间切换。详见 [CLI agent](docs/cli-agents.md)、[混合会话](docs/hybrid-sessions.md)。
-- **代码与仓库**：只读浏览文件与 Diff、预览 Markdown 与图片、引用代码行、管理 Git worktree。详见 [代码工作区](docs/usage.md#代码工作区)、[仓库与 worktree](docs/usage.md#仓库与-worktree)。
-- **多设备**：手机软键栏与聊天视图、PWA 与 Web Push、偏好跨设备同步、`webmux run` / `attach` 在本机终端接续。详见 [移动端](docs/usage.md#移动端)、[从终端启动与附着](docs/usage.md#从终端启动与附着)。
-- **部署与访问**：一键安装、systemd / launchd 用户服务、Windows 托盘、Tailscale 与 Cloudflare Tunnel 的 HTTPS 入口。详见 [部署指南](docs/deployment.md)。
+- **会话与终端**：持久会话、断线续接、tmux 风格分屏（`Ctrl+B`）、缓冲查找、草稿模式、文件上传、锁定终端尺寸、快捷键参考、Kitty 终端图形。详见 [使用指南](docs/usage.md)、[终端使用](docs/usage/terminal.md)。
+- **Agent 协作**：预置九款 CLI agent 启动配置；“需要你介入”提醒；Claude Code / Codex / OpenCode / omp 在聊天与终端间切换，聊天端支持附件、权限请求作答与 Token 用量。详见 [CLI agent](docs/cli-agents.md)、[混合会话](docs/hybrid-sessions.md)。
+- **代码与仓库**：资源管理器（上传、下载、ZIP、重命名、移动、删除）、Git Diff、多格式预览（Markdown、HTML、表格、JSON、PDF、图片）、[会话临时文件夹](docs/usage/terminal.md#会话临时文件夹)、Git worktree。详见 [代码工作区](docs/usage.md#代码工作区)、[仓库与 worktree](docs/usage.md#仓库与-worktree)。
+- **多设备**：手机软键栏（可锁定 Shift）与聊天视图、PWA 与 Web Push、偏好跨设备同步、`webmux run` / `attach` 在本机终端接续。详见 [移动端](docs/usage.md#移动端)、[从终端启动与附着](docs/usage.md#从终端启动与附着)。
+- **部署与访问**：一键安装、deb / rpm 包、systemd / launchd 用户服务、Windows 安装程序与托盘、Tailscale 与 Cloudflare Tunnel 的 HTTPS 入口。详见 [部署指南](docs/deployment.md)。
 
 ## 快速开始
 

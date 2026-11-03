@@ -37,6 +37,7 @@ curl -fsSL https://cdn.jsdelivr.net/gh/mzdluo123/webmux@main/install.sh | sh
 | `WEBMUX_INSTALL_DIR` | `~/.local/bin`                            | 目标目录；不可写时明确报错，不自动 sudo                         |
 | `WEBMUX_MIRRORS`     | `https://ghfast.top https://gh-proxy.com` | 空格分隔的 gh-proxy 前缀；空值表示只用 GitHub                   |
 | `WEBMUX_SHA256`      | 空                                        | 固定二进制 SHA-256，跳过同源 `SHA256SUMS`                       |
+| `WEBMUX_BASE_URL`    | `https://github.com/mzdluo123/webmux`     | GitHub 仓库地址，主要用于测试和自建镜像                         |
 
 ```sh
 curl -fsSL https://github.com/mzdluo123/webmux/releases/latest/download/install.sh \

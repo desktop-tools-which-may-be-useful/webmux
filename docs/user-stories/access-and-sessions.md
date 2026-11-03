@@ -65,11 +65,11 @@
     - omp `--auto-approve`；
   - Cursor、Copilot、Qwen、Kimi、CodeBuddy 使用各自默认授权行为；
   - 九款 CLI 的启动命令见 [接入说明](../cli-agents.md)；
-  - Open Code 与 omp 预置配置默认为混合模式（US-Q01）；
+  - Claude Code、Codex CLI、Open Code 与 omp 预置配置默认为混合模式（US-Q01）；
   - 预先输入以可键盘操作的下拉框选择，选中框和每个选项同时显示图标、名称与命令，长命令保留完整提示；
   - 保存的配置按 ID 启动，临时命令按完整 argv 启动，均创建真实 PTY；
   - Open Code 可通过“加载 shell 启动文件”保存为 Bash（`~/.bashrc`）或 Zsh（`~/.zshrc`）包装，新安装按服务端 `$SHELL` 预选，其他 shell 回退为不包装或手动选择，不自动安装程序；
-  - 勾选了混合模式的 OpenCode/omp 配置可选择从终端或聊天开始（US-Q02）；
+  - 勾选了混合模式的配置可选择从终端或聊天开始（US-Q02）；
   - 首页与工作树统一使用“新建会话”，分屏菜单复用同一命令选择表单；
   - 创建成功后按入口进入终端或加入当前布局。
 - **US-B02 自定义命令与参数**：作为进阶使用者，我希望填写完整命令及参数，或选用已保存的配置，以便运行自己的 CLI 工作流。
@@ -124,7 +124,7 @@
   - 新安装首次启动时自动写入 Shell、九款 CLI agent 与 omp 共 11 条带图标的启动配置（完整列表见 [接入说明](../cli-agents.md)），其中 omp 附带 `PI_FORCE_IMAGE_PROTOCOL=kitty` 以启用 US-D12 图片显示；
     - Shell 为通用终端，agent 使用本地打包的 LobeHub 图标，omp 使用 Pi；
     - agent 预设按服务端 `$SHELL` 经“加载 shell 启动文件”包裹（Bash 或 Zsh，未设置时 Bash，其他 shell 直接执行）；
-    - 各命令的授权参数见接入说明，Open Code 与 omp 为混合模式，可编辑或删除；
+    - 各命令的授权参数见接入说明，Claude Code、Codex CLI、Open Code 与 omp 为混合模式，可编辑或删除；
   - 文件已存在时（包括用户编辑或删空后）不再补写或覆盖；
   - 配置跨重启与设备共享，环境变量值默认遮挡；
   - 按配置 ID 启动，修改或删除配置不影响运行中会话的命令与环境，会话信息保留配置 ID 供首页解析预览；

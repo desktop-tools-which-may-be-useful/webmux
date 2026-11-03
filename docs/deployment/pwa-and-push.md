@@ -37,5 +37,5 @@ include_title = true # false 时通知标题固定为 WebMux
 - 隧道或 Tailscale 入口关闭期间推送照常发出，但点开通知要等入口恢复后才能打开页面。修改 `tunnel.hostname` 或 Tailscale 入口端口后需在各设备重新开启。
 - 开启步骤：用 Named Tunnel、Tailscale Serve/Funnel 等 HTTPS 入口打开 WebMux → 设置 → 通知推送 → 开启。iOS / iPadOS 需要 16.4 以上，先在 Safari 中“分享 → 添加到主屏幕”，从主屏幕图标打开并重新输入 Token（主屏幕应用不共享 Safari 的登录）。
 - 通知只含会话标题、提醒种类与会话链接，不含工作目录、命令、预览或终端输出。同一信号只提醒一次，spinner 输出与重连不会重复提醒；启发式“可能在等你”和进程退出不推送。
-- VAPID 密钥与订阅保存在 `<state_dir>/push.json`（0600）。文件损坏时改名为 `push.json.corrupt-<时间>` 后重建，所有设备需重新开启。没有设备开启时不产生任何出站请求。
+- VAPID 密钥与订阅保存在 `<state_dir>/push.json`（0600）。文件损坏时原文件保留原位并禁用推送（终端与其他功能不受影响），修复文件后重启；不会自动丢弃订阅或重建 VAPID 密钥。没有设备开启时不产生任何出站请求。
 - 推送是尽力送达：省电、勿扰或离线超过 `ttl_seconds` 时可能延迟或丢失；无 Google Play 服务的 Android 设备不支持；中国大陆网络通常无法访问 FCM；桌面 Chrome、Edge 与 Firefox 需要浏览器进程在运行。会话列表仍是唯一准确的状态来源。

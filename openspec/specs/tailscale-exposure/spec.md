@@ -61,7 +61,7 @@
 #### Scenario: 默认关闭
 
 - **WHEN** 配置中没有 `[tailscale]` 或 `mode = "off"`，且状态目录没有 Tailscale 记录
-- **THEN** 系统不执行 Tailscale Serve/Funnel，不创建 `tailscale.json`，本地访问与现有 Cloudflare 行为不变
+- **THEN** 系统不执行 Tailscale Serve/Funnel，不创建 `tailscale-ownership.json`，本地访问与现有 Cloudflare 行为不变
 
 #### Scenario: 非法模式或端口
 
@@ -94,7 +94,7 @@
 
 端口选择与所有权：
 
-- `tailscale.json` 是唯一的所有权依据。端口已有入口时，只有状态记录中属于本次实例、且精确匹配当前 target、端口并仅有一个 `/` handler 的入口可以复用；没有记录或其他入口 MUST NOT 被覆盖。
+- `tailscale-ownership.json` 是唯一的所有权依据。端口已有入口时，只有状态记录中属于本次实例、且精确匹配当前 target、端口并仅有一个 `/` handler 的入口可以复用；没有记录或其他入口 MUST NOT 被覆盖。
 - `port = 0` 时 SHALL 按 443、8443、10000 选择第一个没有他人入口的端口；三者都被占用时 MUST 失败并提示在 Serve 下显式指定其他空闲端口。
 - 显式端口冲突 MUST 失败，不静默换端口。
 
@@ -266,7 +266,7 @@ Tailscale 来源 SHALL 只在命令成功并由 serve 配置回读确认后登�
 
 ### Requirement: 所有权、对账与失败关闭
 
-系统 SHALL 在 `<state_dir>/tailscale.json` 记录本次实例的入口意图与所有权：版本、provider、节点 DNS 名、端口、模式、target，以及 `pending`/`active` 状态。该文件是唯一的所有权依据，系统 MUST NOT 仅凭 target 相同就把用户手工创建的入口当作自己的。
+系统 SHALL 在 `<state_dir>/tailscale-ownership.json` 记录本次实例的入口意图与所有权：版本、provider、节点 DNS 名、端口、模式、target，以及 `pending`/`active` 状态。该文件是唯一的所有权依据，系统 MUST NOT 仅凭 target 相同就把用户手工创建的入口当作自己的。
 
 写入与存储故障：
 
@@ -323,12 +323,12 @@ Tailscale 来源 SHALL 只在命令成功并由 serve 配置回读确认后登�
 
 #### Scenario: 状态文件损坏
 
-- **WHEN** `tailscale.json` 内容损坏或锁被另一个实例持有，且 serve 配置中没有指向当前监听端口与 target 的入口
+- **WHEN** `tailscale-ownership.json` 内容损坏或锁被另一个实例持有，且 serve 配置中没有指向当前监听端口与 target 的入口
 - **THEN** 系统不删除未知入口、不应用新目标，状态报告存储故障，本地 HTTP 与会话继续
 
 #### Scenario: 状态损坏且入口指向当前端口
 
-- **WHEN** `tailscale.json` 内容损坏，但 serve 配置中有入口指向当前监听端口与 target
+- **WHEN** `tailscale-ownership.json` 内容损坏，但 serve 配置中有入口指向当前监听端口与 target
 - **THEN** 系统拒绝启动并报告所有权未知，要求修复状态文件或手工移除精确目标，避免意外暴露
 
 #### Scenario: 状态锁被运行中实例持有且入口指向当前端口
