@@ -203,3 +203,8 @@
 - 依据：`internal/hybrid/work.go` 与 `actor.go` 的回合内 `tool.upsert`/`plan.set` 跟踪（回合结束丢弃未完成调用）、`Overlay` 覆盖层与 `session-get-hybrid-work` wire 快照；`SessionRow.svelte` 新增一行“当前工作”（进行中的工具调用或计划步骤，一行截断），移除“等待 Agent 回复…”占位；紧凑列表不显示。
 - 验证：`internal/hybrid`（含 fake agent 回合内工作行断言）、`internal/wire`、`internal/api`、`internal/docguard` 的 Go 测试通过，wire 快照已重录；`SessionRow` 浏览器用例（15 项）、svelte-check、Oxlint、前端架构守卫、类型检查与格式检查通过。
 - 限制：未运行全量 E2E 与 Storybook Playwright；未重新核验其余故事能力；未做真机验收。
+
+本次局部核对（2026-11-03）：聊天端首条消息临时标题对应 US-Q02，覆盖索引同步，不改变其他故事。
+
+- 依据：`internal/hybrid` 的 `TestPromptTitle`、`TestFirstPromptTitle` 与 `TestFirstPromptTitleSkipped`（已命名、只有附件、由终端切来的会话不设置），使用 fake agent；`hybrid.spec.ts` 新增的临时标题用例通过。
+- 限制：未用真实 agent 验收；未重新核验其余故事能力。

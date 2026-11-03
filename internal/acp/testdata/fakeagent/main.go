@@ -51,9 +51,9 @@
 // Claude, _session/steering. A turn sends a thought, a tool call (with a
 // permission request when enabled), optionally a form elicitation, a
 // two-chunk agent message and a usage update. Prompt text containing
-// /plan, /notice, /compact, /title, /unknown or /fs adds a plan, notice,
-// compaction, session_info_update, an unknown update kind, or an
-// fs/read_text_file request to the client.
+// /plan, /notice, /compact, /title, /untitle, /unknown or /fs adds a plan,
+// notice, compaction, session_info_update setting or clearing the title,
+// an unknown update kind, or an fs/read_text_file request to the client.
 //
 // The Codex ACP side mimics codex-acp: agentInfo
 // @agentclientprotocol/codex-acp "Codex", options mode (read-only,

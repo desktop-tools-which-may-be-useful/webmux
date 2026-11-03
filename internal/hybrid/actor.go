@@ -100,6 +100,10 @@ type actor struct {
 	// recordTitle is the last title sent to the persistent record. Terminal
 	// titles arrive through the shell, chat titles through its overlay.
 	recordTitle string
+	// promptTitle: the agent session was created by this session and its
+	// first prompt has not been sent, so that prompt may name the chat until
+	// the agent reports a title.
+	promptTitle bool
 	preview     preview
 	// work tracks tool calls and the plan to derive the one-line work
 	// detail shown on the session card; workLine is its latest text, empty
@@ -398,6 +402,7 @@ func (a *actor) emit(events ...Event) {
 				continue
 			}
 			a.title = *e.Info.Title
+			a.promptTitle = false
 		case EventMessage:
 			if e.Message.Role != RoleAgent || !a.preview.add(e.Message) {
 				continue
@@ -580,6 +585,7 @@ func (a *actor) started(started chan<- error, res startResult) {
 			a.record(true, func(r *Record) { r.PID, r.Process = pid, process })
 		}
 	} else {
+		a.promptTitle = true
 		a.installLink(res.link, res.init, res.config, res.notes)
 		sid := a.agentSessionID
 		a.record(true, func(r *Record) {
@@ -868,6 +874,12 @@ func (a *actor) send(text string, attachments []Attachment) (PromptResult, error
 		return PromptResult{}, err
 	}
 	a.nextTurn++
+	if a.promptTitle {
+		a.promptTitle = false
+		if title := promptTitle(text); title != "" && a.title == "" {
+			a.title, a.titleSession = title, a.agentSessionID
+		}
+	}
 	n := strconv.Itoa(a.nextTurn)
 	result := PromptResult{TurnID: "t" + n, PromptID: "p" + n}
 	ctx, cancel := context.WithCancel(context.Background())

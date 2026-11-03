@@ -548,6 +548,39 @@ test.describe("hybrid sessions with the fake agent", () => {
     },
   );
 
+  test("an unnamed chat session takes its title from the first prompt, then from the agent", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const configId = await hybridConfig(request, "E2E titles", {});
+    const created = await request.post("/api/sessions", {
+      data: { cwd: workDir, configId, startSide: "acp" },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id: string = (await created.json()).id;
+    const title = async () =>
+      (await (await request.get(`/api/sessions/${id}`)).json()).title;
+    await openHybrid(page, id, "acp");
+    await chatTurn(page, "fix the   login redirect");
+    await expect.poll(title).toBe("fix the login redirect");
+    await chatTurn(page, "name it /title");
+    await expect.poll(title).toBe("fake title");
+
+    await page.goto("/");
+    await expect(
+      page.getByRole("link", { name: "fake title", exact: true }),
+    ).toBeVisible();
+    expect((await request.delete(`/api/sessions/${id}`)).status()).toBe(204);
+    const recoverable = page.getByRole("region", { name: "可恢复" });
+    await recoverable.getByRole("button", { name: /^可恢复/ }).click();
+    await expect(
+      recoverable
+        .locator('[data-slot="item"]')
+        .filter({ hasText: "fake title" }),
+    ).toHaveCount(1);
+  });
+
   test("after a backend restart both sides resume the recorded conversation", async ({
     page,
     request,

@@ -16,7 +16,7 @@
 | 聊天端服务端队列、去重与 omp/Codex/Claude 插话                                                      | US-Q08                                              |
 | 聊天附件能力块构造、降级、队列与路径安全                                                            | US-Q15                                              |
 | 第三方 ACP 连接器（Codex 的 codex-acp、Claude 的 claude-agent-acp）启动前检查与安装提示             | US-Q16；US-Q01；US-Q03                              |
-| 聊天端关注、推送与首页混合卡片                                                                      | US-Q09；US-C02                                      |
+| 聊天端关注、推送、首条消息临时标题与首页混合卡片                                                    | US-Q09；US-Q02；US-C02                              |
 | 聊天端 agent 标识：卡片与会话页头部的品牌图标和显示名                                               | US-Q17                                              |
 | 混合会话异常、自动重连、Claude 现有认证复用与登录引导、空闲休眠                                     | US-Q10–US-Q11；US-D09                               |
 | 混合会话记录、可恢复分组、恢复、Claude 配置重应用与移除                                             | US-Q12；US-D10；US-L10                              |

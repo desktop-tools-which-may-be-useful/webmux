@@ -733,6 +733,9 @@ func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string)
 		title := "fake title"
 		a.update(sid, &acp.SessionInfoUpdate{Title: acp.StringPatch{Set: true, Value: &title}})
 	}
+	if strings.Contains(text, "/untitle") {
+		a.update(sid, &acp.SessionInfoUpdate{Title: acp.StringPatch{Set: true}})
+	}
 	if strings.Contains(text, "/unknown") {
 		a.update(sid, &acp.UnknownUpdate{Kind: "future_kind", Raw: json.RawMessage(`{"sessionUpdate":"future_kind","x":1}`)})
 	}
