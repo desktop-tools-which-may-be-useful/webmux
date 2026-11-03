@@ -45,6 +45,8 @@ const active: SessionInfo = {
     dormant: false,
     state: "active",
     agent: "omp",
+    agentTitle: "omp",
+    agentIcon: "pi",
     agentSessionId: "01b",
   },
 };

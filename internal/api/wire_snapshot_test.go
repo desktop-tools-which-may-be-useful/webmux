@@ -962,13 +962,13 @@ func wireHybrid(f *wireFixture) {
 		f.t.Fatal(err)
 	}
 	id := item.Info().ID
-	item.SetOverlay(&session.Overlay{Hybrid: &session.HybridInfo{Side: "tui", State: "active", Agent: "omp"}})
+	item.SetOverlay(&session.Overlay{Hybrid: &session.HybridInfo{Side: "tui", State: "active", Agent: "omp", AgentTitle: "omp", AgentIcon: "pi"}})
 	f.call("session-get-hybrid", "GET", "/api/sessions/"+id, nil, 200)
 
 	terminal := f.dial("/ws/s/" + id + "?client=wire-client-1&label=Wire")
 	f.frame(terminal, "ws-terminal-state-hybrid", 2, nil)
 	agentSessionID := "ses_wire"
-	item.SetOverlay(&session.Overlay{Hybrid: &session.HybridInfo{Side: "acp", Phase: "loading", State: "active", Agent: "omp", AgentSessionID: &agentSessionID}})
+	item.SetOverlay(&session.Overlay{Hybrid: &session.HybridInfo{Side: "acp", Phase: "loading", State: "active", Agent: "omp", AgentTitle: "omp", AgentIcon: "pi", AgentSessionID: &agentSessionID}})
 	if err := item.EndRun(f.ctx); err != nil {
 		f.t.Fatal(err)
 	}

@@ -28,6 +28,7 @@ type adapter struct {
 var profile = &ap.Profile{
 	Name:              Name,
 	Title:             "Claude Code",
+	Icon:              "claudecode",
 	Executables:       []string{"claude"},
 	ProcessExecutable: claudeProcess,
 	VerifiedVersion:   "2.1.316",

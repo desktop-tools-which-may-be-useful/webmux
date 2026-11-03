@@ -39,6 +39,8 @@ type HybridInfo struct {
 	Dormant        bool
 	State          string
 	Agent          string
+	AgentTitle     string
+	AgentIcon      string
 	AgentSessionID *string
 }
 

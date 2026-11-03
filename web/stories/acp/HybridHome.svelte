@@ -2,7 +2,7 @@
   import WorkspaceGroup from "../../src/components/WorkspaceGroup.svelte";
   import type { SessionInfo } from "../../src/schemas";
   import { now, session } from "../fixtures";
-  import { sessionIds } from "./fixtures";
+  import { agentMetadata, sessionIds } from "./fixtures";
 
   // The home page's workspace group with hybrid sessions on each side beside
   // a plain shell: the card names the side and, on the chat side, previews
@@ -23,6 +23,8 @@
     dormant: false,
     state: "active" as const,
     agent,
+    agentTitle: agentMetadata[agent].title,
+    agentIcon: agentMetadata[agent].icon,
     agentSessionId: sessionIds[agent].current,
     ...patch,
   });

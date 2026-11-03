@@ -191,6 +191,9 @@ type Profile struct {
 	Name string
 	// Title is the display name.
 	Title string
+	// Icon is the agent's brand glyph: a key of the launch-config icon
+	// catalog, which the browser renders next to Title.
+	Icon string
 	// Executables are the base names the agent runs as; empty means Name.
 	Executables []string
 	// ProcessExecutable optionally recognizes a native process whose name on

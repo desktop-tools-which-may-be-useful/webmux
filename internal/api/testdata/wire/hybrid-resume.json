@@ -14,7 +14,9 @@
     "generation": "",
     "hybrid": {
       "agent": "omp",
+      "agentIcon": "pi",
       "agentSessionId": "wirecandidate",
+      "agentTitle": "omp",
       "dormant": false,
       "side": "acp",
       "state": "active"

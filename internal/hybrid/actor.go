@@ -316,6 +316,7 @@ func (a *actor) overlay() *session.Overlay {
 	info := &session.HybridInfo{
 		Side: string(a.side), Phase: string(a.chat.Phase), Dormant: a.chat.Dormant,
 		State: string(a.state), Agent: a.cmd.Profile.Name,
+		AgentTitle: a.cmd.Profile.Title, AgentIcon: a.cmd.Profile.Icon,
 	}
 	if a.agentSessionID != "" {
 		id := a.agentSessionID

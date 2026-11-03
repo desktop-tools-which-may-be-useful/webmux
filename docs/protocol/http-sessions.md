@@ -104,6 +104,8 @@ interface SessionInfo {
     dormant: boolean; // 聊天端的 agent 进程已休眠
     state: "active" | "closed" | "interrupted";
     agent: string;
+    agentTitle: string; // agent 显示名
+    agentIcon: string; // 品牌图标键，属于启动配置图标目录
     agentSessionId: string | null; // agent 自己的会话 ID，未知时为 null
   };
 }

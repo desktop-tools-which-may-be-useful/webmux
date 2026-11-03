@@ -9,9 +9,9 @@
   import { locationHints } from "../session-location";
   import IconChevronRight from "~icons/tabler/chevron-right";
   import IconDots from "~icons/tabler/dots";
-  import IconMessageCircle from "~icons/tabler/message-circle";
   import IconTerminal2 from "~icons/tabler/terminal-2";
   import { hybridSideLabel } from "../hybrid";
+  import LaunchConfigIcon, { hasLaunchIcon } from "./LaunchConfigIcon.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Item from "$lib/components/ui/item";
@@ -126,15 +126,21 @@
       <div
         class="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground"
       >
-        {#if session.hybrid}<span class="inline-flex items-center gap-1"
-            >{#if chat}<IconMessageCircle
+        {#if session.hybrid}{#if session.hybrid.side === "acp" || session.hybrid.side === "switching"}<span
+              class="inline-flex min-w-0 items-center gap-1"
+              data-slot="session-agent"
+              >{#if hasLaunchIcon(session.hybrid.agentIcon)}<LaunchConfigIcon
+                  icon={session.hybrid.agentIcon}
+                  size="xs"
+                />{/if}{session.hybrid.agentTitle}</span
+            ><span aria-hidden="true">·</span><span
+              >{hybridSideLabel(session.hybrid)}</span
+            >{:else}<span class="inline-flex items-center gap-1"
+              ><IconTerminal2
                 class="size-3.5"
                 aria-hidden="true"
-              />{:else}<IconTerminal2
-                class="size-3.5"
-                aria-hidden="true"
-              />{/if}{hybridSideLabel(session.hybrid)}</span
-          ><span aria-hidden="true">·</span>{/if}
+              />{hybridSideLabel(session.hybrid)}</span
+            >{/if}<span aria-hidden="true">·</span>{/if}
         <span
           >{session.clients ? `${session.clients} 个设备已连接` : "后台会话"} ·
           {relative}</span

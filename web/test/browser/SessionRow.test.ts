@@ -205,24 +205,44 @@ test("uses the launch config preview rows and height", async () => {
   setLaunchPreviews([]);
 });
 
-test("a chat-side hybrid card shows its side and the latest agent message", async () => {
+const chatHybrid = {
+  side: "acp" as const,
+  dormant: false,
+  state: "active" as const,
+  agent: "opencode",
+  agentTitle: "OpenCode",
+  agentIcon: "opencode",
+  agentSessionId: "01a",
+};
+// Rendered text: an SVG <title> is not drawn, so innerText leaves it out.
+const agentElement = () =>
+  document.querySelector<HTMLElement>('[data-slot="session-agent"]');
+const agentLine = () => agentElement()?.parentElement?.innerText;
+
+test("a chat-side hybrid card names its agent and shows the latest agent message", async () => {
   render(SessionRow, {
     session: {
       ...base,
       status: "idle",
+      clients: 2,
       preview: "已修复排序。\n新增两个测试。\n全部通过。",
-      hybrid: {
-        side: "acp",
-        dormant: false,
-        state: "active",
-        agent: "omp",
-        agentSessionId: "01a",
-      },
+      hybrid: chatHybrid,
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
   });
   await expect.element(page.getByText("聊天", { exact: true })).toBeVisible();
+  // The agent's brand glyph replaces the generic chat icon.
+  const agent = agentElement();
+  expect(agent?.innerText).toBe("OpenCode");
+  expect(
+    agent?.querySelector('[data-launch-icon="opencode"] svg'),
+  ).not.toBeNull();
+  expect(agent?.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  expect(document.querySelectorAll("[data-launch-icon]")).toHaveLength(1);
+  expect(agentLine()?.replace(/\s+/g, " ").trim()).toMatch(
+    /^OpenCode · 聊天 · 2 个设备已连接 ·/,
+  );
   const message = document.querySelector('[aria-label="最新消息预览"]');
   expect(message?.textContent?.trim()).toBe(
     "已修复排序。\n新增两个测试。\n全部通过。",
@@ -230,20 +250,52 @@ test("a chat-side hybrid card shows its side and the latest agent message", asyn
   expect(document.querySelector('[data-slot="terminal-preview"]')).toBeNull();
 });
 
+test("a dormant chat card keeps its agent; an unknown glyph leaves the name alone", async () => {
+  render(SessionRow, {
+    session: {
+      ...base,
+      hybrid: {
+        ...chatHybrid,
+        dormant: true,
+        agentTitle: "omp",
+        agentIcon: "pi",
+      },
+    },
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await expect
+    .element(page.getByText("聊天·休眠", { exact: true }))
+    .toBeVisible();
+  expect(
+    document.querySelector(
+      '[data-slot="session-agent"] [data-launch-icon="pi"]',
+    ),
+  ).not.toBeNull();
+  await cleanup();
+  render(SessionRow, {
+    session: {
+      ...base,
+      hybrid: { ...chatHybrid, agentTitle: "Future", agentIcon: "future" },
+    },
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await expect.element(page.getByText("Future", { exact: true })).toBeVisible();
+  expect(document.querySelector("[data-launch-icon]")).toBeNull();
+  expect(document.querySelector('[data-slot="session-agent"] svg')).toBeNull();
+});
+
 test("terminal-side and switching hybrid cards keep the terminal preview", async () => {
-  const hybrid = {
-    side: "tui" as const,
-    dormant: false,
-    state: "active" as const,
-    agent: "opencode",
-    agentSessionId: null,
-  };
+  const hybrid = { ...chatHybrid, side: "tui" as const, agentSessionId: null };
   render(SessionRow, {
     session: { ...base, hybrid },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
   });
   await expect.element(page.getByText("终端", { exact: true })).toBeVisible();
+  expect(document.querySelector('[data-slot="session-agent"]')).toBeNull();
+  expect(document.body.textContent).not.toContain("OpenCode");
   expect(
     document.querySelector('[data-slot="terminal-preview"]'),
   ).not.toBeNull();
@@ -257,6 +309,11 @@ test("terminal-side and switching hybrid cards keep the terminal preview", async
     onclose: () => {},
   });
   await expect.element(page.getByText("切换中", { exact: true })).toBeVisible();
+  const agent = agentElement();
+  expect(agent?.innerText).toBe("OpenCode");
+  expect(
+    agent?.querySelector('[data-launch-icon="opencode"] svg'),
+  ).not.toBeNull();
   expect(
     document.querySelector('[data-slot="terminal-preview"]'),
   ).not.toBeNull();
@@ -293,13 +350,7 @@ test("compact rows keep session state and location hints without rendering previ
         remote: false,
         since: base.lastActiveAt,
       },
-      hybrid: {
-        side: "acp",
-        dormant: false,
-        state: "active",
-        agent: "omp",
-        agentSessionId: "01a",
-      },
+      hybrid: chatHybrid,
     },
     compact: true,
     groupPath: base.cwd,

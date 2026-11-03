@@ -137,6 +137,12 @@
   - 设置页在 Codex 或 Claude 配置的勾选框旁显示可复制的安装命令与说明链接；
   - Claude 明确要求 Node.js 22+，安装命令 `npm install -g @agentclientprotocol/claude-agent-acp` 跟随 `latest`，实测 Claude Code 2.1.316/连接器 0.99.1 只作版本提示而非最低版本或未来兼容承诺；
   - webmux 不自动安装连接器或 Node，也不用 `npx` 临时下载。
+- **US-Q17 识别聊天端 agent**：作为同时开着多个聊天会话的使用者，我希望在首页和聊天页都能一眼看出每个会话由哪个 agent 承接，以便不用切到终端或凭标题猜测。
+  验收要点：
+  - 混合会话的 `hybrid` 对象带档案声明的显示名 `agentTitle` 与品牌图标键 `agentIcon`（属于启动配置图标目录），列表快照、列表事件与单个会话信息一致；前端不内置 agent 名称；
+  - 首页处于聊天端或切换中（含休眠）的卡片以 agent 单色品牌小图标替换通用聊天图标，元信息行形如“OpenCode · 聊天 · 2 个设备已连接”；终端端卡片不变；
+  - 会话页显示聊天视图时，头部在标题后、状态点前显示低强调的图标与名称；窄屏（小于 640px）只显示图标，可访问名称与悬停提示均为“Agent：<名称>”，空间不足时先截断标题；
+  - 标识只用于展示，不可聚焦或点击；切到终端视图后隐藏；浏览器不认识的图标键只显示名称，不用其他图标代替。
 
 依据：
 
@@ -146,3 +152,4 @@
 - [会话外壳与伴随进程](../../internal/session/shell.go)、[进程事实](../../internal/session/process_facts.go)、[聊天接口](../../internal/api/chat.go)、[聊天通道](../../internal/hub/chat.go)
 - [启动配置](../../internal/launch/types.go)、[聊天视图](../../web/src/components/chat/)、[会话页](../../web/src/pages/Terminal.svelte)
 - [可恢复分组](../../web/src/components/RecoverableSessions.svelte)、[安装提示](../../web/src/components/ConnectorInstallHint.svelte)、[原生附着](../../internal/attach/attach.go)、[使用说明](../hybrid-sessions.md)、[协议](../protocol/http-hybrid.md)、[端到端测试](../../web/test/e2e/hybrid.spec.ts)。
+- [会话卡片](../../web/src/components/SessionRow.svelte)、[会话页头部](../../web/src/components/TerminalHeader.svelte)、[品牌图标](../../web/src/components/LaunchConfigIcon.svelte)、[图标一致性测试](../../internal/launch/presets_test.go)。

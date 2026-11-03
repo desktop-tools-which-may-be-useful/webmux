@@ -3,6 +3,8 @@ package launch
 import (
 	"slices"
 	"testing"
+
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 )
 
 func TestPresetsFollowDefaultShell(t *testing.T) {
@@ -54,5 +56,36 @@ func TestPresetsFollowDefaultShell(t *testing.T) {
 			}
 			t.Fatal("omp preset missing")
 		})
+	}
+}
+
+// The browser shows a hybrid session's agent with the profile's Icon from the
+// launch-config icon catalog, so every agent needs a title and a brand glyph
+// in that catalog, the same one its hybrid preset carries.
+func TestAgentIconsComeFromLaunchCatalog(t *testing.T) {
+	registry := agents.Default()
+	for _, a := range registry.Agents() {
+		p := a.Profile()
+		if p.Title == "" || p.Icon == "" || p.Icon == "terminal" {
+			t.Errorf("agent %q: title %q, icon %q; want a title and a brand glyph", p.Name, p.Title, p.Icon)
+			continue
+		}
+		if _, err := normalize(Input{Name: p.Title, Icon: p.Icon, Cmd: []string{p.Name}}); err != nil {
+			t.Errorf("agent %q icon %q is not a launch-config icon: %v", p.Name, p.Icon, err)
+		}
+	}
+	for _, preset := range Presets("/bin/bash") {
+		if !preset.Hybrid {
+			continue
+		}
+		support := registry.Check(preset.Cmd)
+		a, ok := registry.Lookup(support.Agent)
+		if !ok {
+			t.Errorf("hybrid preset %q runs no registered agent: %+v", preset.Name, support)
+			continue
+		}
+		if got := a.Profile().Icon; got != preset.Icon {
+			t.Errorf("agent %q icon %q, its preset %q has %q", support.Agent, got, preset.Name, preset.Icon)
+		}
 	}
 }

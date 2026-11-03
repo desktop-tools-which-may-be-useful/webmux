@@ -16,6 +16,7 @@
   import type { TerminalDraft } from "../terminal-draft.svelte";
   import type { Connection } from "../ws";
   import HybridSideSwitch from "./HybridSideSwitch.svelte";
+  import LaunchConfigIcon, { hasLaunchIcon } from "./LaunchConfigIcon.svelte";
   import UploadFileInput from "./UploadFileInput.svelte";
   import TerminalShortcuts from "./TerminalShortcuts.svelte";
 
@@ -91,6 +92,10 @@
   // Off the terminal side there is no PTY: terminal-only actions are hidden;
   // fullscreen, the code panel and closing the session stay.
   const terminalShown = $derived(!hybrid || hybrid.view === "terminal");
+  // The chat view names the agent it talks to beside the session title.
+  const chatAgent = $derived(
+    hybrid?.view === "chat" ? t.info?.hybrid : undefined,
+  );
   const connectionText = $derived(
     t.connection === "connected"
       ? "已连接"
@@ -130,6 +135,18 @@
     <span class="min-w-0 truncate text-sm font-medium"
       >{t.info?.title || "终端"}</span
     >
+    {#if chatAgent}<span
+        class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+        role="img"
+        aria-label={`Agent：${chatAgent.agentTitle}`}
+        title={`Agent：${chatAgent.agentTitle}`}
+        data-slot="chat-agent"
+        >{#if hasLaunchIcon(chatAgent.agentIcon)}<LaunchConfigIcon
+            icon={chatAgent.agentIcon}
+            size="sm"
+          /><span class="max-sm:hidden">{chatAgent.agentTitle}</span
+          >{:else}<span>{chatAgent.agentTitle}</span>{/if}</span
+      >{/if}
     {#if t.info}<span
         class={`status-dot shrink-0 status-${t.info.status}`}
         class:status-failed={t.info.status === "exited" &&

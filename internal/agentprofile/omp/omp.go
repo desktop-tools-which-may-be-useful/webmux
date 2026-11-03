@@ -20,6 +20,7 @@ type adapter struct {
 var profile = &ap.Profile{
 	Name:            Name,
 	Title:           "omp",
+	Icon:            "pi",
 	VerifiedVersion: "18.13.1",
 	ResumeFlag:      "--resume",
 	// omp acp parses the full argv and ignores unknown options, so every

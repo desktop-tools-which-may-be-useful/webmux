@@ -46,6 +46,7 @@ export const agentMetadata: Record<
   Agent,
   {
     title: string;
+    icon: string;
     executable: string;
     connector?: AgentConnector;
     steering: boolean;
@@ -54,18 +55,21 @@ export const agentMetadata: Record<
 > = {
   omp: {
     title: "omp",
+    icon: "pi",
     executable: "omp",
     steering: true,
     forceSwitchNote: "omp 已输出的部分可能丢失",
   },
   opencode: {
     title: "OpenCode",
+    icon: "opencode",
     executable: "opencode",
     steering: false,
     forceSwitchNote: "已输出的部分可能丢失；回合不会在后台继续",
   },
   claudecode: {
     title: "Claude Code",
+    icon: "claudecode",
     executable: "claude",
     connector: claudeConnector,
     steering: true,

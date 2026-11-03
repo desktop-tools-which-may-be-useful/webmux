@@ -51,6 +51,8 @@ const info: SessionInfo = {
     dormant: false,
     state: "active",
     agent: "omp",
+    agentTitle: "omp",
+    agentIcon: "pi",
     agentSessionId: "01a17e26c4b84f0e9d2a",
   },
 };
@@ -69,6 +71,10 @@ async function onTerminalSide(state: ChatState) {
     hybrid: {
       ...info.hybrid!,
       agent: state.agent,
+      ...(state.agent === "claudecode" && {
+        agentTitle: "Claude Code",
+        agentIcon: "claudecode",
+      }),
       agentSessionId: state.agentSessionId,
     },
   };
@@ -104,6 +110,7 @@ function pendingSwitch() {
 const chatTab = (name: string | RegExp = /^聊天/) =>
   page.getByRole("tab", { name });
 const progress = () => page.getByRole("status").filter({ hasText: "正在切换" });
+const agentBadge = () => page.getByRole("img", { name: "Agent：omp" });
 const steps = () =>
   progress()
     .getByRole("listitem")
@@ -363,6 +370,7 @@ test("a session moved by another device shows the chat view; switching back reat
   chat.frame({ type: "state", state: chatState() });
   const input = page.getByRole("textbox", { name: "消息" });
   await expect.element(input).toBeVisible();
+  await expect.element(agentBadge()).toBeVisible();
   expect(sockets.filter((socket) => socket.path === terminalPath)).toHaveLength(
     1,
   );
@@ -414,6 +422,50 @@ test("a session moved by another device shows the chat view; switching back reat
   await expect
     .element(page.getByRole("tab", { name: "终端" }))
     .toHaveAttribute("aria-selected", "true");
+  await expect.element(agentBadge()).not.toBeInTheDocument();
+});
+
+test("the chat view names its agent beside the title, icon only on a phone", async () => {
+  const { terminal, chat } = await onTerminalSide(tuiState());
+  // The terminal view shows the agent itself; the header adds nothing.
+  await expect
+    .element(page.getByText(info.title, { exact: true }))
+    .toBeVisible();
+  await expect.element(agentBadge()).not.toBeInTheDocument();
+
+  const title = `omp · ${"修复首页排序与置顶工作区".repeat(6)}`;
+  respond(/^GET \/api\/sessions\/hybrid22$/, () =>
+    Response.json({
+      ...info,
+      generation: "",
+      title,
+      hybrid: { ...info.hybrid!, side: "acp" },
+    }),
+  );
+  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
+  terminal.drop(4409);
+  chat.frame({ type: "state", state: chatState() });
+  await expect.element(agentBadge()).toBeVisible();
+  const badge = agentBadge().element() as HTMLElement;
+  expect(badge.title).toBe("Agent：omp");
+  expect(badge.querySelector('[data-launch-icon="pi"] svg')).not.toBeNull();
+  expect(badge.innerText).toBe("omp");
+  // Title, agent, then the status dot.
+  await expect
+    .poll(() => badge.previousElementSibling?.textContent)
+    .toBe(title);
+  const heading = badge.previousElementSibling as HTMLElement;
+  expect(badge.nextElementSibling?.classList).toContain("status-dot");
+
+  await page.viewport(390, 844);
+  await expect.poll(() => badge.innerText).toBe("");
+  const icon = badge.querySelector("[data-launch-icon]")!;
+  expect(icon.getBoundingClientRect().width).toBeGreaterThan(0);
+  // The title gives way; the agent keeps its full width inside the header.
+  expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth);
+  expect(badge.scrollWidth).toBeLessThanOrEqual(badge.clientWidth);
+  const header = badge.closest("header")!.getBoundingClientRect();
+  expect(badge.getBoundingClientRect().right).toBeLessThanOrEqual(header.right);
 });
 
 test("prompts still queued return to this device's draft; a new TUI session ID is announced", async () => {

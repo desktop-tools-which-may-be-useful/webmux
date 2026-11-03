@@ -13,7 +13,9 @@
     "generation": "<generation#1>",
     "hybrid": {
       "agent": "omp",
+      "agentIcon": "pi",
       "agentSessionId": null,
+      "agentTitle": "omp",
       "dormant": false,
       "side": "tui",
       "state": "active"

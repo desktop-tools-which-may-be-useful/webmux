@@ -26,6 +26,9 @@ export const SessionHybridSchema = z.object({
   dormant: z.boolean(),
   state: HybridStateSchema,
   agent: z.string(),
+  // The agent's display name and its brand glyph, a launch-config icon key.
+  agentTitle: z.string(),
+  agentIcon: z.string(),
   agentSessionId: z.string().nullable(),
 });
 export type SessionHybrid = z.infer<typeof SessionHybridSchema>;

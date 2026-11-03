@@ -39,6 +39,7 @@ var locks = ap.LockLayout{HomeEnv: "CODEX_HOME", HomeDefault: ".codex", Dir: "th
 var profile = &ap.Profile{
 	Name:            Name,
 	Title:           "Codex CLI",
+	Icon:            "codex",
 	VerifiedVersion: "0.165.0",
 	Connector: &ap.Connector{
 		Executable:      "codex-acp",

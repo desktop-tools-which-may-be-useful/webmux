@@ -24,6 +24,7 @@ type adapter struct{}
 var profile = &ap.Profile{
 	Name:            Name,
 	Title:           "OpenCode",
+	Icon:            "opencode",
 	VerifiedVersion: "2.1.4",
 	ResumeFlag:      "-s",
 	// The default TUI is a client of the background service, where a turn

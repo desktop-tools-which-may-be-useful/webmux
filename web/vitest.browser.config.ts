@@ -48,16 +48,19 @@ const nativeTouchGesture = defineBrowserCommand(
           setTimeout(resolve, holdMilliseconds);
           await promise;
         }
-        // Real frames give Chrome time to recognize a native pan/cancel instead
-        // of collapsing a whole swipe into one synchronous DOM event burst.
-        await testFrame.evaluate(
-          () =>
-            new Promise<void>((resolve) =>
-              requestAnimationFrame(() =>
-                requestAnimationFrame(() => resolve()),
+        // The first move must clear long-press jitter before yielding: a
+        // stalled initial frame can otherwise exceed 500 ms and select text.
+        // Later steps use real frames so Chrome can recognize a native pan.
+        if (index > 0) {
+          await testFrame.evaluate(
+            () =>
+              new Promise<void>((resolve) =>
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() => resolve()),
+                ),
               ),
-            ),
-        );
+          );
+        }
       }
       await cdp.send("Input.dispatchTouchEvent", {
         type: finish === "cancel" ? "touchCancel" : "touchEnd",

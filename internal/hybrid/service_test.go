@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/agentprofile/opencode"
@@ -204,14 +205,17 @@ func resolved(t *testing.T, path string) string {
 }
 
 func TestCreateStartsEitherSide(t *testing.T) {
-	for _, profile := range []string{omp.Name, opencode.Name} {
+	for _, agent := range []agentprofile.Agent{omp.Agent, opencode.Agent} {
+		p := agent.Profile()
+		profile := p.Name
 		for _, side := range []Side{SideTUI, SideACP} {
 			t.Run(profile+"/"+string(side), func(t *testing.T) {
 				h := newHarness(t, 0)
 				in := h.input(profile, side)
 				s := h.create(in)
 				info := s.Info()
-				if info.Hybrid == nil || info.Hybrid.Side != string(side) || info.Hybrid.State != string(StateActive) || info.Hybrid.Agent != profile {
+				if info.Hybrid == nil || info.Hybrid.Side != string(side) || info.Hybrid.State != string(StateActive) || info.Hybrid.Agent != profile ||
+					info.Hybrid.AgentTitle != p.Title || info.Hybrid.AgentIcon != p.Icon {
 					t.Fatalf("hybrid info %+v", info.Hybrid)
 				}
 				if got := slices.Contains(info.Cmd, "--standalone"); got != (profile == opencode.Name) {

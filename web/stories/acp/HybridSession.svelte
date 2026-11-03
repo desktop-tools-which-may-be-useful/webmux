@@ -164,6 +164,8 @@
       dormant: false,
       state: "active",
       agent,
+      agentTitle: agentMetadata[agent].title,
+      agentIcon: agentMetadata[agent].icon,
       agentSessionId: chat.agentSessionId,
     },
   });

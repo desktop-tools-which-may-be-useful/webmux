@@ -23,6 +23,8 @@ const hybrid = {
   dormant: false,
   state: "active" as const,
   agent: "omp",
+  agentTitle: "omp",
+  agentIcon: "pi",
   agentSessionId: null,
 };
 

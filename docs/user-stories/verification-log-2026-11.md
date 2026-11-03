@@ -162,6 +162,13 @@
 - 验证：同一容器中 `webmux update apply` 从本地签名的测试 Release 把 0.0.1 升到 0.0.2，`rpm -Va webmux` 无差异；`dnf install` 本地包照常可用。
 - 限制：未在 Fedora 45 的 systemd 环境中经定时器运行；未重新核验其余故事能力。
 
+本次局部核对（2026-11-03）：聊天端展示当前 agent 新增 US-Q17，覆盖索引同步，不改变其他故事。
+
+- 依据：`internal/launch` 的档案图标一致性测试、`internal/hybrid` 与 `internal/wire` 的 Go 测试、线上快照与 Zod 契约，以及 `SessionRow` 与 `TerminalHeader` 的浏览器测试。
+- 变更作者运行了 `make check`、`make test-fast`（Go race、Vitest 单元与浏览器）、Storybook 与 `hybrid.spec.ts`；本次修复后重跑 `SessionRow` 浏览器用例（14 项通过）与文档治理检查。
+- 覆盖：聊天端、休眠与切换中的卡片保留品牌图标和名称，终端端不变，未知图标键只显示名称；聊天页头部的可访问名称、窄屏仅图标与标题截断。
+- 限制：截图与手动冒烟使用 fake agent，未连接真实 agent 账号；未重新核验其余故事能力。
+
 本次局部核对（2026-11-03）：新增开发版更新通道（OpenSpec `add-dev-update-channel`），新增 US-K17、US-L14、US-O14，更新 US-K11、US-K15、US-O01、US-O11 与覆盖索引。
 
 - 依据：变更的规格与设计、`internal/update`、`cmd/webmux`、`internal/tray`、发布脚本的实现，以及部署文档。
