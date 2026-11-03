@@ -50,6 +50,27 @@ test("session links open the terminal in this tab without reloading", async ({
   expect(errors).toEqual([]);
 });
 
+test("settings links navigate within the app without reloading the document", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  await page.goto("/settings");
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+
+  await page.getByRole("link", { name: "返回工作区" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings$/);
+  await page.locator("a.brand").click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+  expect(errors).toEqual([]);
+});
+
 test("Home Screen session links keep authenticated navigation inside the app", async ({
   page,
 }) => {

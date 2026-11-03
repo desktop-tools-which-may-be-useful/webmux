@@ -3,7 +3,7 @@
   import { startSettings, stopSettings } from "./settings.svelte";
   import { errorMessage } from "./error";
   import { onMount, tick } from "svelte";
-  import { api, consumeTokenFragment, store, stored } from "./api";
+  import { api, consumeTokenFragment, navigate, store, stored } from "./api";
   import { HealthSchema } from "./schemas";
   import { sync as syncPush } from "./push";
   import { Button } from "$lib/components/ui/button";
@@ -77,6 +77,33 @@
       checking = false;
       error = "Token 无效或已更改";
     };
+    // Plain anchors to app routes would reload the whole document, which
+    // blanks an iOS standalone PWA; route them through history instead.
+    const link = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const anchor =
+        event.target instanceof Element ? event.target.closest("a") : null;
+      if (!anchor || anchor.hasAttribute("download")) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      const url = new URL(anchor.href, location.href);
+      if (url.origin !== location.origin) return;
+      const appRoute =
+        url.pathname === "/" || matchRoute(url.pathname).name !== "sessions";
+      if (!appRoute) return;
+      if (url.pathname === location.pathname && url.search === location.search)
+        return;
+      event.preventDefault();
+      navigate(url.pathname + url.search + url.hash);
+    };
+    document.addEventListener("click", link);
     window.addEventListener("popstate", change);
     window.addEventListener("webmux:auth", auth);
     if (consumeTokenFragment()) token = stored("token");
@@ -85,6 +112,7 @@
       stopSettings();
       routes.disconnect();
       drafts.clearAll();
+      document.removeEventListener("click", link);
       window.removeEventListener("popstate", change);
       window.removeEventListener("webmux:auth", auth);
     };
