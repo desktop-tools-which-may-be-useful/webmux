@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"errors"
 	"net"
+	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/tray"
+	"github.com/rainchan/webmux/internal/update"
 	"github.com/rainchan/webmux/internal/wslclient"
 )
 
@@ -52,6 +55,11 @@ type Options struct {
 	Instance   *Instance
 	// Executable is the absolute path of webmux-tray.exe.
 	Executable string
+	// UpdatesDir is %LOCALAPPDATA%\WebMux\updates, where the tray keeps
+	// the installer of its own update.
+	UpdatesDir string
+	// Releases reads signed releases for the tray's own update.
+	Releases tray.ReleaseClient
 }
 
 // App is the running tray.
@@ -60,6 +68,7 @@ type App struct {
 	log      *tray.Log
 	svc      *tray.TargetService
 	sup      *tray.Supervisor
+	updater  *tray.SelfUpdater
 	menu     *menu
 	notifier *Notifier
 	clip     *Clipboard
@@ -83,7 +92,6 @@ type App struct {
 	probing      bool
 	bound        bindings
 	journal      string
-	installing   atomic.Bool
 
 	lastIcon []byte
 	lastTip  string
@@ -105,10 +113,82 @@ func Run(o Options) {
 		a.log.Printf("tray settings: %v", err)
 		a.settingsWarn = invalidSetting
 	}
+	updated, failed := "", tray.UpdateAttempt{}
+	if err == nil {
+		// An invalid file is never rewritten without a menu action.
+		settings, updated, failed = a.recordVersion(settings)
+	}
 	a.settings = settings
 	a.svc = tray.NewTargetService(o.NewService, settings)
 	a.log.Printf("webmux-tray %s starting", o.Version)
+	installed := InstalledCopy(o.Executable)
+	a.log.Printf("tray copy: installed %v, release build %v", installed, update.IsRelease())
+	a.updater = tray.NewSelfUpdater(tray.SelfUpdateOptions{
+		Version:       o.Version,
+		Arch:          runtime.GOARCH,
+		Release:       update.IsRelease(),
+		Installed:     installed,
+		Dir:           o.UpdatesDir,
+		Client:        o.Releases,
+		AutoUpdate:    a.autoUpdate,
+		Idle:          a.updateIdle,
+		RecordAttempt: a.recordAttempt,
+		Launch:        LaunchInstaller,
+		Publish:       a.kickUI,
+		Logf:          a.log.Printf,
+		Updated:       updated,
+		FailedAttempt: failed,
+	})
 	systray.Run(a.onReady, a.onExit)
+}
+
+// recordVersion saves this tray's version as lastVersion, clears an update
+// attempt it completed, and returns the version to announce as updated and
+// the failed update attempt, if any.
+func (a *App) recordVersion(s tray.Settings) (tray.Settings, string, tray.UpdateAttempt) {
+	next, updated, failed, changed := tray.RecordVersion(s, a.o.Version)
+	if !changed {
+		return s, "", failed
+	}
+	if err := tray.SaveSettings(a.o.SettingsPath, next); err != nil {
+		a.log.Printf("save tray settings: %v", err)
+		return s, updated, failed
+	}
+	a.stamp = statFile(a.o.SettingsPath)
+	return next, updated, failed
+}
+
+// recordAttempt saves the release whose installer is about to run, so the
+// tray it restarts after a failure knows. An invalid settings file is not
+// replaced.
+func (a *App) recordAttempt(attempt tray.UpdateAttempt) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.settingsWarn != "" {
+		return errors.New("托盘设置文件无效")
+	}
+	next := cloneSettings(a.settings)
+	next.UpdateAttempt = attempt
+	if err := tray.SaveSettings(a.o.SettingsPath, next); err != nil {
+		return err
+	}
+	a.settings = next
+	a.stamp = statFile(a.o.SettingsPath)
+	return nil
+}
+
+func (a *App) autoUpdate() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.settings.AutoUpdate
+}
+
+// updateIdle reports that the installer may close the tray now: no server
+// install, start, stop or restart runs and no dialog is open.
+func (a *App) updateIdle() bool {
+	snap := a.snapshot()
+	busy := snap.Installing || snap.State == tray.StateStarting || snap.State == tray.StateStopping || snap.State == tray.StateRestarting
+	return !busy && openDialogs.Load() == 0
 }
 
 func (a *App) onReady() {
@@ -130,13 +210,14 @@ func (a *App) onReady() {
 		settings := a.settings
 		a.mu.Unlock()
 		a.sup = tray.NewSupervisor(tray.Options{
-			Service:  a.svc,
-			Reach:    a.o.Reach,
-			Settings: settings,
-			Publish:  func(tray.Snapshot) { a.kickUI() },
-			Version:  a.o.Version,
-			Notify:   a.notifier.Show,
-			Logf:     a.log.Printf,
+			Service:     a.svc,
+			Reach:       a.o.Reach,
+			Settings:    settings,
+			Publish:     func(tray.Snapshot) { a.kickUI() },
+			Version:     a.o.Version,
+			AutoUpgrade: update.IsRelease() && tray.BuiltinDigests() != nil,
+			Notify:      a.notifier.Show,
+			Logf:        a.log.Printf,
 		})
 		a.probe(true)
 	}
@@ -151,6 +232,7 @@ func (a *App) onReady() {
 	}
 	go a.uiLoop()
 	go a.watchSettings()
+	a.updater.Start()
 	a.kickUI()
 }
 
@@ -170,6 +252,7 @@ func (a *App) wndProc(hwnd windows.HWND, msg uint32, wParam, lParam uintptr) uin
 }
 
 func (a *App) onMenuOpen() {
+	a.updater.MenuOpened()
 	if a.sup != nil {
 		a.sup.Refresh()
 		// A blocked or incompatible tray never polls the installed file;
@@ -244,7 +327,10 @@ func (a *App) update() {
 	v.relayState = a.relays.state
 	v.autostart = AutostartEnabled(a.o.Executable)
 	v.installSupported = a.svc.Current().Digests != nil
-	v.installing = a.installing.Load()
+	if a.sup != nil {
+		a.updater.Observe(snap)
+	}
+	v.selfUpdate = a.updater.View()
 
 	select {
 	case <-a.done:

@@ -191,3 +191,12 @@ func TestChatAttachmentsConvert(t *testing.T) {
 		t.Fatalf("state %+v", state)
 	}
 }
+
+func TestPendingUpdate(t *testing.T) {
+	if got := PendingUpdate("", contract.LauncherSystemd); got != nil {
+		t.Fatalf("no installed version = %+v, want nil", got)
+	}
+	if got := encode(t, PendingUpdate("0.5.0", contract.LauncherSystemd)); got != `{"installedVersion":"0.5.0","launcher":"systemd"}` {
+		t.Fatalf("pending update = %s", got)
+	}
+}

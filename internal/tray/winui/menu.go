@@ -4,6 +4,8 @@ package winui
 
 import (
 	"fyne.io/systray"
+
+	"github.com/rainchan/webmux/internal/tray"
 )
 
 // Pool sizes of the dynamic submenus. fyne.io/systray cannot rebuild a menu
@@ -79,6 +81,7 @@ type candidate struct {
 // menu holds every item; only App.render changes them.
 type menu struct {
 	status1, status2, hint1, hint2 *item
+	updateInfo                     *item
 
 	open, copyLinks, copyLocal, remoteWarn *item
 	remoteLinks, forwardLinks              []*item
@@ -89,7 +92,7 @@ type menu struct {
 	remote, fwHeadline, fwBlocked, fwInit *item
 	fwCandidates                          []*item
 
-	start, stop, restart, install, download *item
+	start, stop, restart, install, update *item
 
 	logs, logService, logTray *item
 	openConfig, initConfig    *item
@@ -99,6 +102,7 @@ type menu struct {
 	modeSystemd               *item
 	editSettings              *item
 	autostart                 *item
+	autoUpdate, checkUpdate   *item
 	quit                      *item
 }
 
@@ -108,6 +112,7 @@ type bindings struct {
 	reported   int          // remote[:reported] fill remoteLinks
 	candidates []candidate
 	distros    []string
+	update     tray.UpdateItem
 }
 
 func add(title string) *item { return newItem(systray.AddMenuItem(title, ""), title) }
@@ -133,12 +138,14 @@ func buildMenu() *menu {
 	m.status2 = add("")
 	m.hint1 = add("")
 	m.hint2 = add("")
-	for _, it := range []*item{m.status1, m.status2, m.hint1, m.hint2} {
+	m.updateInfo = add("")
+	for _, it := range []*item{m.status1, m.status2, m.hint1, m.hint2, m.updateInfo} {
 		it.mi.Disable()
 		it.enabled = false
 	}
 	m.hint1.hide()
 	m.hint2.hide()
+	m.updateInfo.hide()
 	systray.AddSeparator()
 
 	m.open = add("打开 WebMux")
@@ -182,8 +189,8 @@ func buildMenu() *menu {
 	m.restart = add("重启")
 	m.install = add("安装 WSL 中的 webmux")
 	m.install.hide()
-	m.download = add("下载托盘")
-	m.download.hide()
+	m.update = add("更新托盘")
+	m.update.hide()
 	systray.AddSeparator()
 
 	m.logs = add("打开日志")
@@ -203,6 +210,8 @@ func buildMenu() *menu {
 	systray.AddSeparator()
 
 	m.autostart = add("登录时自动启动")
+	m.autoUpdate = add("自动更新")
+	m.checkUpdate = add("检查更新")
 	systray.AddSeparator()
 
 	m.quit = add("退出")

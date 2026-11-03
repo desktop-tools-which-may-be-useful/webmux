@@ -28,6 +28,7 @@
     NoContentSchema,
     PreviewSettingsSchema,
     type LaunchConfigSummary,
+    type PendingUpdate,
     type QuickCommand,
   } from "../schemas";
   import {
@@ -50,6 +51,7 @@
   import QuickCommandDialog from "../components/QuickCommandDialog.svelte";
   import LaunchConfigDialog from "../components/LaunchConfigDialog.svelte";
   import InlineNotice from "../components/InlineNotice.svelte";
+  import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
   import TunnelSettings from "../components/TunnelSettings.svelte";
   import { setBrowserChrome } from "../browser-chrome";
   import TailscaleSettings from "../components/TailscaleSettings.svelte";
@@ -108,6 +110,7 @@
   let launchDeleteBusy = $state(false);
   let launchDeleteError = $state("");
   let defaultShell = $state<"" | StartupShell>("");
+  let pendingUpdate = $state<PendingUpdate>();
   const launchFull = $derived(launchConfigs.length >= LAUNCH_CONFIGS_LIMIT);
   async function loadLaunchConfigs() {
     try {
@@ -123,9 +126,10 @@
     launchEditing = id;
     launchDialogOpen = true;
   }
-  async function loadDefaultShell() {
+  async function loadConfig() {
     try {
       const config = await api("/config", ConfigSchema, "GET");
+      pendingUpdate = config.pendingUpdate;
       defaultShell =
         config.defaultShell === "zsh"
           ? "zsh"
@@ -195,7 +199,7 @@
   onMount(() => {
     setBrowserChrome("WebMux · 设置", false);
     void loadLaunchConfigs();
-    void loadDefaultShell();
+    void loadConfig();
   });
 </script>
 
@@ -237,6 +241,7 @@
           外观、快捷指令、预览和主页工作树保存在服务端，在所有设备间同步；草稿、最近目录与登录凭据仅在当前设备保存。启动配置与公网访问设置也由服务端管理。隧道配置和启停无需重启；通知推送按当前设备管理。
         </p>
       </div>
+      {#if pendingUpdate}<PendingUpdateNotice update={pendingUpdate} />{/if}
       <AppearanceSettings />
       <Card.Root id="quick-commands" class="scroll-mt-4">
         <Card.Header>

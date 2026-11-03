@@ -15,6 +15,16 @@ type ServerConfig struct {
 	Hostname     string              `json:"hostname"`
 	Workspace    WorkspaceCapability `json:"workspace"`
 	Tunnel       TunnelInfo          `json:"tunnel"`
+	// PendingUpdate is present when a different version is installed and
+	// takes effect after a restart; older servers omit it.
+	PendingUpdate *PendingUpdate `json:"pendingUpdate,omitempty"`
+}
+
+// PendingUpdate is an installed version awaiting a restart. Launcher is the
+// recorded launcher (Launcher* constants), which selects the restart method.
+type PendingUpdate struct {
+	InstalledVersion string `json:"installedVersion"`
+	Launcher         string `json:"launcher"`
 }
 
 // TunnelInfo is the read-only tunnel state in GET /api/config. It never

@@ -1,0 +1,31 @@
+{
+  "status": 200,
+  "body": {
+    "config": {
+      "exists": false,
+      "path": ""
+    },
+    "drift": null,
+    "health": {
+      "status": ""
+    },
+    "installedVersion": "0.5.0",
+    "launcher": "systemd",
+    "listen": "",
+    "localApi": true,
+    "logFile": "",
+    "pid": null,
+    "record": true,
+    "sessions": null,
+    "socket": "",
+    "state": "running",
+    "tokenConfigured": false,
+    "urls": {
+      "local": "",
+      "remote": null
+    },
+    "v": 1,
+    "version": "0.4.0",
+    "warnings": null
+  }
+}

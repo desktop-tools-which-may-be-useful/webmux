@@ -20,6 +20,7 @@ import (
 func (a *App) shutdown(stop bool) {
 	a.quitOnce.Do(func() {
 		a.log.Printf("tray exiting (stop WebMux: %v)", stop)
+		a.updater.Close()
 		if a.sup != nil {
 			a.sup.Quit(stop)
 		}
@@ -102,24 +103,19 @@ func (a *App) initConfig() {
 	}
 }
 
-// installWebmux downloads and installs the release server into WSL, then
-// rechecks; a running server keeps its old binary until restarted.
+// installWebmux downloads and installs the release server into WSL; the
+// supervisor then rechecks. A running server keeps its old binary until
+// restarted.
 func (a *App) installWebmux() {
-	if !a.installing.CompareAndSwap(false, true) {
-		return
-	}
-	a.kickUI()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	err := a.svc.Current().Install(ctx)
-	cancel()
-	a.installing.Store(false)
-	a.kickUI()
+	a.sup.Install(func(err error) { go a.installed(err) })
+}
+
+func (a *App) installed(err error) {
 	if err != nil {
 		a.fail("安装 webmux 失败", err)
 		return
 	}
 	a.notifier.Show("WebMux", "已安装 webmux "+a.o.Version)
-	a.sup.Recheck()
 	snap := a.sup.Snapshot()
 	if !snap.HasStatus || snap.Status.State != contract.StateRunning {
 		return
@@ -137,11 +133,18 @@ func (a *App) installWebmux() {
 	}
 }
 
-// openRelease opens the release page of the tray matching a newer server.
-// The tray never updates itself.
-func (a *App) openRelease() {
-	if download := tray.DownloadEntry(a.snapshot()); download.Show {
-		if err := OpenURL(download.URL); err != nil {
+// updateTray runs the update entry: an installed tray checks and installs
+// the latest release, a portable one opens the release page.
+func (a *App) updateTray() {
+	entry := a.bindings().update
+	if !entry.Show || !entry.Enabled {
+		return
+	}
+	switch entry.Action {
+	case tray.UpdateInstall:
+		a.updater.Install()
+	case tray.UpdateOpenRelease:
+		if err := OpenURL(entry.URL); err != nil {
 			a.fail("无法打开浏览器", err)
 		}
 	}

@@ -4,6 +4,10 @@
     "defaultCwd": "<repo>",
     "defaultShell": "bash",
     "hostname": "<hostname>",
+    "pendingUpdate": {
+      "installedVersion": "0.5.0",
+      "launcher": "systemd"
+    },
     "tunnel": {
       "enabled": false,
       "hostname": "",

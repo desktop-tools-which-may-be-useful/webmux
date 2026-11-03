@@ -1,6 +1,8 @@
 # 控制面 JSON 契约
 
-`webmux version|status|stop|config ... --json` 向标准输出写入恰好一个 JSON 对象，诊断只写标准错误。所有对象带 `v`（当前 `1`）；同一版本内只增加可选字段，不删除或改变既有字段含义，不兼容变更提升 `v`。退出码：`0` 运行中且健康或操作成功，`1` 其他错误，`2` 用法错误，`3` 未运行（`status`、`bridge`）。
+`webmux version|status|stop|config|update check ... --json` 向标准输出写入恰好一个 JSON 对象，诊断只写标准错误。
+
+所有对象带 `v`（当前 `1`）；同一版本内只增加可选字段，不删除或改变既有字段含义，不兼容变更提升 `v`。退出码：`0` 运行中且健康或操作成功，`1` 其他错误，`2` 用法错误，`3` 未运行（`status`、`bridge`）。
 
 `version`：`{"v": 1, "version": "0.3.0", "contract": 1}`。`contract` 是该构建支持的控制契约版本，不读取配置、不启动服务；客户端据此判断兼容。不带 `--json` 的 `webmux version` 与 `webmux --version` 仍输出 `webmux <版本>`。旧版本会忽略 `--json` 并输出文本，客户端应回退解析文本。
 
@@ -57,6 +59,7 @@
     "subscriptions": 1, // 已登记设备数
     "publicOrigin": "https://term.example.com", // 仅当前有效 Named 设置具有主机名时出现，动态跟随设置
   },
+  "installedVersion": "0.5.0", // 仅运行中实例经本机 API 返回：可执行文件路径上已安装的版本已知且不同于 version 时出现，重启后生效
 }
 ```
 
@@ -69,3 +72,5 @@
 fields 为字段名到 `{value, source}` 的映射，stores 包含 `{id, path, status, phase?, observedAt, lock}`；敏感凭据仅为布尔，不返回正文。
 
 `config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。
+
+`update check`：`{"v": 1, "current": "0.5.0", "latest": "0.6.0", "available": true, "installMethod": "deb"}`。`latest` 取自签名验证通过的发布清单，`available` 表示它高于 `current`，`installMethod` 为 `deb | rpm | other`。非发布构建或检查失败时以 `1` 退出，标准输出为空。

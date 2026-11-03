@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/update"
 )
 
 // InstallItem describes the install / upgrade menu entry.
@@ -14,8 +15,8 @@ type InstallItem struct {
 }
 
 // InstallEntry derives the install entry. supported is false for a tray
-// without server digests; installing is true while an install runs.
-func InstallEntry(snap Snapshot, supported, installing bool) InstallItem {
+// without server digests.
+func InstallEntry(snap Snapshot, supported bool) InstallItem {
 	if !snap.Installable() {
 		return InstallItem{}
 	}
@@ -29,27 +30,67 @@ func InstallEntry(snap Snapshot, supported, installing bool) InstallItem {
 	switch {
 	case !supported:
 		return InstallItem{Show: true, Title: title + "（" + ErrInstallUnsupported.Error() + "）"}
-	case installing:
+	case snap.Installing:
 		return InstallItem{Show: true, Title: "正在安装 WSL 中的 webmux…"}
 	}
 	busy := snap.State == StateStarting || snap.State == StateStopping || snap.State == StateRestarting
 	return InstallItem{Show: true, Enabled: !busy, Title: title}
 }
 
-// DownloadItem describes the entry opening a newer tray's release page.
-type DownloadItem struct {
-	Show       bool
-	Title, URL string
+// UpdateAction is what the tray update entry does when clicked.
+type UpdateAction int
+
+const (
+	// UpdateOpenRelease opens URL in the default browser.
+	UpdateOpenRelease UpdateAction = iota + 1
+	// UpdateInstall checks for the latest release and installs it.
+	UpdateInstall
+)
+
+// UpdateItem describes the single entry updating the tray.
+type UpdateItem struct {
+	Show, Enabled bool
+	Title, URL    string
+	Action        UpdateAction
 }
 
-// DownloadEntry offers the tray matching a newer installed server; only
-// release versions have a release page.
-func DownloadEntry(snap Snapshot) DownloadItem {
+// UpdateEntry offers a newer tray: the release found by the update check
+// first, else the version of a newer WSL webmux. An installed tray
+// installs it; a portable one only opens the release page. Only release
+// versions have a release page.
+func UpdateEntry(snap Snapshot, u SelfUpdateView) UpdateItem {
+	if u.Latest != "" {
+		if !u.Installed {
+			return UpdateItem{Show: true, Enabled: true, Title: "下载托盘 " + u.Latest, URL: ReleasePage(u.Latest), Action: UpdateOpenRelease}
+		}
+		return UpdateItem{Show: true, Enabled: !u.Busy, Title: "更新到 " + u.Latest, Action: UpdateInstall}
+	}
 	version := snap.Installed.Version
 	if !snap.Compat.Newer() || !releaseVersion(version) {
-		return DownloadItem{}
+		return UpdateItem{}
 	}
-	return DownloadItem{Show: true, Title: "下载托盘 " + version, URL: ReleasePage(version)}
+	if u.Installed && u.Release {
+		return UpdateItem{Show: true, Enabled: !u.Busy, Title: "更新托盘", Action: UpdateInstall}
+	}
+	return UpdateItem{Show: true, Enabled: true, Title: "下载托盘 " + version, URL: ReleasePage(version), Action: UpdateOpenRelease}
+}
+
+// CheckItem describes the "检查更新" entry.
+type CheckItem struct {
+	Enabled bool
+	Title   string
+}
+
+// CheckEntry is disabled with the reason in a development build and while
+// an update runs.
+func CheckEntry(u SelfUpdateView) CheckItem {
+	switch {
+	case !u.Release:
+		return CheckItem{Title: "检查更新（" + update.ErrNotRelease.Error() + "）"}
+	case u.Busy:
+		return CheckItem{Title: "检查更新（正在进行）"}
+	}
+	return CheckItem{Enabled: true, Title: "检查更新"}
 }
 
 // ReleasePage is the GitHub release page of a version.
@@ -80,6 +121,9 @@ func VersionHint(snap Snapshot) string {
 	}
 	if r := snap.Running; r != nil && snap.Compat != "" && installed != "" && r.Version != installed {
 		hints = append(hints, "WSL 中已安装 "+installed+"，重启 WebMux 后生效，重启会结束所有会话")
+	}
+	if snap.UpgradeError != "" {
+		hints = append(hints, "自动升级 WSL 中的 webmux 失败："+snap.UpgradeError)
 	}
 	return strings.Join(hints, "；")
 }

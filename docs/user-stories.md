@@ -29,11 +29,11 @@
 | H    | 手机、平板与触摸操作、慢速网络         | US-H01–US-H11 |
 | I    | 代码工作区、Diff、引用与文件操作       | US-I01–US-I19 |
 | J    | 仓库登记与 worktree 管理               | US-J01–US-J11 |
-| K    | 配置、运行与服务管理                   | US-K01–US-K13 |
-| L    | 开发、验证与发布支持                   | US-L01–US-L12 |
+| K    | 配置、运行与服务管理                   | US-K01–US-K16 |
+| L    | 开发、验证与发布支持                   | US-L01–US-L13 |
 | M    | 原生终端、CLI 与本机控制面             | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道                    | US-N01–US-N08 |
-| O    | Windows/WSL 托盘管理                   | US-O01–US-O12 |
+| O    | Windows/WSL 托盘管理                   | US-O01–US-O13 |
 | P    | Tailscale Serve / Funnel               | US-P01–US-P07 |
 | Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q16 |
 
@@ -61,4 +61,4 @@
 | -------------------------------------------------------------------------------------- | ------------------------ |
 | [verification-log-2026-10-23-to-26](user-stories/verification-log-2026-10-23-to-26.md) | 2026-10-23 至 2026-10-26 |
 | [verification-log-2026-10-27-to-31](user-stories/verification-log-2026-10-27-to-31.md) | 2026-10-27 至 2026-10-31 |
-| [verification-log-2026-11](user-stories/verification-log-2026-11.md)                   | 2026-11-01 至 2026-11-02 |
+| [verification-log-2026-11](user-stories/verification-log-2026-11.md)                   | 2026-11-01 至 2026-11-03 |

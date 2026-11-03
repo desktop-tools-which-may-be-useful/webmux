@@ -15,11 +15,14 @@
     SessionEventSchema,
     RepositoriesSchema,
     type HybridRecord,
+    type PendingUpdate,
     type SessionInfo,
     type Repository,
     type Worktree,
   } from "../schemas";
   import type { LaunchConfigsState } from "../launchConfigs";
+  import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
+  import { dismissUpdate, dismissedUpdate, homeUpdate } from "../pendingUpdate";
   import { connect, type Connection } from "../ws";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
@@ -76,6 +79,9 @@
   let launchConfigs = $state<LaunchConfigsState>({ status: "loading" });
   let cwd = $state("~");
   let hostname = $state("");
+  let pendingUpdate = $state<PendingUpdate>();
+  let dismissedVersion = $state(dismissedUpdate());
+  const updateNotice = $derived(homeUpdate(pendingUpdate, dismissedVersion));
   let setupSettled = $state(false);
   let loading = $state(true);
   let initializing = $state(true);
@@ -334,6 +340,7 @@
         if (disposed) return;
         cwd = c.defaultCwd;
         hostname = c.hostname;
+        pendingUpdate = c.pendingUpdate;
         gitReady = c.workspace.gitAvailable;
         registryReady = c.workspace.registryAvailable;
         capabilityError = [c.workspace.gitError, c.workspace.registryError]
@@ -439,6 +446,18 @@
     >
       连接已断开，重连中…
     </div>{/if}
+  {#if updateNotice}
+    {@const version = updateNotice.installedVersion}
+    <div class="mx-auto max-w-7xl px-4 pt-5 sm:px-8 sm:pt-6">
+      <PendingUpdateNotice
+        update={updateNotice}
+        ondismiss={() => {
+          dismissUpdate(version);
+          dismissedVersion = version;
+        }}
+      />
+    </div>
+  {/if}
   {#if loading || initializing}
     <div
       class="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-8 sm:py-6"

@@ -19,9 +19,6 @@ type Local struct {
 	Configuration func() contract.Configuration
 	// Status describes the running instance; record and localApi are true.
 	Status func() contract.StatusV1
-	// Launcher is the recorded launcher; systemd and launchd refuse an
-	// unforced shutdown.
-	Launcher string
 	// Shutdown takes the SIGTERM path. It runs after the 202 is flushed.
 	Shutdown func()
 	// InSession reports whether a peer PID runs inside a WebMux session.
@@ -78,8 +75,8 @@ func NewLocal(d Deps, local Local) http.Handler {
 		if !decodeOptional(w, r, &req) {
 			return
 		}
-		if hint := runtime.ManagerHint(local.Launcher); hint != "" && !req.Force {
-			failure(w, http.StatusConflict, fmt.Errorf("WebMux is managed by %s; use `%s` (or --force)", local.Launcher, hint))
+		if hint := runtime.ManagerHint(d.Launcher); hint != "" && !req.Force {
+			failure(w, http.StatusConflict, fmt.Errorf("WebMux is managed by %s; use `%s` (or --force)", d.Launcher, hint))
 			return
 		}
 		reply(w, http.StatusAccepted, contract.Ack{OK: true})

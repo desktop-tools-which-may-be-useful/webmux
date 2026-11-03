@@ -61,6 +61,13 @@ type Deps struct {
 	// Hybrid serves the chat channel of hybrid sessions; nil answers 404
 	// for every chat endpoint.
 	Hybrid *hybrid.Service
+	// InstalledVersion returns the installed version awaiting a restart,
+	// or ""; nil never reports one.
+	InstalledVersion func() string
+	// Launcher is the recorded launcher. It selects the restart method of a
+	// pending update; on the local API, systemd and launchd refuse an
+	// unforced shutdown.
+	Launcher string
 }
 
 type Server struct {
@@ -99,7 +106,7 @@ func (s *Server) routes() *http.ServeMux {
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
-		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo()})
+		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate()})
 	})
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, wire.Sessions(m.List())) })
 	mux.HandleFunc("POST /api/sessions", s.create)

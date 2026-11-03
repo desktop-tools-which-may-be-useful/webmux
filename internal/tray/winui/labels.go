@@ -76,7 +76,7 @@ type view struct {
 	autostart    bool
 	// installSupported: the tray carries release server digests.
 	installSupported bool
-	installing       bool
+	selfUpdate       tray.SelfUpdateView
 }
 
 func defaultDistro(distros []wslclient.Distro) string {

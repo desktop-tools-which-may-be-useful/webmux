@@ -9,9 +9,10 @@ import (
 
 // Exit codes of `webmux-tray quit`.
 const (
-	QuitDone    = 0 // no tray runs, or it has exited
+	QuitDone    = 0 // the running tray has exited
 	QuitRunning = 1 // a tray still runs
 	QuitUsage   = 2 // invalid arguments
+	QuitNone    = 3 // no tray was running
 )
 
 // ParseQuit parses the arguments after `quit`: an optional
@@ -45,11 +46,12 @@ type Quitter struct {
 	Wait, Grace, Poll time.Duration
 }
 
-// Quit returns QuitDone or QuitRunning. With killPath set, trays started
-// from it are terminated once Wait passes; trays elsewhere are left alone.
+// Quit returns QuitNone, QuitDone or QuitRunning. With killPath set, trays
+// started from it are terminated once Wait passes; trays elsewhere are left
+// alone.
 func (q Quitter) Quit(killPath string) int {
 	if !q.Running() {
-		return QuitDone
+		return QuitNone
 	}
 	if !q.Signal() {
 		q.logf("the running tray does not support quit requests")

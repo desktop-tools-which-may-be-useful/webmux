@@ -1,0 +1,13 @@
+# Daily check for a newer signed WebMux release. Disable automatic updates
+# with: systemctl disable --now webmux-update.timer (kept across upgrades).
+[Unit]
+Description=Daily WebMux automatic update
+Documentation=https://github.com/mzdluo123/webmux/blob/main/docs/deployment.md
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -98,6 +98,10 @@ type StatusV1 struct {
 	// Push is present when the running server supports attention push;
 	// older servers omit it.
 	Push *PushStatus `json:"push,omitempty"`
+	// InstalledVersion is the version installed at the executable's path
+	// when it is known and differs from Version: it takes effect after a
+	// restart. Older servers omit it.
+	InstalledVersion string `json:"installedVersion,omitempty"`
 }
 
 // PushStatus describes Web Push on a running server. It never carries
@@ -210,6 +214,16 @@ type VersionV1 struct {
 	V        int    `json:"v"`
 	Version  string `json:"version"`
 	Contract int    `json:"contract"`
+}
+
+// UpdateCheckV1 is printed by `webmux update check --json`.
+// InstallMethod is "deb", "rpm" or "other".
+type UpdateCheckV1 struct {
+	V             int    `json:"v"`
+	Current       string `json:"current"`
+	Latest        string `json:"latest"`
+	Available     bool   `json:"available"`
+	InstallMethod string `json:"installMethod"`
 }
 
 // Exit codes shared by every client command.

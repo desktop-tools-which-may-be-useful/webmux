@@ -67,6 +67,9 @@
 | 无服务管理器后台启动、日志与客户端停止                                                              | US-K12                                              |
 | 一键安装脚本、平台识别、同源校验与镜像回退                                                          | US-K11                                              |
 | Linux deb / rpm 安装包、包内用户单元与服务命令识别                                                  | US-K13                                              |
+| deb / rpm 自动更新定时器、root 安装、保留停用与不触碰用户服务                                       | US-K14                                              |
+| `update check`、签名清单与手动验证发布签名                                                          | US-K15                                              |
+| 运行中服务的待生效版本：状态、本机 API、配置响应与 Web UI 提示                                      | US-K16                                              |
 | config init/path/show/validate/check 与启动参数覆盖                                                 | US-K02–US-K04                                       |
 | 所有 TOML 配置项：访问、会话、提醒、存储                                                            | US-A03；US-K03–US-K04；US-K08–US-K09；US-N01–US-N04 |
 | service install/--dry-run/--force/start/stop/restart/status/logs/uninstall                          | US-K05–US-K07                                       |
@@ -77,6 +80,7 @@
 | `AGENTS.md` 体积预算与规则下沉到 `docs/agent-rules/`                                                | US-L11                                              |
 | 文档可达性、相对链接与锚点、README 首页预算                                                         | US-L12                                              |
 | Storybook、截图、baseline、CI 与 release                                                            | US-L03–US-L04                                       |
+| 发布签名、签名密钥检查、发布前验证与密钥轮换                                                        | US-L13                                              |
 | 分层架构测试、线上 JSON 快照、必填数组 Zod 契约与重新录制                                           | US-L05                                              |
 | agent 适配器接口、注册表、Claude 进程注册记录与隐私边界、契约测试与 agent 名称守卫                  | US-L05；US-Q01；US-Q03                              |
 | 前端架构守卫：设计系统 lint、分层、重复代码、未使用代码与基线                                       | US-L06                                              |
@@ -91,11 +95,12 @@
 | 隧道故障隔离、Web/本机持久开关、运行时应用与紧急关闭                                                | US-N05–US-N06；US-M08                               |
 | Web Quick/Named 配置、写入式凭据、恢复默认与配置指南                                                | US-N01–US-N03；US-N07                               |
 | 隧道期望/运行状态、动态模式/主机名、存储错误与设置能力                                              | US-N06；US-N08；US-O09；US-O11                      |
-| 托盘安装升级、启动方式、管理归属、自动恢复                                                          | US-O01–US-O03                                       |
+| 托盘安装升级（含自动升级较旧服务）、启动方式、管理归属、自动恢复                                    | US-O01–US-O03                                       |
 | 托盘登录启动、单实例、发行版、设置、状态与日志                                                      | US-O04–US-O07                                       |
 | Windows 远程转发、敏感链接复制、退出托盘                                                            | US-O08–US-O10                                       |
 | 托盘与 WSL 服务的兼容、版本对应、降级运行与更新入口                                                 | US-O11                                              |
 | Windows 安装程序的安装、升级、卸载、静默模式与托盘退出请求                                          | US-O04；US-O12                                      |
+| 托盘自动更新：检查调度、安装版识别、静默安装、便携版提示与“检查更新”                                | US-O13                                              |
 | Tailscale 检测、节点 DNS、HTTPS 与现有入口只读状态                                                  | US-P01                                              |
 | Tailscale Serve/Funnel 配置、回读确认、精确移除与公网风险                                           | US-P02–US-P03                                       |
 | WSL NAT 阻塞、Windows provider 选择与 operator 提示                                                 | US-P04–US-P05                                       |

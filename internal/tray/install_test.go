@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/fetch"
 )
 
@@ -210,5 +211,103 @@ func TestParseVersion(t *testing.T) {
 		if got := ParseVersion(in); got != want {
 			t.Errorf("ParseVersion(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A release tray with automatic updates upgrades an older WSL webmux once
+// the check finishes; the running instance and its sessions stay, and the
+// status line says a restart applies the new version.
+func TestAutoUpgradeOlderServer(t *testing.T) {
+	service := &fakeService{running: true, launcher: contract.LauncherWindowsTray, record: true, runningAs: "0.2.0", version: "0.2.0", installs: "0.3.0", sessions: 2}
+	h := newUpgradingHarness(t, service, DefaultSettings(), "0.3.0", true)
+	snap := h.wait("upgraded", func(s Snapshot) bool {
+		return s.Compat == CompatMatched && !s.Installing && s.State == StateRunning && s.Sessions == 2
+	})
+	if service.count("install") != 1 || service.count("startTray") != 0 || service.count("shutdown") != 0 {
+		t.Fatalf("calls %v", service.calls)
+	}
+	if snap.Running == nil || snap.Running.Version != "0.2.0" || VersionHint(snap) != "WSL 中已安装 0.3.0，重启 WebMux 后生效，重启会结束所有会话" {
+		t.Fatalf("after upgrade %q %+v", VersionHint(snap), snap.Running)
+	}
+	if notes := h.notifications(); len(notes) != 0 {
+		t.Fatalf("automatic upgrade notified: %v", notes)
+	}
+}
+
+// A webmux too old for the tray's contract or local API is upgraded too.
+func TestAutoUpgradeTooOldServer(t *testing.T) {
+	service := &fakeService{checkErr: ErrWebmuxTooOld, installs: "0.3.0"}
+	h := newUpgradingHarness(t, service, manualSettings(), "0.3.0", true)
+	snap := h.wait("upgraded", func(s Snapshot) bool { return s.Compat == CompatMatched && !s.Installing })
+	if service.count("install") != 1 || snap.Blocker != "" || snap.State != StateStopped || service.count("startTray") != 0 {
+		t.Fatalf("after upgrade %+v %v", snap, service.calls)
+	}
+}
+
+// Nothing is written unasked when automatic updates are off, the tray is
+// not a release build, or the server is missing, newer or not comparable.
+func TestAutoUpgradeOnlyOlderServers(t *testing.T) {
+	off := manualSettings()
+	off.AutoUpdate = false
+	for _, tc := range []struct {
+		name     string
+		service  *fakeService
+		settings Settings
+		release  bool
+		checked  func(Snapshot) bool
+	}{
+		{"automatic updates off", &fakeService{version: "0.2.0"}, off, true, func(s Snapshot) bool { return s.Compat == CompatServerOlder }},
+		{"development tray", &fakeService{version: "0.2.0"}, manualSettings(), false, func(s Snapshot) bool { return s.Compat == CompatServerOlder }},
+		{"missing", &fakeService{checkErr: ErrWebmuxMissing}, manualSettings(), true, func(s Snapshot) bool { return s.Blocker == BlockerMissing }},
+		{"newer", &fakeService{version: "0.4.0"}, manualSettings(), true, func(s Snapshot) bool { return s.Compat == CompatServerNewer }},
+		{"contract too new", &fakeService{version: "0.2.0", contract: 2}, manualSettings(), true, func(s Snapshot) bool { return s.Compat == CompatIncompatibleNewer }},
+		{"not comparable", &fakeService{version: "dev"}, manualSettings(), true, func(s Snapshot) bool { return s.Compat == CompatUnknown }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newUpgradingHarness(t, tc.service, tc.settings, "0.3.0", tc.release)
+			snap := h.wait("checked", tc.checked)
+			if snap.Installing || tc.service.count("install") != 0 {
+				t.Fatalf("installed unasked: %v", tc.service.calls)
+			}
+		})
+	}
+}
+
+// Turning automatic updates on upgrades an older server right away.
+func TestAutoUpgradeWhenEnabled(t *testing.T) {
+	settings := manualSettings()
+	settings.AutoUpdate = false
+	service := &fakeService{version: "0.2.0", installs: "0.3.0"}
+	h := newUpgradingHarness(t, service, settings, "0.3.0", true)
+	h.wait("checked", func(s Snapshot) bool { return s.Compat == CompatServerOlder })
+	if InstallEntry(h.sup.Snapshot(), true).Title != "升级 WSL 中的 webmux（0.2.0 → 0.3.0）" {
+		t.Fatalf("entry %+v", InstallEntry(h.sup.Snapshot(), true))
+	}
+	settings.AutoUpdate = true
+	h.sup.SetSettings(settings)
+	h.wait("upgraded", func(s Snapshot) bool { return s.Compat == CompatMatched && !s.Installing })
+	if service.count("install") != 1 {
+		t.Fatalf("calls %v", service.calls)
+	}
+}
+
+// A failed automatic upgrade shows why in the status line, leaves the file
+// as it was, and waits for the next check instead of retrying.
+func TestAutoUpgradeFailure(t *testing.T) {
+	service := &fakeService{version: "0.2.0", installErr: errors.New("安装到 /usr/bin/webmux 失败：install: cannot create regular file '/usr/bin/webmux': Permission denied")}
+	h := newUpgradingHarness(t, service, manualSettings(), "0.3.0", true)
+	snap := h.wait("failed", func(s Snapshot) bool { return s.UpgradeError != "" })
+	if !strings.Contains(VersionHint(snap), "自动升级 WSL 中的 webmux 失败：安装到 /usr/bin/webmux 失败") || snap.Compat != CompatServerOlder || snap.Installing {
+		t.Fatalf("failure %q %+v", VersionHint(snap), snap)
+	}
+	h.clock.Advance(3 * StatusInterval)
+	if service.count("install") != 1 || len(h.notifications()) != 0 {
+		t.Fatalf("retried before the next check: %v %v", service.calls, h.notifications())
+	}
+	h.sup.Recheck()
+	h.wait("second attempt", func(Snapshot) bool { return service.count("install") == 2 })
+	snap = h.wait("failed again", func(s Snapshot) bool { return s.UpgradeError != "" && !s.Installing })
+	if snap.Installed.Version != "0.2.0" {
+		t.Fatalf("file changed %+v", snap.Installed)
 	}
 }

@@ -1,6 +1,7 @@
 # Smoke test of the Windows installer on a real Windows user session:
-# silent install, `webmux-tray quit`, upgrade over a running tray, refusal
-# beside a foreign tray, wrong-architecture refusal and uninstall.
+# silent install, `webmux-tray quit`, `webmux-tray firewall` (allow/remove
+# only when elevated), upgrade over a running tray, refusal beside a foreign
+# tray, wrong-architecture refusal and uninstall.
 #
 # It installs into the current user's profile and leaves tray.json/tray.log
 # behind by design; run it on a CI runner or a throwaway account.
@@ -115,7 +116,7 @@ try {
   Check ((Run $tray @('quit')) -eq 0) 'quit exits 0 when the tray exits'
   Check ((TrayProcesses $tray).Count -eq 0) 'tray process gone after quit'
   $t = Measure-Command { $code = Run $tray @('quit') }
-  Check ($code -eq 0 -and $t.TotalSeconds -lt 5) 'quit without a tray exits 0 at once'
+  Check ($code -eq 3 -and $t.TotalSeconds -lt 5) 'quit without a tray exits 3 at once'
   Check ((Run $tray @('quit', '--bogus')) -eq 2) 'quit rejects unknown arguments'
 
   # quit and an unresponsive tray: only the --kill-path one is ended.
@@ -124,6 +125,30 @@ try {
   Check (-not $old.HasExited) 'unresponsive tray at another path survives'
   Check ((Run $tray @('quit', '--kill-path', $fake)) -eq 0) 'quit --kill-path ends the unresponsive tray at that path'
   Check (WaitFor { $old.HasExited } 5) 'unresponsive tray terminated'
+
+  # firewall: a silent install adds no rule. Elevated (CI runners), allow
+  # adds the rule for exactly this tray and remove deletes it again. The
+  # caller wraps FirewallRules in @() since an empty result unrolls to $null.
+  function FirewallRules {
+    Get-NetFirewallApplicationFilter -Program $tray -ErrorAction SilentlyContinue |
+      Get-NetFirewallRule -ErrorAction SilentlyContinue |
+      Where-Object { $_.DisplayName -like 'WebMux tray forwarding *' }
+  }
+  Check (@(FirewallRules).Count -eq 0) 'silent install adds no firewall rule'
+  Check ((Run $tray @('firewall')) -eq 2) 'firewall rejects missing arguments'
+  Check ((Run $tray @('firewall', 'allow', 'C:\Other\program.exe')) -eq 2) 'firewall allow only applies to this tray'
+  Check ((Run $tray @('firewall', 'remove', 'webmux-tray.exe')) -eq 2) 'firewall remove rejects a relative path'
+  Check ((Run $tray @('firewall', 'remove')) -eq 0) 'firewall remove without a rule exits 0'
+  $identity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+  if ($identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Check ((Run $tray @('firewall', 'allow')) -eq 0) 'firewall allow exits 0'
+    $rule = @(FirewallRules)
+    Check ($rule.Count -eq 1 -and "$($rule[0].Direction)" -eq 'Inbound' -and "$($rule[0].Action)" -eq 'Allow' -and "$($rule[0].Profile)" -eq 'Domain, Private') 'rule allows inbound to this tray on private and domain networks only'
+    Check ((Run $tray @('firewall', 'allow')) -eq 0 -and @(FirewallRules).Count -eq 1) 'firewall allow is idempotent'
+    Check ((Run $tray @('firewall', 'remove')) -eq 0 -and @(FirewallRules).Count -eq 0) 'firewall remove deletes the rule'
+  } else {
+    Write-Host 'skip - firewall allow and remove need an elevated session'
+  }
 
   # Upgrade over a running tray.
   Start-Process -FilePath $tray | Out-Null

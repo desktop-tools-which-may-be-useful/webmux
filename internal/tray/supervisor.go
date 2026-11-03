@@ -38,6 +38,7 @@ const (
 	UnhealthyLimit    = 3
 	WatchBackoffFirst = time.Second
 	WatchBackoffMax   = 30 * time.Second
+	InstallTimeout    = 10 * time.Minute
 )
 
 // Clock is injectable for tests.
@@ -88,6 +89,11 @@ type Snapshot struct {
 	// Degraded marks an instance whose status uses a contract the tray does
 	// not speak; only reachability from Windows follows it.
 	Degraded bool
+	// Installing is true while the server install into WSL runs.
+	Installing bool
+	// UpgradeError is why the latest automatic upgrade failed, until the
+	// next check or install.
+	UpgradeError string
 }
 
 // Blocker classifies failures that need user action before a start.
@@ -117,6 +123,12 @@ func blockerOf(err error) Blocker {
 // upgrading the server.
 func (s Snapshot) Installable() bool {
 	return s.Blocker == BlockerMissing || s.Blocker == BlockerIncompatible || s.Compat.Older()
+}
+
+// Upgradable reports a server older than the tray, which the tray may
+// upgrade automatically; a missing server is never installed unasked.
+func (s Snapshot) Upgradable() bool {
+	return s.Blocker == BlockerIncompatible || s.Compat.Older()
 }
 
 // TunnelActive reports a starting or ready tunnel on the running instance.
@@ -177,9 +189,11 @@ type Supervisor struct {
 	reach   Reacher
 	clock   Clock
 	tray    BuildInfo
-	publish func(Snapshot)
-	notify  func(title, message string)
-	logf    func(format string, args ...any)
+	// autoUpgrade allows upgrading an older server without asking.
+	autoUpgrade bool
+	publish     func(Snapshot)
+	notify      func(title, message string)
+	logf        func(format string, args ...any)
 
 	events chan any
 	done   chan struct{}
@@ -196,6 +210,10 @@ type Options struct {
 	Settings Settings
 	// Version is the tray version, compared with the installed server.
 	Version string
+	// AutoUpgrade lets the tray upgrade an older server after a check
+	// while Settings.AutoUpdate is on. Only release builds carrying
+	// server digests set it.
+	AutoUpgrade bool
 	// Publish receives every snapshot from the loop goroutine.
 	Publish func(Snapshot)
 	Notify  func(title, message string)
@@ -211,6 +229,7 @@ const (
 	cmdRefresh
 	cmdRecheck
 	cmdSettings
+	cmdInstall
 	cmdQuit
 )
 
@@ -219,6 +238,7 @@ type command struct {
 	settings Settings
 	stop     bool
 	reply    chan struct{}
+	done     func(error)
 }
 
 type statusEvent struct {
@@ -266,6 +286,11 @@ type stopEvent struct {
 	forced bool
 	err    error
 }
+type installEvent struct {
+	auto bool
+	done func(error)
+	err  error
+}
 
 // NewSupervisor starts the loop. It refreshes status first, then starts
 // WebMux when Settings.StartWebMux is set and nothing runs.
@@ -282,7 +307,7 @@ func NewSupervisor(o Options) *Supervisor {
 	if o.Publish == nil {
 		o.Publish = func(Snapshot) {}
 	}
-	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, tray: BuildInfo{Version: o.Version, Contract: slices.Max(SupportedContracts)}, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, supervisorEventQueueCapacity), done: make(chan struct{})}
+	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, tray: BuildInfo{Version: o.Version, Contract: slices.Max(SupportedContracts)}, autoUpgrade: o.AutoUpgrade, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, supervisorEventQueueCapacity), done: make(chan struct{})}
 	go s.loop(o.Settings)
 	return s
 }
@@ -309,6 +334,13 @@ func (s *Supervisor) Refresh() { s.send(command{kind: cmdRefresh}) }
 // Recheck verifies the installed server again, for example after an
 // install or when the menu opens on a blocked tray.
 func (s *Supervisor) Recheck() { s.send(command{kind: cmdRecheck}) }
+
+// Install installs the server matching the tray into WSL, then rechecks.
+// done receives the result on the loop goroutine and must not block; it
+// is not called when an install or a start or stop is already running.
+func (s *Supervisor) Install(done func(error)) {
+	s.send(command{kind: cmdInstall, done: done})
+}
 
 // SetSettings applies new settings. A changed distribution or mode restarts
 // a managed running instance (the UI confirms first); other path changes

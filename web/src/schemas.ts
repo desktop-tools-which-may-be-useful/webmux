@@ -334,6 +334,15 @@ export const TailscaleSettingsUpdateSchema = z
 export type TailscaleSettingsUpdate = z.infer<
   typeof TailscaleSettingsUpdateSchema
 >;
+// An installed version that takes effect after a restart. An unknown future
+// launcher falls back to the manual restart method.
+const PendingUpdateSchema = z.object({
+  installedVersion: z.string().min(1).max(64),
+  launcher: z
+    .enum(["systemd", "launchd", "windows-tray", "manual"])
+    .catch("manual"),
+});
+export type PendingUpdate = z.infer<typeof PendingUpdateSchema>;
 export const ConfigSchema = z.object({
   defaultCwd: z.string(),
   // Older servers do not send the editor's default startup shell.
@@ -343,6 +352,9 @@ export const ConfigSchema = z.object({
   workspace: WorkspaceCapabilitySchema,
   // Older servers do not send the runtime tunnel state.
   tunnel: TunnelInfoSchema.optional(),
+  // Present only while a different version awaits a restart; older servers
+  // never send it.
+  pendingUpdate: PendingUpdateSchema.optional(),
 });
 export const WorktreeSchema = z.object({
   id: z.string(),

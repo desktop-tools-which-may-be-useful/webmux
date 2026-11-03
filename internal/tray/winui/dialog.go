@@ -4,6 +4,7 @@ package winui
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"golang.org/x/sys/windows"
 )
@@ -16,7 +17,13 @@ const (
 	idNo  = 7
 )
 
+// openDialogs counts message boxes on screen; a tray update waits for
+// none to be open.
+var openDialogs atomic.Int32
+
 func messageBox(text string, flags uint32) int32 {
+	openDialogs.Add(1)
+	defer openDialogs.Add(-1)
 	ret, _ := windows.MessageBox(0, utf16Ptr(text), utf16Ptr(dialogTitle), flags|windows.MB_SETFOREGROUND|windows.MB_TOPMOST)
 	return ret
 }

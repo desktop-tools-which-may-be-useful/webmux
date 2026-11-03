@@ -25,6 +25,8 @@ type loopState struct {
 	watchDelay time.Duration
 	after      []func() // continuation once an operation settles
 	quitting   bool
+	// upgradeWanted defers an automatic upgrade past a start or stop.
+	upgradeWanted bool
 
 	nextStatus, nextReach, readyBy, backoffAt, watchAt time.Time
 	lastReason                                         string
@@ -72,11 +74,12 @@ func snapshotKey(s Snapshot) string {
 		running = s.Running.String()
 	}
 	return fmt.Sprintf(
-		"%s|%s|%v|%d|%s|%v|%v|%s|%s|%v|%v|%q|%v|%s|%v|%s|%s|%s|%v|%v",
+		"%s|%s|%v|%d|%s|%v|%v|%s|%s|%v|%v|%q|%v|%s|%v|%s|%s|%s|%v|%v|%v|%q",
 		s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable,
 		s.HasStatus, s.Status.State, s.Status.Version, s.Status.Drift,
 		s.Status.Config, s.Status.URLs, s.Settings, s.Blocker, s.Installed,
 		s.Compat, running, s.RunningCompat, s.Degraded, tunnelKey(s.Status.Tunnel),
+		s.Installing, s.UpgradeError,
 	)
 }
 

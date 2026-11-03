@@ -28,7 +28,9 @@ func TestInstallEntry(t *testing.T) {
 		{"installing", missing, true, true, true, false, "正在安装"},
 		{"while starting", Snapshot{State: StateStarting, Tray: tray, Installed: older.Installed, Compat: CompatServerOlder}, true, false, true, false, "升级"},
 	} {
-		got := InstallEntry(tc.snap, tc.supported, tc.running)
+		snap := tc.snap
+		snap.Installing = tc.running
+		got := InstallEntry(snap, tc.supported)
 		if got.Show != tc.show || got.Enabled != tc.enabled || !strings.Contains(got.Title, tc.title) {
 			t.Errorf("%s: %+v", tc.name, got)
 		}
@@ -37,11 +39,13 @@ func TestInstallEntry(t *testing.T) {
 
 // Every classification yields its status line and update entry; none of
 // them is a notification, so the menu is the only surface.
-func TestVersionHintAndDownloadEntry(t *testing.T) {
+func TestVersionHintAndUpdateEntry(t *testing.T) {
 	tray := BuildInfo{Version: "0.3.0", Contract: 1}
 	snap := func(installed BuildInfo) Snapshot {
 		return Snapshot{State: StateStopped, Tray: tray, Installed: installed, Compat: Classify(tray, installed)}
 	}
+	portable := SelfUpdateView{Release: true}
+	installedCopy := SelfUpdateView{Release: true, Installed: true}
 	for _, tc := range []struct {
 		name     string
 		snap     Snapshot
@@ -60,9 +64,14 @@ func TestVersionHintAndDownloadEntry(t *testing.T) {
 		if got := VersionHint(tc.snap); got != tc.hint {
 			t.Errorf("%s: hint %q, want %q", tc.name, got, tc.hint)
 		}
-		got := DownloadEntry(tc.snap)
-		if got.Show != (tc.download != "") || (got.Show && (got.Title != "下载托盘 "+tc.download || got.URL != "https://github.com/"+ReleaseRepo+"/releases/tag/v"+tc.download)) {
-			t.Errorf("%s: download %+v", tc.name, got)
+		got := UpdateEntry(tc.snap, portable)
+		if got.Show != (tc.download != "") || (got.Show && (got.Title != "下载托盘 "+tc.download || got.URL != "https://github.com/"+ReleaseRepo+"/releases/tag/v"+tc.download || got.Action != UpdateOpenRelease || !got.Enabled)) {
+			t.Errorf("%s: portable entry %+v", tc.name, got)
+		}
+		// An installed release tray installs instead of opening a page.
+		got = UpdateEntry(tc.snap, installedCopy)
+		if got.Show != (tc.download != "") || (got.Show && (got.Title != "更新托盘" || got.Action != UpdateInstall || !got.Enabled)) {
+			t.Errorf("%s: installed entry %+v", tc.name, got)
 		}
 		if got := tc.snap.Installable(); got != tc.install {
 			t.Errorf("%s: installable %v", tc.name, got)
@@ -76,6 +85,39 @@ func TestVersionHintAndDownloadEntry(t *testing.T) {
 	running.Running = &BuildInfo{Version: "0.3.0", Contract: 1}
 	if got := VersionHint(running); got != "" {
 		t.Errorf("same running build hint %q", got)
+	}
+	failed := snap(BuildInfo{Version: "0.2.0", Contract: 1})
+	failed.UpgradeError = "安装到 /usr/bin/webmux 失败：Permission denied"
+	if got := VersionHint(failed); got != "托盘 0.3.0 · WSL 0.2.0（WSL 较旧）；自动升级 WSL 中的 webmux 失败：安装到 /usr/bin/webmux 失败：Permission denied" {
+		t.Errorf("upgrade failure hint %q", got)
+	}
+}
+
+// The tray's own update entries: a release found by the check wins over a
+// newer WSL webmux; a portable tray only links the release page.
+func TestSelfUpdateEntries(t *testing.T) {
+	tray := BuildInfo{Version: "0.3.0", Contract: 1}
+	newerWSL := Snapshot{Tray: tray, Installed: BuildInfo{Version: "0.4.0", Contract: 1}, Compat: CompatServerNewer}
+	for _, tc := range []struct {
+		name  string
+		snap  Snapshot
+		view  SelfUpdateView
+		want  UpdateItem
+		check CheckItem
+	}{
+		{"nothing", Snapshot{Tray: tray}, SelfUpdateView{Release: true, Installed: true}, UpdateItem{}, CheckItem{Enabled: true, Title: "检查更新"}},
+		{"development build", newerWSL, SelfUpdateView{Installed: true}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.4.0", URL: ReleasePage("0.4.0"), Action: UpdateOpenRelease}, CheckItem{Title: "检查更新（此构建不是发布构建，不支持更新）"}},
+		{"installed, auto off", Snapshot{Tray: tray}, SelfUpdateView{Release: true, Installed: true, Latest: "0.5.0", Status: "有新版本 0.5.0"}, UpdateItem{Show: true, Enabled: true, Title: "更新到 0.5.0", Action: UpdateInstall}, CheckItem{Enabled: true, Title: "检查更新"}},
+		{"installing", newerWSL, SelfUpdateView{Release: true, Installed: true, Busy: true, Latest: "0.5.0"}, UpdateItem{Show: true, Title: "更新到 0.5.0", Action: UpdateInstall}, CheckItem{Title: "检查更新（正在进行）"}},
+		{"portable", newerWSL, SelfUpdateView{Release: true, Latest: "0.5.0"}, UpdateItem{Show: true, Enabled: true, Title: "下载托盘 0.5.0", URL: ReleasePage("0.5.0"), Action: UpdateOpenRelease}, CheckItem{Enabled: true, Title: "检查更新"}},
+		{"installed, WSL newer", newerWSL, SelfUpdateView{Release: true, Installed: true}, UpdateItem{Show: true, Enabled: true, Title: "更新托盘", Action: UpdateInstall}, CheckItem{Enabled: true, Title: "检查更新"}},
+	} {
+		if got := UpdateEntry(tc.snap, tc.view); got != tc.want {
+			t.Errorf("%s: entry %+v, want %+v", tc.name, got, tc.want)
+		}
+		if got := CheckEntry(tc.view); got != tc.check {
+			t.Errorf("%s: check %+v, want %+v", tc.name, got, tc.check)
+		}
 	}
 }
 

@@ -5,20 +5,25 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# One job: the Release is created only after every build and check passed,
-# so a failure never leaves a partial Release. The tray embeds the digests
-# of the Linux servers built here (see the Makefile release target).
+# The Release is created only after every build, check and the signature
+# succeeded, so a failure never leaves a partial Release. The tray embeds the
+# digests of the Linux servers built here (see the Makefile release-build
+# target). The signing key reaches only the sign job, which runs on a fresh
+# runner, receives nothing but SHA256SUMS and executes no third-party build
+# code, so no build dependency can read the key.
 jobs:
-  release:
-    name: Build and publish
+  build:
+    name: Build and test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
@@ -40,13 +45,101 @@ jobs:
       - name: Run Go tests
         run: go test -race -parallel=4 ./...
       - name: Build release artifacts
-        run: make release VERSION=${{ steps.version.outputs.version }}
+        run: make release-build VERSION=${{ steps.version.outputs.version }}
       - name: Verify artifacts
         working-directory: bin
         run: |
           sha256sum -c SHA256SUMS
           [ "$(./webmux-linux-amd64 version)" = "webmux ${{ steps.version.outputs.version }}" ]
           sh ../.github/scripts/test-linux-packages.sh . ${{ steps.version.outputs.version }}
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-artifacts
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            bin/webmux-linux-amd64
+            bin/webmux-linux-arm64
+            bin/webmux-darwin-amd64
+            bin/webmux-darwin-arm64
+            bin/webmux-windows-amd64.exe
+            bin/webmux-windows-arm64.exe
+            bin/webmux-tray-windows-amd64.exe
+            bin/webmux-tray-windows-arm64.exe
+            bin/webmux-setup-windows-amd64.exe
+            bin/webmux-setup-windows-arm64.exe
+            bin/webmux_*-1_*.deb
+            bin/webmux-*-1.*.rpm
+            bin/install.sh
+            bin/SHA256SUMS
+      - name: Upload the checksum list for signing
+        uses: actions/upload-artifact@v6
+        with:
+          name: sha256sums
+          if-no-files-found: error
+          retention-days: 7
+          path: bin/SHA256SUMS
+
+  sign:
+    name: Sign SHA256SUMS
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      # No dependency or build cache: the signer uses only the standard
+      # library and this repository's own packages.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: sha256sums
+          path: bin
+      - name: Sign and verify with the built-in public keys
+        env:
+          WEBMUX_RELEASE_SIGNING_KEY: ${{ secrets.WEBMUX_RELEASE_SIGNING_KEY }}
+          GOFLAGS: -mod=readonly
+          GOTOOLCHAIN: local
+        run: make release-sign VERSION=${{ needs.build.outputs.version }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sha256sums-signature
+          if-no-files-found: error
+          retention-days: 7
+          path: bin/SHA256SUMS.minisig
+
+  publish:
+    name: Publish the Release
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-artifacts
+          path: bin
+      - uses: actions/download-artifact@v7
+        with:
+          name: sha256sums-signature
+          path: bin
+      - name: Verify the signed checksums
+        working-directory: bin
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          sha256sum -c SHA256SUMS
+          if grep -q 'SHA256SUMS.minisig' SHA256SUMS; then echo 'SHA256SUMS must not list its signature' >&2; exit 1; fi
+          (cd .. && go run ./cmd/internal/releasesign verify -version ${{ needs.build.outputs.version }} bin/SHA256SUMS)
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,4 +150,4 @@ jobs:
             webmux-windows-amd64.exe webmux-windows-arm64.exe \
             webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
             webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe \
-            webmux_*-1_*.deb webmux-*-1.*.rpm install.sh SHA256SUMS
+            webmux_*-1_*.deb webmux-*-1.*.rpm install.sh SHA256SUMS SHA256SUMS.minisig

@@ -55,6 +55,9 @@ func PrintStatus(w io.Writer, s contract.StatusV1) {
 	if len(s.Drift) > 0 {
 		line("Changed since start (restart to apply): %s", strings.Join(s.Drift, ", "))
 	}
+	if s.InstalledVersion != "" {
+		line("已安装 %s，重启 WebMux 后生效，重启会结束所有会话", s.InstalledVersion)
+	}
 	for _, warning := range s.Warnings {
 		line("Warning:  %s", warning)
 	}

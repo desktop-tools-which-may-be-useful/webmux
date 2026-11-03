@@ -34,6 +34,9 @@ func (a *App) listen() {
 		}
 	})
 	on(m.quit, a.quit)
+	on(m.update, a.updateTray)
+	on(m.checkUpdate, a.updater.Check)
+	on(m.autoUpdate, func() { a.changeSettings(func(s *tray.Settings) { s.AutoUpdate = !s.AutoUpdate }) })
 	if a.sup == nil {
 		return
 	}
@@ -65,7 +68,6 @@ func (a *App) listen() {
 		}
 	})
 	on(m.install, a.installWebmux)
-	on(m.download, a.openRelease)
 	on(m.fwInit, a.initConfig)
 	for i, it := range m.fwCandidates {
 		on(it, func() {

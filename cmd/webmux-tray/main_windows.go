@@ -14,6 +14,7 @@ import (
 	"github.com/rainchan/webmux/internal/localclient"
 	"github.com/rainchan/webmux/internal/tray"
 	"github.com/rainchan/webmux/internal/tray/winui"
+	"github.com/rainchan/webmux/internal/update"
 	"github.com/rainchan/webmux/internal/wslclient"
 )
 
@@ -27,6 +28,8 @@ func main() {
 			return
 		case "quit":
 			os.Exit(winui.QuitCommand(os.Args[2:]))
+		case "firewall":
+			os.Exit(winui.FirewallCommand(os.Args[2:]))
 		}
 	}
 	if err := run(); err != nil {
@@ -108,6 +111,8 @@ func run() error {
 		Reach:        winui.NewReacher(),
 		Instance:     instance,
 		Executable:   exe,
+		UpdatesDir:   filepath.Join(localAppData, "WebMux", "updates"),
+		Releases:     update.Client{},
 	})
 	return nil
 }

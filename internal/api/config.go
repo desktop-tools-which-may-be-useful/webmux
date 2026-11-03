@@ -1,6 +1,17 @@
 package api
 
-import "github.com/rainchan/webmux/internal/contract"
+import (
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/wire"
+)
+
+// pendingUpdate is the installed version awaiting a restart, or nil.
+func (s *Server) pendingUpdate() *contract.PendingUpdate {
+	if s.InstalledVersion == nil {
+		return nil
+	}
+	return wire.PendingUpdate(s.InstalledVersion(), s.Launcher)
+}
 
 // tunnelInfo describes the runtime tunnel when a controller is wired in,
 // otherwise only the configured mode. Named and Hostname come from the

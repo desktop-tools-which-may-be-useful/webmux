@@ -144,8 +144,11 @@ const snapshotSchemas = new Map<string, z.ZodType>();
 for (const [schema, names] of groups)
   for (const name of names) snapshotSchemas.set(`${name}.json`, schema);
 
-// This endpoint belongs to the native local client, not the browser contract.
-const nonWebSnapshots = new Set(["local-status-tunnel-settings.json"]);
+// These endpoints belong to the native local client, not the browser contract.
+const nonWebSnapshots = new Set([
+  "local-status-tunnel-settings.json",
+  "local-status-installed-version.json",
+]);
 
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize);

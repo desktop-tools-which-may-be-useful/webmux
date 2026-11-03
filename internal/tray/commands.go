@@ -25,6 +25,10 @@ func (s *Supervisor) handle(ctx context.Context, ls *loopState, ev any, boot *bo
 	case checkEvent:
 		ls.checkBusy = false
 		s.onCheck(ctx, ls, ev)
+		if ev.err == nil || blockerOf(ev.err) != "" {
+			s.maybeUpgrade(ctx, ls)
+		}
+		s.settled(ctx, ls)
 	case reachEvent:
 		ls.reachBusy = false
 		if ev.gen != ls.gen {
@@ -61,10 +65,20 @@ func (s *Supervisor) handle(ctx context.Context, ls *loopState, ev any, boot *bo
 			s.unexpectedExit(ctx, ls, fmt.Sprintf("退出码 %d", ev.code), ls.TunnelActive())
 		}
 	case startEvent:
+		current := ev.gen == ls.gen
 		s.onStart(ctx, ls, ev)
+		if current && (ev.checked || blockerOf(ev.err) != "") {
+			s.maybeUpgrade(ctx, ls)
+		}
+		s.settled(ctx, ls)
 	case stopEvent:
 		s.onStop(ctx, ls, ev)
+		if !ls.quitting {
+			s.settled(ctx, ls)
+		}
 		return ls.quitting
+	case installEvent:
+		s.onInstall(ctx, ls, ev)
 	}
 	return false
 }
@@ -99,6 +113,8 @@ func (s *Supervisor) command(ctx context.Context, ls *loopState, c command) bool
 		}
 	case cmdRecheck:
 		s.recheck(ctx, ls)
+	case cmdInstall:
+		s.install(ctx, ls, false, c.done)
 	case cmdSettings:
 		old := ls.Settings
 		ls.Settings = c.settings
@@ -125,6 +141,9 @@ func (s *Supervisor) command(ctx context.Context, ls *loopState, c command) bool
 				ls.State, ls.Reason = StateStopped, ""
 			}
 			ls.Blocker, ls.Installed, ls.Compat = "", BuildInfo{}, ""
+			s.recheck(ctx, ls)
+		} else if !old.AutoUpdate && c.settings.AutoUpdate {
+			// Turning automatic updates on upgrades an older server now.
 			s.recheck(ctx, ls)
 		}
 	case cmdQuit:

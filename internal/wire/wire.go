@@ -98,6 +98,15 @@ func Capability(c workspace.Capability) contract.WorkspaceCapability {
 	return contract.WorkspaceCapability(c)
 }
 
+// PendingUpdate describes an installed version awaiting a restart; it is
+// nil when nothing different is installed.
+func PendingUpdate(installed, launcher string) *contract.PendingUpdate {
+	if installed == "" {
+		return nil
+	}
+	return &contract.PendingUpdate{InstalledVersion: installed, Launcher: launcher}
+}
+
 func Worktree(w workspace.Worktree) contract.Worktree { return contract.Worktree(w) }
 
 func Repository(r workspace.Repository) contract.Repository {

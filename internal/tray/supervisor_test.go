@@ -102,6 +102,7 @@ type fakeService struct {
 	contract    int    // reported by Check and Status; 0 means 1
 	runningAs   string // version of the running instance
 	installs    string // version Install puts in place; default 9.9.9
+	installErr  error  // Install fails with it and changes nothing
 	tunnel      *contract.TunnelStatus
 }
 
@@ -282,6 +283,9 @@ func (f *fakeService) Install(context.Context) error {
 	f.call("install")
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.installErr != nil {
+		return f.installErr
+	}
 	f.checkErr, f.version = nil, "9.9.9"
 	if f.installs != "" {
 		f.version = f.installs
@@ -322,12 +326,19 @@ func newHarness(t *testing.T, service *fakeService, settings Settings) *harness 
 
 // newVersionedHarness runs a tray that reports version.
 func newVersionedHarness(t *testing.T, service *fakeService, settings Settings, version string) *harness {
+	return newUpgradingHarness(t, service, settings, version, false)
+}
+
+// newUpgradingHarness runs a tray that reports version and, with
+// autoUpgrade, upgrades an older server when settings allow it.
+func newUpgradingHarness(t *testing.T, service *fakeService, settings Settings, version string, autoUpgrade bool) *harness {
 	h := &harness{t: t, clock: newFakeClock(), service: service}
 	h.sup = NewSupervisor(Options{
-		Service:  service,
-		Clock:    h.clock,
-		Settings: settings,
-		Version:  version,
+		Service:     service,
+		Clock:       h.clock,
+		Settings:    settings,
+		Version:     version,
+		AutoUpgrade: autoUpgrade,
 		Reach: func(context.Context, string) error {
 			h.mu.Lock()
 			defer h.mu.Unlock()
@@ -613,7 +624,7 @@ func TestSupervisorRunsIncompatibleWebmux(t *testing.T) {
 	service := &fakeService{ready: true, version: "0.5.0", contract: 2}
 	h := newVersionedHarness(t, service, manualSettings(), "0.3.0")
 	snap := h.wait("checked", func(s Snapshot) bool { return s.Compat != "" })
-	if snap.Compat != CompatIncompatibleNewer || snap.Blocker != "" || !snap.Actions().Start || snap.Installable() || DownloadEntry(snap).Title != "下载托盘 0.5.0" {
+	if snap.Compat != CompatIncompatibleNewer || snap.Blocker != "" || !snap.Actions().Start || snap.Installable() || UpdateEntry(snap, SelfUpdateView{}).Title != "下载托盘 0.5.0" {
 		t.Fatalf("incompatible %+v", snap)
 	}
 	h.sup.Start()
@@ -786,7 +797,7 @@ func TestSupervisorRefusesOccupiedPortAndOldWebmux(t *testing.T) {
 	old := &fakeService{checkErr: ErrWebmuxTooOld}
 	h = newHarness(t, old, DefaultSettings())
 	snap = h.state(StateFailed)
-	if snap.Reason != ErrWebmuxTooOld.Error() || snap.Actions().Start || snap.Blocker != BlockerIncompatible || InstallEntry(snap, true, false).Title != "升级 WSL 中的 webmux" {
+	if snap.Reason != ErrWebmuxTooOld.Error() || snap.Actions().Start || snap.Blocker != BlockerIncompatible || InstallEntry(snap, true).Title != "升级 WSL 中的 webmux" {
 		t.Fatalf("old webmux %+v", snap)
 	}
 	h.clock.Advance(2*StatusInterval + BackoffMax)

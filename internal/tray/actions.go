@@ -274,3 +274,61 @@ func (s *Supervisor) continueAfter(ls *loopState) {
 		f()
 	}
 }
+
+// install puts the tray's server into WSL; it refuses while an install,
+// start or stop runs. auto marks an install nobody asked for, whose
+// failure only the status line reports.
+func (s *Supervisor) install(ctx context.Context, ls *loopState, auto bool, done func(error)) bool {
+	if ls.Installing || ls.pendingOp {
+		return false
+	}
+	ls.Installing = true
+	ls.UpgradeError = ""
+	go func() {
+		ctx, cancel := context.WithTimeout(ctx, InstallTimeout)
+		defer cancel()
+		s.post(installEvent{auto: auto, done: done, err: s.service.Install(ctx)})
+	}()
+	return true
+}
+
+func (s *Supervisor) onInstall(ctx context.Context, ls *loopState, ev installEvent) {
+	ls.Installing = false
+	switch {
+	case ev.err != nil && ev.auto:
+		s.logf("automatic upgrade of WSL webmux failed: %v", ev.err)
+		ls.UpgradeError = ev.err.Error()
+	case ev.err != nil:
+		s.logf("install webmux: %v", ev.err)
+	default:
+		s.recheck(ctx, ls)
+	}
+	if ev.done != nil {
+		ev.done(ev.err)
+	}
+}
+
+// maybeUpgrade runs after every check that classified the server: an
+// older one is upgraded when allowed, once per check, so a failure waits
+// for the next check. A start or stop in flight defers it until it
+// settles.
+func (s *Supervisor) maybeUpgrade(ctx context.Context, ls *loopState) {
+	ls.UpgradeError = ""
+	if !s.autoUpgrade || !ls.Settings.AutoUpdate || !ls.Upgradable() || ls.Installing {
+		return
+	}
+	if ls.pendingOp {
+		ls.upgradeWanted = true
+		return
+	}
+	s.logf("upgrading WSL webmux to %s automatically", ls.Tray.Version)
+	s.install(ctx, ls, true, nil)
+}
+
+// settled runs a deferred automatic upgrade once no start or stop runs.
+func (s *Supervisor) settled(ctx context.Context, ls *loopState) {
+	if ls.upgradeWanted && !ls.pendingOp {
+		ls.upgradeWanted = false
+		s.maybeUpgrade(ctx, ls)
+	}
+}

@@ -80,7 +80,7 @@ sudo apt install ./webmux_0.2.0-1_amd64.deb
 sudo dnf install ./webmux-0.2.0-1.x86_64.rpm
 ```
 
-- 包内只有 `/usr/bin/webmux` 与 systemd 用户单元 `/usr/lib/systemd/user/webmux.service`，没有依赖，也没有安装脚本。
+- 包内有 `/usr/bin/webmux`、systemd 用户单元 `/usr/lib/systemd/user/webmux.service` 与自动更新的系统单元 `webmux-update.service` / `webmux-update.timer`，没有依赖；第一次装上带定时器的版本时启用该定时器，见[自动更新](updates.md)。
 - 安装、升级、卸载都不会为任何用户启用、启动或重启服务。需要开机自启的用户执行一次 `systemctl --user enable --now webmux`；首次启动会在 `~/.config/webmux/config.toml` 生成带随机 Token 的配置。
 - 升级后正在运行的服务继续使用旧进程，执行 `systemctl --user restart webmux`（或 `webmux service restart`）后生效，重启会结束现有会话。
 - `webmux service status|start|stop|restart|logs` 同样作用于包内单元；`webmux service uninstall` 只禁用并停止它，删除请卸载软件包。也可以改用 `webmux service install`，它写入的 `~/.config/systemd/user/webmux.service` 优先于包内单元。
@@ -89,7 +89,9 @@ Windows 不使用 `install.sh` 或这些安装包：请使用 `webmux-setup-wind
 
 ## 升级
 
-替换二进制后重启服务。**重启会结束所有终端会话**，升级前请保存工作；仓库清单和磁盘上的 worktree 会保留。混合会话在重启后标记为已中断，可从首页“可恢复”分组恢复到聊天或终端（对话由 agent 保存，排队消息不保留）。只替换磁盘上的文件不会让正在运行的进程加载新版本。
+替换二进制后重启服务才会加载新版本，**重启会结束所有终端会话**；仓库清单与 worktree 保留，混合会话可从首页“可恢复”分组恢复（排队消息不保留）。WebMux 会在状态与 Web UI 中提示已安装但尚未生效的版本。
+
+deb / rpm 与安装版托盘的自动更新、`webmux update check` 与发布签名验证见[自动更新](updates.md)。
 
 ## 持久化升级与诊断
 

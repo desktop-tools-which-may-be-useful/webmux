@@ -73,6 +73,9 @@
 - [access-link](../openspec/specs/access-link/spec.md)：携带 Token 的访问链接
 - [release-distribution](../openspec/specs/release-distribution/spec.md)：一次标签发布产出全部平台二进制与校验和
 - [linux-packages](../openspec/specs/linux-packages/spec.md)：deb 与 rpm 安装包
+- [signed-release-updates](../openspec/specs/signed-release-updates/spec.md)：发布签名、最新版本发现与只升级不降级的共用更新规则
+- [linux-package-auto-update](../openspec/specs/linux-package-auto-update/spec.md)：deb / rpm 安装的系统级定时自动更新
+- [server-update-notice](../openspec/specs/server-update-notice/spec.md)：可执行文件被替换后提示“重启后生效”
 
 ## 远程访问
 
@@ -93,6 +96,7 @@
 - [windows-tray-server-compat](../openspec/specs/windows-tray-server-compat/spec.md)：托盘与 WSL 中 webmux 的版本兼容判断
 - [windows-tray-tunnel](../openspec/specs/windows-tray-tunnel/spec.md)：托盘一键开关公网隧道
 - [windows-tray-wsl-install](../openspec/specs/windows-tray-wsl-install/spec.md)：由托盘在 WSL 中安装同版本 webmux
+- [windows-tray-self-update](../openspec/specs/windows-tray-self-update/spec.md)：安装版托盘下载签名安装程序并静默更新自身
 - [wsl-service-lifecycle](../openspec/specs/wsl-service-lifecycle/spec.md)：托盘在 WSL 中启动、监控与重启服务
 
 ## 工程架构

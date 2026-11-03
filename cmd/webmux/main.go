@@ -28,12 +28,14 @@ import (
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/push"
+	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnel"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
+	"github.com/rainchan/webmux/internal/update"
 	"github.com/rainchan/webmux/internal/workspace"
 	"github.com/rainchan/webmux/internal/wsl"
 )
@@ -44,7 +46,7 @@ func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const subcommands = "serve, start, version, status, stop, bridge, config, service, run, attach, ls, open, help"
+const subcommands = "serve, start, version, status, stop, bridge, config, service, update, run, attach, ls, open, help"
 
 const cliHelp = `Usage: webmux [command] [options]
 
@@ -62,6 +64,8 @@ Commands:
   service restart   Restart the user service (ends all terminal sessions)
   service status    Show the user service manager's status
   service logs      Show recent logs; add --follow (-f) to stream
+  update check      Check for a newer signed release; --json for scripts
+  update apply      Install a newer deb/rpm release (root; used by webmux-update.timer)
   run               Create a terminal session
   attach            Attach to a terminal session
   ls                List terminal sessions
@@ -73,7 +77,8 @@ Server options: --config PATH, --listen HOST:PORT, --token TOKEN,
                 --tunnel, --log-file PATH
 Service install options: --config PATH, --force, --dry-run
 
-Linux uses systemd --user; macOS uses a launchd LaunchAgent. Do not use sudo.
+Services: Linux uses systemd --user; macOS uses a launchd LaunchAgent. Do not
+use sudo for them. Only "update apply" runs as root.
 Run "webmux <command> --help" for command options.
 `
 
@@ -112,6 +117,8 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 		return configCommand(args[1:], stdout, stderr)
 	case "service":
 		return serviceCommand(args[1:], stdout, stderr)
+	case "update":
+		return updateCommand(args[1:], stdout, stderr)
 	}
 	_, _ = fmt.Fprintf(stderr, "webmux: unknown subcommand %q\navailable subcommands: %s\n", args[0], subcommands)
 	return contract.ExitUsage
@@ -424,6 +431,10 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
 		DefaultShell: agentprofile.DefaultShell(os.Getenv("SHELL")),
+		// The executable's identity is recorded now; later status and
+		// configuration requests compare against it.
+		InstalledVersion: update.NewInstalledVersion(version).Pending,
+		Launcher:         runtime.Launcher(os.Getenv),
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	deps.Tailscale = tsCtl

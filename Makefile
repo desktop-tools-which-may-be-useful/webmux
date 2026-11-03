@@ -15,6 +15,10 @@ E2E_BINARY ?= $(abspath $(E2E_CACHE)/webmux)
 # backend, named after the agents whose profiles it stands in for.
 E2E_AGENTS = $(dir $(abspath $(E2E_BINARY)))agents
 LDFLAGS = -s -w -X main.version=$(VERSION)
+UPDATE_PKG = github.com/rainchan/webmux/internal/update
+# Only release builds take part in updates (internal/update.IsRelease).
+RELEASE_LDFLAGS = $(LDFLAGS) -X $(UPDATE_PKG).release=1
+RELEASESIGN = $(GO) run ./cmd/internal/releasesign
 TRAY_PKG = github.com/rainchan/webmux/internal/tray
 # Set by release: the Linux server digests the tray may install.
 TRAY_LDFLAGS ?=
@@ -28,7 +32,7 @@ RELEASE_FILES = webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux
 	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
 	webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe $(LINUX_PACKAGES)
 
-.PHONY: web build tray installer linux-packages release check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
+.PHONY: web build tray installer linux-packages release release-build release-sign check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -68,17 +72,27 @@ linux-packages:
 	cd bin && ls $(LINUX_PACKAGES) >/dev/null
 
 # Linux servers first: the tray embeds their digests, and SHA256SUMS lists
-# every artifact. The last step proves both trays carry both digests.
-release: web
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-linux-amd64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-linux-arm64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-darwin-amd64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-darwin-arm64 ./cmd/webmux
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-windows-amd64.exe ./cmd/webmux-windows
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-windows-arm64.exe ./cmd/webmux-windows
+# every artifact. `release` checks the signing key before building anything
+# so a missing secret fails fast. Sub-makes inherit both the environment and
+# command-line variables (through MAKEFLAGS), so release-build runs without
+# the variable and with an empty override; only release-sign sees the key.
+# CI runs release-build without the key and signs in a separate job.
+release:
+	@test -n "$$WEBMUX_RELEASE_SIGNING_KEY" || { echo 'release: WEBMUX_RELEASE_SIGNING_KEY is not set; cannot sign SHA256SUMS' >&2; exit 1; }
+	env -u WEBMUX_RELEASE_SIGNING_KEY $(MAKE) release-build WEBMUX_RELEASE_SIGNING_KEY=
+	$(MAKE) release-sign
+
+release-build:
+	$(MAKE) web
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-linux-amd64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-linux-arm64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-darwin-amd64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-darwin-arm64 ./cmd/webmux
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-windows-amd64.exe ./cmd/webmux-windows
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(RELEASE_LDFLAGS)" -o bin/webmux-windows-arm64.exe ./cmd/webmux-windows
 	amd64=$$(sha256sum bin/webmux-linux-amd64 | cut -d' ' -f1) && \
 	arm64=$$(sha256sum bin/webmux-linux-arm64 | cut -d' ' -f1) && \
-	$(MAKE) tray TRAY_LDFLAGS="-X $(TRAY_PKG).linuxAMD64SHA256=$$amd64 -X $(TRAY_PKG).linuxARM64SHA256=$$arm64" && \
+	$(MAKE) tray TRAY_LDFLAGS="-X $(UPDATE_PKG).release=1 -X $(TRAY_PKG).linuxAMD64SHA256=$$amd64 -X $(TRAY_PKG).linuxARM64SHA256=$$arm64" && \
 	for exe in bin/webmux-tray-windows-amd64.exe bin/webmux-tray-windows-arm64.exe; do \
 		grep -qaF "$$amd64" $$exe && grep -qaF "$$arm64" $$exe || { echo "$$exe lacks the server digests" >&2; exit 1; }; \
 	done
@@ -86,6 +100,12 @@ release: web
 	$(MAKE) linux-packages
 	cp install.sh bin/install.sh
 	cd bin && sha256sum $(RELEASE_FILES) install.sh > SHA256SUMS
+
+# Signs bin/SHA256SUMS with $WEBMUX_RELEASE_SIGNING_KEY into
+# SHA256SUMS.minisig, then proves the built-in public keys accept it.
+release-sign:
+	$(RELEASESIGN) sign -version $(VERSION) bin/SHA256SUMS
+	$(RELEASESIGN) verify -version $(VERSION) bin/SHA256SUMS
 
 check: web format-check docs-check persistence-check
 	$(PNPM) --dir web check:test

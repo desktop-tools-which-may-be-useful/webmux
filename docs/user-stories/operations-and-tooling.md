@@ -90,17 +90,48 @@
   - 生产环境仍推荐 `service install`。
 - **US-K13 Linux 安装包**：作为 Debian / Ubuntu 或 Fedora 等发行版的用户，我希望用 apt / dnf 安装、升级和卸载 WebMux，并能一条命令设置开机自启，以便按系统惯例管理它。
   验收要点：
-  - Release 提供 amd64、arm64 的 `webmux_<版本>-1_<架构>.deb` 与 `webmux-<版本>-1.<架构>.rpm`，计入 `SHA256SUMS`，内含与同版本 `webmux-linux-<架构>` 相同的 `/usr/bin/webmux`（0755）和用户单元 `/usr/lib/systemd/user/webmux.service`（0644），无依赖、无安装脚本；
-  - 安装、升级、卸载不为任何用户启用、启动或重启服务，运行中的服务升级后到重启才换新版本；
+  - Release 提供 amd64、arm64 的 `webmux_<版本>-1_<架构>.deb` 与 `webmux-<版本>-1.<架构>.rpm`，计入 `SHA256SUMS`，无依赖；
+  - 包内的 `/usr/bin/webmux`（0755）与同版本 `webmux-linux-<架构>` 相同，另有用户单元 `/usr/lib/systemd/user/webmux.service`（0644）；
+  - 自动更新的系统单元 `webmux-update.service` / `webmux-update.timer`（0644，见 US-K14）；
+  - 安装脚本只管理更新定时器；
+  - 安装、升级、卸载不为任何用户启用、启动或重启 `webmux.service`，运行中的服务升级后到重启才换新版本；
   - 用户执行 `systemctl --user enable --now webmux` 后以默认配置运行（首次启动生成带随机 Token 的配置）并在登录后自启；
-  - 没有 `~/.config/systemd/user/webmux.service` 时 `webmux service status | start | stop | restart` 作用于包内单元，`uninstall`只禁用并停止它且不删除文件，两者都没有时仍提示先`service install`；
+  - 没有 `~/.config/systemd/user/webmux.service` 时 `webmux service status|start|stop|restart` 作用于包内单元，`uninstall` 只禁用并停止它且不删除文件，两者都没有时仍提示先 `service install`；
   - `service install` 写入的用户定义优先于包内单元。
+- **US-K14 安装包自动更新**：作为用 deb / rpm 安装的部署者，我希望系统每天自动安装经过签名验证的新版本，同时不打断正在运行的终端会话，以便不必手动跟踪发布。
+  验收要点：
+  - 首次获得定时器时（新安装或从不含定时器的版本升级）在运行 systemd 的系统上启用 `webmux-update.timer`（每日、最多 6 小时随机延迟、错过补执行）并留下标记，无 systemd 时只装文件；
+  - 有标记的升级只 `daemon-reload` 并保留管理员的 `disable`，卸载停用定时器并删除标记；
+  - 服务以 root、无法访问 `/home` 与 `/root` 运行 `webmux update apply`：仅发布构建、仅 root、单实例锁、仅当 `/usr/bin/webmux` 属于 `webmux` 包，按签名清单下载同格式同架构安装包并用 argv 调用 `dpkg -i` / `rpm -U`，只升级不降级；
+  - 联网前检查 `apt-mark hold` 与 dnf versionlock 锁文件（不依赖软件仓库），锁定时跳过，锁定状态无法确认时也按锁定跳过；
+  - 检查与下载最长 30 分钟，`dpkg` / `rpm` 一旦开始不被停止信号、超时或 `systemctl stop` 中断（`KillMode=process`）；
+  - dpkg 被占用等失败时原安装不变、次日重试，`rpm -U` 等待 rpm 数据库锁，下载的包总被删除；
+  - journal 记录版本、来源与结果；
+  - 不触碰任何用户的 `webmux.service`。
+- **US-K15 检查更新与验证签名**：作为部署者，我希望随时查看是否有新版本，并能独立验证下载的发布文件来自官方，以便在任何安装方式下判断是否升级以及下载是否可信。
+  验收要点：
+  - `webmux update check` 在任意安装方式下输出当前版本、最新版本、是否有更新，`--json` 输出 `{v,current,latest,available,installMethod}`，不下载、不改文件，失败时非零；
+  - `install.sh` 或手动安装时提示重新运行 `install.sh`，deb/rpm 时提示定时器与 `sudo webmux update apply`；
+  - 非发布构建报告“此构建不是发布构建，不支持更新”且不联网；
+  - 每个 Release 附带 `SHA256SUMS.minisig`，可信注释 `webmux <版本>`，文档公布公钥，`minisign -Vm` 可手动验证；
+  - 更新程序只信任内置公钥，GitHub 与镜像返回的清单都须验证签名，版本取自签名注释；GitHub 不可用时采用各镜像中最高的已验证版本。
+- **US-K16 待生效版本提示**：作为使用者，我希望在服务端可执行文件被更新后得知新版本需要重启才生效、重启会结束会话，以便自己选择合适的时机重启。
+  验收要点：
+  - 运行中的服务端在状态被查询时（距上次至少 60 秒且文件标识变化）以 argv 运行自身路径的 `version --json` 得到已安装版本，读取失败时下次检查重试；
+  - 不同于运行版本时 `webmux status` 增加提示行，`status --json` 与本机状态 API 含 `installedVersion`，`GET /api/config` 含 `pendingUpdate{installedVersion,launcher}`；
+  - Web UI 主页顶部与设置页显示已安装版本、重启后生效、重启结束所有会话，并按启动方给出 `systemctl --user restart webmux`、`webmux service restart`、托盘菜单重启或重新运行；
+  - 主页提示可按版本关闭（设备本地），设置页始终显示；
+  - 不提供重启按钮，服务端从不因此自动重启。
 
 依据：
 
 - [CLI 命令](../../cmd/webmux/main.go)、[启动](../../cmd/webmux/main.go)、[后台启动](../../cmd/webmux/start.go)
 - [配置](../../internal/config/config.go)、[配置命令](../../cmd/webmux/configcmd.go)、[用户服务](../../internal/service/)
 - [安装包配置](../../deploy/linux/nfpm.yaml)、[包内用户单元](../../deploy/linux/webmux.service)、[安装包测试](../../.github/scripts/test-linux-packages.sh)
+- [更新命令](../../cmd/webmux/updatecmd.go)、[签名与更新](../../internal/update/)、[自动更新单元](../../deploy/linux/webmux-update.service)、[定时器](../../deploy/linux/webmux-update.timer)
+- [安装脚本](../../deploy/linux/postinstall.sh)、[自动更新说明](../deployment/updates.md)
+- [已安装版本识别](../../internal/update/installed.go)、[状态输出](../../internal/sessioncmd/status.go)、[待生效提示组件](../../web/src/components/PendingUpdateNotice.svelte)
+- [提示逻辑](../../web/src/pendingUpdate.ts)、[提示用例](../../web/test/pendingUpdate.test.ts)
 - [部署指南](../deployment.md)、[设置页](../../web/src/pages/Settings.svelte)、[设置导航](../../web/src/components/SettingsNavigation.svelte)
 - [导航浏览器回归](../../web/test/browser/SettingsNavigation.test.ts)。
 
@@ -207,6 +238,15 @@
   - 失败信息写明失效链接的行号与原因、不可达文档应登记的索引位置，以及 README 超限时把详细内容迁往 `docs/` 的去向；
   - `TestNavigationRules` 与 `TestSlug` 用内存目录树固定可达性、失效链接、锚点、代码豁免与 README 各项规则；
   - 文档入口见 [文档中心](../README.md)，项目介绍见 [项目介绍](../overview.md)，帮助见 [常见问题与获取帮助](../faq.md)，规格索引见 [OpenSpec 规格索引](../specs.md)。
+- **US-L13 发布签名**：作为维护者，我希望每次发布自动签名校验和文件并在发布前验证，以便自动更新与用户手动校验都有独立于镜像和下载来源的信任根。
+  验收要点：
+  - `make release` 在构建前检查 `WEBMUX_RELEASE_SIGNING_KEY`，缺失即失败，依次执行 `release-build` 与 `release-sign`；
+  - 所有发布二进制注入发布构建标记，本地构建不带；
+  - 生成 `SHA256SUMS` 后 `releasesign sign` 产出 minisign `Ed` 格式的 `SHA256SUMS.minisig`（可信注释 `webmux <版本>`，不列入 `SHA256SUMS`），再以内置公钥 `verify`；
+  - 发布 workflow 分为 build、sign、publish 三个 job，只有 sign 读取私钥，它在全新 runner 上只拿到 `SHA256SUMS`、不恢复缓存也不运行第三方构建代码，publish 再次验证后上传签名；
+  - `releasesign keygen` 以 0600 新建私钥文件并输出公钥；
+  - 轮换时先发布同时内置新旧公钥的版本；
+  - 签名与 minisign 0.12 互通。
 
 依据：
 
@@ -232,5 +272,7 @@
 Pullfrog 依据：[workflow](../../.github/workflows/pullfrog.yml)、[订阅模型配置](../../CONTRIBUTING.md#pullfrog-模型配置)。
 
 持久化守卫依据：[扫描器](../../internal/archtest/persistence_scan_test.go)、[清单校验](../../internal/archtest/persistence_test.go)、[负向样例](../../internal/archtest/persistence_rules_test.go)、[机器清单](../../internal/archtest/persistence_inventory.json)、[治理说明](../persistence.md)。
+
+发布签名依据：[签名工具](../../cmd/internal/releasesign/main.go)、[签名格式与验证](../../internal/update/minisign.go)、[Makefile](../../Makefile)、[发布 workflow](../../.github/workflows/release.yml)、[密钥轮换](../deployment/updates.md#密钥轮换维护者)。
 
 配置诊断依据：[来源投影](../../internal/config/view.go)、[只读与活快照](../../cmd/webmux/configview.go)、[诊断测试](../../cmd/webmux/configview_test.go)、[共享存储](../../internal/statefile/store.go)。

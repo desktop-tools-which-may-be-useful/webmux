@@ -1,6 +1,6 @@
-# 核对记录：2026-11-01 至 2026-11-02
+# 核对记录：2026-11-01 至 2026-11-03
 
-本文收录 2026-11-01 至 2026-11-02 各次局部核对的记录：对应的故事、已运行的验证、范围限制与未核对的部分。
+本文收录 2026-11-01 至 2026-11-03 各次局部核对的记录：对应的故事、已运行的验证、范围限制与未核对的部分。
 
 条目由[用户故事索引](../user-stories.md)原文迁入，按日期升序排列，措辞保持当时的口径；故事的当前内容以各分组文档为准。
 
@@ -117,3 +117,47 @@
 - 回放：在未设置任何 API key 的环境中运行 `pnpm --dir web screenshots`，十张截图全部生成；再运行 `screenshots:hero` 更新 `docs/images/hero.jpg`。
 - 发现：经 npm/Bun 安装的 omp 进程名为 `bun`，混合会话判定为 `not_root`，聊天切换不可用；本次用以 `omp` 命名的 Bun 运行时启动同一安装包绕过。产品侧的识别规则未改动。
 - 限制：截图在 Linux 容器中以预装 Chromium 生成，未在 macOS 上运行脚本。
+
+本次局部核对（2026-11-03）：自动更新新增 US-K14–US-K16、US-L13、US-O13，并更新 US-K13、US-O01、US-O11、US-O12；功能索引与覆盖索引已同步。发布签名故事最初编号为 US-L12，合并 main 时与先合入的“文档导航与首页”冲突，改为 US-L13；合并后 187 个故事 ID 唯一。
+
+- 依据：`internal/update`、`cmd/webmux`、`cmd/internal/releasesign`、`internal/api`、`internal/tray` 的 Go race 测试与前端 `pendingUpdate` 用例。
+- 安装包：`test-linux-packages.sh` 在 Debian/Fedora 容器中覆盖定时器的首次启用、带标记与无标记升级、卸载；systemd 容器中定时器服务把 0.0.1 升到 0.0.2，用户服务 PID 与会话不变。
+- 签名：minisign 0.12 验签通过；签名步骤在空模块缓存且 `GOPROXY=off` 时可完成。
+- 限制：托盘自更新与 NSIS 静默升级只在 Linux 上测试与编译（makensis 3.11），未在 Windows 上运行；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：PR #260 第二轮审查修复，更新 US-K14、US-K15、US-K16、US-O04、US-O12、US-O13，不新增故事，覆盖索引不变。
+
+- 依据：`internal/update`、`internal/fetch`、`internal/tray`、`cmd/webmux` 的 Go race 测试，`internal/tray` 与 `cmd/webmux-tray` 的 Windows amd64/arm64 交叉 vet，`CodeReader` 浏览器测试。
+- 覆盖：安装期间取消不终止包管理器、锁文件判定与无法确认时跳过、已安装版本读取失败后重试、镜像取最高版本、托盘失败退避与等待期间关闭自动更新、`quit` 无托盘时退出码 3。
+- 限制：未在真实 systemd/SELinux 主机上运行更新服务，未编译或在 Windows 上运行 NSIS 脚本，`windows-installer-smoke.ps1` 未运行；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：PR #260 端到端验证，对应 US-K13、US-K14、US-K16、US-O01、US-O12、US-O13，故事内容与覆盖索引不变。均用临时测试密钥签名、本地 HTTP 提供的测试 Release。
+
+- Linux：以 systemd 为 PID 1 的 Debian 13 与 Fedora 44 容器中，更新服务把 deb/rpm 从 0.0.1 升到 0.0.2，另一用户的 `webmux.service` PID 不变。
+  - 安装中 `systemctl stop` 等 dpkg 完成后才返回，`dpkg --audit` 为空。
+  - `apt-mark hold` 与 dnf5 `versionlock.toml`（仓库不可达）时跳过且不发起请求，锁文件无法解析时按锁定跳过。
+- Windows 11（build 26300，NSIS 3.11）：
+  - 删除登录启动项后 `/S` 升级仍不登记；安装中止时托盘运行则退出码 4 并恢复、重启 0.0.1 托盘，未运行则退出码 2 且不启动托盘。
+  - 安装版 0.0.1 托盘 2 分钟后自更新到 0.0.2，无 SmartScreen/UAC 提示；新托盘把 WSL 中的 webmux 升到 0.0.2，运行中的服务端 PID 不变并提示重启后生效。
+  - 托盘触发的安装失败后，重新启动的托盘保留 `updateAttempt` 并提示失败，此后约 3 分钟内的自动检查不再运行安装程序。
+- 限制：SELinux enforcing 无法在容器中启用，未验证；未配置托盘转发，转发恢复未单独验证；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：补充上一条记录中未验证的两项，对应 US-K14、US-O13，故事内容与覆盖索引不变。
+
+- SELinux：Fedora 44 Cloud 虚拟机（QEMU，enforcing，selinux-policy-targeted 43.3）中更新服务连续把 rpm 从 0.0.1 升到 0.0.4，scriptlet 进入 `rpm_script_t`，没有 AVC 拒绝；加回 `NoNewPrivileges=yes` 时 `nnp_transition` 被拒绝、scriptlet 失败。
+- 转发：本机 WSL 为 mirrored 模式，在测试发行版中模拟 NAT 后，托盘自更新期间转发中断约 1.75 秒，新托盘在同一地址与端口恢复转发，服务端 PID 不变。
+- 限制：NAT 网络路径由测试替身代替，未在真实 NAT 模式主机上验证；未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：安装程序可选添加托盘转发的防火墙规则，更新 US-O08、US-O12，不新增故事，覆盖索引不变。
+
+- 依据：`internal/tray` 的规则名称、netsh 参数与 `Firewall.Apply` 单元测试，Windows amd64/arm64 交叉 vet，makensis 3.11 `-WX` 构建。
+- 真机（Windows 11 build 26300，非管理员会话）：安装程序冒烟脚本全部通过，静默安装不加规则；交互安装经 UAC 确认后添加入站 TCP 允许规则（域、专用），再次运行不弹窗，静默覆盖后规则保留；交互卸载经 UAC 确认后删除规则。
+- 对账（记录托盘路径之后的版本）：首次交互安装经 UAC 添加规则并记录路径；再次安装选项默认勾选、不弹窗；取消勾选后经 UAC 删除规则并清除记录；之后静默卸载无 UAC。
+- CI：Windows installer smoke 以管理员运行，`firewall allow` 添加的规则为入站、允许、域与专用网络，重复运行幂等，`remove` 删除规则。
+- 限制：未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：合并 main 后发现 Fedora 45（rpm 6.1，`%_pkgverify_level` 为 `all`）拒绝未签名的 rpm，自动更新改用 `rpm -U --nosignature`，对应 US-K14，故事内容不变。
+
+- 复现：Fedora 45 容器中直接 `rpm -U` 测试包报 “does not verify: no signature”，版本不变。
+- 验证：同一容器中 `webmux update apply` 从本地签名的测试 Release 把 0.0.1 升到 0.0.2，`rpm -Va webmux` 无差异；`dnf install` 本地包照常可用。
+- 限制：未在 Fedora 45 的 systemd 环境中经定时器运行；未重新核验其余故事能力。

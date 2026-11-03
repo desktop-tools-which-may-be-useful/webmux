@@ -48,7 +48,7 @@ func TestQuit(t *testing.T) {
 		want     int
 		kills    int
 	}{
-		{name: "no tray", want: QuitDone},
+		{name: "no tray", want: QuitNone},
 		{name: "tray exits on request", alive: true, supports: true, path: installed, killPath: installed, want: QuitDone},
 		{name: "old tray without kill path", alive: true, path: installed, want: QuitRunning},
 		{name: "old tray at kill path", alive: true, path: installed, killPath: installed, want: QuitDone, kills: 1},

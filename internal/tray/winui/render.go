@@ -42,6 +42,11 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	} else {
 		m.hint2.hide()
 	}
+	if status := v.selfUpdate.Status; status != "" {
+		m.updateInfo.set(status, false, false)
+	} else {
+		m.updateInfo.hide()
+	}
 
 	access := acts.Access && local != ""
 	m.open.set("打开 WebMux", access, false)
@@ -144,15 +149,17 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	m.start.set("启动", acts.Start, false)
 	m.stop.set("停止", acts.Stop, false)
 	m.restart.set("重启", acts.Restart, false)
-	if install := tray.InstallEntry(snap, v.installSupported, v.installing); install.Show && !v.noWSL {
+	if install := tray.InstallEntry(snap, v.installSupported); install.Show && !v.noWSL {
 		m.install.set(install.Title, install.Enabled, false)
 	} else {
 		m.install.hide()
 	}
-	if download := tray.DownloadEntry(snap); download.Show && !v.noWSL {
-		m.download.set(download.Title, true, false)
+	// The tray updates itself even without WSL.
+	b.update = tray.UpdateEntry(snap, v.selfUpdate)
+	if b.update.Show {
+		m.update.set(b.update.Title, b.update.Enabled, false)
 	} else {
-		m.download.hide()
+		m.update.hide()
 	}
 
 	serviceLog := !v.noWSL && (systemdMode(snap, v) || (snap.HasStatus && strings.HasPrefix(status.LogFile, "/")))
@@ -209,6 +216,9 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 
 	m.editSettings.set("编辑托盘设置", !v.noWSL, false)
 	m.autostart.set("登录时自动启动", !v.noWSL, v.autostart)
+	m.autoUpdate.set("自动更新", true, v.settings.AutoUpdate)
+	check := tray.CheckEntry(v.selfUpdate)
+	m.checkUpdate.set(check.Title, check.Enabled, false)
 	m.quit.set("退出", true, false)
 	return b
 }

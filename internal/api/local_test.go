@@ -57,9 +57,8 @@ func TestLocalShutdownAndTokenPolicy(t *testing.T) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			stopped := false
-			handler := NewLocal(testDeps(t, Deps{Config: config.Config{Token: row.token}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{
+			handler := NewLocal(testDeps(t, Deps{Config: config.Config{Token: row.token}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Launcher: row.launcher}), Local{
 				Status:    func() contract.StatusV1 { return contract.StatusV1{V: 1} },
-				Launcher:  row.launcher,
 				Shutdown:  func() { stopped = true },
 				InSession: func(pid int) bool { return inside[pid] },
 			})

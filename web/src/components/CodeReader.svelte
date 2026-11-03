@@ -250,15 +250,17 @@
       onselect(Math.min(start, end), Math.max(start, end));
     }
     find.cursor = restoreCursor(state.cursor, find.matches);
-    viewer.scrollTo({
-      type: "line",
-      id,
-      lineNumber: known.line,
-      align: "start",
-      // A positive offset leaves the line below the edge; the captured
-      // fraction is how far the line is scrolled past it.
-      offset: -known.offset * codeLineHeight,
-    });
+    if (requested !== undefined) scrollToLine(requested, "center");
+    else
+      viewer.scrollTo({
+        type: "line",
+        id,
+        lineNumber: known.line,
+        align: "start",
+        // A positive offset leaves the line below the edge; the captured
+        // fraction is how far the line is scrolled past it.
+        offset: -known.offset * codeLineHeight,
+      });
   }
 
   function placeInitial() {
@@ -303,7 +305,11 @@
   function goto(value: string) {
     const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());
     if (match) {
-      const current = selected?.start ?? 1;
+      // Before the first placement the restored selection is still pending.
+      const current =
+        (placed ? undefined : pending?.selection?.start) ??
+        selected?.start ??
+        1;
       const [, sign, digits, column, percent] = match;
       let target = digits ? Number(digits) : current;
       if (digits && percent) {
@@ -314,11 +320,15 @@
         target = Math.round(lines.length * fraction);
       } else if (digits && sign)
         target = current + target * (sign === "-" ? -1 : 1);
-      // Before the first render this jump replaces any restore or initial
-      // placement, which would otherwise scroll back once layout arrives.
+      // Before the first placement this jump replaces the restored or initial
+      // scroll position, which would otherwise win once layout arrives; the
+      // rest of the restored state still applies.
       if (!placed) {
-        pending = undefined;
         requested = target;
+        if (pending) {
+          const { panel: _, ...rest } = pending;
+          pending = { ...rest, line: target, offset: 0 };
+        }
       }
       scrollToLine(target, "center");
       if (column) scrollToColumn(target, Number(column.slice(1)));

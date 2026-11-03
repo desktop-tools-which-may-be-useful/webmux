@@ -10,6 +10,7 @@
 | [remote-access.md](deployment/remote-access.md)             | 远程访问与 HTTPS     | 手机访问（Tailscale）、访问链接、公网访问（Cloudflare Tunnel）、HTTPS                                       |
 | [pwa-and-push.md](deployment/pwa-and-push.md)               | 安装为应用与手机推送 | 安装为应用（PWA）、手机推送（Web Push）                                                                     |
 | [windows-wsl.md](deployment/windows-wsl.md)                 | Windows（WSL）部署   | 前置条件、安装与托盘设置、启动方式、远程转发、Token 与剪贴板、故障诊断                                      |
+| [updates.md](deployment/updates.md)                         | 自动更新             | deb / rpm 定时更新、托盘自更新、检查更新、发布签名与密钥轮换                                                |
 
 ## 常见入口
 

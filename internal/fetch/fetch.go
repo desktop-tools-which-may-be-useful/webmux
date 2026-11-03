@@ -46,6 +46,8 @@ type Asset struct {
 	// returning a temporary path in dir; BinarySHA256 then verifies it.
 	Extract      func(download *os.File, dir string, limit int64) (string, error)
 	BinarySHA256 string
+	// Mode is the installed file's permission; zero selects 0755.
+	Mode os.FileMode
 }
 
 // Downloader holds the sources and limits; zero values select defaults.
@@ -75,24 +77,12 @@ func (e *SourcesError) Error() string {
 // then each mirror. It returns the host that served it. A context error is
 // returned unwrapped; target is untouched unless a source succeeds.
 func (d Downloader) Download(ctx context.Context, a Asset, target string) (string, error) {
-	base := d.GitHubBase
-	if base == "" {
-		base = GitHub
-	}
-	sources := []string{base + a.Path}
-	mirrors := d.Mirrors
-	if mirrors == nil {
-		mirrors = DefaultMirrors
-	}
-	for _, mirror := range mirrors {
-		sources = append(sources, mirror+"/"+GitHub+a.Path)
-	}
 	var failures []string
-	for _, source := range sources {
+	for _, source := range d.Sources(a.Path) {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		host := sourceHost(source)
+		host := SourceHost(source)
 		err := d.fetch(ctx, source, a, target)
 		if err == nil {
 			return host, nil
@@ -104,6 +94,41 @@ func (d Downloader) Download(ctx context.Context, a Asset, target string) (strin
 		failures = append(failures, host+": "+err.Error())
 	}
 	return "", &SourcesError{Failures: failures}
+}
+
+// Sources lists the URLs tried for a GitHub path: GitHub, then each mirror.
+func (d Downloader) Sources(path string) []string {
+	base := d.GitHubBase
+	if base == "" {
+		base = GitHub
+	}
+	sources := []string{base + path}
+	mirrors := d.Mirrors
+	if mirrors == nil {
+		mirrors = DefaultMirrors
+	}
+	for _, mirror := range mirrors {
+		sources = append(sources, mirror+"/"+GitHub+path)
+	}
+	return sources
+}
+
+// Get reads a small file from one source with the same timeouts as
+// Download. It never verifies content; callers authenticate it.
+func (d Downloader) Get(ctx context.Context, source string, limit int64) ([]byte, error) {
+	var out []byte
+	err := d.stream(ctx, source, func(body io.Reader) error {
+		b, err := io.ReadAll(io.LimitReader(body, limit+1))
+		if err != nil {
+			return err
+		}
+		if int64(len(b)) > limit {
+			return fmt.Errorf("response exceeds %d bytes", limit)
+		}
+		out = b
+		return nil
+	})
+	return out, err
 }
 
 func (d Downloader) logger() *slog.Logger {
@@ -127,25 +152,32 @@ func FileSHA256(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func sourceHost(source string) string {
+// SourceHost returns the host of a source URL, for logs and reports.
+func SourceHost(source string) string {
 	if u, err := url.Parse(source); err == nil {
 		return u.Host
 	}
 	return source
 }
 
-// fetch downloads one source into a temporary file beside target, verifies
-// it, and atomically installs the executable.
-func (d Downloader) fetch(parent context.Context, source string, a Asset, target string) (err error) {
-	headerTimeout, idleTimeout, limit := d.HeaderTimeout, d.IdleTimeout, d.MaxBytes
+// limit returns the configured response size ceiling.
+func (d Downloader) limit() int64 {
+	if d.MaxBytes == 0 {
+		return defaultMaxBytes
+	}
+	return d.MaxBytes
+}
+
+// stream issues one GET and hands the body to consume. One watchdog covers
+// connect+headers, then each idle gap in the body; it stops when consume
+// returns, so consume must only read the body.
+func (d Downloader) stream(parent context.Context, source string, consume func(io.Reader) error) (err error) {
+	headerTimeout, idleTimeout := d.HeaderTimeout, d.IdleTimeout
 	if headerTimeout == 0 {
 		headerTimeout = defaultHeaderTimeout
 	}
 	if idleTimeout == 0 {
 		idleTimeout = defaultIdleTimeout
-	}
-	if limit == 0 {
-		limit = defaultMaxBytes
 	}
 	client := d.Client
 	if client == nil {
@@ -153,7 +185,6 @@ func (d Downloader) fetch(parent context.Context, source string, a Asset, target
 	}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	// One watchdog covers connect+headers, then each idle gap in the body.
 	// phase names the current wait; timedOut records it only if the watchdog
 	// actually fired, so unrelated failures keep their own error.
 	var phase, timedOut atomic.Pointer[string]
@@ -186,7 +217,13 @@ func (d Downloader) fetch(parent context.Context, source string, a Asset, target
 	}
 	setPhase(fmt.Sprintf("no data for %s", idleTimeout))
 	watchdog.Reset(idleTimeout)
+	return consume(&idleReader{r: res.Body, watchdog: watchdog, idle: idleTimeout})
+}
 
+// fetch downloads one source into a temporary file beside target, verifies
+// it, and atomically installs the file.
+func (d Downloader) fetch(parent context.Context, source string, a Asset, target string) error {
+	limit := d.limit()
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, ".download-*")
 	if err != nil {
@@ -196,14 +233,18 @@ func (d Downloader) fetch(parent context.Context, source string, a Asset, target
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	defer func() { _ = tmp.Close() }()
 	h := sha256.New()
-	body := &idleReader{r: io.LimitReader(res.Body, limit+1), watchdog: watchdog, idle: idleTimeout}
-	n, err := io.Copy(io.MultiWriter(tmp, h), body)
+	err = d.stream(parent, source, func(body io.Reader) error {
+		n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(body, limit+1))
+		if err != nil {
+			return err
+		}
+		if n > limit {
+			return fmt.Errorf("response exceeds %d bytes", limit)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
-	}
-	watchdog.Stop()
-	if n > limit {
-		return fmt.Errorf("response exceeds %d bytes", limit)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != a.SHA256 {
 		return fmt.Errorf("sha256 mismatch: got %s", got)
@@ -226,7 +267,11 @@ func (d Downloader) fetch(parent context.Context, source string, a Asset, target
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(binary, 0o755); err != nil {
+	mode := a.Mode
+	if mode == 0 {
+		mode = 0o755
+	}
+	if err := os.Chmod(binary, mode); err != nil {
 		return err
 	}
 	return os.Rename(binary, target)

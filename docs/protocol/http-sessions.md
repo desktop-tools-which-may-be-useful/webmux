@@ -111,12 +111,12 @@ interface SessionInfo {
 
 ## 其他
 
-| 方法 | 路径                   | 说明                                                                                                                              |
-| ---- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                                         |
-| GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel}`，不含 token |
-| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                  |
-| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                     |
+| 方法 | 路径                   | 说明                                                                                                                                              |
+| ---- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                                                         |
+| GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel, pendingUpdate?}`，不含 token |
+| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                                  |
+| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                                     |
 
 `tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。
 
@@ -127,6 +127,8 @@ interface SessionInfo {
 - 响应不包含 Cloudflare 凭据。
 
 `defaultShell` 为只读的启动文件 shell：`"bash"`、`"zsh"`，或空字符串表示不自动包装；由服务进程 `$SHELL` 的 basename 决定，未设置时为 `"bash"`。
+
+`pendingUpdate` 仅在可执行文件路径上已安装的版本已知且不同于运行版本时出现：`{installedVersion, launcher}`，`launcher` 为 `systemd`、`launchd`、`windows-tray` 或 `manual`，决定 Web UI 给出的重启方式。旧服务端不返回该字段。
 
 ## 启动配置
 

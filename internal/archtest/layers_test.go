@@ -46,6 +46,7 @@ var webmux = manifest{
 		"internal/statefile":               shared,
 		"internal/settingsstore":           shared,
 		"internal/fetch":                   shared,
+		"internal/update":                  shared,
 		"internal/pathutil":                shared,
 		"internal/attentionkind":           shared,
 		"internal/wsl":                     shared,

@@ -151,6 +151,66 @@ test("a goto submitted before the first placement survives it", async () => {
   expect(row(1)).toBeFalsy();
 });
 
+test("a relative goto before the first placement counts from the restored selection and keeps the restored state", async () => {
+  const text = Array.from(
+    { length: 400 },
+    (_, i) => `const line${i + 1} = ${i + 1};`,
+  ).join("\n");
+  const search = {
+    search: "line250",
+    caseSensitive: false,
+    regexp: false,
+    wholeWord: false,
+  };
+  const harness = await render(Harness, {
+    text,
+    hidden: true,
+    restore: {
+      line: 10,
+      offset: 0,
+      selection: { start: 180, end: 182 },
+      search,
+    },
+  });
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="跳转行"]')!
+    .click();
+  await expect
+    .poll(() => document.querySelector("[data-code-goto-line]"))
+    .toBeTruthy();
+  const input = document.querySelector<HTMLInputElement>(
+    'input[aria-label="跳转到行"]',
+  )!;
+  input.value = "+20";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  document
+    .querySelector<HTMLFormElement>("[data-code-goto-line]")!
+    .requestSubmit();
+  // Until layout arrives the restored state, now aimed at the jump, is kept.
+  expect(harness.component.capture()).toMatchObject({
+    line: 200,
+    selection: { start: 180, end: 182 },
+    search,
+  });
+  await harness.rerender({ hidden: false });
+  await expect.poll(() => row(200)).toBeTruthy();
+  const host = document.querySelector<HTMLElement>("[data-code-reader]")!;
+  await expect
+    .poll(() => {
+      const rect = row(200)!.getBoundingClientRect();
+      const box = host.getBoundingClientRect();
+      return rect.top >= box.top && rect.bottom <= box.bottom;
+    })
+    .toBe(true);
+  expect(harness.component.capture()).toMatchObject({
+    selection: { start: 180, end: 182 },
+    search,
+  });
+  await expect
+    .element(page.getByLabelText("Selected reference"))
+    .toMatchTextContent(new RegExp("180-182"));
+});
+
 test("renders HTML and control-looking content as code text", async () => {
   const text =
     '<img src="invalid" onerror="window.codeExecuted=true">\n<script>window.codeExecuted=true</script>\ncarriage\rreturn\x1b[31m text';
