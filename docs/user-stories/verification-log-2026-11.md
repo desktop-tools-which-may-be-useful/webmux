@@ -184,6 +184,7 @@
   - `internal/tray/...`（含 `LANEnabled`、`LANListenAddress`、转发器同源校验）与 `cmd/webmux`（含 `TestConfigListen`）的 Go race 测试；
   - `cmd/webmux-tray` 与 `internal/tray/...` 的 Windows amd64 交叉 vet 与编译。
 - 限制：未在真实 Windows 11 主机上运行新版托盘菜单点击流程；未重新核验其余故事能力。
+
 本次局部核对（2026-11-03）：`add-antigravity-acp-hybrid` 新增 Antigravity CLI（`agy`）混合会话适配器与默认启动配置，对应更新 US-B01、US-B08、US-Q01、US-Q03–US-Q05、US-Q08、US-Q11；不新增或重编号故事，覆盖索引同步。
 
 - 内容：新安装默认预置 `Antigravity CLI`（`agy --dangerously-skip-permissions`，混合模式，图标 `antigravity`，保留旧 `geminicli` 兼容），`OSC 7501` 子记录段长放宽到 64 字节以提取 36 字符 UUID 会话 ID，跨进程加载后补齐 `model`/`thought_level`，活动回合忽略回显的 `user_message_chunk`。
@@ -196,3 +197,9 @@
 - 旧 `geminicli` 图标在编辑对话框中显示“Gemini CLI（旧配置）”，可保存并重新选择；同步补齐 README、概览、部署与索引中的 Antigravity CLI 混合能力列表。
 - 依据：`go test -race ./internal/agentprofile/...`；`LaunchConfigDialog` 浏览器测试 22 项、`launchConfigs` 单元测试 57 项；前端类型与架构检查、OpenSpec strict 校验、文档与格式检查均通过。
 - 限制：未重新运行完整产品套件，未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：聊天端会话卡片工作细节对应 US-C02、US-Q09。
+
+- 依据：`internal/hybrid/work.go` 与 `actor.go` 的回合内 `tool.upsert`/`plan.set` 跟踪（回合结束丢弃未完成调用）、`Overlay` 覆盖层与 `session-get-hybrid-work` wire 快照；`SessionRow.svelte` 新增一行“当前工作”（进行中的工具调用或计划步骤，一行截断），移除“等待 Agent 回复…”占位；紧凑列表不显示。
+- 验证：`internal/hybrid`（含 fake agent 回合内工作行断言）、`internal/wire`、`internal/api`、`internal/docguard` 的 Go 测试通过，wire 快照已重录；`SessionRow` 浏览器用例（15 项）、svelte-check、Oxlint、前端架构守卫、类型检查与格式检查通过。
+- 限制：未运行全量 E2E 与 Storybook Playwright；未重新核验其余故事能力；未做真机验收。

@@ -100,6 +100,14 @@ func TestSessionHybrid(t *testing.T) {
 	if want := `{"side":"acp","phase":"loading","dormant":true,"state":"active","agent":"opencode","agentTitle":"OpenCode","agentIcon":"opencode","agentSessionId":"ses_abc"}`; got != want {
 		t.Fatalf("known agent session: %s, want %s", got, want)
 	}
+	work := "读取 internal/wire/wire.go"
+	got = encode(t, Hybrid(&session.HybridInfo{Side: "acp", State: "active", Agent: "omp", Work: work}))
+	if !strings.Contains(got, `"work":"读取 internal/wire/wire.go"`) {
+		t.Fatalf("work detail: %s", got)
+	}
+	if strings.Contains(got, `"work":""`) {
+		t.Fatalf("empty work detail must be omitted: %s", got)
+	}
 	id = "changed"
 	if *out.Hybrid.AgentSessionID != "ses_abc" {
 		t.Fatal("agent session ID aliases the service value")

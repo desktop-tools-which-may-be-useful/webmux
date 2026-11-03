@@ -80,7 +80,7 @@ func wireSchema(name string) wireRules {
 	case "settings-patch", "settings-reset", "ws-settings-update":
 		add("", "time", "updatedAt")
 	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get",
-		"ws-terminal-state", "ws-terminal-state-exited", "session-get-hybrid", "ws-terminal-state-hybrid", "hybrid-resume":
+		"ws-terminal-state", "ws-terminal-state-exited", "session-get-hybrid", "session-get-hybrid-work", "ws-terminal-state-hybrid", "hybrid-resume":
 		sessionFields("")
 		add("", "path", "cmd/*")
 	case "hybrid-records":
@@ -969,7 +969,8 @@ func wireHybrid(f *wireFixture) {
 	terminal := f.dial("/ws/s/" + id + "?client=wire-client-1&label=Wire")
 	f.frame(terminal, "ws-terminal-state-hybrid", 2, nil)
 	agentSessionID := "ses_wire"
-	item.SetOverlay(&session.Overlay{Hybrid: &session.HybridInfo{Side: "acp", Phase: "loading", State: "active", Agent: "omp", AgentTitle: "omp", AgentIcon: "pi", AgentSessionID: &agentSessionID}})
+	item.SetOverlay(&session.Overlay{Hybrid: &session.HybridInfo{Side: "acp", Phase: "loading", State: "active", Agent: "omp", AgentTitle: "omp", AgentIcon: "pi", AgentSessionID: &agentSessionID, Work: "读取 internal/wire/wire.go"}})
+	f.call("session-get-hybrid-work", "GET", "/api/sessions/"+id, nil, 200)
 	if err := item.EndRun(f.ctx); err != nil {
 		f.t.Fatal(err)
 	}

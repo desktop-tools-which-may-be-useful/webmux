@@ -286,6 +286,40 @@ test("a dormant chat card keeps its agent; an unknown glyph leaves the name alon
   expect(document.querySelector('[data-slot="session-agent"] svg')).toBeNull();
 });
 
+test("a working chat card shows its live work detail instead of a placeholder", async () => {
+  render(SessionRow, {
+    session: {
+      ...base,
+      status: "running",
+      preview: "",
+      hybrid: { ...chatHybrid, work: "读取 internal/wire/wire.go" },
+    },
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  const work = document.querySelector('[aria-label="当前工作"]');
+  expect(work?.textContent).toContain("读取 internal/wire/wire.go");
+  expect(page.getByText("等待 Agent 回复…").elements()).toHaveLength(0);
+  expect(page.getByLabelText("最新消息预览").elements()).toHaveLength(0);
+});
+
+test("a chat card without preview or work detail renders no message block", async () => {
+  render(SessionRow, {
+    session: {
+      ...base,
+      status: "idle",
+      preview: "",
+      hybrid: chatHybrid,
+    },
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await expect.element(page.getByText("聊天", { exact: true })).toBeVisible();
+  expect(page.getByLabelText("当前工作").elements()).toHaveLength(0);
+  expect(page.getByLabelText("最新消息预览").elements()).toHaveLength(0);
+  expect(page.getByText("等待 Agent 回复…").elements()).toHaveLength(0);
+});
+
 test("terminal-side and switching hybrid cards keep the terminal preview", async () => {
   const hybrid = { ...chatHybrid, side: "tui" as const, agentSessionId: null };
   render(SessionRow, {

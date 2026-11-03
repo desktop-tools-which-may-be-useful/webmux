@@ -88,6 +88,7 @@ const groups: Array<[z.ZodType, string[]]> = [
       "session-create",
       "session-get",
       "session-get-hybrid",
+      "session-get-hybrid-work",
       "ws-terminal-state-exited",
       "ws-terminal-state-hybrid",
       "ws-terminal-state",

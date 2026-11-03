@@ -30,6 +30,9 @@ export const SessionHybridSchema = z.object({
   agentTitle: z.string(),
   agentIcon: z.string(),
   agentSessionId: z.string().nullable(),
+  // Present only while the agent is working (a running turn): the
+  // tool call or plan step it is on, one line. Omitted otherwise.
+  work: z.string().optional(),
 });
 export type SessionHybrid = z.infer<typeof SessionHybridSchema>;
 

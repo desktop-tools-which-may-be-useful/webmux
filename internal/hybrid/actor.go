@@ -101,6 +101,11 @@ type actor struct {
 	// titles arrive through the shell, chat titles through its overlay.
 	recordTitle string
 	preview     preview
+	// work tracks tool calls and the plan to derive the one-line work
+	// detail shown on the session card; workLine is its latest text, empty
+	// outside a turn.
+	work     workTracker
+	workLine string
 	// switching is the running switch, from its eligibility check on.
 	switching *switchOp
 	// opening: a reconnect or wake is opening the agent session again;
@@ -332,6 +337,10 @@ func (a *actor) overlay() *session.Overlay {
 	if a.side == SideACP && a.state == StateActive {
 		o.Attention = a.currentAttention()
 		o.Preview = a.preview.text
+		// The work detail is only meaningful while a turn is in flight.
+		if a.turn != nil {
+			info.Work = a.workLine
+		}
 		switch {
 		case o.Attention != nil:
 			o.Status = session.StatusWaiting
@@ -371,9 +380,11 @@ func (a *actor) clearAttention() {
 // emit stores events in the log, keeping the replaceable state they carry.
 func (a *actor) emit(events ...Event) {
 	for _, e := range events {
+		toolsOnly := false
 		switch e.Kind {
 		case EventPlan:
 			a.chat.Plan = e.Plan
+			a.work.setPlan(e.Plan)
 		case EventCommands:
 			a.chat.Commands = e.Commands
 		case EventConfig:
@@ -391,11 +402,19 @@ func (a *actor) emit(events ...Event) {
 			if e.Message.Role != RoleAgent || !a.preview.add(e.Message) {
 				continue
 			}
+		case EventTool:
+			// Tool calls only matter to the session card's work
+			// line; flush only when it changes.
+			a.work.tool(*e.Tool)
+			toolsOnly = true
 		default:
 			continue
 		}
-		a.dirty = true
+		if !toolsOnly {
+			a.dirty = true
+		}
 	}
+	a.refreshWork()
 	a.log.append(time.Now().UTC(), events...)
 }
 
@@ -418,6 +437,21 @@ func (a *actor) saveTitle(title string) {
 	}
 	a.recordTitle = title
 	a.record(false, func(r *Record) { r.Title = title })
+}
+
+// refreshWork recomputes the one-line work detail from the tracked tool
+// calls and plan. The detail is only kept while a turn is in flight, so a
+// finished or failed turn clears it.
+func (a *actor) refreshWork() {
+	line := ""
+	if a.turn != nil {
+		line = a.work.line()
+	}
+	if line == a.workLine {
+		return
+	}
+	a.workLine = line
+	a.dirty = true
 }
 
 // record changes the session's record; immediate writes it now.
@@ -868,6 +902,7 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 		return
 	}
 	a.turn = nil
+	a.work.endTurn()
 	t.cancel()
 	stop, text := stopReason(resp, err)
 	var rpc *acp.RPCError

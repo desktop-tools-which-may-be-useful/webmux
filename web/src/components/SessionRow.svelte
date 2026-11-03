@@ -9,6 +9,7 @@
   import { locationHints } from "../session-location";
   import IconChevronRight from "~icons/tabler/chevron-right";
   import IconDots from "~icons/tabler/dots";
+  import IconLoader2 from "~icons/tabler/loader-2";
   import IconTerminal2 from "~icons/tabler/terminal-2";
   import { hybridSideLabel } from "../hybrid";
   import LaunchConfigIcon, { hasLaunchIcon } from "./LaunchConfigIcon.svelte";
@@ -149,6 +150,21 @@
             >{copyNotice}</span
           >{/if}
       </div>
+      {#if !compact && session.hybrid?.work}
+        <!-- What the agent is doing right now: the running turn's tool
+             call or plan step, one line. -->
+        <p
+          aria-label="当前工作"
+          title={session.hybrid.work}
+          class="mt-2 flex min-w-0 items-center gap-1.5 text-xs text-foreground/80"
+        >
+          <IconLoader2
+            class="size-3.5 shrink-0 animate-spin text-info"
+            aria-hidden="true"
+          />
+          <span class="min-w-0 truncate">{session.hybrid.work}</span>
+        </p>
+      {/if}
       {#if hints.launch || hints.reported}
         <div class="mt-2 space-y-1 text-xs text-muted-foreground">
           {#if hints.launch}
@@ -178,12 +194,14 @@
     </div>
     {#if !compact}
       {#if chat}
-        <p
-          aria-label="最新消息预览"
-          class="mt-3 line-clamp-3 min-w-0 px-4 pb-4 text-sm leading-6 break-words whitespace-pre-line text-foreground/85"
-        >
-          {session.preview || "等待 Agent 回复…"}
-        </p>
+        {#if session.preview}
+          <p
+            aria-label="最新消息预览"
+            class="mt-3 line-clamp-3 min-w-0 px-4 pb-4 text-sm leading-6 break-words whitespace-pre-line text-foreground/85"
+          >
+            {session.preview}
+          </p>
+        {/if}
       {:else}
         <pre
           data-slot="terminal-preview"

@@ -32,7 +32,9 @@ type Driver interface {
 	RunExited(code int)
 }
 
-// HybridInfo is the driver's description of a hybrid shell.
+// HybridInfo is the driver's description of a hybrid shell. Work is the
+// driver's one-line summary of what the agent is doing (a running turn's
+// current tool call or plan step); it is empty outside a turn.
 type HybridInfo struct {
 	Side           string
 	Phase          string
@@ -42,6 +44,7 @@ type HybridInfo struct {
 	AgentTitle     string
 	AgentIcon      string
 	AgentSessionID *string
+	Work           string
 }
 
 // Overlay is what a driver reports for its shell. Hybrid is always shown;
