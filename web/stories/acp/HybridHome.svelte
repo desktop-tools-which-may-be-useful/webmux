@@ -58,7 +58,6 @@
   const archive: ArchiveActions = {
     now,
     filtering: false,
-    highlight: "archivd1",
     resume: async () => {
       notice = "此预览使用示例数据，未恢复真实会话。";
       return new Promise(() => {});
