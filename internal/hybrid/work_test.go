@@ -31,6 +31,28 @@ func TestWorkLinePrefersLatestActiveTool(t *testing.T) {
 	if got := w.line(); got != "Read README.md" {
 		t.Fatalf("falling back to the remaining active call: %q", got)
 	}
+	// Once every call in the turn has completed, the latest completed call
+	// remains visible while the LLM thinks between tool calls.
+	w.tool(Tool{ToolCallID: "a", Status: &done})
+	if got := w.line(); got != "执行" {
+		t.Fatalf("falling back to the latest completed call in the turn: %q", got)
+	}
+}
+
+func TestWorkLineDefaultPendingAndSparsePatch(t *testing.T) {
+	var w workTracker
+	// A new tool_call without an explicit status defaults to pending, and
+	// a later status patch with empty title/locations keeps the earlier ones.
+	w.tool(Tool{ToolCallID: "a", Kind: strPtr("edit"), Title: strPtr("Edit service.go"), Locations: []Location{{Path: "/repo/service.go"}}})
+	if got := w.line(); got != "Edit service.go" {
+		t.Fatalf("default pending tool line: %q", got)
+	}
+	inProgress := "in_progress"
+	empty := ""
+	w.tool(Tool{ToolCallID: "a", Kind: &empty, Title: &empty, Status: &inProgress, Locations: []Location{}})
+	if got := w.line(); got != "Edit service.go" {
+		t.Fatalf("sparse patch preserved title: %q", got)
+	}
 }
 
 func TestWorkLineToolTitleWins(t *testing.T) {
@@ -111,15 +133,35 @@ func TestHybridWorkDetailDuringTurn(t *testing.T) {
 	h := newHarness(t, 0)
 	s := h.create(h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=300ms"))
 	id := s.Info().ID
+	listSub := h.svc.manager.Subscribe()
+	defer h.svc.manager.Unsubscribe(listSub)
 	st := h.follow(id)
 	prompt(t, h, id, "hello")
-	waitFor(t, "work detail", func() bool {
-		i := s.Info()
-		return i.Hybrid != nil && i.Hybrid.Work == "Read file"
+	waitFor(t, "work detail published to session list", func() bool {
+		for {
+			select {
+			case ev := <-listSub.Out:
+				if ev.Type == "updated" && ev.Session != nil && ev.Session.ID == id &&
+					ev.Session.Hybrid != nil && ev.Session.Hybrid.Work == "Read file" {
+					return true
+				}
+			default:
+				return false
+			}
+		}
 	})
 	st.until("turn end", hasKind(EventTurnEnd))
-	waitFor(t, "work cleared", func() bool {
-		i := s.Info()
-		return i.Hybrid != nil && i.Hybrid.Work == ""
+	waitFor(t, "work cleared in session list", func() bool {
+		for {
+			select {
+			case ev := <-listSub.Out:
+				if ev.Type == "updated" && ev.Session != nil && ev.Session.ID == id &&
+					ev.Session.Hybrid != nil && ev.Session.Hybrid.Work == "" {
+					return true
+				}
+			default:
+				return false
+			}
+		}
 	})
 }

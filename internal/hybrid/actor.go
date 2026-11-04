@@ -164,6 +164,7 @@ type pending struct {
 	epoch  int
 	kind   string
 	build  func(id string) Request
+	tool   *Tool
 	req    Request
 	since  time.Time
 	answer chan Answer
@@ -410,7 +411,9 @@ func (a *actor) emit(events ...Event) {
 		case EventTool:
 			// Tool calls only matter to the session card's work
 			// line; flush only when it changes.
-			a.work.tool(*e.Tool)
+			if a.turn != nil {
+				a.work.tool(*e.Tool)
+			}
 			toolsOnly = true
 		default:
 			continue
@@ -632,7 +635,8 @@ func (h *handler) SessionUpdate(n acp.SessionNotification) {
 }
 
 func (h *handler) RequestPermission(ctx context.Context, req acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	ans, err := h.ask(ctx, RequestPermission, func(id string) Request { return permissionRequest(id, req) })
+	tool := toolPatch(req.ToolCall)
+	ans, err := h.ask(ctx, RequestPermission, &tool, func(id string) Request { return permissionRequest(id, req) })
 	if err != nil {
 		return acp.RequestPermissionResponse{}, err
 	}
@@ -647,7 +651,7 @@ func (h *handler) CreateElicitation(ctx context.Context, req acp.CreateElicitati
 		// Only form mode is advertised.
 		return acp.CreateElicitationResponse{Action: acp.ElicitDecline}, nil
 	}
-	ans, err := h.ask(ctx, RequestForm, func(id string) Request { return formRequest(id, req) })
+	ans, err := h.ask(ctx, RequestForm, nil, func(id string) Request { return formRequest(id, req) })
 	if err != nil {
 		return acp.CreateElicitationResponse{}, err
 	}
@@ -663,8 +667,8 @@ func (h *handler) CreateElicitation(ctx context.Context, req acp.CreateElicitati
 // ask opens a request on the actor and waits for its answer. The agent
 // withdrawing it (ctx) closes it as cancelled; a stopped actor answers
 // cancelled.
-func (h *handler) ask(ctx context.Context, kind string, build func(id string) Request) (Answer, error) {
-	p := &pending{epoch: h.epoch, kind: kind, build: build, answer: make(chan Answer, 1)}
+func (h *handler) ask(ctx context.Context, kind string, tool *Tool, build func(id string) Request) (Answer, error) {
+	p := &pending{epoch: h.epoch, kind: kind, build: build, tool: tool, answer: make(chan Answer, 1)}
 	if !h.a.post(func() { h.a.openRequest(p) }) {
 		return cancelledAnswer(kind), nil
 	}
@@ -717,6 +721,10 @@ func (a *actor) openRequest(p *pending) {
 	if p.epoch != a.epoch || a.closing || a.stopped {
 		p.answer <- cancelledAnswer(p.kind)
 		return
+	}
+	if p.tool != nil && a.turn != nil {
+		a.work.tool(*p.tool)
+		a.refreshWork()
 	}
 	a.nextRequest++
 	p.req, p.since = p.build("r"+strconv.Itoa(a.nextRequest)), time.Now().UTC()
@@ -885,6 +893,7 @@ func (a *actor) send(text string, attachments []Attachment) (PromptResult, error
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &turn{id: result.TurnID, cancel: cancel, done: make(chan struct{})}
 	a.turn = t
+	a.work.endTurn()
 	startedAt := time.Now().UTC()
 	a.chat.Turn = Turn{Running: true, TurnID: t.id, StartedAt: &startedAt}
 	a.dirty = true

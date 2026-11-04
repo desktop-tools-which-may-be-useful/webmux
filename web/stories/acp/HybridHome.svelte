@@ -48,6 +48,19 @@
     },
     {
       ...base,
+      id: "hybridwk",
+      generation: "",
+      title: "OpenCode · 排查工具调用",
+      cmd: ["opencode"],
+      status: "running",
+      attention: null,
+      preview: "",
+      hybrid: hybrid("opencode", "acp", {
+        work: "读取 internal/hybrid/work.go",
+      }),
+    },
+    {
+      ...base,
       id: "hybridtu",
       title: "OpenCode · 更新 README",
       cmd: ["opencode"],

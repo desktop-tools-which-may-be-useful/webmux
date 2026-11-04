@@ -301,6 +301,8 @@ test("a working chat card shows its live work detail instead of a placeholder", 
   expect(work?.textContent).toContain("读取 internal/wire/wire.go");
   expect(page.getByText("等待 Agent 回复…").elements()).toHaveLength(0);
   expect(page.getByLabelText("最新消息预览").elements()).toHaveLength(0);
+  const link = document.querySelector("[data-session-link]");
+  expect(link && getComputedStyle(link).paddingBottom).toBe("16px");
 });
 
 test("a chat card without preview or work detail renders no message block", async () => {
@@ -318,6 +320,8 @@ test("a chat card without preview or work detail renders no message block", asyn
   expect(page.getByLabelText("当前工作").elements()).toHaveLength(0);
   expect(page.getByLabelText("最新消息预览").elements()).toHaveLength(0);
   expect(page.getByText("等待 Agent 回复…").elements()).toHaveLength(0);
+  const link = document.querySelector("[data-session-link]");
+  expect(link && getComputedStyle(link).paddingBottom).toBe("16px");
 });
 
 test("terminal-side and switching hybrid cards keep the agent and the terminal preview", async () => {

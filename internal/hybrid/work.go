@@ -38,18 +38,19 @@ func (w *workTracker) tool(t Tool) {
 	}
 	prev, ok := w.tools[t.ToolCallID]
 	if !ok {
+		prev.status = "pending"
 		w.order = append(w.order, t.ToolCallID)
 	}
-	if t.Kind != nil {
+	if t.Kind != nil && *t.Kind != "" {
 		prev.kind = *t.Kind
 	}
-	if t.Title != nil {
+	if t.Title != nil && oneLine(*t.Title) != "" {
 		prev.title = *t.Title
 	}
 	if t.Status != nil {
 		prev.status = *t.Status
 	}
-	if t.Locations != nil {
+	if len(t.Locations) > 0 {
 		prev.locations = prev.locations[:0]
 		for _, l := range t.Locations {
 			prev.locations = append(prev.locations, l.Path)
@@ -78,27 +79,28 @@ func (w *workTracker) prune() {
 	}
 }
 
-// endTurn marks every unfinished tool call as failed, so the next turn's
-// work line does not resurrect an interrupted call.
+// endTurn clears the finished turn's tool calls so the next turn starts clean.
 func (w *workTracker) endTurn() {
-	for i := range w.order {
-		t := w.tools[w.order[i]]
-		if t.status == "pending" || t.status == "in_progress" {
-			t.status = "failed"
-			w.tools[w.order[i]] = t
-		}
-	}
+	clear(w.tools)
+	w.order = w.order[:0]
 }
 
 // setPlan records the latest plan.
 func (w *workTracker) setPlan(p *Plan) { w.plan = p }
 
 // line is the current work, or "" when nothing is in flight. A running or
-// pending tool call takes precedence over the plan's in-progress step.
+// pending tool call takes precedence over a completed call from the same
+// turn, which in turn takes precedence over the plan's in-progress step.
 func (w *workTracker) line() string {
 	for i := len(w.order) - 1; i >= 0; i-- {
 		t := w.tools[w.order[i]]
 		if t.status == "pending" || t.status == "in_progress" {
+			return renderTool(t)
+		}
+	}
+	for i := len(w.order) - 1; i >= 0; i-- {
+		t := w.tools[w.order[i]]
+		if t.status == "completed" {
 			return renderTool(t)
 		}
 	}

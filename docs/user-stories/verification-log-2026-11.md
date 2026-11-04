@@ -249,3 +249,8 @@
 - 通过：`SessionRow` 与 `SessionListRecoverable` 浏览器测试（18 项）、`pnpm --dir web check`、`check:arch`、`make docs-check`。
 - 截图：Storybook “Workspace/Hybrid home” 示例数据，桌面 1280px 与手机 390px、明暗主题前后对比。
 - 限制：未在真实服务中手动执行“恢复到终端”；未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：修复聊天端会话卡片无最新消息预览时的底部边距，并使 `HybridInfo.Work` 参与会话显示比对与回合内工具调用跟踪，对应 US-C02、US-Q09，不新增故事或改变覆盖索引。
+
+- 依据：`internal/session`（`TestHybridMetadataParticipatesInDisplayComparison`）与 `internal/hybrid`（`TestWork*`、`TestHybridWorkDetailDuringTurn` 会话列表事件断言）的 Go race 测试；`SessionRow` 浏览器用例（16 项，含无预览卡片底边距断言）、`acp-chat.spec.ts` Storybook 用例、`make check` 通过。
+- 限制：未重新核验其余故事能力。

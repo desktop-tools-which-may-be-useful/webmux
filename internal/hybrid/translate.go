@@ -142,13 +142,7 @@ func (t *translator) update(u acp.Update) []Event {
 		}
 		return []Event{{Kind: EventTool, Tool: &tool}}
 	case *acp.ToolCallUpdate:
-		tool := Tool{ToolCallID: u.ToolCallID, Kind: cappedPtr(u.Kind), Title: cappedPtr(u.Title), Status: toolStatus(u.Status)}
-		if u.Content != nil {
-			tool.Content = toolContents(u.Content)
-		}
-		if u.Locations != nil {
-			tool.Locations = locations(u.Locations)
-		}
+		tool := toolPatch(*u)
 		return []Event{{Kind: EventTool, Tool: &tool}}
 	case *acp.Plan:
 		plan := Plan{Entries: make([]PlanEntry, len(u.Entries))}
@@ -273,6 +267,17 @@ func toolStatus(s *string) *string {
 		return &v
 	}
 	return nil
+}
+
+func toolPatch(u acp.ToolCallUpdate) Tool {
+	tool := Tool{ToolCallID: u.ToolCallID, Kind: cappedPtr(u.Kind), Title: cappedPtr(u.Title), Status: toolStatus(u.Status)}
+	if u.Content != nil {
+		tool.Content = toolContents(u.Content)
+	}
+	if u.Locations != nil {
+		tool.Locations = locations(u.Locations)
+	}
+	return tool
 }
 
 func toolContents(in []acp.ToolCallContent) []Content {

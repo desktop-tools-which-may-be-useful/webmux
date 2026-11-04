@@ -88,6 +88,7 @@
 >
   <a
     data-session-link
+    class:pb-4={!compact && chat}
     class="group block w-full min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     aria-label={session.title}
     href={`/s/${session.id}`}
@@ -191,7 +192,7 @@
         {#if session.preview}
           <p
             aria-label="最新消息预览"
-            class="mt-3 line-clamp-3 min-w-0 px-4 pb-4 text-sm leading-6 break-words whitespace-pre-line text-foreground/85"
+            class="mt-3 line-clamp-3 min-w-0 px-4 text-sm leading-6 break-words whitespace-pre-line text-foreground/85"
           >
             {session.preview}
           </p>
