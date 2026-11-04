@@ -6,6 +6,7 @@ import {
   createShell,
   headerAction,
   recordInput,
+  viewSwitch,
 } from "./fixtures";
 
 const quick = (page: Page) =>
@@ -38,10 +39,7 @@ test("uploads land in the session folder the code panel browses", async ({
   );
   expect(path.startsWith(workDir)).toBe(false);
 
-  await page
-    .locator(".terminal-header")
-    .getByRole("button", { name: "代码", exact: true })
-    .click();
+  await viewSwitch(page.locator(".terminal-header"), "代码").click();
   const code = page.getByRole("region", { name: "代码工作区" });
   await expect(code).toBeVisible();
   await code.getByRole("tab", { name: "临时文件夹", exact: true }).click();

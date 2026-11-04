@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import { test, expect, createShell } from "./fixtures";
+import { test, expect, createShell, viewSwitch } from "./fixtures";
 
 // Below 640px the document bar's controls live in the code menu.
 async function previewMarkdown(page: Page) {
@@ -62,10 +62,7 @@ test("Markdown preview opens relative links, finds headings and loads workspace 
       leaks.push(request.url());
   });
   await createShell(page, "Markdown code", workDir);
-  await page
-    .locator(".terminal-header")
-    .getByRole("button", { name: "代码", exact: true })
-    .click();
+  await viewSwitch(page.locator(".terminal-header"), "代码").click();
   await page.getByRole("button", { name: "README.md", exact: true }).click();
   await previewMarkdown(page);
   const preview = page

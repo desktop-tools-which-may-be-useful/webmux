@@ -165,6 +165,32 @@ test.describe("hybrid sessions with the fake agent", () => {
     ).toHaveCount(0);
   });
 
+  test("phones keep one view control while the session info arrives", async ({
+    page,
+    request,
+    workDir,
+  }, testInfo) => {
+    test.skip(!testInfo.project.use.isMobile, "One control is a phone layout");
+    const id = await createHybrid(request, workDir, "tui");
+    await page.setViewportSize({ width: 393, height: 851 });
+    // Until the terminal stream connects the page cannot know the session is
+    // hybrid: it shows the ordinary terminal and code tabs.
+    const gate = Promise.withResolvers<void>();
+    await page.routeWebSocket("**/ws/s/*", async (socket) => {
+      await gate.promise;
+      socket.connectToServer();
+    });
+    await page.goto(`/s/${id}`);
+    const views = page.getByRole("tablist", { name: "会话视图", exact: true });
+    await expect(views.getByRole("tab")).toHaveText(["终端", "代码"]);
+    const control = await views.elementHandle();
+    gate.resolve();
+    await expectSide(page, "tui");
+    // The same control gains the chat tab instead of being replaced.
+    await expect(views.getByRole("tab")).toHaveText(["聊天", "终端", "代码"]);
+    expect(await control!.evaluate((list) => list.isConnected)).toBe(true);
+  });
+
   for (const { start, agent } of [
     { start: "acp", agent: "omp" },
     { start: "tui", agent: "opencode" },

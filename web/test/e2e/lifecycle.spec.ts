@@ -9,6 +9,7 @@ import {
   expectTerminalLine,
   headerAction,
   expectConnected,
+  viewSwitch,
 } from "./fixtures";
 
 for (const initialization of ["connected", "font-pending"] as const) {
@@ -293,10 +294,7 @@ test("replay and the header action return to latest output without typing", asyn
 
   await scrollBack();
   if (info.project.use.isMobile) {
-    await page
-      .locator(".terminal-header")
-      .getByRole("button", { name: "代码", exact: true })
-      .click();
+    await viewSwitch(page.locator(".terminal-header"), "代码").click();
     await expect(
       page.getByRole("region", { name: "代码工作区" }),
     ).toBeVisible();
@@ -332,10 +330,7 @@ test("replay and the header action return to latest output without typing", asyn
   expect(live.isClosed()).toBe(false);
   await latestEnabled();
   if (info.project.use.isMobile)
-    await page
-      .locator(".terminal-header")
-      .getByRole("button", { name: "终端", exact: true })
-      .click();
+    await viewSwitch(page.locator(".terminal-header"), "终端").click();
   // Nothing was missed, so the reading position stays until the header
   // action (the floating button on phones) returns to the latest output.
   if (narrow) await floating.click();
@@ -344,15 +339,9 @@ test("replay and the header action return to latest output without typing", asyn
 
   if (info.project.use.isMobile) {
     await scrollBack();
-    await page
-      .locator(".terminal-header")
-      .getByRole("button", { name: "代码", exact: true })
-      .click();
+    await viewSwitch(page.locator(".terminal-header"), "代码").click();
     // From the narrow code view, the view switch returns to the terminal.
-    await page
-      .locator(".terminal-header")
-      .getByRole("button", { name: "终端", exact: true })
-      .click();
+    await viewSwitch(page.locator(".terminal-header"), "终端").click();
     await expect(page.locator(".terminal-host")).toBeVisible();
     await floating.click();
     await expectTerminalLine(page, marker);

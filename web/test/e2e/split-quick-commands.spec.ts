@@ -1,4 +1,10 @@
-import { test, expect, createShell, openPaneMenu } from "./fixtures";
+import {
+  test,
+  expect,
+  createShell,
+  openPaneMenu,
+  viewSwitch,
+} from "./fixtures";
 
 test("compact split code view retains quick commands on a wide touch screen", async ({
   page,
@@ -39,7 +45,7 @@ test("compact split code view retains quick commands on a wide touch screen", as
     }
     await expect(entry).toBeHidden();
     await expect(bar).toBeVisible();
-    await second.getByRole("button", { name: "代码", exact: true }).click();
+    await viewSwitch(second, "代码").click();
     await expect(second.locator(".terminal-host")).toBeHidden();
     await expect(bar).toBeHidden();
     await expect(entry).toBeVisible();
@@ -50,7 +56,7 @@ test("compact split code view retains quick commands on a wide touch screen", as
       page.getByRole("menuitem", { name: "管理快捷指令…", exact: true }),
     ).toBeEnabled();
     await page.keyboard.press("Escape");
-    await second.getByRole("button", { name: "终端", exact: true }).click();
+    await viewSwitch(second, "终端").click();
     await expect(entry).toBeHidden();
     await expect(bar).toBeVisible();
   }

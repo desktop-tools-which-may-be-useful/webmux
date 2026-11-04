@@ -1,4 +1,10 @@
-import { test, expect, createShell, openPaneMenu } from "./fixtures";
+import {
+  test,
+  expect,
+  createShell,
+  openPaneMenu,
+  viewSwitch,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 async function split(pane: Locator, direction: "左右" | "上下") {
@@ -63,12 +69,12 @@ test("nested splits preserve terminal state, isolate input and restore layout", 
   await expect(original.locator(".xterm-rows")).not.toContainText(
     "second-pane",
   );
-  await second.getByRole("button", { name: "代码", exact: true }).click();
+  await viewSwitch(second, "代码").click();
   await expect(
     second.getByRole("region", { name: "代码工作区" }),
   ).toBeVisible();
   await expect(second.locator(".terminal-host")).toBeHidden();
-  await second.getByRole("button", { name: "终端", exact: true }).click();
+  await viewSwitch(second, "终端").click();
   await expect(second.locator(".terminal-host")).toBeVisible();
   await expect(original.locator(".xterm")).toHaveAttribute(
     "data-retained",

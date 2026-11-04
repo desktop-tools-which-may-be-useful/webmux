@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Frame, FrameLocator, Locator, Page } from "@playwright/test";
-import { test, expect, createShell } from "./fixtures";
+import { test, expect, createShell, viewSwitch } from "./fixtures";
 
 function git(root: string, ...args: string[]) {
   execFileSync("git", ["-C", root, ...args], {
@@ -25,10 +25,7 @@ function frameOf(win: Page) {
 }
 type Scope = Page | FrameLocator;
 function showCode(page: Page) {
-  return page
-    .locator(".terminal-header")
-    .getByRole("button", { name: "代码", exact: true })
-    .click();
+  return viewSwitch(page.locator(".terminal-header"), "代码").click();
 }
 function popOutButton(page: Page) {
   return page.getByRole("button", {
@@ -506,7 +503,7 @@ test("mobile browsers without Picture-in-Picture offer no pop-out", async ({
   await withoutPictureInPicture(page);
   await writeFile(join(workDir, "mobile.txt"), "mobile document\n");
   await createShell(page, "Mobile code", workDir);
-  await page.getByRole("button", { name: "代码", exact: true }).click();
+  await viewSwitch(page, "代码").click();
   await expect(
     page.getByRole("button", { name: "mobile.txt", exact: true }),
   ).toBeVisible();

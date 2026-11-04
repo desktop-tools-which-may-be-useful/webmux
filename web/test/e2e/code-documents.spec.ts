@@ -1,14 +1,11 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page, Request } from "@playwright/test";
-import { test, expect, createShell } from "./fixtures";
+import { test, expect, createShell, viewSwitch } from "./fixtures";
 import { pdfFixture } from "../fixtures/pdf";
 
 async function showCode(page: Page) {
-  await page
-    .locator(".terminal-header")
-    .getByRole("button", { name: "代码", exact: true })
-    .click();
+  await viewSwitch(page.locator(".terminal-header"), "代码").click();
   await expect(page.getByRole("region", { name: "代码工作区" })).toBeVisible();
 }
 async function open(page: Page, name: string) {

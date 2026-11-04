@@ -7,6 +7,7 @@ import {
   expectTerminalLine,
   recordInput,
   expectConnected,
+  viewSwitch,
 } from "./fixtures";
 
 // Only one entry is rendered visibly at a time; role queries skip the hidden one.
@@ -362,17 +363,17 @@ test("narrow code view keeps the quick-command entry accessible", async ({
     .getByRole("button", { name: "快捷指令", exact: true });
   const bar = page.getByRole("complementary", { name: "终端软键" });
   await expect(headerEntry).toBeHidden();
-  await page.getByRole("button", { name: "代码", exact: true }).click();
+  await viewSwitch(page, "代码").click();
   await expect(bar).toBeHidden();
   await expect(headerEntry).toBeVisible();
   await expect(quick(page)).toHaveCount(1);
   await headerEntry.click();
   await expect(menu(page)).toHaveAttribute("data-side", "bottom");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "终端", exact: true }).click();
+  await viewSwitch(page, "终端").click();
   await expect(headerEntry).toBeHidden();
   await expect(bar.getByRole("button", { name: "快捷指令" })).toBeVisible();
-  await page.getByRole("button", { name: "代码", exact: true }).click();
+  await viewSwitch(page, "代码").click();
   await headerEntry.click();
   await item(page, "管理快捷指令…").click();
   await expect(page).toHaveURL(

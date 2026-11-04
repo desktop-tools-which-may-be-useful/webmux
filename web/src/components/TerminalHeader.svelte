@@ -16,11 +16,10 @@
   import type { TerminalDraft } from "../terminal-draft.svelte";
   import type { Connection } from "../ws";
   import DraftToggle from "./DraftToggle.svelte";
-  import HybridSideSwitch from "./HybridSideSwitch.svelte";
+  import SessionViewTabs from "./SessionViewTabs.svelte";
   import LaunchConfigIcon, { hasLaunchIcon } from "./LaunchConfigIcon.svelte";
   import UploadFileInput from "./UploadFileInput.svelte";
   import TerminalShortcuts from "./TerminalShortcuts.svelte";
-  import ViewSegment from "./ViewSegment.svelte";
 
   interface HeaderTerminal {
     readonly info: SessionInfo | undefined;
@@ -186,14 +185,19 @@
   <!-- Actions, left to right: where the session runs, terminal actions
        (icons), the quick commands and the panes it opens (outlined), then
        the window and the menu. -->
-  {#if hybrid?.side || hybrid?.target}<HybridSideSwitch
-      side={hybrid.side}
-      target={hybrid.target}
-      switching={hybrid.view === "switching"}
-      chatUnavailable={hybrid.chatUnavailable}
-      request={(to) => hybrid.request(to)}
-      code={{ shown: codeShown, set: (value) => (codeShown = value) }}
-    />{/if}
+  <SessionViewTabs
+    hybrid={hybrid && hybrid.view !== "recovery"
+      ? {
+          side: hybrid.side,
+          target: hybrid.target,
+          switching: hybrid.view === "switching",
+          chatUnavailable: hybrid.chatUnavailable,
+          request: (to) => hybrid.request(to),
+        }
+      : undefined}
+    pane={terminalShown ? "终端" : "聊天"}
+    code={{ shown: codeShown, set: (value) => (codeShown = value) }}
+  />
   {#if terminalShown}
     <Button
       variant="ghost"
@@ -229,17 +233,6 @@
       disabled={t.connection === "missing"}
       toggle={toggleDraft}
     />
-  {/if}
-  <!-- Phones: both destinations stay visible. A hybrid session's chat/terminal
-       switch carries the code tab itself. -->
-  {#if !(hybrid?.side || hybrid?.target)}
-    <div class="sm:hidden">
-      <ViewSegment
-        first={terminalShown ? "终端" : "聊天"}
-        code={codeShown}
-        onchange={(value) => (codeShown = value)}
-      />
-    </div>
   {/if}
   <Button
     variant="outline"

@@ -9,6 +9,7 @@ import {
   createShell,
   runCommand,
   expectTerminalLine,
+  viewSwitch,
 } from "./fixtures";
 function git(root: string, ...args: string[]) {
   return execFileSync("git", ["-C", root, ...args], {
@@ -22,10 +23,7 @@ function git(root: string, ...args: string[]) {
   }).toString();
 }
 async function showCode(page: import("@playwright/test").Page) {
-  await page
-    .locator(".terminal-header")
-    .getByRole("button", { name: "代码", exact: true })
-    .click();
+  await viewSwitch(page.locator(".terminal-header"), "代码").click();
   await expect(page.getByRole("region", { name: "代码工作区" })).toBeVisible();
 }
 async function visibleCode(page: import("@playwright/test").Page) {

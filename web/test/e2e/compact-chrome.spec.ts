@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { test, expect, createShell } from "./fixtures";
+import { test, expect, createShell, viewSwitch } from "./fixtures";
 
 function git(root: string, ...args: string[]) {
   execFileSync("git", ["-C", root, ...args], {
@@ -83,17 +83,17 @@ test("narrow headers keep one row and move rare actions into the menu", async ({
       await expect(
         header(page).getByRole("button", { name: /^草稿模式/ }),
       ).toBeHidden();
+      // An ordinary session's switch is the same tab control a hybrid one
+      // uses, with its terminal and code tabs.
+      const views = header(page).getByRole("tablist", { name: "会话视图" });
+      await expect(views.getByRole("tab")).toHaveText(["终端", "代码"]);
       await expect(
-        header(page)
-          .getByRole("group", { name: "会话视图" })
-          .getByRole("button", { name: "终端", exact: true }),
-      ).toHaveAttribute("aria-pressed", view === "代码" ? "true" : "false");
+        views.getByRole("tab", { name: "终端", exact: true }),
+      ).toHaveAttribute("aria-selected", view === "代码" ? "true" : "false");
       await expect(
         header(page).getByRole("button", { name: "返回会话列表" }),
       ).toBeVisible();
-      await header(page)
-        .getByRole("button", { name: view, exact: true })
-        .click();
+      await views.getByRole("tab", { name: view, exact: true }).click();
     }
   }
   // Soft keys exist on touch devices; a narrow desktop window has the menu.
@@ -139,7 +139,7 @@ test("a phone Diff leaves most of the screen to code and reaches document action
   await modifiedRepository(workDir);
   await page.setViewportSize({ width: 393, height: 851 });
   await createShell(page, "Phone diff", workDir);
-  await header(page).getByRole("button", { name: "代码", exact: true }).click();
+  await viewSwitch(header(page), "代码").click();
   await openDiff(page);
   const tabs = page.getByRole("tablist", { name: "文件标签" });
   await expectOneRow(tabs.locator(".."));
@@ -197,7 +197,7 @@ test("wide headers keep every action and the code workspace stays on single rows
   await expect(
     header(page).getByRole("button", { name: /^草稿模式/ }),
   ).toBeVisible();
-  await header(page).getByRole("button", { name: "代码", exact: true }).click();
+  await viewSwitch(header(page), "代码").click();
   await openDiff(page);
   const panel = page.getByRole("region", { name: "代码工作区" });
   await expect(panel.getByRole("navigation")).toContainText(workDir);

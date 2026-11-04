@@ -7,6 +7,7 @@ import {
   runCommand,
   expectTerminalLine,
   expectConnected,
+  viewSwitch,
 } from "./fixtures";
 
 type Point = { x: number; y: number };
@@ -416,7 +417,7 @@ test("terminal find searches real output without input or resize, copies and ret
   const baseline = frames.length;
   if (testInfo.project.use.isMobile) {
     // The shared menu also works while the narrow layout shows code instead.
-    await page.getByRole("button", { name: "代码", exact: true }).click();
+    await viewSwitch(page, "代码").click();
     await page.getByRole("button", { name: "终端菜单" }).click();
     await page.getByRole("menuitem", { name: "查找", exact: true }).click();
   } else {
