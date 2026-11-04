@@ -18,17 +18,38 @@ concurrency:
 # runner, receives nothing but SHA256SUMS and executes no third-party build
 # code, so no build dependency can read the key.
 jobs:
-  # The complete Test suite (every platform, E2E, Storybook, performance),
-  # with change detection disabled. Nothing is signed or published unless it
-  # passes.
+  # main pushes run the complete Test suite (every platform, E2E, Storybook,
+  # performance) for each merged commit. When the tagged commit is on main and
+  # that run passed in full, the release reuses it; otherwise `checks` runs
+  # the suite again. Nothing is signed or published without one of the two.
+  verify:
+    name: Find the main Test run
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse: ${{ steps.main.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/require-main-test.sh "$GITHUB_SHA"
+
   checks:
     name: Checks
+    needs: verify
+    if: needs.verify.outputs.reuse != 'true'
     uses: ./.github/workflows/test.yml
     with:
       full: true
 
   build:
-    name: Build and test
+    name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -49,10 +70,6 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Install NSIS for the Windows installers
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nsis
-      - name: Build embedded frontend
-        run: pnpm --dir web build
-      - name: Run Go tests
-        run: go test -race -parallel=4 ./...
       - name: Build release artifacts
         run: make release-build VERSION=${{ steps.version.outputs.version }}
       - name: Verify artifacts
@@ -92,7 +109,8 @@ jobs:
 
   sign:
     name: Sign SHA256SUMS
-    needs: [build, checks]
+    needs: [build, verify, checks]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.verify.result == 'success' && (needs.checks.result == 'success' || (needs.verify.outputs.reuse == 'true' && needs.checks.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -122,7 +140,8 @@ jobs:
 
   publish:
     name: Publish the Release
-    needs: [build, checks, sign]
+    needs: [build, verify, checks, sign]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.sign.result == 'success' && needs.verify.result == 'success' && (needs.checks.result == 'success' || (needs.verify.outputs.reuse == 'true' && needs.checks.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
