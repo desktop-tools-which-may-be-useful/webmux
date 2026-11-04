@@ -19,7 +19,9 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import * as Collapsible from "$lib/components/ui/collapsible";
   import * as Select from "$lib/components/ui/select";
+  import IconChevronRight from "~icons/tabler/chevron-right";
   import IconRefresh from "~icons/tabler/refresh";
   import * as Command from "$lib/components/ui/command";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
@@ -53,6 +55,7 @@
   let baseEditVersion = 0;
   let refreshController: AbortController | null = null;
   let pathEdited = $state(false);
+  let pathOpen = $state(false);
   let branchEdited = $state(false);
   let commits = $state<z.infer<typeof CommitsSchema>["commits"]>([]);
   let commitsLoading = $state(false);
@@ -554,29 +557,40 @@
       </p>
     </div>
   {/if}
-  <div class="space-y-2">
-    <Label for="worktree-path">新工作树完整路径</Label>
-    <Input
-      id="worktree-path"
-      bind:value={path}
-      oninput={() => {
-        pathEdited = true;
-      }}
-      required
-      autocomplete="off"
-      autocapitalize="off"
-      autocorrect="off"
-      spellcheck={false}
-    />
-    <p
-      class="font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground"
+  <Collapsible.Root bind:open={pathOpen} class="space-y-2">
+    <Collapsible.Trigger
+      class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
     >
-      {path}
-    </p>
-    <p class="text-xs text-muted-foreground">
-      默认放在仓库旁，目录名取分支最后一段；可以修改完整路径，不覆盖已有目录。
-    </p>
-  </div>
+      <IconChevronRight
+        class={pathOpen
+          ? "size-3.5 shrink-0 rotate-90 transition-transform"
+          : "size-3.5 shrink-0 transition-transform"}
+        aria-hidden="true"
+      />
+      <span class="flex min-w-0 flex-1 items-center gap-2">
+        <span>存放目录</span>
+        {#if path}<span class="truncate font-mono text-xs">{path}</span>{/if}
+      </span>
+    </Collapsible.Trigger>
+    <Collapsible.Content class="space-y-2 pl-5">
+      <Label for="worktree-path">新工作树完整路径</Label>
+      <Input
+        id="worktree-path"
+        bind:value={path}
+        oninput={() => {
+          pathEdited = true;
+        }}
+        required
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck={false}
+      />
+      <p class="text-xs text-muted-foreground">
+        默认放在仓库旁，目录名取分支最后一段；可以修改完整路径，不覆盖已有目录。
+      </p>
+    </Collapsible.Content>
+  </Collapsible.Root>
   <p class="text-xs text-muted-foreground">
     仅检出版本控制内容；只会在刷新起始分支上游时 fetch，不会复制 .env
     或安装依赖。创建成功后即使命令启动失败，工作树与分支仍保留。

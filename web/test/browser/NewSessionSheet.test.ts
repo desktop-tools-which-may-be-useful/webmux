@@ -557,6 +557,7 @@ test("location tabs preserve the direct directory, selected worktree and new-wor
     .element(page.getByRole("combobox", { name: "起始提交", exact: true }))
     .toMatchTextContent(/initial/);
   await branch.fill("feature/retained");
+  await page.getByRole("button", { name: /^存放目录/ }).click();
   await page.getByLabelText("新工作树完整路径").fill("/repos/custom-retained");
   await locationTab("直接目录").click();
   await expect
@@ -788,6 +789,7 @@ test("worktree management hides launch controls until starting a session is expl
   await page
     .getByLabelText("新分支名称", { exact: true })
     .fill("feature/separate");
+  await page.getByRole("button", { name: /^存放目录/ }).click();
   await page
     .getByLabelText("新工作树完整路径", { exact: true })
     .fill("/repos/project.worktrees/separate");

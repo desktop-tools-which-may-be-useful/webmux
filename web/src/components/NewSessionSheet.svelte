@@ -338,13 +338,13 @@
 
 {#snippet fields()}
   <form
-    class="space-y-5"
+    class="space-y-4"
     onsubmit={(event) => {
       event.preventDefault();
       void create(false, treeOnly);
     }}
   >
-    <fieldset disabled={busy} class="min-w-0 space-y-5">
+    <fieldset disabled={busy} class="min-w-0 space-y-4">
       <Tabs.Root
         bind:value={mode}
         onValueChange={() => {
@@ -658,7 +658,7 @@
   description={intent === "worktree" && mode === "new"
     ? "创建独立的代码副本。默认只创建工作树，可选择同时启动会话。"
     : "选择启动位置和命令。浏览器断开后，会话仍会继续。"}
-  class="p-6"
+  class="sm:max-w-3xl p-5"
   pinDrawerHeader
   {busy}
   {onclose}

@@ -294,6 +294,7 @@ test("prefills an editable suggestion and does not refill after a manual clear",
   render(Harness, { repository });
 
   await expect.element(branchInput()).toHaveValue(expected);
+  await page.getByRole("button", { name: /^存放目录/ }).click();
   await expect
     .element(pathInput())
     .toHaveValue(`/repos/project.worktrees/${expected.split("/").at(-1)}`);
@@ -376,6 +377,7 @@ test("search selects the literal branch and ignores occupied matches without los
     .not.toBeInTheDocument();
   await expect.element(ready()).toHaveTextContent("not-ready");
   await userEvent.keyboard("{Enter}");
+  await page.getByRole("button", { name: /^存放目录/ }).click();
   await expect
     .element(pathInput())
     .toHaveValue("/repos/project.worktrees/branch-042");
