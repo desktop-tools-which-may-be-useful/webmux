@@ -35,8 +35,8 @@
   } = $props();
 
   let expanded = $state(false);
-  // While filters or a just-archived record reveal the section, a toggle
-  // only overrides that until the reveal ends; the user's own choice stays.
+  // While filters reveal the section, a toggle only overrides that until the
+  // reveal ends; the user's own choice stays.
   let override = $state<boolean | undefined>();
   let showAll = $state(false);
   let busy = $state("");
@@ -44,21 +44,14 @@
   let removing = $state<HybridRecord | null>(null);
   let removeOpen = $state(false);
 
-  const highlighted = $derived(
-    records.findIndex((record) => record.id === archive.highlight),
-  );
-  const reveal = $derived(
-    (archive.filtering && records.length > 0) || highlighted >= 0,
-  );
+  const reveal = $derived(archive.filtering && records.length > 0);
   $effect(() => {
     void reveal;
     override = undefined;
   });
   const open = $derived(override ?? (reveal || expanded));
   const shown = $derived(
-    showAll || archive.filtering || highlighted >= PAGE
-      ? records
-      : records.slice(0, PAGE),
+    showAll || archive.filtering ? records : records.slice(0, PAGE),
   );
   const interrupted = $derived(
     records.filter((record) => record.state === "interrupted").length,
@@ -133,9 +126,8 @@
     >
       {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
       {#each shown as record (record.id)}
-        {@const marked = record.id === archive.highlight}
         <Item.Root
-          variant={marked ? "outline" : "muted"}
+          variant="muted"
           class="min-w-0 flex-col flex-nowrap items-stretch"
           data-archived-id={record.id}
         >
@@ -151,7 +143,6 @@
                 variant={record.state === "interrupted" ? "warning" : "outline"}
                 >{record.state === "closed" ? "已关闭" : "已中断"}</Badge
               >
-              {#if marked}<Badge variant="info">刚归档</Badge>{/if}
             </div>
             <Item.Description>
               <span class="flex flex-wrap gap-x-3 gap-y-1">

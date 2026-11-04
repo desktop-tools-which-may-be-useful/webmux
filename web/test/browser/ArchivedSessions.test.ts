@@ -43,7 +43,6 @@ function show(
   const archive: ArchiveActions = {
     now,
     filtering: false,
-    highlight: "",
     resume,
     remove,
     onresumed,
@@ -265,21 +264,9 @@ test("hides the directory a group already names and pages long lists", async () 
   await expect.element(group().getByText("/repos/project/web")).toBeVisible();
 });
 
-test("filters and a just-archived record open the section on their own", async () => {
+test("filters open the section on their own", async () => {
   show([record], vi.fn(), { filtering: true });
   await expect
     .element(group().getByRole("button", { name: "恢复到聊天" }))
     .toBeVisible();
-  await cleanup();
-  const older = Array.from({ length: 6 }, (_, i) => ({
-    ...record,
-    id: `hybrid${i}0`,
-    title: `记录 ${i}`,
-  }));
-  show([...older, { ...record, id: "hybridnw" }], vi.fn(), {
-    highlight: "hybridnw",
-  });
-  // Past the first page, the marked record is still shown.
-  await expect.element(group().getByText("刚归档")).toBeVisible();
-  await expect.element(group().getByText("修复排序")).toBeVisible();
 });

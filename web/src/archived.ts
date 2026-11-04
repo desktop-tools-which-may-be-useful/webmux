@@ -24,8 +24,6 @@ export interface ArchiveActions {
   now: number;
   /** Filters are active: sections with matches open on their own. */
   filtering: boolean;
-  /** The record just archived, revealed and marked until it times out. */
-  highlight: string;
   resume: (
     id: string,
     side: "tui" | "acp",

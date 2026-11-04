@@ -636,7 +636,7 @@ test.describe("hybrid sessions with the fake agent", () => {
     ).toHaveCount(1);
   });
 
-  test("archiving from the session page returns home to the record in its worktree", async ({
+  test("archiving from the session page returns home with the archived section collapsed", async ({
     page,
     request,
     workDir,
@@ -675,14 +675,13 @@ test.describe("hybrid sessions with the fake agent", () => {
 
     await expect(page).toHaveURL(/\/$/);
     const archived = page.getByRole("region", { name: "main 的已归档会话" });
+    await expect(archived).toBeVisible();
     const row = archived
       .locator('[data-slot="item"]')
       .filter({ hasText: "E2E archive" });
-    await expect(row).toBeInViewport();
-    await expect(row).toContainText("刚归档");
-    await expect(
-      page.getByRole("status").filter({ hasText: "已归档“E2E archive”" }),
-    ).toHaveCount(1);
+    await expect(row).toBeHidden();
+    await archived.getByRole("button", { name: /已归档/ }).click();
+    await expect(row).toBeVisible();
 
     await row.getByRole("button", { name: "恢复到终端", exact: true }).click();
     await expect(row).toHaveCount(0);

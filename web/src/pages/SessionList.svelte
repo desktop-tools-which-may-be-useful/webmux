@@ -3,7 +3,7 @@
   import InlineNotice from "../components/InlineNotice.svelte";
   import LazyDialog from "../components/LazyDialog.svelte";
   import { applySessionEvent } from "../session-list";
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
   import { z } from "zod";
   import RepositorySidebar from "../components/RepositorySidebar.svelte";
   import SessionViewControls from "../components/SessionViewControls.svelte";
@@ -284,17 +284,9 @@
       ),
     );
   }
-  // The record just archived: revealed once it is listed, marked for a
-  // moment and announced. `revealing` waits for it to be listed.
-  let revealing = $state(
-    new URLSearchParams(location.search).get("archived") ?? "",
-  );
-  let highlight = $state("");
-  let announcement = $state("");
   const archive: ArchiveActions = $derived({
     now,
     filtering,
-    highlight,
     resume: resumeHybrid,
     remove: async (id) => {
       await removeRecord(id);
@@ -302,51 +294,6 @@
       await refreshRecoverable();
     },
     onresumed: () => void refreshRecoverable(),
-  });
-  $effect(() => {
-    const id = revealing;
-    if (!id) return;
-    if (new URLSearchParams(location.search).has("archived")) {
-      const url = new URL(location.href);
-      url.searchParams.delete("archived");
-      history.replaceState(history.state, "", url.pathname + url.search);
-    }
-    // A record that never shows up (its close failed to record) is dropped.
-    const giveUp = setTimeout(() => {
-      if (revealing === id) revealing = "";
-    }, 5000);
-    return () => clearTimeout(giveUp);
-  });
-  $effect(() => {
-    const id = revealing;
-    const record = id && recoverable.find((r) => r.id === id);
-    if (!record) return;
-    revealing = "";
-    const repositoryId = [...placement.repositories].find(([, entry]) =>
-      repositoryRecords(entry).some((r) => r.id === id),
-    )?.[0];
-    const scope = repositoryId ?? "direct";
-    if (selectedRepository !== "all" && selectedRepository !== scope)
-      repositoryChoice = "all";
-    if (repositoryId) {
-      if (selectedRepository === repositoryId)
-        focusedExpanded[repositoryId] = true;
-      else expansionOverrides[repositoryId] = true;
-    }
-    highlight = id;
-    announcement = `已归档“${record.title || record.name}”`;
-    void tick().then(() =>
-      document
-        .querySelector(`[data-archived-id="${CSS.escape(id)}"]`)
-        ?.scrollIntoView({ block: "nearest" }),
-    );
-  });
-  $effect(() => {
-    if (!highlight) return;
-    const done = setTimeout(() => {
-      highlight = "";
-    }, 4000);
-    return () => clearTimeout(done);
   });
   // Only an actively producing session follows the tab indicator; idle live
   // sessions are still "active" for the list summary but not for this marker.
@@ -738,7 +685,6 @@
                 : new Set()}
               {archive}
             />{/if}
-          <p class="sr-only" role="status">{announcement}</p>
           {#if (filtering && !visible.length && !archivedMatches) || (!repositories.length && !list.length && !recoverable.length) || (selectedRepository === "direct" && !direct.length && !placement.direct.length)}<SessionListEmpty
               filtered={filtering && !visible.length && !archivedMatches}
               canStart
@@ -774,9 +720,6 @@
     session={closing}
     onremoved={() => {
       if (closing) drafts.remove(closing.id);
-    }}
-    onarchived={(session) => {
-      revealing = session.id;
     }}
     onclose={() => {
       closing = null;

@@ -322,15 +322,12 @@ test("a scope without archived matches shows the empty state", async () => {
   await expect.element(page.getByText("没有匹配的会话")).toBeVisible();
 });
 
-test("returning home after archiving reveals and announces the record", async () => {
-  history.replaceState(null, "", "/?archived=hybrid22");
+test("returning home after archiving leaves the archived section collapsed", async () => {
+  history.replaceState(null, "", "/");
   render(SessionList, { drafts: createTerminalDrafts() });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [] });
   const region = page.getByRole("region", { name: "work 的已归档会话" });
-  await expect.element(region.getByText("刚归档")).toBeVisible();
-  await expect
-    .element(page.getByRole("status").filter({ hasText: "已归档“修复排序”" }))
-    .toBeInTheDocument();
-  expect(location.search).toBe("");
+  await expect.element(region.getByText("修复排序")).not.toBeVisible();
+  expect(page.getByText("刚归档").elements()).toEqual([]);
 });
