@@ -31,7 +31,8 @@ test("isolated desktop and phone synchronize preferences in both directions", as
     await expect(b.locator("html")).toHaveClass(/dark/);
     await a.getByLabel("终端字号", { exact: true }).fill("18");
     await a.getByLabel("终端字号", { exact: true }).press("Tab");
-    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("18");
+    await expect(a.getByLabel("终端字号", { exact: true })).toHaveValue("18");
+    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("13");
     await b.getByRole("button", { name: "浅色", exact: true }).click();
     await expect(a.locator("html")).not.toHaveClass(/dark/);
     await b.getByRole("switch", { name: "Diff 自动换行" }).click();
@@ -49,15 +50,14 @@ test("isolated desktop and phone synchronize preferences in both directions", as
     await expect(
       b.getByRole("button", { name: "编辑 echo shared" }),
     ).toBeVisible();
-    await expect
-      .poll(
-        async () =>
-          (await (await request.get("/api/settings")).json()).values.fontSize,
-      )
-      .toBe(18);
+    expect(
+      (await (await request.get("/api/settings")).json()).values,
+    ).not.toHaveProperty("fontSize");
     await server.restart();
+    await a.reload();
     await b.reload();
-    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("18");
+    await expect(a.getByLabel("终端字号", { exact: true })).toHaveValue("18");
+    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("13");
     await expect(
       b.getByRole("button", { name: "编辑 echo shared" }),
     ).toBeVisible();
@@ -78,7 +78,6 @@ test("legacy browser keys never overwrite server preferences", async ({
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem("webmux.theme", "dark");
-    localStorage.setItem("webmux.fontSize", "20");
     localStorage.setItem("webmux.quickCommands", "[]");
     localStorage.setItem("webmux.settingsCache", "bad-cache");
   });
@@ -86,7 +85,6 @@ test("legacy browser keys never overwrite server preferences", async ({
   await expect(page.getByText("已连接 · 设置已同步")).toBeVisible();
   const snapshot = await (await request.get("/api/settings")).json();
   expect(snapshot.values.theme).toBeNull();
-  expect(snapshot.values.fontSize).toBeNull();
   expect(snapshot.values.quickCommands).toBeNull();
   await expect(
     page.getByRole("button", { name: "编辑 /resume" }),

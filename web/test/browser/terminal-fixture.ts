@@ -1,3 +1,4 @@
+import { terminalFont } from "../../src/hooks/terminal-font-preference.svelte";
 import { seedSettings } from "./settings-fixture";
 // Shared harness for the Terminal*.test.ts browser suites.
 import type { ComponentProps } from "svelte";
@@ -520,11 +521,11 @@ export function syntheticPointerCapture(target: HTMLElement) {
 // observer and resolution listener was released. Call once per test file.
 export function installTerminalFixture() {
   beforeEach(async () => {
-    await seedSettings({ fontSize: 14 });
+    await seedSettings();
     sockets = [];
     previousDark = document.documentElement.classList.contains("dark");
     previousFont = localStorage.getItem("webmux.fontSize");
-    localStorage.setItem("webmux.fontSize", "14");
+    terminalFont.set(14);
     touchTeardowns = [];
     observations = [];
     resolutionQueries = [];
@@ -585,8 +586,8 @@ export function installTerminalFixture() {
     } finally {
       for (const teardown of touchTeardowns) teardown();
       document.documentElement.classList.toggle("dark", previousDark);
-      if (previousFont === null) localStorage.removeItem("webmux.fontSize");
-      else localStorage.setItem("webmux.fontSize", previousFont);
+      if (previousFont === null) terminalFont.reset();
+      else terminalFont.set(Number(previousFont));
       for (const observer of observations) observer.native.disconnect();
       for (const query of resolutionQueries) {
         // oxlint-disable-next-line unicorn/no-useless-spread -- Removing a listener mutates the set being traversed.

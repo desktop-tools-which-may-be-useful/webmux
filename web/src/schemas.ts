@@ -898,7 +898,6 @@ export type CodePopoutOutbound = z.infer<typeof CodePopoutOutboundSchema>;
 // User preferences shared by every authenticated client of this server.
 export const SettingsValuesSchema = z.strictObject({
   theme: ThemeSchema.nullable(),
-  fontSize: z.number().int().min(8).max(20).nullable(),
   preview: PreviewSettingsSchema.nullable(),
   codeReader: z
     .strictObject({

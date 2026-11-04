@@ -2,6 +2,7 @@
 package settings
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -31,7 +32,6 @@ type Command struct {
 }
 type Values struct {
 	Theme         *string             `json:"theme"`
-	FontSize      *int                `json:"fontSize"`
 	Preview       *Preview            `json:"preview"`
 	CodeReader    *CodeReader         `json:"codeReader"`
 	QuickCommands *[]Command          `json:"quickCommands"`
@@ -47,6 +47,10 @@ type Values struct {
 	// client's built-in template. omitempty keeps files without it readable
 	// by earlier releases.
 	ArtifactPrompt *string `json:"artifactPrompt,omitempty"`
+	// LegacyFontSize only lets files written before the terminal font moved
+	// to per-browser storage load under strict decoding. Open discards it and
+	// it is never written back.
+	LegacyFontSize json.RawMessage `json:"fontSize,omitempty"`
 }
 
 // ArtifactPromptPlaceholder is replaced by the folder's path; a custom
@@ -107,9 +111,6 @@ func validate(f storedFile) error {
 }
 func validateValues(v Values) error {
 	if v.Theme != nil && *v.Theme != "light" && *v.Theme != "dark" {
-		return ErrInvalid
-	}
-	if v.FontSize != nil && (*v.FontSize < 8 || *v.FontSize > 20) {
 		return ErrInvalid
 	}
 	if v.ChatIdleSleepMinutes != nil && (*v.ChatIdleSleepMinutes < 0 || *v.ChatIdleSleepMinutes > MaxChatIdleSleepMinutes) {
@@ -187,7 +188,6 @@ func clonePtr[T any](p *T) *T {
 }
 func cloneValues(v Values) Values {
 	v.Theme = clonePtr(v.Theme)
-	v.FontSize = clonePtr(v.FontSize)
 	v.Preview = clonePtr(v.Preview)
 	v.CodeReader = clonePtr(v.CodeReader)
 	v.ForceSoftKeys = clonePtr(v.ForceSoftKeys)
@@ -215,8 +215,6 @@ func apply(v Values, c Changes) (Values, error) {
 		switch key {
 		case "theme":
 			v.Theme = c.Values.Theme
-		case "fontSize":
-			v.FontSize = c.Values.FontSize
 		case "preview":
 			v.Preview = c.Values.Preview
 		case "codeReader":

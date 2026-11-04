@@ -18,7 +18,6 @@ type SettingsCommand struct {
 }
 type SettingsValues struct {
 	Theme         *string             `json:"theme"`
-	FontSize      *int                `json:"fontSize"`
 	Preview       *SettingsPreview    `json:"preview"`
 	CodeReader    *SettingsCodeReader `json:"codeReader"`
 	QuickCommands *[]SettingsCommand  `json:"quickCommands"`

@@ -117,6 +117,9 @@ func TestLoadsFileWithoutChatIdleSleepMinutes(t *testing.T) {
 	if v, err = s.Patch(11, Changes{Fields: map[string]bool{"chatIdleSleepMinutes": true}, Values: Values{ChatIdleSleepMinutes: &minutes}}); err != nil || *v.Values.ChatIdleSleepMinutes != 5 {
 		t.Fatalf("patch: %+v %v", v, err)
 	}
+	if raw, err := os.ReadFile(filepath.Join(dir, "settings.json")); err != nil || strings.Contains(string(raw), "fontSize") {
+		t.Fatalf("legacy fontSize rewritten: %s %v", raw, err)
+	}
 }
 func TestFailedCommitDoesNotPublish(t *testing.T) {
 	s := Open(t.TempDir())
@@ -219,11 +222,6 @@ func TestSubscribeConcurrentCommitHasNoGap(t *testing.T) {
 	}
 }
 func TestValidationBoundaries(t *testing.T) {
-	for _, size := range []int{7, 21} {
-		if validateValues(Values{FontSize: &size}) == nil {
-			t.Fatal("font range accepted")
-		}
-	}
 	for _, p := range []Preview{{0, 0}, {51, 0}, {1, -1}, {1, 51}} {
 		if validateValues(Values{Preview: &p}) == nil {
 			t.Fatal("preview range accepted")

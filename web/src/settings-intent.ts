@@ -8,7 +8,6 @@ export const defaultCodeReader = {
 } as const;
 export const emptySettings: SettingsValues = {
   theme: null,
-  fontSize: null,
   preview: null,
   codeReader: null,
   quickCommands: null,

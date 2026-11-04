@@ -1,11 +1,10 @@
 # 服务端偏好协议
 
-`GET /api/settings` 返回 `{revision, updatedAt, values}`。`values` 始终包含 theme、fontSize、preview、codeReader、quickCommands、artifactPrompt、homeWorktrees、forceSoftKeys、chatIdleSleepMinutes 九个键。
+`GET /api/settings` 返回 `{revision, updatedAt, values}`。`values` 始终包含 theme、preview、codeReader、quickCommands、artifactPrompt、homeWorktrees、forceSoftKeys、chatIdleSleepMinutes 八个键。
 
 ## 值与默认
 
 - theme：light / dark / null；null 跟随系统。
-- fontSize：8–20 的整数或 null；null 按粗指针 13、细指针 14。
 - preview：`{lines: 1..50, skip: 0..50}` 或 null（10/1）。
 - codeReader：`{lineNumbers: "show"|"hide", diffOverflow: "scroll"|"wrap"}` 或 null（show/scroll）。
 - quickCommands：最多 50 个 `{id, name, command, enter}`，唯一 ID；null 显示预置指令，空数组表示明确清空。

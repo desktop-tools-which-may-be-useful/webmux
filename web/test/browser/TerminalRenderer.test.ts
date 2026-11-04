@@ -1,4 +1,4 @@
-import { seedSettings } from "./settings-fixture";
+import { terminalFont } from "../../src/hooks/terminal-font-preference.svelte";
 // WebGL/DOM renderers, DPR changes, fit, fonts and theme colours.
 import { expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
@@ -355,9 +355,18 @@ test("pending viewport reset after a theme change does not read a disposed rende
   expect(errors).toEqual([]);
 });
 
+const storedFont = () => localStorage.getItem("webmux.fontSize");
+const settingsPatches = () =>
+  vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([url, init]) =>
+        String(url) === "/api/settings" && init?.method === "PATCH",
+    );
+
 test("font size is restored, clamped, persisted and re-fits the PTY grid", async () => {
   observeGlyphPixels(true);
-  await seedSettings({ fontSize: 18 });
+  terminalFont.set(18);
   const { socket, api } = await openTerminalApi();
   expect(api.fontSize).toBe(18);
   expect(getComputedStyle(host().querySelector(".xterm-rows")!).fontSize).toBe(
@@ -367,33 +376,15 @@ test("font size is restored, clamped, persisted and re-fits the PTY grid", async
 
   api.setFontSize(30);
   expect(api.fontSize).toBe(20);
-  await expect
-    .poll(
-      () =>
-        JSON.parse(localStorage.getItem("webmux.settingsCache")!).values
-          .fontSize,
-    )
-    .toBe(20);
+  expect(storedFont()).toBe("20");
   await expect.poll(() => geometry(socket).cell).toBeGreaterThan(initial);
   api.setFontSize(3);
   expect(api.fontSize).toBe(8);
-  await expect
-    .poll(
-      () =>
-        JSON.parse(localStorage.getItem("webmux.settingsCache")!).values
-          .fontSize,
-    )
-    .toBe(8);
+  expect(storedFont()).toBe("8");
   await expect.poll(() => geometry(socket).cell).toBeLessThan(initial);
   api.setFontSize(15.6);
   expect(api.fontSize).toBe(16);
-  await expect
-    .poll(
-      () =>
-        JSON.parse(localStorage.getItem("webmux.settingsCache")!).values
-          .fontSize,
-    )
-    .toBe(16);
+  expect(storedFont()).toBe("16");
   await expect
     .poll(() => getComputedStyle(host().querySelector(".xterm-rows")!).fontSize)
     .toBe("16px");
@@ -402,7 +393,7 @@ test("font size is restored, clamped, persisted and re-fits the PTY grid", async
 
 test("a stored font size at the minimum is restored", async () => {
   observeGlyphPixels(true);
-  await seedSettings({ fontSize: 8 });
+  terminalFont.set(8);
   const { socket, api } = await openTerminalApi();
   expect(api.fontSize).toBe(8);
   expect(getComputedStyle(host().querySelector(".xterm-rows")!).fontSize).toBe(
@@ -411,59 +402,13 @@ test("a stored font size at the minimum is restored", async () => {
   expectNoSessionMutation(socket);
 });
 
-test("rapid font gestures render locally and persist only the final size", async () => {
-  await seedSettings({ fontSize: 14 });
-  const { api } = await openTerminalApi();
+test("font changes stay in this browser and never patch server settings", async () => {
+  const { api, rendered } = await openTerminalApi();
   for (let i = 0; i < 40; i++) api.setFontSize(8 + (i % 13));
   api.setFontSize(17);
   expect(api.fontSize).toBe(17);
-  const patches = () =>
-    vi
-      .mocked(fetch)
-      .mock.calls.filter(
-        ([url, init]) =>
-          String(url) === "/api/settings" && init?.method === "PATCH",
-      );
-  expect(patches()).toHaveLength(0);
-  await expect.poll(() => patches().length).toBe(1);
-  expect(JSON.parse(String(patches()[0][1]?.body)).changes).toEqual({
-    fontSize: 17,
-  });
-  await expect
-    .poll(
-      () =>
-        JSON.parse(localStorage.getItem("webmux.settingsCache")!).values
-          .fontSize,
-    )
-    .toBe(17);
-});
-
-test("leaving during the font debounce flushes once and cancels the timer", async () => {
-  await seedSettings({ fontSize: 14 });
-  const { api, rendered } = await openTerminalApi();
-  const patches = () =>
-    vi
-      .mocked(fetch)
-      .mock.calls.filter(
-        ([url, init]) =>
-          String(url) === "/api/settings" && init?.method === "PATCH",
-      );
-  api.setFontSize(16);
-  api.setFontSize(19);
-  expect(patches()).toHaveLength(0);
+  expect(storedFont()).toBe("17");
   await rendered.unmount();
-  await expect.poll(() => patches().length).toBe(1);
-  expect(JSON.parse(String(patches()[0][1]?.body)).changes).toEqual({
-    fontSize: 19,
-  });
-  await expect
-    .poll(
-      () =>
-        JSON.parse(localStorage.getItem("webmux.settingsCache")!).values
-          .fontSize,
-    )
-    .toBe(19);
-  // Wait beyond the pending timer's deadline to detect a duplicate late save.
   await new Promise((resolve) => setTimeout(resolve, 300));
-  expect(patches()).toHaveLength(1);
+  expect(settingsPatches()).toHaveLength(0);
 });

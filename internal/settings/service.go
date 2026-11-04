@@ -33,6 +33,7 @@ func Open(dir string) *Service {
 		s.broken = err
 	} else if err == nil {
 		s.current = f.Snapshot
+		s.current.Values.LegacyFontSize = nil
 	}
 	s.commit = s.store.Commit
 	return s

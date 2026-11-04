@@ -1,11 +1,11 @@
 <script lang="ts">
-  import {
-    settings,
-    changeSettings,
-    reloadSettings,
-    saveSettings,
-  } from "../settings.svelte";
+  import { settings, changeSettings, reloadSettings } from "../settings.svelte";
   import { defaultCodeReader } from "../settings-intent";
+  import {
+    terminalFont,
+    minFontSize,
+    maxFontSize,
+  } from "../hooks/terminal-font-preference.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -13,19 +13,12 @@
   import * as Card from "$lib/components/ui/card";
   import InlineNotice from "./InlineNotice.svelte";
   const code = $derived(settings.values.codeReader ?? defaultCodeReader);
-  let fontDirty = $state(false);
-  let fontSize = $state<number | undefined>(14);
-  $effect(() => {
-    if (!fontDirty)
-      fontSize =
-        settings.values.fontSize ??
-        (matchMedia("(pointer: coarse)").matches ? 13 : 14);
-  });
+  let fontDraft = $state<number | undefined>(undefined);
+  const fontInput = $derived(fontDraft ?? terminalFont.size);
   const validFont = $derived(
-    fontSize !== undefined &&
-      Number.isInteger(fontSize) &&
-      fontSize >= 8 &&
-      fontSize <= 20,
+    Number.isInteger(fontInput) &&
+      fontInput >= minFontSize &&
+      fontInput <= maxFontSize,
   );
 </script>
 
@@ -33,7 +26,7 @@
   <Card.Header>
     <Card.Title>外观与阅读</Card.Title>
     <Card.Description
-      >保存到当前服务端，在已连接的设备间即时同步。恢复默认后使用设备的系统主题与默认字号。</Card.Description
+      >主题与阅读偏好保存到当前服务端，在已连接的设备间即时同步；终端字号只保存在此浏览器。恢复默认后使用设备的系统主题与默认字号。</Card.Description
     >
   </Card.Header>
   <Card.Content class="space-y-6">
@@ -54,6 +47,34 @@
     {#if settings.error}<InlineNotice tone="danger"
         >{settings.error}</InlineNotice
       >{/if}
+    <div class="space-y-2">
+      <Label for="settings-font">终端字号</Label>
+      <Input
+        id="settings-font"
+        type="number"
+        min={minFontSize}
+        max={maxFontSize}
+        step={1}
+        value={fontInput}
+        oninput={(event) => {
+          fontDraft = event.currentTarget.valueAsNumber;
+          if (validFont) terminalFont.set(fontDraft);
+        }}
+        onblur={() => (fontDraft = undefined)}
+        aria-invalid={!validFont}
+      />
+      {#if !validFont}<p role="alert" class="text-sm text-destructive">
+          请输入 {minFontSize}–{maxFontSize} 之间的整数。
+        </p>{/if}
+      <Button
+        variant="ghost"
+        size="sm"
+        onclick={() => {
+          fontDraft = undefined;
+          terminalFont.reset();
+        }}>恢复默认字号</Button
+      >
+    </div>
     <fieldset disabled={!settings.ready} class="space-y-6">
       <div class="space-y-2">
         <p class="text-sm font-medium">主题</p>
@@ -72,42 +93,6 @@
             >
           {/each}
         </div>
-      </div>
-      <div class="space-y-2">
-        <Label for="settings-font">终端字号</Label>
-        <Input
-          id="settings-font"
-          type="number"
-          min={8}
-          max={20}
-          step={1}
-          bind:value={fontSize}
-          oninput={() => {
-            fontDirty = true;
-          }}
-          aria-invalid={!validFont}
-          onchange={async () => {
-            if (validFont) {
-              try {
-                await saveSettings({ fontSize: fontSize! });
-                fontDirty = false;
-              } catch {
-                /* retain input */
-              }
-            }
-          }}
-        />
-        {#if !validFont}<p role="alert" class="text-sm text-destructive">
-            请输入 8–20 之间的整数。
-          </p>{/if}
-        <Button
-          variant="ghost"
-          size="sm"
-          onclick={() => {
-            fontDirty = false;
-            changeSettings({ fontSize: null });
-          }}>恢复默认字号</Button
-        >
       </div>
       <div class="flex items-center justify-between gap-3">
         <Label for="settings-lines">代码行号</Label>

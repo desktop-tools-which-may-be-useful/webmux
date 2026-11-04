@@ -61,7 +61,7 @@
 
 - [cli-config](../openspec/specs/cli-config/spec.md)：客户端定位、检查与初始化配置
 - [effective-configuration](../openspec/specs/effective-configuration/spec.md)：区分已配置值与运行中生效值
-- [server-settings-sync](../openspec/specs/server-settings-sync/spec.md)：主题、字号、预览等偏好的跨设备同步
+- [server-settings-sync](../openspec/specs/server-settings-sync/spec.md)：主题、预览等偏好的跨设备同步
 - [state-persistence](../openspec/specs/state-persistence/spec.md)：状态目录文件的统一存储、权限与有界解码
 - [persistence-governance](../openspec/specs/persistence-governance/spec.md)：持久化清单、守卫与故障测试
 

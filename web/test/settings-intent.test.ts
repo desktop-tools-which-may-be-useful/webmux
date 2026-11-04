@@ -81,7 +81,7 @@ describe("preference conflict replay", () => {
     expect(
       SettingsSnapshotSchema.safeParse({
         ...snapshot,
-        values: { ...emptySettings, fontSize: "14" },
+        values: { ...emptySettings, theme: "blue" },
       }).success,
     ).toBe(false);
   });

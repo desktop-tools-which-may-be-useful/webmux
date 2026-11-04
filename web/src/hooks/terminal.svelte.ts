@@ -1,4 +1,4 @@
-import { onMount, onDestroy, untrack } from "svelte";
+import { onMount, untrack } from "svelte";
 import type { Terminal } from "@xterm/xterm";
 import { SearchAddon } from "@xterm/addon-search";
 import {
@@ -7,7 +7,7 @@ import {
   type TerminalFindOptions,
   type TerminalFindResults,
 } from "../terminal-search";
-import { settings, changeSettings } from "../settings.svelte";
+import { terminalFont } from "./terminal-font-preference.svelte";
 import {
   type ControlState,
   type SessionInfo,
@@ -126,20 +126,8 @@ export function useTerminal(
   // Locked and held grids may exceed the host; both scroll it to the tail.
   const gridFixed = () => isSizeLocked() || isHeightHeld();
   const stream = createTerminalSocket(id, manageChrome);
-  const defaultFont = matchMedia("(pointer: coarse)").matches ? 13 : 14;
-  let fontDraft = $state<number | null>(null);
-  const fontSize = $derived(
-    fontDraft ?? settings.values.fontSize ?? defaultFont,
-  );
-  let fontSaveTimer: ReturnType<typeof setTimeout> | undefined;
-  function flushFontSize() {
-    clearTimeout(fontSaveTimer);
-    fontSaveTimer = undefined;
-    if (fontDraft === null) return;
-    changeSettings({ fontSize: fontDraft });
-    fontDraft = null;
-  }
-  onDestroy(flushFontSize);
+  const fontSize = $derived(terminalFont.size);
+  const setFontSize = terminalFont.set;
   let modifiers = $state<Modifiers>({
     ctrl: false,
     alt: false,
@@ -298,11 +286,6 @@ export function useTerminal(
     return pasteResult;
   }
 
-  function setFontSize(value: number) {
-    fontDraft = Math.max(8, Math.min(20, Math.round(value)));
-    clearTimeout(fontSaveTimer);
-    fontSaveTimer = setTimeout(flushFontSize, 250);
-  }
   $effect(() => {
     const value = fontSize;
     untrack(() => {

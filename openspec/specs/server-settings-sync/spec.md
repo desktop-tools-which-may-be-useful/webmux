@@ -2,14 +2,14 @@
 
 ## Purpose
 
-让同一 WebMux 实例上的主题、字号、输出预览、快捷指令、代码阅读偏好与主页工作树选择脱离单个浏览器，统一保存在服务端并在所有已认证客户端之间同步；同时把 token、推送订阅、草稿与上次选择等必须留在设备的数据划出清晰边界，并在设置存储损坏、被占用或暂时不可达时保持终端与会话可用。
+让同一 WebMux 实例上的主题、输出预览、快捷指令、代码阅读偏好与主页工作树选择脱离单个浏览器，统一保存在服务端并在所有已认证客户端之间同步；同时把 token、推送订阅、草稿与上次选择等必须留在设备的数据划出清晰边界，并在设置存储损坏、被占用或暂时不可达时保持终端与会话可用。
 ## Requirements
 ### Requirement: 配置分层与同步范围
 
 系统 SHALL 把用户偏好划分为三类，并 SHALL 只把第一类放进服务端设置文档与设置 API：
 
-- 跨客户端同步：`theme`、`fontSize`、`preview`、`codeReader.lineNumbers`、`codeReader.diffOverflow`、`quickCommands`、`artifactPrompt`、`homeWorktrees`、`forceSoftKeys`。
-- 仅当前设备：浏览器中保存的 token 输入、Web Push 订阅标识、草稿与暂存正文、`draftPersistence` 开关、`recentDirs`、`lastLaunch`、`customCommand`、`clientId`、`clientLive`。
+- 跨客户端同步：`theme`、`preview`、`codeReader.lineNumbers`、`codeReader.diffOverflow`、`quickCommands`、`artifactPrompt`、`homeWorktrees`、`forceSoftKeys`。
+- 仅当前设备：浏览器中保存的终端字号（`fontSize`，屏幕尺寸因设备而异）、token 输入、Web Push 订阅标识、草稿与暂存正文、`draftPersistence` 开关、`recentDirs`、`lastLaunch`、`customCommand`、`clientId`、`clientLive`。
 - 部署默认与全局策略：`listen`、`token`、`state_dir`、`allowed_origins`、`tunnel.*`、`default_cwd`、`scrollback_bytes`、`idle_after_seconds`、`prompt_patterns`、`agent_protocol`、`bell_attention`、`push.*`。
 
 设置接口 SHALL NOT 返回或接受第二类与第三类字段；PATCH 中出现 `token`、`push`、`draft`、`listen` 等未知键时 SHALL 返回 400。服务端 SHALL NOT 因为本能力修改 `config.toml` 或改变上述 TOML 项的生效方式。
@@ -81,12 +81,11 @@
 
 - `revision` SHALL 为从 0 开始的单调递增整数，每次成功 PATCH 加 1。
 - `updatedAt` SHALL 为 UTC RFC 3339 时间，未写入过时为空字符串。
-- `values` SHALL 始终包含 `theme`、`fontSize`、`preview`、`codeReader`、`quickCommands`、`artifactPrompt`、`homeWorktrees`、`forceSoftKeys`，未设置的键为 `null`。
+- `values` SHALL 始终包含 `theme`、`preview`、`codeReader`、`quickCommands`、`artifactPrompt`、`homeWorktrees`、`forceSoftKeys`，未设置的键为 `null`。
 
 设置值 SHALL 满足以下约束：
 
 - `theme`：`"light"`、`"dark"` 或 `null`；
-- `fontSize`：整数 8–20 或 `null`；
 - `preview`：`{lines, skip}`，`lines` 为 1–50 的整数，`skip` 为 0–50 的整数，或 `null`；
 - `codeReader`：`{lineNumbers, diffOverflow}`，`lineNumbers` 为 `"show"` 或 `"hide"`，`diffOverflow` 为 `"scroll"` 或 `"wrap"`，或 `null`；
 - `quickCommands`：0–50 条，每条 `id` 为 1–64 字符且列表内唯一，`name` 去首尾空白后不超过 40 字符，`command` 去首尾空白后非空且不超过 4096 字符，`enter` 为布尔，或 `null`；
@@ -111,7 +110,7 @@
 
 #### Scenario: 越界与非法值
 
-- **WHEN** PATCH 同时包含合法主题与 51 条快捷指令，或包含 `fontSize: 30`、重复的快捷指令 ID、不含 `{dir}` 的 `artifactPrompt`
+- **WHEN** PATCH 同时包含合法主题与 51 条快捷指令，或包含 `theme: "blue"`、重复的快捷指令 ID、不含 `{dir}` 的 `artifactPrompt`
 - **THEN** 服务端返回 400，修订号与所有设置保持原值，后续读取看不到部分更新
 
 #### Scenario: 请求体上限
@@ -136,8 +135,8 @@ PATCH 的状态码 SHALL 如下：
 
 #### Scenario: 部分更新保留其他键
 
-- **WHEN** 当前设置为 `theme: "dark"`、`fontSize: 15`，客户端 PATCH `{baseRevision: 3, changes: {theme: "light"}}`
-- **THEN** 返回 200，`theme` 变为 `"light"`，`fontSize` 仍为 15，`revision` 变为 4
+- **WHEN** 当前设置为 `theme: "dark"`、`preview: {lines: 15, skip: 1}`，客户端 PATCH `{baseRevision: 3, changes: {theme: "light"}}`
+- **THEN** 返回 200，`theme` 变为 `"light"`，`preview` 仍为 `{lines: 15, skip: 1}`，`revision` 变为 4
 
 #### Scenario: 修订号冲突
 
@@ -190,7 +189,7 @@ PATCH 的状态码 SHALL 如下：
 
 #### Scenario: 旧键与新快照共存
 
-- **WHEN** 旧浏览器保存了主题、字号和快捷指令，新服务端对应值为 null
+- **WHEN** 旧浏览器保存了主题和快捷指令，新服务端对应值为 null
 - **THEN** 页面使用默认值和预置指令，不上传旧值、不修改服务端 revision
 
 #### Scenario: 缓存损坏
@@ -200,14 +199,14 @@ PATCH 的状态码 SHALL 如下：
 
 ### Requirement: 服务端设置不可用时的降级
 
-浏览器 SHALL 把最近一次成功同步的快照保存在本地只读缓存中，用于首屏主题与字号，以及设置服务不可用时展示最后已知值。缓存 SHALL 包含 `v`、`revision` 与 `values`，损坏、版本不符或字段非法时 SHALL 被忽略并删除。
+浏览器 SHALL 把最近一次成功同步的快照保存在本地只读缓存中，用于首屏主题，以及设置服务不可用时展示最后已知值。缓存 SHALL 包含 `v`、`revision` 与 `values`，损坏、版本不符或字段非法时 SHALL 被忽略并删除。
 
 设置接口返回 503 或网络不可达时，页面 SHALL 使用缓存或默认值只读展示：
 
 - 设置页 SHALL 显示不可用原因与服务端返回的状态文件路径，禁用写入并提供重新读取入口。
 - 快捷指令菜单 SHALL 使用缓存列表只读展示；没有缓存时显示预置指令并说明暂不可保存。
 
-认证失败时 SHALL 进入现有登录流程。登录页可以使用缓存主题与字号渲染，但 SHALL NOT 展示缓存中的快捷指令。
+认证失败时 SHALL 进入现有登录流程。登录页可以使用缓存主题渲染，但 SHALL NOT 展示缓存中的快捷指令。
 
 设置不可用 SHALL NOT 阻止会话创建、终端连接、终端输入输出、草稿或主页浏览。
 
@@ -216,7 +215,7 @@ PATCH 的状态码 SHALL 如下：
 #### Scenario: 设置文件损坏
 
 - **WHEN** `settings.json` 损坏，用户打开设置页和终端
-- **THEN** 设置页显示不可用原因与文件路径，写入被禁用；终端仍使用缓存中的主题与字号，快捷指令菜单可用但不可保存
+- **THEN** 设置页显示不可用原因与文件路径，写入被禁用；终端仍使用缓存中的主题与本机保存的字号，快捷指令菜单可用但不可保存
 
 #### Scenario: 离线后恢复
 
@@ -226,7 +225,7 @@ PATCH 的状态码 SHALL 如下：
 #### Scenario: 首次使用就没有缓存
 
 - **WHEN** 新浏览器第一次打开页面时设置接口不可用
-- **THEN** 页面使用默认主题、设备默认字号与 `/resume`、`/new` 预置指令，不因设置失败而阻塞登录后的终端
+- **THEN** 页面使用默认主题与 `/resume`、`/new` 预置指令，不因设置失败而阻塞登录后的终端
 
 ### Requirement: 设置页与共享偏好入口
 

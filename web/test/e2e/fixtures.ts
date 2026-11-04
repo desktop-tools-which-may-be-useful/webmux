@@ -118,7 +118,6 @@ export const test = base.extend<
               baseRevision: prefs.revision,
               changes: {
                 theme: null,
-                fontSize: null,
                 preview: null,
                 codeReader: null,
                 quickCommands: null,
@@ -197,7 +196,6 @@ export const test = base.extend<
                   baseRevision: prefs.revision,
                   changes: {
                     theme: null,
-                    fontSize: null,
                     preview: null,
                     codeReader: null,
                     quickCommands: null,
