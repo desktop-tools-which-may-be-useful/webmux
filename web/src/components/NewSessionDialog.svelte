@@ -41,6 +41,7 @@
   import AdvancedSection from "./AdvancedSection.svelte";
   import LaunchPicker from "./LaunchPicker.svelte";
   import LocationPicker from "./LocationPicker.svelte";
+  import LazyDialog from "./LazyDialog.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import WorktreeCreateFields from "./WorktreeCreateFields.svelte";
   import type { SplitDirection } from "../terminal-layout";
@@ -56,6 +57,7 @@
     oncreated,
     onchange,
     onworktreecreated,
+    onworktreeremoved,
     onclose,
   }: {
     launchConfigs: LaunchConfigsState;
@@ -70,6 +72,8 @@
     oncreated?: (session: SessionInfo, direction: SplitDirection) => void;
     onchange: () => void;
     onworktreecreated: (tree: Worktree) => void;
+    /** A worktree was deleted from the location list. */
+    onworktreeremoved?: (tree: Worktree) => void;
     onclose: () => void;
   } = $props();
   const recent = recentDirs();
@@ -181,6 +185,18 @@
       ? createdTree
       : repository?.worktrees.find((w) => w.id === worktreeId),
   );
+  let removing = $state<Worktree | null>(null);
+  // A removed selection falls back to its repository's main worktree.
+  function removed(tree: Worktree) {
+    onworktreeremoved?.(tree);
+    if (createdTree?.id === tree.id) createdTree = null;
+    if (kind !== "worktree" || worktreeId !== tree.id) return;
+    const main = repositories
+      .find((r) => r.id === tree.repositoryId)
+      ?.worktrees.find((w) => w.kind === "main");
+    if (main) worktreeId = main.id;
+    else kind = "directory";
+  }
   // Creating only a worktree needs a new-worktree location; any other
   // location would have nothing to create.
   const treeTargetMissing = $derived(treeOnly && kind !== "new-worktree");
@@ -357,6 +373,9 @@
         {preferredRepositoryId}
         {createdTree}
         {newWorktreeSummary}
+        onremove={(tree) => {
+          removing = tree;
+        }}
         bind:kind={
           () => kind,
           (next) => {
@@ -501,6 +520,22 @@
 >
   {@render fields()}
 </ResponsiveDialog>
+
+{#if removing}
+  {@const target = removing}
+  <LazyDialog
+    load={() => import("./RemoveWorktreeDialog.svelte")}
+    label="删除确认"
+    onclose={() => (removing = null)}
+  >
+    {#snippet children(page)}<page.default
+        worktree={target}
+        {onchange}
+        onremoved={() => removed(target)}
+        onclose={() => (removing = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
 
 {#if mkdirMounted}<AlertDialog.Root bind:open={mkdirOpen}>
     <AlertDialog.Content>

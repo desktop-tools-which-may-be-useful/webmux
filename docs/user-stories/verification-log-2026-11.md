@@ -264,3 +264,8 @@
 
 - 依据：`internal/api` Go race 测试（`TestAuthenticationAndOriginBoundaries`、`TestWebSocketHandshakeBoundaries` 的 Cookie 用例由放行改为 401）、`token-link.spec.ts` E2E、`make format-check`、`make docs-check`。
 - 限制：未运行完整 `make test`；手动设置 Cookie 的第三方客户端需改用 Bearer 头；未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：PR #304 新建会话位置列表可删除 linked 工作树，对应更新 US-J08；不新增故事，覆盖索引不变。
+
+- 依据：`NewSessionDialog` 浏览器测试（删除后回退到主工作区，并断言 `onworktreeremoved` 回调携带被删工作树；分屏页面 `Terminal.svelte` 据此剪除本地列表，该剪除未单独测试）、`svelte-check`、`check:arch`、`make docs-check`；隔离演示数据下的桌面/手机、明暗截图见 PR。
+- 限制：未运行完整 `make test`；未重新核验其余故事能力。

@@ -98,6 +98,7 @@ const session: SessionInfo = {
 
 let created: unknown[] = [];
 let worktrees: unknown[] = [];
+let removed: unknown[] = [];
 // The 409 body a create starting on the chat side answers, when set.
 let acpConflict: unknown = null;
 // Session creations answered with this 400 error, when set.
@@ -108,6 +109,7 @@ beforeEach(() => {
   localStorage.clear();
   created = [];
   worktrees = [];
+  removed = [];
   acpConflict = null;
   sessionFailures = 0;
   vi.stubGlobal(
@@ -124,6 +126,22 @@ beforeEach(() => {
           return Response.json({ error: "启动失败" }, { status: 400 });
         }
         return Response.json(session, { status: 201 });
+      }
+      if (
+        path === "/api/repositories/repo-1/worktrees/created/removal-preview"
+      ) {
+        return Response.json({
+          confirmationId: "confirm1",
+          expiresAt: "2099-01-01T00:00:00Z",
+          worktree: createdTree,
+          sessions: [],
+          blockers: [],
+          forceAllowed: true,
+        });
+      }
+      if (path === "/api/repositories/repo-1/worktrees/created/remove") {
+        removed.push(JSON.parse(String(init?.body)));
+        return new Response(null, { status: 204 });
       }
       if (path === "/api/repositories/repo-1/worktrees") {
         worktrees.push(JSON.parse(String(init?.body)));
@@ -676,6 +694,39 @@ test("the location picker switches between recent directories, typed directories
     configId: config.id,
     name: "",
   });
+});
+
+test("a linked worktree can be deleted from the location picker and the main worktree is selected instead", async () => {
+  const onchange = vi.fn();
+  const onworktreeremoved = vi.fn();
+  render(NewSessionDialog, {
+    launchConfigs: { status: "ready", configs: [config] },
+    defaultCwd: "/work",
+    repositories: [{ ...repository, worktrees: [mainTree, createdTree] }],
+    entry: {
+      kind: "worktree",
+      repositoryId: "repo-1",
+      worktreeId: createdTree.id,
+    },
+    onchange,
+    onworktreeremoved,
+    onworktreecreated: () => {},
+    onclose: () => {},
+  });
+  await expect.element(locationField()).toMatchTextContent(/fresh/);
+  await locationField().click();
+  await expect
+    .element(page.getByRole("button", { name: /^删除工作树 main/ }))
+    .not.toBeInTheDocument();
+  await page
+    .getByRole("button", { name: /^删除工作树 feature\/fresh/ })
+    .click();
+  await page.getByRole("button", { name: "确认安全删除" }).click();
+  await vi.waitFor(() => expect(removed).toHaveLength(1));
+  expect(removed[0]).toEqual({ confirmationId: "confirm1", mode: "safe" });
+  expect(onchange).toHaveBeenCalled();
+  expect(onworktreeremoved).toHaveBeenCalledWith(createdTree);
+  await expect.element(locationField()).toMatchTextContent(/\/repos\/project/);
 });
 
 test("without repositories only directories are offered", async () => {

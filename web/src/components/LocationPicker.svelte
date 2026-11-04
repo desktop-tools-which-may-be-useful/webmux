@@ -4,6 +4,8 @@
   import IconFolder from "~icons/tabler/folder";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconPencil from "~icons/tabler/pencil";
+  import IconTrash from "~icons/tabler/trash";
+  import { Button } from "$lib/components/ui/button";
   import * as Command from "$lib/components/ui/command";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -26,6 +28,7 @@
     preferredRepositoryId,
     createdTree,
     newWorktreeSummary,
+    onremove,
     kind = $bindable(),
     cwd = $bindable(),
     repositoryId = $bindable(),
@@ -39,6 +42,8 @@
     /** A tree created by this dialog that the repository list may lack. */
     createdTree: Worktree | null;
     newWorktreeSummary: string;
+    /** Asks to delete a linked worktree; the picker never deletes itself. */
+    onremove?: (tree: Worktree) => void;
     kind: TargetKind;
     cwd: string;
     repositoryId: string;
@@ -111,6 +116,25 @@
       >
         <IconGitBranch class="text-muted-foreground" aria-hidden="true" />
         <ChoiceDetails primary={worktreeLabel(tree)} secondary={tree.path} />
+        {#if onremove && tree.kind === "linked"}
+          <Button
+            type="button"
+            variant="quiet"
+            size="icon-sm"
+            class="pointer-events-auto"
+            title={`删除工作树 ${worktreeLabel(tree)}`}
+            aria-label={`删除工作树 ${worktreeLabel(tree)}`}
+            onkeydown={(event) => {
+              // The command root rewrites Enter into selecting the row.
+              if (event.key === "Enter") event.stopPropagation();
+            }}
+            onclick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+              onremove(tree);
+            }}><IconTrash class="size-4" aria-hidden="true" /></Button
+          >
+        {/if}
       </Command.Item>
     {/each}
     <Command.Item

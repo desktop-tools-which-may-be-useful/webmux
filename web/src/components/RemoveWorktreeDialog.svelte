@@ -18,8 +18,14 @@
     worktree,
     onclose,
     onchange,
-  }: { worktree: Worktree; onclose: () => void; onchange: () => void } =
-    $props();
+    onremoved,
+  }: {
+    worktree: Worktree;
+    onclose: () => void;
+    onchange: () => void;
+    /** The worktree was removed; runs before `onclose`. */
+    onremoved?: () => void;
+  } = $props();
   let preview = $state<RemovalPreview | null>(null);
   let busy = $state(false);
   let error = $state("");
@@ -71,6 +77,7 @@
         undefined,
         RemoveWorktreeRequestSchema,
       );
+      onremoved?.();
       onclose();
     } catch (err) {
       error = `${errorMessage(err)}。操作未完整完成；部分会话可能已关闭，请重新读取预览后确认。`;

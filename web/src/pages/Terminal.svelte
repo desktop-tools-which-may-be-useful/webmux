@@ -521,6 +521,18 @@
               setPinned(homeWorktrees.value, repo, [tree.id], true),
             );
         }}
+        onworktreeremoved={(tree) => {
+          repositories = repositories.map((repo) =>
+            repo.id === tree.repositoryId
+              ? {
+                  ...repo,
+                  worktrees: repo.worktrees.filter(
+                    (item) => item.id !== tree.id,
+                  ),
+                }
+              : repo,
+          );
+        }}
         oncreated={(session, direction) => {
           const targetId = target.id;
           info[session.id] = session;
