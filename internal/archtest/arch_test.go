@@ -47,7 +47,7 @@ type manifest struct {
 	// wireScope are the packages whose JSON values must be contract types.
 	wireScope []string
 	// sinks are the scope's own JSON wrappers: "pkg.func" to the index of
-	// the value argument, or of the type parameter for a generic wrapper.
+	// the value argument, or of the type parameters for a generic wrapper.
 	sinks map[string]sink
 	// encoders are the service functions ("pkg.func" or "pkg.(*T).method")
 	// allowed to encode JSON, with the reason: outbound protocol payloads
@@ -55,10 +55,11 @@ type manifest struct {
 	encoders map[string]string
 }
 
-// sink locates the JSON value of a call: argument arg, or type argument
-// typeArg when typeArg >= 0.
+// sink locates the JSON values of a call: argument arg, or every type
+// argument listed in typeArgs when it is not empty.
 type sink struct {
-	arg, typeArg int
+	arg      int
+	typeArgs []int
 }
 
 type violation struct {
@@ -557,7 +558,7 @@ func (p *program) sinkOf(fn *types.Func) (sink, bool) {
 	key := p.sinkKey(fn)
 	if name, ok := strings.CutPrefix(key, "encoding/json."); ok {
 		if arg, ok := jsonSinks[name]; ok {
-			return sink{arg: arg, typeArg: -1}, true
+			return sink{arg: arg}, true
 		}
 	}
 	s, ok := p.m.sinks[key]
@@ -633,26 +634,31 @@ func (p *program) checkWireValues(rel string, pkg *packages.Package) {
 				if !ok {
 					return true
 				}
-				var t types.Type
+				var targets []types.Type
 				what := "value"
-				if s.typeArg >= 0 {
+				if len(s.typeArgs) > 0 {
 					inst, ok := info.Instances[id]
-					if !ok || inst.TypeArgs.Len() <= s.typeArg {
+					if !ok {
 						return true
 					}
-					t, what = inst.TypeArgs.At(s.typeArg), "type argument"
+					what = "type argument"
+					for _, index := range s.typeArgs {
+						if inst.TypeArgs.Len() > index {
+							targets = append(targets, inst.TypeArgs.At(index))
+						}
+					}
 				} else if s.arg < len(call.Args) {
-					t = info.TypeOf(call.Args[s.arg])
-				} else {
-					return true
+					targets = append(targets, info.TypeOf(call.Args[s.arg]))
 				}
-				good, deferred := p.wireType(t)
-				switch {
-				case good, deferred && wrapper:
-				case deferred:
-					p.report(call.Pos(), "R8", "pass a concrete contract type, or register the wrapper in layers_test.go", "%s %s is %s outside a registered JSON wrapper", p.sinkKey(callee.Origin()), what, t)
-				default:
-					p.report(call.Pos(), "R8", "declare the shape in internal/contract and convert in internal/wire", "%s %s has non-contract type %s", p.sinkKey(callee.Origin()), what, t)
+				for _, t := range targets {
+					good, deferred := p.wireType(t)
+					switch {
+					case good, deferred && wrapper:
+					case deferred:
+						p.report(call.Pos(), "R8", "pass a concrete contract type, or register the wrapper in layers_test.go", "%s %s is %s outside a registered JSON wrapper", p.sinkKey(callee.Origin()), what, t)
+					default:
+						p.report(call.Pos(), "R8", "declare the shape in internal/contract and convert in internal/wire", "%s %s has non-contract type %s", p.sinkKey(callee.Origin()), what, t)
+					}
 				}
 				return true
 			})

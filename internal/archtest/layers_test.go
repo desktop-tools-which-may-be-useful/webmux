@@ -82,11 +82,14 @@ var webmux = manifest{
 	// The controller's JSON boundary: their values are checked where they
 	// are called.
 	sinks: map[string]sink{
-		"internal/api.reply":          {arg: 2, typeArg: -1},
-		"internal/api.decode":         {arg: 2, typeArg: -1},
-		"internal/api.decodeOptional": {arg: 2, typeArg: -1},
-		"internal/api.serveCode":      {typeArg: 0},
-		"internal/hub.jsonFrame":      {arg: 1, typeArg: -1},
+		"internal/api.reply":          {arg: 2},
+		"internal/api.decode":         {arg: 2},
+		"internal/api.decodeOptional": {arg: 2},
+		"internal/api.serveCode":      {typeArgs: []int{0}},
+		"internal/api.serve":          {typeArgs: []int{0}},
+		"internal/api.serveIn":        {typeArgs: []int{0, 1}},
+		"internal/api.serveInDone":    {typeArgs: []int{0}},
+		"internal/hub.jsonFrame":      {arg: 1},
 	},
 	encoders: map[string]string{
 		"internal/push.payload":     "Web Push message body, read by the service worker",

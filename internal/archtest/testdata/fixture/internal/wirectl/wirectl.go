@@ -14,6 +14,12 @@ func reply(v any) { _, _ = json.Marshal(v) }
 
 func serve[T any](fn func() T) { reply(fn()) }
 
+func serveIn[Req, T any](fn func(Req) T) {
+	var req Req
+	reply(req)
+	reply(fn(req))
+}
+
 // send is an unregistered wrapper, which would hide its callers' types.
 func send(v any) { _, _ = json.Marshal(v) } // want R8
 
@@ -34,6 +40,9 @@ func handlers() {
 	_ = json.NewEncoder(nil).Encode(item)
 	serve(func() contract.Item { return contract.Item{} })
 	serve(func() svc.Report { return svc.Report{} }) // want R8
+	serveIn(func(contract.Item) contract.Item { return contract.Item{} })
+	serveIn(func(svc.Report) contract.Item { return contract.Item{} }) // want R8
+	serveIn(func(contract.Item) svc.Report { return svc.Report{} })    // want R8
 	marshal := json.Marshal                          // want R8
 	_, _ = marshal(item)
 	send(item)

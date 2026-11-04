@@ -8,11 +8,10 @@ import (
 )
 
 func (s *Server) workspaceRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/repositories", func(w http.ResponseWriter, r *http.Request) {
+	const repo = "/api/repositories/{id}"
+	serve(mux, "GET /api/repositories", http.StatusOK, workspaceFailure, func(r *http.Request) ([]contract.Repository, error) {
 		repositories, err := s.Workspace.List(r.Context())
-		if !workspaceFailure(w, err) {
-			reply(w, 200, wire.Repositories(repositories))
-		}
+		return wire.Repositories(repositories), err
 	})
 	mux.HandleFunc("POST /api/repositories", func(w http.ResponseWriter, r *http.Request) {
 		var req contract.RegisterRepositoryRequest
@@ -20,76 +19,44 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 			return
 		}
 		repository, created, err := s.Workspace.Register(r.Context(), req.Path)
-		if workspaceFailure(w, err) {
+		if err != nil {
+			workspaceFailure(w, err)
 			return
 		}
-		status := 200
+		status := http.StatusOK
 		if created {
-			status = 201
+			status = http.StatusCreated
 		}
 		reply(w, status, wire.Repository(repository))
 	})
-	mux.HandleFunc("DELETE /api/repositories/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !workspaceFailure(w, s.Workspace.Unregister(r.PathValue("id"))) {
-			w.WriteHeader(204)
-		}
+	serveDone(mux, "DELETE "+repo, workspaceFailure, func(r *http.Request) error {
+		return s.Workspace.Unregister(r.PathValue("id"))
 	})
-	mux.HandleFunc("GET /api/repositories/{id}/worktrees", func(w http.ResponseWriter, r *http.Request) {
+	serve(mux, "GET "+repo+"/worktrees", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Repository, error) {
 		repository, err := s.Workspace.Refresh(r.Context(), r.PathValue("id"))
-		if !workspaceFailure(w, err) {
-			reply(w, 200, wire.Repository(repository))
-		}
+		return wire.Repository(repository), err
 	})
-	mux.HandleFunc("GET /api/repositories/{id}/branches", func(w http.ResponseWriter, r *http.Request) {
+	serve(mux, "GET "+repo+"/branches", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Branches, error) {
 		branches, err := s.Workspace.Branches(r.Context(), r.PathValue("id"))
-		if !workspaceFailure(w, err) {
-			reply(w, 200, wire.Branches(branches))
-		}
+		return wire.Branches(branches), err
 	})
-	mux.HandleFunc("GET /api/repositories/{id}/commits", func(w http.ResponseWriter, r *http.Request) {
+	serve(mux, "GET "+repo+"/commits", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Commits, error) {
 		commits, err := s.Workspace.RecentCommits(r.Context(), r.PathValue("id"), r.URL.Query()["from"])
-		if !workspaceFailure(w, err) {
-			reply(w, 200, wire.Commits(commits))
-		}
+		return wire.Commits(commits), err
 	})
-	mux.HandleFunc("POST /api/repositories/{id}/branches/refresh", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.RefreshBranchBaseRequest
-		if !decode(w, r, &req) {
-			return
-		}
+	serveIn(mux, "POST "+repo+"/branches/refresh", http.StatusOK, workspaceFailure, func(r *http.Request, req contract.RefreshBranchBaseRequest) (contract.RefreshBranchBaseResponse, error) {
 		result, err := s.Workspace.RefreshBranchBase(r.Context(), r.PathValue("id"), req.Branch)
-		if !workspaceFailure(w, err) {
-			reply(w, 200, wire.RefreshBranchBase(result))
-		}
+		return wire.RefreshBranchBase(result), err
 	})
-	mux.HandleFunc("POST /api/repositories/{id}/worktrees", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.CreateWorktreeRequest
-		if !decode(w, r, &req) {
-			return
-		}
+	serveIn(mux, "POST "+repo+"/worktrees", http.StatusCreated, workspaceFailure, func(r *http.Request, req contract.CreateWorktreeRequest) (contract.Worktree, error) {
 		tree, err := s.Workspace.CreateWorktree(r.Context(), r.PathValue("id"), wire.CreateWorktree(req))
-		if !workspaceFailure(w, err) {
-			reply(w, 201, wire.Worktree(tree))
-		}
+		return wire.Worktree(tree), err
 	})
-	mux.HandleFunc("POST /api/repositories/{id}/worktrees/{worktreeId}/removal-preview", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.RemovalPreviewRequest
-		if !decode(w, r, &req) {
-			return
-		}
+	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/removal-preview", http.StatusOK, workspaceFailure, func(r *http.Request, _ contract.RemovalPreviewRequest) (contract.RemovalPreview, error) {
 		preview, err := s.Workspace.PreviewRemoval(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"))
-		if !workspaceFailure(w, err) {
-			reply(w, 200, wire.Preview(preview))
-		}
+		return wire.Preview(preview), err
 	})
-	mux.HandleFunc("POST /api/repositories/{id}/worktrees/{worktreeId}/remove", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.RemoveWorktreeRequest
-		if !decode(w, r, &req) {
-			return
-		}
-		err := s.Workspace.RemoveWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.RemoveWorktree(req))
-		if !workspaceFailure(w, err) {
-			w.WriteHeader(204)
-		}
+	serveInDone(mux, "POST "+repo+"/worktrees/{worktreeId}/remove", workspaceFailure, func(r *http.Request, req contract.RemoveWorktreeRequest) error {
+		return s.Workspace.RemoveWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.RemoveWorktree(req))
 	})
 }

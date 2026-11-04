@@ -278,7 +278,10 @@ func hybridFailure(w http.ResponseWriter, err error) bool {
 // chatFailure answers a failed chat command; a request that ended first is
 // a timeout.
 func chatFailure(w http.ResponseWriter, err error) {
+	var bad *badRequest
 	switch {
+	case errors.As(err, &bad):
+		failure(w, http.StatusBadRequest, bad.err)
 	case hybridFailure(w, err):
 	case cancelled(err):
 		failure(w, http.StatusGatewayTimeout, err)
@@ -301,12 +304,8 @@ func sessionFailure(w http.ResponseWriter, err error) {
 	failure(w, workspaceStatus(err), err)
 }
 
-func workspaceFailure(w http.ResponseWriter, err error) bool {
-	if err == nil {
-		return false
-	}
+func workspaceFailure(w http.ResponseWriter, err error) {
 	failure(w, workspaceStatus(err), err)
-	return true
 }
 
 func tunnelStatus(err error) int {

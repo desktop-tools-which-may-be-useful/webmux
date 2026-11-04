@@ -11,80 +11,37 @@ import (
 // launchRoutes serves the saved launch configs. The list carries environment
 // names only; values leave the server only for a single config.
 func (s *Server) launchRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/launch-configs", func(w http.ResponseWriter, r *http.Request) {
+	const base = "/api/launch-configs"
+	serve(mux, "GET "+base, http.StatusOK, launchFailure, func(*http.Request) ([]contract.LaunchConfigSummary, error) {
 		list, err := s.Launch.List()
-		if err != nil {
-			launchFailure(w, err)
-			return
-		}
-		reply(w, http.StatusOK, wire.LaunchSummaries(list))
+		return wire.LaunchSummaries(list), err
 	})
-	mux.HandleFunc("GET /api/launch-configs/presets", func(w http.ResponseWriter, r *http.Request) {
+	serve(mux, "GET "+base+"/presets", http.StatusOK, launchFailure, func(*http.Request) ([]contract.LaunchPreset, error) {
 		list, err := s.Launch.Presets()
-		if err != nil {
-			launchFailure(w, err)
-			return
-		}
-		reply(w, http.StatusOK, wire.LaunchPresets(list))
+		return wire.LaunchPresets(list), err
 	})
-	mux.HandleFunc("POST /api/launch-configs/presets", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.RestoreLaunchPresetsRequest
-		if !decode(w, r, &req) {
-			return
-		}
+	serveIn(mux, "POST "+base+"/presets", http.StatusOK, launchFailure, func(_ *http.Request, req contract.RestoreLaunchPresetsRequest) ([]contract.LaunchConfigSummary, error) {
 		list, err := s.Launch.RestorePresets(req.Name)
-		if err != nil {
-			launchFailure(w, err)
-			return
-		}
-		reply(w, http.StatusOK, wire.LaunchSummaries(list))
+		return wire.LaunchSummaries(list), err
 	})
 	// Read-only: the settings page asks whether an edited command can use
 	// hybrid mode, so the browser never mirrors the profile rules.
-	mux.HandleFunc("POST /api/launch-configs/hybrid-support", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.HybridSupportRequest
-		if !decode(w, r, &req) {
-			return
-		}
-		reply(w, http.StatusOK, wire.HybridSupport(agents.Default().Check(req.Cmd)))
+	serveIn(mux, "POST "+base+"/hybrid-support", http.StatusOK, launchFailure, func(_ *http.Request, req contract.HybridSupportRequest) (contract.HybridSupport, error) {
+		return wire.HybridSupport(agents.Default().Check(req.Cmd)), nil
 	})
-	mux.HandleFunc("GET /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	serve(mux, "GET "+base+"/{id}", http.StatusOK, launchFailure, func(r *http.Request) (contract.LaunchConfig, error) {
 		item, err := s.Launch.Get(r.PathValue("id"))
-		if err != nil {
-			launchFailure(w, err)
-			return
-		}
-		reply(w, http.StatusOK, wire.LaunchConfig(item))
+		return wire.LaunchConfig(item), err
 	})
-	mux.HandleFunc("POST /api/launch-configs", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.LaunchConfigInput
-		if !decode(w, r, &req) {
-			return
-		}
+	serveIn(mux, "POST "+base, http.StatusCreated, launchFailure, func(_ *http.Request, req contract.LaunchConfigInput) (contract.LaunchConfig, error) {
 		item, err := s.Launch.Create(wire.LaunchInput(req))
-		if err != nil {
-			launchFailure(w, err)
-			return
-		}
-		reply(w, http.StatusCreated, wire.LaunchConfig(item))
+		return wire.LaunchConfig(item), err
 	})
-	mux.HandleFunc("PUT /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var req contract.LaunchConfigInput
-		if !decode(w, r, &req) {
-			return
-		}
+	serveIn(mux, "PUT "+base+"/{id}", http.StatusOK, launchFailure, func(r *http.Request, req contract.LaunchConfigInput) (contract.LaunchConfig, error) {
 		item, err := s.Launch.Update(r.PathValue("id"), wire.LaunchInput(req))
-		if err != nil {
-			launchFailure(w, err)
-			return
-		}
-		reply(w, http.StatusOK, wire.LaunchConfig(item))
+		return wire.LaunchConfig(item), err
 	})
-	mux.HandleFunc("DELETE /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.Launch.Delete(r.PathValue("id")); err != nil {
-			launchFailure(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+	serveDone(mux, "DELETE "+base+"/{id}", launchFailure, func(r *http.Request) error {
+		return s.Launch.Delete(r.PathValue("id"))
 	})
 }

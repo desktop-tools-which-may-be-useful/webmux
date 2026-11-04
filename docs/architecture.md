@@ -117,7 +117,7 @@ Tailscale 控制器的生命周期：
 | R5   | Controller 的构造、状态和 I/O 操作只调用注入实例的方法；只允许显式登记并附理由的 Service 包级纯函数（目前为 `push.Validate`、`hybrid.FormValue`）；可以引用 Service 的类型、常量与哨兵错误                                                                                                    |
 | R6   | Service 不使用服务端 HTTP 符号，不声明以 `*http.Request` 为参数的函数；只有登记为出站的 `push` 可以使用 HTTP 客户端符号                                                                                                                                                                       |
 | R7   | Service 错误不携带整数 `Status`/`StatusCode`/`HTTPStatus`/`HTTPStatusCode` 字段，不提供错误到整数状态的同名方法或函数；显式 HTTP 状态方法或函数始终禁止。允许大小、行号、退出码等业务整数及非错误对象的 `Status() int`；HTTP 状态映射归 `internal/api/errors.go`                              |
-| R8   | Controller 编解码的每个 JSON 值都是 `contract` 中的具名类型（可经指针、切片、映射）；汇点是 `encoding/json` 的编解码函数和登记的包装函数 `api.reply`/`decode`/`decodeOptional`/`serveCode`、`hub.jsonFrame`；接口类型的值只能出现在登记的包装函数内；`contract` 类型的字段不引用 Service 类型 |
+| R8   | Controller 编解码的每个 JSON 值都是 `contract` 中的具名类型（可经指针、切片、映射）；汇点是 `encoding/json` 的编解码函数和登记的包装函数 `api.reply`/`decode`/`decodeOptional`/`serveCode`/`serve`/`serveIn`/`serveInDone`、`hub.jsonFrame`；接口类型的值只能出现在登记的包装函数内；`contract` 类型的字段不引用 Service 类型 |
 | R9   | Service 不声明 `MarshalJSON`；JSON 编码器只能在登记函数体内直接调用（Web Push 载荷与 VAPID 头、代码视图摘要）。检查整个源码，包括包级初始化；禁止保存编码器函数值或方法值，即使位于登记函数中                                                                                                 |
 | R10  | `contract` 不导入 Service 或 Controller                                                                                                                                                                                                                                                       |
 

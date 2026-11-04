@@ -40,8 +40,9 @@ var fixture = manifest{
 	contract:  "internal/contract",
 	wireScope: []string{"internal/wirectl"},
 	sinks: map[string]sink{
-		"internal/wirectl.reply": {arg: 0, typeArg: -1},
-		"internal/wirectl.serve": {typeArg: 0},
+		"internal/wirectl.reply":   {arg: 0},
+		"internal/wirectl.serve":   {typeArgs: []int{0}},
+		"internal/wirectl.serveIn": {typeArgs: []int{0, 1}},
 	},
 	encoders: map[string]string{
 		"internal/svc.digest":            "fixture digest",

@@ -16,38 +16,136 @@ import (
 func (s *Server) chatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ws/s/{id}/chat", s.chatWS)
 	const base = "/api/sessions/{id}/chat/"
-	mux.HandleFunc("POST "+base+"prompts", s.chatPrompt)
-	mux.HandleFunc("PATCH "+base+"queue/{qid}", s.chatQueueEdit)
-	mux.HandleFunc("DELETE "+base+"queue/{qid}", s.chatQueueCommand(func(h *hybrid.Service, r *http.Request, rid string) error {
-		return h.RemoveQueued(r.Context(), r.PathValue("id"), rid, r.PathValue("qid"))
+	serveIn(mux, "POST "+base+"prompts", http.StatusOK, chatFailure, func(r *http.Request, req contract.ChatPromptRequest) (contract.ChatPromptResult, error) {
+		h, err := s.hybrids()
+		if err != nil {
+			return contract.ChatPromptResult{}, err
+		}
+		result, err := h.Prompt(r.Context(), r.PathValue("id"), wire.ChatPromptInput(req))
+		return wire.ChatPromptResult(result), err
+	})
+	serveInDone(mux, "PATCH "+base+"queue/{qid}", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatQueueRequest) error {
+		return h.EditQueued(r.Context(), r.PathValue("id"), r.PathValue("qid"), wire.ChatQueueEdit(req))
 	}))
-	mux.HandleFunc("POST "+base+"queue/{qid}/send-now", s.chatQueueCommand(func(h *hybrid.Service, r *http.Request, rid string) error {
-		return h.SendQueuedNow(r.Context(), r.PathValue("id"), rid, r.PathValue("qid"))
+	serveInDone(mux, "DELETE "+base+"queue/{qid}", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatQueueRequest) error {
+		return h.RemoveQueued(r.Context(), r.PathValue("id"), req.ClientRequestID, r.PathValue("qid"))
 	}))
-	mux.HandleFunc("POST "+base+"queue/resume", s.chatQueueCommand(func(h *hybrid.Service, r *http.Request, rid string) error {
-		return h.ResumeQueue(r.Context(), r.PathValue("id"), rid)
+	serveInDone(mux, "POST "+base+"queue/{qid}/send-now", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatQueueRequest) error {
+		return h.SendQueuedNow(r.Context(), r.PathValue("id"), req.ClientRequestID, r.PathValue("qid"))
 	}))
-	mux.HandleFunc("POST "+base+"queue/clear", s.chatQueueCommand(func(h *hybrid.Service, r *http.Request, rid string) error {
-		return h.ClearQueue(r.Context(), r.PathValue("id"), rid)
+	serveInDone(mux, "POST "+base+"queue/resume", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatQueueRequest) error {
+		return h.ResumeQueue(r.Context(), r.PathValue("id"), req.ClientRequestID)
 	}))
-	mux.HandleFunc("POST "+base+"cancel", s.chatCancel)
-	mux.HandleFunc("POST "+base+"requests/{requestId}", s.chatAnswer)
-	mux.HandleFunc("PUT "+base+"config/{configId}", s.chatConfig)
-	mux.HandleFunc("PUT "+base+"permission-mode", s.chatPermissionMode)
-	mux.HandleFunc("POST /api/sessions/{id}/switch", s.hybridSwitch)
-	mux.HandleFunc("POST /api/sessions/{id}/resume", s.hybridResume)
-	mux.HandleFunc("GET /api/hybrid-sessions", s.hybridRecords)
-	mux.HandleFunc("GET /api/hybrid-sessions/{id}", s.hybridRecord)
-	mux.HandleFunc("DELETE /api/hybrid-sessions/{id}", s.removeHybridRecord)
+	serveInDone(mux, "POST "+base+"queue/clear", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatQueueRequest) error {
+		return h.ClearQueue(r.Context(), r.PathValue("id"), req.ClientRequestID)
+	}))
+	serveInDone(mux, "POST "+base+"cancel", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatCommandRequest) error {
+		return h.Cancel(r.Context(), r.PathValue("id"), req.ClientRequestID)
+	}))
+	serveInDone(mux, "POST "+base+"requests/{requestId}", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatAnswerRequest) error {
+		answer, err := wire.ChatAnswer(req)
+		if err != nil {
+			return &badRequest{err}
+		}
+		return h.Answer(r.Context(), r.PathValue("id"), req.ClientRequestID, r.PathValue("requestId"), answer)
+	}))
+	serveInDone(mux, "PUT "+base+"config/{configId}", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatConfigRequest) error {
+		return h.SetConfig(r.Context(), r.PathValue("id"), wire.ChatConfigInput(r.PathValue("configId"), req))
+	}))
+	serveInDone(mux, "PUT "+base+"permission-mode", chatFailure, chatCommand(s, func(h *hybrid.Service, r *http.Request, req contract.ChatPermissionModeRequest) error {
+		return h.SetPermissionMode(r.Context(), r.PathValue("id"), wire.ChatPermissionModeInput(req))
+	}))
+	// hybridSwitch moves a hybrid session to its other side, or answers a
+	// switch waiting for the user's choice. It answers once the switch is
+	// over; a draft returned to the terminal goes to this requester only.
+	serveIn(mux, "POST /api/sessions/{id}/switch", http.StatusOK, chatFailure, func(r *http.Request, req contract.HybridSwitchRequest) (contract.HybridSwitchResult, error) {
+		h, err := s.hybrids()
+		if err != nil {
+			return contract.HybridSwitchResult{}, err
+		}
+		result, err := h.Switch(r.Context(), r.PathValue("id"), wire.HybridSwitchInput(req))
+		return wire.HybridSwitchResult(result), err
+	})
+	// hybridResume resumes a closed or interrupted hybrid session under its
+	// ID and answers with the running session. Choices the user must make
+	// first (another agent session, resuming without the deleted config's
+	// environment) are 409s.
+	serveIn(mux, "POST /api/sessions/{id}/resume", http.StatusOK, sessionFailure, func(r *http.Request, req contract.HybridResumeRequest) (contract.SessionInfo, error) {
+		if _, err := s.hybrids(); err != nil {
+			return contract.SessionInfo{}, err
+		}
+		item, err := s.Workspace.ResumeHybrid(r.Context(), r.PathValue("id"), wire.HybridResumeInput(req))
+		if err != nil {
+			return contract.SessionInfo{}, err
+		}
+		return wire.Session(item.Info()), nil
+	})
+	// hybridRecords lists the hybrid session records, most recently updated
+	// first; state=recoverable keeps the closed and interrupted ones.
+	serve(mux, "GET /api/hybrid-sessions", http.StatusOK, chatFailure, func(r *http.Request) ([]contract.HybridRecord, error) {
+		h, err := s.hybrids()
+		if err != nil {
+			return []contract.HybridRecord{}, err
+		}
+		recoverable := false
+		switch r.URL.Query().Get("state") {
+		case "":
+		case "recoverable":
+			recoverable = true
+		default:
+			return []contract.HybridRecord{}, &badRequest{errors.New("state 只能是 recoverable")}
+		}
+		list, err := h.Records(recoverable)
+		return wire.HybridRecords(list, s.configMissing), err
+	})
+	serve(mux, "GET /api/hybrid-sessions/{id}", http.StatusOK, chatFailure, func(r *http.Request) (contract.HybridRecord, error) {
+		h, err := s.hybrids()
+		if err != nil {
+			return contract.HybridRecord{}, err
+		}
+		rec, err := h.Record(r.PathValue("id"))
+		if err != nil {
+			return contract.HybridRecord{}, err
+		}
+		return wire.HybridRecord(rec, s.configMissing(rec.ConfigID)), nil
+	})
+	// removeHybridRecord deletes a closed or interrupted record and its
+	// exited shell; the agent keeps its own session.
+	serveDone(mux, "DELETE /api/hybrid-sessions/{id}", chatFailure, func(r *http.Request) error {
+		h, err := s.hybrids()
+		if err != nil {
+			return err
+		}
+		id := r.PathValue("id")
+		if err := h.RemoveRecord(r.Context(), id); err != nil {
+			return err
+		}
+		// The folder outlived the shell for a possible resume; the record
+		// is gone, so nothing can come back for it.
+		s.Artifacts.Remove(id)
+		return nil
+	})
 }
 
-// hybrids returns the hybrid service, or answers 404: without one no
+// hybrids returns the hybrid service, or hybrid.ErrNotFound: without one no
 // session has a chat channel.
-func (s *Server) hybrids(w http.ResponseWriter) *hybrid.Service {
+func (s *Server) hybrids() (*hybrid.Service, error) {
 	if s.Hybrid == nil {
-		chatFailure(w, hybrid.ErrNotFound)
+		return nil, hybrid.ErrNotFound
 	}
-	return s.Hybrid
+	return s.Hybrid, nil
+}
+
+// chatCommand adapts a command on the hybrid service to a serveInDone
+// handler.
+func chatCommand[Req any](s *Server, run func(h *hybrid.Service, r *http.Request, req Req) error) func(*http.Request, Req) error {
+	return func(r *http.Request, req Req) error {
+		h, err := s.hybrids()
+		if err != nil {
+			return err
+		}
+		return run(h, r, req)
+	}
 }
 
 func (s *Server) chatWS(w http.ResponseWriter, r *http.Request) {
@@ -70,181 +168,9 @@ func (s *Server) chatWS(w http.ResponseWriter, r *http.Request) {
 	hub.Chat(r.Context(), sub, c)
 }
 
-func (s *Server) chatPrompt(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.ChatPromptRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	result, err := h.Prompt(r.Context(), r.PathValue("id"), wire.ChatPromptInput(req))
-	if err != nil {
-		chatFailure(w, err)
-		return
-	}
-	reply(w, http.StatusOK, wire.ChatPromptResult(result))
-}
-
-func (s *Server) chatQueueEdit(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.ChatQueueRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	chatDone(w, h.EditQueued(r.Context(), r.PathValue("id"), r.PathValue("qid"), wire.ChatQueueEdit(req)))
-}
-
-// chatQueueCommand handles a queue command whose body carries only the
-// client request ID.
-func (s *Server) chatQueueCommand(run func(h *hybrid.Service, r *http.Request, requestID string) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		h := s.hybrids(w)
-		var req contract.ChatQueueRequest
-		if h == nil || !decode(w, r, &req) {
-			return
-		}
-		chatDone(w, run(h, r, req.ClientRequestID))
-	}
-}
-
-func (s *Server) chatCancel(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.ChatCommandRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	chatDone(w, h.Cancel(r.Context(), r.PathValue("id"), req.ClientRequestID))
-}
-
-func (s *Server) chatAnswer(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.ChatAnswerRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	answer, err := wire.ChatAnswer(req)
-	if err != nil {
-		failure(w, http.StatusBadRequest, err)
-		return
-	}
-	chatDone(w, h.Answer(r.Context(), r.PathValue("id"), req.ClientRequestID, r.PathValue("requestId"), answer))
-}
-
-func (s *Server) chatConfig(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.ChatConfigRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	chatDone(w, h.SetConfig(r.Context(), r.PathValue("id"), wire.ChatConfigInput(r.PathValue("configId"), req)))
-}
-
-func (s *Server) chatPermissionMode(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.ChatPermissionModeRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	chatDone(w, h.SetPermissionMode(r.Context(), r.PathValue("id"), wire.ChatPermissionModeInput(req)))
-}
-
-// hybridSwitch moves a hybrid session to its other side, or answers a
-// switch waiting for the user's choice. It answers once the switch is
-// over; a draft returned to the terminal goes to this requester only.
-func (s *Server) hybridSwitch(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.HybridSwitchRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	result, err := h.Switch(r.Context(), r.PathValue("id"), wire.HybridSwitchInput(req))
-	if err != nil {
-		chatFailure(w, err)
-		return
-	}
-	reply(w, http.StatusOK, wire.HybridSwitchResult(result))
-}
-
-// hybridResume resumes a closed or interrupted hybrid session under its ID
-// and answers with the running session. Choices the user must make first
-// (another agent session, resuming without the deleted config's
-// environment) are 409s.
-func (s *Server) hybridResume(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	var req contract.HybridResumeRequest
-	if h == nil || !decode(w, r, &req) {
-		return
-	}
-	item, err := s.Workspace.ResumeHybrid(r.Context(), r.PathValue("id"), wire.HybridResumeInput(req))
-	if err != nil {
-		sessionFailure(w, err)
-		return
-	}
-	reply(w, http.StatusOK, wire.Session(item.Info()))
-}
-
-// hybridRecords lists the hybrid session records, most recently updated
-// first; state=recoverable keeps the closed and interrupted ones.
-func (s *Server) hybridRecords(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	if h == nil {
-		return
-	}
-	recoverable := false
-	switch r.URL.Query().Get("state") {
-	case "":
-	case "recoverable":
-		recoverable = true
-	default:
-		failure(w, http.StatusBadRequest, errors.New("state 只能是 recoverable"))
-		return
-	}
-	list, err := h.Records(recoverable)
-	if err != nil {
-		chatFailure(w, err)
-		return
-	}
-	reply(w, http.StatusOK, wire.HybridRecords(list, s.configMissing))
-}
-
-func (s *Server) hybridRecord(w http.ResponseWriter, r *http.Request) {
-	h := s.hybrids(w)
-	if h == nil {
-		return
-	}
-	rec, err := h.Record(r.PathValue("id"))
-	if err != nil {
-		chatFailure(w, err)
-		return
-	}
-	reply(w, http.StatusOK, wire.HybridRecord(rec, s.configMissing(rec.ConfigID)))
-}
-
-// removeHybridRecord deletes a closed or interrupted record and its exited
-// shell; the agent keeps its own session.
-func (s *Server) removeHybridRecord(w http.ResponseWriter, r *http.Request) {
-	if h := s.hybrids(w); h != nil {
-		id := r.PathValue("id")
-		err := h.RemoveRecord(r.Context(), id)
-		if err == nil {
-			// The folder outlived the shell for a possible resume; the
-			// record is gone, so nothing can come back for it.
-			s.Artifacts.Remove(id)
-		}
-		chatDone(w, err)
-	}
-}
-
 // configMissing reports whether launch config id was deleted; a store that
 // cannot be read cannot tell and says no.
 func (s *Server) configMissing(id string) bool {
 	_, err := s.Launch.Get(id)
 	return errors.Is(err, launch.ErrNotFound)
-}
-
-func chatDone(w http.ResponseWriter, err error) {
-	if err != nil {
-		chatFailure(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
