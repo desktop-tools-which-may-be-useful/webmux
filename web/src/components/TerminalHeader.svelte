@@ -385,11 +385,17 @@
           {@render paneActions(true)}
         </div>{/if}
       <DropdownMenu.Separator />
+      {@const archivable =
+        t.exitCode === null && t.info?.hybrid?.state === "active"}
       <DropdownMenu.Item
-        variant="destructive"
+        variant={archivable ? "default" : "destructive"}
         disabled={!t.info}
         onSelect={close}
-        >{t.exitCode !== null ? "移除会话" : "关闭会话"}</DropdownMenu.Item
+        >{t.exitCode !== null
+          ? "移除会话"
+          : archivable
+            ? "归档会话"
+            : "关闭会话"}</DropdownMenu.Item
       >
     </DropdownMenu.Content>
   </DropdownMenu.Root>

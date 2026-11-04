@@ -44,6 +44,13 @@ const (
 	StateInterrupted State = "interrupted"
 )
 
+// WorkspaceRef is the registered repository worktree a session belonged to
+// when its record was last saved.
+type WorkspaceRef struct {
+	RepositoryID string `json:"repositoryId"`
+	WorktreeID   string `json:"worktreeId"`
+}
+
 // Record links a WebMux session ID to an agent session. It never holds
 // environment values, messages, queued text or tokens.
 type Record struct {
@@ -80,6 +87,9 @@ type Record struct {
 	// end an orphan that survived an unclean shutdown.
 	PID     int               `json:"pid,omitempty"`
 	Process *runtime.Identity `json:"process,omitempty"`
+	// Workspace is the session's latest repository association, nil when it
+	// had none; records written before it existed omit it.
+	Workspace *WorkspaceRef `json:"workspace,omitempty"`
 }
 
 func (r Record) clone() Record {
@@ -100,6 +110,10 @@ func (r Record) clone() Record {
 	if r.Process != nil {
 		p := *r.Process
 		r.Process = &p
+	}
+	if r.Workspace != nil {
+		w := *r.Workspace
+		r.Workspace = &w
 	}
 	return r
 }

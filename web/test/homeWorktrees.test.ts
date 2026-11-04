@@ -61,6 +61,16 @@ describe("homeLayout", () => {
     expect(layout.unpinned.map((t) => t.id)).toEqual(["main", "a", "b"]);
   });
 
+  test("a worktree with archived records is shown like one with sessions", () => {
+    const layout = homeLayout(
+      { r1: [] },
+      repo(trees),
+      [],
+      new Map([["a", [{}]]]),
+    );
+    expect(shownIds(layout)).toEqual(["a:false"]);
+  });
+
   test("an explicit empty choice hides the main worktree too", () => {
     expect(homeLayout({ r1: [] }, repo(trees), []).shown).toEqual([]);
   });

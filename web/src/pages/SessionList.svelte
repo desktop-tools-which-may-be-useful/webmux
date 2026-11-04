@@ -3,7 +3,7 @@
   import InlineNotice from "../components/InlineNotice.svelte";
   import LazyDialog from "../components/LazyDialog.svelte";
   import { applySessionEvent } from "../session-list";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { z } from "zod";
   import RepositorySidebar from "../components/RepositorySidebar.svelte";
   import SessionViewControls from "../components/SessionViewControls.svelte";
@@ -32,8 +32,13 @@
   import SessionFilters from "../components/SessionFilters.svelte";
   import RepositoryGroup from "../components/RepositoryGroup.svelte";
   import DirectSessions from "../components/DirectSessions.svelte";
-  import RecoverableSessions from "../components/RecoverableSessions.svelte";
   import { loadRecoverable, removeRecord, resumeHybrid } from "../recoverable";
+  import {
+    repositoryRecords,
+    matchesArchivedQuery,
+    placeArchived,
+    type ArchiveActions,
+  } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { setLaunchPreviews } from "../launchPreviews.svelte";
@@ -125,7 +130,7 @@
     z.enum(["compact", "preview"]).safeParse(stored("homeSessionView")).data ===
       "compact",
   );
-  // Closed or interrupted hybrid shells belong to the recoverable group only.
+  // Closed or interrupted hybrid shells show as archived records only.
   const list = $derived(
     sessions.filter(
       (session) => !session.hybrid || session.hybrid.state === "active",
@@ -138,6 +143,8 @@
         !repositories.some((r) => r.id === s.workspace?.repositoryId),
     ),
   );
+  // Archived records sit in the group a live session of theirs would.
+  const placement = $derived(placeArchived(recoverable, repositories));
   // A workspace session proves at least one repository exists, so reserve the
   // sidebar frame before Git discovery returns instead of moving the list when
   // the repositories appear.
@@ -171,6 +178,13 @@
             (session) => session.workspace?.repositoryId === selectedRepository,
           ),
   );
+  const scopedArchive = $derived.by(() => {
+    if (selectedRepository === "all") return recoverable;
+    if (selectedRepository === "direct") return placement.direct;
+    const entry = placement.repositories.get(selectedRepository);
+    return entry ? repositoryRecords(entry) : [];
+  });
+  const scopedArchiveCount = $derived(scopedArchive.length);
   $effect(() => {
     if (loading || initializing || !repositoriesSettled || repositoryError)
       return;
@@ -231,6 +245,111 @@
       ? new Set(visible.map((session) => session.id))
       : undefined,
   );
+  // Archived records the filters keep: the archived status or none, and the
+  // search over their titles, agent, directory, repository and branch.
+  const visibleArchiveIds = $derived.by(() => {
+    if (!filtering) return undefined;
+    if (statusFilter !== "all" && statusFilter !== "archived")
+      return new Set<string>();
+    return new Set(
+      recoverable
+        .filter((record) => {
+          if (!search) return true;
+          const repository = repositories.find(
+            (repo) => repo.id === record.workspace?.repositoryId,
+          );
+          const tree = repository?.worktrees.find(
+            (worktree) => worktree.id === record.workspace?.worktreeId,
+          );
+          return matchesArchivedQuery(
+            record,
+            search,
+            repository?.name,
+            tree?.branch,
+          );
+        })
+        .map((record) => record.id),
+    );
+  });
+  const archivedMatches = $derived(
+    visibleArchiveIds === undefined
+      ? 0
+      : scopedArchive.filter((record) => visibleArchiveIds.has(record.id))
+          .length,
+  );
+  function archivedInRepository(id: string) {
+    const entry = placement.repositories.get(id);
+    return Boolean(
+      entry &&
+      repositoryRecords(entry).some(
+        (record) => !visibleArchiveIds || visibleArchiveIds.has(record.id),
+      ),
+    );
+  }
+  // The record just archived: revealed once it is listed, marked for a
+  // moment and announced. `revealing` waits for it to be listed.
+  let revealing = $state(
+    new URLSearchParams(location.search).get("archived") ?? "",
+  );
+  let highlight = $state("");
+  let announcement = $state("");
+  const archive: ArchiveActions = $derived({
+    now,
+    filtering,
+    highlight,
+    resume: resumeHybrid,
+    remove: async (id) => {
+      await removeRecord(id);
+      drafts.remove(id);
+      await refreshRecoverable();
+    },
+    onresumed: () => void refreshRecoverable(),
+  });
+  $effect(() => {
+    const id = revealing;
+    if (!id) return;
+    if (new URLSearchParams(location.search).has("archived")) {
+      const url = new URL(location.href);
+      url.searchParams.delete("archived");
+      history.replaceState(history.state, "", url.pathname + url.search);
+    }
+    // A record that never shows up (its close failed to record) is dropped.
+    const giveUp = setTimeout(() => {
+      if (revealing === id) revealing = "";
+    }, 5000);
+    return () => clearTimeout(giveUp);
+  });
+  $effect(() => {
+    const id = revealing;
+    const record = id && recoverable.find((r) => r.id === id);
+    if (!record) return;
+    revealing = "";
+    const repositoryId = [...placement.repositories].find(([, entry]) =>
+      repositoryRecords(entry).some((r) => r.id === id),
+    )?.[0];
+    const scope = repositoryId ?? "direct";
+    if (selectedRepository !== "all" && selectedRepository !== scope)
+      repositoryChoice = "all";
+    if (repositoryId) {
+      if (selectedRepository === repositoryId)
+        focusedExpanded[repositoryId] = true;
+      else expansionOverrides[repositoryId] = true;
+    }
+    highlight = id;
+    announcement = `已归档“${record.title || record.name}”`;
+    void tick().then(() =>
+      document
+        .querySelector(`[data-archived-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "nearest" }),
+    );
+  });
+  $effect(() => {
+    if (!highlight) return;
+    const done = setTimeout(() => {
+      highlight = "";
+    }, 4000);
+    return () => clearTimeout(done);
+  });
   // Only an actively producing session follows the tab indicator; idle live
   // sessions are still "active" for the list summary but not for this marker.
   const running = $derived(
@@ -256,7 +375,8 @@
       repositories.map((repo) => [
         repo.id,
         expansionOverrides[repo.id] ??
-          sessions.some((s) => s.workspace?.repositoryId === repo.id),
+          (sessions.some((s) => s.workspace?.repositoryId === repo.id) ||
+            placement.repositories.has(repo.id)),
       ]),
     ),
   );
@@ -515,9 +635,10 @@
             />{/snippet}
           <SessionFilters
             sessions={scopedSessions}
+            archivedCount={scopedArchiveCount}
             bind:query
             bind:statusFilter
-            filtered={filtering && visible.length > 0}
+            filtered={filtering && (visible.length > 0 || archivedMatches > 0)}
             shortcutDisabled={Boolean(
               creating ||
               adding ||
@@ -568,9 +689,10 @@
                 selectedRepository !== repo.id}
               {visibleIds}
               open={filtering
-                ? visible.some(
+                ? (visible.some(
                     (session) => session.workspace?.repositoryId === repo.id,
-                  ) &&
+                  ) ||
+                    archivedInRepository(repo.id)) &&
                   (filterExpanded[repo.id] ?? true)
                 : selectedRepository === repo.id
                   ? (focusedExpanded[repo.id] ?? true)
@@ -604,9 +726,12 @@
               onclose={(s) => {
                 closing = s;
               }}
+              archived={placement.repositories.get(repo.id)}
+              {visibleArchiveIds}
+              {archive}
             />
           {/each}
-          {#if direct.length}<DirectSessions
+          {#if direct.length || placement.direct.length}<DirectSessions
               sessions={direct}
               {compact}
               focused={selectedRepository === "direct"}
@@ -615,20 +740,16 @@
               onclose={(s) => {
                 closing = s;
               }}
+              archived={placement.direct}
+              visibleArchiveIds={selectedRepository === "all" ||
+              selectedRepository === "direct"
+                ? visibleArchiveIds
+                : new Set()}
+              {archive}
             />{/if}
-          <RecoverableSessions
-            records={recoverable}
-            {now}
-            resume={resumeHybrid}
-            remove={async (id) => {
-              await removeRecord(id);
-              drafts.remove(id);
-              await refreshRecoverable();
-            }}
-            onresumed={() => void refreshRecoverable()}
-          />
-          {#if (filtering && !visible.length) || (!repositories.length && !list.length) || (selectedRepository === "direct" && !direct.length)}<SessionListEmpty
-              filtered={filtering && !visible.length}
+          <p class="sr-only" role="status">{announcement}</p>
+          {#if (filtering && !visible.length && !archivedMatches) || (!repositories.length && !list.length && !recoverable.length) || (selectedRepository === "direct" && !direct.length && !placement.direct.length)}<SessionListEmpty
+              filtered={filtering && !visible.length && !archivedMatches}
               canStart
               onclear={clearFilters}
               onstart={() => start()}
@@ -663,6 +784,9 @@
     session={closing}
     onremoved={() => {
       if (closing) drafts.remove(closing.id);
+    }}
+    onarchived={(session) => {
+      revealing = session.id;
     }}
     onclose={() => {
       closing = null;

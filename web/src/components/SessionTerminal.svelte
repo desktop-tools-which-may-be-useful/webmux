@@ -66,6 +66,7 @@
     viewportHeight,
     oninfo,
     onremoved,
+    onarchived,
   }: {
     id: string;
     drafts: TerminalDrafts;
@@ -83,6 +84,8 @@
       connection: string,
     ) => void;
     onremoved: () => void;
+    // A live hybrid session was archived from this pane.
+    onarchived: () => void;
   } = $props();
   const draft = untrack(() => drafts.get(id));
   let composer = $state<TerminalInputComposer>();
@@ -849,6 +852,7 @@
         if (!hybrid.known) drafts.remove(id);
         onremoved();
       }}
+      {onarchived}
     />{/if}
   <ConfirmDialog
     bind:open={

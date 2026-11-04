@@ -136,9 +136,16 @@ func TestHybridRecord(t *testing.T) {
 	rec.SetAgentSessionID("one")
 	rec.SetAgentSessionID("two")
 	rec.InterruptedAt = &at
+	rec.Workspace = &hybrid.WorkspaceRef{RepositoryID: "r1", WorktreeID: "w1"}
 	out := HybridRecord(rec, false)
 	if *out.AgentSessionID != "two" || len(out.PreviousIDs) != 1 || out.PreviousIDs[0] != "one" || !out.InterruptedAt.Equal(at) || out.ConfigMissing {
 		t.Fatalf("record %+v", out)
+	}
+	if out.Workspace == nil || *out.Workspace != (contract.WorkspaceReference{RepositoryID: "r1", WorktreeID: "w1"}) {
+		t.Fatalf("record workspace %+v", out.Workspace)
+	}
+	if got := encode(t, HybridRecord(hybrid.Record{ID: "x"}, false)); strings.Contains(got, "workspace") {
+		t.Fatalf("record without workspace %s", got)
 	}
 	list := HybridRecords([]hybrid.Record{rec, {ID: "bcdefghi", ConfigID: "gone"}}, func(id string) bool { return id == "gone" })
 	if len(list) != 2 || list[0].ConfigMissing || !list[1].ConfigMissing || encode(t, HybridRecords(nil, nil)) != "[]" {

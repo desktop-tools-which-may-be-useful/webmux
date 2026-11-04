@@ -19,7 +19,11 @@
       "side": "acp",
       "state": "closed",
       "title": "agent",
-      "updatedAt": "<time>"
+      "updatedAt": "<time>",
+      "workspace": {
+        "repositoryId": "repo0001",
+        "worktreeId": "tree0001"
+      }
     }
   ]
 }

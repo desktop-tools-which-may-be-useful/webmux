@@ -221,7 +221,7 @@ Open Code、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 预置配置默认
 
 首次启动的默认预设只在 `launch-configs.json` 不存在时写入，删除后不会自动重新出现。需要时可在设置页「新建启动配置」旁的「添加系统预设」菜单中补回单个或全部缺失的预设；同名配置已存在时不会覆盖。
 
-勾选了 **混合模式** 的配置（预置的 Open Code、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 默认已勾选）会创建混合会话，可在聊天视图与终端之间切换、关闭后从首页”可恢复”分组恢复，见 [混合会话](hybrid-sessions.md)。聊天输入框的附件规则如下：
+勾选了 **混合模式** 的配置（预置的 Open Code、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 默认已勾选）会创建混合会话，可在聊天视图与终端之间切换、归档后从首页所属工作树的“已归档”中恢复，见 [混合会话](hybrid-sessions.md)。聊天输入框的附件规则如下：
 
 - 支持上传、拖放或粘贴附件。
 - agent 声明图片或嵌入上下文能力时原生发送，否则按服务器路径降级并提示。

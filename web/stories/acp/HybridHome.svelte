@@ -1,14 +1,73 @@
 <script lang="ts">
   import WorkspaceGroup from "../../src/components/WorkspaceGroup.svelte";
-  import type { SessionInfo } from "../../src/schemas";
+  import type { ArchiveActions } from "../../src/archived";
+  import type { HybridRecord, SessionInfo } from "../../src/schemas";
   import { now, session } from "../fixtures";
   import { agentMetadata, sessionIds } from "./fixtures";
 
   // The home page's workspace group with hybrid sessions on each side beside
   // a plain shell: the card names the side and, on the chat side, previews
   // the latest agent message instead of terminal lines. A running turn
-  // shows its live one-line work detail above the preview.
+  // shows its live one-line work detail above the preview. With `archived`,
+  // the group also lists archived records, the first one just archived.
+  let { archived = false }: { archived?: boolean } = $props();
   let notice = $state("");
+  const record = (
+    id: string,
+    title: string,
+    patch: Partial<HybridRecord> = {},
+  ): HybridRecord => ({
+    id,
+    name: title,
+    title,
+    configId: "cfgomp01",
+    configMissing: false,
+    agent: "omp",
+    cwd: "/home/developer/webmux",
+    cmd: ["omp"],
+    side: "acp",
+    agentSessionId: sessionIds.omp.current,
+    previousIds: [],
+    state: "closed",
+    queuedCount: 0,
+    createdAt: "2026-01-01T09:00:00Z",
+    updatedAt: "2026-01-01T11:58:00Z",
+    interruptedAt: null,
+    ...patch,
+  });
+  const records: HybridRecord[] = [
+    record(
+      "archivd1",
+      "omp · 修复首页排序后补充回归测试与文档说明，确认长标题会截断",
+    ),
+    record("archivd2", "OpenCode · 升级依赖", {
+      agent: "opencode",
+      cmd: ["opencode"],
+      side: "tui",
+      state: "interrupted",
+      activity: "turn",
+      queuedCount: 2,
+      interruptedAt: "2026-01-01T10:00:00Z",
+      updatedAt: "2026-01-01T10:00:00Z",
+    }),
+    record("archivd3", "omp · web 子目录的样式调整", {
+      cwd: "/home/developer/webmux/web",
+      updatedAt: "2025-12-30T12:00:00Z",
+    }),
+  ];
+  const archive: ArchiveActions = {
+    now,
+    filtering: false,
+    highlight: "archivd1",
+    resume: async () => {
+      notice = "此预览使用示例数据，未恢复真实会话。";
+      return new Promise(() => {});
+    },
+    remove: async () => {
+      notice = "此预览使用示例数据，未删除真实记录。";
+    },
+    onresumed: () => {},
+  };
   const base = {
     ...session,
     cwd: "/home/developer/webmux",
@@ -104,6 +163,8 @@
     {sessions}
     {now}
     onclose={() => (notice = "此预览使用示例数据，未关闭真实会话。")}
+    archived={archived ? records : []}
+    {archive}
   />
   {#if notice}<p role="status" class="mt-4 text-sm text-muted-foreground">
       {notice}

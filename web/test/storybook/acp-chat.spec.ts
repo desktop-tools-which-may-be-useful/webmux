@@ -73,6 +73,23 @@ for (const { name, viewport, theme, textScale } of layouts) {
       }, textScale);
       await expect.poll(() => overflowViolations(page)).toEqual([]);
     });
+
+    test("hybrid home archived records", async ({ page }) => {
+      await page.route("**/api/**", (route) => route.abort());
+      await page.goto(
+        `/iframe.html?id=workspace-hybrid-home--archived-records&viewMode=story&globals=theme:${theme}`,
+      );
+      const archived = page.getByRole("region", {
+        name: "webmux 的已归档会话",
+      });
+      await expect(archived.getByText("刚归档")).toBeVisible();
+      await expect(archived.getByText("1 条已中断")).toBeVisible();
+      await page.evaluate(async (scale) => {
+        document.documentElement.style.fontSize = `${Number(scale) * 100}%`;
+        await document.fonts.ready;
+      }, textScale);
+      await expect.poll(() => overflowViolations(page)).toEqual([]);
+    });
   });
 }
 

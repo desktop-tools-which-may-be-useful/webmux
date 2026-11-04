@@ -21,13 +21,21 @@ async function cleanSessions(request: APIRequestContext) {
   for (const session of await sessions(request)) {
     // A hybrid session refuses to close (409) while it switches sides and
     // leaves the list once closed; cleanHybridRecords removes its record.
+    // One archived just before the test ended may leave between the list
+    // and its close (404).
+    let closed = 0;
     await expect
       .poll(
-        async () =>
-          (await request.delete(`/api/sessions/${session.id}`)).status(),
+        async () => {
+          closed = (
+            await request.delete(`/api/sessions/${session.id}`)
+          ).status();
+          return closed === 204 || closed === 404;
+        },
         { message: `Close ${session.id}` },
       )
-      .toBe(204);
+      .toBe(true);
+    if (closed === 404) continue;
     let gone = false;
     await expect
       .poll(async () => {

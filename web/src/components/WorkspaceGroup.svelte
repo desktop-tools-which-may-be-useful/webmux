@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { SessionInfo, Worktree } from "../schemas";
+  import type { HybridRecord, SessionInfo, Worktree } from "../schemas";
+  import type { ArchiveActions } from "../archived";
   import IconDots from "~icons/tabler/dots";
   import IconFolder from "~icons/tabler/folder";
   import IconGitBranch from "~icons/tabler/git-branch";
@@ -10,6 +11,7 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Item from "$lib/components/ui/item";
   import SessionRow from "./SessionRow.svelte";
+  import ArchivedSessions from "./ArchivedSessions.svelte";
   import InlineNotice from "./InlineNotice.svelte";
   import { countSessions } from "../session-status";
   let {
@@ -26,6 +28,8 @@
     onremove,
     pinned,
     ontogglepin,
+    archived = [],
+    archive,
   }: {
     title: string;
     path?: string;
@@ -41,6 +45,10 @@
     // Undefined outside curated repository lists.
     pinned?: boolean;
     ontogglepin?: () => void;
+    // Closed and interrupted hybrid sessions placed in this group; already
+    // narrowed by the home page's filters.
+    archived?: HybridRecord[];
+    archive?: ArchiveActions;
   } = $props();
   const detailsId = $props.id();
   let detailsOpen = $state(false);
@@ -220,9 +228,15 @@
         />
       {/each}
     </Item.Group>
-  {:else}
+  {:else if !archived.length}
     <p class="border-t py-4 text-xs text-muted-foreground">
       暂无会话。工作树独立保留，可以随时启动。
     </p>
   {/if}
+  {#if archive && archived.length}<ArchivedSessions
+      {title}
+      records={archived}
+      {groupPath}
+      {archive}
+    />{/if}
 </section>

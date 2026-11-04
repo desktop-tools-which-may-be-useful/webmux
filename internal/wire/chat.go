@@ -268,6 +268,9 @@ func HybridRecord(r hybrid.Record, configMissing bool) contract.HybridRecord {
 		at := *r.InterruptedAt
 		out.InterruptedAt = &at
 	}
+	if r.Workspace != nil {
+		out.Workspace = &contract.WorkspaceReference{RepositoryID: r.Workspace.RepositoryID, WorktreeID: r.Workspace.WorktreeID}
+	}
 	return out
 }
 

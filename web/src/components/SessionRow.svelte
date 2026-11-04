@@ -235,11 +235,17 @@
             >{copyTarget.label}</DropdownMenu.Item
           >
           <DropdownMenu.Separator />
+          {@const archivable =
+            session.status !== "exited" && session.hybrid?.state === "active"}
           <DropdownMenu.Item
-            variant="destructive"
+            variant={archivable ? "default" : "destructive"}
             onSelect={() => onclose(session)}
           >
-            {session.status === "exited" ? "移除会话" : "关闭会话"}
+            {session.status === "exited"
+              ? "移除会话"
+              : archivable
+                ? "归档会话"
+                : "关闭会话"}
           </DropdownMenu.Item>
         </DropdownMenu.Content>{/if}
     </DropdownMenu.Root>

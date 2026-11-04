@@ -52,6 +52,7 @@ func TestResponseArrayFixture(t *testing.T) {
 		"hybridRecords": HybridRecords([]hybrid.Record{{
 			ID: "abcdefgh", Name: "omp", Title: "session title", ConfigID: "abcdefgh", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"},
 			Side: hybrid.SideTUI, State: hybrid.StateClosed, CreatedAt: chatTime, UpdatedAt: chatTime,
+			Workspace: &hybrid.WorkspaceRef{RepositoryID: "repo0001", WorktreeID: "tree0001"},
 		}}, func(string) bool { return false }),
 	}
 	got, err := json.MarshalIndent(values, "", "  ")

@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { APIRequestContext, Page } from "@playwright/test";
 import {
@@ -630,13 +630,68 @@ test.describe("hybrid sessions with the fake agent", () => {
       page.getByRole("link", { name: "fake title", exact: true }),
     ).toBeVisible();
     expect((await request.delete(`/api/sessions/${id}`)).status()).toBe(204);
-    const recoverable = page.getByRole("region", { name: "可恢复" });
-    await recoverable.getByRole("button", { name: /^可恢复/ }).click();
+    const archived = page.getByRole("region", {
+      name: `${basename(workDir)} 的已归档会话`,
+    });
+    await archived.getByRole("button", { name: /^已归档/ }).click();
     await expect(
-      recoverable
-        .locator('[data-slot="item"]')
-        .filter({ hasText: "fake title" }),
+      archived.locator('[data-slot="item"]').filter({ hasText: "fake title" }),
     ).toHaveCount(1);
+  });
+
+  test("archiving from the session page returns home to the record in its worktree", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const root = join(workDir, "archive-repo");
+    await mkdir(root);
+    for (const args of [
+      ["init", "-b", "main"],
+      [
+        "-c",
+        "user.name=WebMux QA",
+        "-c",
+        "user.email=qa@example.invalid",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "initial",
+      ],
+    ])
+      expect(spawnSync("git", ["-C", root, ...args]).status).toBe(0);
+    const registered = await request.post("/api/repositories", {
+      data: { path: root },
+    });
+    expect(registered.status(), await registered.text()).toBe(201);
+    const id = await createHybrid(request, root, "acp", {
+      name: "E2E archive",
+    });
+    await openHybrid(page, id, "acp");
+    await chatTurn(page, "keep-this");
+
+    await page.getByRole("button", { name: "会话菜单", exact: true }).click();
+    await page.getByRole("menuitem", { name: "归档会话", exact: true }).click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("对话保留在 agent 中");
+    await dialog.getByRole("button", { name: "归档", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/$/);
+    const archived = page.getByRole("region", { name: "main 的已归档会话" });
+    const row = archived
+      .locator('[data-slot="item"]')
+      .filter({ hasText: "E2E archive" });
+    await expect(row).toBeInViewport();
+    await expect(row).toContainText("刚归档");
+    await expect(
+      page.getByRole("status").filter({ hasText: "已归档“E2E archive”" }),
+    ).toHaveCount(1);
+
+    await row.getByRole("button", { name: "恢复到终端", exact: true }).click();
+    await expect(row).toHaveCount(0);
+    const resumed = await openSessionLink(page, "E2E archive");
+    await expectSide(resumed, "tui");
+    await expectTerminalLine(resumed, "> keep-this");
   });
 
   test("after a backend restart both sides resume the recorded conversation", async ({
@@ -664,8 +719,10 @@ test.describe("hybrid sessions with the fake agent", () => {
 
     await server.restart();
     await page.goto("/");
-    const recoverable = page.getByRole("region", { name: "可恢复" });
-    await recoverable.getByRole("button", { name: /^可恢复/ }).click();
+    const recoverable = page.getByRole("region", {
+      name: `${basename(workDir)} 的已归档会话`,
+    });
+    await recoverable.getByRole("button", { name: /^已归档/ }).click();
     const records = recoverable.locator('[data-slot="item"]');
     await expect(records).toHaveCount(2);
     // From the home page, the chat session comes back on the chat side.

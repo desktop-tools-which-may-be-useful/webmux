@@ -1,7 +1,8 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
-import RecoverableSessions from "../../src/components/RecoverableSessions.svelte";
+import ArchivedSessions from "../../src/components/ArchivedSessions.svelte";
+import type { ArchiveActions } from "../../src/archived";
 import type { ResumeOutcome } from "../../src/recoverable";
 import type { HybridRecord, SessionInfo } from "../../src/schemas";
 
@@ -34,17 +35,32 @@ const now = Date.parse("2026-10-28T00:05:00Z");
 function show(
   records: HybridRecord[],
   resume: (...args: unknown[]) => Promise<ResumeOutcome>,
+  patch: Partial<ArchiveActions> & { groupPath?: string } = {},
 ) {
   const remove = vi.fn(async () => {});
   const onresumed = vi.fn();
-  render(RecoverableSessions, { records, now, resume, remove, onresumed });
+  const { groupPath, ...actions } = patch;
+  const archive: ArchiveActions = {
+    now,
+    filtering: false,
+    highlight: "",
+    resume,
+    remove,
+    onresumed,
+    ...actions,
+  };
+  render(ArchivedSessions, { title: "main", records, groupPath, archive });
   return { remove, onresumed };
 }
-const group = () => page.getByRole("region", { name: "可恢复" });
+const group = () => page.getByRole("region", { name: "main 的已归档会话" });
 const expand = () =>
   group()
-    .getByRole("button", { name: /可恢复/ })
+    .getByRole("button", { name: /已归档/ })
     .click();
+const removeRecord = async () => {
+  await page.getByRole("button", { name: "更多操作 修复排序" }).click();
+  await page.getByRole("menuitem", { name: "删除记录" }).click();
+};
 
 test("is hidden without records and collapsed by default with a count", async () => {
   show([], vi.fn());
@@ -57,7 +73,7 @@ test("is hidden without records and collapsed by default with a count", async ()
     ],
     vi.fn(),
   );
-  await expect.element(group()).toMatchTextContent(/可恢复\s*2/);
+  await expect.element(group()).toMatchTextContent(/已归档\s*2\s*1 条已中断/);
   expect(page.getByRole("button", { name: "恢复到聊天" }).elements()).toEqual(
     [],
   );
@@ -195,12 +211,12 @@ test("a second question keeps the first answer", async () => {
 test("removing needs confirmation and failures stay inline", async () => {
   const { remove } = show([record], vi.fn());
   await expand();
-  await page.getByRole("button", { name: "移除" }).click();
+  await removeRecord();
   const dialog = page.getByRole("alertdialog");
   await expect.element(dialog).toMatchTextContent(/修复排序/);
   await dialog.getByRole("button", { name: "取消" }).click();
   expect(remove).not.toHaveBeenCalled();
-  await page.getByRole("button", { name: "移除" }).click();
+  await removeRecord();
   await page
     .getByRole("alertdialog")
     .getByRole("button", { name: "确认" })
@@ -224,4 +240,46 @@ test("removing needs confirmation and failures stay inline", async () => {
   await expect
     .element(page.getByRole("alert"))
     .toMatchTextContent(/无法恢复“修复排序”：网络中断/);
+});
+
+test("hides the directory a group already names and pages long lists", async () => {
+  const records = Array.from({ length: 7 }, (_, i) => ({
+    ...record,
+    id: `hybrid${i}0`,
+    title: `记录 ${i}`,
+    state: "closed" as const,
+  }));
+  show(
+    [...records, { ...record, id: "hybridsu", cwd: "/repos/project/web" }],
+    vi.fn(),
+    { groupPath: "/repos/project" },
+  );
+  await expand();
+  expect(
+    group().getByText("/repos/project", { exact: true }).elements(),
+  ).toEqual([]);
+  await expect.element(group().getByText("记录 4")).toBeVisible();
+  expect(group().getByText("记录 5").elements()).toEqual([]);
+  await group().getByRole("button", { name: "显示全部 8 条" }).click();
+  await expect.element(group().getByText("记录 6")).toBeVisible();
+  await expect.element(group().getByText("/repos/project/web")).toBeVisible();
+});
+
+test("filters and a just-archived record open the section on their own", async () => {
+  show([record], vi.fn(), { filtering: true });
+  await expect
+    .element(group().getByRole("button", { name: "恢复到聊天" }))
+    .toBeVisible();
+  await cleanup();
+  const older = Array.from({ length: 6 }, (_, i) => ({
+    ...record,
+    id: `hybrid${i}0`,
+    title: `记录 ${i}`,
+  }));
+  show([...older, { ...record, id: "hybridnw" }], vi.fn(), {
+    highlight: "hybridnw",
+  });
+  // Past the first page, the marked record is still shown.
+  await expect.element(group().getByText("刚归档")).toBeVisible();
+  await expect.element(group().getByText("修复排序")).toBeVisible();
 });

@@ -85,7 +85,7 @@ test("workspace controls stay reachable at 320px with doubled text", async ({
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(321);
-  // The empty "可恢复" group stays in the DOM, hidden; check what is shown.
+  // Hidden groups stay in the DOM; check only what is shown.
   for (const button of await page
     .locator("header button:visible, main button:visible")
     .all()) {

@@ -7,6 +7,7 @@
 
   let {
     sessions,
+    archivedCount,
     query = $bindable(),
     statusFilter = $bindable(),
     filtered,
@@ -15,6 +16,8 @@
   }: {
     // Unfiltered list: the filter counts never depend on the active filter.
     sessions: SessionInfo[];
+    // Archived hybrid records, also unfiltered.
+    archivedCount: number;
     query: string;
     statusFilter: StatusFilter;
     // Filters are active and at least one session still matches.
@@ -32,6 +35,7 @@
       { id: "active", label: "运行中", count: counts.active },
       { id: "waiting", label: "等待中", count: counts.waiting },
       { id: "exited", label: "已退出", count: counts.exited },
+      { id: "archived", label: "已归档", count: archivedCount },
     ] as const;
   });
 

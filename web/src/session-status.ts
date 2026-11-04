@@ -13,13 +13,15 @@ export function isActive(status: SessionState) {
   return status === "running" || status === "idle";
 }
 
-export type StatusFilter = "all" | "active" | "waiting" | "exited";
+// "archived" keeps only archived hybrid records, so no live session matches.
+export type StatusFilter = "all" | "active" | "waiting" | "exited" | "archived";
 
 export function matchesStatusFilter(
   status: SessionState,
   filter: StatusFilter,
 ) {
   if (filter === "all") return true;
+  if (filter === "archived") return false;
   return filter === "active" ? isActive(status) : status === filter;
 }
 

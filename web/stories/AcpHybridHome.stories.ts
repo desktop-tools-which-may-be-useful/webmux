@@ -11,3 +11,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const SessionCards: Story = {};
+
+// Archived records below the live sessions: an interrupted one, a long title
+// and one started in a subdirectory; the first was just archived.
+export const ArchivedRecords: Story = { args: { archived: true } };

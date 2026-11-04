@@ -125,7 +125,11 @@
       "queuedCount": 0,
       "createdAt": "2026-01-02T03:04:05Z",
       "updatedAt": "2026-01-02T03:04:05Z",
-      "interruptedAt": null
+      "interruptedAt": null,
+      "workspace": {
+        "repositoryId": "repo0001",
+        "worktreeId": "tree0001"
+      }
     }
   ],
   "launch": [

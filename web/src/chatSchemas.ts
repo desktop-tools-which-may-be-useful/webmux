@@ -62,6 +62,11 @@ export const HybridRecordSchema = z.object({
   createdAt: datetime,
   updatedAt: datetime,
   interruptedAt: datetime.nullable(),
+  // The registered worktree the session last belonged to; omitted when it
+  // had none or the record predates it.
+  workspace: z
+    .object({ repositoryId: z.string(), worktreeId: z.string() })
+    .optional(),
 });
 export type HybridRecord = z.infer<typeof HybridRecordSchema>;
 export const HybridRecordsSchema = z.array(HybridRecordSchema);

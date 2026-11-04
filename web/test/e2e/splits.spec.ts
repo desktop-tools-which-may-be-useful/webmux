@@ -352,4 +352,16 @@ test("a split preserves hybrid chat and terminal switching beside a shell", asyn
     .click();
   await expect(page).toHaveTitle(/Shell beside chat · WebMux$/);
   await expect(page.locator(".split-terminal")).toHaveCount(2);
+
+  // Archiving the hybrid pane removes only that pane; the page stays.
+  await page.getByRole("button", { name: /^切换到窗格 2：/ }).click();
+  await chat.getByRole("button", { name: "终端菜单", exact: true }).click();
+  await page.getByRole("menuitem", { name: "归档会话", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "归档", exact: true })
+    .click();
+  await expect(page.locator(".split-terminal")).toHaveCount(1);
+  await expect(page).toHaveURL(/\/s\//);
+  await expect(page).toHaveTitle(/Shell beside chat · WebMux$/);
 });

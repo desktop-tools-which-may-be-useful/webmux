@@ -3,7 +3,18 @@
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Collapsible from "$lib/components/ui/collapsible";
-  import type { Repository, SessionInfo, Worktree } from "../schemas";
+  import type {
+    HybridRecord,
+    Repository,
+    SessionInfo,
+    Worktree,
+  } from "../schemas";
+  import {
+    EMPTY_ARCHIVE,
+    repositoryRecords,
+    type ArchiveActions,
+    type RepositoryArchive,
+  } from "../archived";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { homeLayout, worktreeTitle } from "../homeWorktrees";
   import { statusSummary } from "../session-status";
@@ -29,6 +40,9 @@
     ontogglepin,
     onremove,
     onclose,
+    archived = EMPTY_ARCHIVE,
+    visibleArchiveIds,
+    archive,
   }: {
     repo: Repository;
     // All sessions associated with this repository.
@@ -51,12 +65,18 @@
     ontogglepin: (worktreeId: string, pinned: boolean) => void;
     onremove: (worktree: Worktree) => void;
     onclose: (session: SessionInfo) => void;
+    // Every archived record placed in this repository.
+    archived?: RepositoryArchive;
+    // Archived records the filters keep; undefined while not filtering.
+    visibleArchiveIds?: ReadonlySet<string>;
+    archive?: ArchiveActions;
   } = $props();
 
   let detailsOpen = $state(false);
   let menuOpen = $state(false);
   $effect(() => {
-    if (hidden || (filtering && !visible.length)) menuOpen = false;
+    if (hidden || (filtering && !visible.length && !archivedVisible))
+      menuOpen = false;
   });
   let contentReady = $state(false);
   $effect(() => {
@@ -73,18 +93,29 @@
       (s) => !repo.worktrees.some((w) => w.id === s.workspace?.worktreeId),
     ),
   );
+  // Archived records of a group that the filters keep.
+  function shownArchive(records: readonly HybridRecord[] = []) {
+    return visibleArchiveIds
+      ? records.filter((record) => visibleArchiveIds.has(record.id))
+      : [...records];
+  }
+  const archivedVisible = $derived(
+    shownArchive(repositoryRecords(archived)).length > 0,
+  );
   const renderLayout = $derived(
-    homeLayout(homeWorktrees.value, repo, sessions),
+    homeLayout(homeWorktrees.value, repo, sessions, archived.worktrees),
   );
   const layout = $derived(
-    visibleIds ? homeLayout(homeWorktrees.value, repo, visible) : renderLayout,
+    visibleIds
+      ? homeLayout(homeWorktrees.value, repo, visible, archived.worktrees)
+      : renderLayout,
   );
 </script>
 
 <Collapsible.Root
   class="min-w-0 space-y-4"
   data-repository-id={repo.id}
-  hidden={hidden || (filtering && !visible.length)}
+  hidden={hidden || (filtering && !visible.length && !archivedVisible)}
   role="region"
   aria-label={`仓库 ${repo.name}`}
   {open}
@@ -166,6 +197,7 @@
       class="space-y-8"
     >
       {#each renderLayout.shown as { tree, pinned } (tree.id)}
+        {@const treeArchive = shownArchive(archived.worktrees.get(tree.id))}
         <WorkspaceGroup
           title={worktreeTitle(tree)}
           path={tree.path}
@@ -176,6 +208,7 @@
           hidden={hidden ||
             !open ||
             (filtering &&
+              !treeArchive.length &&
               !visible.some(
                 (session) => session.workspace?.worktreeId === tree.id,
               ))}
@@ -185,9 +218,12 @@
           {onclose}
           onstart={() => onstart(tree.id)}
           onremove={tree.kind === "linked" ? () => onremove(tree) : undefined}
+          archived={treeArchive}
+          {archive}
         />
       {/each}
-      {#if missing.length}<WorkspaceGroup
+      {@const missingArchive = shownArchive(archived.missing)}
+      {#if missing.length || archived.missing.length}<WorkspaceGroup
           title="已不可用工作区"
           sessions={missing}
           {visibleIds}
@@ -196,10 +232,13 @@
             !open ||
             Boolean(
               visibleIds &&
+              !missingArchive.length &&
               !missing.some((session) => visibleIds.has(session.id)),
             )}
           {now}
           {onclose}
+          archived={missingArchive}
+          {archive}
         />{/if}
       {#if !layout.shown.length && layout.unpinned.length}<p
           class="text-sm text-muted-foreground"
@@ -207,7 +246,7 @@
           主页还没有
           worktree。从仓库菜单选择「选择主页工作树」或「新建工作树」。
         </p>{/if}
-      {#if !repo.worktrees.length && !missing.length}<p
+      {#if !repo.worktrees.length && !missing.length && !archived.missing.length}<p
           class="text-sm text-muted-foreground"
         >
           {repo.error

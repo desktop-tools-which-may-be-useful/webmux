@@ -98,7 +98,7 @@ OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN �
   - 圆环显示上下文用量，点击查看 Token 详情。
 - **多设备协作**：回合进行中的消息进入所有设备共享的队列，omp 与 Codex 还支持插话；权限请求与表单在所有设备同步。
   - 上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
-- **省资源、可恢复**：聊天端空闲后结束 agent 进程（默认 30 分钟），打开会话或发送消息时自动唤醒；服务重启后从首页“可恢复”分组恢复到聊天或终端。
+- **省资源、可恢复**：聊天端空闲后结束 agent 进程（默认 30 分钟），打开会话或发送消息时自动唤醒；归档或服务重启后，从首页所属工作树的“已归档”中恢复到聊天或终端。
 
 新安装预置的 Open Code、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 启动配置已开启混合模式，新建会话时选择”从终端开始”或”从聊天开始”即可。详见 [混合会话](hybrid-sessions.md)。
 

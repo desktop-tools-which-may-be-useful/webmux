@@ -241,6 +241,9 @@ func (s *Service) resume(id string, in ResumeInput) (*session.Session, error) {
 	a := newActor(s, cmd, rec.Cwd, rec.ConfigID, side)
 	a.agentSessionID = sid
 	a.title, a.titleSession = rec.Title, sid
+	a.recordTitle = rec.Title
+	// recordWorkspace starts nil: the fresh shell has not reported an
+	// association yet, so its unset workspace must not clear the saved one.
 	a.chat.QueueLost = rec.QueuedCount
 	if rec.PermissionMode == PermissionAsk {
 		a.chat.PermissionMode = PermissionAsk

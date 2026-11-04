@@ -142,12 +142,14 @@
     await tick();
     if (mounted && keyboard && !hasTouchInput()) terminals[sessionId]?.focus();
   }
-  function close(sessionId: string) {
+  // Removes a pane; the last one returns home, where an archived session's
+  // record is revealed.
+  function close(sessionId: string, archived = false) {
     const next = removePane(layout, sessionId);
     delete terminals[sessionId];
     delete info[sessionId];
     if (!next) {
-      navigate("/");
+      navigate(archived ? `/?archived=${encodeURIComponent(sessionId)}` : "/");
       return;
     }
     const previous = ids.indexOf(sessionId);
@@ -402,6 +404,7 @@
               revisions[pane.sessionId] = (revisions[pane.sessionId] ?? 0) + 1;
             }}
             onremoved={() => close(pane.sessionId)}
+            onarchived={() => close(pane.sessionId, true)}
             oninfo={(value, connection) => {
               info[value.id] = value;
               connections[value.id] = connection;

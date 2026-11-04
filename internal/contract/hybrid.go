@@ -119,6 +119,9 @@ type HybridRecord struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	InterruptedAt *time.Time `json:"interruptedAt"`
+	// Workspace is the registered worktree the session last belonged to;
+	// omitted when it had none or the record predates it.
+	Workspace *WorkspaceReference `json:"workspace,omitempty"`
 }
 
 // HybridCandidate is an agent session offered when a record's agent
