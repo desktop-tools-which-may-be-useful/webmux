@@ -19,7 +19,6 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as NativeSelect from "$lib/components/ui/native-select";
   import * as Select from "$lib/components/ui/select";
   import IconRefresh from "~icons/tabler/refresh";
   import * as Command from "$lib/components/ui/command";
@@ -346,22 +345,29 @@
           />{refreshing ? "正在刷新" : "刷新上游"}</Button
         >
       </div>
-      <NativeSelect.Root
-        id="worktree-start-branch"
-        class="w-full"
+      <Select.Root
+        type="single"
         value={startBranch}
         disabled={disabled || loading || !data}
-        onchange={(event) => chooseStartBranch(event.currentTarget.value)}
+        onValueChange={chooseStartBranch}
       >
-        {#if !startBranch}<NativeSelect.Option value=""
-            >选择本地分支</NativeSelect.Option
-          >{/if}
-        {#each data?.branches || [] as item (item.name)}
-          <NativeSelect.Option value={item.name}
-            >{item.name}</NativeSelect.Option
-          >
-        {/each}
-      </NativeSelect.Root>
+        <Select.Trigger id="worktree-start-branch">
+          {#if startBranch}
+            <span class="truncate">{startBranch}</span>
+          {:else}
+            <span class="text-muted-foreground">选择本地分支</span>
+          {/if}
+        </Select.Trigger>
+        <Select.Content
+          class="max-h-[min(24rem,var(--bits-select-content-available-height))]"
+        >
+          {#each data?.branches || [] as item (item.name)}
+            <Select.Item value={item.name} label={item.name}
+              >{item.name}</Select.Item
+            >
+          {/each}
+        </Select.Content>
+      </Select.Root>
       {#if refreshing}
         <p
           role="status"

@@ -122,6 +122,33 @@ func TestBranchesDefaultBranchUsesMainWorktree(t *testing.T) {
 	}
 }
 
+func TestBranchesOrderedByLatestCommit(t *testing.T) {
+	t.Parallel()
+	isolateGit(t)
+	root := initRepo(t)
+	commitAt := func(branch, date string) {
+		gitTest(t, root, "checkout", "-b", branch, "main")
+		gitTestEnv(t, root, []string{"GIT_COMMITTER_DATE=" + date, "GIT_AUTHOR_DATE=" + date}, "commit", "--allow-empty", "-m", branch)
+	}
+	commitAt("a-oldest", "2000-01-01T00:00:00Z")
+	commitAt("z-newest", "2020-01-01T00:00:00Z")
+	commitAt("m-middle", "2010-01-01T00:00:00Z")
+	gitTest(t, root, "checkout", "main")
+	s, _ := testService(t, t.TempDir(), root)
+	r := registerTest(t, s, root)
+	branches, err := s.Branches(context.Background(), r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, branch := range branches.Branches {
+		names = append(names, branch.Name)
+	}
+	if got, want := strings.Join(names, ","), "main,z-newest,m-middle,a-oldest"; got != want {
+		t.Fatalf("branch order = %s, want %s", got, want)
+	}
+}
+
 func TestBranchesDescribeCommitsIncludingDetachedDefault(t *testing.T) {
 	t.Parallel()
 	isolateGit(t)

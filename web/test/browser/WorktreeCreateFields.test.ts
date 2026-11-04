@@ -171,6 +171,10 @@ async function closeBase() {
 }
 const startBranchInput = () =>
   page.getByRole("combobox", { name: "起始分支", exact: true });
+async function chooseStartBranch(name: string) {
+  await startBranchInput().click();
+  await page.getByRole("option", { name, exact: true }).click();
+}
 const reference = () => page.getByRole("status", { name: "提交引用" });
 
 afterEach(async () => {
@@ -211,7 +215,7 @@ test("switching the start branch lists that branch's history", async () => {
   });
   render(Harness, { repository });
   await expect.element(reference()).toHaveTextContent(head);
-  await startBranchInput().selectOptions("release");
+  await chooseStartBranch("release");
   await expect.element(reference()).toHaveTextContent(other);
   await openBase();
   await expect.element(options().first()).toMatchTextContent(/bbbbbbb/);
@@ -438,7 +442,7 @@ test("a late response cannot replace a newer branch selection", async () => {
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);
 
-  await startBranchInput().selectOptions("wt/taken-branch");
+  await chooseStartBranch("wt/taken-branch");
   await expect.element(reference()).toHaveTextContent(selectedHead);
   expect(mainSignal?.aborted).toBe(true);
   const lateResponse = Response.json(remoteRefresh("main", "c".repeat(40)));
@@ -447,7 +451,9 @@ test("a late response cannot replace a newer branch selection", async () => {
   await vi.waitFor(() => expect(lateRead).toHaveBeenCalled());
   await Promise.resolve();
   await expect.element(reference()).toHaveTextContent(selectedHead);
-  await expect.element(startBranchInput()).toHaveValue("wt/taken-branch");
+  await expect
+    .element(startBranchInput())
+    .toMatchTextContent(/wt\/taken-branch/);
 });
 
 test("a refresh response preserves a commit picked after the request", async () => {

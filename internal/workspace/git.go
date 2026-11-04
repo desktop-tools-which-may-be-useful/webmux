@@ -361,7 +361,7 @@ func findTree(repository Repository, id string) (Worktree, error) {
 }
 func (s *Service) branches(ctx context.Context, r *repositoryState, repository Repository) (Branches, error) {
 	result := Branches{Branches: []Branch{}, Bases: []Base{}, DefaultParent: filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")}
-	data, err := s.git(ctx, r.entry.AnchorPath, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(subject)%00", "refs/heads/", "refs/remotes/")
+	data, err := s.git(ctx, r.entry.AnchorPath, "for-each-ref", "--sort=-committerdate", "--format=%(refname)%00%(objectname)%00%(subject)%00", "refs/heads/", "refs/remotes/")
 	if err != nil {
 		return result, err
 	}
