@@ -6,6 +6,7 @@
     "baseSubject": "initial",
     "branch": "main",
     "fetchWarning": "该分支未配置上游，保留本地基线",
-    "upstream": ""
+    "upstream": "",
+    "upstreamHead": ""
   }
 }

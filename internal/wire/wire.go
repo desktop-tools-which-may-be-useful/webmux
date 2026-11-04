@@ -136,6 +136,10 @@ func Branches(b workspace.Branches) contract.Branches {
 	}
 }
 
+func Commits(in []workspace.Commit) contract.Commits {
+	return contract.Commits{Commits: each(in, func(v workspace.Commit) contract.Commit { return contract.Commit(v) })}
+}
+
 func RefreshBranchBase(r workspace.BranchBaseRefresh) contract.RefreshBranchBaseResponse {
 	return contract.RefreshBranchBaseResponse(r)
 }

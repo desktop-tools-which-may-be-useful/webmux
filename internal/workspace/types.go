@@ -97,6 +97,14 @@ type Base struct {
 	Head    string `json:"head"`
 	Subject string `json:"subject"`
 }
+
+// Commit is one entry of the history shown when choosing a start commit.
+type Commit struct {
+	Hash        string `json:"hash"`
+	Subject     string `json:"subject"`
+	Author      string `json:"author"`
+	CommittedAt string `json:"committedAt"`
+}
 type Branches struct {
 	Branches           []Branch `json:"branches"`
 	Bases              []Base   `json:"bases"`
@@ -111,6 +119,7 @@ type BranchBaseRefresh struct {
 	BaseSubject  string `json:"baseSubject"`
 	BaseSource   string `json:"baseSource"`
 	Upstream     string `json:"upstream"`
+	UpstreamHead string `json:"upstreamHead"`
 	FetchWarning string `json:"fetchWarning"`
 }
 type Reference struct {

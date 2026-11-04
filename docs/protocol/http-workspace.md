@@ -2,16 +2,17 @@
 
 ## 仓库与 worktree
 
-| 方法       | 路径                                                            | 说明                                                                                         |
-| ---------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| GET / POST | `/api/repositories`                                             | 列出仓库快照；POST `{path}` 登记仓库（新增 201，已存在 200）                                 |
-| DELETE     | `/api/repositories/{id}`                                        | 仅移除登记，204                                                                              |
-| GET        | `/api/repositories/{id}/worktrees`                              | 刷新仓库快照（含 `checkedAt` 与 `worktrees`）                                                |
-| GET        | `/api/repositories/{id}/branches`                               | `{branches, bases, defaultBase, defaultBaseSubject, defaultBranch, defaultParent}`，不 fetch |
-| POST       | `/api/repositories/{id}/branches/refresh`                       | `{branch}`；fetch 已配置上游并返回远程基线或本地回退                                         |
-| POST       | `/api/repositories/{id}/worktrees`                              | `{path, mode: "new", branch, base}` 或 `{path, mode: "existing", branch}`，201               |
-| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, blockers, forceAllowed}`          |
-| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204   |
+| 方法       | 路径                                                            | 说明                                                                                                                                                       |
+| ---------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET / POST | `/api/repositories`                                             | 列出仓库快照；POST `{path}` 登记仓库（新增 201，已存在 200）                                                                                               |
+| DELETE     | `/api/repositories/{id}`                                        | 仅移除登记，204                                                                                                                                            |
+| GET        | `/api/repositories/{id}/worktrees`                              | 刷新仓库快照（含 `checkedAt` 与 `worktrees`）                                                                                                              |
+| GET        | `/api/repositories/{id}/branches`                               | `{branches, bases, defaultBase, defaultBaseSubject, defaultBranch, defaultParent}`，不 fetch                                                               |
+| GET        | `/api/repositories/{id}/commits?from=<oid>[&from=<oid>]`        | `{commits: [{hash, subject, author, committedAt}]}`：自 1–2 个完整提交 ID（本地与上游尖端）合并最近 50 条，新到旧，超出上限的起始提交仍会列出；非法 ID 400 |
+| POST       | `/api/repositories/{id}/branches/refresh`                       | `{branch}`；fetch 已配置上游并返回远程基线或本地回退；`upstreamHead` 为 fetch 到的上游尖端（本地分叉时也返回），未成功时为空                               |
+| POST       | `/api/repositories/{id}/worktrees`                              | `{path, mode: "new", branch, base}` 或 `{path, mode: "existing", branch}`，201                                                                             |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, blockers, forceAllowed}`                                                                        |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204                                                                 |
 
 `bases` 每项为 `{name, head, subject}`，`subject` 是引用指向的提交标题。浏览器用标题展示候选项，创建请求的 `base` 仍传引用或 OID。
 

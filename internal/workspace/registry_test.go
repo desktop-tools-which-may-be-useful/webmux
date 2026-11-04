@@ -16,9 +16,14 @@ import (
 
 func gitTest(t *testing.T, cwd string, args ...string) string {
 	t.Helper()
+	return gitTestEnv(t, cwd, nil, args...)
+}
+func gitTestEnv(t *testing.T, cwd string, env []string, args ...string) string {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
+	cmd.Env = append(os.Environ(), env...)
 	// Test fixture commands share the process with session cleanup. Register
 	// ownership so the adopted-child reaper cannot collect their exit status.
 	var output bytes.Buffer

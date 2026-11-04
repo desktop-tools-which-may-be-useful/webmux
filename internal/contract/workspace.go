@@ -62,18 +62,34 @@ type Branches struct {
 	DefaultParent      string       `json:"defaultParent"`
 }
 
+// Commit is one recent commit offered as a worktree start point.
+type Commit struct {
+	Hash        string `json:"hash"`
+	Subject     string `json:"subject"`
+	Author      string `json:"author"`
+	CommittedAt string `json:"committedAt"`
+}
+
+// Commits is the body of GET /api/repositories/{id}/commits?from=<oid>.
+type Commits struct {
+	Commits []Commit `json:"commits"`
+}
+
 // RefreshBranchBaseRequest selects the local branch whose upstream is fetched.
 type RefreshBranchBaseRequest struct {
 	Branch string `json:"branch"`
 }
 
 // RefreshBranchBaseResponse describes a remote base or a local fallback.
+// UpstreamHead is the fetched upstream tip, also when the local base is kept
+// because the branch is ahead or diverged; it is empty when no fetch succeeded.
 type RefreshBranchBaseResponse struct {
 	Branch       string `json:"branch"`
 	Base         string `json:"base"`
 	BaseSubject  string `json:"baseSubject"`
 	BaseSource   string `json:"baseSource"`
 	Upstream     string `json:"upstream"`
+	UpstreamHead string `json:"upstreamHead"`
 	FetchWarning string `json:"fetchWarning"`
 }
 

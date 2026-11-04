@@ -3,7 +3,15 @@
   import { api } from "../api";
   import { suggestWorktreeBranch } from "../branchName";
   import {
+    commitChoiceLabel,
+    commitChoices,
+    type CommitChoice,
+    type CommitTip,
+  } from "../commitChoices";
+  import { Badge } from "$lib/components/ui/badge";
+  import {
     BranchesSchema,
+    CommitsSchema,
     RefreshBranchBaseRequestSchema,
     RefreshBranchBaseResponseSchema,
     type Repository,
@@ -12,6 +20,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import * as NativeSelect from "$lib/components/ui/native-select";
+  import * as Select from "$lib/components/ui/select";
   import IconRefresh from "~icons/tabler/refresh";
   import * as Command from "$lib/components/ui/command";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
@@ -46,23 +55,72 @@
   let refreshController: AbortController | null = null;
   let pathEdited = $state(false);
   let branchEdited = $state(false);
-  const baseChoices = $derived([
-    ...(data?.defaultBase
-      ? [
-          {
-            value: data.defaultBase,
-            label: `${data.defaultBaseSubject || "无标题提交"}（当前主工作区）`,
-          },
-        ]
-      : []),
-    ...(data?.bases.map((item) => ({
-      value: item.name,
-      label: `${item.subject || "无标题提交"}（${item.name.replace(/^refs\/heads\//, "本地：").replace(/^refs\/remotes\//, "远程：")}）`,
-    })) || []),
-  ]);
-  const baseLabel = $derived(
-    baseChoices.find((item) => item.value === base)?.label ?? base,
+  let commits = $state<z.infer<typeof CommitsSchema>["commits"]>([]);
+  let commitsLoading = $state(false);
+  let commitsError = $state("");
+  let commitsGeneration = 0;
+  let commitsController: AbortController | null = null;
+  // Tips the history was read from; their rows carry these tags.
+  let commitTips = $state<CommitTip[]>([]);
+  const commitRows = $derived(
+    commitChoices(commits, { tips: commitTips, base, baseSubject }),
   );
+  const selectedCommit = $derived(
+    commitRows.find((item) => item.value === base),
+  );
+
+  function clearCommits() {
+    commitsGeneration += 1;
+    commitsController?.abort();
+    commitsController = null;
+    commitsLoading = false;
+    commitsError = "";
+  }
+
+  // Tags for a branch's local tip and, after a fetch, its upstream tip.
+  function branchTips(local: string, upstreamHead: string): CommitTip[] {
+    if (!upstreamHead) return [{ hash: local, tag: "本地最新" }];
+    if (upstreamHead === local) return [{ hash: local, tag: "本地与远程最新" }];
+    return [
+      { hash: upstreamHead, tag: "远程最新" },
+      { hash: local, tag: "本地最新" },
+    ];
+  }
+
+  // Lists the history reachable from the tips, merged newest first. Later
+  // calls supersede earlier ones.
+  function loadCommits(tips: CommitTip[]) {
+    clearCommits();
+    const generation = commitsGeneration;
+    const repositoryID = repository.id;
+    const controller = new AbortController();
+    commitsController = controller;
+    commitTips = tips;
+    commitsLoading = true;
+    const query = new URLSearchParams(
+      [...new Set(tips.map((tip) => tip.hash))].map((hash) => ["from", hash]),
+    );
+    void api(
+      `/repositories/${repositoryID}/commits?${query}`,
+      CommitsSchema,
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then((value) => {
+        if (generation === commitsGeneration) commits = value.commits;
+      })
+      .catch((err: unknown) => {
+        if (generation !== commitsGeneration) return;
+        commits = [];
+        commitsError = `无法读取最近提交：${errorMessage(err)}`;
+      })
+      .finally(() => {
+        if (generation !== commitsGeneration) return;
+        commitsLoading = false;
+        commitsController = null;
+      });
+  }
 
   function suggestedBranch(avoid?: string) {
     if (!data) return "";
@@ -115,11 +173,20 @@
         upstream = value.upstream;
         refreshWarning = value.fetchWarning;
         lastRefreshedAt = value.baseSource === "remote" ? new Date() : null;
+        // A remote base descends from the local tip; a local base is the
+        // freshly read tip. Either way the fetched upstream tip is listed, so
+        // a diverged upstream stays selectable without becoming the default.
+        const localHead =
+          value.baseSource === "local"
+            ? value.base
+            : data?.branches.find((item) => item.name === branchName)?.head ||
+              value.base;
         if (editVersion === baseEditVersion) {
           base = value.base;
           baseSource = value.baseSource;
           baseSubject = value.baseSubject;
         }
+        loadCommits(branchTips(localHead, value.upstreamHead));
       })
       .catch((err: unknown) => {
         if (generation !== refreshGeneration) return;
@@ -144,6 +211,8 @@
       base = data?.defaultBase || "";
       baseSource = "";
       baseSubject = data?.defaultBaseSubject || "";
+      if (base) loadCommits([{ hash: base, tag: "当前主工作区" }]);
+      else clearCommits();
       return;
     }
     base = selected.head;
@@ -151,6 +220,7 @@
     baseSubject =
       data?.bases.find((item) => item.name === `refs/heads/${name}`)?.subject ||
       "";
+    loadCommits(branchTips(selected.head, ""));
     refreshUpstream(name);
   }
 
@@ -158,6 +228,8 @@
     const id = repository.id;
     let active = true;
     clearRefresh();
+    clearCommits();
+    commits = [];
     data = null;
     startBranch = "";
     baseSource = "";
@@ -176,7 +248,7 @@
         baseSubject = value.defaultBaseSubject;
         fillSuggestedBranch();
         startBranch = value.defaultBranch || "";
-        if (mode === "new" && startBranch) chooseStartBranch(startBranch);
+        if (mode === "new") chooseStartBranch(startBranch);
       })
       .catch((err) => {
         if (active) error = errorMessage(err);
@@ -187,6 +259,7 @@
     return () => {
       active = false;
       clearRefresh();
+      clearCommits();
     };
   });
   $effect(() => {
@@ -203,6 +276,23 @@
   }
 </script>
 
+{#snippet commitDetails(item: CommitChoice)}
+  <span class="grid min-w-0 flex-1 gap-0.5">
+    <span class="truncate text-sm font-medium" title={item.subject}
+      >{item.subject}</span
+    >
+    <span
+      class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
+    >
+      <span class="font-mono">{item.shortHash}</span>
+      {#each item.tags as tag (tag)}
+        <Badge variant={tag === "远程最新" ? "info" : "secondary"}>{tag}</Badge>
+      {/each}
+      {#if item.age}<span>{item.age}</span>{/if}
+    </span>
+  </span>
+{/snippet}
+
 <div class="space-y-4 rounded-lg border p-3">
   <fieldset class="space-y-2">
     <legend class="mb-2 text-sm font-medium">工作树分支</legend>
@@ -217,7 +307,7 @@
           branchEdited = false;
           branch = "";
           fillSuggestedBranch();
-          if (startBranch) chooseStartBranch(startBranch);
+          chooseStartBranch(startBranch);
         }}>创建新分支</Button
       >
       <Button
@@ -228,6 +318,7 @@
           if (mode === "existing") return;
           mode = "existing";
           clearRefresh();
+          clearCommits();
           baseSource = "";
           branch = "";
         }}>使用已有分支</Button
@@ -336,36 +427,54 @@
     </div>
     <div class="space-y-2">
       <Label for="worktree-base">起始提交</Label>
-      <Input
-        id="worktree-base"
-        value={baseLabel}
-        oninput={(event) => {
-          const value = event.currentTarget.value;
+      <Select.Root
+        type="single"
+        bind:value={base}
+        disabled={disabled || loading || !data || !commitRows.length}
+        onValueChange={() => {
           baseEditVersion += 1;
           baseSource = "";
           baseSubject = "";
           upstream = "";
           lastRefreshedAt = null;
-          base =
-            baseChoices.find((item) => item.label === value)?.value ?? value;
         }}
-        list="worktree-bases"
-        required
-        placeholder="选择提交，或输入分支名 / 提交 ID"
-        aria-describedby="worktree-base-help"
-        autocomplete="off"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck={false}
-      />
-      <datalist id="worktree-bases"
-        >{#each baseChoices as item (item.value)}<option value={item.label}
-          ></option>{/each}</datalist
       >
+        <Select.Trigger
+          id="worktree-base"
+          aria-describedby="worktree-base-help"
+        >
+          {#if selectedCommit}
+            {@render commitDetails(selectedCommit)}
+          {:else}
+            <span class="text-muted-foreground">
+              {commitsLoading ? "正在读取最近提交…" : "选择提交"}
+            </span>
+          {/if}
+        </Select.Trigger>
+        <Select.Content
+          class="max-h-[min(24rem,var(--bits-select-content-available-height))]"
+        >
+          {#each commitRows as item (item.value)}
+            <Select.Item
+              value={item.value}
+              label={item.subject}
+              aria-label={commitChoiceLabel(item)}
+            >
+              {@render commitDetails(item)}
+            </Select.Item>
+          {/each}
+        </Select.Content>
+      </Select.Root>
       <p id="worktree-base-help" class="text-xs text-muted-foreground">
-        从这条提交创建新分支；也可直接输入本地分支、远程跟踪引用或提交 ID。
+        {#if commitsLoading}正在读取最近提交…{:else}可选所选分支最近 {commits.length}
+          条提交；点击“刷新上游”会拉取远程最新提交并加入列表。{/if}
       </p>
-      {#if data && !baseChoices.length}<p class="text-sm text-muted-foreground">
+      {#if commitsError}<p role="status" class="text-xs text-warning">
+          {commitsError}
+        </p>{/if}
+      {#if data && !commitRows.length && !commitsLoading}<p
+          class="text-sm text-muted-foreground"
+        >
           尚无可用提交。请先在终端创建提交；仍可在主工作区启动会话。
         </p>{/if}
     </div>

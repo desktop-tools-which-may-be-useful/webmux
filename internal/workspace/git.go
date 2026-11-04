@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -412,6 +413,119 @@ func (s *Service) Branches(ctx context.Context, id string) (Branches, error) {
 		return Branches{}, err
 	}
 	return s.branches(ctx, r, repository)
+}
+
+// recentCommitLimit bounds the start-commit history offered to the browser.
+const recentCommitLimit = 50
+
+// maxCommitStarts bounds the tips merged into one history: the local branch
+// tip and its freshly fetched upstream tip.
+const maxCommitStarts = 2
+
+// RecentCommits lists up to recentCommitLimit commits reachable from any of
+// the commit object ids in `from` (a branch tip and optionally its upstream
+// tip), newest first, so a fetched upstream commit appears beside local
+// history. A requested tip outside the capped window is appended so it stays
+// visible. Only full hexadecimal object ids are accepted so a value can never
+// act as an option or ref expression.
+func (s *Service) RecentCommits(ctx context.Context, id string, from []string) ([]Commit, error) {
+	if len(from) == 0 || len(from) > maxCommitStarts {
+		return nil, problemf(ErrInvalid, "from 需要 1 到 %d 个完整的提交 ID", maxCommitStarts)
+	}
+	for _, oid := range from {
+		if !isObjectID(oid) {
+			return nil, problemf(ErrInvalid, "from 必须是完整的提交 ID")
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+	r, err := s.repository(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := acquire(ctx, r); err != nil {
+		return nil, err
+	}
+	defer release(r)
+	if _, err := s.current(ctx, r); err != nil {
+		return nil, err
+	}
+	for _, oid := range from {
+		if _, err := s.git(ctx, r.entry.AnchorPath, "rev-parse", "--verify", "--end-of-options", oid+"^{commit}"); err != nil {
+			if errorKind(err) != ErrInternal {
+				return nil, err
+			}
+			return nil, problemf(ErrNotFound, "提交不存在")
+		}
+	}
+	args := append([]string{"log", "-n", strconv.Itoa(recentCommitLimit), "--no-show-signature",
+		"--format=%H%x00%s%x00%an%x00%cI%x00"}, from...)
+	data, err := s.git(ctx, r.entry.AnchorPath, append(args, "--")...)
+	if err != nil {
+		return nil, err
+	}
+	commits := parseCommitLog(data)
+	// The cap spans the merged walk, so an older requested tip can fall
+	// outside it. Resolve any missing tip on its own instead of leaving the
+	// browser without a row for the fetched upstream commit.
+	seen := make(map[string]bool, len(commits))
+	for _, commit := range commits {
+		seen[commit.Hash] = true
+	}
+	var missing []string
+	for _, oid := range from {
+		if !seen[oid] {
+			seen[oid] = true
+			missing = append(missing, oid)
+		}
+	}
+	if len(missing) > 0 {
+		args := append([]string{"log", "--no-walk=unsorted", "--no-show-signature",
+			"--format=%H%x00%s%x00%an%x00%cI%x00"}, missing...)
+		extra, err := s.git(ctx, r.entry.AnchorPath, append(args, "--")...)
+		if err != nil {
+			return nil, err
+		}
+		commits = append(commits, parseCommitLog(extra)...)
+		sort.SliceStable(commits, func(i, j int) bool {
+			return commitTime(commits[i].CommittedAt).After(commitTime(commits[j].CommittedAt))
+		})
+	}
+	return commits, nil
+}
+
+func parseCommitLog(data []byte) []Commit {
+	commits := []Commit{}
+	fields := bytes.Split(data, []byte{0})
+	for i := 0; i+3 < len(fields); i += 4 {
+		commits = append(commits, Commit{
+			Hash:        strings.TrimPrefix(string(fields[i]), "\n"),
+			Subject:     string(fields[i+1]),
+			Author:      string(fields[i+2]),
+			CommittedAt: string(fields[i+3]),
+		})
+	}
+	return commits
+}
+
+func commitTime(value string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
+}
+
+func isObjectID(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	for _, c := range value {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // unsupportedContents is deliberately conservative: removal never traverses or

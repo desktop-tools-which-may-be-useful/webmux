@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "commits": [
+      {
+        "author": "Wire test",
+        "committedAt": "2026-01-02T03:04:05Z",
+        "hash": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
+        "subject": "initial"
+      }
+    ]
+  }
+}

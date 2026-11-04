@@ -43,7 +43,7 @@ func TestRefreshBranchBaseUsesConfiguredUpstream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Branch != "main" || result.Base != remoteHead || result.BaseSubject != "remote latest" || result.BaseSource != "remote" || result.Upstream != "origin/main" || result.FetchWarning != "" {
+	if result.Branch != "main" || result.Base != remoteHead || result.UpstreamHead != remoteHead || result.BaseSubject != "remote latest" || result.BaseSource != "remote" || result.Upstream != "origin/main" || result.FetchWarning != "" {
 		t.Fatalf("remote refresh: %+v", result)
 	}
 	if head := gitTest(t, root, "rev-parse", "main"); head != localHead {
@@ -89,20 +89,25 @@ func TestRefreshBranchBaseRequiresConfiguredRemoteUpstream(t *testing.T) {
 	}
 }
 
-func TestRefreshBranchBaseKeepsLocalAheadOfUpstream(t *testing.T) {
+func TestRefreshBranchBaseKeepsDivergedLocalAndReportsUpstreamTip(t *testing.T) {
 	t.Parallel()
 	isolateGit(t)
-	s, r, root, _ := upstreamFixture(t)
+	s, r, root, remote := upstreamFixture(t)
 	putFile(t, filepath.Join(root, "local"), "local only\n")
 	gitTest(t, root, "add", "local")
 	gitTest(t, root, "commit", "-m", "local only")
 	localHead := gitTest(t, root, "rev-parse", "main")
+	remoteHead := advanceUpstream(t, root, remote, "remote latest")
 	result, err := s.RefreshBranchBase(context.Background(), r.ID, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Base != localHead || result.BaseSubject != "local only" || result.BaseSource != "local" || !strings.Contains(result.FetchWarning, "上游未有") {
-		t.Fatalf("local-ahead branch replaced by older upstream: %+v", result)
+		t.Fatalf("diverged branch replaced by upstream: %+v", result)
+	}
+	// The fetched tip is still reported so the browser can offer it.
+	if result.UpstreamHead != remoteHead {
+		t.Fatalf("upstream tip not reported: %+v", result)
 	}
 }
 

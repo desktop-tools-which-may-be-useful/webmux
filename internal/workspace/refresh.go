@@ -52,6 +52,7 @@ func (s *Service) RefreshBranchBase(ctx context.Context, repositoryID, branch st
 		result.FetchWarning = "上游刷新后无法读取提交，保留本地基线；请重试"
 		return result, nil
 	}
+	result.UpstreamHead = remote.Head
 	if !useRemote {
 		result.FetchWarning = "本地分支包含上游未有的提交，保留本地基线"
 		return result, nil

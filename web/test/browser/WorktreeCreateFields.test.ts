@@ -84,23 +84,49 @@ function localRefresh(response: typeof branches, branch: string) {
         ?.subject || response.defaultBaseSubject,
     baseSource: "local",
     upstream: "",
+    upstreamHead: "",
     fetchWarning: "该分支未配置上游，保留本地基线",
   };
 }
 
-function remoteRefresh(branch: string, base: string, subject = "remote") {
+function remoteRefresh(
+  branch: string,
+  base: string,
+  subject = "remote",
+  upstreamHead = base,
+) {
   return {
     branch,
     base,
     baseSubject: subject,
     baseSource: "remote",
     upstream: `origin/${branch}`,
+    upstreamHead,
     fetchWarning: "",
   };
 }
 
 function deferred<T>() {
   return Promise.withResolvers<T>();
+}
+
+const older = "e".repeat(40);
+const committedAt = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+
+// History served for the requested tips: each tip, newest first, on top of
+// one shared older commit.
+function history(from: string[]) {
+  return {
+    commits: [
+      ...from.map((hash, index) => ({
+        hash,
+        subject: index === 0 ? "最新提交" : `提交 ${hash.slice(0, 7)}`,
+        author: "dev",
+        committedAt,
+      })),
+      { hash: older, subject: "较早提交", author: "dev", committedAt },
+    ],
+  };
 }
 
 function serve(status = 200, response = branches, onrefresh?: RefreshHandler) {
@@ -112,6 +138,9 @@ function serve(status = 200, response = branches, onrefresh?: RefreshHandler) {
         const body = JSON.parse(String(init?.body)) as { branch: string };
         if (onrefresh) return onrefresh(body.branch, init?.signal ?? null);
         return Response.json(localRefresh(response, body.branch));
+      }
+      if (url.pathname === "/api/repositories/repo-1/commits") {
+        return Response.json(history(url.searchParams.getAll("from")));
       }
       if (url.pathname !== "/api/repositories/repo-1/branches") {
         throw new Error(`Unexpected request: ${url.pathname}`);
@@ -131,6 +160,15 @@ const pathInput = () =>
 const ready = () => page.getByRole("status", { name: "表单就绪" });
 const baseInput = () =>
   page.getByRole("combobox", { name: "起始提交", exact: true });
+const options = () => page.getByRole("listbox").getByRole("option");
+async function openBase() {
+  await baseInput().click();
+  await expect.element(options().first()).toBeVisible();
+}
+async function closeBase() {
+  await userEvent.keyboard("{Escape}");
+  await expect.element(options().first()).not.toBeInTheDocument();
+}
 const startBranchInput = () =>
   page.getByRole("combobox", { name: "起始分支", exact: true });
 const reference = () => page.getByRole("status", { name: "提交引用" });
@@ -145,47 +183,42 @@ afterEach(async () => {
   }
 });
 
-test("shows commit titles while preserving exact references and manual input", async () => {
+test("lists recent commits of the start branch and selects one by title", async () => {
+  serve();
+  render(Harness, { repository });
+  await expect.element(baseInput()).toMatchTextContent(/最新提交/);
+  await expect.element(reference()).toHaveTextContent(head);
+
+  await openBase();
+  await expect.element(options()).toHaveLength(2);
+  await expect
+    .element(options().first())
+    .toHaveAccessibleName("最新提交 · aaaaaaa · 本地最新 · 3小时前");
+  await options().getByText("较早提交").click();
+  await expect.element(reference()).toHaveTextContent(older);
+  await expect.element(baseInput()).toMatchTextContent(/较早提交/);
+  await expect.element(ready()).toHaveTextContent("ready");
+});
+
+test("switching the start branch lists that branch's history", async () => {
+  const other = "b".repeat(40);
   serve(200, {
     ...branches,
-    bases: [
-      ...branches.bases,
-      {
-        name: "refs/heads/origin/main",
-        head,
-        subject: "修复终端重连",
-      },
-      {
-        name: "refs/remotes/origin/main",
-        head: "b".repeat(40),
-        subject: "修复终端重连",
-      },
+    branches: [
+      ...branches.branches,
+      { name: "release", head: other, worktreePaths: [] },
     ],
   });
   render(Harness, { repository });
-  const input = page.getByRole("combobox", { name: "起始提交", exact: true });
-  const reference = page.getByRole("status", { name: "提交引用" });
-  await expect.element(input).toHaveValue("修复终端重连（当前主工作区）");
-  await expect.element(reference).toHaveTextContent(head);
-
-  await input.fill("修复终端重连（远程：origin/main）");
-  await expect.element(reference).toHaveTextContent("refs/remotes/origin/main");
-  await input.fill("修复终端重连（本地：origin/main）");
-  await expect.element(reference).toHaveTextContent("refs/heads/origin/main");
-  await input.fill("修复终端重连（本地：main）");
-  await expect.element(reference).toHaveTextContent("refs/heads/main");
-
-  for (const value of ["release/my-task", "c".repeat(40)]) {
-    await input.fill(value);
-    await expect.element(reference).toHaveTextContent(value);
-    await expect.element(ready()).toHaveTextContent("ready");
-  }
-  await input.fill("");
-  await expect.element(reference).toHaveTextContent("");
-  await expect.element(ready()).toHaveTextContent("not-ready");
+  await expect.element(reference()).toHaveTextContent(head);
+  await startBranchInput().selectOptions("release");
+  await expect.element(reference()).toHaveTextContent(other);
+  await openBase();
+  await expect.element(options().first()).toMatchTextContent(/bbbbbbb/);
+  await closeBase();
 });
 
-test("shows a detached default title without branch candidates", async () => {
+test("a detached default lists history from the main worktree commit", async () => {
   serve(200, {
     ...branches,
     bases: [],
@@ -193,13 +226,55 @@ test("shows a detached default title without branch candidates", async () => {
     defaultBranch: null,
   });
   render(Harness, { repository });
+  await expect.element(reference()).toHaveTextContent(head);
+  await openBase();
   await expect
-    .element(page.getByRole("combobox", { name: "起始提交", exact: true }))
-    .toHaveValue("独立提交 <title> & 引号（当前主工作区）");
-  await expect
-    .element(page.getByRole("status", { name: "提交引用" }))
-    .toHaveTextContent(head);
+    .element(options().first())
+    .toHaveAccessibleName(/^最新提交 · aaaaaaa · 当前主工作区/);
+  await closeBase();
   await expect.element(ready()).toHaveTextContent("ready");
+});
+
+test("a failed history read keeps the default base selectable", async () => {
+  serve();
+  const fetcher = vi.mocked(fetch);
+  const base = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation(async (input, init) =>
+    String(input).includes("/commits")
+      ? Response.json({ error: "boom" }, { status: 500 })
+      : base(input, init),
+  );
+  render(Harness, { repository });
+  await expect.element(page.getByText(/无法读取最近提交/)).toBeVisible();
+  await openBase();
+  await expect.element(options()).toHaveLength(1);
+  await closeBase();
+  await expect.element(reference()).toHaveTextContent(head);
+  await expect.element(ready()).toHaveTextContent("ready");
+});
+
+test("refresh lists a diverged upstream tip without making it the default", async () => {
+  const upstreamHead = "d".repeat(40);
+  serve(200, branches, (branch) =>
+    Response.json({
+      ...localRefresh(branches, branch),
+      upstream: "origin/main",
+      upstreamHead,
+      fetchWarning: "本地分支包含上游未有的提交，保留本地基线",
+    }),
+  );
+  render(Harness, { repository });
+  await expect.element(page.getByText(/上游未有/)).toBeVisible();
+  await openBase();
+  await expect.element(options()).toHaveLength(3);
+  await expect
+    .element(options().first())
+    .toHaveAccessibleName(/^最新提交 · ddddddd · 远程最新/);
+  await expect
+    .element(options().nth(1))
+    .toHaveAccessibleName(/aaaaaaa · 本地最新/);
+  await closeBase();
+  await expect.element(reference()).toHaveTextContent(head);
 });
 
 test("prefills an editable suggestion and does not refill after a manual clear", async () => {
@@ -375,22 +450,22 @@ test("a late response cannot replace a newer branch selection", async () => {
   await expect.element(startBranchInput()).toHaveValue("wt/taken-branch");
 });
 
-test("a refresh response preserves manual base edits made after the request", async () => {
+test("a refresh response preserves a commit picked after the request", async () => {
   const pending = deferred<Response>();
   serve(200, branches, () => pending.promise);
   render(Harness, { repository });
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);
-  const manual = "d".repeat(40);
-  await baseInput().fill(manual);
+  await openBase();
+  await options().getByText("较早提交").click();
   const response = Response.json(remoteRefresh("main", "b".repeat(40)));
   const responseRead = vi.spyOn(response, "json");
   pending.resolve(response);
   await vi.waitFor(() => expect(responseRead).toHaveBeenCalled());
   await Promise.resolve();
-  await expect.element(reference()).toHaveTextContent(manual);
-  await expect.element(baseInput()).toHaveValue(manual);
+  await expect.element(reference()).toHaveTextContent(older);
+  await expect.element(baseInput()).toMatchTextContent(/较早提交/);
 });
 
 test("a failed manual refresh clears the previous remote-latest label", async () => {
