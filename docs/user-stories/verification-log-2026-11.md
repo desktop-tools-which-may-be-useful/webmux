@@ -228,3 +228,8 @@
 
 - 依据：`internal/launch`、`internal/wire`、`internal/api` 的 Go race 测试与线上快照，`wireArrays`、`wire-contract` 单元用例，以及 `LaunchConfigsSettings` 浏览器组件测试。
 - 限制：未重新核验其余故事能力。
+
+本次局部核对（2026-11-03）：终端顶部状态提示改为悬浮显示，显示或关闭不再改变终端尺寸，对应更新 US-D05，不新增故事或改变覆盖索引。
+
+- 依据：`pnpm --dir web check`、`check:arch`、`make docs-check`，以及 `openspec validate float-terminal-notices --strict`。
+- 限制：未在真机上核对，未重新核验其余故事能力。

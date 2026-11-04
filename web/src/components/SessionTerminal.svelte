@@ -682,32 +682,6 @@
     close={closeSession}
     hybrid={hybrid.known ? hybrid : undefined}
   />
-  <TerminalNotices
-    terminal={t}
-    {uploads}
-    {draft}
-    {draftSaved}
-    {error}
-    pendingCopy={pendingCopy !== null}
-    {copyPending}
-    dismissCopy={() => (pendingCopy = null)}
-    bind:notice
-    {showScratch}
-    dismissScratch={() => (draft.scratchUpdatedWhileHidden = false)}
-    remove={closeSession}
-    notices={hybrid.notices}
-    dismiss={(key) => hybrid.dismiss(key)}
-    recovery={hybrid.recoverable ? recovery : undefined}
-  />
-  {#if hybrid.connector && hybrid.view === "terminal"}<div
-      class="shrink-0 border-b px-4 py-2"
-    >
-      <ConnectorInstallHint
-        connector={hybrid.connector}
-        detail="安装后会自动重新检测"
-        ondismiss={() => hybrid.dismissConnector()}
-      />
-    </div>{/if}
   <TerminalWorkspace
     {codeShown}
     {desktop}
@@ -715,69 +689,102 @@
     onfind={showFind}
   >
     {#snippet terminalPane()}
-      <!-- A hybrid session's panes fade in as a switch lands on them. -->
-      <div
-        class={["h-full", hybrid.known && paneEnter]}
-        hidden={!terminalShown()}
-      >
-        <TerminalViewport
-          bind:container
-          terminal={t}
-          visible={terminalVisible()}
-          sizeLocked={sizeLocked || keyboardHeld}
-          {findOpen}
-          {uploads}
-          {quickMenu}
-          {draftToggle}
-          send={softInput}
-          toggle={(key) => {
-            if (draft.enabled) controlNotice();
-            else t.toggleModifier(key);
-          }}
-          lock={(key) => {
-            if (draft.enabled) controlNotice();
-            else t.lockModifier(key);
-          }}
-          {paste}
-          keyboard={() => {
-            if (draft.enabled) composer?.keyboard(hold.begin);
-            else t.keyboard(hold.begin);
-          }}
-        >
-          {#snippet findBar()}
-            <TerminalFindBar
-              bind:this={findPanel}
-              open={findOpen}
-              terminal={t}
-              onclose={closeFind}
-            />
-          {/snippet}
-        </TerminalViewport>
-      </div>
-      {#if hybrid.view === "chat"}
-        <div class={["h-full", paneEnter]}>
-          <ChatView
-            bind:this={chatView}
-            model={hybrid.chat.model}
-            chat={hybrid.chat.state}
-            connection={hybrid.chat.connection}
+      <div class="relative h-full">
+        <!-- Notices float over this pane (not the code pane beside it): showing
+           or dismissing one must not resize the terminal, which would redraw
+           the PTY. z-30 keeps them above the find bar (z-20). -->
+        <div class="absolute inset-x-0 top-0 z-30 flex flex-col bg-background">
+          <TerminalNotices
+            terminal={t}
+            {uploads}
             {draft}
-            {drafts}
-            uploads={chatUploads}
-            uploadUnavailable={chatUploadUnavailable}
-            actions={hybrid.actions}
-            onreview={review}
-            onterminal={() => hybrid.request("tui")}
+            {draftSaved}
+            {error}
+            pendingCopy={pendingCopy !== null}
+            {copyPending}
+            dismissCopy={() => (pendingCopy = null)}
+            bind:notice
+            {showScratch}
+            dismissScratch={() => (draft.scratchUpdatedWhileHidden = false)}
+            remove={closeSession}
+            notices={hybrid.notices}
+            dismiss={(key) => hybrid.dismiss(key)}
+            recovery={hybrid.recoverable ? recovery : undefined}
           />
+          {#if hybrid.connector && hybrid.view === "terminal"}<div
+              class="shrink-0 border-b px-4 py-2"
+            >
+              <ConnectorInstallHint
+                connector={hybrid.connector}
+                detail="安装后会自动重新检测"
+                ondismiss={() => hybrid.dismissConnector()}
+              />
+            </div>{/if}
         </div>
-      {:else if hybrid.view === "switching"}
-        <SwitchProgress
-          target={hybrid.target}
-          steps={hybrid.steps}
-          awaitingChoice={hybrid.awaitingChoice}
-          onchoose={() => (choiceClosed = false)}
-        />
-      {/if}
+        <!-- A hybrid session's panes fade in as a switch lands on them. -->
+        <div
+          class={["h-full", hybrid.known && paneEnter]}
+          hidden={!terminalShown()}
+        >
+          <TerminalViewport
+            bind:container
+            terminal={t}
+            visible={terminalVisible()}
+            sizeLocked={sizeLocked || keyboardHeld}
+            {findOpen}
+            {uploads}
+            {quickMenu}
+            {draftToggle}
+            send={softInput}
+            toggle={(key) => {
+              if (draft.enabled) controlNotice();
+              else t.toggleModifier(key);
+            }}
+            lock={(key) => {
+              if (draft.enabled) controlNotice();
+              else t.lockModifier(key);
+            }}
+            {paste}
+            keyboard={() => {
+              if (draft.enabled) composer?.keyboard(hold.begin);
+              else t.keyboard(hold.begin);
+            }}
+          >
+            {#snippet findBar()}
+              <TerminalFindBar
+                bind:this={findPanel}
+                open={findOpen}
+                terminal={t}
+                onclose={closeFind}
+              />
+            {/snippet}
+          </TerminalViewport>
+        </div>
+        {#if hybrid.view === "chat"}
+          <div class={["h-full", paneEnter]}>
+            <ChatView
+              bind:this={chatView}
+              model={hybrid.chat.model}
+              chat={hybrid.chat.state}
+              connection={hybrid.chat.connection}
+              {draft}
+              {drafts}
+              uploads={chatUploads}
+              uploadUnavailable={chatUploadUnavailable}
+              actions={hybrid.actions}
+              onreview={review}
+              onterminal={() => hybrid.request("tui")}
+            />
+          </div>
+        {:else if hybrid.view === "switching"}
+          <SwitchProgress
+            target={hybrid.target}
+            steps={hybrid.steps}
+            awaitingChoice={hybrid.awaitingChoice}
+            onchoose={() => (choiceClosed = false)}
+          />
+        {/if}
+      </div>
     {/snippet}
     {#snippet draftPane()}
       <TerminalInputComposer
