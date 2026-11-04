@@ -62,5 +62,5 @@
 
 #### Scenario: 开发版服务端已删除
 
-- **WHEN** 便携版托盘为 0.10.3-dev.4，Release `dev` 中只剩 dev.6 与 dev.7 的产物，缓存中没有对应文件
+- **WHEN** 便携版托盘为 0.10.3-dev.4，Release `dev` 中只剩 dev.7 的产物，缓存中没有对应文件
 - **THEN** 安装失败，状态行提示该开发版的服务端已不在 dev Release、请先更新托盘，WSL 中原有文件不变

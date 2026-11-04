@@ -45,8 +45,8 @@
   - build 之前：若自标签 `dev` 所指提交以来只改了文档（以该提交中的 `.github/scripts/classify-changes.sh` 判定），跳过；标签不存在或不是祖先时不跳过。
   - plan 与发布前若该提交已不是 main 最新提交，或版本不高于 Release `dev` 当前清单的版本，跳过。
   - build 先运行 `pnpm --dir web build` 与 `go test -race`，再构建产物；build 按 `dev-release` 分组可取消；publish 按 `dev-release-publish` 分组不取消，sign 不入组；隔离与正式版相同。
-  - publish 按“读取上一次清单、上传带版本号的产物、替换 `install.sh` 与清单、移动标签、删除其他文件”的顺序操作 Release `dev`，标记为预发布且不设为 latest。
-  - 验证：`actionlint` 通过；在测试仓库或 fork 中连续推送两次，Release `dev` 只剩两次构建的产物与 `install.sh`，`latest` 不变；手动重跑较早提交的运行时跳过发布；只改 Markdown 的推送不构建也不发布。
+  - publish 按“上传带版本号的产物、替换 `install.sh` 与清单、移动标签、删除不在本次清单中的文件”的顺序操作 Release `dev`，标记为预发布且不设为 latest。
+  - 验证：`actionlint` 通过；在测试仓库或 fork 中连续推送两次，Release `dev` 只剩最后一次构建的产物与 `install.sh`，`latest` 不变；手动重跑较早提交的运行时跳过发布；只改 Markdown 的推送不构建也不发布。
 - [ ] 5.3 `release.yml` 生成发布说明时以 `--notes-start-tag` 指定上一个 `v*` 标签。
   - 验证：`actionlint` 通过；在 fork 中存在 `dev` 预发布时打正式标签，发布说明从上一个 `v*` 标签开始。
 - [x] 5.4 `install.sh` 支持 `WEBMUX_CHANNEL=dev|stable`：开发版从 Release `dev` 的 `SHA256SUMS` 找出唯一匹配的带版本号二进制；`WEBMUX_VERSION` 接受 `X.Y.Z` 或当前开发版版本，通道与版本矛盾时报错。

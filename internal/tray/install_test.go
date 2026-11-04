@@ -139,9 +139,10 @@ func TestInstallerDevBuild(t *testing.T) {
 	}
 }
 
-// Release dev keeps two builds. When GitHub no longer has an older dev
-// tray's server, the reason says to update the tray first and still lists
-// every source; a release tray's missing file is reported as before.
+// Release dev keeps only the current build. When GitHub no longer has an
+// older dev tray's server, the reason says to update the tray first and
+// still lists every source; a release tray's missing file is reported as
+// before.
 func TestInstallerDevBuildGone(t *testing.T) {
 	gone := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(gone.Close)

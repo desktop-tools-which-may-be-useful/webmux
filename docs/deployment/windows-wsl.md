@@ -26,7 +26,7 @@ WebMux 不原生运行在 Windows 上，而是运行在 WSL 2 发行版中，由
 - 要求发行版能通过 `/mnt/<盘符>` 访问 Windows 文件（`/etc/wsl.conf` 未关闭 automount）。
 - 本地 `make tray` 构建的托盘不带摘要，不提供安装。
 - WebMux 运行中升级时旧进程继续运行，重启后生效。
-- `dev` Release 只保留最近两次构建。较旧开发版托盘需要的服务端已被删除时，托盘报告“开发版 <版本> 的服务端已不在 dev Release，请先更新托盘”，不改动 WSL 中的文件。
+- `dev` Release 只保留当前构建。较旧开发版托盘需要的服务端已被删除时，托盘报告“开发版 <版本> 的服务端已不在 dev Release，请先更新托盘”，不改动 WSL 中的文件。
 
 托盘菜单“更新通道”选择正式版或开发版（`tray.json` 的 `updateChannel`，默认 `stable`），见[自动更新](updates.md#更新通道)。切到开发版后，托盘自更新到开发版，并按上面的规则把 WSL 中较旧的 webmux 升级到同一次开发版构建。
 

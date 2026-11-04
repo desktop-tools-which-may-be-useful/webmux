@@ -64,8 +64,9 @@ mkdir -p "$www/bad/releases/latest/download"
 printf 'bad binary\n' > "$www/bad/releases/latest/download/webmux-linux-amd64"
 printf '%064d  webmux-linux-amd64\n' 0 > "$www/bad/releases/latest/download/SHA256SUMS"
 
-# The rolling dev Release: the current build 0.10.3-dev.4 and the previous
-# 0.10.3-dev.3, whose files remain but are no longer in SHA256SUMS.
+# The rolling dev Release mid-publish: the current build 0.10.3-dev.4 and
+# the outgoing 0.10.3-dev.3, whose files are not yet deleted but are no
+# longer in SHA256SUMS.
 dev_dir=$www/releases/download/dev
 mkdir -p "$dev_dir"
 for build in 0.10.3-dev.3 0.10.3-dev.4; do

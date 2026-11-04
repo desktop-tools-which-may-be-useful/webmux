@@ -16,11 +16,11 @@ permissions:
 # replaced. Isolation is as in release.yml: the signing key reaches only the
 # sign job, which receives nothing but SHA256SUMS.
 #
-# Publishing follows openspec release-distribution: read the current
-# SHA256SUMS (the previous build), upload this build's versioned files,
-# replace install.sh, SHA256SUMS and its signature, move the `dev` tag, then
-# delete every file listed in neither manifest. Clients that read the
-# previous manifest can still download its files.
+# Publishing follows openspec release-distribution: upload this build's
+# versioned files, replace install.sh, SHA256SUMS and its signature, move the
+# `dev` tag, then delete every file this manifest does not list, so the
+# Release holds only the current build. A client that read the previous
+# manifest just before the switch fails its download and retries next check.
 jobs:
   plan:
     name: Plan the development version
@@ -278,14 +278,10 @@ jobs:
           names() {
             awk '{ n = $2; sub(/^\*/, "", n); print n }' "$1"
           }
-          previous="$RUNNER_TEMP/current/SHA256SUMS"
           if [ "$EXISTS" != true ]; then
             gh release create dev --prerelease --latest=false --target "$HEAD_SHA" \
               --title "WebMux 开发版" \
               --notes "main 上通过 CI 的最新开发版，版本见 SHA256SUMS.minisig 的可信注释。安装：curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/download/dev/install.sh | WEBMUX_CHANNEL=dev sh"
-          fi
-          if [ ! -f "$previous" ]; then
-            : > "$previous"
           fi
 
           # Versioned files first; --clobber only replaces leftovers of an
@@ -295,7 +291,7 @@ jobs:
           gh release upload dev --clobber install.sh SHA256SUMS SHA256SUMS.minisig
           git push --force origin "$HEAD_SHA:refs/tags/dev"
 
-          keep=$({ names SHA256SUMS; names "$previous"; printf '%s\n' install.sh SHA256SUMS SHA256SUMS.minisig; } | sort -u)
+          keep=$({ names SHA256SUMS; printf '%s\n' install.sh SHA256SUMS SHA256SUMS.minisig; } | sort -u)
           mapfile -t present < <(gh release view dev --json assets --jq '.assets[].name')
           for name in "${present[@]}"; do
             if ! grep -qxF -- "$name" <<< "$keep"; then

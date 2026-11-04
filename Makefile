@@ -27,8 +27,9 @@ MAKENSIS ?= makensis
 # v2.47+ requires a newer Go than go.mod pins for CI (GOTOOLCHAIN=local).
 NFPM ?= $(GO) run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.46.3
 # A development version (X.Y.Z-dev.N) names its binaries, trays and
-# installers webmux-<version>-<release name without "webmux-">, so the
-# rolling `dev` Release can hold two builds side by side (internal/update
+# installers webmux-<version>-<release name without "webmux-">, so a
+# publish to the rolling `dev` Release uploads beside the outgoing build
+# instead of overwriting it before the manifest switches (internal/update
 # AssetName). Package file names keep the version as is; nfpm writes the
 # package version as X.Y.Z~dev.N, which sorts before X.Y.Z.
 DEV_VERSION = $(findstring -dev.,$(VERSION))

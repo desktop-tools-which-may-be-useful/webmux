@@ -24,7 +24,7 @@
 `SHA256SUMS` 的格式 SHALL 与 `sha256sum` 输出一致，可用 `sha256sum -c` 直接校验。
 
 - 标签发布：SHALL 为 Release 中除 `SHA256SUMS.minisig` 外的每个其他产物各列一行。
-- Release `dev`：SHALL 只为本次构建的产物（包括 `install.sh`）各列一行；为下载中的客户端保留的上一次构建产物 SHALL NOT 列在其中。
+- Release `dev`：SHALL 只为本次构建的产物（包括 `install.sh`）各列一行。
 
 #### Scenario: 用户校验下载
 
@@ -88,7 +88,7 @@ main 上的提交通过 CI 后，开发版流水线 SHALL 以开发版版本构�
 - 二进制、托盘与安装程序：`webmux-<版本>-<正式版文件名去掉 webmux- 前缀>`；
 - deb：`webmux_<版本>-1_<架构>.deb`；rpm：`webmux-<版本>-1.<架构>.rpm`；包内版本 SHALL 为 `X.Y.Z~dev.N`。
 
-Release `dev` SHALL 以固定文件名包含 `install.sh`，内容与同一提交中的脚本相同；它 SHALL 列在本次清单中，SHALL 随清单一起替换，不为上一次构建保留。
+Release `dev` SHALL 以固定文件名包含 `install.sh`，内容与同一提交中的脚本相同；它 SHALL 列在本次清单中，SHALL 随清单一起替换。
 
 #### Scenario: 产物名
 
@@ -98,16 +98,16 @@ Release `dev` SHALL 以固定文件名包含 `install.sh`，内容与同一提�
 
 ### Requirement: 开发版发布顺序与保留
 
-开发版发布 SHALL 依次：读取 Release `dev` 当前的 `SHA256SUMS`，其中列出的文件为“上一次构建”；上传本次带版本号的产物；替换 `install.sh`、`SHA256SUMS` 与签名；移动标签 `dev`；删除 Release 中既不在本次清单、也不在上一次清单中的文件。
+开发版发布 SHALL 依次：上传本次带版本号的产物；替换 `install.sh`、`SHA256SUMS` 与签名；移动标签 `dev`；删除 Release 中不在本次清单中的文件，Release `dev` 因此只保留当前构建。替换清单前读到旧清单的客户端可能下载失败，SHALL 在下一次检查时重试。
 
 - 替换清单之前任何一步失败时 SHALL NOT 替换清单，已列在当前清单中的产物 SHALL 保持不变；上传了一部分的本次产物 SHALL 由下一次成功的发布删除。
 - 替换清单之后删除失败时，SHALL 只留下多余的文件，由下一次成功的发布删除。
 - 判断“版本不高于当前清单”时 SHALL 只采用能以内置公钥验证的现有清单与签名；缺失、不配对或无法验证时 SHALL 视为未发布并照常发布。
 
-#### Scenario: 只保留两次构建
+#### Scenario: 只保留当前构建
 
 - **WHEN** 开发版 0.10.3-dev.3 发布完成，此前 Release `dev` 中有 dev.1 与 dev.2 的产物，当前清单为 dev.2
-- **THEN** Release `dev` 中只剩 dev.2 与 dev.3 的产物以及 `install.sh`，签名清单列出 dev.3
+- **THEN** Release `dev` 中只剩 dev.3 的产物以及 `install.sh`，签名清单列出 dev.3
 
 #### Scenario: 上次替换清单中途失败
 
@@ -117,7 +117,7 @@ Release `dev` SHALL 以固定文件名包含 `install.sh`，内容与同一提�
 #### Scenario: 发布中途失败
 
 - **WHEN** 上传 0.10.3-dev.3 的产物时失败，之后 0.10.3-dev.4 发布成功
-- **THEN** 失败后签名清单仍为 dev.2，dev.2 的产物全部保留；dev.4 发布后 Release `dev` 中只剩 dev.2 与 dev.4 的产物
+- **THEN** 失败后签名清单仍为 dev.2，dev.2 的产物全部保留；dev.4 发布后 Release `dev` 中只剩 dev.4 的产物
 
 ### Requirement: 开发版签名
 

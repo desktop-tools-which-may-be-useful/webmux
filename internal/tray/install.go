@@ -75,8 +75,8 @@ func (i Installer) Install(ctx context.Context) error {
 		asset := fetch.Asset{Path: "/" + update.Repo + "/releases/download/" + update.ReleaseTag(i.Version) + "/" + name, SHA256: digest}
 		source, err := i.Downloader.Download(ctx, asset, local)
 		if err != nil {
-			// Release dev keeps only two builds; an older dev tray's server
-			// is gone and only a newer tray can install one.
+			// Release dev keeps only the current build; an older dev tray's
+			// server is gone and only a newer tray can install one.
 			if update.IsDevVersion(i.Version) && missingOnGitHub(err) {
 				return fmt.Errorf("开发版 %s 的服务端已不在 dev Release，请先更新托盘：%w", i.Version, err)
 			}
