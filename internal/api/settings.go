@@ -1,12 +1,10 @@
 package api
 
 import (
-	"io"
 	"net/http"
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/hub"
-	"github.com/rainchan/webmux/internal/jsonutil"
 	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/wire"
 )
@@ -21,14 +19,8 @@ func (s *Server) settingsRoutes(mux *http.ServeMux) {
 		reply(w, 200, wire.SettingsSnapshot(v))
 	})
 	mux.HandleFunc("PATCH /api/settings", func(w http.ResponseWriter, r *http.Request) {
-		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 2<<20))
-		if err != nil {
-			failure(w, 400, settings.ErrInvalid)
-			return
-		}
 		var req contract.SettingsPatch
-		if jsonutil.Decode(data, &req) != nil {
-			failure(w, 400, settings.ErrInvalid)
+		if !decodeStrict(w, r, &req, 2<<20, settings.ErrInvalid) {
 			return
 		}
 		changes, err := wire.SettingsChanges(req)

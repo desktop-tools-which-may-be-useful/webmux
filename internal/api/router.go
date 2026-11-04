@@ -21,6 +21,7 @@ import (
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/hub"
 	"github.com/rainchan/webmux/internal/hybrid"
+	"github.com/rainchan/webmux/internal/jsonutil"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
@@ -171,6 +172,18 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	var extra any
 	if err := d.Decode(&extra); err != io.EOF {
 		failure(w, 400, errors.New("expected one JSON object"))
+		return false
+	}
+	return true
+}
+
+// decodeStrict is decode for bodies that must also reject duplicate and
+// case-folded keys. A body over limit bytes or an invalid document is a 400
+// that carries only invalid, never any input text.
+func decodeStrict(w http.ResponseWriter, r *http.Request, v any, limit int64, invalid error) bool {
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil || jsonutil.Decode(data, v) != nil {
+		failure(w, http.StatusBadRequest, invalid)
 		return false
 	}
 	return true

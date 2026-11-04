@@ -44,6 +44,11 @@ var fixture = manifest{
 		"internal/wirectl.serve":   {typeArgs: []int{0}},
 		"internal/wirectl.serveIn": {typeArgs: []int{0, 1}},
 	},
+	bodyReaders: map[string]string{
+		"internal/ctrl.readJSON":     "fixture JSON reader",
+		"internal/ctrl.unusedReader": "stale registration",
+		"internal/svc.Read":          "registration outside a controller",
+	},
 	encoders: map[string]string{
 		"internal/svc.digest":            "fixture digest",
 		"internal/svc.registeredAlias":   "fixture direct call with rejected alias",
@@ -69,6 +74,7 @@ func TestRulesOnFixture(t *testing.T) {
 		"internal/ghost:0 R0":    true,
 		"internal/svc:0 R0":      true,
 		"internal/shared:0 R0":   true,
+		"internal/ctrl:0 R0":     true,
 	}
 	for _, pkg := range p.pkgs {
 		for _, file := range pkg.Syntax {
@@ -102,6 +108,8 @@ func TestRulesOnFixture(t *testing.T) {
 		"registered pure function internal/svc.NotAFunction is not a package function",
 		"registered pure function internal/svc.(*Service).Do is not a package function",
 		"pure registration internal/shared.notAService is not in a service package",
+		"registered request body reader internal/ctrl.unusedReader does not read a request body",
+		"request body reader registration internal/svc.Read is not in a controller package",
 	} {
 		if !messages[msg] {
 			t.Errorf("registration violation not detected: %s", msg)
@@ -151,7 +159,7 @@ func TestViolationsReportedTogether(t *testing.T) {
 			t.Errorf("unsorted: %q before %q", violations[i-1], v)
 		}
 	}
-	for _, rule := range []string{"R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"} {
+	for _, rule := range []string{"R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11"} {
 		if !rules[rule] {
 			t.Errorf("no %s violation in one run", rule)
 		}

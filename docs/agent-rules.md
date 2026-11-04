@@ -13,6 +13,6 @@ When `AGENTS.md` outgrows the budget, move the least frequently needed rules int
 
 ## Related
 
-- [Architecture](architecture.md) and its layer rules R0–R10.
+- [Architecture](architecture.md) and its layer rules R0–R11.
 - [Documentation governance](doc-governance.md) for size and tree-layout limits.
 - [Go style](go-style.md), [Frontend style](frontend-style.md), [Design system](design-system.md).

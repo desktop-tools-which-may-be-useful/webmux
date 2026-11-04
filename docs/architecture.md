@@ -64,7 +64,7 @@ flowchart LR
 | `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                              |
 | `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测；根内文件操作与目录 ZIP                          |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
-| `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R10                                                             |
+| `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R11                                                             |
 | `internal/docguard`                           | 只含测试：文档与 spec 的行数、体积、目录扇出与树状组织规则                                      |
 | `internal/wslclient`                          | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算 |
 | `internal/attach`                             | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                |
@@ -120,11 +120,12 @@ Tailscale 控制器的生命周期：
 | R8   | Controller 编解码的每个 JSON 值都是 `contract` 中的具名类型（可经指针、切片、映射）；汇点是 `encoding/json` 的编解码函数和登记的包装函数（见 `layers_test.go` 的 `sinks`，如 `api.reply`、`api.serve`）；接口类型的值只能出现在登记的包装函数内；`contract` 类型的字段不引用 Service 类型 |
 | R9   | Service 不声明 `MarshalJSON`；JSON 编码器只能在登记函数体内直接调用（Web Push 载荷与 VAPID 头、代码视图摘要）。检查整个源码，包括包级初始化；禁止保存编码器函数值或方法值，即使位于登记函数中                                                                                             |
 | R10  | `contract` 不导入 Service 或 Controller                                                                                                                                                                                                                                                   |
+| R11  | Controller 只在登记函数（`layers_test.go` 的 `bodyReaders`：`decode`、`decodeOptional`、`decodeStrict`、`receiveUpload`）内读取请求体；`r.Body` 与 `ParseForm`、`MultipartReader` 等消费请求体的方法其他位置都不允许，新增 JSON 接口必须经这些函数，大小上限与未知字段策略因此集中        |
 
 **维护方式**
 
 - 新增 `internal/` 包时，在 `internal/archtest/layers_test.go` 的清单中归类；删除包时同时删除条目。
-- 例外只能写进清单的登记表（`outbound`、`sinks`、`encoders`、`pure`），并附理由，评审时可见。纯函数登记不能用于构造、状态访问或 I/O；缺失、未使用或指向非函数的条目使测试失败。依赖方向没有例外。
+- 例外只能写进清单的登记表（`outbound`、`sinks`、`bodyReaders`、`encoders`、`pure`），并附理由，评审时可见。纯函数登记不能用于构造、状态访问或 I/O；缺失、未使用或指向非函数的条目使测试失败。依赖方向没有例外。
 - 每条规则由 `internal/archtest/testdata/fixture` 中带 `// want Rn` 注释的故意违规验证；修改规则时同步增加违规与合规样例。
 - `AGENTS.md` 有 10 KiB 体积预算，由 `TestAgentsGuideSize`（`internal/archtest/agents_size_test.go`）检查；超限时把最不常用的规则原文迁入 `docs/agent-rules/`，规则索引见 [Agent 规则](agent-rules.md)。
 - Service 以哨兵错误报告错误种类（`workspace.ErrConflict`、`codeview.ErrGone`、`files.ErrTooLarge` 等），Controller 用 `errors.Is` 映射状态码，错误文本不变。

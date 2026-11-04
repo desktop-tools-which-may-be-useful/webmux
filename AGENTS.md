@@ -7,7 +7,7 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 ## Architecture
 
 - `cmd/webmux` loads TOML, converts it to `session.Options` (via `cmd/internal/assemble`), constructs every service (`session.Manager`, launch, workspace, codeview, files, push) and injects them into `api.New` as `api.Deps`. Only `cmd/` constructs services or converts configuration into service options. Keep explicit constructor-based wiring.
-- Layers are enforced by `internal/archtest` (rules R0–R10 in `docs/architecture.md`; manifest in `internal/archtest/layers_test.go`, where every new `internal/` package must be classified).
+- Layers are enforced by `internal/archtest` (rules R0–R11 in `docs/architecture.md`; manifest in `internal/archtest/layers_test.go`, where every new `internal/` package must be classified).
   - Controllers: `internal/api`, `hub`, `wire`. Services: `session`, `workspace`, `launch`, `push`, `codeview`, `files`, and others. Shared: `contract`, `config`, `runtime`, `statefile`, `fetch`, `pathutil`, `attentionkind`. Out-of-server clients: `client`, `attach`, `tray/...`, `tunnel`, `service`, and others.
   - Shared packages and clients never import services or controllers. Only `cmd/` imports `internal/api`.
 - `internal/session` owns PTYs, bounded byte scrollback, metadata, status detection, and process cleanup. `internal/api` owns REST routes, authentication, Origin checks, error-to-status mapping, and static serving. `internal/hub` bridges session subscriptions to WebSockets and encodes terminal JSON frames. `internal/files` owns directory completion, mkdir, and upload storage.

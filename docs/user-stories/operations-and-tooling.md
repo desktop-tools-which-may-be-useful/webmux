@@ -190,7 +190,7 @@
   - 现有 CI 执行相应质量检查。
 - **US-L05 分层架构约束**：作为贡献者，我希望 Controller 与 Service 的边界和线上 JSON 形状由测试守住，以便越界依赖或协议漂移在 `go test` 中就被发现，而不是靠评审。
   验收要点：
-  - `go test ./...` 包含 `internal/archtest`：未归类或失效的包、越界依赖、Controller 直接 I/O 或使用未登记的 Service 包级函数、Service 携带 HTTP 状态、编解码非 `contract` 类型等违规一次列出位置、R0–R10 编号及修复提示；
+  - `go test ./...` 包含 `internal/archtest`：未归类或失效的包、越界依赖、Controller 直接 I/O 或使用未登记的 Service 包级函数、Service 携带 HTTP 状态、编解码非 `contract` 类型、Controller 在登记函数之外读取请求体等违规一次列出位置、R0–R11 编号及修复提示；
   - 同一包还检查 `internal/acp`、`internal/hybrid`、`internal/agentprofile` 核心与 `web/src`（启动配置图标目录除外）的生产代码不出现任何已注册 agent 的名称或可执行文件名，agent 差异只能放在 `internal/agentprofile/<agent>` 适配器中。纯函数例外需理由且仍被使用；
   - 允许业务整数与非错误对象的领域 Status。R9 检查包级初始化及编码器函数值/方法值，登记函数不能借别名绕过。固定样例覆盖违规与合规写法。141 份线上快照分九组独立运行（另有不可用服务场景单独运行），仅归一化明确动态字段，业务正文、确定性 Git OID、摘要和固定输入保留；
   - 差异可见，有意变更用 `-update` 重新录制。

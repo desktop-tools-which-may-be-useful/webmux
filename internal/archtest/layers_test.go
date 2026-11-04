@@ -85,6 +85,7 @@ var webmux = manifest{
 		"internal/api.reply":          {arg: 2},
 		"internal/api.decode":         {arg: 2},
 		"internal/api.decodeOptional": {arg: 2},
+		"internal/api.decodeStrict":   {arg: 2},
 		"internal/api.serveCode":      {typeArgs: []int{0}},
 		"internal/api.serve":          {typeArgs: []int{0}},
 		"internal/api.serveIn":        {typeArgs: []int{0, 1}},
@@ -96,6 +97,12 @@ var webmux = manifest{
 		"internal/push.testPayload": "Web Push test message body",
 		"internal/push.vapidHeader": "VAPID JWT header and claims sent to push services",
 		"internal/codeview.version": "content digest of a snapshot, never sent as JSON",
+	},
+	bodyReaders: map[string]string{
+		"internal/api.decode":         "reads JSON bodies with a size limit and unknown fields rejected",
+		"internal/api.decodeOptional": "reads a JSON body that may be empty, then delegates to decode",
+		"internal/api.decodeStrict":   "reads JSON bodies that must also reject duplicate and case-folded keys",
+		"internal/api.receiveUpload":  "streams one multipart file upload within the upload size limit",
 	},
 }
 

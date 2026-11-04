@@ -53,6 +53,11 @@ type manifest struct {
 	// allowed to encode JSON, with the reason: outbound protocol payloads
 	// and internal digests, never client-visible wire shapes.
 	encoders map[string]string
+	// bodyReaders are the controller functions ("pkg.func" or
+	// "pkg.(*T).method") allowed to read an HTTP request body, with the
+	// reason: JSON goes through them so size limits and strictness stay in
+	// one place.
+	bodyReaders map[string]string
 }
 
 // sink locates the JSON values of a call: argument arg, or every type
@@ -200,6 +205,7 @@ func (p *program) check() []violation {
 		switch l {
 		case controller:
 			p.checkControllerUses(pkg)
+			p.checkRequestBodies(pkg)
 		case service:
 			p.checkServiceHTTP(rel, pkg)
 			p.checkServiceErrors(pkg)
@@ -234,6 +240,12 @@ func (p *program) checkManifest() {
 		rel, _, _ := strings.Cut(key, ".")
 		if p.m.layers[rel] != service {
 			p.reportPackage(rel, "R0", "only service functions register JSON encoding", "encoder registration %s is not in a service package", key)
+		}
+	}
+	for key := range p.m.bodyReaders {
+		rel, _, _ := strings.Cut(key, ".")
+		if p.m.layers[rel] != controller {
+			p.reportPackage(rel, "R0", "only controller functions register request body reads", "request body reader registration %s is not in a controller package", key)
 		}
 	}
 	for rel := range p.m.outbound {
@@ -806,6 +818,89 @@ func (p *program) checkServiceJSON(pkg *packages.Package) {
 	for key := range p.m.encoders {
 		if rel, ok := p.rel(pkg.PkgPath); ok && strings.HasPrefix(key, rel+".") && !used[key] {
 			p.reportPackage(rel, "R0", "remove the stale entry from the encoder registrations", "registered encoder %s does not encode JSON", key)
+		}
+	}
+}
+
+// bodyMethods are the *http.Request methods that consume the body.
+var bodyMethods = map[string]bool{
+	"MultipartReader": true, "ParseForm": true, "ParseMultipartForm": true, "FormFile": true, "FormValue": true, "PostFormValue": true,
+}
+
+// holderOf is the type that declares the selected field or method, found by
+// following the embedded fields of the selection's path.
+func holderOf(s *types.Selection) types.Type {
+	t := s.Recv()
+	path := s.Index()
+	for _, i := range path[:len(path)-1] {
+		if ptr, ok := types.Unalias(t).(*types.Pointer); ok {
+			t = ptr.Elem()
+		}
+		st, ok := t.Underlying().(*types.Struct)
+		if !ok {
+			return t
+		}
+		t = st.Field(i).Type()
+	}
+	return t
+}
+
+// isHTTPRequest reports whether t is net/http.Request or a pointer to it.
+func isHTTPRequest(t types.Type) bool {
+	if ptr, ok := types.Unalias(t).(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := types.Unalias(t).(*types.Named)
+	return ok && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == "net/http" && named.Obj().Name() == "Request"
+}
+
+// R11: a controller reads a request body only in registered functions, so
+// every JSON body keeps one size limit and strictness policy. Every
+// reference to the body or a body-consuming method counts, including
+// assignments and method values.
+func (p *program) checkRequestBodies(pkg *packages.Package) {
+	info := pkg.TypesInfo
+	used := map[string]bool{}
+	for _, file := range pkg.Syntax {
+		for _, decl := range file.Decls {
+			key := ""
+			if fn, ok := decl.(*ast.FuncDecl); ok {
+				if fn.Body == nil {
+					continue
+				}
+				key = p.sinkKey(info.Defs[fn.Name].(*types.Func))
+			}
+			ast.Inspect(decl, func(n ast.Node) bool {
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				selection, ok := info.Selections[sel]
+				if !ok || !isHTTPRequest(holderOf(selection)) {
+					return true
+				}
+				name := sel.Sel.Name
+				switch {
+				case selection.Kind() == types.FieldVal && name == "Body", selection.Kind() == types.MethodVal && bodyMethods[name]:
+				default:
+					return true
+				}
+				if _, registered := p.m.bodyReaders[key]; registered {
+					used[key] = true
+					return true
+				}
+				where := "package initializer"
+				if key != "" {
+					where = "function " + key
+				}
+				p.report(sel.Sel.Pos(), "R11", "read JSON with decode, decodeOptional or decodeStrict, or register the function in layers_test.go", "%s reads the request body through %s", where, name)
+				return true
+			})
+		}
+	}
+	for key := range p.m.bodyReaders {
+		if rel, ok := p.rel(pkg.PkgPath); ok && strings.HasPrefix(key, rel+".") && !used[key] {
+			p.reportPackage(rel, "R0", "remove the stale entry from the request body reader registrations", "registered request body reader %s does not read a request body", key)
 		}
 	}
 }
