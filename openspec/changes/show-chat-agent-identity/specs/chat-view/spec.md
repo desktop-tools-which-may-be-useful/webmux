@@ -2,14 +2,12 @@
 
 ### Requirement: 会话列表中的 agent 标识
 
-首页会话卡片 SHALL 为处于聊天端或切换中的混合会话（`hybrid.side` 为 `acp` 或 `switching`，含休眠）在“所在端”信息处显示 agent 标识：
+首页会话卡片 SHALL 为任意所在端的混合会话（`hybrid.side` 为 `tui`、`acp` 或 `switching`，含休眠，含“恢复到终端”后的会话）在“所在端”信息处显示 agent 标识：
 
 - 标识由 `agentIcon` 对应的单色品牌小图标与 `agentTitle` 组成，紧接其后是现有的所在端文字，形如“OpenCode · 聊天”；
-- 品牌图标 SHALL 替换原来的通用聊天图标，尺寸与同一行的其他元信息图标相同，颜色跟随该行的弱化文字色；
+- 品牌图标 SHALL 替换原来的通用聊天或终端图标，尺寸与同一行的其他元信息图标相同，颜色跟随该行的弱化文字色；
 - 图标 SHALL 是装饰性的（对辅助技术隐藏），agent 名称以可见文字提供；
 - `agentIcon` 不在本地图标目录中时 SHALL 只显示名称，SHALL NOT 用终端等其他图标代替。
-
-处于 `tui` 端的卡片 SHALL 保持现有显示不变。
 
 #### Scenario: 聊天端卡片
 
@@ -26,10 +24,10 @@
 - **WHEN** 首页列出一个正在切换的 OpenCode 混合会话
 - **THEN** 卡片显示 OpenCode 品牌小图标与“OpenCode · 切换中”，切换过程中标识不消失
 
-#### Scenario: 终端端卡片不变
+#### Scenario: 终端端卡片
 
-- **WHEN** 首页列出一个处于终端端的混合会话
-- **THEN** 卡片仍显示终端图标与“终端”，不出现 agent 标识
+- **WHEN** 用户把一个已关闭的 Claude Code 混合会话“恢复到终端”，随后回到首页
+- **THEN** 卡片显示 Claude Code 品牌小图标与“Claude Code · 终端”，不再只显示通用终端图标
 
 #### Scenario: 未知图标键
 

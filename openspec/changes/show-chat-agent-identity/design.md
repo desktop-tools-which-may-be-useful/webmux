@@ -18,7 +18,7 @@
 **Non-Goals:**
 
 - “可恢复”分组的记录卡片：它目前直接显示档案名，统一改造涉及记录列表负载，不在本次范围。
-- 终端端的卡片与头部：用户在终端中能直接看到 agent 自身的界面。
+- 终端视图的头部：用户在终端中能直接看到 agent 自身的界面。首页卡片不在此列：终端端（含“恢复到终端”后）的卡片同样显示 agent 标识，否则首页无从分辨终端里跑的是哪个 agent。
 - 浏览器标签页标题、推送通知内容。
 - 任何交互（点击标识查看 agent 版本、切换 agent 等）。
 
@@ -47,11 +47,11 @@
 
 `SessionHybridSchema` 增加 `agentTitle: z.string()` 与 `agentIcon: z.string()`。两者是服务端必有字段，按必填校验，与 `agent` 一致。
 
-### D4：卡片——品牌图标替换通用聊天图标
+### D4：卡片——品牌图标替换通用聊天/终端图标
 
-`SessionRow` 中 `hybrid.side` 为 `acp` 或 `switching` 时，“所在端”片段渲染为 `[品牌图标] {agentTitle} · {hybridSideLabel}`；其余情况保持现有 `IconMessageCircle`/`IconTerminal2` 分支。只替换而不是并排追加，是为了让元信息行仍只有一个前导图标，信息密度不变。
+`SessionRow` 中任意 `hybrid.side`（`tui`、`acp`、`switching`）的“所在端”片段都渲染为 `[品牌图标] {agentTitle} · {hybridSideLabel}`，不再保留通用聊天/终端图标分支；普通会话没有该片段。只替换而不是并排追加，是为了让元信息行仍只有一个前导图标，信息密度不变。
 
-判断条件用 `side` 而不是现有的 `chat` 派生值（它在 `phase` 存在时为假）。切换期间 `side` 为 `switching`，因此把它一并纳入，休眠和切换过程中仍能看出 agent。
+条件只看 `hybrid` 是否存在，不看 `side` 或 `chat` 派生值：休眠、切换过程中以及“恢复到终端”后都能看出 agent。
 
 ### D5：头部——标题后的低强调标识
 

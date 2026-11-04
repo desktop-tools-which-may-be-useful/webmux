@@ -243,3 +243,9 @@
 
 - 依据：`TerminalInput` 浏览器用例重放 WebKit 整段键事件序列（修复前只收到首字、修复后完整一次），前端单元与浏览器全量、`make check`、`check:arch`。
 - 限制：事件序列取自公开的 iOS Simulator 实录，未在真机上用 Typeless 核对，未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：混合会话“恢复到终端”后首页卡片不再丢失 agent 标识；终端端卡片同样显示 agent 品牌小图标与名称，对应更新 US-Q17，不新增故事或改变覆盖索引。
+
+- 通过：`SessionRow` 与 `SessionListRecoverable` 浏览器测试（18 项）、`pnpm --dir web check`、`check:arch`、`make docs-check`。
+- 截图：Storybook “Workspace/Hybrid home” 示例数据，桌面 1280px 与手机 390px、明暗主题前后对比。
+- 限制：未在真实服务中手动执行“恢复到终端”；未重新核验其余故事能力。

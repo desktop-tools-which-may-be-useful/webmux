@@ -320,16 +320,21 @@ test("a chat card without preview or work detail renders no message block", asyn
   expect(page.getByText("等待 Agent 回复…").elements()).toHaveLength(0);
 });
 
-test("terminal-side and switching hybrid cards keep the terminal preview", async () => {
+test("terminal-side and switching hybrid cards keep the agent and the terminal preview", async () => {
+  // A session resumed to the terminal still names the agent it runs.
   const hybrid = { ...chatHybrid, side: "tui" as const, agentSessionId: null };
   render(SessionRow, {
-    session: { ...base, hybrid },
+    session: { ...base, clients: 1, hybrid },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
   });
   await expect.element(page.getByText("终端", { exact: true })).toBeVisible();
-  expect(document.querySelector('[data-slot="session-agent"]')).toBeNull();
-  expect(document.body.textContent).not.toContain("OpenCode");
+  expect(
+    agentElement()?.querySelector('[data-launch-icon="opencode"] svg'),
+  ).not.toBeNull();
+  expect(agentLine()?.replace(/\s+/g, " ").trim()).toMatch(
+    /^OpenCode · 终端 · 1 个设备已连接 ·/,
+  );
   expect(
     document.querySelector('[data-slot="terminal-preview"]'),
   ).not.toBeNull();
