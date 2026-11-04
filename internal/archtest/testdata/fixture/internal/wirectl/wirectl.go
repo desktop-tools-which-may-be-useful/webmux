@@ -43,7 +43,7 @@ func handlers() {
 	serveIn(func(contract.Item) contract.Item { return contract.Item{} })
 	serveIn(func(svc.Report) contract.Item { return contract.Item{} }) // want R8
 	serveIn(func(contract.Item) svc.Report { return svc.Report{} })    // want R8
-	marshal := json.Marshal                          // want R8
+	marshal := json.Marshal                                            // want R8
 	_, _ = marshal(item)
 	send(item)
 }
