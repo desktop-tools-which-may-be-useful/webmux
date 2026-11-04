@@ -518,7 +518,7 @@ test("typing / lists and filters published commands without authentication flows
   await expect
     .element(menu.getByRole("option", { selected: true }))
     .toMatchTextContent(/^\/reset/);
-  await userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Tab}");
   await expect.element(input).toHaveValue("/reset ");
   await expect.element(menu).not.toBeInTheDocument();
   expect(commands()).toEqual([]);

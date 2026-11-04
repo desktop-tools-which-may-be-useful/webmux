@@ -90,13 +90,14 @@
     },
     {
       title: "聊天输入",
-      scope: "混合会话的聊天输入框；斜杠菜单打开时，Enter 优先选择指令。",
+      scope:
+        "混合会话的聊天输入框；斜杠菜单打开时，Enter 仍然发送，Tab 填入指令。",
       shortcuts: [
         { action: "发送消息（桌面）", keys: ["Enter"] },
         { action: "换行（触屏上 Enter 也换行）", keys: ["Shift + Enter"] },
         { action: "发送；运行中支持时插入提示", keys: ["Ctrl / ⌘ + Enter"] },
         { action: "斜杠菜单：选择指令", keys: ["↑ / ↓"] },
-        { action: "斜杠菜单：填入 / 关闭", keys: ["Enter 或 Tab / Esc"] },
+        { action: "斜杠菜单：填入 / 关闭", keys: ["Tab / Esc"] },
       ],
     },
     {

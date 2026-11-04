@@ -129,7 +129,7 @@
         highlighted = (active + step + matches.length) % matches.length;
         return;
       }
-      if ((event.key === "Enter" || event.key === "Tab") && command) {
+      if (event.key === "Tab" && command) {
         event.preventDefault();
         pick(command);
         return;
