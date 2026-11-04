@@ -440,7 +440,7 @@
 >
   <div class="flex shrink-0 items-center gap-1 border-b px-1 py-0.5">
     <Button
-      variant={find.panel === "search" ? "secondary" : "ghost"}
+      variant="ghost"
       size="icon-sm"
       aria-label="文件内查找"
       aria-expanded={find.panel === "search"}
@@ -450,7 +450,7 @@
       ><IconSearch aria-hidden="true" /></Button
     >
     <Button
-      variant={find.panel === "goto" ? "secondary" : "ghost"}
+      variant="ghost"
       size="icon-sm"
       aria-label="跳转行"
       aria-expanded={find.panel === "goto"}
@@ -460,7 +460,7 @@
       ><IconListNumbers aria-hidden="true" /></Button
     >
     <Button
-      variant={showGutter ? "secondary" : "ghost"}
+      variant="ghost"
       size="icon-sm"
       aria-label="显示行号"
       title={showGutter ? "隐藏行号" : "显示行号"}

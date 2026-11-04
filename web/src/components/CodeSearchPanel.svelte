@@ -55,7 +55,7 @@
   <div class="flex items-center gap-1">
     {#each [{ key: "caseSensitive", label: "区分大小写", text: "Aa" }, { key: "wholeWord", label: "全词匹配", text: "W" }, { key: "regexp", label: "正则表达式", text: ".*" }] as const as option (option.key)}
       <Button
-        variant={spec[option.key] ? "secondary" : "ghost"}
+        variant="ghost"
         size="icon-sm"
         aria-label={option.label}
         title={option.label}

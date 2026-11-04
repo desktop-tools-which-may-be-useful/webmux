@@ -36,7 +36,7 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as Tabs from "$lib/components/ui/tabs";
+  import SplitDirectionChoice from "./SplitDirectionChoice.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import AdvancedSection from "./AdvancedSection.svelte";
   import LaunchPicker from "./LaunchPicker.svelte";
@@ -435,14 +435,7 @@
             launchTouched = true;
           }}
         />
-        {#if split}
-          <Tabs.Root bind:value={direction}>
-            <Tabs.List aria-label="分屏方向" size="form" class="w-full">
-              <Tabs.Trigger value="horizontal">左右分屏</Tabs.Trigger>
-              <Tabs.Trigger value="vertical">上下分屏</Tabs.Trigger>
-            </Tabs.List>
-          </Tabs.Root>
-        {/if}
+        {#if split}<SplitDirectionChoice bind:direction />{/if}
         <AdvancedSection title="高级：会话名称" summary={name}>
           <div class="space-y-2">
             <Label for="session-name"

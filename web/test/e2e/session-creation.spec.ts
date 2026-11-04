@@ -159,7 +159,7 @@ test("full split creation uses saved configs and keeps the launch subdirectory a
   expect(await (await request.get("/api/sessions")).json()).toHaveLength(1);
   await open();
   await chooseLaunch(page, "Project shell");
-  await page.getByRole("tab", { name: "上下分屏", exact: true }).click();
+  await page.getByRole("radio", { name: "上下分屏", exact: true }).click();
   await page
     .getByRole("button", { name: "创建并加入分屏 →", exact: true })
     .click();

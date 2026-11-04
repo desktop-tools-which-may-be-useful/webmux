@@ -81,14 +81,14 @@ test("4x CPU: a busy session among 120 cards keeps order, filtering and input re
   expect(await order()).toEqual(before);
   await expect(row).toHaveAttribute("data-status", "waiting");
 
-  const filters = page.getByRole("group", { name: "按会话状态筛选" });
-  await filters.getByRole("button", { name: /等待中/ }).click();
+  const filters = page.getByRole("radiogroup", { name: "按会话状态筛选" });
+  await filters.getByRole("radio", { name: /等待中/ }).click();
   await row.getByRole("button", { name: /会话菜单/ }).click();
   await expect(page.getByRole("menu")).toBeVisible();
   update({ ...sessions[31], preview: "updated-59\nstatus", status: "running" });
   await expect(row).toBeHidden();
   await expect(page.getByRole("menu")).toBeHidden();
-  await filters.getByRole("button", { name: /全部/ }).click();
+  await filters.getByRole("radio", { name: /全部/ }).click();
   await expect(row).toBeVisible();
   await expect(page.getByRole("menu")).toBeHidden();
 

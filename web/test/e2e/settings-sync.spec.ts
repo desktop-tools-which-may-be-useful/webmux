@@ -27,13 +27,13 @@ test("isolated desktop and phone synchronize preferences in both directions", as
     ]);
     await expect(a.getByText("已连接 · 设置已同步")).toBeVisible();
     await expect(b.getByText("已连接 · 设置已同步")).toBeVisible();
-    await a.getByRole("button", { name: "深色", exact: true }).click();
+    await a.getByRole("radio", { name: "深色", exact: true }).click();
     await expect(b.locator("html")).toHaveClass(/dark/);
     await a.getByLabel("终端字号", { exact: true }).fill("18");
     await a.getByLabel("终端字号", { exact: true }).press("Tab");
     await expect(a.getByLabel("终端字号", { exact: true })).toHaveValue("18");
     await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("13");
-    await b.getByRole("button", { name: "浅色", exact: true }).click();
+    await b.getByRole("radio", { name: "浅色", exact: true }).click();
     await expect(a.locator("html")).not.toHaveClass(/dark/);
     await b.getByRole("switch", { name: "Diff 自动换行" }).click();
     await expect(
@@ -106,7 +106,7 @@ test("corrupt settings preserve bytes while terminal APIs remain available", asy
       "settings.json",
     );
     await expect(
-      page.getByRole("button", { name: "深色", exact: true }),
+      page.getByRole("radio", { name: "深色", exact: true }),
     ).toBeDisabled();
     expect((await request.get("/api/settings")).status()).toBe(503);
     expect((await request.get("/api/health")).status()).toBe(200);

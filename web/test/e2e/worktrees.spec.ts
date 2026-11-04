@@ -527,7 +527,7 @@ test("existing branch creation, safe removal and stale destructive confirmation 
   await page.goto("/");
   await register(page, root);
   await openWorktreeCreation(page, false);
-  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  await page.getByRole("radio", { name: "使用已有分支", exact: true }).click();
   await page.getByRole("button", { name: "已有本地分支", exact: true }).click();
   await page.getByRole("combobox", { name: "已有本地分支" }).fill("spare");
   await page.getByRole("option", { name: "spare", exact: true }).click();

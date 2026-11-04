@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { ListButton } from "$lib/components/ui/list-button";
+  import SplitDirectionChoice from "./SplitDirectionChoice.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import { errorMessage } from "../error";
 
@@ -61,18 +62,7 @@
   {onclose}
 >
   <div class="space-y-4">
-    <div class="flex gap-2" role="group" aria-label="分屏方向">
-      <Button
-        variant={direction === "horizontal" ? "default" : "outline"}
-        aria-pressed={direction === "horizontal"}
-        onclick={() => (direction = "horizontal")}>左右分屏</Button
-      >
-      <Button
-        variant={direction === "vertical" ? "default" : "outline"}
-        aria-pressed={direction === "vertical"}
-        onclick={() => (direction = "vertical")}>上下分屏</Button
-      >
-    </div>
+    <SplitDirectionChoice bind:direction />
     <Input
       aria-label="搜索已有会话"
       placeholder="搜索名称或目录"

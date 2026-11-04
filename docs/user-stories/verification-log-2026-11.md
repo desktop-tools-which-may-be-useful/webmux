@@ -269,3 +269,19 @@
 
 - 依据：`NewSessionDialog` 浏览器测试（删除后回退到主工作区，并断言 `onworktreeremoved` 回调携带被删工作树；分屏页面 `Terminal.svelte` 据此剪除本地列表，该剪除未单独测试）、`svelte-check`、`check:arch`、`make docs-check`；隔离演示数据下的桌面/手机、明暗截图见 PR。
 - 限制：未运行完整 `make test`；未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：统一线条设计语言，对应更新 US-L06 的设计系统约定。具体改动：
+
+- 带面板的标签页统一使用 `Tabs variant="line"`。
+- 分屏方向、主题、起始端、工作树分支方式、状态筛选、显示方式与 SVG 预览/源码改为基于 RadioGroup 的 `SegmentedControl`（`radiogroup`/`radio`）。
+- 开关按钮改为固定 variant 加 `aria-pressed` 描边，Button 移除 `secondary`。
+
+各选项的行为不变，不新增故事，也不改变覆盖索引。
+
+- 依据：
+  - `pnpm --dir web check`、`check:test`、`check:storybook`、`lint`、`check:arch`。
+  - Vitest 浏览器套件，含新增 `SessionViewControls` 单选不可清空用例；去掉清空保护后该用例失败。
+  - Storybook 套件（452 项）。
+  - 受影响的 E2E：splits、worktrees、settings-sync、repository-scope、session-creation、workspace-discovery、workspace-ui、hybrid、code-documents。
+  - 隔离演示服务在 1280/390/320px 与明暗主题下的截图检查。
+- 限制：未运行完整 `make test`，未在真机上核对；未重新核验其余故事能力。

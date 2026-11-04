@@ -116,7 +116,7 @@
         <Badge variant="secondary" role="status">正在恢复…</Badge>
       </div>{/if}
     {#if !t.atBottom && !t.restoring && visible}<Button
-        variant="secondary"
+        variant="outline"
         size="sm"
         raised
         class="absolute right-3 bottom-3 z-10 sm:hidden"

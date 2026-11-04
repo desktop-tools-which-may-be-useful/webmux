@@ -273,7 +273,7 @@
     onValueChange={(v) =>
       switchRoot(v === "artifacts" ? "artifacts" : "workspace")}
   >
-    <Tabs.List class="w-full" aria-label="代码根"
+    <Tabs.List variant="line" class="w-full" aria-label="代码根"
       ><Tabs.Trigger value="workspace">工作区</Tabs.Trigger><Tabs.Trigger
         value="artifacts">临时文件夹</Tabs.Trigger
       ></Tabs.List
@@ -309,7 +309,7 @@
       if (v === "changes" || query || !rootListing) void load();
     }}
   >
-    <Tabs.List class="w-full"
+    <Tabs.List variant="line" class="w-full"
       ><Tabs.Trigger value="files">文件</Tabs.Trigger
       >{#if root !== "artifacts"}<Tabs.Trigger value="changes"
           >修改</Tabs.Trigger

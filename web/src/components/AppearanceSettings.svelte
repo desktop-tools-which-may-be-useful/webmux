@@ -11,6 +11,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
   import * as Card from "$lib/components/ui/card";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import InlineNotice from "./InlineNotice.svelte";
   const code = $derived(settings.values.codeReader ?? defaultCodeReader);
   let fontDraft = $state<number | undefined>(undefined);
@@ -78,21 +79,19 @@
     <fieldset disabled={!settings.ready} class="space-y-6">
       <div class="space-y-2">
         <p class="text-sm font-medium">主题</p>
-        <div class="flex flex-wrap gap-2" role="group" aria-label="主题">
-          {#each [{ value: null, label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }] as option (option.value)}
-            <Button
-              variant={settings.values.theme === option.value
-                ? "secondary"
-                : "outline"}
-              size="sm"
-              aria-pressed={settings.values.theme === option.value}
-              onclick={() =>
-                changeSettings({
-                  theme: option.value as "light" | "dark" | null,
-                })}>{option.label}</Button
-            >
-          {/each}
-        </div>
+        <SegmentedControl.Root
+          value={settings.values.theme ?? "system"}
+          onValueChange={(value) =>
+            changeSettings({
+              theme: value === "light" || value === "dark" ? value : null,
+            })}
+          disabled={!settings.ready}
+          aria-label="主题"
+        >
+          <SegmentedControl.Item value="system">跟随系统</SegmentedControl.Item>
+          <SegmentedControl.Item value="light">浅色</SegmentedControl.Item>
+          <SegmentedControl.Item value="dark">深色</SegmentedControl.Item>
+        </SegmentedControl.Root>
       </div>
       <div class="flex items-center justify-between gap-3">
         <Label for="settings-lines">代码行号</Label>

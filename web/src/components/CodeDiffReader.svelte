@@ -461,7 +461,7 @@
       ></span
     >
     <Button
-      variant={find.panel === "search" ? "secondary" : "ghost"}
+      variant="ghost"
       size="icon-sm"
       aria-label="文件内查找"
       aria-expanded={find.panel === "search"}
@@ -472,7 +472,7 @@
       ><IconSearch aria-hidden="true" /></Button
     >
     <Button
-      variant={overflow === "wrap" ? "secondary" : "ghost"}
+      variant="ghost"
       size="icon-sm"
       aria-label="自动换行"
       title="自动换行"

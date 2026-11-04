@@ -20,6 +20,7 @@
   import { Label } from "$lib/components/ui/label";
   import * as NativeSelect from "$lib/components/ui/native-select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import IconChevronDown from "~icons/tabler/chevron-down";
   import CodeImageView from "./CodeImageView.svelte";
   import CodeMarkdownPreview, {
@@ -657,7 +658,7 @@
           >{shownDiff ? "返回文件" : "查看 Diff"}</Button
         >{/if}
       {#if formatFile}<Button
-          variant={formatPreview ? "secondary" : "outline"}
+          variant="ghost"
           size="sm"
           aria-pressed={formatPreview}
           onclick={() => showFormat(formatPreview ? "source" : "preview")}
@@ -675,23 +676,16 @@
             {@render outlineItems()}
           </DropdownMenu.Content>
         </DropdownMenu.Root>{/if}
-      {#if svgFile}<div
-          class="flex shrink-0 gap-1"
-          role="group"
+      {#if svgFile}<SegmentedControl.Root
+          value={svgView}
+          onValueChange={(view) =>
+            showSvg(view === "source" ? "source" : "preview")}
           aria-label="SVG 显示方式"
+          class="shrink-0"
         >
-          <Button
-            variant={svgView === "preview" ? "secondary" : "outline"}
-            size="sm"
-            aria-pressed={svgView === "preview"}
-            onclick={() => showSvg("preview")}>预览</Button
-          ><Button
-            variant={svgView === "source" ? "secondary" : "outline"}
-            size="sm"
-            aria-pressed={svgView === "source"}
-            onclick={() => showSvg("source")}>源码</Button
-          >
-        </div>{/if}
+          <SegmentedControl.Item value="preview">预览</SegmentedControl.Item>
+          <SegmentedControl.Item value="source">源码</SegmentedControl.Item>
+        </SegmentedControl.Root>{/if}
       {#if shownDiff}
         {#if imageChange}<Label size="sm" class="shrink-0"
             >预览来源

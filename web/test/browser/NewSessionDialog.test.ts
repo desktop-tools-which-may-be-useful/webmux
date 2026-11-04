@@ -303,14 +303,14 @@ test("a hybrid config offers and remembers where the session starts", async () =
     hybrid: true,
   };
   open({ status: "ready", configs: [config, hybridConfig] });
-  const sides = page.getByRole("tablist", { name: "起始端", exact: true });
+  const sides = page.getByRole("radiogroup", { name: "起始端", exact: true });
   await expect.element(launchField()).toMatchTextContent(/Claude 恢复/);
   expect(sides.elements()).toHaveLength(0);
   await chooseLaunch(hybridConfig.name);
   await expect
-    .element(sides.getByRole("tab", { name: "从终端开始", exact: true }))
-    .toHaveAttribute("aria-selected", "true");
-  await sides.getByRole("tab", { name: "从聊天开始", exact: true }).click();
+    .element(sides.getByRole("radio", { name: "从终端开始", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
+  await sides.getByRole("radio", { name: "从聊天开始", exact: true }).click();
   await submit().click();
   await vi.waitFor(() => expect(created).toHaveLength(1));
   expect(created[0]).toEqual({
@@ -331,8 +331,8 @@ test("the last launch choice and start side are filled in on the next open", asy
   open({ status: "ready", configs: [config, hybridConfig] });
   await expect.element(launchField()).toMatchTextContent(/Open Code/);
   await expect
-    .element(page.getByRole("tab", { name: "从聊天开始", exact: true }))
-    .toHaveAttribute("aria-selected", "true");
+    .element(page.getByRole("radio", { name: "从聊天开始", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
   await submit().click();
   await vi.waitFor(() => expect(created).toHaveLength(1));
   expect(created[0]).toEqual({
@@ -372,8 +372,8 @@ test("a missing chat connector keeps the dialog and can start on the terminal", 
   await expect
     .element(page.getByText("聊天端需要另外安装 codex-acp", { exact: false }))
     .toBeVisible();
-  const sides = page.getByRole("tablist", { name: "起始端", exact: true });
-  await sides.getByRole("tab", { name: "从聊天开始", exact: true }).click();
+  const sides = page.getByRole("radiogroup", { name: "起始端", exact: true });
+  await sides.getByRole("radio", { name: "从聊天开始", exact: true }).click();
   await nameSession("修复排序");
   await submit().click();
   await expect
@@ -907,7 +907,7 @@ test("split creation starts in the pane's directory and returns the chosen direc
     },
   );
   await expect.element(directory()).toHaveValue("/project/subdir");
-  await page.getByRole("tab", { name: "上下分屏", exact: true }).click();
+  await page.getByRole("radio", { name: "上下分屏", exact: true }).click();
   await page
     .getByRole("button", { name: "创建并加入分屏 →", exact: true })
     .click();

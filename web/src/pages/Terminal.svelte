@@ -324,7 +324,7 @@
     <nav class="pane-tabs" aria-label="终端窗格">
       {#each ids as sessionId, index (sessionId)}
         <Button
-          variant={active === sessionId ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           aria-label={`切换到窗格 ${index + 1}：${info[sessionId]?.title || sessionId}`}
           aria-current={active === sessionId ? "true" : undefined}

@@ -22,7 +22,7 @@
 </script>
 
 <Button
-  variant={draft.enabled ? "default" : "outline"}
+  variant="outline"
   size="sm"
   class={className}
   aria-label={draft.scratch.length

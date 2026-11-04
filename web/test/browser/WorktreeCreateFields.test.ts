@@ -333,9 +333,9 @@ test("mode switch regenerates a new branch and a failed list stays empty", async
     .poll(() => branchInput().element().value)
     .toMatch(/^wt\/[a-z]+-[a-z]+$/);
 
-  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  await page.getByRole("radio", { name: "使用已有分支", exact: true }).click();
   await expect.element(ready()).toHaveTextContent("not-ready");
-  await page.getByRole("button", { name: "创建新分支", exact: true }).click();
+  await page.getByRole("radio", { name: "创建新分支", exact: true }).click();
   await expect
     .poll(() => branchInput().element().value)
     .toMatch(/^wt\/[a-z]+-[a-z]+$/);
@@ -362,7 +362,7 @@ test("search selects the literal branch and ignores occupied matches without los
     ],
   });
   await show();
-  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  await page.getByRole("radio", { name: "使用已有分支", exact: true }).click();
   const branchPicker = () =>
     page.getByRole("button", { name: "已有本地分支", exact: true });
   await branchPicker().click();
@@ -410,7 +410,7 @@ test("search selects the literal branch and ignores occupied matches without los
 test("reopening the branch picker starts unfiltered and mode switches close it", async () => {
   serve(200, branches);
   await show();
-  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  await page.getByRole("radio", { name: "使用已有分支", exact: true }).click();
   const picker = () =>
     page.getByRole("button", { name: "已有本地分支", exact: true });
   await picker().click();
@@ -425,8 +425,8 @@ test("reopening the branch picker starts unfiltered and mode switches close it",
   await userEvent.keyboard("{Escape}");
   await picker().click();
   await expect.element(search).toHaveValue("");
-  await page.getByRole("button", { name: "创建新分支", exact: true }).click();
-  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  await page.getByRole("radio", { name: "创建新分支", exact: true }).click();
+  await page.getByRole("radio", { name: "使用已有分支", exact: true }).click();
   await expect.element(picker()).toHaveAttribute("aria-expanded", "false");
 });
 
@@ -553,11 +553,11 @@ test("mode switches and unmount abort pending refreshes", async () => {
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);
-  await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
+  await page.getByRole("radio", { name: "使用已有分支", exact: true }).click();
   expect(signals).toHaveLength(1);
   expect(signals[0]?.aborted).toBe(true);
 
-  await page.getByRole("button", { name: "创建新分支", exact: true }).click();
+  await page.getByRole("radio", { name: "创建新分支", exact: true }).click();
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);

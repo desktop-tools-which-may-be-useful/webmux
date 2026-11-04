@@ -320,7 +320,7 @@
     {#if !stick}
       <!-- Anchored to the message area, so a taller composer never covers it. -->
       <Button
-        variant="secondary"
+        variant="outline"
         size="sm"
         raised
         class="absolute bottom-3 left-1/2 z-10 -translate-x-1/2"

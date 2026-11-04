@@ -293,7 +293,7 @@
                     </DropdownMenu.Content>
                   </DropdownMenu.Root>
                   <Button
-                    variant="secondary"
+                    variant="outline"
                     size="icon-touch"
                     disabled={!item.text || locked}
                     title="取用到草稿"

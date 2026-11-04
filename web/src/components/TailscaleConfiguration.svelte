@@ -62,7 +62,7 @@
 <form onsubmit={submit} class="space-y-4" aria-label="Tailscale 配置">
   <fieldset {disabled} class="min-w-0 space-y-4">
     <Tabs.Root bind:value={mode}>
-      <Tabs.List size="form" aria-label="Tailscale 模式">
+      <Tabs.List variant="line" size="form" aria-label="Tailscale 模式">
         <Tabs.Trigger value="off">关闭</Tabs.Trigger>
         <Tabs.Trigger value="serve">Serve</Tabs.Trigger>
         <Tabs.Trigger value="funnel">Funnel</Tabs.Trigger>

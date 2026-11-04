@@ -320,7 +320,7 @@
       {/if}
       {#if running}
         <Button
-          variant="secondary"
+          variant="outline"
           size="icon-touch"
           aria-label="停止"
           title="停止当前回合"

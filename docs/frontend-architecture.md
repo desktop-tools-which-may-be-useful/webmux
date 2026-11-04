@@ -59,6 +59,7 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 | 组件                | variant / size                                              | 用途                                                                                                      |
 | ------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `Button`            | `variant="quiet"`                                           | 平时弱化、悬停时恢复前景色的 ghost 按钮                                                                   |
+| `Button`            | `aria-pressed` / `aria-expanded` / `aria-current="true"`    | outline、ghost、quiet 在开关按下、展开或当前项时显示前景色描边；不再提供填充的 `secondary`                |
 | `Button`            | `raised`                                                    | 浮在终端或代码上的按钮（边框加阴影）                                                                      |
 | `Button`            | `size="icon-touch"` / `size="sm-touch"`                     | 窄屏（小于 `sm`）44px 触控尺寸，`sm` 以上恢复常规尺寸                                                     |
 | `Input`、`Textarea` | `mono`                                                      | 命令、路径、环境变量与终端文本                                                                            |
@@ -71,7 +72,8 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 | `Input`、`Label`    | `size="sm"`                                                 | 代码导航等紧凑面板                                                                                        |
 | `NativeSelect`      | `size="sm"`                                                 | 原生下拉选择；手机保留系统选择器                                                                          |
 | `Select`            | —                                                           | 需要跨平台一致样式、同时展示名称与命令或路径的下拉框；保留完整内容提示与键盘选择                          |
-| `Tabs.List`         | `size="form"`                                               | 新建会话等表单中的分组切换，使用控件尺寸令牌；默认尺寸保持其他页面的紧凑布局                              |
+| `Tabs.List`         | `variant="line"`、`size="form"`                             | 带关联面板的标签页统一使用 `line`，不使用填充胶囊样式的 `default`；`form` 用于表单中的分组切换            |
+| `SegmentedControl`  | `size="form"`、`wrap`                                       | 基于 RadioGroup（`radiogroup`/`radio`）的下划线分段控件；`form` 用于表单，`wrap` 在窄屏换行（如状态筛选） |
 | `Checkbox`          | —                                                           | 复选框，配合 `Label` 使用                                                                                 |
 | `ListButton`        | `row` / `text` / `content` / `option` / `tab` / `tab-close` | 列表、标签栏与卡片中的可点击区域。它不带控件尺寸，虚拟列表的固定行高不受影响；独立的操作按钮仍用 `Button` |
 

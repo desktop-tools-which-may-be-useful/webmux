@@ -7,7 +7,7 @@
   import * as Command from "$lib/components/ui/command";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as Tabs from "$lib/components/ui/tabs";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import ChoiceDetails from "./ChoiceDetails.svelte";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import PickerField from "./PickerField.svelte";
@@ -159,12 +159,21 @@
       直接执行，不展开变量或管道；需要 shell 语法请用 bash -lc '命令'。
     </p>
   {:else if chosen?.hybrid}
-    <Tabs.Root bind:value={startSide}>
-      <Tabs.List aria-label="起始端" size="form" class="w-full">
-        <Tabs.Trigger value="tui" {disabled}>从终端开始</Tabs.Trigger>
-        <Tabs.Trigger value="acp" {disabled}>从聊天开始</Tabs.Trigger>
-      </Tabs.List>
-    </Tabs.Root>
+    <SegmentedControl.Root
+      bind:value={
+        () => startSide,
+        (next) => {
+          if (next === "tui" || next === "acp") startSide = next;
+        }
+      }
+      aria-label="起始端"
+      size="form"
+      class="w-full"
+      {disabled}
+    >
+      <SegmentedControl.Item value="tui">从终端开始</SegmentedControl.Item>
+      <SegmentedControl.Item value="acp">从聊天开始</SegmentedControl.Item>
+    </SegmentedControl.Root>
     {#if chosen.hybridSupport.connector}<p
         class="text-xs text-muted-foreground"
       >

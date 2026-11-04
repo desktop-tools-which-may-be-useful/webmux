@@ -424,11 +424,11 @@ test("SVG previews by default, toggles to referenceable source and falls back wh
     .element(page.getByLabelText("图片信息").first())
     .toHaveTextContent("SVG · 40 × 20 · 111 B");
   await expect
-    .element(page.getByRole("button", { name: "预览", exact: true }))
-    .toHaveAttribute("aria-pressed", "true");
+    .element(page.getByRole("radio", { name: "预览", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
   expect(document.querySelector("diffs-container")).toBeNull();
 
-  await page.getByRole("button", { name: "源码", exact: true }).click();
+  await page.getByRole("radio", { name: "源码", exact: true }).click();
   await expect
     .poll(
       () =>
@@ -437,7 +437,7 @@ test("SVG previews by default, toggles to referenceable source and falls back wh
     )
     .toContain("<svg");
   expect(document.querySelector('[aria-label="图片预览"]')).toBeNull();
-  await page.getByRole("button", { name: "预览", exact: true }).click();
+  await page.getByRole("radio", { name: "预览", exact: true }).click();
   await expect
     .element(page.getByLabelText("图片信息").first())
     .toHaveTextContent("SVG · 40 × 20 · 111 B");
@@ -448,8 +448,8 @@ test("SVG previews by default, toggles to referenceable source and falls back wh
     .element(page.getByText(/SVG 预览不可用，已切换到源码/))
     .toBeVisible();
   await expect
-    .element(page.getByRole("button", { name: "源码", exact: true }))
-    .toHaveAttribute("aria-pressed", "true");
+    .element(page.getByRole("radio", { name: "源码", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
   await expect
     .poll(
       () =>

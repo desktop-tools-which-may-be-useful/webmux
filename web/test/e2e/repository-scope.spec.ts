@@ -137,18 +137,18 @@ test("repository scope limits the home list, composes with filters and survives 
   await expect(page.locator('[aria-label="终端输出预览"]:visible')).toHaveCount(
     1,
   );
-  const views = page.getByRole("group", { name: "会话显示方式" });
-  await expect(views.getByRole("button", { name: "输出预览" })).toHaveAttribute(
-    "aria-pressed",
+  const views = page.getByRole("radiogroup", { name: "会话显示方式" });
+  await expect(views.getByRole("radio", { name: "输出预览" })).toHaveAttribute(
+    "aria-checked",
     "true",
   );
-  await views.getByRole("button", { name: "紧凑列表" }).click();
+  await views.getByRole("radio", { name: "紧凑列表" }).click();
   await expect(page.locator('[aria-label="终端输出预览"]:visible')).toHaveCount(
     0,
   );
   await page.reload();
-  await expect(views.getByRole("button", { name: "紧凑列表" })).toHaveAttribute(
-    "aria-pressed",
+  await expect(views.getByRole("radio", { name: "紧凑列表" })).toHaveAttribute(
+    "aria-checked",
     "true",
   );
   await expect(page.locator('[aria-label="终端输出预览"]:visible')).toHaveCount(
@@ -165,8 +165,8 @@ test("repository scope limits the home list, composes with filters and survives 
   await search.fill("Mobile layout");
   await expect(page.getByText("没有匹配的会话", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "清除筛选", exact: true }).click();
-  const filters = page.getByRole("group", { name: "按会话状态筛选" });
-  await filters.getByRole("button", { name: /已退出/ }).click();
+  const filters = page.getByRole("radiogroup", { name: "按会话状态筛选" });
+  await filters.getByRole("radio", { name: /已退出/ }).click();
   await expect(page.locator("[data-session-id]:visible")).toHaveCount(0);
   expect(
     (await request.delete(`/api/sessions/${sessions[1].id}`)).status(),

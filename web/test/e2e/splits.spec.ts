@@ -251,7 +251,7 @@ test("existing sessions can join a split and missing panes can be dismissed", as
   const existing = await response.json();
   await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
-  await page.getByRole("button", { name: "上下分屏", exact: true }).click();
+  await page.getByRole("radio", { name: "上下分屏", exact: true }).click();
   await page.getByRole("button", { name: /Existing agent/ }).click();
   await expect(page.locator(".split-terminal")).toHaveCount(2);
   const joined = page.locator(`[data-session-id="${existing.id}"]`);

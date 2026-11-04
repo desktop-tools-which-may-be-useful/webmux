@@ -127,7 +127,7 @@
       )}{/each}
     {#each modifierKeys as [key, label] (key)}
       <Button
-        variant={modifiers[key] ? "default" : "outline"}
+        variant="outline"
         size="sm"
         aria-pressed={modifiers[key]}
         title={key === "shift" ? shiftTitle : undefined}

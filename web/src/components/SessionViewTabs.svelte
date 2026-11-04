@@ -50,7 +50,7 @@
       }
     }
   >
-    <Tabs.List aria-label="会话视图">
+    <Tabs.List variant="line" aria-label="会话视图">
       {#if hybrid}
         <Tabs.Trigger
           value="acp"

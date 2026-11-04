@@ -60,7 +60,7 @@
 <form onsubmit={submit} class="space-y-4" aria-label="隧道配置">
   <fieldset {disabled} class="min-w-0 space-y-4">
     <Tabs.Root bind:value={mode}>
-      <Tabs.List size="form">
+      <Tabs.List variant="line" size="form">
         <Tabs.Trigger value="quick">Quick Tunnel</Tabs.Trigger>
         <Tabs.Trigger value="named">Named Tunnel</Tabs.Trigger>
       </Tabs.List>

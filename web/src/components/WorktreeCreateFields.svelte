@@ -25,6 +25,7 @@
   import * as Command from "$lib/components/ui/command";
   import IconGitBranch from "~icons/tabler/git-branch";
   import PickerField from "./PickerField.svelte";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import type { z } from "zod";
   let {
     repository,
@@ -304,40 +305,29 @@
 {/snippet}
 
 <div class="space-y-3 rounded-lg border p-3">
-  <fieldset>
-    <legend class="sr-only">工作树分支</legend>
-    <div class="flex flex-wrap gap-2">
-      <Button
-        type="button"
-        size="sm"
-        variant={mode === "new" ? "default" : "outline"}
-        aria-pressed={mode === "new"}
-        onclick={() => {
-          if (mode === "new") return;
-          mode = "new";
-          setBranchPickerOpen(false);
-          branchEdited = false;
-          branch = "";
-          fillSuggestedBranch();
-          chooseStartBranch(startBranch);
-        }}>创建新分支</Button
-      >
-      <Button
-        type="button"
-        size="sm"
-        variant={mode === "existing" ? "default" : "outline"}
-        aria-pressed={mode === "existing"}
-        onclick={() => {
-          if (mode === "existing") return;
-          mode = "existing";
-          clearRefresh();
-          clearCommits();
-          baseSource = "";
-          branch = "";
-        }}>使用已有分支</Button
-      >
-    </div>
-  </fieldset>
+  <SegmentedControl.Root
+    value={mode}
+    onValueChange={(next) => {
+      if (next === "new" && mode !== "new") {
+        mode = "new";
+        setBranchPickerOpen(false);
+        branchEdited = false;
+        branch = "";
+        fillSuggestedBranch();
+        chooseStartBranch(startBranch);
+      } else if (next === "existing" && mode !== "existing") {
+        mode = "existing";
+        clearRefresh();
+        clearCommits();
+        baseSource = "";
+        branch = "";
+      }
+    }}
+    aria-label="工作树分支"
+  >
+    <SegmentedControl.Item value="new">创建新分支</SegmentedControl.Item>
+    <SegmentedControl.Item value="existing">使用已有分支</SegmentedControl.Item>
+  </SegmentedControl.Root>
   {#if loading}<p role="status" class="text-sm">正在读取本地分支…</p>{/if}
   {#if error}<p role="alert" class="break-all text-sm text-destructive">
       {error}

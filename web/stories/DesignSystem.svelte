@@ -16,6 +16,7 @@
   import * as Card from "$lib/components/ui/card";
   import * as Empty from "$lib/components/ui/empty";
   import * as Tabs from "$lib/components/ui/tabs";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import InlineNotice from "../src/components/InlineNotice.svelte";
@@ -40,6 +41,7 @@
   let notice = $state("");
   let dialogOpen = $state(false);
   let confirmOpen = $state(false);
+  let wrapping = $state(true);
   let name = $state("检查构建");
   const sections = {
     foundations: [
@@ -261,8 +263,12 @@
           ><IconPlus aria-hidden="true" />新建会话</Button
         >
         <Button variant="outline">添加仓库</Button>
-        <Button variant="secondary">查看详情</Button>
         <Button variant="ghost">刷新状态</Button>
+        <Button
+          variant="ghost"
+          aria-pressed={wrapping}
+          onclick={() => (wrapping = !wrapping)}>自动换行</Button
+        >
         <Button variant="destructive" onclick={() => (confirmOpen = true)}
           >关闭会话</Button
         >
@@ -345,6 +351,21 @@
         <div class="flex items-center gap-3 sm:col-span-2">
           <Switch id="ds-enter" /><Label for="ds-enter">发送后自动回车</Label>
         </div>
+        <div class="space-y-2 sm:col-span-2">
+          <p class="text-sm font-medium">分屏方向</p>
+          <SegmentedControl.Root
+            value="horizontal"
+            aria-label="分屏方向"
+            size="form"
+          >
+            <SegmentedControl.Item value="horizontal"
+              >左右分屏</SegmentedControl.Item
+            >
+            <SegmentedControl.Item value="vertical"
+              >上下分屏</SegmentedControl.Item
+            >
+          </SegmentedControl.Root>
+        </div>
         <div class="flex flex-wrap gap-2 sm:col-span-2">
           <Button onclick={() => (notice = "示例已保存，不影响实际快捷指令。")}
             >保存示例</Button
@@ -386,7 +407,7 @@
     </div>
   {:else if section === "surfaces"}
     <Tabs.Root value="workspace">
-      <Tabs.List aria-label="示例内容"
+      <Tabs.List variant="line" aria-label="示例内容"
         ><Tabs.Trigger value="workspace">工作区</Tabs.Trigger><Tabs.Trigger
           value="activity">最近活动</Tabs.Trigger
         ></Tabs.List
