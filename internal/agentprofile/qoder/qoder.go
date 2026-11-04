@@ -1,8 +1,10 @@
-// Package qoder is the hybrid adapter for Qoder CLI (international).
-// Its ACP mode is a built-in --acp flag rather than a subcommand.
+// Package qoder is the hybrid adapter for Qoder CLI. Its ACP mode is a
+// built-in --acp flag rather than a subcommand. The international and the
+// Chinese edition share the CLI; New builds either from a Variant.
 package qoder
 
 import (
+	"slices"
 	"strings"
 
 	ap "github.com/rainchan/webmux/internal/agentprofile"
@@ -11,49 +13,74 @@ import (
 // Name identifies Qoder on the wire and in hybrid session records.
 const Name = "qoder"
 
-// Qoder config option IDs used by the built-in ACP.
+// Config option IDs used by the built-in ACP.
 const (
 	qoderModel  = "model"
 	qoderEffort = "effort"
 	qoderMode   = "mode"
 )
 
-// Agent is the Qoder adapter.
-var Agent ap.Agent = adapter{SessionSteering: ap.SessionSteering{IdlePrompt: true}}
+// Variant is one edition of the Qoder CLI.
+type Variant struct {
+	// Name identifies the edition on the wire and in session records.
+	Name  string
+	Title string
+	// Executables are the binary names the edition ships under; a versioned
+	// name (for example qodercli-1.1.81, which is what Linux /proc/<pid>/exe
+	// reports) matches too.
+	Executables []string
+	// ProgramApps are the terminal program ids, besides Name, in the OSC 7501
+	// root record.
+	ProgramApps []string
+}
+
+// Agent is the international Qoder adapter.
+var Agent = New(Variant{
+	Name:        Name,
+	Title:       "Qoder",
+	Executables: []string{"qoder", "qodercli"},
+	ProgramApps: []string{"qoder-cli"},
+})
+
+// New builds the adapter for edition v.
+func New(v Variant) ap.Agent {
+	return &adapter{
+		SessionSteering: ap.SessionSteering{IdlePrompt: true},
+		variant:         v,
+		profile: &ap.Profile{
+			Name:              v.Name,
+			Title:             v.Title,
+			Icon:              "qoder",
+			Executables:       v.Executables,
+			ProcessExecutable: func(base string) bool { return runsProcess(v.Executables, base) },
+			VerifiedVersion:   "1.1.81",
+			// Built-in ACP via --acp flag, no connector needed.
+			ACPArg:         "--acp",
+			HiddenCommands: []string{"login", "logout"},
+			ResumeFlag:     "--resume",
+			Positional:     ap.PositionalPrompt,
+			Options:        qoderOptions(),
+			ChatSide:       qoderChatSide,
+			Subcommands: ap.SetOf("mcp", "hooks", "hook", "rollback", "update", "config",
+				"plugins", "plugin", "commit", "agents", "agent", "skills", "skill",
+				"feedback", "security", "login", "status", "remote-control", "sites",
+				"wiki"),
+			SessionSubcommands: ap.SetOf("fork-session"),
+		},
+	}
+}
 
 type adapter struct {
 	ap.SessionSteering
+	variant Variant
+	profile *ap.Profile
 }
 
-var profile = &ap.Profile{
-	Name:              Name,
-	Title:             "Qoder",
-	Icon:              "qoder",
-	Executables:       []string{"qoder", "qodercli"},
-	ProcessExecutable: qoderProcess,
-	VerifiedVersion:   "1.1.81",
-	// Built-in ACP via --acp flag, no connector needed.
-	ACPArg:         "--acp",
-	HiddenCommands: []string{"login", "logout"},
-	ResumeFlag:     "--resume",
-	Positional:     ap.PositionalPrompt,
-	Options:        qoderOptions(),
-	ChatSide:       qoderChatSide,
-	Subcommands: ap.SetOf("mcp", "hooks", "hook", "rollback", "update", "config",
-		"plugins", "plugin", "commit", "agents", "agent", "skills", "skill",
-		"feedback", "security", "login", "status", "remote-control", "sites",
-		"wiki"),
-	SessionSubcommands: ap.SetOf("fork-session"),
-}
-
-// qoderProcess also accepts the versioned binary name
-// (for example qodercli-1.1.81), which is what Linux /proc/<pid>/exe reports.
-func qoderProcess(base string) bool {
-	for _, exe := range []string{"qoder", "qodercli"} {
-		if base == exe {
-			return true
-		}
-		if strings.HasPrefix(base, exe+"-") {
+// runsProcess reports whether base is one of executables or a versioned
+// build of one.
+func runsProcess(executables []string, base string) bool {
+	for _, exe := range executables {
+		if base == exe || strings.HasPrefix(base, exe+"-") {
 			return true
 		}
 	}
@@ -100,15 +127,15 @@ func qoderOptions() map[string]ap.Option {
 	return o
 }
 
-func (adapter) Profile() *ap.Profile { return profile }
+func (a adapter) Profile() *ap.Profile { return a.profile }
 
-// Identify reads Qoder's OSC 7501 root record. Session ID comes from
+// Identify reads the OSC 7501 root record. Session ID comes from
 // session/list candidate fallback rather than terminal signals.
-func (adapter) Identify(s ap.Signals) (ap.Identity, bool) {
-	if s.ProgramApp != Name && s.ProgramApp != "qoder-cli" {
+func (a adapter) Identify(s ap.Signals) (ap.Identity, bool) {
+	if s.ProgramApp != a.variant.Name && !slices.Contains(a.variant.ProgramApps, s.ProgramApp) {
 		return ap.Identity{}, false
 	}
-	return ap.Identity{Agent: Name, Cwd: s.RootCwd}, true
+	return ap.Identity{Agent: a.variant.Name, Cwd: s.RootCwd}, true
 }
 
 func (adapter) InterruptKeys() [][]byte { return [][]byte{[]byte("\x1b")} }

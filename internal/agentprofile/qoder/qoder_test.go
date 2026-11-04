@@ -22,12 +22,12 @@ func TestContract(t *testing.T) {
 
 func TestProcessExecutable(t *testing.T) {
 	for _, base := range []string{"qoder", "qodercli", "qodercli-1.1.81", "qoder-2.0.0"} {
-		if !profile.RunsProcess(base) {
+		if !Agent.Profile().RunsProcess(base) {
 			t.Fatalf("native process %q not recognized", base)
 		}
 	}
 	for _, base := range []string{"node", "qodercn", "qoderclicn"} {
-		if profile.RunsProcess(base) {
+		if Agent.Profile().RunsProcess(base) {
 			t.Fatalf("unrelated process %q recognized", base)
 		}
 	}
