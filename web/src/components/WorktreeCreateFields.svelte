@@ -23,7 +23,8 @@
   import IconRefresh from "~icons/tabler/refresh";
   import AdvancedSection from "./AdvancedSection.svelte";
   import * as Command from "$lib/components/ui/command";
-  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import IconGitBranch from "~icons/tabler/git-branch";
+  import PickerField from "./PickerField.svelte";
   import type { z } from "zod";
   let {
     repository,
@@ -56,6 +57,13 @@
   let baseEditVersion = 0;
   let refreshController: AbortController | null = null;
   let pathEdited = $state(false);
+  let branchPickerOpen = $state(false);
+  let branchSearch = $state("");
+  // The desktop list stays mounted while closed; each opening starts unfiltered.
+  function setBranchPickerOpen(next: boolean) {
+    branchPickerOpen = next;
+    if (!next) branchSearch = "";
+  }
   let branchEdited = $state(false);
   let commits = $state<z.infer<typeof CommitsSchema>["commits"]>([]);
   let commitsLoading = $state(false);
@@ -307,6 +315,7 @@
         onclick={() => {
           if (mode === "new") return;
           mode = "new";
+          setBranchPickerOpen(false);
           branchEdited = false;
           branch = "";
           fillSuggestedBranch();
@@ -444,32 +453,43 @@
   {:else}
     <div class="space-y-2">
       <Label for="existing-branch">已有本地分支</Label>
-      <Command.Root
-        label="已有本地分支"
-        variant="outline"
-        class="h-auto min-w-0"
-        filter={(value, search) =>
-          value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0}
-        disableInitialScroll
+      <PickerField
+        id="existing-branch"
+        bind:open={() => branchPickerOpen, setBranchPickerOpen}
+        disabled={disabled || loading || !data}
       >
-        <Command.Input
-          id="existing-branch"
-          placeholder="搜索本地分支…"
-          aria-describedby="existing-branch-selection"
-          disabled={disabled || loading || !data}
-          autocomplete="off"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck={false}
-        />
-        <ScrollArea
-          type="always"
-          class="h-48 min-w-0 overflow-hidden"
-          scrollbarYClasses="bg-muted/50 [&_[data-slot=scroll-area-thumb]]:bg-muted-foreground"
+        {#snippet trigger()}
+          {#if branch}
+            <IconGitBranch
+              class="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <span class="min-w-0 flex-1 truncate" title={branch}>{branch}</span>
+          {:else}
+            <span class="text-sm text-muted-foreground">
+              {loading ? "正在读取本地分支…" : "选择本地分支"}
+            </span>
+          {/if}
+        {/snippet}
+        <Command.Root
+          label="已有本地分支"
+          class="h-auto min-w-0"
+          filter={(value, search) =>
+            value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0}
+          disableInitialScroll
         >
+          <Command.Input
+            bind:value={branchSearch}
+            placeholder="搜索本地分支…"
+            aria-label="搜索本地分支"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck={false}
+          />
           <Command.List
             aria-label="本地分支列表"
-            class="max-h-none overflow-visible pr-3"
+            class="max-h-[min(14rem,50dvh)] p-1"
           >
             <Command.Empty>
               {loading
@@ -485,6 +505,7 @@
                 data-checked={branch === item.name}
                 onSelect={() => {
                   branch = item.name;
+                  setBranchPickerOpen(false);
                 }}
               >
                 <span class="min-w-0 flex-1 break-all">
@@ -498,17 +519,8 @@
               </Command.Item>
             {/each}
           </Command.List>
-        </ScrollArea>
-      </Command.Root>
-      <p
-        id="existing-branch-selection"
-        role="status"
-        class="break-all text-xs text-muted-foreground"
-      >
-        {branch
-          ? `已选择：${branch}`
-          : "搜索后点击分支，或用 ↑↓ 和 Enter 选择未被占用的分支。"}
-      </p>
+        </Command.Root>
+      </PickerField>
     </div>
   {/if}
   {#if mode === "new" && data && !commitRows.length && !commitsLoading}<p

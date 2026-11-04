@@ -528,7 +528,8 @@ test("existing branch creation, safe removal and stale destructive confirmation 
   await register(page, root);
   await openWorktreeCreation(page, false);
   await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
-  await page.getByLabel("已有本地分支", { exact: true }).fill("spare");
+  await page.getByRole("button", { name: "已有本地分支", exact: true }).click();
+  await page.getByRole("combobox", { name: "已有本地分支" }).fill("spare");
   await page.getByRole("option", { name: "spare", exact: true }).click();
   await expect(page.getByLabel("新工作树完整路径")).toHaveValue(/\/spare$/);
   const path = await page.getByLabel("新工作树完整路径").inputValue();
