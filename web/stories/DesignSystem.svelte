@@ -357,6 +357,7 @@
             value="horizontal"
             aria-label="分屏方向"
             size="form"
+            wrap
           >
             <SegmentedControl.Item value="horizontal"
               >左右分屏</SegmentedControl.Item
