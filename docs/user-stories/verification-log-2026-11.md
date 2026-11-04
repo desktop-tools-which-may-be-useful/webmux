@@ -238,3 +238,8 @@
 
 - 通过：`make check`；桌面与 Pixel 7 的 compact-chrome、hybrid（含挂起终端流时同一控件随会话信息补上“聊天”的新用例）、composer、lifecycle、quick-commands、split-quick-commands、splits、terminal 与代码相关 E2E；CI 全部测试任务。
 - 限制：截图用 Pixel 7 模拟与 fake agent，未做真机验收；未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：iOS 键盘扩展（如 Typeless 语音输入）一次提交的整段文字完整写入终端一次，不再只剩首字，对应更新 US-H06，不新增故事或改变覆盖索引。
+
+- 依据：`TerminalInput` 浏览器用例重放 WebKit 整段键事件序列（修复前只收到首字、修复后完整一次），前端单元与浏览器全量、`make check`、`check:arch`。
+- 限制：事件序列取自公开的 iOS Simulator 实录，未在真机上用 Typeless 核对，未重新核验其余故事能力。

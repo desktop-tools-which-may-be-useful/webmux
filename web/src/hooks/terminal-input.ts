@@ -145,8 +145,35 @@ export function attachTerminalInput(
     event.stopImmediatePropagation();
     term.input(event.data, true);
   };
+  // A keyboard extension (Typeless, other dictation keyboards) commits text
+  // with one insertText call, which WebKit reports as one key: keydown and
+  // keypress carry the whole string as `key`, the keypress `charCode` names
+  // only its first code point, then insertText follows. xterm sends that
+  // code point and ignores the insertion as already handled. Send the string
+  // once and cancel the keypress so the insertion does not happen; key names
+  // never match (Enter's charCode is 13, not "E").
+  const wholeStringKey = (event: KeyboardEvent) => {
+    const { key, charCode } = event;
+    if (
+      userInput?.draftEnabled() ||
+      event.target !== term.textarea ||
+      event.isComposing ||
+      composing ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      !charCode ||
+      key.codePointAt(0) !== charCode ||
+      key.length <= String.fromCodePoint(charCode).length
+    )
+      return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    term.input(key, true);
+  };
   for (const type of ["keydown", "keypress", "keyup"] as const)
     parent.addEventListener(type, trackKey, true);
+  parent.addEventListener("keypress", wholeStringKey, true);
   parent.addEventListener("beforeinput", directInput as EventListener, true);
   parent.addEventListener("compositionstart", trackComposition, true);
   parent.addEventListener("compositionend", trackComposition, true);
@@ -277,6 +304,7 @@ export function attachTerminalInput(
     );
     for (const type of ["keydown", "keypress", "keyup"] as const)
       parent.removeEventListener(type, trackKey, true);
+    parent.removeEventListener("keypress", wholeStringKey, true);
     parent.removeEventListener("compositionstart", trackComposition, true);
     parent.removeEventListener("compositionend", trackComposition, true);
     clearTimeout(compositionTimer);

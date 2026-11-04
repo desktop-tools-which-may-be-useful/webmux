@@ -183,6 +183,55 @@ test("iOS IME composition keeps the helper caret fixed without dropping commits"
   }
 });
 
+// A keyboard extension (Typeless, other dictation keyboards) commits a
+// transcript with one insertText call, which WebKit reports as one key whose
+// `key` is the whole string while the keypress `charCode` names only its first
+// code point (recorded in the iOS Simulator):
+//   keydown  key="hello world" keyCode=72
+//   keypress key="hello world" charCode=104
+//   beforeinput/input insertText data="hello world"
+//   keyup
+test("a whole string committed as one iOS key reaches the terminal once", async () => {
+  const { socket } = await openTerminal();
+  await page.getByRole("button", { name: "Focus terminal input" }).click();
+  const textarea = host().querySelector<HTMLTextAreaElement>(
+    ".xterm-helper-textarea",
+  )!;
+  const commit = (text: string, keyCode: number) => {
+    const key = (type: string, legacy: Record<string, number>) => {
+      const event = new KeyboardEvent(type, {
+        key: text,
+        code: "Unidentified",
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+      for (const [name, value] of Object.entries(legacy))
+        Object.defineProperty(event, name, { value });
+      return textarea.dispatchEvent(event);
+    };
+    const charCode = text.codePointAt(0)!;
+    if (!key("keydown", { keyCode })) return;
+    // A cancelled keypress suppresses the browser's insertion.
+    if (key("keypress", { keyCode: charCode, charCode, which: charCode }))
+      imeInsert(textarea, text);
+    key("keyup", { keyCode });
+  };
+
+  commit("hello world this is a test", 72);
+  await settle();
+  expect(inputText(socket)).toBe("hello world this is a test");
+  // The first code point may lie outside the BMP.
+  commit("😀 你好", 0);
+  await settle();
+  expect(inputText(socket)).toBe("hello world this is a test😀 你好");
+
+  // Single keys keep xterm's own path.
+  await userEvent.keyboard("x{Enter}");
+  await settle();
+  expect(inputText(socket)).toBe("hello world this is a test😀 你好x\r");
+});
+
 test("a locked iOS helper stays inside the grid's bottom edge", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(
     Navigator.prototype,
