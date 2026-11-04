@@ -259,3 +259,8 @@
 
 - 依据：`internal/api`（`TestSessionRename`、`TestSessionRenameIgnoresUnavailableHybridStore`，修复前 503、修复后 200）、`internal/session`、`internal/hybrid` 的 Go race 测试；`make format-check`、`make docs-check`。
 - 限制：未运行完整 `make test`，未在真机上核对；未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：服务端不再接受 `webmux_token` Cookie 认证，HTTP 只认 Bearer 头，WebSocket 另认 Token 子协议；Origin 检查不变。对应更新 US-A02，不新增故事或改变覆盖索引。
+
+- 依据：`internal/api` Go race 测试（`TestAuthenticationAndOriginBoundaries`、`TestWebSocketHandshakeBoundaries` 的 Cookie 用例由放行改为 401）、`token-link.spec.ts` E2E、`make format-check`、`make docs-check`。
+- 限制：未运行完整 `make test`；手动设置 Cookie 的第三方客户端需改用 Bearer 头；未重新核验其余故事能力。

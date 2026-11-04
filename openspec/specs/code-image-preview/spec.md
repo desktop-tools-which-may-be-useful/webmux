@@ -191,7 +191,7 @@ SVG 预览的安全约束：
 
 ### Requirement: 原始字节响应安全与认证
 
-原始字节接口 SHALL 沿用现有 Host、Origin 与 token 认证；token SHALL 只经请求头或既有 Cookie 传递，不出现在 URL、Referer 或日志中，也不生成公开分享地址。
+原始字节接口 SHALL 沿用现有 Host、Origin 与 token 认证；token SHALL 只经 `Authorization: Bearer` 请求头传递，不出现在 URL、Referer、Cookie 或日志中，也不生成公开分享地址。
 
 响应 SHALL 设置以下头：
 

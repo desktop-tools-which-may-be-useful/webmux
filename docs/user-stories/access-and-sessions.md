@@ -15,7 +15,7 @@
   - 鼠标悬停、键盘激活或手机点击可查看，指针可移入说明，Escape 或点击外部可关闭；
   - 说明涵盖共享密码用途、初始化生成与保存、配置路径及启动参数覆盖；
   - 配置路径独立成行、窄屏可换行且无横向溢出；
-  - 启用认证后，正确 token 才能访问 HTTP API 与 WebSocket；
+  - 启用认证后，正确 token 才能访问 HTTP API 与 WebSocket；HTTP 只接受 `Authorization: Bearer`，WebSocket 只接受 Bearer 或 token 子协议，`webmux_token` Cookie 与 URL 参数都不能认证；
   - 当前浏览器保存 token；
   - 错误或变更后的 token 触发重新认证提示；
   - 本机套接字采用同用户身份校验，见 US-M08。

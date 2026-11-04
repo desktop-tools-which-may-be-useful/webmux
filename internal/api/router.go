@@ -236,11 +236,6 @@ func (s *Server) authorized(r *http.Request) bool {
 	if found && strings.EqualFold(scheme, "Bearer") {
 		token = credential
 	}
-	if token == "" {
-		if cookie, err := r.Cookie("webmux_token"); err == nil {
-			token = cookie.Value
-		}
-	}
 	if token == "" && strings.HasPrefix(r.URL.Path, "/ws/") {
 		token = protocolToken(r)
 	}

@@ -314,7 +314,7 @@ PATCH 的状态码 SHALL 如下：
 - 浏览器 HTTP 请求 SHALL 使用 `Authorization: Bearer <token>`。
 - WebSocket 握手 SHALL 提供 `webmux` 与 `webmux.token.<base64url(token)>` 子协议；服务端 SHALL 只选择 `webmux`，SHALL NOT 回显 token 子协议或把 token 放进 URL。
 
-现有中间件对 `webmux_token` Cookie 的兼容回退 SHALL 保持不变，但浏览器 SHALL NOT 依赖 Cookie。本机 Unix 套接字 SHALL 继续按对端有效 UID 校验。服务端 SHALL NOT 新增匿名设置端点、放宽 CORS 或通过静态文件暴露设置文件。
+服务端 SHALL NOT 接受 `webmux_token` Cookie 认证，浏览器只经 Bearer 头与 Token 子协议携带 Token。本机 Unix 套接字 SHALL 继续按对端有效 UID 校验。服务端 SHALL NOT 新增匿名设置端点、放宽 CORS 或通过静态文件暴露设置文件。
 
 `settings.json` 与 `settings.json.lock` SHALL 为 0600，状态目录 SHALL 为 0700。
 

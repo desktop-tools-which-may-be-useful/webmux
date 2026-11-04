@@ -8,11 +8,11 @@
 
 ## 认证与 Origin
 
-- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>` 或 Cookie `webmux_token`。
+- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>`；服务端不接受 Cookie 认证。
 - WebSocket 握手不能设置请求头，因此：
   - 前端改为同时提供子协议 `webmux` 与 `webmux.token.<base64url(UTF-8 token)>`（无填充），服务端只选择 `webmux`、不回显 token。
   - 不接受 query `?token=`，token 不进入请求 URL。
-  - 前端也不把 token 写入 Cookie，因为 Cookie 不按端口隔离。
+  - 不使用 Cookie：Cookie 不按端口隔离，且浏览器会自动携带，服务端不接受 `webmux_token` Cookie。
 
 - token 以定长摘要做常量时间比较。
 - 带 `Origin` 的请求必须与 `Host` 同源，或在 `allowed_origins` 中。Origin 必须是完整的 HTTP(S) origin，不能含路径、query 或 fragment；`allowed_origins` 条目另须全小写，不带末尾斜杠与默认端口（`:80`、`:443`），否则启动失败。

@@ -31,7 +31,7 @@ func TestAuthenticationAndOriginBoundaries(t *testing.T) {
 	}{
 		{"bearer", "Bearer secret", "", "", "http://webmux.example", 200},
 		{"bearer case insensitive", "bearer secret", "", "", "", 200},
-		{"cookie", "", "secret", "", "", 200},
+		{"cookie rejected", "", "secret", "", "", 401},
 		{"HTTP query forbidden", "", "", "?token=secret", "", 401},
 		{"incorrect bearer", "Bearer wrong", "secret", "", "", 401},
 		{"allowed cross origin", "Bearer secret", "", "", "https://trusted.example", 200},
@@ -86,7 +86,7 @@ func TestWebSocketHandshakeBoundaries(t *testing.T) {
 		{"?token=secret", "", server.URL, nil, 401},
 		{"", "", "https://evil.example", secret, 403},
 		{"", "", server.URL, secret, 101},
-		{"", "webmux_token=secret", server.URL, nil, 101},
+		{"", "webmux_token=secret", server.URL, nil, 401},
 	} {
 		header := make(http.Header)
 		header.Set("Cookie", row.cookie)

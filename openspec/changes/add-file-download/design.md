@@ -85,7 +85,7 @@
 ### 8. 限制与安全
 
 - 传输上限沿用 #110 的 `MaxDownloadBytes = 100 MiB`；超过时 413 且不发送正文。文本 2 MiB / 20000 行与图片 20 MiB 预览上限保持独立。
-- 认证接受 Bearer 头或既有 `webmux_token` Cookie；token 不进入 URL、Referer 或日志，不生成公开分享地址。Origin 与 Host 检查沿用 `/api` 中间件。
+- 认证只接受 Bearer 头（服务端不接受 Cookie）；token 不进入 URL、Referer 或日志，不生成公开分享地址。Origin 与 Host 检查沿用 `/api` 中间件。
 - 响应沿用 `Content-Length`、`Content-Disposition: attachment`、`Cache-Control: no-store` 与全局 `X-Content-Type-Options: nosniff`；非图片为 `application/octet-stream`，SVG 下载继续带禁止脚本与外部资源的 CSP。
 - 目录列表、搜索与打开继续有界；临时根可能很大，沿用现有 200 条分页与 10000 条目录上限，不新增全盘扫描。
 - 权限错误映射为“文件不可读”类 403，不泄漏底层系统错误细节；不记录文件内容。
