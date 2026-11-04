@@ -254,3 +254,8 @@
 
 - 依据：`internal/session`（`TestHybridMetadataParticipatesInDisplayComparison`）与 `internal/hybrid`（`TestWork*`、`TestHybridWorkDetailDuringTurn` 会话列表事件断言）的 Go race 测试；`SessionRow` 浏览器用例（16 项，含无预览卡片底边距断言）、`acp-chat.spec.ts` Storybook 用例、`make check` 通过。
 - 限制：未重新核验其余故事能力。
+
+本次局部核对（2026-11-04）：PR #300 会话卡片菜单手动修改标题，新增 US-C15 并登记覆盖索引；普通会话改名不再依赖混合会话记录存储。
+
+- 依据：`internal/api`（`TestSessionRename`、`TestSessionRenameIgnoresUnavailableHybridStore`，修复前 503、修复后 200）、`internal/session`、`internal/hybrid` 的 Go race 测试；`make format-check`、`make docs-check`。
+- 限制：未运行完整 `make test`，未在真机上核对；未重新核验其余故事能力。

@@ -2,16 +2,17 @@
 
 ## 会话
 
-| 方法   | 路径                           | 说明                                             |
-| ------ | ------------------------------ | ------------------------------------------------ |
-| GET    | `/api/sessions`                | 会话列表 `SessionInfo[]`，按 `lastActiveAt` 倒序 |
-| POST   | `/api/sessions`                | 创建会话，201 返回 `SessionInfo`                 |
-| GET    | `/api/sessions/{id}`           | 单个会话；不存在 404                             |
-| DELETE | `/api/sessions/{id}`           | 关闭会话（SIGHUP → SIGKILL），204                |
-| DELETE | `/api/sessions/{id}?remove=1`  | 移除已退出会话，204；仍在运行 409                |
-| GET    | `/api/sessions/{id}/buffer`    | 下载完整原始缓冲（`application/octet-stream`）   |
-| POST   | `/api/sessions/{id}/upload`    | 上传文件，见下文                                 |
-| POST   | `/api/sessions/{id}/artifacts` | 确保会话临时文件夹存在，200 `{path}`，见下文     |
+| 方法   | 路径                           | 说明                                                                               |
+| ------ | ------------------------------ | ---------------------------------------------------------------------------------- |
+| GET    | `/api/sessions`                | 会话列表 `SessionInfo[]`，按 `lastActiveAt` 倒序                                   |
+| POST   | `/api/sessions`                | 创建会话，201 返回 `SessionInfo`                                                   |
+| GET    | `/api/sessions/{id}`           | 单个会话；不存在 404                                                               |
+| PATCH  | `/api/sessions/{id}`           | 设置用户标题 `{"name"}`，返回会话；空串恢复自动标题；含控制字符或超过 512 字节 400 |
+| DELETE | `/api/sessions/{id}`           | 关闭会话（SIGHUP → SIGKILL），204                                                  |
+| DELETE | `/api/sessions/{id}?remove=1`  | 移除已退出会话，204；仍在运行 409                                                  |
+| GET    | `/api/sessions/{id}/buffer`    | 下载完整原始缓冲（`application/octet-stream`）                                     |
+| POST   | `/api/sessions/{id}/upload`    | 上传文件，见下文                                                                   |
+| POST   | `/api/sessions/{id}/artifacts` | 确保会话临时文件夹存在，200 `{path}`，见下文                                       |
 
 创建请求有两种互斥形式：
 

@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,4 +107,35 @@ func TestFirstPromptTitleSkipped(t *testing.T) {
 			t.Fatalf("title %q, want %q", got, dir)
 		}
 	})
+}
+
+// A user-chosen name outlives the agent's titles and a close and resume.
+func TestRenamedSessionKeepsNameAcrossResume(t *testing.T) {
+	h := newHarness(t, 0)
+	in := h.input(omp.Name, SideACP)
+	in.Name = ""
+	s := h.create(in)
+	id := s.Info().ID
+	if _, err := h.manager.Rename(id, "我的任务"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.svc.SetName(id, "我的任务"); err != nil {
+		t.Fatal(err)
+	}
+	chatTurn(t, h, id, "/title")
+	st := s.Info()
+	if st.Title != "我的任务" {
+		t.Fatalf("agent title replaced the name: %q", st.Title)
+	}
+	h.closeSession(id)
+	if rec := h.record(id); rec.Name != "我的任务" {
+		t.Fatalf("record name %q", rec.Name)
+	}
+	resumed := h.mustResume(id, ResumeInput{Side: SideACP, Env: in.Env})
+	if got := resumed.Info().Title; got != "我的任务" {
+		t.Fatalf("title after resume %q", got)
+	}
+	if err := h.svc.SetName("missing1", "x"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown record: %v", err)
+	}
 }

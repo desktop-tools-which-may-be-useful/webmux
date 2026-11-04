@@ -252,6 +252,13 @@
   - 中键或 Ctrl/⌘/Shift 点击保留浏览器默认的新标签页或新窗口行为；
   - 终端页“返回会话列表”回到首页，列表继续实时更新；
   - 主屏幕应用同样在应用内导航。
+- **US-C15 手动修改会话标题**：作为使用者，我希望在首页会话卡片菜单里手动给会话起名，以便在 agent 不自动更新标题时仍能分辨会话。
+  验收要点：
+  - 卡片菜单的“修改标题”打开对话框，预填当前标题，Enter 或“保存”提交，取消不改动；
+  - 手动标题优先于终端 OSC 与 agent 报告的标题，之后的自动标题不再覆盖它；
+  - 保存成功后标题经会话列表同步到所有设备，混合会话归档后恢复仍保留该名称；
+  - 留空保存则恢复自动标题：普通会话在终端或 agent 再次报告前显示启动目录名，混合会话立即恢复其上一个自动标题（如首条提示标题）；
+  - 含控制字符或超过 512 字节的名称被拒绝并在对话框内显示原因，原标题不变；跨 Origin 请求同样被拒绝。
 
 依据：
 
@@ -265,4 +272,5 @@
 - [标签页指示](../../web/src/browser-chrome.ts)、[终端状态接线](../../web/src/hooks/terminal-socket.svelte.ts)、[指示浏览器用例](../../web/test/browser/BrowserChrome.test.ts)
 - [指示端到端用例](../../web/test/e2e/browser-chrome.spec.ts)、[推送与设置卡片](../../web/src/push.ts)、[推送卡片](../../web/src/components/PushSettings.svelte)
 - [推送负载](../../internal/push/alert.go)
+- [修改标题对话框](../../web/src/components/RenameSessionDialog.svelte)、[标题浏览器用例](../../web/test/browser/RenameSessionDialog.test.ts)、[重命名实现](../../internal/session/manager.go)
 - [Service Worker](../../web/public/sw.js)、[推送设置用例](../../web/test/browser/PushSettings.test.ts)、[推送端到端用例](../../web/test/e2e/push.spec.ts)。

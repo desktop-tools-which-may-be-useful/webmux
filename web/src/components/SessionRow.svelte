@@ -2,6 +2,7 @@
   import { onDestroy } from "svelte";
   import { navigate } from "../api";
   import SessionStatus from "./SessionStatus.svelte";
+  import RenameSessionDialog from "./RenameSessionDialog.svelte";
   import type { SessionInfo } from "../schemas";
   import { previewFor } from "../launchPreviews.svelte";
   import { selectPreview } from "../preview";
@@ -66,6 +67,7 @@
   $effect(() => {
     if (hidden) menuOpen = false;
   });
+  let renaming = $state(false);
   let copyNotice = $state("");
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   onDestroy(() => clearTimeout(copyTimer));
@@ -234,6 +236,9 @@
           <DropdownMenu.Item onSelect={() => void copyDirectory()}
             >{copyTarget.label}</DropdownMenu.Item
           >
+          <DropdownMenu.Item onSelect={() => (renaming = true)}
+            >修改标题</DropdownMenu.Item
+          >
           <DropdownMenu.Separator />
           {@const archivable =
             session.status !== "exited" && session.hybrid?.state === "active"}
@@ -250,6 +255,10 @@
         </DropdownMenu.Content>{/if}
     </DropdownMenu.Root>
   </Item.Actions>
+  {#if renaming}<RenameSessionDialog
+      {session}
+      onclose={() => (renaming = false)}
+    />{/if}
 </Item.Root>
 
 <style>

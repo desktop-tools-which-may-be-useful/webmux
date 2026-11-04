@@ -559,3 +559,10 @@ func (s *Service) SetPermissionMode(ctx context.Context, id string, in Permissio
 	})
 	return err
 }
+
+// SetName records the user-chosen name of session id (empty for none), so a
+// recovered session keeps it. A session without a record answers ErrNotFound.
+func (s *Service) SetName(id, name string) error {
+	_, err := s.records.update(id, true, func(r *Record) { r.Name = name })
+	return err
+}

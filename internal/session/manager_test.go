@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestCreateRejectsInvalidInput(t *testing.T) {
@@ -26,5 +28,60 @@ func TestCreateAfterShutdown(t *testing.T) {
 	manager.Shutdown(context.Background())
 	if _, err := manager.Create(CreateInput{Cmd: []string{"/bin/sh"}}); !errors.Is(err, ErrShuttingDown) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRenameOutranksTerminalTitle(t *testing.T) {
+	cwd := t.TempDir()
+	manager := NewManager(Options{DefaultCwd: cwd})
+	t.Cleanup(func() { manager.Shutdown(context.Background()) })
+	s, err := manager.Create(CreateInput{Cmd: []string{"/bin/sh", "-c", `sleep 0.3; printf '\033]0;from terminal\007'; sleep 30`}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := s.Info().ID
+	sub := manager.Subscribe()
+	defer manager.Unsubscribe(sub)
+
+	info, err := manager.Rename(id, "  my task ")
+	if err != nil || info.Title != "my task" || info.PlaceholderTitle {
+		t.Fatalf("rename: %+v %v", info, err)
+	}
+	if e := <-sub.Out; e.Type != "snapshot" {
+		t.Fatalf("first event %+v", e)
+	}
+	if e := <-sub.Out; e.Type != "updated" || e.Session == nil || e.Session.Title != "my task" {
+		t.Fatalf("list event %+v", e)
+	}
+	time.Sleep(700 * time.Millisecond)
+	if got := s.Info().Title; got != "my task" {
+		t.Fatalf("terminal title replaced the name: %q", got)
+	}
+
+	// An empty name hands the title back: the directory until the terminal
+	// reports one again.
+	info, err = manager.Rename(id, "")
+	if err != nil || info.Title != filepath.Base(cwd) || !info.PlaceholderTitle {
+		t.Fatalf("clear: %+v %v", info, err)
+	}
+}
+
+func TestRenameRejectsInvalidNames(t *testing.T) {
+	manager := NewManager(Options{DefaultCwd: t.TempDir()})
+	t.Cleanup(func() { manager.Shutdown(context.Background()) })
+	s, err := manager.Create(CreateInput{Cmd: []string{"/bin/sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a\nb", "a\x1b[31m", strings.Repeat("长", MaxNameBytes), "\xff"} {
+		if _, err := manager.Rename(s.Info().ID, name); !errors.Is(err, ErrInvalid) {
+			t.Errorf("name %q: %v", name, err)
+		}
+	}
+	if _, err := manager.Rename("missing1", "x"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing session: %v", err)
+	}
+	if got := s.Info().Title; got == "" || strings.ContainsAny(got, "\n\x1b") {
+		t.Fatalf("rejected rename changed the title to %q", got)
 	}
 }

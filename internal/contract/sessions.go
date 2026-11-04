@@ -112,3 +112,9 @@ type CreateSessionRequest struct {
 	ConfigID  *string             `json:"configId,omitempty"`
 	StartSide HybridSide          `json:"startSide,omitempty"`
 }
+
+// RenameSessionRequest is the body of PATCH /api/sessions/{id}. An empty
+// name hands the title back to the terminal or agent.
+type RenameSessionRequest struct {
+	Name string `json:"name"`
+}

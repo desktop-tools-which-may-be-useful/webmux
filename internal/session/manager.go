@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/rainchan/webmux/internal/pathutil"
 )
@@ -437,4 +440,37 @@ func (m *Manager) SetWorkspace(id, cwd string, workspace *Workspace) {
 	s.broadcastLocked(s.stateLocked())
 	s.mu.Unlock()
 	m.publishLocked(Event{Type: "updated", Session: &info})
+}
+
+// MaxNameBytes bounds a user-chosen session name, the same limit an OSC title
+// is held to.
+const MaxNameBytes = 512
+
+// Rename gives session id the user-chosen name, which then outranks terminal
+// and agent titles. An empty name hands the title back to them, showing the
+// launch directory until one arrives. A name is trimmed and may not hold
+// control characters or exceed MaxNameBytes.
+func (m *Manager) Rename(id, name string) (Info, error) {
+	name = strings.TrimSpace(name)
+	if len(name) > MaxNameBytes || !utf8.ValidString(name) || strings.ContainsFunc(name, unicode.IsControl) {
+		return Info{}, fmt.Errorf("%w: 名称不能含控制字符或超过 %d 字节", ErrInvalid, MaxNameBytes)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sessions[id]
+	if !ok {
+		return Info{}, ErrNotFound
+	}
+	s.mu.Lock()
+	s.userTitle = name
+	s.info.Title = filepath.Base(s.info.Cwd)
+	s.info.PlaceholderTitle = name == ""
+	if name != "" {
+		s.info.Title = name
+	}
+	info := s.infoLocked()
+	s.broadcastLocked(s.stateLocked())
+	s.mu.Unlock()
+	m.publishLocked(Event{Type: "updated", Session: &info})
+	return info, nil
 }

@@ -290,6 +290,15 @@ func chatFailure(w http.ResponseWriter, err error) {
 	}
 }
 
+// renameFailure answers a session rename: session errors, plus the hybrid
+// statuses of a record that cannot be written.
+func renameFailure(w http.ResponseWriter, err error) {
+	if hybridFailure(w, err) {
+		return
+	}
+	failure(w, sessionStatus(err), err)
+}
+
 // sessionFailure answers a session start: a saved launch config keeps its
 // launch statuses and a hybrid session its hybrid statuses (a full record
 // store is a 409 with reason limit); everything else is a workspace error.

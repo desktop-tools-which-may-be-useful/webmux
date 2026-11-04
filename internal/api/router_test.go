@@ -19,6 +19,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/wire"
 )
@@ -332,5 +333,81 @@ func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(info.Cmd, []string{"/bin/echo", "two words", "$HOME"}) {
 		t.Fatalf("command arguments: %+v", info)
+	}
+}
+
+func TestSessionRename(t *testing.T) {
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	}()
+	s, err := m.Create(session.CreateInput{Cmd: []string{"/bin/sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := s.Info().ID
+	handler := New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
+	patch := func(path, body, origin string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("PATCH", path, strings.NewReader(body))
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := patch("/api/sessions/"+id, `{"name":"x"}`, "http://evil.example"); rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign origin: status %d", rec.Code)
+	}
+	if got := s.Info().Title; got == "x" {
+		t.Fatal("rejected origin still renamed the session")
+	}
+	rec := patch("/api/sessions/"+id, `{"name":" 发布检查 "}`, "")
+	var info contract.SessionInfo
+	if err := json.Unmarshal(rec.Body.Bytes(), &info); rec.Code != http.StatusOK || err != nil || info.Title != "发布检查" {
+		t.Fatalf("rename: status %d %s", rec.Code, rec.Body.String())
+	}
+	for _, tc := range []struct {
+		path, body string
+		want       int
+	}{
+		{"/api/sessions/" + id, `{"name":"a\nb"}`, http.StatusBadRequest},
+		{"/api/sessions/" + id, `{"name":"x","extra":1}`, http.StatusBadRequest},
+		{"/api/sessions/" + id, `{"name":"x"} {}`, http.StatusBadRequest},
+		{"/api/sessions/zzzzzzzz", `{"name":"x"}`, http.StatusNotFound},
+	} {
+		if rec := patch(tc.path, tc.body, ""); rec.Code != tc.want {
+			t.Errorf("%s %s: status %d, want %d", tc.path, tc.body, rec.Code, tc.want)
+		}
+	}
+	if got := s.Info().Title; got != "发布检查" {
+		t.Fatalf("a rejected rename changed the title to %q", got)
+	}
+}
+
+// An ordinary shell's rename must not depend on the hybrid record store: a
+// closed store only disables hybrid sessions.
+func TestSessionRenameIgnoresUnavailableHybridStore(t *testing.T) {
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	}()
+	s, err := m.Create(session.CreateInput{Cmd: []string{"/bin/sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hybrids := hybrid.New(hybrid.Options{StateDir: t.TempDir(), Manager: m})
+	hybrids.Close()
+	handler := New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Hybrid: hybrids}))
+	req := httptest.NewRequest("PATCH", "/api/sessions/"+s.Info().ID, strings.NewReader(`{"name":"plain"}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || s.Info().Title != "plain" {
+		t.Fatalf("rename with closed hybrid store: status %d title %q %s", rec.Code, s.Info().Title, rec.Body.String())
 	}
 }
