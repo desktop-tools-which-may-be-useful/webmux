@@ -229,6 +229,7 @@ func TestCodexExternalWriter(t *testing.T) {
 	id := s.Info().ID
 	tuiTurn(t, s, "one")
 	h.waitEligible(id)
+	waitFor(t, "session from the writer lock", func() bool { return s.Info().Hybrid.AgentSessionID != nil })
 	sid := *s.Info().Hybrid.AgentSessionID
 	h.closeSession(id)
 	other, err := h.manager.Create(session.CreateInput{Cwd: in.Cwd, Cmd: []string{in.Cmd[0], "resume", sid}, Env: in.Env})
