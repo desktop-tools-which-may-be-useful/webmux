@@ -3,7 +3,6 @@ import { defineConfig, devices } from "@playwright/test";
 
 export function resolveE2EWorkers(
   env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform,
   parallelism = availableParallelism(),
 ): number {
   const override = env.WEBMUX_E2E_WORKERS;
@@ -13,7 +12,7 @@ export function resolveE2EWorkers(
       throw new Error("WEBMUX_E2E_WORKERS must be a positive integer");
     return workers;
   }
-  if (env.CI) return platform === "darwin" ? 4 : 2;
+  if (env.CI) return 2;
   return Math.min(2, parallelism);
 }
 
@@ -25,9 +24,9 @@ export default defineConfig({
   // workers and shards instead of leaving a worker idle at a file boundary.
   fullyParallel: true,
   // Each worker fixture owns its backend and sessions, so workers never
-  // share state or reuse dev servers. Keep Ubuntu's two slots and macOS's
-  // four to overlap PTY/Git and browser waits. Local runs use up to two to
-  // cut the serial wall clock; WEBMUX_E2E_WORKERS overrides everywhere.
+  // share state or reuse dev servers. CI keeps two slots to overlap PTY/Git
+  // and browser waits. Local runs use up to two to cut the serial wall
+  // clock; WEBMUX_E2E_WORKERS overrides everywhere.
   workers: resolveE2EWorkers(),
   forbidOnly: Boolean(process.env.CI),
   failOnFlakyTests: Boolean(process.env.CI),

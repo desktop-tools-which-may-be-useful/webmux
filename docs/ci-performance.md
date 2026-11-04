@@ -22,7 +22,7 @@ E2E 的 worker 数从 2 调到 4，Storybook 从 2 调到 6，使用同一台机
 
 - 本地 E2E 默认使用 `min(2, CPU 数)` 个 worker，CPU 不少于 2 时为 2。
 - `WEBMUX_E2E_WORKERS` 在所有环境覆盖该值；`WEBMUX_E2E_WORKERS=1` 可回退串行排查 flaky。
-- Ubuntu CI 的 2 个与 macOS CI 的 4 个 worker 保持不变。
+- CI 的 E2E 使用 2 个 worker（macOS runner 已移除，见文末）。
 - Go 测试默认 `-parallel=4`，多核本机可提高 `GO_TEST_PARALLEL`（例如 `make test GO_TEST_PARALLEL=8`）。
 
 ## 改动
@@ -143,3 +143,8 @@ PR 运行 [41287420287](https://github.com/mzdluo123/webmux/actions/runs/4128742
 - E2E 运行时 65 秒产出（原约 170 秒）；E2E 分片最晚约 3 分 45 秒结束。
 - macOS Go race 96 秒（原 199 秒）。
 - 关键路径变为 Storybook job（约 4 分 40 秒，其中构建与测试 3 分 56 秒），是下一轮的优化对象。
+
+2026-11-04：移除 macOS Go race 与两个 macOS E2E 分片，上文的 macOS 数据保留为历史记录。
+
+- 原因：GitHub macOS arm64 runner 容量不足，job 排队约 20 分钟后以“未被 runner 接收”失败；重跑又遇到 runner 上 `git` 段错误，使 `Test result` 失败。
+- 现状：CI 只剩 Ubuntu 与 Windows 安装程序冒烟，`E2E runtime` 只构建 Linux 程序；macOS 构建仍由 Ubuntu 的 `GOOS=darwin go vet` 检查。

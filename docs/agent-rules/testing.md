@@ -34,7 +34,7 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
   - E2E/performance reuse them via `WEBMUX_E2E_BINARY`. Agents are found in `agents/` beside it.
   - `make test-fast` skips Storybook, E2E and performance.
 - Workers share only the immutable executables. Each has an independent backend, HOME/config/workdirs, fake-agent session stores (the agents come first on each backend's `PATH`) and dynamic ports.
-  - Up to two workers locally, two on Ubuntu CI and four on macOS CI. `WEBMUX_E2E_WORKERS` overrides.
+  - Up to two workers locally and two on CI. `WEBMUX_E2E_WORKERS` overrides.
   - Session, process and hybrid-record cleanup is automatic.
 - Do not connect tests to an existing developer service.
 
@@ -42,7 +42,7 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
 
 - CI classifies changed paths in the `Classify changes` job (`.github/scripts/classify-changes.sh`).
   - Docs-only changes run the formatting, documentation, persistence and agent/web static guards without the test suites.
-  - Go-only changes skip Vitest, Storybook and performance. Web-only changes skip both Go race jobs, the Windows cross-compile and the Windows installer smoke. E2E still runs for either.
+  - Go-only changes skip Vitest, Storybook and performance. Web-only changes skip Go race, the Windows cross-compile and the Windows installer smoke. E2E still runs for either.
   - Unknown paths, `.github/**`, `Makefile`, module/lockfile changes and installer tooling force a full run. Do not use `on.pull_request.paths`: the required `Test result` check must always report.
   - The job validates the base itself, forces a full run for any `.github/` change, and executes the base revision's classifier so a PR cannot weaken the rules that skip its own tests.
   - Every push to main forces the complete suite (classification is skipped), so a merged commit normally has a full result.
@@ -52,12 +52,12 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
     - Fallback: not on main, no run, a failed or partial run, or the run did not finish within the wait budget. `Checks` calls `test.yml` with `full: true` itself.
     - `sign` and `publish` need one of the two to have passed, so a tag never releases without the complete suite.
   - The release `Build` job only builds, checksums and verifies the real artifacts (including the deb/rpm install check); it does not rerun Go tests, which `Go race` already covers.
-- CI builds the Linux and macOS E2E executables, fake agents and frontend output once in the `E2E runtime` job (`.github/scripts/package-e2e-runtime.mjs`).
-  - Go race, macOS Go race and every E2E shard depend on that job and reuse its same-run artifact, including the locked Playwright runtime.
+- CI builds the Linux E2E executable, fake agents and frontend output once in the `E2E runtime` job (`.github/scripts/package-e2e-runtime.mjs`).
+  - Go race and every E2E shard depend on that job and reuse its same-run artifact, including the locked Playwright runtime.
 - `.github/workflows/test.yml` runs parallel jobs:
   - Ubuntu: formatting/architecture guard/frontend build, Go race, Vitest, Storybook, single-worker 4x CPU performance, and four E2E shards (desktop and mobile projects).
   - E2E shards reuse the executable and Playwright packages; they skip pnpm/frontend dependencies and Go setup.
-  - macOS: native Go race (excluding the static guards `archtest`/`docguard` and the Windows `tray`/`wsl`/`wslclient` packages) using the shared frontend output, and two desktop-project E2E shards on separate runners.
+  - No macOS runner: GitHub's macOS arm64 capacity left jobs queued until they failed. The Ubuntu Go job vets the darwin build (`GOOS=darwin go vet`); macOS runtime behaviour (process tree, `sysctl`, `/private/var` paths) is not tested in CI, so run `make test` on a Mac when changing it.
   - `Test result` aggregates every job, accepts intentionally `skipped` results, and cross-checks that every job the classifier selected actually succeeded.
 - Every browser job installs Chromium through `.github/actions/playwright`, which caches the Linux apt packages because a slow Ubuntu mirror can otherwise consume a job's whole timeout.
 - Go modules and the Go build/test cache use separate keys: modules follow `go.mod`/`go.sum`, while the build cache rolls over weekly (and on module changes) so `main` refreshes it without saving a full copy per Go commit.

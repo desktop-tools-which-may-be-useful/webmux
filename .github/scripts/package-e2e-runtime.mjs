@@ -25,19 +25,16 @@ await cp(join(web, "dist"), join(destination, "web/dist"), {
   recursive: true,
 });
 
-// Each runner's shards get the backend and, in agents/ beside it, the fake
-// agent under the names agentprofile recognises (as `make e2e-runtime`
-// lays out .cache/webmux-e2e), so they need no Go toolchain.
+// The E2E shards get the backend and, in agents/ beside it, the fake agent
+// under the names agentprofile recognises (as `make e2e-runtime` lays out
+// .cache/webmux-e2e), so they need no Go toolchain.
 function build(platform, arch, output, pkg) {
   execFileSync("go", ["build", "-trimpath", "-o", output, pkg], {
     env: { ...process.env, CGO_ENABLED: "0", GOOS: platform, GOARCH: arch },
     stdio: "inherit",
   });
 }
-for (const [platform, arch] of [
-  ["linux", "amd64"],
-  ["darwin", "arm64"],
-]) {
+for (const [platform, arch] of [["linux", "amd64"]]) {
   const runtime = join(destination, ".ci-runtime", platform);
   const agents = join(runtime, "agents");
   await mkdir(agents, { recursive: true });
