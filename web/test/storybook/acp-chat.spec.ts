@@ -82,8 +82,13 @@ for (const { name, viewport, theme, textScale } of layouts) {
       const archived = page.getByRole("region", {
         name: "webmux 的已归档会话",
       });
-      await expect(archived.getByText("刚归档")).toBeVisible();
       await expect(archived.getByText("1 条已中断")).toBeVisible();
+      await archived.getByRole("button", { name: /已归档/ }).click();
+      await expect(
+        archived.getByText(
+          "omp · 修复首页排序后补充回归测试与文档说明，确认长标题会截断",
+        ),
+      ).toBeVisible();
       await page.evaluate(async (scale) => {
         document.documentElement.style.fontSize = `${Number(scale) * 100}%`;
         await document.fonts.ready;
