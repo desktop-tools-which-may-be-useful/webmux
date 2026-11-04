@@ -225,6 +225,44 @@ export const test = base.extend<
 
 export { expect };
 
+// New-session dialog pickers. Option names start with the item title and
+// continue with its command or path.
+async function pick(page: Page, field: "位置" | "运行", name: string) {
+  await page.getByRole("button", { name: field, exact: true }).click();
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await page
+    .getByRole("option", { name: new RegExp(`^${escaped}`) })
+    .first()
+    .click();
+}
+
+export async function chooseLaunch(page: Page, name: string) {
+  await pick(page, "运行", name);
+}
+
+export async function chooseLocation(page: Page, name: string) {
+  await pick(page, "位置", name);
+}
+
+export async function useCustomCommand(page: Page, command: string) {
+  await chooseLaunch(page, "自定义命令…");
+  await page.getByLabel("自定义启动命令", { exact: true }).fill(command);
+}
+
+export async function useDirectory(page: Page, cwd: string) {
+  await expect(
+    page.getByRole("button", { name: "位置", exact: true }),
+  ).toBeVisible();
+  const input = page.getByLabel("工作目录", { exact: true });
+  if (!(await input.isVisible())) await chooseLocation(page, "输入或浏览目录…");
+  await input.fill(cwd);
+}
+
+export async function nameSession(page: Page, name: string) {
+  await page.getByRole("button", { name: "高级：会话名称" }).click();
+  await page.getByLabel("会话名称", { exact: false }).fill(name);
+}
+
 export async function createShell(
   page: Page,
   name = "E2E shell",
@@ -235,15 +273,9 @@ export async function createShell(
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page
-    .getByLabel("自定义启动命令", { exact: true })
-    .fill("/bin/bash --noprofile --norc -i");
-  if (cwd) {
-    await page.getByRole("tab", { name: "直接目录", exact: true }).click();
-    await page.getByLabel("工作目录", { exact: true }).fill(cwd);
-  }
-  await page.getByLabel("会话名称", { exact: false }).fill(name);
+  await useCustomCommand(page, "/bin/bash --noprofile --norc -i");
+  if (cwd) await useDirectory(page, cwd);
+  await nameSession(page, name);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
   await expectConnected(page);

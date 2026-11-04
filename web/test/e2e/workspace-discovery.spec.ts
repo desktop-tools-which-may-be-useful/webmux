@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { test, expect } from "./fixtures";
+import { test, expect, nameSession } from "./fixtures";
 
 test("workspace search shortcuts clear filters without capturing dialog input", async ({
   page,
@@ -24,8 +24,8 @@ test("workspace search shortcuts clear filters without capturing dialog input", 
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话" })
     .click();
+  await nameSession(page, "review");
   const name = page.getByLabel("会话名称", { exact: false });
-  await name.fill("review");
   await page.keyboard.type("/branch");
   await expect(name).toHaveValue("review/branch");
   await expect(search).toHaveValue("");

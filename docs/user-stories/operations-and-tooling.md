@@ -285,7 +285,7 @@
 质量基线补充依据：
 
 - [ESLint 与 TypeScript 配置](../../web/eslint.config.mjs)、[测试类型配置](../../web/tsconfig.test.json)、[wire 契约测试](../../web/test/wire-contract.test.ts)
-- [新建会话与 Dialog 浏览器回归](../../web/test/browser/NewSessionSheet.test.ts)、[主题与可访问性 E2E](../../web/test/e2e/frontend-quality.spec.ts)、[上传失败 E2E](../../web/test/e2e/upload.spec.ts)
+- [新建会话与 Dialog 浏览器回归](../../web/test/browser/NewSessionDialog.test.ts)、[主题与可访问性 E2E](../../web/test/e2e/frontend-quality.spec.ts)、[上传失败 E2E](../../web/test/e2e/upload.spec.ts)
 - [列表重连 E2E](../../web/test/e2e/workspace-discovery.spec.ts)。
 
 Pullfrog 依据：[workflow](../../.github/workflows/pullfrog.yml)、[订阅模型配置](../../CONTRIBUTING.md#pullfrog-模型配置)。

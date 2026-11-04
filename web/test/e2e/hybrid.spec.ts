@@ -5,11 +5,14 @@ import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { APIRequestContext, Page } from "@playwright/test";
 import {
+  chooseLaunch,
   expect,
   expectTerminalLine,
+  nameSession,
   openSessionLink,
   runCommand,
   test,
+  useDirectory,
 } from "./fixtures";
 import type { E2EServer } from "./server.mjs";
 
@@ -211,11 +214,7 @@ test.describe("hybrid sessions with the fake agent", () => {
         .locator("header")
         .getByRole("button", { name: "＋ 新建会话", exact: true })
         .click();
-      await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-      await page
-        .getByRole("combobox", { name: "选择启动配置", exact: true })
-        .click();
-      await page.getByRole("option", { name, exact: true }).click();
+      await chooseLaunch(page, name);
       await page
         .getByRole("tablist", { name: "起始端", exact: true })
         .getByRole("tab", {
@@ -223,10 +222,8 @@ test.describe("hybrid sessions with the fake agent", () => {
           exact: true,
         })
         .click();
-      await page.getByLabel("工作目录", { exact: true }).fill(workDir);
-      await page
-        .getByLabel("会话名称", { exact: false })
-        .fill("E2E round trip");
+      await useDirectory(page, workDir);
+      await nameSession(page, "E2E round trip");
       await page
         .getByRole("button", { name: "创建并进入 →", exact: true })
         .click();
@@ -890,11 +887,7 @@ test.describe("hybrid sessions with the fake agent", () => {
         .locator("header")
         .getByRole("button", { name: "＋ 新建会话", exact: true })
         .click();
-      await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-      await page
-        .getByRole("combobox", { name: "选择启动配置", exact: true })
-        .click();
-      await page.getByRole("option", { name, exact: true }).click();
+      await chooseLaunch(page, name);
       await expect(
         page.getByText(`聊天端需要另外安装 ${row.connector}`),
       ).toBeVisible();
@@ -902,7 +895,7 @@ test.describe("hybrid sessions with the fake agent", () => {
         .getByRole("tablist", { name: "起始端", exact: true })
         .getByRole("tab", { name: "从聊天开始", exact: true })
         .click();
-      await page.getByLabel("工作目录", { exact: true }).fill(workDir);
+      await useDirectory(page, workDir);
       await page
         .getByRole("button", { name: "创建并进入 →", exact: true })
         .click();

@@ -176,6 +176,11 @@ async function chooseStartBranch(name: string) {
   await page.getByRole("option", { name, exact: true }).click();
 }
 const reference = () => page.getByRole("status", { name: "提交引用" });
+// The start commit and path live in the folded advanced section.
+async function show() {
+  render(Harness, { repository });
+  await page.getByRole("button", { name: /^高级：/ }).click();
+}
 
 afterEach(async () => {
   try {
@@ -189,7 +194,7 @@ afterEach(async () => {
 
 test("lists recent commits of the start branch and selects one by title", async () => {
   serve();
-  render(Harness, { repository });
+  await show();
   await expect.element(baseInput()).toMatchTextContent(/最新提交/);
   await expect.element(reference()).toHaveTextContent(head);
 
@@ -213,7 +218,7 @@ test("switching the start branch lists that branch's history", async () => {
       { name: "release", head: other, worktreePaths: [] },
     ],
   });
-  render(Harness, { repository });
+  await show();
   await expect.element(reference()).toHaveTextContent(head);
   await chooseStartBranch("release");
   await expect.element(reference()).toHaveTextContent(other);
@@ -229,7 +234,7 @@ test("a detached default lists history from the main worktree commit", async () 
     defaultBaseSubject: "独立提交 <title> & 引号",
     defaultBranch: null,
   });
-  render(Harness, { repository });
+  await show();
   await expect.element(reference()).toHaveTextContent(head);
   await openBase();
   await expect
@@ -248,7 +253,7 @@ test("a failed history read keeps the default base selectable", async () => {
       ? Response.json({ error: "boom" }, { status: 500 })
       : base(input, init),
   );
-  render(Harness, { repository });
+  await show();
   await expect.element(page.getByText(/无法读取最近提交/)).toBeVisible();
   await openBase();
   await expect.element(options()).toHaveLength(1);
@@ -267,7 +272,7 @@ test("refresh lists a diverged upstream tip without making it the default", asyn
       fetchWarning: "本地分支包含上游未有的提交，保留本地基线",
     }),
   );
-  render(Harness, { repository });
+  await show();
   await expect.element(page.getByText(/上游未有/)).toBeVisible();
   await openBase();
   await expect.element(options()).toHaveLength(3);
@@ -291,10 +296,9 @@ test("prefills an editable suggestion and does not refill after a manual clear",
     },
     { random: () => 0 },
   );
-  render(Harness, { repository });
+  await show();
 
   await expect.element(branchInput()).toHaveValue(expected);
-  await page.getByRole("button", { name: /^存放目录/ }).click();
   await expect
     .element(pathInput())
     .toHaveValue(`/repos/project.worktrees/${expected.split("/").at(-1)}`);
@@ -324,7 +328,7 @@ test("prefills an editable suggestion and does not refill after a manual clear",
 test("mode switch regenerates a new branch and a failed list stays empty", async () => {
   vi.spyOn(Math, "random").mockReturnValue(0);
   serve();
-  render(Harness, { repository });
+  await show();
   await expect
     .poll(() => branchInput().element().value)
     .toMatch(/^wt\/[a-z]+-[a-z]+$/);
@@ -338,7 +342,7 @@ test("mode switch regenerates a new branch and a failed list stays empty", async
 
   await cleanup();
   serve(503);
-  render(Harness, { repository });
+  await show();
   await expect
     .element(page.getByRole("alert"))
     .toHaveTextContent("无法读取分支");
@@ -357,7 +361,7 @@ test("search selects the literal branch and ignores occupied matches without los
       { name: "feature/branch-042", head, worktreePaths: [] },
     ],
   });
-  render(Harness, { repository });
+  await show();
   await page.getByRole("button", { name: "使用已有分支", exact: true }).click();
   const search = page.getByRole("combobox", {
     name: "已有本地分支",
@@ -377,7 +381,6 @@ test("search selects the literal branch and ignores occupied matches without los
     .not.toBeInTheDocument();
   await expect.element(ready()).toHaveTextContent("not-ready");
   await userEvent.keyboard("{Enter}");
-  await page.getByRole("button", { name: /^存放目录/ }).click();
   await expect
     .element(pathInput())
     .toHaveValue("/repos/project.worktrees/branch-042");
@@ -410,7 +413,7 @@ test("upstream refresh stays nonblocking and manual refresh updates the default"
       ? first.promise
       : Response.json(remoteRefresh(branch, manualHead, "手动刷新"));
   });
-  render(Harness, { repository });
+  await show();
 
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
@@ -439,7 +442,7 @@ test("a late response cannot replace a newer branch selection", async () => {
     }
     return Response.json(remoteRefresh(branch, selectedHead));
   });
-  render(Harness, { repository });
+  await show();
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);
@@ -461,7 +464,7 @@ test("a late response cannot replace a newer branch selection", async () => {
 test("a refresh response preserves a commit picked after the request", async () => {
   const pending = deferred<Response>();
   serve(200, branches, () => pending.promise);
-  render(Harness, { repository });
+  await show();
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);
@@ -485,7 +488,7 @@ test("a failed manual refresh clears the previous remote-latest label", async ()
       ? Response.json(remoteRefresh(branch, remoteHead))
       : Response.json({ error: "fetch failed" }, { status: 500 });
   });
-  render(Harness, { repository });
+  await show();
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/远程最新/);
@@ -503,7 +506,7 @@ test("failed refreshes keep the local base and form availability", async () => {
   serve(200, branches, () =>
     Response.json({ error: "fetch failed" }, { status: 500 }),
   );
-  render(Harness, { repository });
+  await show();
   await expect
     .element(page.getByRole("status", { name: "上游刷新警告" }))
     .toMatchTextContent(/保留当前基线/);
@@ -518,7 +521,7 @@ test("mode switches and unmount abort pending refreshes", async () => {
     signals.push(signal);
     return pending.promise;
   });
-  render(Harness, { repository });
+  await show();
   await expect
     .element(page.getByRole("status", { name: "上游刷新状态" }))
     .toMatchTextContent(/正在获取 main/);

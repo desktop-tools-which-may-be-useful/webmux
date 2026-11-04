@@ -484,7 +484,7 @@
 {#if creating}
   {@const target = creating}
   <LazyDialog
-    load={() => import("../components/NewSessionSheet.svelte")}
+    load={() => import("../components/NewSessionDialog.svelte")}
     label="创建表单"
     onclose={closeCreation}
   >
@@ -492,8 +492,11 @@
         {launchConfigs}
         {repositories}
         defaultCwd={target.cwd}
-        initialCwd={target.cwd}
-        initialWorkspace={target.workspace}
+        entry={{
+          kind: "directory",
+          cwd: target.cwd,
+          workspace: target.workspace,
+        }}
         split
         onchange={() => {}}
         onworktreecreated={(tree) => {

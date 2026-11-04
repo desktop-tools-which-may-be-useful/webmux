@@ -9,6 +9,9 @@ import {
   runCommand,
   expectTerminalLine,
   expectConnected,
+  nameSession,
+  useCustomCommand,
+  useDirectory,
 } from "./fixtures";
 import { startE2EServer } from "./server.mjs";
 
@@ -52,6 +55,10 @@ async function openWorktreeCreation(page: Page, withSession = true) {
   await page
     .getByRole("menuitem", { name: "新建工作树…", exact: true })
     .click();
+  // The start commit and path are folded until requested.
+  await page
+    .getByRole("button", { name: "高级：起始提交与存放目录", exact: true })
+    .click();
   if (withSession)
     await page
       .getByRole("checkbox", { name: "创建后启动会话", exact: true })
@@ -71,11 +78,8 @@ async function createTree(page: Page, branch: string, name: string) {
   const path = await page
     .getByLabel("新工作树完整路径", { exact: true })
     .inputValue();
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page
-    .getByLabel("自定义启动命令", { exact: true })
-    .fill("/bin/bash --noprofile --norc -i");
-  await page.getByLabel("会话名称", { exact: false }).fill(name);
+  await useCustomCommand(page, "/bin/bash --noprofile --norc -i");
+  await nameSession(page, name);
   await expect(branchInput).toHaveValue(branch);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
@@ -117,11 +121,8 @@ test("repository → two worktrees → shared PTYs → guarded force removal ret
   await alphaGroup
     .getByRole("button", { name: "新建会话", exact: true })
     .click();
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page
-    .getByLabel("自定义启动命令", { exact: true })
-    .fill("/bin/bash --noprofile --norc -i");
-  await page.getByLabel("会话名称", { exact: false }).fill("Alpha helper");
+  await useCustomCommand(page, "/bin/bash --noprofile --norc -i");
+  await nameSession(page, "Alpha helper");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
   const helperId = new URL(page.url()).pathname.split("/").at(-1)!;
@@ -209,8 +210,7 @@ test("failed agent start retains new worktree and retry does not create again; u
   await expect(branchInput).not.toHaveValue("");
   await branchInput.fill("retry-agent");
   await expect(branchInput).toHaveValue("retry-agent");
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page.getByLabel("自定义启动命令").fill("/webmux-missing-agent");
+  await useCustomCommand(page, "/webmux-missing-agent");
   await expect(branchInput).toHaveValue("retry-agent");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("webmux-missing-agent");
@@ -219,11 +219,10 @@ test("failed agent start retains new worktree and retry does not create again; u
       "工作树已创建。再次提交只启动会话，不会重复创建分支或目录。",
     ),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
   await page
     .getByLabel("自定义启动命令", { exact: true })
     .fill("/bin/bash --noprofile --norc -i");
-  await page.getByLabel("会话名称", { exact: false }).fill("Retained shell");
+  await nameSession(page, "Retained shell");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
   const sessionURL = page.url();
@@ -324,10 +323,7 @@ test("without Git an isolated real service still starts and runs a direct shell"
       .locator("header")
       .getByRole("button", { name: "＋ 新建会话", exact: true })
       .click();
-    await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-    await page
-      .getByLabel("自定义启动命令", { exact: true })
-      .fill("/bin/bash --noprofile --norc -i");
+    await useCustomCommand(page, "/bin/bash --noprofile --norc -i");
     await page
       .getByRole("button", { name: "创建并进入 →", exact: true })
       .click();
@@ -726,11 +722,8 @@ test("direct launch still offers explicit directory creation without registering
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await page.getByLabel("工作目录", { exact: true }).fill(path);
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page
-    .getByLabel("自定义启动命令", { exact: true })
-    .fill("/bin/bash --noprofile --norc -i");
+  await useDirectory(page, path);
+  await useCustomCommand(page, "/bin/bash --noprofile --norc -i");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page

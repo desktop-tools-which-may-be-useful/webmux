@@ -27,7 +27,7 @@
 ## 代码依据
 
 - [终端页面](../../web/src/pages/Terminal.svelte)
-- [统一新建会话](../../web/src/components/NewSessionSheet.svelte)
+- [统一新建会话](../../web/src/components/NewSessionDialog.svelte)
 - [分屏菜单](../../web/src/components/TerminalSplitMenu.svelte)
 - [已有会话选择](../../web/src/components/SplitSessionDialog.svelte)
 - [布局恢复](../../web/src/terminal-layout.ts)

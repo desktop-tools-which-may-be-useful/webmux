@@ -24,7 +24,7 @@ test("workspace defers settings and management forms until requested", async ({
   await expect(page.getByText("还没有会话", { exact: true })).toBeVisible();
   expect(
     scripts.filter((url) =>
-      /\/(Settings|NewSessionSheet|AddRepositoryDialog|RemoveWorktreeDialog|AddHomeWorktreesDialog)-/.test(
+      /\/(Settings|NewSessionDialog|AddRepositoryDialog|RemoveWorktreeDialog|AddHomeWorktreesDialog)-/.test(
         url,
       ),
     ),
@@ -34,7 +34,7 @@ test("workspace defers settings and management forms until requested", async ({
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  expect(scripts.some((url) => /\/NewSessionSheet-/.test(url))).toBe(true);
+  expect(scripts.some((url) => /\/NewSessionDialog-/.test(url))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await page.getByRole("button", { name: "添加仓库", exact: true }).click();
@@ -59,7 +59,7 @@ for (const theme of ["light", "dark"] as const) {
     });
     const requested = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    await page.route("**/assets/NewSessionSheet-*.js", async (route) => {
+    await page.route("**/assets/NewSessionDialog-*.js", async (route) => {
       requested.resolve();
       await release.promise;
       await route.continue();
@@ -100,7 +100,7 @@ for (const theme of ["light", "dark"] as const) {
     });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.route("**/assets/NewSessionSheet-*.js", (route) =>
+    await page.route("**/assets/NewSessionDialog-*.js", (route) =>
       route.abort(),
     );
     await page.goto("/");

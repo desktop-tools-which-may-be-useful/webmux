@@ -3,7 +3,14 @@ import { promisify } from "node:util";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { APIRequestContext, Page } from "@playwright/test";
-import { test, expect, openPaneMenu } from "./fixtures";
+import {
+  chooseLaunch,
+  chooseLocation,
+  expect,
+  openPaneMenu,
+  test,
+  useCustomCommand,
+} from "./fixtures";
 
 const exec = promisify(execFile);
 
@@ -52,24 +59,14 @@ test("global and worktree creation use the selected repository instead of an unr
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await expect(
-    page.getByRole("tab", { name: "已有工作树", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
-  await expect(
-    page.getByRole("combobox", { name: "仓库", exact: true }),
-  ).toContainText("second");
-  await expect(
-    page.getByRole("combobox", { name: "工作树", exact: true }),
-  ).toContainText("main");
+  const location = page.getByRole("button", { name: "位置", exact: true });
+  await expect(location).toContainText("second · 主工作区 · main");
   await page.getByRole("button", { name: "取消", exact: true }).click();
   expect(await (await request.get("/api/sessions")).json()).toEqual([]);
   const group = page.locator(`[data-worktree-id="${second.worktrees[0].id}"]`);
   await group.getByRole("button", { name: "新建会话", exact: true }).click();
-  await expect(
-    page.getByRole("combobox", { name: "仓库", exact: true }),
-  ).toContainText("second");
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page.getByLabel("自定义启动命令", { exact: true }).fill("/bin/sh -i");
+  await expect(location).toContainText("second · 主工作区 · main");
+  await useCustomCommand(page, "/bin/sh -i");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
   const sessions = await (await request.get("/api/sessions")).json();
@@ -103,7 +100,7 @@ test("worktree management creates only a worktree even when launch configs are u
     page.getByRole("checkbox", { name: "创建后启动会话", exact: true }),
   ).not.toBeChecked();
   await expect(
-    page.getByRole("tab", { name: "手动填写", exact: true }),
+    page.getByRole("button", { name: "运行", exact: true }),
   ).toHaveCount(0);
   const branch = page.getByLabel("新分支名称", { exact: true });
   await expect(branch).not.toHaveValue("");
@@ -161,13 +158,7 @@ test("full split creation uses saved configs and keeps the launch subdirectory a
   await page.getByRole("button", { name: "取消", exact: true }).click();
   expect(await (await request.get("/api/sessions")).json()).toHaveLength(1);
   await open();
-  await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "选择启动配置", exact: true })
-    .click();
-  await page
-    .getByRole("option", { name: "Project shell", exact: true })
-    .click();
+  await chooseLaunch(page, "Project shell");
   await page.getByRole("tab", { name: "上下分屏", exact: true }).click();
   await page
     .getByRole("button", { name: "创建并加入分屏 →", exact: true })
@@ -196,7 +187,7 @@ test("split creation retains a new worktree across repository changes after comm
   workDir,
 }, testInfo) => {
   const repo = await register(request, join(workDir, "project"));
-  await register(request, join(workDir, "other"));
+  const other = await register(request, join(workDir, "other"));
   const response = await request.post("/api/sessions", {
     data: { cwd: repo.anchorPath, cmd: ["/bin/sh", "-i"], name: "Original" },
   });
@@ -204,35 +195,28 @@ test("split creation retains a new worktree across repository changes after comm
   await page.goto(`/s/${original.id}`);
   await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "新建会话…", exact: true }).click();
-  await page.getByRole("tab", { name: "新工作树", exact: true }).click();
-  const repository = page.getByRole("combobox", { name: "仓库", exact: true });
-  await repository.click();
-  await page.getByRole("option", { name: "project", exact: true }).click();
+  // The pane's repository is listed first, so its "new worktree" comes first.
+  await chooseLocation(page, "新建工作树…");
+  const location = page.getByRole("button", { name: "位置", exact: true });
+  await expect(location).toContainText("新建工作树 · project");
   const branch = page.getByLabel("新分支名称", { exact: true });
   await expect(branch).not.toHaveValue("");
   await branch.fill("feature/retry-target");
+  await page.getByRole("button", { name: "高级：起始提交与存放目录" }).click();
   const pathInput = page.getByLabel("新工作树完整路径", { exact: true });
   await expect(pathInput).toHaveValue(/\/retry-target$/);
   const path = await pathInput.inputValue();
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page
-    .getByLabel("自定义启动命令", { exact: true })
-    .fill("/webmux-missing-agent");
+  await useCustomCommand(page, "/webmux-missing-agent");
   await page
     .getByRole("button", { name: "创建并加入分屏 →", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("webmux-missing-agent");
-  await expect(
-    page.getByRole("tab", { name: "已有工作树", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
-  await repository.click();
-  await page.getByRole("option", { name: "other", exact: true }).click();
-  await repository.click();
-  await page.getByRole("option", { name: "project", exact: true }).click();
-  await page.getByRole("combobox", { name: "工作树", exact: true }).click();
+  await expect(location).toContainText("project · feature/retry-target");
+  await chooseLocation(page, `主工作区 · main ${other.anchorPath}`);
+  await expect(location).not.toContainText("retry-target");
+  await location.click();
   const retained = page.getByRole("option", {
-    name: "feature/retry-target",
-    exact: true,
+    name: /^feature\/retry-target/,
   });
   await expect(retained).toBeVisible();
   const evidence = process.env.WEBMUX_SESSION_RECOVERY_EVIDENCE_DIR;

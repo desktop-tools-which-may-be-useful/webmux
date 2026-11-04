@@ -48,6 +48,7 @@
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
   import { homeCache } from "../home-cache";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
+  import type { LaunchEntry } from "../newSessionDefaults";
 
   let { drafts }: { drafts: TerminalDrafts } = $props();
 
@@ -102,11 +103,8 @@
   let gitReady = $state(cached.setup?.gitReady ?? false);
   let registryReady = $state(cached.setup?.registryReady ?? false);
   let connection = $state<Connection>("connecting");
-  let creating = $state<{
-    mode: "direct" | "existing" | "new";
-    repositoryId: string;
-    worktreeId: string;
-  } | null>(null);
+  // The new-session dialog is open; `entry` names a contextual entry.
+  let creating = $state<{ entry?: LaunchEntry } | null>(null);
   let adding = $state(false);
   let removing = $state<Worktree | null>(null);
   let curating = $state<Repository | null>(null);
@@ -380,25 +378,8 @@
       ]),
     ),
   );
-  function start(
-    mode: "direct" | "existing" | "new" = repositories.some(
-      (repo) => repo.id === selectedRepository,
-    )
-      ? "existing"
-      : "direct",
-    repositoryId = mode === "existing" ? selectedRepository : "",
-    worktreeId = "",
-  ) {
-    if (mode === "existing" && !worktreeId) {
-      const trees =
-        repositories.find((repo) => repo.id === repositoryId)?.worktrees ?? [];
-      worktreeId =
-        (
-          trees.find((tree) => tree.kind === "main" && tree.available) ??
-          trees.find((tree) => tree.kind !== "bare" && tree.available)
-        )?.id ?? "";
-    }
-    creating = { mode, repositoryId, worktreeId };
+  function start(entry?: LaunchEntry) {
+    creating = { entry };
     // Pick up configs changed on other devices since the page loaded.
     if (launchConfigs.status !== "ready") launchConfigs = { status: "loading" };
     void loadLaunchConfigs();
@@ -709,8 +690,12 @@
               {now}
               onstart={(worktreeId) =>
                 worktreeId === undefined
-                  ? start("new", repo.id)
-                  : start("existing", repo.id, worktreeId)}
+                  ? start({ kind: "new-worktree", repositoryId: repo.id })
+                  : start({
+                      kind: "worktree",
+                      repositoryId: repo.id,
+                      worktreeId,
+                    })}
               oncurate={() => {
                 curating = repo;
               }}
@@ -762,7 +747,7 @@
 {#if creating}
   {@const target = creating}
   <LazyDialog
-    load={() => import("../components/NewSessionSheet.svelte")}
+    load={() => import("../components/NewSessionDialog.svelte")}
     label="创建表单"
     onclose={() => (creating = null)}
   >
@@ -770,10 +755,9 @@
         {launchConfigs}
         {repositories}
         defaultCwd={cwd}
-        initialMode={target.mode}
-        intent={target.mode === "new" ? "worktree" : "session"}
-        initialRepositoryId={target.repositoryId}
-        initialWorktreeId={target.worktreeId}
+        entry={target.entry}
+        selectedRepositoryId={selectedRepository}
+        intent={target.entry?.kind === "new-worktree" ? "worktree" : "session"}
         onchange={() => void refresh()}
         onworktreecreated={(tree) => pin(tree.repositoryId, [tree.id], true)}
         onclose={() => (creating = null)}

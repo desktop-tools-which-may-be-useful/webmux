@@ -1,5 +1,13 @@
 import type { Page } from "@playwright/test";
-import { test, expect, expectTerminalLine, runCommand } from "./fixtures";
+import {
+  chooseLaunch,
+  expect,
+  expectTerminalLine,
+  nameSession,
+  runCommand,
+  test,
+  useDirectory,
+} from "./fixtures";
 
 const card = (page: Page) => page.locator("#launch-configs");
 const secret = "e2e-launch-secret-42";
@@ -34,13 +42,9 @@ async function startFromConfig(page: Page, name: string, cwd: string) {
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "选择启动配置", exact: true })
-    .click();
-  await page.getByRole("option", { name, exact: true }).click();
-  await page.getByLabel("工作目录", { exact: true }).fill(cwd);
-  await page.getByLabel("会话名称", { exact: false }).fill("E2E config");
+  await chooseLaunch(page, name);
+  await useDirectory(page, cwd);
+  await nameSession(page, "E2E config");
   const request = page.waitForRequest(
     (r) =>
       r.method() === "POST" && new URL(r.url()).pathname === "/api/sessions",
@@ -189,20 +193,16 @@ test("configs persist across a settings reload and remain selectable alongside m
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-  const select = page.getByRole("combobox", {
-    name: "选择启动配置",
-    exact: true,
-  });
+  const select = page.getByRole("button", { name: "运行", exact: true });
   await expect(select).toContainText("E2E persisted");
   await expect(select.locator('[data-launch-icon="codex"] svg')).toBeVisible();
   await expect(select).toContainText("/bin/bash --noprofile --norc -i");
   await select.click();
   await expect(
-    page.getByRole("option", { name: "E2E persisted", exact: true }),
+    page.getByRole("option", { name: /^E2E persisted/ }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await chooseLaunch(page, "自定义命令…");
   await expect(
     page.getByLabel("自定义启动命令", { exact: true }),
   ).toBeVisible();

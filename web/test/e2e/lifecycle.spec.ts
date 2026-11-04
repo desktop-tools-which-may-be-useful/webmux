@@ -84,7 +84,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
       await expect(create).toBeEnabled();
       await create.click();
       await expect(
-        page.getByRole("tab", { name: "手动填写", exact: true }),
+        page.getByRole("button", { name: "运行", exact: true }),
       ).toBeVisible();
       await page.getByRole("button", { name: "取消", exact: true }).click();
       await page
