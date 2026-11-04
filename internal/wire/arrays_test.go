@@ -33,7 +33,7 @@ func TestResponseArrayFixture(t *testing.T) {
 		"repository":    Repository(workspace.Repository{Availability: "unavailable"}),
 		"repositories":  Repositories(nil),
 		"branches":      Branches(workspace.Branches{Branches: []workspace.Branch{{Name: "main"}}}),
-		"preview":       Preview(workspace.Preview{Worktree: workspace.Worktree{Kind: "main"}}),
+		"preview":       Preview(workspace.Preview{Worktree: workspace.Worktree{Kind: "main"}}, func(string) bool { return false }),
 		"launch":        LaunchSummaries([]launch.Summary{{ID: "abcdefgh", Name: "Shell", Cmd: []string{"sh"}}}),
 		"launchConfig":  LaunchConfig(launch.Config{ID: "abcdefgh", Name: "Shell", Cmd: []string{"sh"}}),
 		"launchPresets": LaunchPresets([]launch.Preset{{Name: "Shell", Cmd: []string{"sh"}}}),

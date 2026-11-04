@@ -215,6 +215,7 @@
       "error": ""
     },
     "sessions": [],
+    "archived": [],
     "blockers": [],
     "forceAllowed": false
   },

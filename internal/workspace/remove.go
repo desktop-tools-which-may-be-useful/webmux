@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -227,13 +228,69 @@ func (s *Service) PreviewRemoval(ctx context.Context, repositoryID, worktreeID s
 	s.confirmations[id] = confirmation{repositoryID: repositoryID, worktreeID: worktreeID, expires: expires, state: state, timer: timer}
 	s.coord.Unlock()
 	s.mu.Unlock()
-	return Preview{ConfirmationID: id, ExpiresAt: expires, Worktree: state.tree, Sessions: state.sessions, Blockers: state.blockers, ForceAllowed: state.supported}, nil
+	return Preview{
+		ConfirmationID: id, ExpiresAt: expires, Worktree: state.tree, Sessions: state.sessions, Archived: s.targetRecords(state.tree.Path),
+		Blockers: state.blockers, ForceAllowed: state.supported,
+	}, nil
 }
-func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) error {
+
+// RemoveWorktree removes a linked worktree after its confirmation and
+// returns the IDs of the hybrid records it forgot: the closed and
+// interrupted sessions under the removed directory, which cannot resume.
+func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) ([]string, error) {
+	path, err := s.removeWorktree(ctx, repositoryID, worktreeID, req)
+	if err != nil {
+		return nil, err
+	}
+	// The worktree is gone whatever the client does now.
+	forgetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
+	defer cancel()
+	return s.forgetRecords(forgetCtx, path), nil
+}
+
+// targetRecords lists the closed and interrupted hybrid records whose
+// directory lies in path, most recently updated first.
+func (s *Service) targetRecords(path string) []hybrid.Record {
+	result := make([]hybrid.Record, 0)
+	if s.hybrids == nil {
+		return result
+	}
+	list, err := s.hybrids.Records(true)
+	if err != nil {
+		return result
+	}
+	for _, rec := range list {
+		cwd, err := canonicalTarget(rec.Cwd)
+		if err != nil {
+			cwd = filepath.Clean(rec.Cwd)
+		}
+		if within(path, cwd) || within(path, rec.Cwd) {
+			result = append(result, rec)
+		}
+	}
+	return result
+}
+
+// forgetRecords deletes the closed and interrupted hybrid records whose
+// directory lies in removed worktree path, including those of sessions the
+// removal closed. A record that cannot be removed stays recoverable, so it
+// can still be deleted by hand.
+func (s *Service) forgetRecords(ctx context.Context, path string) []string {
+	var forgotten []string
+	for _, rec := range s.targetRecords(path) {
+		if s.hybrids.RemoveRecord(ctx, rec.ID) == nil {
+			forgotten = append(forgotten, rec.ID)
+		}
+	}
+	return forgotten
+}
+
+// removeWorktree performs the removal and returns the removed path.
+func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()
 	if req.Mode != "safe" && req.Mode != "force" {
-		return problemf(ErrInvalid, "删除模式必须为 safe 或 force")
+		return "", problemf(ErrInvalid, "删除模式必须为 safe 或 force")
 	}
 	s.coord.Lock()
 	confirmation, ok := s.confirmations[req.ConfirmationID]
@@ -244,22 +301,22 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 		defer confirmation.state.identity.close()
 	}
 	if !ok || !time.Now().Before(confirmation.expires) || confirmation.repositoryID != repositoryID || confirmation.worktreeID != worktreeID {
-		return problemf(ErrConflict, "删除确认已失效，请重新预览")
+		return "", problemf(ErrConflict, "删除确认已失效，请重新预览")
 	}
 	if req.Mode == "force" && (req.ConfirmPath != confirmation.state.tree.Path || !req.CloseSessions) {
-		return problemf(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
+		return "", problemf(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
 	}
 	r, err := s.repository(repositoryID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := acquire(ctx, r); err != nil {
-		return err
+		return "", err
 	}
 	defer release(r)
 	path := confirmation.state.tree.Path
 	if err := s.reserve(ctx, path); err != nil {
-		return err
+		return "", err
 	}
 	defer s.unreserve(path)
 	// Every execution path releases the reservation and re-reads real Git state,
@@ -271,21 +328,22 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 	}()
 	current, err := s.removalState(ctx, r, worktreeID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer current.identity.close()
 	if !current.supported {
-		return problemf(ErrConflict, "不支持删除此工作树: %v", current.blockers)
+		return "", problemf(ErrConflict, "不支持删除此工作树: %v", current.blockers)
 	}
-	if !sameTarget(confirmation.state, current) || !sameSessions(confirmation.state.sessions, current.sessions, false) {
-		return problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
+	if !sameTarget(confirmation.state, current) || !sameSessions(confirmation.state.sessions, current.sessions) {
+		return "", problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
 	}
 	if req.Mode == "safe" && len(current.blockers) != 0 {
-		return problemf(ErrConflict, "安全删除被阻止: %v", current.blockers)
+		return "", problemf(ErrConflict, "安全删除被阻止: %v", current.blockers)
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
+	closed := make(map[string]bool)
 	if req.Mode == "force" {
 		active := make([]*session.Session, 0, len(current.sessions))
 		for _, info := range current.sessions {
@@ -294,7 +352,7 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 			}
 			item, err := s.manager.Get(info.ID)
 			if err != nil {
-				return problemf(ErrConflict, "会话集合已变化，请重新预览")
+				return "", problemf(ErrConflict, "会话集合已变化，请重新预览")
 			}
 			active = append(active, item)
 		}
@@ -306,29 +364,30 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 		for _, item := range active {
 			select {
 			case <-item.Done():
+				closed[item.Info().ID] = true
 			case <-ctx.Done():
-				return problemf(ErrTimeout, "关闭会话未在期限内完成，工作树未删除；部分会话可能已关闭")
+				return "", problemf(ErrTimeout, "关闭会话未在期限内完成，工作树未删除；部分会话可能已关闭")
 			}
 		}
 	}
 	final, err := s.removalState(ctx, r, worktreeID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer final.identity.close()
-	if !final.supported || !sameTarget(current, final) || !sameSessions(current.sessions, final.sessions, req.Mode == "force") {
-		return problemf(ErrConflict, "关闭期间目标身份或会话集合变化，工作树未删除；部分会话可能已关闭")
+	if !final.supported || !sameTarget(current, final) || !remainingSessions(current.sessions, final.sessions) {
+		return "", problemf(ErrConflict, "关闭期间目标身份或会话集合变化，工作树未删除；部分会话可能已关闭")
 	}
 	for _, info := range final.sessions {
-		if info.Status != session.StatusExited {
-			return problemf(ErrConflict, "仍有运行会话，工作树未删除")
+		if !closed[info.ID] && info.Status != session.StatusExited {
+			return "", problemf(ErrConflict, "仍有运行会话，工作树未删除")
 		}
 	}
 	if req.Mode == "safe" && len(final.blockers) != 0 {
-		return problemf(ErrConflict, "安全删除被最新状态阻止: %v", final.blockers)
+		return "", problemf(ErrConflict, "安全删除被最新状态阻止: %v", final.blockers)
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
 	argv := []string{"worktree", "remove"}
 	if req.Mode == "force" {
@@ -336,9 +395,9 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 	}
 	argv = append(argv, "--", path)
 	if _, err := s.git(ctx, r.entry.AnchorPath, argv...); err != nil {
-		return problemf(errorKind(err), "%v；删除未完整成功，部分会话可能已关闭，请刷新实际状态", err)
+		return "", problemf(errorKind(err), "%v；删除未完整成功，部分会话可能已关闭，请刷新实际状态", err)
 	}
-	return nil
+	return path, nil
 }
 
 func (s *Service) clearConfirmations() {

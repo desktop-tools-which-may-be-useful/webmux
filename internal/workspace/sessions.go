@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/rainchan/webmux/internal/hybrid"
@@ -369,7 +370,10 @@ func (s *Service) targetSessions(path string) []session.Info {
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return result
 }
-func sameSessions(a, b []session.Info, allowExit bool) bool {
+
+// sameSessions reports whether a and b hold the same sessions in the same
+// directories, each exited in both or in neither.
+func sameSessions(a, b []session.Info) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -377,7 +381,20 @@ func sameSessions(a, b []session.Info, allowExit bool) bool {
 		if a[i].ID != b[i].ID || a[i].Cwd != b[i].Cwd {
 			return false
 		}
-		if !allowExit && (a[i].Status == session.StatusExited) != (b[i].Status == session.StatusExited) {
+		if (a[i].Status == session.StatusExited) != (b[i].Status == session.StatusExited) {
+			return false
+		}
+	}
+	return true
+}
+
+// remainingSessions reports whether after holds only sessions of before, in
+// the same directories. Sessions may leave: a closed hybrid shell is removed
+// once its driver records the close.
+func remainingSessions(before, after []session.Info) bool {
+	for _, info := range after {
+		i := slices.IndexFunc(before, func(old session.Info) bool { return old.ID == info.ID })
+		if i < 0 || before[i].Cwd != info.Cwd {
 			return false
 		}
 	}

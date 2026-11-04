@@ -115,8 +115,11 @@ type RemovalPreview struct {
 	ExpiresAt      time.Time     `json:"expiresAt"`
 	Worktree       Worktree      `json:"worktree"`
 	Sessions       []SessionInfo `json:"sessions"`
-	Blockers       []string      `json:"blockers"`
-	ForceAllowed   bool          `json:"forceAllowed"`
+	// Archived are the closed and interrupted hybrid records in the
+	// worktree; a successful removal deletes them.
+	Archived     []HybridRecord `json:"archived"`
+	Blockers     []string       `json:"blockers"`
+	ForceAllowed bool           `json:"forceAllowed"`
 }
 
 // RemoveWorktreeRequest confirms a previewed removal.

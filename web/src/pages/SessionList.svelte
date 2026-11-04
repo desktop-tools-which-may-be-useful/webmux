@@ -408,6 +408,12 @@
     if (repo)
       homeWorktrees.save(setPinned(homeWorktrees.value, repo, ids, pinned));
   }
+  // After a worktree change: a removal also forgets the archived records of
+  // sessions in the removed directory.
+  function refreshWorktrees() {
+    void refresh();
+    void refreshRecoverable();
+  }
   async function refresh(force = false) {
     // A lifecycle refresh coalesces with the startup read instead of starting
     // another slow discovery. Explicit and later refreshes still supersede an
@@ -758,7 +764,7 @@
         entry={target.entry}
         selectedRepositoryId={selectedRepository}
         intent={target.entry?.kind === "new-worktree" ? "worktree" : "session"}
-        onchange={() => void refresh()}
+        onchange={refreshWorktrees}
         onworktreecreated={(tree) => pin(tree.repositoryId, [tree.id], true)}
         onclose={() => (creating = null)}
       />{/snippet}
@@ -798,7 +804,7 @@
   >
     {#snippet children(page)}<page.default
         worktree={target}
-        onchange={() => void refresh()}
+        onchange={refreshWorktrees}
         onclose={() => (removing = null)}
       />{/snippet}
   </LazyDialog>

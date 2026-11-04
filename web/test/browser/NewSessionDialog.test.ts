@@ -135,6 +135,7 @@ beforeEach(() => {
           expiresAt: "2099-01-01T00:00:00Z",
           worktree: createdTree,
           sessions: [],
+          archived: [],
           blockers: [],
           forceAllowed: true,
         });

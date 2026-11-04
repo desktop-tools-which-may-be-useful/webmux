@@ -26,7 +26,10 @@ func testWorkspace(t *testing.T, m *session.Manager, cwd string) *workspace.Serv
 	t.Cleanup(service.Close)
 	return service
 }
-func workspaceAPI(t *testing.T) (http.Handler, *workspace.Service, *session.Manager, string) {
+
+// gitRepository isolates Git from the user's configuration and returns a
+// repository with one commit.
+func gitRepository(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("requires real Git")
@@ -45,6 +48,11 @@ func workspaceAPI(t *testing.T) (http.Handler, *workspace.Service, *session.Mana
 			t.Fatalf("Git fixture: %v %s", err, out)
 		}
 	}
+	return root
+}
+func workspaceAPI(t *testing.T) (http.Handler, *workspace.Service, *session.Manager, string) {
+	t.Helper()
+	root := gitRepository(t)
 	c := config.Config{DefaultCwd: root, Token: "secret"}
 	m := session.NewManager(testSessionOptions(c))
 	t.Cleanup(func() {

@@ -144,10 +144,13 @@ func RefreshBranchBase(r workspace.BranchBaseRefresh) contract.RefreshBranchBase
 	return contract.RefreshBranchBaseResponse(r)
 }
 
-func Preview(p workspace.Preview) contract.RemovalPreview {
+// Preview converts a removal preview; configMissing reports a deleted
+// launch config for each archived record.
+func Preview(p workspace.Preview, configMissing func(configID string) bool) contract.RemovalPreview {
 	return contract.RemovalPreview{
 		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree),
-		Sessions: Sessions(p.Sessions), Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
+		Sessions: Sessions(p.Sessions), Archived: HybridRecords(p.Archived, configMissing),
+		Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
 	}
 }
 

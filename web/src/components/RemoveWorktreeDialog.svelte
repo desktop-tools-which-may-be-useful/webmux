@@ -93,8 +93,8 @@
 <ResponsiveDialog
   title={force ? "强制删除 worktree" : "删除 worktree"}
   description={force
-    ? "危险操作：停止已确认的 WebMux 会话，并永久丢弃删除时目录中的全部内容。"
-    : "先检查文件与会话。删除 worktree 不删除分支，也不移除已退出的会话记录。"}
+    ? "危险操作：停止已确认的 WebMux 会话，永久丢弃删除时目录中的全部内容，并删除该目录下混合会话的恢复记录。"
+    : "先检查文件与会话。删除 worktree 不删除分支，但会一并删除该目录下已归档的混合会话记录。"}
   {onclose}
   {busy}
 >
@@ -143,6 +143,18 @@
                 class="break-all"
               >
                 {session.title} · {sessionStatusText(session)} · {session.cwd}
+              </li>{/each}
+          </ul>
+        </div>
+      {/if}
+      {#if preview.archived.length}
+        <div class="space-y-2 text-sm">
+          <p class="font-medium">将删除的已归档会话（删除后不可恢复）</p>
+          <ul class="space-y-1">
+            {#each preview.archived as record (record.id)}<li class="break-all">
+                {record.title || record.name} · {record.state === "closed"
+                  ? "已关闭"
+                  : "已中断"} · {record.cwd}
               </li>{/each}
           </ul>
         </div>

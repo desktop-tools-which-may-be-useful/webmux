@@ -136,7 +136,7 @@ func TestCloseTimeoutDoesNotDeleteTreeAndReleasesReservation(t *testing.T) {
 	preview := previewTest(t, s, r, tree)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err = s.RemoveWorktree(ctx, r.ID, tree.ID, forceRequest(preview))
+	_, err = s.RemoveWorktree(ctx, r.ID, tree.ID, forceRequest(preview))
 	if errorKind(err) != ErrTimeout {
 		t.Fatalf("close timeout incorrectly succeeded: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -143,8 +144,11 @@ type Preview struct {
 	ExpiresAt      time.Time      `json:"expiresAt"`
 	Worktree       Worktree       `json:"worktree"`
 	Sessions       []session.Info `json:"sessions"`
-	Blockers       []string       `json:"blockers"`
-	ForceAllowed   bool           `json:"forceAllowed"`
+	// Archived are the closed and interrupted hybrid records in the
+	// worktree; a successful removal deletes them.
+	Archived     []hybrid.Record `json:"archived"`
+	Blockers     []string        `json:"blockers"`
+	ForceAllowed bool            `json:"forceAllowed"`
 }
 
 func randomID() (string, error) {

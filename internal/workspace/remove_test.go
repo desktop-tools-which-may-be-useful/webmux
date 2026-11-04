@@ -61,7 +61,7 @@ func TestSafeRemovalProtectsEveryContentCategoryAndRetainsBranches(t *testing.T)
 			if len(preview.Blockers) == 0 || !preview.ForceAllowed {
 				t.Fatalf("incorrect blockers: %+v", preview)
 			}
-			err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"})
+			_, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"})
 			if errorKind(err) != ErrConflict {
 				t.Fatalf("unsafe safe removal: %v", err)
 			}
@@ -69,7 +69,7 @@ func TestSafeRemovalProtectsEveryContentCategoryAndRetainsBranches(t *testing.T)
 			if item != nil && item.Info().Status == session.StatusExited {
 				t.Fatal("safe removal closed session")
 			}
-			if err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"}); errorKind(err) != ErrConflict {
+			if _, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"}); errorKind(err) != ErrConflict {
 				t.Fatal("confirmation reused")
 			}
 		})
@@ -84,7 +84,7 @@ func TestSafeRemovalProtectsEveryContentCategoryAndRetainsBranches(t *testing.T)
 	if len(preview.Blockers) != 0 {
 		t.Fatalf("clean blockers: %+v", preview.Blockers)
 	}
-	if err := s.RemoveWorktree(context.Background(), r.ID, clean.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"}); err != nil {
+	if _, err := s.RemoveWorktree(context.Background(), r.ID, clean.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(clean.Path); !os.IsNotExist(err) {
@@ -132,7 +132,7 @@ func TestStaleConfirmationsRejectBeforeClosingPTY(t *testing.T) {
 				gitTest(t, root, "worktree", "prune")
 				gitTest(t, root, "worktree", "add", tree.Path, "stale-"+change)
 			}
-			err = s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(preview))
+			_, err = s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(preview))
 			if errorKind(err) != ErrConflict {
 				t.Fatalf("stale %s confirmation: %v", change, err)
 			}
@@ -183,7 +183,7 @@ func TestForceRemovalRequiresExplicitAuthorizationAndWaitsForPTYCleanup(t *testi
 		} else {
 			req.CloseSessions = false
 		}
-		if err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, req); errorKind(err) != ErrInvalid {
+		if _, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, req); errorKind(err) != ErrInvalid {
 			t.Fatalf("missing %s accepted: %v", invalid, err)
 		}
 		if item.Info().Status == session.StatusExited {
@@ -191,7 +191,7 @@ func TestForceRemovalRequiresExplicitAuthorizationAndWaitsForPTYCleanup(t *testi
 		}
 	}
 	p := previewTest(t, s, r, tree)
-	if err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)); err != nil {
+	if _, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -246,7 +246,7 @@ func TestUnsupportedRemovalAndReservationRelease(t *testing.T) {
 			if p.ForceAllowed {
 				t.Fatalf("%s enabled force", kind)
 			}
-			if err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)); errorKind(err) != ErrConflict {
+			if _, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)); errorKind(err) != ErrConflict {
 				t.Fatalf("unsupported removal: %v", err)
 			}
 			item, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Cmd: []string{"/bin/sh", "-c", "printf UNRESERVED"}})
@@ -306,7 +306,10 @@ func TestDeleteWaitsForInflightLaunchThenRejectsStaleSessionSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	removed := make(chan error, 1)
-	go func() { removed <- s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)) }()
+	go func() {
+		_, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p))
+		removed <- err
+	}()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		s.coord.Lock()
@@ -354,7 +357,7 @@ func TestRemovalCancellationAndGitFailurePreserveTruth(t *testing.T) {
 	p := previewTest(t, s, r, tree)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := s.RemoveWorktree(ctx, r.ID, tree.ID, forceRequest(p)); errorKind(err) != ErrTimeout {
+	if _, err := s.RemoveWorktree(ctx, r.ID, tree.ID, forceRequest(p)); errorKind(err) != ErrTimeout {
 		t.Fatalf("cancelled removal: %v", err)
 	}
 	if item.Info().Status == session.StatusExited {
@@ -372,7 +375,7 @@ func TestRemovalCancellationAndGitFailurePreserveTruth(t *testing.T) {
 	}
 	s.gitPath = wrapper
 	p = previewTest(t, s, r, tree)
-	if err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)); err == nil {
+	if _, err := s.RemoveWorktree(context.Background(), r.ID, tree.ID, forceRequest(p)); err == nil {
 		t.Fatal("failed Git removal reported complete success")
 	}
 	waitDone(t, item)

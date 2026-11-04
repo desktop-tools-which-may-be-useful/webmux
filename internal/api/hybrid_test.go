@@ -200,3 +200,68 @@ func TestCreateHybridSessionRecordLimit(t *testing.T) {
 	h.expectCommand("DELETE", "/api/hybrid-sessions/limaaaaa", nil, 204)
 	h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp-again", true)), 201)
 }
+
+// A force removal closes the worktree's hybrid session, whose shell leaves
+// the list once its close is recorded, then removes the worktree and
+// forgets the session's record and folder: nothing can resume there. A
+// closed session elsewhere stays recoverable.
+func TestForceRemoveWorktreeForgetsHybridSessions(t *testing.T) {
+	root := gitRepository(t)
+	h := newHybridAPI(t, nil)
+	var repository contract.Repository
+	if err := json.Unmarshal(workspaceRequest(t, h.handler, "POST", "/api/repositories", map[string]string{"path": root}, 201).Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	base := "/api/repositories/" + repository.ID
+	var tree contract.Worktree
+	created := workspaceRequest(t, h.handler, "POST", base+"/worktrees", contract.CreateWorktreeRequest{Path: filepath.Join(t.TempDir(), "agent"), Mode: "new", Branch: "agent", Base: "HEAD"}, 201)
+	if err := json.Unmarshal(created.Body.Bytes(), &tree); err != nil {
+		t.Fatal(err)
+	}
+	configID := h.config("omp", true)
+	outside := h.createSide(configID, contract.HybridSideTUI)
+	h.closeSession(outside)
+	start := func() string {
+		var info contract.SessionInfo
+		ref := fmt.Sprintf(`{"configId":%q,"startSide":"tui","workspace":{"repositoryId":%q,"worktreeId":%q}}`, configID, repository.ID, tree.ID)
+		if err := json.Unmarshal(h.expect(ref, 201), &info); err != nil {
+			t.Fatal(err)
+		}
+		return info.ID
+	}
+	archived := start()
+	h.closeSession(archived)
+	inside := start()
+	var folder contract.ArtifactsFolder
+	if err := json.Unmarshal(h.expectCommand("POST", "/api/sessions/"+inside+"/artifacts", nil, 200), &folder); err != nil {
+		t.Fatal(err)
+	}
+	treeURL := base + "/worktrees/" + tree.ID
+	var preview contract.RemovalPreview
+	if err := json.Unmarshal(workspaceRequest(t, h.handler, "POST", treeURL+"/removal-preview", struct{}{}, 200).Body.Bytes(), &preview); err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Sessions) != 1 || preview.Sessions[0].ID != inside {
+		t.Fatalf("preview sessions %+v", preview.Sessions)
+	}
+	if len(preview.Archived) != 1 || preview.Archived[0].ID != archived {
+		t.Fatalf("preview archived %+v", preview.Archived)
+	}
+	workspaceRequest(t, h.handler, "POST", treeURL+"/remove", contract.RemoveWorktreeRequest{
+		ConfirmationID: preview.ConfirmationID, Mode: "force", ConfirmPath: preview.Worktree.Path, CloseSessions: true,
+	}, 204)
+	if _, err := os.Stat(tree.Path); !os.IsNotExist(err) {
+		t.Fatalf("worktree still present: %v", err)
+	}
+	for _, id := range []string{inside, archived} {
+		if _, err := h.hybrids.Record(id); !errors.Is(err, hybrid.ErrNotFound) {
+			t.Fatalf("removed worktree's record %s: %v", id, err)
+		}
+	}
+	if _, err := os.Stat(folder.Path); !os.IsNotExist(err) {
+		t.Fatalf("removed worktree's folder: %v", err)
+	}
+	if rec, err := h.hybrids.Record(outside); err != nil || rec.State != hybrid.StateClosed {
+		t.Fatalf("record outside the worktree: %+v %v", rec, err)
+	}
+}

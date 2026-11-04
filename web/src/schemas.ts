@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { AgentConnectorSchema, SessionHybridSchema } from "./chatSchemas";
+import {
+  AgentConnectorSchema,
+  HybridRecordSchema,
+  SessionHybridSchema,
+} from "./chatSchemas";
 
 export * from "./chatSchemas";
 
@@ -452,6 +456,9 @@ export const RemovalPreviewSchema = z.object({
   expiresAt: z.iso.datetime({ offset: true }),
   worktree: WorktreeSchema,
   sessions: z.array(SessionInfoSchema),
+  // Closed and interrupted hybrid records in the worktree; a successful
+  // removal deletes them.
+  archived: z.array(HybridRecordSchema),
   blockers: z.array(z.string()),
   forceAllowed: z.boolean(),
 });
