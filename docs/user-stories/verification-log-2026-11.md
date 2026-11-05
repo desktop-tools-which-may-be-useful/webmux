@@ -325,6 +325,15 @@
   - Playwright：`quick-start.spec.ts` 桌面（1280×720）与 Pixel 7（390×844）通过；其余 E2E 交由 CI 运行。
 - 限制：未在真机上核对，未截取 PR 前后对比截图；E2E 使用 fake agent。
 
+本次局部核对（2026-11-05）：聊天与快速开始待发送附件栏及对话流用户消息中的图片附件支持小图（缩略图）预览，并新增 `GET /api/sessions/{id}/upload?path=...` 供跨刷新/多设备读取会话上传图片，对应更新 US-Q14、US-Q15 与覆盖索引，不新增故事。
+
+- 范围：上传中的本地图片附件直接复用内存对象 URL 预览；刷新后或其他设备通过会话上传读取接口按路径安全校验（仅限当前会话上传目录内且小于 10 MiB 的普通文件）加载图片，加载中或不可读时平稳降级为图片图标。
+- 依据：
+  - Go：`go test -race ./internal/artifacts ./internal/api`（新增 `TestReadUpload` 与 `TestReadSessionUpload` 覆盖正常读取、路径逃逸、符号链接、空文件与会话不存在）通过。
+  - 前端：`make check`（生产构建、`svelte-check`、测试类型检查、Oxlint、`check:arch`、`docs-check`、`persistence-check`、`go vet`、`golangci-lint`）通过；`ChatUpload`、`ChatView`、`QuickStart` 浏览器测试（37 项）通过。
+  - Storybook 与 E2E：`acp-chat.spec.ts`（241 项）与 `hybrid.spec.ts` 图片附件用例（桌面与 Pixel 7）通过；Storybook 隔离示例数据下桌面（1280×720）与手机（390×844）、浅色与深色主题前后对比截图。
+- 限制：未运行完整 `make test` 全量套件，未在 iOS/Android 真机浏览器核对；未重新核验其余故事能力。
+
 本次局部核对（2026-11-05）：新增页面内右上角弹窗提醒（Toast）作为默认开启的通知渠道，对应更新 US-C06、US-C12 与覆盖索引，不新增故事。
 
 - 范围：用户使用网站时，新的会话关注信号默认在右上角弹出提醒（状态徽章、会话标题与操作说明），点击直达对应会话 `/s/<ID>`，支持手动关闭、悬停/聚焦暂停、超时自动收起、关注升级替换及关注解除/会话移除时自动清理；设置页“通知推送”卡片提供本机开关（默认开启，无需浏览器通知授权或 HTTPS）。

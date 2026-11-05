@@ -133,6 +133,7 @@ func (s *Server) routes() *http.ServeMux {
 	serveIn(mux, "PATCH /api/sessions/{id}", http.StatusOK, renameFailure, s.rename)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.delete)
 	mux.HandleFunc("GET /api/sessions/{id}/buffer", s.buffer)
+	mux.HandleFunc("GET /api/sessions/{id}/upload", s.readUpload)
 	mux.HandleFunc("POST /api/sessions/{id}/upload", s.upload)
 	mux.HandleFunc("POST /api/sessions/{id}/artifacts", s.ensureArtifacts)
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)

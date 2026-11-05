@@ -354,6 +354,18 @@ test("a missing connector offers its install hint and the terminal; outdated par
 });
 
 test("renders the attachments of a user prompt", async () => {
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+    0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+    0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  ]);
+  respond(
+    /^GET \/api\/sessions\/hybrid22\/upload$/,
+    () => new Response(png, { headers: { "Content-Type": "image/png" } }),
+  );
   const socket = await open();
   socket.frame(snapshot(chatState()));
   socket.frame({
@@ -387,6 +399,9 @@ test("renders the attachments of a user prompt", async () => {
   const attachments = page.getByRole("list", { name: "附件" });
   await expect.element(attachments.getByText("shot.png")).toBeVisible();
   await expect.element(attachments.getByText("notes.txt")).toBeVisible();
+  const thumb = attachments.getByRole("img", { name: "shot.png" });
+  await expect.element(thumb).toBeVisible();
+  expect(thumb.element().getAttribute("src")).toMatch(/^blob:/);
 });
 
 test("the composer posts the prompt with a request ID and mode auto", async () => {

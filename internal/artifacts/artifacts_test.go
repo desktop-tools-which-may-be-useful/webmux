@@ -240,6 +240,28 @@ func TestUploadPathAcceptsOnlyTheSessionsUploads(t *testing.T) {
 		if _, err := s.UploadPath(a, p); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s accepted: %v", name, err)
 		}
+		if _, err := s.ReadUpload(a, p); !errors.Is(err, ErrInvalid) {
+			t.Errorf("ReadUpload(%s) accepted: %v", name, err)
+		}
+	}
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	img := filepath.Join(aUploads, "preview.png")
+	if err := os.WriteFile(img, png, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ReadUpload(a, img)
+	if err != nil || got.Name != "preview.png" || got.MediaType != "image/png" || string(got.Data) != string(png) {
+		t.Fatalf("ReadUpload: %+v (%v)", got, err)
+	}
+	if _, err := s.ReadUpload("abcdefgh", img); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing session: %v", err)
+	}
+	big := filepath.Join(aUploads, "big.bin")
+	if err := os.WriteFile(big, make([]byte, maxReadUploadBytes+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ReadUpload(a, big); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("oversized upload: %v", err)
 	}
 }
 

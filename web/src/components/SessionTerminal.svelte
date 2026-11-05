@@ -783,6 +783,7 @@
           <div class={["h-full", paneEnter]}>
             <ChatView
               bind:this={chatView}
+              {sessionId}
               model={hybrid.chat.model}
               chat={hybrid.chat.state}
               connection={hybrid.chat.connection}

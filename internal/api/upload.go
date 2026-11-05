@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
@@ -156,6 +157,32 @@ func (s *Server) ensureArtifacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusOK, contract.ArtifactsFolder{Path: path})
+}
+
+// readUpload serves one uploaded file from the session's uploads/ folder.
+func (s *Server) readUpload(w http.ResponseWriter, r *http.Request) {
+	file, err := s.Artifacts.ReadUpload(r.PathValue("id"), r.URL.Query().Get("path"))
+	if err != nil {
+		artifactsFailure(w, err)
+		return
+	}
+	h := w.Header()
+	contentType := "application/octet-stream"
+	if file.MediaType != "" {
+		contentType = file.MediaType
+	}
+	h.Set("Content-Type", contentType)
+	h.Set("Content-Length", strconv.Itoa(len(file.Data)))
+	h.Set("Cache-Control", "no-store")
+	h.Set("Content-Disposition", contentDisposition("inline", file.Name))
+	if file.MediaType == "image/svg+xml" || file.MediaType == "application/pdf" {
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	}
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	_, _ = w.Write(file.Data)
 }
 
 type uploadContextReader struct {

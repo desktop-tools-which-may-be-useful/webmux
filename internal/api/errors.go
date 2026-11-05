@@ -176,6 +176,8 @@ func artifactsFailure(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, artifacts.ErrInvalid):
 		status = http.StatusBadRequest
+	case errors.Is(err, artifacts.ErrTooLarge):
+		status = http.StatusRequestEntityTooLarge
 	case errors.Is(err, artifacts.ErrUnavailable):
 		status = http.StatusServiceUnavailable
 	}

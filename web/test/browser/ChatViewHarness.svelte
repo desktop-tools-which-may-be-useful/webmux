@@ -40,6 +40,7 @@
 
 <div style="height: 800px">
   <ChatView
+    sessionId={session}
     model={chat.model}
     chat={chat.state}
     connection={chat.connection}

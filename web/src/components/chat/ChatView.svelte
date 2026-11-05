@@ -32,6 +32,7 @@
   // otherwise: the transcript, then a dock with the plan, the queue, a
   // pending request or the input.
   let {
+    sessionId,
     model,
     chat,
     connection,
@@ -46,6 +47,7 @@
     onopenlocation,
     onterminal,
   }: {
+    sessionId?: string;
     model: ChatModel;
     chat: ChatState | undefined;
     connection: Connection;
@@ -217,7 +219,14 @@
         <ol class="flex flex-col gap-2.5" aria-label="对话">
           {#each entries as entry (`${entry.type}:${entry.id}`)}
             <li class="min-w-0">
-              <TimelineItem {entry} {waiting} {onreview} {onopenlocation} />
+              <TimelineItem
+                {entry}
+                {sessionId}
+                preview={(path) => uploads.preview?.(path)}
+                {waiting}
+                {onreview}
+                {onopenlocation}
+              />
             </li>
           {/each}
         </ol>

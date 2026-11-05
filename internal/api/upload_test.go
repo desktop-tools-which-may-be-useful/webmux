@@ -154,6 +154,69 @@ func TestUploadPersistsBinaryInSessionUploadsFolder(t *testing.T) {
 	}
 }
 
+func TestReadUploadServesSessionUploadedFileWithSniffedMediaType(t *testing.T) {
+	handler, _, item, _, uploads := uploadAPI(t)
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89")
+	body, contentType := uploadBody(t, "shot.png", png, "")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, uploadRequest(item, bytes.NewReader(body), contentType))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("upload: %d %s", w.Code, w.Body.String())
+	}
+	var uploaded struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &uploaded); err != nil {
+		t.Fatal(err)
+	}
+
+	get := httptest.NewRequest(http.MethodGet, "http://webmux.example/api/sessions/"+item.Info().ID+"/upload?path="+uploaded.Path, nil)
+	get.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, get)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("read upload: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("Content-Type %q, want image/png", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control %q, want no-store", got)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), png) {
+		t.Fatalf("body %v, want %v", rec.Body.Bytes(), png)
+	}
+
+	for _, row := range []struct {
+		name   string
+		url    string
+		auth   string
+		origin string
+		status int
+	}{
+		{"missing session", "/api/sessions/abcdefgh/upload?path=" + uploaded.Path, "Bearer secret", "", http.StatusNotFound},
+		{"missing path", "/api/sessions/" + item.Info().ID + "/upload", "Bearer secret", "", http.StatusBadRequest},
+		{"outside uploads", "/api/sessions/" + item.Info().ID + "/upload?path=" + filepath.Dir(uploads), "Bearer secret", "", http.StatusBadRequest},
+		{"unauthenticated", "/api/sessions/" + item.Info().ID + "/upload?path=" + uploaded.Path, "", "", http.StatusUnauthorized},
+		{"untrusted origin", "/api/sessions/" + item.Info().ID + "/upload?path=" + uploaded.Path, "Bearer secret", "https://evil.example", http.StatusForbidden},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "http://webmux.example"+row.url, nil)
+			if row.auth != "" {
+				r.Header.Set("Authorization", row.auth)
+			}
+			if row.origin != "" {
+				r.Header.Set("Origin", row.origin)
+			}
+			out := httptest.NewRecorder()
+			handler.ServeHTTP(out, r)
+			if out.Code != row.status {
+				t.Fatalf("status %d, want %d: %s", out.Code, row.status, out.Body.String())
+			}
+		})
+	}
+}
+
 func TestUploadNormalizesTraversalFilenames(t *testing.T) {
 	for _, name := range []string{"../../escape.bin", "/absolute/path/escape.bin", `..\..\escape.bin`, `C:\folder\escape.bin`} {
 		t.Run(name, func(t *testing.T) {

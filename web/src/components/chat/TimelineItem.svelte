@@ -3,7 +3,6 @@
   import IconFile from "~icons/tabler/file";
   import IconHandStop from "~icons/tabler/hand-stop";
   import IconLoader2 from "~icons/tabler/loader-2";
-  import IconPhoto from "~icons/tabler/photo";
   import IconX from "~icons/tabler/x";
   import CodeMarkdownPreview from "../CodeMarkdownPreview.svelte";
   import InlineNotice from "../InlineNotice.svelte";
@@ -11,6 +10,7 @@
   import type { DisplayEntry } from "../../chat-model";
   import type { ChatCodeLink } from "../../markdown-link";
   import type { StopReason } from "../../schemas";
+  import ChatAttachmentImage from "./ChatAttachmentImage.svelte";
   import ChatDisclosure from "./ChatDisclosure.svelte";
   import ToolRow from "./ToolRow.svelte";
 
@@ -18,11 +18,15 @@
   // prose, and its work is a column of quiet one-line rows.
   let {
     entry,
+    sessionId,
+    preview,
     waiting,
     onreview,
     onopenlocation,
   }: {
     entry: DisplayEntry;
+    sessionId?: string;
+    preview?: (path: string) => string | undefined;
     /** Tool calls whose permission request waits for an answer. */
     waiting: readonly string[];
     onreview: (path: string) => void;
@@ -74,15 +78,17 @@
         <ul class="flex flex-wrap gap-1" aria-label="附件">
           {#each entry.attachments as attachment (attachment.path)}
             <li
-              class="flex max-w-full min-w-0 items-center gap-1 rounded-sm border bg-background/60 px-1.5 py-0.5 text-xs"
+              class="flex max-w-full min-w-0 items-center gap-1.5 rounded-sm border bg-background/60 px-1.5 py-1 text-xs"
             >
-              {#if attachment.kind === "image"}<IconPhoto
-                  class="size-3.5 shrink-0"
-                  aria-hidden="true"
-                />{:else}<IconFile
-                  class="size-3.5 shrink-0"
-                  aria-hidden="true"
-                />{/if}
+              {#if attachment.kind === "image"}
+                <ChatAttachmentImage
+                  {attachment}
+                  {sessionId}
+                  preview={preview?.(attachment.path)}
+                />
+              {:else}
+                <IconFile class="size-3.5 shrink-0" aria-hidden="true" />
+              {/if}
               <span class="min-w-0 truncate"
                 >{attachment.name ?? attachment.path}</span
               >

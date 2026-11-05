@@ -11,6 +11,7 @@
 | DELETE | `/api/sessions/{id}`           | 关闭会话（SIGHUP → SIGKILL），204                                                  |
 | DELETE | `/api/sessions/{id}?remove=1`  | 移除已退出会话，204；仍在运行 409                                                  |
 | GET    | `/api/sessions/{id}/buffer`    | 下载完整原始缓冲（`application/octet-stream`）                                     |
+| GET    | `/api/sessions/{id}/upload`    | 读取本会话已上传的单个文件（`?path=`），见下文                                     |
 | POST   | `/api/sessions/{id}/upload`    | 上传文件，见下文                                                                   |
 | POST   | `/api/sessions/{id}/artifacts` | 确保会话临时文件夹存在，200 `{path}`，见下文                                       |
 
@@ -60,6 +61,7 @@
 - 文件位于会话临时文件夹的 `uploads/` 中，同名时追加 ` (2)` 等序号而不覆盖。
 - 单文件上限 100 MiB（超限 413），读期限 5 分钟（超时 408）。
 - 无效请求 400，会话不存在 404，会话已退出 409，临时文件夹不可用 503。
+- `GET /api/sessions/{id}/upload?path=<服务器绝对路径>` 读取该会话 `uploads/` 内的普通非符号链接文件（上限 10 MiB，超限 413），按文件内容嗅探 `Content-Type` 并返回原始字节；其他路径或不存在的文件返回 400，会话不存在 404。
 
 **会话临时文件夹**：`POST /api/sessions/{id}/artifacts` 幂等地创建并返回 `$TMPDIR/webmux-artifacts-<uid>-<实例摘要>/<会话ID>`（0700）。
 

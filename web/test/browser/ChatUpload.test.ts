@@ -117,6 +117,9 @@ test("a chosen image uploads with progress, then waits as a chip and is sent wit
   finish("/tmp/webmux-upload-1/shot.png");
   await expect.element(chips()).toBeVisible();
   expect(chipNames()).toEqual(["shot.png"]);
+  const thumb = chips().getByRole("img", { name: "shot.png" });
+  await expect.element(thumb).toBeVisible();
+  expect(thumb.element().getAttribute("src")).toMatch(/^blob:/);
   // The draft text is not touched: the file travels as an attachment.
   expect(draft().element().textContent).toBe("看看这张图");
   await expect

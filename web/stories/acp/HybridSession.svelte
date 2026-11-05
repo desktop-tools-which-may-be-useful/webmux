@@ -86,10 +86,22 @@
         : null,
     ),
   );
+  const samplePreview =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64" viewBox="0 0 96 64"><rect width="96" height="64" rx="6" fill="#18221d"/><rect x="10" y="10" width="76" height="14" rx="3" fill="#2d6a4f"/><rect x="10" y="30" width="52" height="10" rx="2" fill="#40916c"/><rect x="10" y="46" width="64" height="8" rx="2" fill="#52b788"/></svg>`,
+    );
   let attachments = $state<ChatAttachment[]>(
     untrack(() =>
       uploading
         ? [
+            {
+              path: "/tmp/webmux-upload-story/home-order.png",
+              name: "home-order.png",
+              mimeType: "image/png",
+              size: 48_213,
+              kind: "image",
+            },
             {
               path: "/tmp/webmux-upload-story/notes.txt",
               name: "notes.txt",
@@ -107,6 +119,9 @@
     },
     get attachments() {
       return attachments;
+    },
+    preview(path) {
+      return path.endsWith(".png") ? samplePreview : undefined;
     },
     async uploadFiles() {},
     filePaste() {

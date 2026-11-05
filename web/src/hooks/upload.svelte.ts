@@ -1,5 +1,6 @@
 import { errorMessage } from "../error";
 import { onMount } from "svelte";
+import { SvelteMap } from "svelte/reactivity";
 import { uploadFile } from "../api";
 import type { ChatAttachment } from "../schemas";
 import type { Connection } from "../ws";
@@ -36,6 +37,8 @@ export interface ChatUploads {
   readonly progress: UploadProgress | null;
   /** Finished uploads waiting to be sent with the next message. */
   readonly attachments: readonly ChatAttachment[];
+  /** Object or data URL for an uploaded image attachment, when available locally. */
+  preview?(path: string): string | undefined;
   uploadFiles(files: File[]): Promise<void>;
   filePaste(event: ClipboardEvent): boolean;
   cancel(): void;
@@ -334,6 +337,7 @@ export function useChatUpload(
 ): ChatUploads {
   let progress = $state<UploadProgress | null>(null);
   let localAttachments = $state<ChatAttachment[]>([]);
+  const previews = new SvelteMap<string, string>();
   let controller: AbortController | undefined;
   let disposed = false;
 
@@ -377,6 +381,12 @@ export function useChatUpload(
         waiting: false,
         report: (value) => (progress = value),
         insert: async (path, file) => {
+          const isImage = Object.hasOwn(imageTypes, file.type);
+          if (isImage) {
+            const existing = previews.get(path);
+            if (existing) URL.revokeObjectURL(existing);
+            previews.set(path, URL.createObjectURL(file));
+          }
           writeAttachments([
             ...currentAttachments(),
             {
@@ -384,7 +394,7 @@ export function useChatUpload(
               name: file.name,
               ...(file.type ? { mimeType: file.type } : {}),
               size: file.size,
-              kind: Object.hasOwn(imageTypes, file.type) ? "image" : "file",
+              kind: isImage ? "image" : "file",
             },
           ]);
         },
@@ -400,6 +410,8 @@ export function useChatUpload(
   onMount(() => () => {
     disposed = true;
     controller?.abort();
+    for (const url of previews.values()) URL.revokeObjectURL(url);
+    previews.clear();
   });
 
   return {
@@ -409,6 +421,9 @@ export function useChatUpload(
     get attachments() {
       return currentAttachments();
     },
+    preview(path) {
+      return previews.get(path);
+    },
     uploadFiles,
     filePaste(event) {
       return pasteFiles(event, uploadFiles);
@@ -417,6 +432,11 @@ export function useChatUpload(
       controller?.abort();
     },
     remove(path) {
+      const url = previews.get(path);
+      if (url) {
+        URL.revokeObjectURL(url);
+        previews.delete(path);
+      }
       writeAttachments(
         currentAttachments().filter((item) => item.path !== path),
       );

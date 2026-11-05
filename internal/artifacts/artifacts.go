@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -29,7 +31,19 @@ var (
 	ErrNotFound    = errors.New("session artifacts folder not found")
 	ErrUnavailable = errors.New("session artifacts folder unavailable")
 	ErrInvalid     = errors.New("invalid session artifacts path")
+	ErrTooLarge    = errors.New("session artifacts file too large")
 )
+
+// maxReadUploadBytes bounds an uploaded attachment read back by the browser.
+const maxReadUploadBytes int64 = 10 << 20
+
+// UploadFile holds the verified bytes and sniffed media type of one uploaded
+// file in a session's uploads/ folder.
+type UploadFile struct {
+	Name      string
+	MediaType string
+	Data      []byte
+}
 
 // UploadsDir names the subdirectory uploads are stored in.
 const UploadsDir = "uploads"
@@ -326,4 +340,57 @@ func (s *Service) UploadPath(id, path string) (string, error) {
 		return "", invalid
 	}
 	return clean, nil
+}
+
+// ReadUpload reads a regular, non-symlink file from session id's uploads/
+// directory (up to 10 MiB) and sniffs its media type.
+func (s *Service) ReadUpload(id, path string) (UploadFile, error) {
+	if s == nil {
+		return UploadFile{}, fmt.Errorf("%w: 临时文件夹不可用", ErrUnavailable)
+	}
+	if _, err := s.Path(id); err != nil {
+		return UploadFile{}, err
+	}
+	if s.manager != nil {
+		if _, err := s.manager.Get(id); err != nil {
+			return UploadFile{}, fmt.Errorf("%w: 会话不存在", ErrNotFound)
+		}
+	}
+	clean, err := s.UploadPath(id, path)
+	if err != nil {
+		return UploadFile{}, err
+	}
+	file, err := os.Open(clean)
+	if err != nil {
+		return UploadFile{}, fmt.Errorf("%w: 读取上传文件失败", ErrInvalid)
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return UploadFile{}, fmt.Errorf("%w: 路径不是本会话的上传文件", ErrInvalid)
+	}
+	lstat, err := os.Lstat(clean)
+	if err != nil || !lstat.Mode().IsRegular() || !os.SameFile(info, lstat) {
+		return UploadFile{}, fmt.Errorf("%w: 路径不是本会话的上传文件", ErrInvalid)
+	}
+	name := filepath.Base(clean)
+	if info.Size() > maxReadUploadBytes {
+		return UploadFile{}, fmt.Errorf("%w: 附件 %s 超过 %d MiB", ErrTooLarge, name, maxReadUploadBytes>>20)
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxReadUploadBytes+1))
+	if err != nil {
+		return UploadFile{}, fmt.Errorf("%w: 读取上传文件失败", ErrInvalid)
+	}
+	if int64(len(data)) > maxReadUploadBytes {
+		return UploadFile{}, fmt.Errorf("%w: 附件 %s 超过 %d MiB", ErrTooLarge, name, maxReadUploadBytes>>20)
+	}
+	head := data
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	return UploadFile{
+		Name:      name,
+		MediaType: pathutil.SniffContentType(head),
+		Data:      data,
+	}, nil
 }

@@ -469,11 +469,29 @@ test.describe("hybrid sessions with the fake agent", () => {
       data: {
         clientRequestId: "e2e-claude-attachments",
         text: "inspect attachments",
-        attachments: [{ path: image }, { path: text }],
+        attachments: [
+          {
+            path: image,
+            name: "pixel.png",
+            mimeType: "image/png",
+            size: 68,
+            kind: "image",
+          },
+          {
+            path: text,
+            name: "note.txt",
+            mimeType: "text/plain",
+            size: 17,
+            kind: "file",
+          },
+        ],
       },
     });
     expect(prompted.status(), await prompted.text()).toBe(200);
     await expect(conversation(page)).toContainText("echo: inspect attachments");
+    await expect(
+      conversation(page).getByRole("img", { name: "pixel.png", exact: true }),
+    ).toHaveAttribute("src", /^blob:/);
     await expect(working(page)).toHaveCount(0);
 
     const info = await (await request.get(`/api/sessions/${id}`)).json();
