@@ -6,16 +6,20 @@
   import { createChatSocket } from "../../src/hooks/chat-socket.svelte";
   import { useChatUpload } from "../../src/hooks/upload.svelte";
   import type { ChatCodeLink } from "../../src/markdown-link";
-  import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
+  import {
+    createTerminalDrafts,
+    type TerminalDrafts,
+  } from "../../src/terminal-draft.svelte";
 
   // The chat view on its real channel and commands, as the session page
   // wires it, without the terminal around it.
-  let { id }: { id: string } = $props();
+  let { id, drafts: providedDrafts }: { id: string; drafts?: TerminalDrafts } =
+    $props();
   const session = untrack(() => id);
   const chat = createChatSocket(session);
   chat.open();
   onDestroy(() => chat.dispose());
-  const drafts = createTerminalDrafts();
+  const drafts = untrack(() => providedDrafts ?? createTerminalDrafts());
   const draft = drafts.get(session);
   const actions = chatActions(session);
   let reviewed = $state("");
@@ -26,6 +30,10 @@
     (file, progress, signal) => uploadFile(session, file, progress, signal),
     (message) => {
       error = message;
+    },
+    {
+      get: () => draft.attachments,
+      set: (next) => drafts.setAttachments(draft, next),
     },
   );
 </script>

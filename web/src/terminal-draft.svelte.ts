@@ -5,7 +5,11 @@ import {
   scratchStorageLimit,
   type DraftStorage,
 } from "./draftStorage";
-import type { ScratchEntry, SubmissionProgress } from "./schemas";
+import type {
+  ChatAttachment,
+  ScratchEntry,
+  SubmissionProgress,
+} from "./schemas";
 
 interface DraftSubmission {
   readonly id: string;
@@ -57,6 +61,8 @@ export interface TerminalDraft {
   // The run generation the saved scratch list was written for.
   scratchGeneration: string | null;
   scratchUpdatedWhileHidden: boolean;
+  // Pending uploaded attachments waiting in the chat composer.
+  attachments: ChatAttachment[];
 }
 
 export interface DraftOperation {
@@ -92,6 +98,9 @@ export function createTerminalDrafts(
       sessionId: entry.sessionId,
       generation: entry.generation,
       text: entry.text,
+      ...(entry.attachments.length
+        ? { attachments: entry.attachments.map((item) => ({ ...item })) }
+        : {}),
       savedAt: now(),
       submission: entry.submission && {
         id: entry.submission.id,
@@ -166,6 +175,7 @@ export function createTerminalDrafts(
         scratchPersisted: true,
         scratchGeneration: savedScratch?.generation ?? null,
         scratchUpdatedWhileHidden: false,
+        attachments: saved?.attachments ?? [],
       });
       entry = created;
       entries.set(sessionId, entry);
@@ -356,6 +366,11 @@ export function createTerminalDrafts(
         entry.scratchUpdatedWhileHidden = false;
       }
     },
+    setAttachments(entry: TerminalDraft, attachments: ChatAttachment[]) {
+      if (!valid(entry)) return;
+      entry.attachments = attachments.map((item) => ({ ...item }));
+      persist(entry);
+    },
     clear(entry: TerminalDraft) {
       if (!valid(entry)) return;
       entry.submission = null;
@@ -428,6 +443,7 @@ export function createTerminalDrafts(
       entry.scratchPersisted = true;
       entry.scratchGeneration = null;
       entry.scratchUpdatedWhileHidden = false;
+      entry.attachments = [];
     }
     entries.delete(sessionId);
   }
@@ -466,6 +482,7 @@ export interface TerminalDrafts {
   ): ScratchTakeResult;
   clearScratch(entry: TerminalDraft): void;
   setEnabled(entry: TerminalDraft, enabled: boolean): void;
+  setAttachments(entry: TerminalDraft, attachments: ChatAttachment[]): void;
   clear(entry: TerminalDraft): void;
   remove(sessionId: string): void;
   reconcile(sessionIds: Iterable<string>): void;

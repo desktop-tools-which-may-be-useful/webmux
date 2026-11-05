@@ -382,3 +382,34 @@ test("a draft written for another run keeps its text but forgets its submission"
   expect(entry.text).toBe("text");
   expect(entry.generation).toBe("fedcba9876543210");
 });
+
+test("pending chat attachments persist with the session draft and clear on removal", () => {
+  const saved = memoryDrafts();
+  const drafts = createTerminalDrafts({ storage: saved.storage() });
+  const entry = drafts.get("aaaaaaaa");
+  drafts.setAttachments(entry, [
+    {
+      path: "/tmp/uploads/spec.md",
+      name: "spec.md",
+      mimeType: "text/markdown",
+      size: 12,
+      kind: "file",
+    },
+  ]);
+  expect(entry.attachments).toHaveLength(1);
+  expect(saved.data.size).toBe(1);
+
+  const reloaded = createTerminalDrafts({ storage: saved.storage() });
+  expect(reloaded.get("aaaaaaaa").attachments).toEqual([
+    {
+      path: "/tmp/uploads/spec.md",
+      name: "spec.md",
+      mimeType: "text/markdown",
+      size: 12,
+      kind: "file",
+    },
+  ]);
+
+  reloaded.setAttachments(reloaded.get("aaaaaaaa"), []);
+  expect(saved.data.size).toBe(0);
+});

@@ -411,13 +411,17 @@
       hybrid.view === "chat" ? hybrid.chat.connection : t.connection;
     if (current) untrack(() => oninfo(current, connection));
   });
-  // Chat uploads and their pending attachments live on this page, not in
-  // ChatView, so switching sides neither aborts an upload nor drops them.
-  // Leaving the page aborts the upload: its attachment has nowhere to go.
+  // Chat uploads live on this page (not in ChatView) so switching sides does
+  // not abort an upload; pending attachments live on the session draft so
+  // switching pages preserves them.
   const sessionId = untrack(() => id);
   const chatUploads = useChatUpload(
     (file, progress, signal) => uploadFile(sessionId, file, progress, signal),
     (message) => (error = message),
+    {
+      get: () => draft.attachments,
+      set: (next) => drafts.setAttachments(draft, next),
+    },
   );
   const chatUploadUnavailable = $derived(
     hybrid.missing

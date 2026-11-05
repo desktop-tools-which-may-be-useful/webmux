@@ -318,6 +318,11 @@ const imageTypes: Record<string, true> = {
   "image/webp": true,
 };
 
+export interface ChatAttachmentStore {
+  get(): ChatAttachment[];
+  set(next: ChatAttachment[]): void;
+}
+
 // Chat uploads become attachments of the next message rather than text in
 // the draft: the server sends them as ACP content blocks, or as server paths
 // when the agent cannot take them. send stores each file: in a session's
@@ -325,13 +330,21 @@ const imageTypes: Record<string, true> = {
 export function useChatUpload(
   send: UploadSend,
   setError: (message: string) => void,
+  store?: ChatAttachmentStore,
 ): ChatUploads {
   let progress = $state<UploadProgress | null>(null);
-  let attachments = $state<ChatAttachment[]>([]);
+  let localAttachments = $state<ChatAttachment[]>([]);
   let controller: AbortController | undefined;
   let disposed = false;
 
+  const currentAttachments = () => store?.get() ?? localAttachments;
+  const writeAttachments = (next: ChatAttachment[]) => {
+    if (store) store.set(next);
+    else localAttachments = next;
+  };
+
   function refusal(files: File[]) {
+    const attachments = currentAttachments();
     if (attachments.length + files.length > maxAttachments)
       return `每条消息最多 ${maxAttachments} 个附件。`;
     const oversized = files.find((file) => file.size > maxAttachmentBytes);
@@ -364,8 +377,8 @@ export function useChatUpload(
         waiting: false,
         report: (value) => (progress = value),
         insert: async (path, file) => {
-          attachments = [
-            ...attachments,
+          writeAttachments([
+            ...currentAttachments(),
             {
               path,
               name: file.name,
@@ -373,7 +386,7 @@ export function useChatUpload(
               size: file.size,
               kind: Object.hasOwn(imageTypes, file.type) ? "image" : "file",
             },
-          ];
+          ]);
         },
       });
     } catch (err) {
@@ -394,7 +407,7 @@ export function useChatUpload(
       return progress;
     },
     get attachments() {
-      return attachments;
+      return currentAttachments();
     },
     uploadFiles,
     filePaste(event) {
@@ -404,15 +417,17 @@ export function useChatUpload(
       controller?.abort();
     },
     remove(path) {
-      attachments = attachments.filter((item) => item.path !== path);
+      writeAttachments(
+        currentAttachments().filter((item) => item.path !== path),
+      );
     },
     take() {
-      const taken = attachments;
-      attachments = [];
+      const taken = [...currentAttachments()];
+      writeAttachments([]);
       return taken;
     },
     restore(sent) {
-      attachments = [...sent, ...attachments];
+      writeAttachments([...sent, ...currentAttachments()]);
     },
   };
 }

@@ -282,6 +282,8 @@ export const StoredDraftSchema = z.object({
   sessionId: SessionInfoSchema.shape.id,
   generation: GenerationSchema.nullable(),
   text: z.string(),
+  // Pending uploaded attachments waiting in the chat composer.
+  attachments: z.array(ChatAttachmentSchema).optional(),
   savedAt: z.number().int().nonnegative(),
   submission: z
     .object({

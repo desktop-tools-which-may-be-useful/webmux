@@ -43,6 +43,7 @@
     BranchesSchema,
     QuickStartOptionsRequestSchema,
     QuickStartOptionsSchema,
+    type ChatAttachment,
     type ChatConfig as ChatOption,
     type ChatPermissionMode as PermissionMode,
     type QuickStartFailure,
@@ -65,9 +66,12 @@
       ? shell.launchConfigs.state.configs.filter((config) => config.hybrid)
       : [],
   );
+  const initialDraft = quickStartMemory.loadDraft();
   const remembered = quickStartMemory.choice();
-  let repositoryChoice = $state(remembered?.repositoryId);
-  let agentChoice = $state(remembered?.configId);
+  let repositoryChoice = $state(
+    initialDraft.repositoryId ?? remembered?.repositoryId,
+  );
+  let agentChoice = $state(initialDraft.configId ?? remembered?.configId);
   const usableRepository = (repo: Repository) =>
     repo.availability === "available";
   const repository = $derived(
@@ -75,9 +79,41 @@
   );
   const agent = $derived(pickDefault(agents, agentChoice, () => true));
 
-  let text = $state(quickStartMemory.draft());
-  $effect(() => quickStartMemory.saveDraft(text));
-  let permissionMode = $state<PermissionMode>("auto");
+  let text = $state(initialDraft.text);
+  let attachments = $state<ChatAttachment[]>(initialDraft.attachments ?? []);
+  let permissionMode = $state<PermissionMode>(
+    initialDraft.permissionMode ?? "auto",
+  );
+  let edits = $state<Record<string, Record<string, ConfigValue>>>(
+    initialDraft.edits ?? {},
+  );
+  let baseChoice = $state<{ repositoryId: string; name: string } | undefined>(
+    initialDraft.baseChoice,
+  );
+  // The repository whose init instruction the user unticked for this send; a
+  // repository change or sending ticks it again.
+  let unticked = $state<string | undefined>(initialDraft.unticked);
+
+  function persistDraft() {
+    const edited = Object.keys(edits).length ? edits : undefined;
+    quickStartMemory.saveDraftState({
+      text,
+      ...(attachments.length ? { attachments } : {}),
+      ...(repositoryChoice && repositoryChoice !== remembered?.repositoryId
+        ? { repositoryId: repositoryChoice }
+        : {}),
+      ...(agentChoice && agentChoice !== remembered?.configId
+        ? { configId: agentChoice }
+        : {}),
+      ...(baseChoice ? { baseChoice } : {}),
+      ...(permissionMode !== "auto" ? { permissionMode } : {}),
+      ...(edited ? { edits: edited } : {}),
+      ...(unticked ? { unticked } : {}),
+    });
+  }
+  $effect(() => {
+    persistDraft();
+  });
 
   // Choosing an agent (and opening the page) reads the options it offers:
   // the server starts it in a throwaway session in the repository and
@@ -114,7 +150,6 @@
   );
 
   // The page's option values: the agent's catalog plus edits.
-  let edits = $state<Record<string, Record<string, ConfigValue>>>({});
   const catalog = $derived(
     probe?.agentId === agent?.id && probe?.options
       ? probe.options
@@ -129,13 +164,13 @@
   function setOption(id: string, value: ConfigValue) {
     if (!agent) return;
     edits = { ...edits, [agent.id]: { ...edits[agent.id], [id]: value } };
+    persistDraft();
   }
 
   // The base branch defaults to the repository's main worktree branch and
   // offers its local branches through the new-worktree form's searchable
   // list. Branches are told apart by name: several can share a commit.
   let branches = $state<{ id: string; data?: Branches; error?: string }>();
-  let baseChoice = $state<{ repositoryId: string; name: string }>();
   let basePickerOpen = $state(false);
   let baseSearch = $state("");
   // Keyed on the ID alone: a refreshed repository list must not cancel the
@@ -196,9 +231,6 @@
         ? "repository"
         : "",
   );
-  // The repository whose init instruction the user unticked for this send; a
-  // repository change or reopening the page ticks it again.
-  let unticked = $state<string>();
   const useInstruction = $derived(unticked !== repository?.id);
   const instructionPreview = $derived(
     expandInitInstruction(
@@ -214,6 +246,13 @@
   const uploads = useChatUpload(
     uploadQuickStartFile,
     (message) => (uploadError = message),
+    {
+      get: () => attachments,
+      set: (next) => {
+        attachments = next;
+        persistDraft();
+      },
+    },
   );
   // Reading the agent's options holds the agent row and sending.
   const locked = $derived(sending || probing);
@@ -268,6 +307,7 @@
             configId: agent.id,
           });
           text = "";
+          unticked = undefined;
           quickStartMemory.clearDraft();
           openSession({ id: outcome.sessionId });
           return;
@@ -433,6 +473,7 @@
           onchange={(id) => {
             repositoryChoice = id;
             unticked = undefined;
+            persistDraft();
           }}
         >
           {#snippet icon()}<IconBook2 aria-hidden="true" />{/snippet}
@@ -464,6 +505,7 @@
               bind:search={baseSearch}
               onselect={(name) => {
                 baseChoice = { repositoryId: repository?.id ?? "", name };
+                persistDraft();
                 setBasePickerOpen(false);
               }}
             />
@@ -484,7 +526,10 @@
               disabled={sending}
               bind:checked={
                 () => useInstruction,
-                (next) => (unticked = next ? undefined : repository?.id)
+                (next) => {
+                  unticked = next ? undefined : repository?.id;
+                  persistDraft();
+                }
               }
             />
             <Label for="use-init-instruction">使用初始化指令</Label>
@@ -552,6 +597,7 @@
             disabled={sending}
             bind:ref={input}
             bind:value={text}
+            oninput={() => persistDraft()}
             onkeydown={keydown}
             onpaste={(event) => uploads.filePaste(event)}
           />
@@ -584,7 +630,10 @@
                   config={options}
                   disabled={locked}
                   modeDisabled={locked}
-                  onmodechange={(mode) => (permissionMode = mode)}
+                  onmodechange={(mode) => {
+                    permissionMode = mode;
+                    persistDraft();
+                  }}
                   onconfigchange={setOption}
                 />
                 {@render probeStatus()}
@@ -613,7 +662,10 @@
             <ChatPermissionMode
               mode={permissionMode}
               disabled={locked}
-              onchange={(mode) => (permissionMode = mode)}
+              onchange={(mode) => {
+                permissionMode = mode;
+                persistDraft();
+              }}
             />
             {#if options.length}
               <ChatConfig
@@ -637,7 +689,10 @@
     value={agent?.id ?? ""}
     choices={agents.map((item) => ({ value: item.id, name: item.name }))}
     disabled={locked}
-    onchange={(id) => (agentChoice = id)}
+    onchange={(id) => {
+      agentChoice = id;
+      persistDraft();
+    }}
   >
     {#snippet choiceIcon(id)}<LaunchConfigIcon
         icon={agents.find((item) => item.id === id)?.icon ?? ""}

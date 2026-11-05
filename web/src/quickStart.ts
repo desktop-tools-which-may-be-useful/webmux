@@ -1,25 +1,67 @@
 import { z } from "zod";
 import { api, APIError, store, stored } from "./api";
+import type { ConfigValue } from "./chat-api";
 import { newRequestId } from "./ids";
 import {
+  ChatAttachmentSchema,
+  ChatPermissionModeSchema,
   QuickStartFailureSchema,
   QuickStartRequestSchema,
   QuickStartResultSchema,
+  type ChatAttachment,
   type ChatConfig,
+  type ChatPermissionMode,
   type QuickStartFailure,
   type QuickStartRequest,
 } from "./schemas";
 
 // Quick start's memory on this device: the repository and agent of the last
-// successful start, and the unsent text. Both are validated on read and
-// degrade to nothing when unreadable.
+// successful start, and the unsent composer state. Both are validated on read
+// and degrade to nothing when unreadable.
 
 const ChoiceSchema = z.object({
   repositoryId: z.string().min(1).max(256),
   configId: z.string().regex(/^[a-z2-7]{8}$/),
 });
 export type QuickStartChoice = z.infer<typeof ChoiceSchema>;
-const DraftSchema = z.object({ text: z.string().max(100_000) });
+
+const ConfigValueSchema: z.ZodType<ConfigValue> = z.union([
+  z.object({ value: z.string().max(1024) }),
+  z.object({ enabled: z.boolean() }),
+]);
+
+const BaseChoiceSchema = z.object({
+  repositoryId: z.string().min(1).max(256),
+  name: z.string().min(1).max(256),
+});
+
+const DraftSchema = z.object({
+  text: z.string().max(100_000).default(""),
+  attachments: z.array(ChatAttachmentSchema).max(8).optional(),
+  repositoryId: z.string().min(1).max(256).optional(),
+  configId: z
+    .string()
+    .regex(/^[a-z2-7]{8}$/)
+    .optional(),
+  baseChoice: BaseChoiceSchema.optional(),
+  permissionMode: ChatPermissionModeSchema.optional(),
+  edits: z
+    .record(z.string(), z.record(z.string(), ConfigValueSchema))
+    .optional(),
+  unticked: z.string().min(1).max(256).optional(),
+});
+export type QuickStartDraft = {
+  text: string;
+  attachments?: ChatAttachment[];
+  repositoryId?: string;
+  configId?: string;
+  baseChoice?: { repositoryId: string; name: string };
+  permissionMode?: ChatPermissionMode;
+  edits?: Record<string, Record<string, ConfigValue>>;
+  unticked?: string;
+};
+
+let memoryDraft: QuickStartDraft | undefined;
 
 function readJson<T extends z.ZodType>(key: string, schema: T) {
   try {
@@ -29,18 +71,62 @@ function readJson<T extends z.ZodType>(key: string, schema: T) {
   }
 }
 
+function emptyDraft(draft: QuickStartDraft) {
+  return (
+    !draft.text &&
+    !draft.attachments?.length &&
+    !draft.repositoryId &&
+    !draft.configId &&
+    !draft.baseChoice &&
+    (!draft.permissionMode || draft.permissionMode === "auto") &&
+    (!draft.edits || Object.keys(draft.edits).length === 0) &&
+    !draft.unticked
+  );
+}
+
 export const quickStartMemory = {
   choice: (): QuickStartChoice | undefined =>
     readJson("quickStart", ChoiceSchema),
   rememberChoice(choice: QuickStartChoice) {
     store("quickStart", JSON.stringify(choice));
   },
-  draft: (): string => readJson("quick-start-draft", DraftSchema)?.text ?? "",
+  loadDraft(): QuickStartDraft {
+    const raw = stored("quick-start-draft", "");
+    if (!raw) {
+      // If storage was cleared externally (e.g. between tests), drop the
+      // fallback only when localStorage is reachable and empty.
+      try {
+        if (localStorage.getItem("webmux.quick-start-draft") === null)
+          memoryDraft = undefined;
+      } catch {
+        /* use memoryDraft when storage is unreachable */
+      }
+      return memoryDraft ?? { text: "" };
+    }
+    try {
+      const parsed = DraftSchema.safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : { text: "" };
+    } catch {
+      return { text: "" };
+    }
+  },
+  draft: (): string => quickStartMemory.loadDraft().text,
+  saveDraftState(draft: QuickStartDraft) {
+    if (emptyDraft(draft)) {
+      quickStartMemory.clearDraft();
+      return;
+    }
+    memoryDraft = draft;
+    store("quick-start-draft", JSON.stringify(draft));
+  },
   saveDraft(text: string) {
-    if (text) store("quick-start-draft", JSON.stringify({ text }));
-    else quickStartMemory.clearDraft();
+    quickStartMemory.saveDraftState({
+      ...quickStartMemory.loadDraft(),
+      text,
+    });
   },
   clearDraft() {
+    memoryDraft = undefined;
     try {
       localStorage.removeItem("webmux.quick-start-draft");
     } catch {

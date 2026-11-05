@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte/pure";
-import { shellUi } from "../../src/shell.svelte";
+import { openSession, shellUi } from "../../src/shell.svelte";
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
 import {
   commands,
@@ -140,6 +140,76 @@ test("defaults skip what is unusable, and the first send goes in one request", a
     configId: "cfgclaud",
   });
   expect(localStorage.getItem("webmux.quick-start-draft")).toBeNull();
+});
+
+test("switching pages away from /new and back keeps all composer choices, attachments and text", async () => {
+  StagingXHR.sent = [];
+  vi.stubGlobal("XMLHttpRequest", StagingXHR);
+  const { input, toolbar, place } = await open();
+  await input.fill("先看别的会话再回来");
+
+  await place.getByRole("button", { name: "基准分支：main" }).click();
+  await page.getByRole("option", { name: "feature", exact: true }).click();
+  await expect
+    .element(place.getByRole("button", { name: "基准分支：feature" }))
+    .toBeVisible();
+
+  const box = page.getByRole("checkbox", { name: "使用初始化指令" });
+  await box.click();
+  await expect.element(box).not.toBeChecked();
+
+  await toolbar.getByRole("button", { name: "权限：全部接受" }).click();
+  await page.getByRole("menuitemradio", { name: /每次询问/ }).click();
+  await userEvent.keyboard("{Escape}");
+
+  await toolbar.getByRole("button", { name: "思考：中" }).click();
+  await page.getByRole("menuitemradio", { name: /高/ }).click();
+  await userEvent.keyboard("{Escape}");
+
+  const picker = page
+    .getByLabelText("选择上传文件")
+    .element() as HTMLInputElement;
+  const transfer = new DataTransfer();
+  transfer.items.add(
+    new File(["# 笔记"], "note.md", { type: "text/markdown" }),
+  );
+  picker.files = transfer.files;
+  picker.dispatchEvent(new Event("change", { bubbles: true }));
+  await expect.poll(() => StagingXHR.sent.length).toBe(1);
+  const { xhr } = StagingXHR.sent[0]!;
+  xhr.status = 201;
+  xhr.response = { path: "/tmp/staging/note.md" };
+  xhr.onload?.();
+  await expect
+    .element(page.getByRole("list", { name: "待发送附件" }))
+    .toHaveTextContent("note.md");
+
+  // Switch away to an open session page and back to /new.
+  openSession({ id: "chataaaa" });
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  await expect.element(page.getByTestId("session-page")).toBeVisible();
+  history.pushState(null, "", "/new");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  await expect.poll(() => location.pathname).toBe("/new");
+
+  await expect
+    .element(page.getByRole("textbox", { name: "任务描述" }))
+    .toHaveValue("先看别的会话再回来");
+  await expect
+    .element(place.getByRole("button", { name: "基准分支：feature" }))
+    .toBeVisible();
+  await expect
+    .element(page.getByRole("checkbox", { name: "使用初始化指令" }))
+    .not.toBeChecked();
+  await expect
+    .element(toolbar.getByRole("button", { name: "权限：每次询问" }))
+    .toBeVisible();
+  await expect
+    .element(toolbar.getByRole("button", { name: "思考：高" }))
+    .toBeVisible();
+  await expect
+    .element(page.getByRole("list", { name: "待发送附件" }))
+    .toHaveTextContent("note.md");
 });
 
 const created = () =>

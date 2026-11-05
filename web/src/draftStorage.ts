@@ -103,7 +103,7 @@ export function createDraftStorage(
     save(draft) {
       const key = draftPrefix + draft.sessionId;
       if (!result.enabled) return false;
-      if (!draft.text && !draft.submission) {
+      if (!draft.text && !draft.submission && !draft.attachments?.length) {
         drop(key);
         return true;
       }
