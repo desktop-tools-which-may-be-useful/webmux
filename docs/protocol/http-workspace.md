@@ -35,6 +35,8 @@
 
 `POST /api/quick-starts` 一次完成快速开始：在仓库中新建 worktree、以聊天端启动混合会话、应用配置与权限模式，并发送首条提示。请求与响应结构见 `internal/contract/quickstart.go`。
 
+可选 `startSide: "tui"` 改为在 agent 的终端中启动：跳过配置与权限模式，首条消息（含初始化指令）在终端输出安静后输入并回车，带 `attachments` 时预检返回 400；缺省与 `"acp"` 为聊天端。
+
 - 请求：`{clientRequestId, repositoryId, configId, base, branch, text, config, permissionMode, useInitInstruction, attachments?}`。`config` 为配置项 ID 到值的映射（布尔项为 `"true"`/`"false"`）；路径由服务端取 `defaultParent/<分支名末段>`。
 - 附件：`attachments` 为 `POST /api/quick-starts/uploads` 返回的 `{path}`，最多 8 个，只读取 `path`；不是暂存文件夹中的普通文件时在预检返回 400。会话创建并应用配置后，文件移入该会话的上传目录，随首条提示按聊天附件规则发送。
 - 成功：201 `{sessionId, worktree, configWarnings}`。agent 不接受的配置值记为 `configWarnings` 并作为聊天提示写入时间线，不阻断发送。

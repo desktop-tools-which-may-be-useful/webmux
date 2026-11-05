@@ -6,13 +6,15 @@
   import IconChevronDown from "~icons/tabler/chevron-down";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLoader2 from "~icons/tabler/loader-2";
+  import IconMessage from "~icons/tabler/message";
   import IconNotes from "~icons/tabler/notes";
+  import IconTerminal2 from "~icons/tabler/terminal-2";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
   import { Textarea } from "$lib/components/ui/textarea";
-  import { api, uploadQuickStartFile } from "../api";
+  import { api, store, stored, uploadQuickStartFile } from "../api";
   import { suggestWorktreeBranch } from "../branchName";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import type { ConfigValue } from "../chat-api";
@@ -78,6 +80,13 @@
     pickDefault(repositories, repositoryChoice, usableRepository),
   );
   const agent = $derived(pickDefault(agents, agentChoice, () => true));
+
+  // Where the agent starts: its chat, or its terminal, which gets the message
+  // typed in. A terminal start has no agent options, permission mode or files.
+  let startSide = $state<"acp" | "tui">(
+    stored("quickStartSide") === "tui" ? "tui" : "acp",
+  );
+  const chat = $derived(startSide === "acp");
 
   let text = $state(initialDraft.text);
   let attachments = $state<ChatAttachment[]>(initialDraft.attachments ?? []);
@@ -255,9 +264,10 @@
     },
   );
   // Reading the agent's options holds the agent row and sending.
-  const locked = $derived(sending || probing);
+  const locked = $derived(sending || (chat && probing));
   const canSend = $derived(
     !locked &&
+      (chat || !attachments.length) &&
       !uploads.progress &&
       !!repository &&
       !!agent &&
@@ -300,8 +310,10 @@
           permissionMode,
           attachments,
           useInitInstruction: !!repository.initInstruction && useInstruction,
+          startSide,
         });
         if (outcome.ok) {
+          store("quickStartSide", startSide);
           quickStartMemory.rememberChoice({
             repositoryId: repository.id,
             configId: agent.id,
@@ -359,7 +371,9 @@
     >
       <h2 class="text-2xl font-medium">要让 agent 做什么？</h2>
       <p class="max-w-md text-sm text-muted-foreground">
-        发送后会在所选仓库新建 worktree，以聊天方式启动 agent 并发出这条消息。
+        发送后会在所选仓库新建 worktree，{chat
+          ? "以聊天方式启动 agent 并发出这条消息"
+          : "在终端中启动 agent，待它就绪后输入这条消息并回车"}。
       </p>
     </div>
 
@@ -513,6 +527,12 @@
         </Popover.Root>
       </div>
 
+      {#if !chat && attachments.length}<p
+          role="alert"
+          class="px-1 text-sm text-destructive"
+        >
+          终端启动不支持附件，请移除附件或改为聊天启动。
+        </p>{/if}
       {#if uploadError}<p role="alert" class="px-1 text-sm text-destructive">
           {uploadError}
         </p>{/if}
@@ -609,7 +629,7 @@
           />{/if}
         <div class="flex items-center justify-end gap-2 px-2 pb-2">
           <div class="mr-auto flex min-w-0 items-center gap-1">
-            <ChatUploadButton {uploads} disabled={sending} />
+            {#if chat}<ChatUploadButton {uploads} disabled={sending} />{/if}
             {#if sending}
               <span
                 class="flex items-center gap-1.5 text-xs text-muted-foreground"
@@ -625,18 +645,21 @@
                  the chat composer does; the row above keeps the location. -->
               <span class="flex min-w-0 items-center gap-0.5 sm:hidden">
                 {@render agentPicker()}
-                <ChatSessionOptions
-                  mode={permissionMode}
-                  config={options}
-                  disabled={locked}
-                  modeDisabled={locked}
-                  onmodechange={(mode) => {
-                    permissionMode = mode;
-                    persistDraft();
-                  }}
-                  onconfigchange={setOption}
-                />
-                {@render probeStatus()}
+                {@render sidePicker()}
+                {#if chat}
+                  <ChatSessionOptions
+                    mode={permissionMode}
+                    config={options}
+                    disabled={locked}
+                    modeDisabled={locked}
+                    onmodechange={(mode) => {
+                      permissionMode = mode;
+                      persistDraft();
+                    }}
+                    onconfigchange={setOption}
+                  />
+                  {@render probeStatus()}
+                {/if}
               </span>
             {/if}
           </div>
@@ -659,22 +682,25 @@
         >
           <div class="flex shrink-0 items-center gap-0.5">
             {@render agentPicker()}
-            <ChatPermissionMode
-              mode={permissionMode}
-              disabled={locked}
-              onchange={(mode) => {
-                permissionMode = mode;
-                persistDraft();
-              }}
-            />
-            {#if options.length}
-              <ChatConfig
-                config={options}
+            {@render sidePicker()}
+            {#if chat}
+              <ChatPermissionMode
+                mode={permissionMode}
                 disabled={locked}
-                onchange={setOption}
+                onchange={(mode) => {
+                  permissionMode = mode;
+                  persistDraft();
+                }}
               />
+              {#if options.length}
+                <ChatConfig
+                  config={options}
+                  disabled={locked}
+                  onchange={setOption}
+                />
+              {/if}
+              {@render probeStatus()}
             {/if}
-            {@render probeStatus()}
           </div>
         </div>
       {/if}
@@ -698,6 +724,26 @@
         icon={agents.find((item) => item.id === id)?.icon ?? ""}
         size="xs"
       />{/snippet}
+  </ChatSelect>
+{/snippet}
+
+{#snippet sidePicker()}
+  <ChatSelect
+    labeled
+    name="启动方式"
+    value={startSide}
+    choices={[
+      { value: "acp", name: "聊天" },
+      { value: "tui", name: "终端" },
+    ]}
+    disabled={sending}
+    onchange={(value) => {
+      if (value === "acp" || value === "tui") startSide = value;
+    }}
+  >
+    {#snippet choiceIcon(value)}{#if value === "tui"}<IconTerminal2
+          aria-hidden="true"
+        />{:else}<IconMessage aria-hidden="true" />{/if}{/snippet}
   </ChatSelect>
 {/snippet}
 

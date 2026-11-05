@@ -20,6 +20,10 @@ type QuickStartRequest struct {
 	// UseInitInstruction puts the repository's initialization instruction
 	// before Text, its {{name}} references replaced by quick command text.
 	UseInitInstruction bool `json:"useInitInstruction"`
+	// StartSide is "acp" (the default: a chat) or "tui", which types Text
+	// into the agent's terminal and presses Enter instead. A terminal start
+	// ignores Config and PermissionMode and rejects Attachments.
+	StartSide HybridSide `json:"startSide,omitempty"`
 	// Attachments are files returned by POST /api/quick-starts/uploads;
 	// only their path is read. They go with the first prompt.
 	Attachments []ChatAttachment `json:"attachments,omitempty"`

@@ -495,6 +495,9 @@ export const QuickStartRequestSchema = z.object({
   attachments: z.array(ChatAttachmentSchema).optional(),
   // Whether the repository's init instruction goes before the first message.
   useInitInstruction: z.boolean(),
+  // "tui" types the message into the agent's terminal instead of a chat;
+  // it takes no options, permission mode or attachments.
+  startSide: z.enum(["tui", "acp"]).optional(),
 });
 export type QuickStartRequest = z.infer<typeof QuickStartRequestSchema>;
 export const QuickStartResultSchema = z.object({

@@ -611,3 +611,35 @@ func TestCreateSessionFirstMessage(t *testing.T) {
 		t.Fatalf("first chat prompt %q", got)
 	}
 }
+
+// A terminal quick start creates the worktree and the agent's TUI, types the
+// message into it and rejects what only a chat can take.
+func TestQuickStartTerminalSide(t *testing.T) {
+	h := newQuickHarness(t, "")
+	bad := h.input("quick-start-tui0", "wt/tui-bad")
+	bad.StartSide = "tui"
+	bad.Attachments = []string{"/tmp/x"}
+	if _, err := h.start(bad); err == nil || errorKind(err) != ErrInvalid {
+		t.Fatalf("attachments on a terminal start: %v", err)
+	}
+	in := h.input("quick-start-tui1", "wt/tui")
+	in.StartSide = "tui"
+	result, err := h.start(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := h.manager.Get(result.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for !strings.Contains(string(item.Buffer()), in.Text) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !strings.Contains(string(item.Buffer()), in.Text) {
+		t.Fatalf("terminal never received %q: %q", in.Text, item.Buffer())
+	}
+	if len(result.ConfigWarnings) != 0 {
+		t.Fatalf("warnings %v", result.ConfigWarnings)
+	}
+}

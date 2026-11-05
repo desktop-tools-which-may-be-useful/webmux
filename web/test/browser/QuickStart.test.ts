@@ -67,7 +67,12 @@ beforeEach(() => {
   respond(/^GET \/api\/hybrid-sessions/, () => Response.json([]));
 });
 afterEach(() => {
-  for (const key of ["shellMode", "quickStart", "quick-start-draft"])
+  for (const key of [
+    "shellMode",
+    "quickStart",
+    "quickStartSide",
+    "quick-start-draft",
+  ])
     localStorage.removeItem(`webmux.${key}`);
   history.replaceState(null, "", "/");
 });
@@ -134,6 +139,7 @@ test("defaults skip what is unusable, and the first send goes in one request", a
     config: { effort: "high" },
     permissionMode: "auto",
     useInitInstruction: true,
+    startSide: "acp",
   });
   expect(JSON.parse(localStorage.getItem("webmux.quickStart")!)).toEqual({
     repositoryId: "repo1",
@@ -221,6 +227,31 @@ const created = () =>
     },
     { status: 201 },
   );
+
+test("starting in the terminal drops chat-only controls and is remembered", async () => {
+  respond(/^POST \/api\/quick-starts$/, created);
+  const { input, toolbar } = await open();
+  await expect
+    .element(toolbar.getByRole("button", { name: "思考：中" }))
+    .toBeVisible();
+  await toolbar.getByRole("button", { name: "启动方式：聊天" }).click();
+  await page.getByRole("menuitemradio", { name: "终端" }).click();
+  await expect
+    .element(toolbar.getByRole("button", { name: "启动方式：终端" }))
+    .toBeVisible();
+  expect(
+    toolbar.getByRole("button", { name: "思考：中" }).elements(),
+  ).toHaveLength(0);
+  expect(
+    page.getByRole("button", { name: "上传文件" }).elements(),
+  ).toHaveLength(0);
+  await input.fill("修复首页排序");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  const sent = commands().find((c) => c.path === "/api/quick-starts");
+  expect(sent?.body).toMatchObject({ startSide: "tui" });
+  expect(localStorage.getItem("webmux.quickStartSide")).toBe("tui");
+});
 
 test("unticking the init instruction applies to that send only", async () => {
   respond(/^POST \/api\/quick-starts$/, created);

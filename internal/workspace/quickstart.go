@@ -57,6 +57,10 @@ type QuickStartInput struct {
 	// its {{name}} references expanded, before Text.
 	UseInitInstruction bool
 	Attachments        []string
+	// StartSide is acp (the default: a chat) or tui, which types the first
+	// message into the agent's terminal instead. A terminal start takes
+	// neither agent options, a permission mode nor attachments.
+	StartSide string
 }
 
 // QuickStartResult is a quick start that sent its first prompt.
@@ -156,13 +160,19 @@ func (s *Service) quickStart(ctx context.Context, in QuickStartInput) (QuickStar
 	}
 	configID := in.ConfigID
 	item, err := s.CreateSession(ctx, SessionInput{
-		ConfigID: &configID, StartSide: string(hybrid.SideACP),
+		ConfigID: &configID, StartSide: string(plan.side),
 		Workspace: &Reference{RepositoryID: in.RepositoryID, WorktreeID: tree.ID},
 	})
 	if err != nil {
 		return fail(StepSession, &tree, "", err)
 	}
 	id := item.Info().ID
+	if plan.side == hybrid.SideTUI {
+		if err := s.sendFirstMessage(ctx, item, false, plan); err != nil {
+			return fail(StepPrompt, &tree, id, err)
+		}
+		return QuickStartResult{SessionID: id, Worktree: tree, ConfigWarnings: []string{}}, nil
+	}
 	warnings, err := s.applyQuickStartConfig(ctx, id, in)
 	if err != nil {
 		return fail(StepConfig, &tree, id, err)
@@ -215,6 +225,7 @@ func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) 
 // prompt's text and its staged attachments.
 type quickStartPlan struct {
 	path string
+	side hybrid.Side
 	// text is the user's message; instruction is the expanded
 	// initialization instruction ("" for none), still holding {{dir}}.
 	text        string
@@ -228,6 +239,17 @@ type quickStartPlan struct {
 func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quickStartPlan, error) {
 	if strings.TrimSpace(in.Text) == "" {
 		return quickStartPlan{}, problemf(ErrInvalid, "请输入消息")
+	}
+	side := hybrid.Side(in.StartSide)
+	switch side {
+	case "":
+		side = hybrid.SideACP
+	case hybrid.SideACP, hybrid.SideTUI:
+	default:
+		return quickStartPlan{}, problemf(ErrInvalid, "startSide 只能是 tui 或 acp")
+	}
+	if side == hybrid.SideTUI && len(in.Attachments) > 0 {
+		return quickStartPlan{}, problemf(ErrInvalid, "从终端开始不支持附件")
 	}
 	if in.PermissionMode != "" && in.PermissionMode != string(hybrid.PermissionAsk) && in.PermissionMode != string(hybrid.PermissionAuto) {
 		return quickStartPlan{}, problemf(ErrInvalid, "permissionMode 只能是 ask 或 auto")
@@ -248,7 +270,7 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 		staged = append(staged, clean)
 	}
 	configID := in.ConfigID
-	command, err := s.resolveCommand(SessionInput{ConfigID: &configID, StartSide: string(hybrid.SideACP)})
+	command, err := s.resolveCommand(SessionInput{ConfigID: &configID, StartSide: string(side)})
 	if err != nil {
 		return quickStartPlan{}, err
 	}
@@ -283,12 +305,12 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 		return quickStartPlan{}, problemf(ErrInvalid, "消息与初始化指令合计超过 %d 字节", hybrid.MaxPromptBytes)
 	}
 	if err := s.hybrids.CheckCreate(ctx, hybrid.CreateInput{
-		Cwd: r.entry.AnchorPath, ConfigID: command.configID, Cmd: command.cmd, Env: command.env, StartSide: hybrid.SideACP,
+		Cwd: r.entry.AnchorPath, ConfigID: command.configID, Cmd: command.cmd, Env: command.env, StartSide: side,
 	}); err != nil {
 		return quickStartPlan{}, err
 	}
 	parent := filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")
-	return quickStartPlan{path: filepath.Join(parent, leaf), text: in.Text, instruction: instruction, attachments: staged}, nil
+	return quickStartPlan{side: side, path: filepath.Join(parent, leaf), text: in.Text, instruction: instruction, attachments: staged}, nil
 }
 
 // expandRepositoryInstruction is a repository's initialization instruction
