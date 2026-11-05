@@ -32,6 +32,7 @@
   import { dragWidth, keyWidth } from "../splitter";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
   import AppSidebar from "./AppSidebar.svelte";
+  import AttentionToasts from "./AttentionToasts.svelte";
   import LazyDialog from "./LazyDialog.svelte";
   import ModeSwitch from "./ModeSwitch.svelte";
   import CloseSessionDialog from "./CloseSessionDialog.svelte";
@@ -275,6 +276,7 @@
     {@render children()}
   </div>
 </div>
+<AttentionToasts />
 
 <!-- noBodyStyles: the page under it keeps its scroll position and layout. -->
 <Drawer.Root direction="left" noBodyStyles bind:open={shellUi.drawerOpen}>

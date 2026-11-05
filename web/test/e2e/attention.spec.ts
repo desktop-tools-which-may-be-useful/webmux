@@ -242,3 +242,43 @@ test("structured agents do not trigger the waiting heuristics", async ({
   await expect.poll(() => status(false)).toBe("waiting");
   expect(await status(true)).toBe("running");
 });
+
+const delayedQuestionAgent = String.raw`
+until [ -e ask-now ]; do sleep 0.05; done
+printf '\033]777;notify;warp://cli-agent;{"v":1,"agent":"e2e","event":"question_asked"}\007'
+cat > /dev/null
+`;
+
+test("raises a top-right toast by default while browsing and navigates to the session on click", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  await page.goto("/new");
+  const created = await request.post("/api/sessions", {
+    data: {
+      cwd: workDir,
+      cmd: ["/bin/bash", "-c", delayedQuestionAgent],
+      name: "E2E toast agent",
+    },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+
+  await writeFile(join(workDir, "ask-now"), "");
+  const region = page.getByRole("region", { name: "会话通知" });
+  await expect(region).toBeVisible();
+  const toast = region.locator(`[data-toast-session-id="${id}"]`);
+  await expect(toast).toHaveAttribute("data-tone", "destructive");
+  await expect(toast).toContainText("需要回答");
+  await expect(toast).toContainText("E2E toast agent");
+  await expect(toast).toContainText("Agent 正在等待你的输入");
+
+  await toast
+    .getByRole("button", {
+      name: "打开会话 E2E toast agent：需要回答 · Agent 正在等待你的输入",
+    })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/s/${id}$`));
+  await expect(region).toBeHidden();
+});

@@ -1,12 +1,15 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { page } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
+import { resetAttentionToasts } from "../../src/attention-toast.svelte";
 import PushSettings from "../../src/components/PushSettings.svelte";
 import type { PushSupport } from "../../src/push";
 import type { PushStatus } from "../../src/schemas";
 
 afterEach(() => {
   cleanup();
+  localStorage.removeItem("webmux.toastNotifications");
+  resetAttentionToasts();
   vi.unstubAllGlobals();
 });
 
@@ -103,11 +106,35 @@ for (const row of cases) {
         page.getByText("会话列表中的状态仍是唯一准确来源", { exact: false }),
       )
       .toBeVisible();
-    expect(page.getByRole("switch").elements()).toHaveLength(
-      row.toggle ? 1 : 0,
-    );
+    await expect
+      .element(page.getByRole("switch", { name: "页面内右上角弹窗提醒" }))
+      .toBeChecked();
+    expect(
+      page.getByRole("switch", { name: "在本设备开启推送" }).elements(),
+    ).toHaveLength(row.toggle ? 1 : 0);
   });
 }
+
+test("in-app toast notifications are enabled by default and can be toggled on this device", async () => {
+  render(PushSettings, {
+    support: { ...capable, secure: false, serviceWorker: false },
+    loadStatus: async () => ({
+      ...available,
+      available: false,
+      reason: "unsupported_origin",
+    }),
+  });
+  const toastToggle = page.getByRole("switch", {
+    name: "页面内右上角弹窗提醒",
+  });
+  await expect.element(toastToggle).toBeChecked();
+  await toastToggle.click();
+  await expect.element(toastToggle).not.toBeChecked();
+  expect(localStorage.getItem("webmux.toastNotifications")).toBe("0");
+  await toastToggle.click();
+  await expect.element(toastToggle).toBeChecked();
+  expect(localStorage.getItem("webmux.toastNotifications")).toBe("1");
+});
 
 test("any browser can send the test to every device once one is subscribed", async () => {
   // A desktop that cannot or has not turned push on still drives the phones.
@@ -145,7 +172,7 @@ test("a pending permission prompt explains where to allow notifications", async 
     support: capable,
     loadStatus: async () => available,
   });
-  const toggle = page.getByRole("switch");
+  const toggle = page.getByRole("switch", { name: "在本设备开启推送" });
   await toggle.click();
   const hint = page.getByText("等待浏览器通知授权");
   await expect.element(hint).toBeVisible();

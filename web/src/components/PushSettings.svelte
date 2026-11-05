@@ -7,6 +7,10 @@
   import * as Card from "$lib/components/ui/card";
   import InlineNotice from "./InlineNotice.svelte";
   import { APIError } from "../api";
+  import {
+    attentionToasts,
+    setToastNotificationsEnabled,
+  } from "../attention-toast.svelte";
   import { PushReasonSchema, type PushStatus } from "../schemas";
   import {
     advise,
@@ -128,10 +132,26 @@
   <Card.Header>
     <Card.Title>通知推送</Card.Title>
     <Card.Description
-      >会话提问、等待授权、本轮完成、出错或发出终端通知时提醒本设备；页面关闭或手机锁屏后也能收到，点击通知回到对应会话。只对当前设备生效。</Card.Description
+      >会话提问、等待授权、本轮完成、出错或发出终端通知时提醒本设备；打开网页时默认在右上角弹出提醒，页面关闭或手机锁屏后还可通过后台推送收到，点击通知回到对应会话。只对当前设备生效。</Card.Description
     >
   </Card.Header>
   <Card.Content class="space-y-4">
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between gap-4">
+        <Label for="toast-enabled">页面内右上角弹窗提醒</Label>
+        <Switch
+          id="toast-enabled"
+          aria-describedby="toast-enabled-help"
+          checked={attentionToasts.enabled}
+          onCheckedChange={(checked) => setToastNotificationsEnabled(checked)}
+        />
+      </div>
+      <p id="toast-enabled-help" class="text-xs text-muted-foreground">
+        默认开启；使用网站时在右上角即时弹出需要关注的会话提醒，无需浏览器通知授权或
+        HTTPS。
+      </p>
+    </div>
+
     {#if loadError}
       <InlineNotice tone="danger">无法读取推送状态：{loadError}</InlineNotice>
     {:else if status}

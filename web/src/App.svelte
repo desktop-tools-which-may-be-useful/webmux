@@ -19,6 +19,7 @@
   import { createTerminalDrafts } from "./terminal-draft.svelte";
   import { browserDraftStorage } from "./draftStorage";
   import { clearHomeCache } from "./home-cache";
+  import { resetAttentionToasts } from "./attention-toast.svelte";
 
   const drafts = createTerminalDrafts({ storage: browserDraftStorage() });
   let uploadNotice = $state("");
@@ -89,6 +90,7 @@
       stopSettings();
       drafts.clearAll();
       clearHomeCache();
+      resetAttentionToasts();
       uploadNotice = "";
       ready = false;
       checking = false;

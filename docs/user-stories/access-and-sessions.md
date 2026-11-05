@@ -204,7 +204,10 @@
   - 支持 `OSC 7501` 程序状态、Warp 结构化 agent 事件、终端通知和 BEL 响铃，按此顺序分层：存在 `OSC 7501` 状态时只由其变化决定提醒，较低层不覆盖或清除较高层；
   - 服务端在无浏览器时也应答 `OSC 7501;?` 探测，使 Claude Code 等需探测的 agent 报告状态，回放不重答，`webmux attach` 不把探测转给本地终端；
   - 具体提醒优先于启发式状态，持续输出和重连不清除；
-  - 需要回答、等待授权与出错停止在会话卡片状态徽章和会话页顶栏状态圆点显示为红色（`destructive`），本轮完成、有通知、响铃提醒与启发式“可能在等你”保持琥珀色（`warning`）；
+  - 需要回答、等待授权与出错停止在会话卡片状态徽章、右上角弹窗提醒和会话页顶栏状态圆点显示为红色（`destructive`），本轮完成、有通知、响铃提醒与启发式“可能在等你”保持琥珀色（`warning`）；
+  - 使用网站时（首页、快速开始页或任意会话页），默认在页面右上角弹出新的关注提醒（Toast），无需浏览器通知授权或 HTTPS：
+    - 弹窗展示状态徽章、会话标题与操作说明，点击直达对应会话 `/s/<ID>`，也可单独关闭、悬停暂停或超时自动收起；
+    - 同一会话关注升级时替换前一条，关注解除或会话移除时自动消失；设置页“通知推送”卡片可按当前设备开关该弹窗提醒；
   - 用户输入、agent 报告重新开始或空闲、提示符作废或退出时清除，重复报告不在处理后再次提醒；
   - 只解析状态与种类，不保存正文。
 - **US-C07 调整输出预览**：作为使用者，我希望控制预览行数并跳过 agent 的底部状态栏，以便首页突出有用输出。
@@ -239,7 +242,7 @@
   - 需要新标签页时可用浏览器的中键或 Ctrl/⌘ 点击。
 - **US-C12 后台接收推送提醒**：作为离开页面或锁屏的使用者，我希望收到需要回答、等待授权、本轮完成、出错或终端通知的推送，以便及时回到对应会话。
   验收要点：
-  - 设置页按设备开启或关闭推送，开启时只请求一次浏览器通知授权，显示服务端订阅数，并可从任一设备向全部设备发送测试通知；
+  - 设置页“通知推送”卡片提供默认开启的本机“页面内右上角弹窗提醒”开关（打开网页时无需授权或 HTTPS 即可提醒），并按设备开启或关闭后台推送，开启后台推送时只请求一次浏览器通知授权，显示服务端订阅数，并可从任一设备向全部设备发送测试通知；
   - 仅安全上下文与支持的来源（已授权的 HTTPS 入口，含 Tailscale Serve/Funnel，或本机回环）提供开关，否则给出 HTTPS 入口、Quick Tunnel、iOS 主屏幕、浏览器能力、权限或服务端配置等可执行提示；
   - 推送标题为会话标题，`include_title = false` 或标题为空时为 WebMux，正文以与会话列表一致的短标签开头并给出下一步；
   - 测试通知说明推送已生效；
@@ -304,6 +307,7 @@
 - [设置](../../web/src/pages/Settings.svelte)、[主题](../../web/src/theme.ts)
 - [标签页指示](../../web/src/browser-chrome.ts)、[终端状态接线](../../web/src/hooks/terminal-socket.svelte.ts)、[指示浏览器用例](../../web/test/browser/BrowserChrome.test.ts)
 - [指示端到端用例](../../web/test/e2e/browser-chrome.spec.ts)、[推送与设置卡片](../../web/src/push.ts)、[推送卡片](../../web/src/components/PushSettings.svelte)
+- [页面内弹窗提醒](../../web/src/components/AttentionToasts.svelte)、[弹窗状态跟踪](../../web/src/attention-toast.svelte.ts)、[弹窗纯函数](../../web/src/attention-toast.ts)、[弹窗浏览器用例](../../web/test/browser/AttentionToasts.test.ts)
 - [推送负载](../../internal/push/alert.go)
 - [修改标题对话框](../../web/src/components/RenameSessionDialog.svelte)、[标题浏览器用例](../../web/test/browser/RenameSessionDialog.test.ts)、[重命名实现](../../internal/session/manager.go)
 - [Service Worker](../../web/public/sw.js)、[推送设置用例](../../web/test/browser/PushSettings.test.ts)、[推送端到端用例](../../web/test/e2e/push.spec.ts)。

@@ -1,3 +1,8 @@
+import {
+  observeAttentionRemoved,
+  observeAttentionSession,
+  observeAttentionSnapshot,
+} from "../attention-toast.svelte";
 import { connectSessions } from "../forwards.svelte";
 import { homeCache } from "../home-cache";
 import type { SessionInfo } from "../schemas";
@@ -28,8 +33,10 @@ export function createSessionList({
   onreconnect: () => void;
 }): SessionList {
   // The previous list renders at once and is refreshed behind the page.
-  let sessions = $state.raw<SessionInfo[]>(homeCache.sessions() ?? []);
-  let loading = $state(!homeCache.sessions());
+  const cached = homeCache.sessions();
+  if (cached) observeAttentionSnapshot(cached);
+  let sessions = $state.raw<SessionInfo[]>(cached ?? []);
+  let loading = $state(!cached);
   let connection = $state<Connection>("connecting");
   let error = $state("");
   const socket = connectSessions(
@@ -41,6 +48,7 @@ export function createSessionList({
       sessions = applySessionEvent(sessions, event);
       homeCache.rememberSessions(sessions);
       if (event.type === "snapshot") {
+        observeAttentionSnapshot(event.sessions);
         const ids = event.sessions.map((session) => session.id);
         // Recoverable hybrid sessions still own their drafts; without
         // their IDs, leave saved drafts alone rather than guess.
@@ -49,14 +57,18 @@ export function createSessionList({
         });
         loading = false;
       } else if (event.type === "removed") {
+        observeAttentionRemoved(event.id);
         if (removedHybrid) void archived.refresh();
         else drafts.remove(event.id);
-      } else if (
-        event.session.hybrid &&
-        (event.type === "created" || event.session.hybrid.state !== "active")
-      ) {
-        // A resumed shell or one that just closed or was interrupted.
-        void archived.refresh();
+      } else {
+        observeAttentionSession(event.session);
+        if (
+          event.session.hybrid &&
+          (event.type === "created" || event.session.hybrid.state !== "active")
+        ) {
+          // A resumed shell or one that just closed or was interrupted.
+          void archived.refresh();
+        }
       }
     },
     (state) => {
