@@ -305,3 +305,34 @@ test.describe("phone drawer", () => {
       await expect(page).toHaveURL(/\/$/);
     });
 });
+
+// Required guard: at every width, on the home page, with either stored
+// collapse state, the sidebar (full or rail) or its open button is reachable.
+test.describe("sidebar is always reachable", () => {
+  for (const collapsed of ["false", "true"])
+    test(`a sidebar or its open button is visible at every width (collapsed=${collapsed})`, async ({
+      page,
+    }) => {
+      await page.addInitScript((value) => {
+        localStorage.setItem("webmux.sidebarCollapsed", value);
+      }, collapsed);
+      await page.goto("/");
+      for (const width of [320, 390, 639, 640, 768, 1023, 1024, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        const reachable = page
+          .getByRole("complementary", { name: "侧栏" })
+          .or(page.getByRole("navigation", { name: "窄栏导航" }))
+          .or(page.getByRole("button", { name: "打开侧栏" }));
+        await expect(
+          reachable.first(),
+          `no sidebar or open button at ${width}px`,
+        ).toBeVisible();
+        // Page content never hides under a sidebar that is not shown.
+        const pad = await page.evaluate(() => {
+          const main = document.querySelector(".app-shell-main");
+          return main ? parseFloat(getComputedStyle(main).paddingLeft) : 0;
+        });
+        if (width < 640) expect(pad, `padding at ${width}px`).toBe(0);
+      }
+    });
+});

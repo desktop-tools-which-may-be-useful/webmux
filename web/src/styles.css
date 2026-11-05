@@ -164,22 +164,24 @@
   background: var(--border);
   outline: none;
 }
+/* The media rules repeat [data-collapsed] so they outrank the collapsed-state
+   rules above at any stored collapse value. */
 @media (min-width: 640px) and (max-width: 1023px) {
-  .app-shell {
+  .app-shell[data-collapsed] {
     --app-sidebar-width: 3.5rem;
   }
-  .app-shell .app-sidebar-full {
+  .app-shell[data-collapsed] .app-sidebar-full {
     display: none;
   }
-  .app-shell .app-sidebar-rail {
+  .app-shell[data-collapsed] .app-sidebar-rail {
     display: flex;
   }
 }
 @media (max-width: 639px) {
-  .app-shell {
+  .app-shell[data-collapsed] {
     --app-sidebar-width: 0px;
   }
-  .app-shell .app-sidebar {
+  .app-shell[data-collapsed] .app-sidebar {
     display: none;
   }
 }
