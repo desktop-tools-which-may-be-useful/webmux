@@ -46,7 +46,7 @@ export interface HomeLayout {
 }
 
 /** The main worktree first, then the rest by path. */
-export function sortWorktrees(worktrees: readonly Worktree[]): Worktree[] {
+function sortWorktrees(worktrees: readonly Worktree[]): Worktree[] {
   return [...worktrees].sort((a, b) =>
     a.kind === "main"
       ? -1
