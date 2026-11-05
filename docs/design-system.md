@@ -63,8 +63,8 @@ WebMux 是持续运行的终端工作台。视觉方向为克制的开发工具�
   - 使用键盘方向键、Enter 和 Escape 选择或关闭。
 - 多选一按语义选组件，两者都用下划线标出当前项：
   - 切换带关联面板的内容区域（如 Tailscale 模式、会话视图、代码根）用 `Tabs.List variant="line"`；隐藏面板不能影响当前方式的校验或提交。
-  - 只选一个值（如分屏方向、主题、起始端、状态筛选、显示方式）用 `SegmentedControl`：基于 RadioGroup（`role="radiogroup"` 与 `radio`），方向键切换，已选项不能被再次点击清空。
-  - 不用一组普通按钮模拟分段控件。每个选项都需要说明文字时，再考虑 RadioGroup。
+  - 只选一个值（如分屏方向、主题、状态筛选、显示方式）用 `SegmentedControl`：基于 RadioGroup（`role="radiogroup"` 与 `radio`），方向键切换，已选项不能被再次点击清空。
+  - 不用一组普通按钮模拟分段控件。每个选项都需要说明文字时用 `RadioGroup`（如新建会话的起始端）：选项卡片带标题与说明，边框标出当前项。
 
 ## Icons
 

@@ -347,6 +347,21 @@ test("the last launch choice and start side are filled in on the next open", asy
   });
 });
 
+test("each hybrid agent remembers its own start side", async () => {
+  const first = { ...otherConfig, hybrid: true };
+  const second = { ...config, id: "hybrid33", name: "omp 混合", hybrid: true };
+  localStorage.setItem("webmux.hybridStartSide", "tui");
+  localStorage.setItem(`webmux.hybridStartSide:${first.id}`, "acp");
+  localStorage.setItem("webmux.lastLaunch", `config:${first.id}`);
+  open({ status: "ready", configs: [first, second] });
+  const chat = page.getByRole("radio", { name: "从聊天开始", exact: true });
+  await expect.element(chat).toHaveAttribute("aria-checked", "true");
+  await chooseLaunch(second.name);
+  await expect.element(chat).toHaveAttribute("aria-checked", "false");
+  await chooseLaunch(first.name);
+  await expect.element(chat).toHaveAttribute("aria-checked", "true");
+});
+
 test("a missing chat connector keeps the dialog and can start on the terminal", async () => {
   const connector = {
     executable: "codex-acp",

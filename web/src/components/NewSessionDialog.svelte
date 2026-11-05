@@ -151,6 +151,15 @@
     )
       source = "unset";
   });
+  // Each agent keeps the side it last started on; an agent never started
+  // falls back to the side of the most recent hybrid session.
+  const hybridConfigId = $derived(chosenConfig?.hybrid ? chosenConfig.id : "");
+  $effect(() => {
+    if (!hybridConfigId) return;
+    const side =
+      stored("hybridStartSide:" + hybridConfigId) || stored("hybridStartSide");
+    startSide = side === "acp" ? "acp" : "tui";
+  });
   const commandReady = $derived.by(() => {
     if (source === "config") return !!chosenConfig;
     if (source !== "custom") return false;
@@ -337,7 +346,10 @@
         "lastLaunch",
         chosenConfig ? `config:${chosenConfig.id}` : "custom",
       );
-      if (chosenConfig?.hybrid) store("hybridStartSide", startSide);
+      if (chosenConfig?.hybrid) {
+        store("hybridStartSide", startSide);
+        store("hybridStartSide:" + chosenConfig.id, startSide);
+      }
       if (custom) store("customCommand", command);
       if (oncreated) oncreated(session, direction);
       else navigate("/s/" + session.id);
