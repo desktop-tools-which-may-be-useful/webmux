@@ -41,7 +41,6 @@ type ChatFrame struct {
 type ChatState struct {
 	Side           HybridSide      `json:"side"`
 	Phase          HybridPhase     `json:"phase,omitempty"`
-	Dormant        bool            `json:"dormant"`
 	Agent          string          `json:"agent"`
 	AgentSessionID *string         `json:"agentSessionId"`
 	Eligibility    ChatEligibility `json:"eligibility"`
@@ -70,7 +69,7 @@ type ChatState struct {
 	// verified with: the agent, and a connector when it has one.
 	Outdated []ChatOutdated `json:"outdated"`
 	// ConnectorMissing is set while the chat side cannot start because the
-	// profile's connector is not installed (wake, reconnect, rollback).
+	// profile's connector is not installed (reconnect, rollback).
 	ConnectorMissing *AgentConnector `json:"connectorMissing,omitempty"`
 }
 
@@ -363,7 +362,7 @@ type ChatRequestOutcome struct {
 }
 
 // ChatMarker is a WebMux timeline marker; Kind is loaded, switched,
-// truncated, reconnected or resumed.
+// truncated or reconnected.
 type ChatMarker struct {
 	Kind string     `json:"kind"`
 	Side HybridSide `json:"side,omitempty"`

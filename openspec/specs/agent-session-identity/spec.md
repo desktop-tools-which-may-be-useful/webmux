@@ -225,7 +225,7 @@ ID 变化（例如 TUI 中执行 `/new`、`/resume`、`/fork`）SHALL 按“跟�
 Codex 在 `session/load` 或 `session/resume` 时以该错误拒绝被其他 Codex 客户端（Codex App、IDE、webmux 之外的终端）占用的会话：
 
 - 切到聊天时出现，SHALL 按“切换失败自动回滚”回到终端端，SHALL NOT 新建或分叉会话；
-- 恢复到聊天或从休眠唤醒时出现，请求 SHALL 返回 409 `occupied_external`，会话保持原状态。
+- 恢复到聊天时出现，请求 SHALL 返回 409 `occupied_external`，会话保持原状态。
 
 用户文档 SHALL 说明：Codex 能发现 webmux 之外的占用，而其他 agent 不能。
 

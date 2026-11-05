@@ -39,7 +39,6 @@
     loaded: "已加载对话历史",
     truncated: "更早的历史未缓存",
     reconnected: "Agent 已重新连接",
-    resumed: "Agent 已唤醒",
   };
 </script>
 

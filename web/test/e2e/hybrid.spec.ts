@@ -562,46 +562,58 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expect(conversation(page)).not.toContainText("/resume");
   });
 
-  test(
-    "an idle chat side sleeps and wakes for the next message",
-    { tag: "@slow" },
-    async ({ page, request, workDir }, testInfo) => {
-      // The shortest setting is one minute; one project is enough to wait.
-      test.skip(
-        testInfo.project.name !== "chromium-desktop",
-        "Waits a real minute of idleness; the desktop project covers it",
-      );
-      test.setTimeout(180_000);
-      const prefs = await (await request.get("/api/settings")).json();
-      expect(
-        (
-          await request.patch("/api/settings", {
-            data: {
-              baseRevision: prefs.revision,
-              changes: { chatIdleSleepMinutes: 1 },
-            },
-          })
-        ).ok(),
-      ).toBeTruthy();
-      const id = await createHybrid(request, workDir, "acp", {
-        agent: "claude",
-      });
-      await openHybrid(page, id, "acp");
-      await chatTurn(page, "before-sleep");
+  test("an idle chat side keeps the same agent process alive until explicitly archived", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const store = join(workDir, "idle-alive-store");
+    await mkdir(store);
+    const id = await createHybrid(request, workDir, "acp", {
+      env: { FAKEAGENT_STORE: store },
+    });
+    await openHybrid(page, id, "acp");
+    await chatTurn(page, "before-idle");
 
-      await expect(
-        page.getByRole("status").filter({ hasText: "Agent 已休眠" }),
-      ).toBeVisible({ timeout: 100_000 });
-      const info = await (await request.get(`/api/sessions/${id}`)).json();
-      expect(info.hybrid).toMatchObject({ side: "acp", dormant: true });
+    const eventsPath = join(store, "events.log");
+    const openPids = async () =>
+      (await readFile(eventsPath, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => line.split(" "))
+        .filter((parts) => parts[2] === "acp" && parts[3] === "open")
+        .map((parts) => Number(parts[1]));
+    const pidAlive = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
 
-      await chatTurn(page, "after-sleep");
-      await expect(conversation(page)).toContainText("Agent 已唤醒");
-      await expect(conversation(page)).toContainText("echo: before-sleep");
-      const awake = await (await request.get(`/api/sessions/${id}`)).json();
-      expect(awake.hybrid.dormant).toBe(false);
-    },
-  );
+    const pids = await openPids();
+    expect(pids).toHaveLength(1);
+    const pid = pids[0]!;
+    expect(pidAlive(pid)).toBe(true);
+
+    await delay(1500);
+    expect(pidAlive(pid)).toBe(true);
+    const info = await (await request.get(`/api/sessions/${id}`)).json();
+    expect(info.status).not.toBe("exited");
+    expect(info.hybrid).toMatchObject({ side: "acp" });
+    expect(info.hybrid.dormant).toBeUndefined();
+
+    await chatTurn(page, "after-idle");
+    expect(await openPids()).toEqual([pid]);
+    expect(await readFile(eventsPath, "utf8")).not.toContain(
+      "call session/close",
+    );
+
+    expect((await request.delete(`/api/sessions/${id}`)).status()).toBe(204);
+    await expect.poll(() => pidAlive(pid)).toBe(false);
+    expect(await readFile(eventsPath, "utf8")).toContain("call session/close");
+  });
 
   test("an unnamed chat session takes its title from the first prompt, then from the agent", async ({
     page,

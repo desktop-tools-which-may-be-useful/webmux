@@ -29,8 +29,8 @@ type Agent interface {
 }
 
 // Resumer is an agent whose session/resume (no history replay) may be used
-// for waking from idle sleep and reconnecting after a crash, when the
-// agent declares it; otherwise those use session/load.
+// when reconnecting after a crash, if the agent declares it; otherwise
+// crash reconnects use session/load.
 type Resumer interface {
 	ResumesSessions() bool
 }

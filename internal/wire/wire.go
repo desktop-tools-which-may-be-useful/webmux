@@ -72,7 +72,7 @@ func Hybrid(h *session.HybridInfo) *contract.SessionHybrid {
 		return nil
 	}
 	out := &contract.SessionHybrid{
-		Side: contract.HybridSide(h.Side), Phase: contract.HybridPhase(h.Phase), Dormant: h.Dormant,
+		Side: contract.HybridSide(h.Side), Phase: contract.HybridPhase(h.Phase),
 		State: contract.HybridState(h.State), Agent: h.Agent, AgentTitle: h.AgentTitle, AgentIcon: h.AgentIcon, Work: h.Work,
 	}
 	if h.AgentSessionID != nil {

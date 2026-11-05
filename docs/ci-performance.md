@@ -60,7 +60,7 @@ E2E 的 worker 数从 2 调到 4，Storybook 从 2 调到 6，使用同一台机
     - `changes` 与 `lint` 始终必需。
 
 - Ubuntu E2E 保持两个 worker，避免较少 CPU 上的争用；macOS 使用四个。E2E 和 Storybook 的 flaky 结果均使 CI 失败，重试仅保留诊断。异步生成默认分支名的用例等待初始值后再填入目标名称。
-- 本地 `make test` 预构建一次前端、`.cache/webmux-e2e/webmux` 与 `.cache/webmux-e2e/agents/` 中的假 agent，E2E 和性能测试通过 `WEBMUX_E2E_BINARY` 复用；`make test-fast` 提供不含 Storybook、E2E 与性能的快速分层入口。混合会话 E2E 中验证空闲休眠的用例要等待真实的 1 分钟，只在桌面项目运行。
+- 本地 `make test` 预构建一次前端、`.cache/webmux-e2e/webmux` 与 `.cache/webmux-e2e/agents/` 中的假 agent，E2E 和性能测试通过 `WEBMUX_E2E_BINARY` 复用；`make test-fast` 提供不含 Storybook、E2E 与性能的快速分层入口。
 
 ## 复测
 

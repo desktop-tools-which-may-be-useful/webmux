@@ -2,7 +2,6 @@
   import Brand from "../components/Brand.svelte";
   import AppearanceSettings from "../components/AppearanceSettings.svelte";
   import ArtifactPromptSetting from "../components/ArtifactPromptSetting.svelte";
-  import ChatIdleSleepSetting from "../components/ChatIdleSleepSetting.svelte";
   import { settings, changeSettings, saveSettings } from "../settings.svelte";
   import { errorMessage } from "../error";
   import { onMount } from "svelte";
@@ -535,7 +534,6 @@
               {/if}
             </InlineNotice>
           {/if}
-          <ChatIdleSleepSetting />
         </Card.Content>
       </Card.Root>
       <Card.Root id="drafts" class="scroll-mt-4">

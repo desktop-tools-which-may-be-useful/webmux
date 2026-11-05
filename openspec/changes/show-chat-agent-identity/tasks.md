@@ -29,7 +29,7 @@
 
 - [x] 3.1 `SessionRow.svelte` 为任意所在端（`tui`、`acp`、`switching`）的混合会话显示 agent 标识。
   - 形如 `[品牌图标 xs] {agentTitle} · {hybridSideLabel}`，图标 `aria-hidden`；图标键未知时只显示文字；普通会话保持原样。
-  - 验证：`web/test/browser/SessionRow.test.ts` 覆盖品牌图标替换通用聊天/终端图标、休眠文字、切换中与终端端标识、未知图标键不渲染图标。
+  - 验证：`web/test/browser/SessionRow.test.ts` 覆盖品牌图标替换通用聊天/终端图标、聊天端、切换中与终端端标识、未知图标键不渲染图标。
 - [x] 3.2 `TerminalHeader.svelte` 在聊天视图显示 agent 标识。
   - 条件：`hybrid?.view === "chat"` 且 `t.info?.hybrid` 存在；位置在标题与状态点之间，`shrink-0`。
   - 形式：`<span role="img">`，`aria-label` 与 `title` 为“Agent：{agentTitle}”；内含 `LaunchConfigIcon size="sm"` 与 `max-sm:hidden` 的弱化小号名称；图标键未知时始终显示名称。

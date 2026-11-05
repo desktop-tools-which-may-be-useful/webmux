@@ -102,7 +102,6 @@ interface SessionInfo {
   hybrid?: {
     side: "tui" | "acp" | "switching";
     phase?: string; // 切换中的步骤，切换之外省略
-    dormant: boolean; // 聊天端的 agent 进程已休眠
     state: "active" | "closed" | "interrupted";
     agent: string;
     agentTitle: string; // agent 显示名

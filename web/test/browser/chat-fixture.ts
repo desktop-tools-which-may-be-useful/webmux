@@ -138,7 +138,6 @@ export function commands() {
 export function chatState(patch: Partial<ChatState> = {}): ChatState {
   return {
     side: "acp",
-    dormant: false,
     agent: "omp",
     agentSessionId: "01a17e26c4b84f0e9d2a",
     outdated: [],

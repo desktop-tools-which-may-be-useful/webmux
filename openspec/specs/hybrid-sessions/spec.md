@@ -35,11 +35,11 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 
 ### Requirement: 单写者与所在端
 
-混合会话 SHALL 在任意时刻处于且只处于以下之一：`tui`、`acp`、`switching`。处于 `acp` 时 SHALL 还可以带有 `dormant` 标记。webmux 会话 ID SHALL 在混合会话的整个生命周期中保持不变。
+混合会话 SHALL 在任意时刻处于且只处于以下之一：`tui`、`acp`、`switching`。webmux 会话 ID SHALL 在混合会话的整个生命周期中保持不变。
 
 系统 SHALL 保证同一 agent 会话 ID 在任意时刻至多被一个由 webmux 启动的进程打开。只调用 `session/list` 的临时探测进程不算打开。进入目标端之前，系统 SHALL 已确认原端的进程组已经全部退出。这是硬性要求：omp 在 TUI 仍持有会话租约时，另一个进程写入同一会话，会把它分叉成一个新 ID 的会话。
 
-会话信息 SHALL 包含 `hybrid` 对象，至少含 `side`、`phase`、`dormant`、`state`、`agent` 与 `agentSessionId`（尚未得知时为 `null`）。普通会话 SHALL NOT 含该对象。
+会话信息 SHALL 包含 `hybrid` 对象，至少含 `side`、`phase`、`state`、`agent`、`agentTitle`、`agentIcon` 与 `agentSessionId`（尚未得知时为 `null`）。普通会话 SHALL NOT 含该对象。
 
 #### Scenario: 切换期间不存在两个进程
 
@@ -101,7 +101,7 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 4. 在 PTY 中启动档案生成的恢复命令，开始新的运行代际；
 5. 进入 `tui` 端。
 
-会话处于 `dormant` 时 SHALL 直接从第 4 步开始。回合正在运行时，Web 端 SHALL 先请求用户确认“当前回合会被中断，已输出的内容会保留”。
+回合正在运行时，Web 端 SHALL 先请求用户确认“当前回合会被中断，已输出的内容会保留”。
 
 #### Scenario: 往返后历史完整
 
@@ -131,25 +131,23 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 ### Requirement: 进程意外退出
 
 - 会话在 `tui` 端时，TUI 进程自行退出（包括 `/exit` 与崩溃）SHALL 使会话标记为 `interrupted`，SHALL NOT 自动切换。会话页 SHALL 保留最后的终端输出，并提供“恢复到聊天 / 恢复到终端”。
-- 会话在 `acp` 端时，ACP 进程意外退出 SHALL 触发一次自动重连：重新启动 ACP 并按档案执行 `session/resume` 或 `session/load`。当前回合 SHALL 以中断结束。重连失败时，会话 SHALL 标记为 `interrupted`。
+- 会话在 `acp` 端时，ACP 进程意外退出 SHALL 触发一次自动重连：
+  - 重新启动 ACP，agent 声明了 `session/resume` 且档案允许时 SHALL 使用 `session/resume`（不回放历史，事件日志保持连续），否则 SHALL 使用 `session/load` 并以新的日志代际重新回放；
+  - 当前回合 SHALL 以中断结束；重连失败时，会话 SHALL 标记为 `interrupted`。
 
 #### Scenario: ACP 崩溃
 
 - **WHEN** 聊天端回合进行中，ACP 进程被 SIGKILL
 - **THEN** 当前回合显示为已中断，系统自动重连一次；重连成功后可以继续发送消息
 
-### Requirement: 聊天端空闲休眠
+### Requirement: 聊天端进程保持运行
 
-会话在 `acp` 端时，如果没有运行中的回合、没有待答复请求、队列为空，并且最近 N 分钟没有任何命令，系统 SHALL 结束 ACP 进程并标记为 `dormant`。N 来自服务端设置 `chatIdleSleepMinutes`，默认 30，为 0 时不休眠。
+会话处于 `acp` 端且状态为 `active` 时，系统 SHALL NOT 因空闲时长结束 ACP 进程，使 agent 内部的后台命令、子任务或定时器在聊天端空闲期间保持运行；系统 SHALL 仅在切换到 `tui`、显式归档（关闭）会话或服务停止时结束 ACP 进程。
 
-- 休眠期间，会话 SHALL 仍是活动会话，不进入可恢复列表。
-- 打开会话的聊天通道或提交任意命令时，系统 SHALL 自动唤醒，已缓存的事件 SHALL 保持可读。
-- agent 声明了 `session/resume` 时，唤醒与崩溃重连 SHALL 使用它（不回放历史，事件日志保持连续）；否则 SHALL 使用 `session/load`，并以新的日志代际重新回放。
+#### Scenario: 聊天端空闲时保持存活
 
-#### Scenario: 休眠后唤醒
-
-- **WHEN** 会话空闲超过设定时间后，用户在手机上打开该会话并发送消息
-- **THEN** ACP 进程被重新启动，消息在唤醒完成后发送，此前的对话仍然可见
+- **WHEN** 聊天端会话没有运行中的回合且长时间未收到用户命令
+- **THEN** ACP 进程保持运行，会话始终处于活动状态，只有用户显式归档会话、切换到终端端或停止服务时才结束进程
 
 ### Requirement: 关闭混合会话
 

@@ -27,7 +27,7 @@
   - 在混合会话 TUI 启动与恢复时注入会话级 `--settings`，通过 `title` 命令将当前
     `conversation_id` 以 `OSC 7501` 子记录上报到控制终端，结合 `agy` 原生发出的
     `OSC 7501` 根记录（`app=antigravity`）与根进程 `cwd` 完成身份识别、变化跟踪与资格核对；
-  - 配置中断键为单次 `Esc`（`\x1b`），启用 `session/resume` 唤醒与重连，声明跨进程加载后
+  - 配置中断键为单次 `Esc`（`\x1b`），启用 `session/resume` 异常重连，声明跨进程加载后
     需自动补齐的配置项 `ReapplyOnLoad: ["model", "thought_level"]`，记录实测版本 `1.4.12`。
 - 在混合会话 ACP 转换层（`internal/hybrid`）中忽略活动 `session/prompt` 回合期间
   agent 回显的 `user_message_chunk` 通知，仅在 `session/load` 历史回放阶段转换

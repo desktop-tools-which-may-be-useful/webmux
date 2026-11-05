@@ -23,7 +23,6 @@ import (
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/session"
-	"github.com/rainchan/webmux/internal/settings"
 )
 
 const (
@@ -50,9 +49,6 @@ type Options struct {
 	Version string
 	// Logger receives lifecycle events, method names and error codes only.
 	Logger *slog.Logger
-	// Settings supplies chatIdleSleepMinutes; changes apply at once. Nil
-	// or unavailable settings use the default of 30 minutes.
-	Settings *settings.Service
 	// Uploads validates that path is one of session id's uploaded files and
 	// returns it cleaned (artifacts.Service.UploadPath). Nil refuses every
 	// attachment.
@@ -69,15 +65,13 @@ type timing struct {
 	probeDelay time.Duration
 	// observe is how often a terminal side's identity is read.
 	observe time.Duration
-	// minute is the unit of chatIdleSleepMinutes.
-	minute time.Duration
 	// connectorRecheck is how often a missing connector is looked for
 	// again while the terminal side runs.
 	connectorRecheck time.Duration
 }
 
 var defaultTiming = timing{
-	interrupt: 10 * time.Second, probeDelay: time.Second, observe: 500 * time.Millisecond, minute: time.Minute,
+	interrupt: 10 * time.Second, probeDelay: time.Second, observe: 500 * time.Millisecond,
 	connectorRecheck: connectorRecheck,
 }
 
@@ -97,16 +91,12 @@ type Service struct {
 	userHome string
 	// probes holds a token per running eligibility probe (maxProbes).
 	probes chan struct{}
-	// settingsDone closes when the settings watcher ends (nil without one).
-	settingsDone chan struct{}
 	// resumes dedupes resume requests by client request ID.
 	resumes dedupe
 
-	mu          sync.Mutex
-	actors      map[string]*actor
-	closed      bool
-	idleMinutes int
-	settingsSub *settings.Subscription
+	mu     sync.Mutex
+	actors map[string]*actor
+	closed bool
 	// recovering holds the record IDs a resume or removal is working on.
 	recovering map[string]bool
 }
@@ -132,17 +122,12 @@ func New(o Options) *Service {
 		manager: o.Manager, records: openRecords(o.StateDir), capacity: capacity, version: o.Version, log: log,
 		uploads: o.Uploads, userHome: userHome, agents: agents.Default(),
 		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
-		recovering:  make(map[string]bool),
-		idleMinutes: settings.DefaultChatIdleSleepMinutes,
+		recovering: make(map[string]bool),
 	}
 	if err := s.records.recoverAfterRestart(time.Now()); err != nil {
 		log.Warn("hybrid sessions unavailable", "error", err)
 	}
 	o.Manager.SetIDReserver(s.records.reserved)
-	if o.Settings != nil {
-		s.settingsDone = make(chan struct{})
-		go s.watchSettings(o.Settings)
-	}
 	return s
 }
 
@@ -170,14 +155,7 @@ func (s *Service) Close() {
 	for _, a := range s.actors {
 		actors = append(actors, a)
 	}
-	sub := s.settingsSub
 	s.mu.Unlock()
-	if sub != nil {
-		sub.Close()
-	}
-	if s.settingsDone != nil {
-		<-s.settingsDone
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	join, cancelJoin := context.WithTimeout(context.Background(), shutdownJoin)
@@ -335,17 +313,13 @@ func (s *Service) actor(id string) (*actor, error) {
 // Subscribe opens a gap-free view of session id's chat: a snapshot, the
 // events after resume (or all cached events, with Reset when resume is no
 // longer in the log), then live frames. A subscriber that falls behind is
-// dropped with ErrSlow. Opening the chat wakes a dormant session.
+// dropped with ErrSlow.
 func (s *Service) Subscribe(id string, resume *ResumePoint) (*Subscription, error) {
 	a, err := s.actor(id)
 	if err != nil {
 		return nil, err
 	}
-	sub, err := a.log.subscribe(resume)
-	if err == nil {
-		a.post(a.wake)
-	}
-	return sub, err
+	return a.log.subscribe(resume)
 }
 
 // PromptResult reports what a prompt did: Queued with the queue item's
@@ -392,8 +366,8 @@ type PermissionModeInput struct {
 // the same ID within 30 minutes (and among the session's last 256) gets the
 // first outcome, success or error, without running again. Commands fail
 // with ErrSwitching during a switch and ErrWrongSide outside the chat side.
-// Each command restarts the idle clock and wakes a dormant session; a
-// prompt sent meanwhile waits in the queue until the agent is back.
+// A prompt sent while the agent is reconnecting waits in the queue until
+// the agent is back.
 
 // command runs fn on session id's actor once per client request ID.
 func command[T any](ctx context.Context, s *Service, id, requestID, name string, fn func(a *actor) (T, error)) (T, error) {
@@ -403,7 +377,7 @@ func command[T any](ctx context.Context, s *Service, id, requestID, name string,
 		return zero, err
 	}
 	return once(ctx, &a.recent, requestID, name, func(ctx context.Context) (T, error) {
-		return call(ctx, a, func() (T, error) { a.activity(); return fn(a) })
+		return call(ctx, a, func() (T, error) { return fn(a) })
 	})
 }
 
@@ -415,7 +389,7 @@ func agentCommand(ctx context.Context, s *Service, id, requestID, name string, p
 		return err
 	}
 	_, err = once(ctx, &a.recent, requestID, name, func(ctx context.Context) (struct{}, error) {
-		run, err := call(ctx, a, func() (agentCall, error) { a.activity(); return prepare(a) })
+		run, err := call(ctx, a, func() (agentCall, error) { return prepare(a) })
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -448,7 +422,6 @@ func (s *Service) Prompt(ctx context.Context, id string, in PromptInput) (Prompt
 				return PromptResult{}, err
 			}
 			return call(ctx, a, func() (PromptResult, error) {
-				a.activity()
 				return a.prompt(in.Text, attachments)
 			})
 		})
@@ -462,7 +435,6 @@ func (s *Service) Prompt(ctx context.Context, id string, in PromptInput) (Prompt
 				return struct{}{}, err
 			}
 			run, err := call(ctx, a, func() (agentCall, error) {
-				a.activity()
 				return a.steer(in.Text, attachments)
 			})
 			if err != nil {

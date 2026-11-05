@@ -79,8 +79,8 @@ func FormValue(raw []byte) (any, error) {
 }
 
 // ready reports why the session cannot take chat commands now. A chat side
-// without a connection (dormant, waking or reconnecting) is ready: prompts
-// queue until the agent is back.
+// without a connection (reconnecting) is ready: prompts queue until the
+// agent is back.
 func (a *actor) ready() error {
 	switch {
 	case a.state != StateActive || a.closing:

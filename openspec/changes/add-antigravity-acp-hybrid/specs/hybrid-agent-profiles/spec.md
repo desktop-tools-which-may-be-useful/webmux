@@ -23,7 +23,7 @@ Antigravity CLI（`agy`）的 TUI 原生通过 `OSC 7501` 根记录上报 `app=a
 `thought_level` 重置为默认值。`agy` 档案 SHALL 声明加载后需补齐的配置项列表为
 `["model", "thought_level"]`，由系统在跨进程加载或恢复后按记录中的取值自动调用
 `session/set_config_option` 恢复。`agy` 档案的中断键 SHALL 为单次 `Esc`（`\x1b`），
-并启用 `session/resume` 用于空闲休眠唤醒与崩溃重连。
+并启用 `session/resume` 用于崩溃重连。
 
 #### Scenario: agy 跨进程加载后补齐模型与推理等级
 

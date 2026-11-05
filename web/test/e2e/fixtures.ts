@@ -132,7 +132,6 @@ export const test = base.extend<
                 artifactPrompt: null,
                 homeWorktrees: null,
                 forceSoftKeys: null,
-                chatIdleSleepMinutes: null,
               },
             },
           })
@@ -210,7 +209,6 @@ export const test = base.extend<
                     artifactPrompt: null,
                     homeWorktrees: null,
                     forceSoftKeys: null,
-                    chatIdleSleepMinutes: null,
                   },
                 },
               })

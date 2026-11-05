@@ -23,8 +23,6 @@ type SettingsValues struct {
 	QuickCommands *[]SettingsCommand  `json:"quickCommands"`
 	HomeWorktrees map[string][]string `json:"homeWorktrees"`
 	ForceSoftKeys *bool               `json:"forceSoftKeys"`
-	// ChatIdleSleepMinutes: 0..1440, 0 never sleeps; null is 30.
-	ChatIdleSleepMinutes *int `json:"chatIdleSleepMinutes"`
 	// ArtifactPrompt: template containing "{dir}"; null is the built-in one.
 	ArtifactPrompt *string `json:"artifactPrompt"`
 }

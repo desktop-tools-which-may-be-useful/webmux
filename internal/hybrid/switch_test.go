@@ -22,7 +22,16 @@ import (
 
 // fast shortens the service's waits; call it before creating sessions.
 func (h *harness) fast() {
-	h.svc.timing = timing{interrupt: 300 * time.Millisecond, probeDelay: 50 * time.Millisecond, observe: 20 * time.Millisecond, minute: time.Minute, connectorRecheck: 100 * time.Millisecond}
+	h.svc.timing = timing{interrupt: 300 * time.Millisecond, probeDelay: 50 * time.Millisecond, observe: 20 * time.Millisecond, connectorRecheck: 100 * time.Millisecond}
+}
+
+func (h *harness) generation(id string) string {
+	h.t.Helper()
+	return actorState(h, id, func(a *actor) string {
+		a.log.mu.Lock()
+		defer a.log.mu.Unlock()
+		return a.log.generation
+	})
 }
 
 func (h *harness) switchTo(id string, side Side) (SwitchResult, error) {
@@ -858,17 +867,21 @@ func TestProbeConcurrency(t *testing.T) {
 // mid-turn ends the turn as cancelled; the session reconnects and takes
 // prompts again.
 func TestChatAgentKilledMidTurnReconnects(t *testing.T) {
-	for _, profile := range []string{omp.Name, "claude"} {
+	for _, profile := range []string{omp.Name, "omp-no-resume", "claude"} {
 		t.Run(profile, func(t *testing.T) {
 			h := newHarness(t, 0)
 			h.fast()
 			in := h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=300ms")
-			if profile == "claude" {
+			switch profile {
+			case "omp-no-resume":
+				in = h.input(omp.Name, SideACP, "FAKEAGENT_TURN_DELAY=300ms", "FAKEAGENT_NO_RESUME=1")
+			case "claude":
 				in = h.claudeInput(SideACP, "")
 				in.Env["FAKEAGENT_TURN_DELAY"] = "300ms"
 			}
 			s := h.create(in)
 			id := s.Info().ID
+			generation := h.generation(id)
 			pid := h.record(id).PID
 			st := h.follow(id)
 			prompt(t, h, id, "long")
@@ -876,12 +889,22 @@ func TestChatAgentKilledMidTurnReconnects(t *testing.T) {
 			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
 				t.Fatal(err)
 			}
-			events := st.until("reconnected", func(events []Event) bool {
-				return slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventMarker && e.Marker.Kind == MarkerReconnected })
-			})
-			end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == EventTurnEnd })
-			if end < 0 || events[end].TurnEnd.StopReason != acp.StopCancelled {
-				t.Fatalf("turn after SIGKILL %v", kinds(events))
+			if profile == "omp-no-resume" {
+				waitFor(t, "new log generation", func() bool { return h.generation(id) != generation })
+				h.follow(id).until("reconnected", func(events []Event) bool {
+					return slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventMarker && e.Marker.Kind == MarkerReconnected })
+				})
+			} else {
+				events := st.until("reconnected", func(events []Event) bool {
+					return slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventMarker && e.Marker.Kind == MarkerReconnected })
+				})
+				end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == EventTurnEnd })
+				if end < 0 || events[end].TurnEnd.StopReason != acp.StopCancelled {
+					t.Fatalf("turn after SIGKILL %v", kinds(events))
+				}
+				if h.generation(id) != generation {
+					t.Fatal("resume reconnect started a new log generation")
+				}
 			}
 			waitFor(t, "new agent process", func() bool { p := h.record(id).PID; return p > 0 && p != pid })
 			chatTurn(t, h, id, "after")
@@ -912,4 +935,48 @@ func TestCloseInterruptsTerminalTurn(t *testing.T) {
 	if rec := h.record(id); rec.State != StateClosed {
 		t.Fatalf("record %+v", rec)
 	}
+}
+
+// TestChatSideStaysAliveWhileIdleUntilArchived verifies that an idle chat-side
+// hybrid session keeps the same ACP agent process running until the session is
+// explicitly archived (closed).
+func TestChatSideStaysAliveWhileIdleUntilArchived(t *testing.T) {
+	h := newHarness(t, 0)
+	h.fast()
+	s := h.create(h.input(omp.Name, SideACP))
+	id := s.Info().ID
+	chatTurn(t, h, id, "before-idle")
+	pid := h.record(id).PID
+	if pid <= 0 {
+		t.Fatalf("missing ACP pid in record %+v", h.record(id))
+	}
+	if err := syscall.Kill(pid, 0); err != nil {
+		t.Fatalf("agent pid %d not alive: %v", pid, err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if got := countCalls(t, h.store, acp.MethodSessionClose); got != 0 {
+		t.Fatalf("idle chat session called session/close %d times", got)
+	}
+	if rec := h.record(id); rec.State != StateActive || rec.Side != SideACP || rec.PID != pid {
+		t.Fatalf("record changed while idle: %+v (want pid %d)", rec, pid)
+	}
+	chatTurn(t, h, id, "after-idle")
+	if got := countCalls(t, h.store, acp.MethodInitialize); got != 1 {
+		t.Fatalf("initialize ran %d times across idle period, want 1", got)
+	}
+	if h.record(id).PID != pid {
+		t.Fatalf("agent pid changed from %d to %d", pid, h.record(id).PID)
+	}
+
+	h.closeSession(id)
+	if rec := h.record(id); rec.State != StateClosed || rec.PID != 0 {
+		t.Fatalf("record after archive %+v", rec)
+	}
+	if got := countCalls(t, h.store, acp.MethodSessionClose); got != 1 {
+		t.Fatalf("session/close ran %d times on archive, want 1", got)
+	}
+	waitFor(t, "archived ACP process exit", func() bool {
+		return errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
+	})
 }

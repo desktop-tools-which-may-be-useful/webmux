@@ -127,8 +127,8 @@ func (a *actor) beginSwitch(to Side, pick string) (<-chan switchOutcome, error) 
 		return nil, fmt.Errorf("%w: 会话已结束", ErrConflict)
 	case a.switching != nil:
 		return nil, ErrSwitching
-	case a.starting || a.opening || a.sleeping:
-		return nil, fmt.Errorf("%w: agent 正在启动或休眠，请稍后重试", ErrConflict)
+	case a.starting || a.opening:
+		return nil, fmt.Errorf("%w: agent 正在启动或重连，请稍后重试", ErrConflict)
 	}
 	done := make(chan switchOutcome, 1)
 	if to == a.side {
@@ -473,7 +473,6 @@ func (a *actor) switchCancelled(op *switchOp) {
 func (a *actor) switchedToACP(op *switchOp, t target, res openResult) {
 	a.side = SideACP
 	a.agentCwd = t.cwd
-	a.chat.Dormant = false
 	a.installLink(res.link, res.init, res.config, res.notes)
 	a.emit(Event{Kind: EventMarker, Marker: &Marker{Kind: MarkerSwitched, Side: SideACP}})
 	pid := res.link.sidecar.PID()
@@ -484,7 +483,6 @@ func (a *actor) switchedToACP(op *switchOp, t target, res openResult) {
 	})
 	a.probe = probeState{}
 	a.reconnects = 0
-	a.touch()
 	a.svc.log.Info("hybrid switch finished", "id", a.id, "side", string(SideACP))
 	a.finish(op, a.resultOn(SideACP), nil)
 	a.checkLink()
@@ -508,7 +506,6 @@ func (a *actor) toTUI(op *switchOp) {
 		a.turn.cancel()
 	}
 	if link == nil {
-		// Dormant: the agent process is already gone.
 		a.setPhase(PhaseStarting)
 	}
 	a.svc.log.Info("hybrid switch started", "id", a.id, "to", string(SideTUI))
@@ -574,7 +571,6 @@ func (a *actor) returnQueue(op *switchOp) string {
 // the queued prompts went back to the device that switched.
 func (a *actor) switchedToTUI(op *switchOp, sid, draft string, dropped []string) {
 	a.side = SideTUI
-	a.chat.Dormant = false
 	if n := len(op.queued); n > 0 {
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeInfo, Text: strconv.Itoa(n) + " 条排队消息已退回发起切换的设备的输入框"}})
 	}
@@ -645,7 +641,6 @@ func (a *actor) rollbackToACP(op *switchOp, sid string, cause failure) {
 		pid := res.link.sidecar.PID()
 		process := processIdentity(pid)
 		a.record(true, func(r *Record) { r.Side, r.PID, r.Process = SideACP, pid, process })
-		a.touch()
 		a.rolledBack(op, cause)
 		a.checkLink()
 	}) && res.link != nil {

@@ -395,8 +395,6 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	} else if err := launches.Seed(launch.Presets(os.Getenv("SHELL"))); err != nil {
 		slog.Warn("seed default launch configs", "error", err)
 	}
-	// Server preferences open before hybrid sessions, which follow the
-	// chat idle sleep setting.
 	preferences := settings.Open(c.StateDir)
 	defer preferences.Close()
 	// Session artifacts folders exist before hybrid sessions, which accept
@@ -407,7 +405,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// hybrid sessions; New logs why.
 	hybrids := hybrid.New(hybrid.Options{
 		StateDir: c.StateDir, Manager: m, ScrollbackBytes: sessionOptions.ScrollbackBytes,
-		Version: version, Logger: slog.Default(), Settings: preferences, Uploads: folders.UploadPath,
+		Version: version, Logger: slog.Default(), Uploads: folders.UploadPath,
 	})
 	if err := hybrids.Unavailable(); err != nil {
 		slog.Warn("hybrid records unreadable; session artifacts folders kept", "error", err)

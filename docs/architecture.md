@@ -209,7 +209,7 @@ flowchart LR
   - 新增 agent 只需新增子包并在注册表登记（启动预设、图标与文档另行添加）；`internal/archtest` 守住 `acp`、`hybrid`、核心包与 `web/src` 不出现 agent 名称。
 - **生命周期**：从终端或聊天开始，协议见 [混合会话接口](protocol/http-hybrid.md)。
   - 切换失败自动回到原端；TUI 自行退出或回滚失败标记 `interrupted`。
-  - ACP 意外退出自动重连一次；聊天端空闲 `chatIdleSleepMinutes` 分钟后休眠并在下次命令时唤醒。
+  - ACP 意外退出自动重连一次；聊天端会话保持 ACP 进程运行，仅在切换、显式归档（关闭）或服务停止时结束。
   - 关闭记为 `closed`。
   - 服务启动时把 `active` 记录改为 `interrupted`，并结束 PID 与启动标识都匹配的残留进程组。
 

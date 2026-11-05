@@ -56,7 +56,7 @@ func TestAttachRefusedOffTheTerminalSide(t *testing.T) {
 	}
 	for _, overlay := range []session.HybridInfo{
 		{Side: string(contract.HybridSideSwitching), Phase: string(contract.HybridPhaseInterrupting)},
-		{Side: string(contract.HybridSideACP), Dormant: true},
+		{Side: string(contract.HybridSideACP)},
 	} {
 		overlay.State, overlay.Agent = "active", "omp"
 		s.SetOverlay(&session.Overlay{Hybrid: &overlay})

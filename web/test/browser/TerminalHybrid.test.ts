@@ -50,7 +50,6 @@ const info: SessionInfo = {
   reportedCwd: null,
   hybrid: {
     side: "tui",
-    dormant: false,
     state: "active",
     agent: "omp",
     agentTitle: "omp",

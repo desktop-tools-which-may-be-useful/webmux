@@ -233,7 +233,6 @@ test("uses the launch config preview rows and height", async () => {
 
 const chatHybrid = {
   side: "acp" as const,
-  dormant: false,
   state: "active" as const,
   agent: "opencode",
   agentTitle: "OpenCode",
@@ -276,13 +275,12 @@ test("a chat-side hybrid card names its agent and shows the latest agent message
   expect(document.querySelector('[data-slot="terminal-preview"]')).toBeNull();
 });
 
-test("a dormant chat card keeps its agent; an unknown glyph leaves the name alone", async () => {
+test("a chat card renders known brand glyphs; an unknown glyph leaves the name alone", async () => {
   render(SessionRow, {
     session: {
       ...base,
       hybrid: {
         ...chatHybrid,
-        dormant: true,
         agentTitle: "omp",
         agentIcon: "pi",
       },
@@ -290,9 +288,7 @@ test("a dormant chat card keeps its agent; an unknown glyph leaves the name alon
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
   });
-  await expect
-    .element(page.getByText("聊天·休眠", { exact: true }))
-    .toBeVisible();
+  await expect.element(page.getByText("聊天", { exact: true })).toBeVisible();
   expect(
     document.querySelector(
       '[data-slot="session-agent"] [data-launch-icon="pi"]',

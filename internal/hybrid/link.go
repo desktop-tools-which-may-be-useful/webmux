@@ -372,8 +372,8 @@ func (a *actor) checkLink() {
 }
 
 // linkLost handles the end of the current ACP connection outside a
-// switch, close or sleep: the agent exited or broke the protocol. The
-// running turn ends cancelled and the session reconnects once (D24): with
+// switch or close: the agent exited or broke the protocol. The running
+// turn ends cancelled and the session reconnects once (D24): with
 // session/resume when possible, else session/load in a new generation. A
 // second loss before a turn completes normally, or a failed reconnect,
 // interrupts the session.
@@ -401,13 +401,12 @@ func (a *actor) linkLost(link *acpLink) {
 	}
 	a.reconnects++
 	a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: "与 agent 的连接已断开，正在重新连接"}})
-	a.reopen(link, true)
+	a.reopen(link)
 }
 
-// reopen opens the agent session again on a new process, after old (if
-// any) is gone: a reconnect after a crash or a wake from sleep. Prompts
-// queue meanwhile.
-func (a *actor) reopen(old *acpLink, reconnect bool) {
+// reopen opens the agent session again on a new process after old (if
+// any) is gone, reconnecting after a crash. Prompts queue meanwhile.
+func (a *actor) reopen(old *acpLink) {
 	a.opening = true
 	a.epoch++
 	epoch, sid, cwd := a.epoch, a.agentSessionID, a.agentCwd
@@ -421,54 +420,40 @@ func (a *actor) reopen(old *acpLink, reconnect bool) {
 		} else {
 			res = a.openACP(epoch, sid, cwd, true, func() bool { return a.sync(a.restartLog) })
 		}
-		if !a.sync(func() { a.reopened(res, reconnect, oldGone) }) && res.link != nil {
+		if !a.sync(func() { a.reopened(res, oldGone) }) && res.link != nil {
 			_ = res.link.stop()
 		}
 	}()
 }
 
-// reopened applies a finished reconnect or wake. A failed reconnect
-// interrupts the session, keeping the old process's identity unless it was
-// confirmed gone (oldGone); a failed wake leaves it dormant with its queue
-// paused, and the next command tries again.
-func (a *actor) reopened(res openResult, reconnect, oldGone bool) {
+// reopened applies a finished reconnect. A failed reconnect interrupts
+// the session, keeping the old process's identity unless it was confirmed
+// gone (oldGone).
+func (a *actor) reopened(res openResult, oldGone bool) {
 	a.opening = false
 	a.dirty = true
 	if res.fail != nil {
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: res.fail.public}})
 		a.noteConnector(res.fail.err)
-		if reconnect {
-			a.interrupt("idle", oldGone)
-		} else {
-			a.setQueue(a.chat.Queue.Items, true)
-		}
+		a.interrupt("idle", oldGone)
 		a.afterTransition()
 		return
 	}
 	a.installLink(res.link, res.init, res.config, res.notes)
-	a.chat.Dormant = false
-	kind := MarkerLoaded
-	switch {
-	case reconnect:
-		kind = MarkerReconnected
-	case res.resumed:
-		kind = MarkerResumed
-	}
-	a.emit(Event{Kind: EventMarker, Marker: &Marker{Kind: kind, Side: SideACP}})
+	a.emit(Event{Kind: EventMarker, Marker: &Marker{Kind: MarkerReconnected, Side: SideACP}})
 	pid := res.link.sidecar.PID()
 	process := processIdentity(pid)
 	a.record(true, func(r *Record) { r.PID, r.Process = pid, process })
-	a.svc.log.Info("hybrid acp reopened", "id", a.id, "reconnect", reconnect, "resumed", res.resumed)
-	a.touch()
+	a.svc.log.Info("hybrid acp reopened", "id", a.id, "resumed", res.resumed)
 	a.checkLink()
 	a.drain()
 	a.afterTransition()
 }
 
-// afterTransition runs a close that waited for a start, wake, reconnect or
-// sleep to finish.
+// afterTransition runs a close that waited for a start or reconnect to
+// finish.
 func (a *actor) afterTransition() {
-	if a.closeAfterStart && !a.starting && !a.opening && !a.sleeping {
+	if a.closeAfterStart && !a.starting && !a.opening {
 		a.closeAfterStart = false
 		a.beginClose()
 	}

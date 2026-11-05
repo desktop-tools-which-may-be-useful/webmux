@@ -30,12 +30,12 @@ export function hybridSupportReason(support: HybridSupport | null) {
     : text;
 }
 
-export type HybridSideLabel = "终端" | "聊天" | "聊天·休眠" | "切换中";
+export type HybridSideLabel = "终端" | "聊天" | "切换中";
 
 /** Where a hybrid session currently runs, as shown on cards and pages. */
 export function hybridSideLabel(hybrid: SessionHybrid): HybridSideLabel {
   if (hybrid.side === "switching" || hybrid.phase) return "切换中";
-  if (hybrid.side === "acp") return hybrid.dormant ? "聊天·休眠" : "聊天";
+  if (hybrid.side === "acp") return "聊天";
   return "终端";
 }
 

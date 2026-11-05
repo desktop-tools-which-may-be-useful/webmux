@@ -37,32 +37,21 @@ type Values struct {
 	QuickCommands *[]Command          `json:"quickCommands"`
 	HomeWorktrees map[string][]string `json:"homeWorktrees"`
 	ForceSoftKeys *bool               `json:"forceSoftKeys"`
-	// ChatIdleSleepMinutes is how long a hybrid session's chat side may sit
-	// idle before its agent process is stopped; 0 never sleeps, nil is the
-	// default (DefaultChatIdleSleepMinutes). Added in 0.8.0: omitempty lets
-	// files written by 0.7.x, which lack the key, load as unset.
-	ChatIdleSleepMinutes *int `json:"chatIdleSleepMinutes,omitempty"`
 	// ArtifactPrompt is the template inserted to tell an agent about the
 	// session artifacts folder; "{dir}" stands for its path, nil is the
 	// client's built-in template. omitempty keeps files without it readable
 	// by earlier releases.
 	ArtifactPrompt *string `json:"artifactPrompt,omitempty"`
-	// LegacyFontSize only lets files written before the terminal font moved
-	// to per-browser storage load under strict decoding. Open discards it and
-	// it is never written back.
-	LegacyFontSize json.RawMessage `json:"fontSize,omitempty"`
+	// LegacyFontSize and LegacyChatIdleSleepMinutes only let files written
+	// before those settings were removed load under strict decoding. Open
+	// discards them and they are never written back.
+	LegacyFontSize             json.RawMessage `json:"fontSize,omitempty"`
+	LegacyChatIdleSleepMinutes json.RawMessage `json:"chatIdleSleepMinutes,omitempty"`
 }
 
 // ArtifactPromptPlaceholder is replaced by the folder's path; a custom
 // template must contain it.
 const ArtifactPromptPlaceholder = "{dir}"
-
-// DefaultChatIdleSleepMinutes applies while chatIdleSleepMinutes is unset
-// or settings are unavailable; MaxChatIdleSleepMinutes bounds it (a day).
-const (
-	DefaultChatIdleSleepMinutes = 30
-	MaxChatIdleSleepMinutes     = 1440
-)
 
 type Snapshot struct {
 	Revision  int64  `json:"revision"`
@@ -111,9 +100,6 @@ func validate(f storedFile) error {
 }
 func validateValues(v Values) error {
 	if v.Theme != nil && *v.Theme != "light" && *v.Theme != "dark" {
-		return ErrInvalid
-	}
-	if v.ChatIdleSleepMinutes != nil && (*v.ChatIdleSleepMinutes < 0 || *v.ChatIdleSleepMinutes > MaxChatIdleSleepMinutes) {
 		return ErrInvalid
 	}
 	if v.Preview != nil && (v.Preview.Lines < 1 || v.Preview.Lines > 50 || v.Preview.Skip < 0 || v.Preview.Skip > 50) {
@@ -191,7 +177,6 @@ func cloneValues(v Values) Values {
 	v.Preview = clonePtr(v.Preview)
 	v.CodeReader = clonePtr(v.CodeReader)
 	v.ForceSoftKeys = clonePtr(v.ForceSoftKeys)
-	v.ChatIdleSleepMinutes = clonePtr(v.ChatIdleSleepMinutes)
 	v.ArtifactPrompt = clonePtr(v.ArtifactPrompt)
 	if v.QuickCommands != nil {
 		list := append([]Command{}, (*v.QuickCommands)...)
@@ -225,8 +210,6 @@ func apply(v Values, c Changes) (Values, error) {
 			v.HomeWorktrees = c.Values.HomeWorktrees
 		case "forceSoftKeys":
 			v.ForceSoftKeys = c.Values.ForceSoftKeys
-		case "chatIdleSleepMinutes":
-			v.ChatIdleSleepMinutes = c.Values.ChatIdleSleepMinutes
 		case "artifactPrompt":
 			v.ArtifactPrompt = c.Values.ArtifactPrompt
 		default:

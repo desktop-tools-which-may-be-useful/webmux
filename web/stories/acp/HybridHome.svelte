@@ -79,7 +79,6 @@
     patch: Partial<NonNullable<SessionInfo["hybrid"]>> = {},
   ) => ({
     side,
-    dormant: false,
     state: "active" as const,
     agent,
     agentTitle: agentMetadata[agent].title,
@@ -141,7 +140,7 @@
       status: "idle",
       attention: null,
       preview: "测试已整理完毕，全部通过。",
-      hybrid: hybrid("omp", "acp", { dormant: true }),
+      hybrid: hybrid("omp", "acp"),
     },
     {
       ...base,

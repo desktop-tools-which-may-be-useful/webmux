@@ -141,10 +141,10 @@ func sideOf(info session.Info) string {
 }
 
 // Attach owns the only data writer. Its reader is cancelled and joined on all exits.
-// A hybrid session attaches only on its terminal side: in the chat, dormant
-// or switching it refuses with 4409, even while a run still exists.
+// A hybrid session attaches only on its terminal side: in the chat or
+// switching it refuses with 4409, even while a run still exists.
 func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o session.AttachOptions, deflateReplay bool) {
-	if h := s.Info().Hybrid; h != nil && (h.Side != string(contract.HybridSideTUI) || h.Dormant) {
+	if h := s.Info().Hybrid; h != nil && h.Side != string(contract.HybridSideTUI) {
 		_ = c.Close(contract.CloseMoved, movedReason(h.Side))
 		return
 	}

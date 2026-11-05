@@ -994,8 +994,6 @@ export const SettingsValuesSchema = z.strictObject({
     );
   }).nullable(),
   forceSoftKeys: z.boolean().nullable(),
-  // Hybrid chat idle sleep in minutes; 0 never sleeps, null is 30.
-  chatIdleSleepMinutes: z.number().int().min(0).max(1440).nullable(),
 });
 export type SettingsValues = z.infer<typeof SettingsValuesSchema>;
 export const SettingsSnapshotSchema = z.strictObject({

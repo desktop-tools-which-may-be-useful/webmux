@@ -61,7 +61,7 @@ export type TimelineEntry =
   | {
       type: "marker";
       id: string;
-      kind: "loaded" | "switched" | "truncated" | "reconnected" | "resumed";
+      kind: "loaded" | "switched" | "truncated" | "reconnected";
       side?: string;
     };
 

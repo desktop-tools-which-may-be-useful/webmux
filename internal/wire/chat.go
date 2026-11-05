@@ -38,7 +38,7 @@ func ChatFrame(f hybrid.Frame) contract.ChatFrame {
 
 func ChatState(s hybrid.ChatState) contract.ChatState {
 	out := contract.ChatState{
-		Side: contract.HybridSide(s.Side), Phase: contract.HybridPhase(s.Phase), Dormant: s.Dormant,
+		Side: contract.HybridSide(s.Side), Phase: contract.HybridPhase(s.Phase),
 		Agent: s.Agent,
 		Eligibility: contract.ChatEligibility{
 			Available: s.Eligibility.Available, Reason: s.Eligibility.Reason,

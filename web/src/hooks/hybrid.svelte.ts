@@ -240,7 +240,6 @@ export function useHybrid(
       ? [
           state.side,
           state.phase ?? "",
-          state.dormant,
           state.turn.running,
           state.requests.length,
           chat.model.title ?? "",

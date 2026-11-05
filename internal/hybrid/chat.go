@@ -77,7 +77,6 @@ const (
 	MarkerSwitched    = "switched"
 	MarkerTruncated   = "truncated"
 	MarkerReconnected = "reconnected"
-	MarkerResumed     = "resumed"
 )
 
 // PermissionMode is how the chat side answers the agent's permission
@@ -302,7 +301,6 @@ type Marker struct {
 type ChatState struct {
 	Side           Side
 	Phase          Phase
-	Dormant        bool
 	Agent          string
 	AgentSessionID *string
 	Eligibility    Eligibility

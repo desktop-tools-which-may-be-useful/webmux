@@ -51,7 +51,7 @@ Codex、Claude Code 网页版的做法是在一个输入框里写任务、选仓
   - 新增快速开始编排（worktree → 混合会话 → 配置 → 首条提示），复用 `workspace.CreateWorktree`、`workspace.CreateSession`、`hybrid.Service.Prompt`。
   - `internal/hybrid` 记录每个启动配置的配置项清单；这份新的持久状态需要在 `internal/statefile` 目录登记。
 - 接口：`internal/contract`、`internal/wire`、`internal/api` 新增 `QuickStartRequest`/`QuickStartResult`、`PATCH /api/repositories/{id}`，以及启动配置的配置项清单字段；`web/src/schemas.ts` 同步更新，并重新录制 `internal/api/testdata/wire`。现有会话、混合会话和聊天接口的字段与语义不变。
-- 混合模式：不受影响。快速开始只是组合现有的 worktree 创建、混合会话创建（`startSide: acp`）、设置配置和发送提示；生成的是标准混合会话，切换、休眠、恢复、关闭和归档都按 `hybrid-sessions` 的规则进行。聊天侧栏只读取现有数据。
+- 混合模式：不受影响。快速开始只是组合现有的 worktree 创建、混合会话创建（`startSide: acp`）、设置配置和发送提示；生成的是标准混合会话，切换、恢复、关闭和归档都按 `hybrid-sessions` 的规则进行。聊天侧栏只读取现有数据。
 - 前端：
   - 新增 `pages/QuickStart.svelte` 与 `/new` 路由；输入框和配置控件复用 `ChatConfig`、`ChatSelect`、`ChatPermissionMode`。
   - `AddRepositoryDialog` 增加初始化指令字段，并新增修改指令的仓库菜单项。

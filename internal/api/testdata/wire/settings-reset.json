@@ -5,7 +5,6 @@
     "updatedAt": "<time>",
     "values": {
       "artifactPrompt": null,
-      "chatIdleSleepMinutes": null,
       "codeReader": null,
       "forceSoftKeys": null,
       "homeWorktrees": null,

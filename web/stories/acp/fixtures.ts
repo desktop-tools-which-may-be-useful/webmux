@@ -519,7 +519,6 @@ const codexConnector = {
 function baseState(agent: Agent): ChatState {
   return {
     side: "acp",
-    dormant: false,
     agent,
     agentSessionId: sessionIds[agent].current,
     outdated: [],

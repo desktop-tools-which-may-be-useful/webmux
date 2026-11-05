@@ -291,3 +291,17 @@
 - 内容：`question`（需要回答）、`permission`（等待授权）与 `error`（出错停止）的会话徽章、会话页头部状态圆点、仓库侧栏包含上述等待会话时的 `待 N` 徽章，以及聊天端权限卡片、表单提问卡片与工具调用行“等待授权”均显示红色；`done`、`notify`、`bell` 与启发式 `waiting` 保持琥珀色。
 - 依据：`make check`、前端单元全量（53 个文件）、Vitest 浏览器套件全量（60 个文件共 473 项）、Storybook 验证套件（452 项），以及桌面与 Pixel 7 的 `attention`、`hybrid`、`repository-scope` E2E（57 项通过）；隔离演示服务在 1280×720 与 390×844、浅色与深色主题下的前后对比截图。
 - 限制：未运行其余未受影响的 E2E 与性能套件，未做 iOS/Android 真机核对；未重新核验其余故事能力。
+
+本次局部核对（2026-11-05）：移除混合会话聊天端空闲休眠能力，使聊天端 ACP 进程在空闲期间保持存活。具体调整：
+
+- 聊天端 ACP 进程仅在切换到终端、显式归档（关闭）会话或服务停止时结束，避免误杀 agent 后台命令、子任务或定时器。
+- 将 US-Q11 标记为已退役（保留编号），同步更新 US-Q06、US-Q09、US-Q10、US-Q13、US-Q14、US-Q16、US-Q17、US-M03 以及总目录与覆盖索引。
+- 保留旧 `settings.json` 中遗留 `chatIdleSleepMinutes` 字段的向后兼容读取与重写清理。
+
+- 依据：
+  - `openspec validate --specs` 以及 `add-antigravity-acp-hybrid`、`show-chat-agent-identity`、`quick-start-chat` 的 `--strict` 校验。
+  - `make check`（前端生产构建、格式检查、文档门禁、持久化门禁、测试类型检查、Oxlint、前端架构门禁、`go vet`、`golangci-lint`）。
+  - `make test-fast`（全量 Go `-race` 含 `TestChatSideStaysAliveWhileIdleUntilArchived`、`internal/settings` 遗留字段兼容、`internal/hybrid` 崩溃重连恢复与 `internal/api` wire 快照，以及 Vitest 单元与浏览器套件）。
+  - 受影响的 Playwright E2E（`hybrid.spec.ts` 含聊天端空闲保活与显式归档清理用例、`settings-sync.spec.ts`）与 Storybook 套件（`contracts.spec.ts`、`acp-chat.spec.ts`）。
+  - 隔离演示服务下设置页“启动配置”分区的桌面（1280×800）与手机（390×844）、明暗主题前后对比截图。
+- 限制：未运行其余未受影响的 E2E 与性能基准用例，未在真机上核对；未重新核验其余故事能力。

@@ -73,7 +73,7 @@ type actor struct {
 	// one: OpenCode names its session only after a message.
 	resumedSID string
 	// agentCwd is the resolved cwd the agent session was opened or found
-	// in; reconnects and wakes load it there.
+	// in; reconnects load it there.
 	agentCwd string
 	chat     ChatState
 	tr       translator
@@ -115,20 +115,12 @@ type actor struct {
 	workLine string
 	// switching is the running switch, from its eligibility check on.
 	switching *switchOp
-	// opening: a reconnect or wake is opening the agent session again;
-	// prompts queue until it is ready. sleeping: the agent process is
-	// stopping for idle sleep; a wake waits for it (wakeAfterSleep).
-	opening        bool
-	sleeping       bool
-	wakeAfterSleep bool
+	// opening: a reconnect is opening the agent session again; prompts
+	// queue until it is ready.
+	opening bool
 	// reconnects counts automatic reconnects since the last turn that
 	// ended normally (D24 allows one).
 	reconnects int
-	// lastActive is the last command, turn end or wake; the chat side
-	// sleeps chatIdleSleepMinutes after it.
-	lastActive time.Time
-	sleepTimer *time.Timer
-	sleepAt    time.Time
 	// probe is the eligibility check of the terminal side's session.
 	probe probeState
 	// connector is the eligibility check of the profile's connector.
@@ -181,7 +173,7 @@ func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side S
 	a := &actor{
 		svc: s, cmd: cmd, cwd: cwd, configID: configID,
 		inbox: make(chan func(), inboxSize), quit: make(chan struct{}),
-		side: side, state: StateActive, agentCwd: cwd, lastActive: time.Now(),
+		side: side, state: StateActive, agentCwd: cwd,
 	}
 	a.probeCtx, a.probeCancel = context.WithCancel(context.Background())
 	a.chat = ChatState{
@@ -201,18 +193,11 @@ func (a *actor) run() {
 	for !a.stopped {
 		(<-a.inbox)()
 		a.flush()
-		if !a.stopped {
-			a.armSleep()
-		}
 	}
 }
 
-// stopTimers stops the sleep and probe timers and the running probes.
+// stopTimers stops the probe timers and the running probes.
 func (a *actor) stopTimers() {
-	if a.sleepTimer != nil {
-		a.sleepTimer.Stop()
-		a.sleepTimer = nil
-	}
 	if a.probe.timer != nil {
 		a.probe.timer.Stop()
 		a.probe.timer = nil
@@ -327,7 +312,7 @@ func (a *actor) flush() {
 // session waiting, a running turn running, anything else idle.
 func (a *actor) overlay() *session.Overlay {
 	info := &session.HybridInfo{
-		Side: string(a.side), Phase: string(a.chat.Phase), Dormant: a.chat.Dormant,
+		Side: string(a.side), Phase: string(a.chat.Phase),
 		State: string(a.state), Agent: a.cmd.Profile.Name,
 		AgentTitle: a.cmd.Profile.Title, AgentIcon: a.cmd.Profile.Icon,
 	}
@@ -605,7 +590,6 @@ func (a *actor) started(started chan<- error, res startResult) {
 		return
 	}
 	a.dirty = true
-	a.touch()
 	pid, process := res.pid, res.process
 	if res.link == nil {
 		// A terminal that already exited left the session interrupted.
@@ -969,7 +953,6 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 		a.reconnects = 0
 	}
 	a.dirty = true
-	a.touch()
 	a.emit(Event{Kind: EventTurnEnd, TurnEnd: &TurnEnd{TurnID: t.id, StopReason: stop, Error: text}})
 	now := time.Now().UTC()
 	switch stop {
@@ -1098,13 +1081,13 @@ func (a *actor) RunExited(code int) {
 // beginClose ends the session for a user: the running turn is cancelled
 // (chat) or interrupted like a switch would (terminal, bounded by the
 // interrupt wait), the side's processes stop, then finishClose records
-// closed and removes the shell. A start, wake, reconnect or sleep in
-// progress finishes first.
+// closed and removes the shell. A start or reconnect in progress finishes
+// first.
 func (a *actor) beginClose() {
 	if a.closing || a.stopped {
 		return
 	}
-	if a.starting || a.opening || a.sleeping {
+	if a.starting || a.opening {
 		a.closeAfterStart = true
 		return
 	}
@@ -1192,8 +1175,8 @@ func (a *actor) shellGone() {
 // ctx ends first, and leaves the record active so the next start marks it
 // interrupted; the record keeps what the session was doing and how many
 // queued prompts the shutdown loses. It blocks the actor, which ends with
-// it; a switch, wake or reconnect in flight stops the process it started
-// once it finds the actor gone.
+// it; a switch or reconnect in flight stops the process it started once it
+// finds the actor gone.
 func (a *actor) shutdown(ctx context.Context) {
 	if a.stopped {
 		return

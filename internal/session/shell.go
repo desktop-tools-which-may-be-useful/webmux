@@ -38,7 +38,6 @@ type Driver interface {
 type HybridInfo struct {
 	Side           string
 	Phase          string
-	Dormant        bool
 	State          string
 	Agent          string
 	AgentTitle     string

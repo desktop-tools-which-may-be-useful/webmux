@@ -360,8 +360,6 @@ func hybridSide(h *contract.SessionHybrid) string {
 	switch {
 	case h.Side == contract.HybridSideSwitching || h.Phase != "":
 		return "切换中"
-	case h.Side == contract.HybridSideACP && h.Dormant:
-		return "聊天·休眠"
 	case h.Side == contract.HybridSideACP:
 		return "聊天"
 	default:

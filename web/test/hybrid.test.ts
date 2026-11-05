@@ -20,7 +20,6 @@ const connector = {
 
 const hybrid = {
   side: "acp" as const,
-  dormant: false,
   state: "active" as const,
   agent: "omp",
   agentTitle: "omp",
@@ -32,7 +31,6 @@ describe("hybrid labels", () => {
   test("a phase means switching even before the side flips", () => {
     expect(hybridSideLabel({ ...hybrid, side: "tui" })).toBe("终端");
     expect(hybridSideLabel(hybrid)).toBe("聊天");
-    expect(hybridSideLabel({ ...hybrid, dormant: true })).toBe("聊天·休眠");
     expect(hybridSideLabel({ ...hybrid, side: "switching" })).toBe("切换中");
     expect(hybridSideLabel({ ...hybrid, side: "tui", phase: "stopping" })).toBe(
       "切换中",

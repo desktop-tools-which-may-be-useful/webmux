@@ -2,7 +2,7 @@
 
 ### Requirement: 会话列表中的 agent 标识
 
-首页会话卡片 SHALL 为任意所在端的混合会话（`hybrid.side` 为 `tui`、`acp` 或 `switching`，含休眠，含“恢复到终端”后的会话）在“所在端”信息处显示 agent 标识：
+首页会话卡片 SHALL 为任意所在端的混合会话（`hybrid.side` 为 `tui`、`acp` 或 `switching`，含“恢复到终端”后的会话）在“所在端”信息处显示 agent 标识：
 
 - 标识由 `agentIcon` 对应的单色品牌小图标与 `agentTitle` 组成，紧接其后是现有的所在端文字，形如“OpenCode · 聊天”；
 - 品牌图标 SHALL 替换原来的通用聊天或终端图标，尺寸与同一行的其他元信息图标相同，颜色跟随该行的弱化文字色；
@@ -13,11 +13,6 @@
 
 - **WHEN** 首页列出一个处于聊天端的 OpenCode 混合会话，有 2 个设备连接
 - **THEN** 卡片元信息行显示 OpenCode 品牌小图标与“OpenCode · 聊天 · 2 个设备已连接”，不再显示通用聊天图标
-
-#### Scenario: 休眠的聊天端卡片
-
-- **WHEN** 处于聊天端的 omp 混合会话进入休眠
-- **THEN** 卡片显示 omp 的品牌小图标与“omp · 聊天·休眠”
 
 #### Scenario: 切换中的卡片
 

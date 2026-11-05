@@ -165,7 +165,6 @@
     hybrid: {
       side: chat.side,
       phase: chat.phase,
-      dormant: false,
       state: "active",
       agent,
       agentTitle: agentMetadata[agent].title,

@@ -14,7 +14,6 @@
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `side`           | `tui`、`acp` 或 `switching`                                                                                                        |
 | `phase`          | 切换中的步骤：`interrupting`、`awaiting_choice`、`cancelling`、`stopping`、`starting`、`loading`、`rolling_back`；不在切换中时省略 |
-| `dormant`        | 聊天端空闲休眠，agent 进程已结束                                                                                                   |
 | `state`          | `active`、`closed` 或 `interrupted`；首页运行中分组只显示 `active`                                                                 |
 | `agent`          | 档案名：`opencode`、`omp`、`codex` 或 `claudecode`                                                                                 |
 | `agentTitle`     | 档案的显示名，如 `OpenCode`、`Claude Code`；会话卡片与聊天页头部用它标识 agent                                                     |
@@ -102,11 +101,11 @@ Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固�
 - `state`：完整替换聊天状态（所在端、阶段、资格与原因、回合、待答复请求、配置项、命令、计划、用量、队列、是否可插话、`authRequired`、`promptCapabilities`、`permissionMode`、`forceSwitchNote`、`idChange`、`queueLost` 等）。其中几个字段：
   - `turn`：当前或上一回合；`startedAt` 在回合开始时记录，`endedAt` 在回合结束时记录，二者为 UTC RFC 3339 时间。聊天视图据此显示进行中的已用时间与结束后的总用时，刷新、重连和其他设备不会重新计时。
   - `forceSwitchNote`：TUI 回合未停下时强制切换会损失什么，由该 agent 的适配器提供。Claude Code 明确 `session/cancel` 后后台 Bash 或子任务可能仍存活；强制切换终止连接器并等待受管后代退出，不保证任意自行 daemonize 的进程。
-  - `promptCapabilities`：`{image, embeddedContext}`，来自 ACP `initialize`，连接断开或休眠时复位为 `false`。
+  - `promptCapabilities`：`{image, embeddedContext}`，来自 ACP `initialize`，连接断开时复位为 `false`。
   - `permissionMode`：`ask` 或 `auto`，见下文。
   - `eligibility`：`{available, reason?, connector?}`；`reason` 为 `connector_missing` 时 `connector` 给出未安装的连接器。
   - `outdated`：低于已验证版本的程序 `[{name, version, verified}]`，Codex 会分别列出 Codex CLI 与 codex-acp，Claude Code 会分别列出 `claude` 与 claude-agent-acp。
-  - `connectorMissing`：聊天端因连接器未安装而无法启动（唤醒、重连、回滚）时给出连接器，安装后成功连接即清除。
+  - `connectorMissing`：聊天端因连接器未安装而无法启动（重连、回滚）时给出连接器，安装后成功连接即清除。
 
 关闭码：`4404` 会话不存在或不是混合会话；`4408` 客户端过慢或写超时，可重连；`1013` 日志被重置，重连后从新代际开始；`4410` 会话已结束。
 
@@ -116,7 +115,7 @@ Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固�
 - 会话元数据：`plan.set`、`commands.set`、`config.set`、`usage.set`、`info.set`（`title` 同时写回会话标题，创建名称仍优先）、`compaction.upsert`。
 - 回合：`turn.start`、`turn.end`（`stopReason` 含 `cancelled`、`error`、`auth_required`）。
 - 请求：`request.open`、`request.close`。
-- 提示与标记：`notice`、`marker`（`loaded`、`switched`、`truncated`、`reconnected`、`resumed`）。
+- 提示与标记：`notice`、`marker`（`loaded`、`switched`、`truncated`、`reconnected`）。
 
 单个文本字段超过 256 KiB 时截断并标 `truncated`；不支持的内容块以 `type: "unsupported"` 占位。日志按编码字节估算，上限为 `scrollback_bytes`；每次 `session/load` 开始新代际。
 
@@ -137,7 +136,7 @@ Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固�
 | PUT    | `/api/sessions/{id}/chat/config/{configId}`    | 选择类 `{value}`、布尔类 `{enabled}`，经 `session/set_config_option` 生效并记录，204                                                                                                         |
 | PUT    | `/api/sessions/{id}/chat/permission-mode`      | `{clientRequestId, mode}`，`mode` 为 `ask` 或 `auto`（其他值 400）；两端均可设置，切换中返回 409 `switching`，204                                                                            |
 
-`text` 不超过 64 KiB；有附件时可以只发附件。会话处于休眠时，命令先唤醒 agent 再执行。回合以 `cancelled`、错误、`refusal` 或 `auth_required` 结束时，非空队列暂停。
+`text` 不超过 64 KiB；有附件时可以只发附件。ACP 自动重连期间提交的自动发送消息进入队列等待连接恢复。回合以 `cancelled`、错误、`refusal` 或 `auth_required` 结束时，非空队列暂停。
 
 插话只在档案声明、agent 在 `initialize` 中声明支持且有回合运行时可用；omp、Codex 与 Claude Code 的档案声明该能力。
 
@@ -160,7 +159,7 @@ agent 声明 `promptCapabilities.image` 时图片以 `image` 块（base64 与原
 - `ask`：把每个 `session/request_permission` 作为 `request.open` 交给用户。
 - `auto`（默认）：由服务端直接选择第一个 `allow_once` 选项，没有则选第一个 `allow_always`，不产生 `request.open`、提醒或 `notice`。没有允许选项的请求仍交给用户；表单（`elicitation/create`）从不自动答复。
 
-从 `ask` 改为 `auto` 时，已挂起的权限请求立即按同样规则批准并以 `request.close` 关闭。模式写入混合会话记录的 `permissionMode`（仅 `ask` 时写入，没有该字段的记录按 `auto` 处理），切换、休眠唤醒、重连与恢复后保持。
+从 `ask` 改为 `auto` 时，已挂起的权限请求立即按同样规则批准并以 `request.close` 关闭。模式写入混合会话记录的 `permissionMode`（仅 `ask` 时写入，没有该字段的记录按 `auto` 处理），切换、重连与恢复后保持。
 
 ## 冲突与错误
 
@@ -178,4 +177,4 @@ Codex 与 Claude Code 的插话带 `_meta.steering.idleBehavior = "promptRequire
 
 agent 调用失败返回 502；`hybrid-sessions.json` 不可用返回 503 并附文件路径，普通会话不受影响。
 
-终端 WebSocket `/ws/s/{id}` 在会话不在终端端、休眠或切换中时以 `4409`（`session moved: <所在端>`）关闭，见 [WebSocket 接口](websocket.md)。
+终端 WebSocket `/ws/s/{id}` 在会话不在终端端或切换中时以 `4409`（`session moved: <所在端>`）关闭，见 [WebSocket 接口](websocket.md)。

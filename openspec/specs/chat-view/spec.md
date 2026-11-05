@@ -91,7 +91,7 @@ agent 发起 `form` 模式的表单请求时，聊天视图 SHALL 渲染 string�
 - 新建会话 SHALL 处于 `auto`。
 - 当前模式 SHALL 出现在聊天状态的 `permissionMode` 中，并在所有设备同步。
 - `ask` SHALL 写入混合会话记录的 `permissionMode`；没有该字段的记录 SHALL 按 `auto` 处理。
-- 以上保存方式使模式在切换两端、休眠唤醒、重连与恢复后保持不变。
+- 以上保存方式使模式在切换两端、重连与恢复后保持不变。
 
 - 输入框下方的配置项旁 SHALL 显示“权限”选择（“每次询问”/“自动批准”），变更经 `PUT /api/sessions/{id}/chat/permission-mode` 提交 `{clientRequestId, mode}`；`mode` 不是 `ask` 或 `auto` 时 SHALL 返回 400，切换进行中 SHALL 返回 409 `switching`，终端端 SHALL 允许设置；
 - `auto` 模式下，agent 的权限请求 SHALL 由服务端直接选择第一个 `allow_once` 选项，没有时选择第一个 `allow_always`；此时 SHALL NOT 打开请求、产生关注与推送，也 SHALL NOT 在时间线追加批准提示；

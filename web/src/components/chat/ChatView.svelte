@@ -4,7 +4,6 @@
   import IconHandStop from "~icons/tabler/hand-stop";
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconX from "~icons/tabler/x";
-  import IconZzz from "~icons/tabler/zzz";
   import { Button } from "$lib/components/ui/button";
   import InlineNotice from "../InlineNotice.svelte";
   import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
@@ -136,7 +135,6 @@
     if (
       !chat ||
       chat.turn.running ||
-      chat.dormant ||
       turnElapsed === undefined ||
       turnEndedAt === undefined
     )
@@ -283,7 +281,7 @@
               >
             {/if}
           </p>
-        {:else if turnElapsed !== undefined && turnEndedAt !== undefined && !chat.dormant}
+        {:else if turnElapsed !== undefined && turnEndedAt !== undefined}
           <p
             class="flex items-center gap-2 text-sm text-muted-foreground"
             aria-hidden="true"
@@ -305,14 +303,6 @@
             <span class="tabular-nums"
               >· 用时 {formatDuration(turnElapsed)}</span
             >
-          </p>
-        {:else if chat.dormant}
-          <p
-            class="flex items-center gap-2 text-sm text-muted-foreground"
-            role="status"
-          >
-            <IconZzz class="size-3.5" aria-hidden="true" />
-            Agent 已休眠，发送消息时自动唤醒
           </p>
         {/if}
       </div>

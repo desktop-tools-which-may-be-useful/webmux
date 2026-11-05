@@ -53,7 +53,7 @@ Antigravity CLI 文档（`antigravity.google/docs`）及本机实测 `agy 1.4.12
 
 **Goals:**
 - 在不改变 `internal/hybrid` 单写者状态机架构的前提下，扩展 `internal/agentprofile`
-  与 `internal/hybrid` 支持 `agy` 混合会话（聊天 ↔ 终端双向切换、空闲休眠唤醒、异常重连与重启恢复）。
+  与 `internal/hybrid` 支持 `agy` 混合会话（聊天 ↔ 终端双向切换、异常重连与重启恢复）。
 - 在规格中完整给出 `agy` 档案配置、`--settings` 注入字符串、协议差异处理与
   `fakeagent` 行为定义，使实现者无需依赖本地 `agy` 环境即可完成开发与测试。
 - 将新安装预置的 `Gemini CLI` 启动配置更新为默认开启混合模式的 `Antigravity CLI`
@@ -117,7 +117,7 @@ Antigravity CLI 文档（`antigravity.google/docs`）及本机实测 `agy 1.4.12
 ### 3. 跨进程加载补齐 `model` 与 `thought_level`（`ReapplyOnLoad`）
 
 - **做法**：`agy` 适配器设置 `ReapplyOnLoad: []string{"model", "thought_level"}`。
-  当会话从 TUI 切到聊天、从休眠唤醒、异常重连或服务重启恢复时，`actor.openACP()`
+  当会话从 TUI 切到聊天、异常重连或服务重启恢复时，`actor.openACP()`
   读取会话记录中的 `Record.Config`，若新 `agy acp` 进程返回的 `model` 或
   `thought_level` 与记录值不同，则自动调用 `session/set_config_option` 恢复用户此前选定的模型与推理等级。
 - **依据**：实测 `agy acp` 在跨进程执行 `session/load` 或 `session/resume` 时总是返回默认

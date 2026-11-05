@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/rainchan/webmux/internal/session"
@@ -258,17 +259,24 @@ func TestClaudeAttachments(t *testing.T) {
 	}
 }
 
-func TestClaudeWakeReappliesConfig(t *testing.T) {
-	h := sleepyHarness(t, 1)
+func TestClaudeReconnectReappliesConfig(t *testing.T) {
+	h := newHarness(t, 0)
+	h.fast()
 	in := h.claudeInput(SideACP, "", "--model", "sonnet", "--effort", "high", "--permission-mode", "plan")
 	id := h.create(in).Info().ID
 	chatTurn(t, h, id, "hello")
-	waitFor(t, "dormant", func() bool { return h.dormant(id) })
+	pid := h.record(id).PID
 	st := h.follow(id)
-	st.until("resumed marker", hasMarker(MarkerResumed))
-	waitFor(t, "awake with restored config", func() bool {
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	st.until("reconnected marker", func(events []Event) bool {
+		return slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventMarker && e.Marker.Kind == MarkerReconnected })
+	})
+	waitFor(t, "reconnected with restored config", func() bool {
 		config := h.chatState(id).Config
-		return !h.dormant(id) && configValue(config, "model") == "sonnet" && configValue(config, "effort") == "high" && configValue(config, "mode") == "plan"
+		rec := h.record(id)
+		return rec.PID > 0 && rec.PID != pid && configValue(config, "model") == "sonnet" && configValue(config, "effort") == "high" && configValue(config, "mode") == "plan"
 	})
 }
 

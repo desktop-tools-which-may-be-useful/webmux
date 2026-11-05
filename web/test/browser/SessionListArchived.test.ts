@@ -43,7 +43,6 @@ const active: SessionInfo = {
   reportedCwd: null,
   hybrid: {
     side: "acp",
-    dormant: false,
     state: "active",
     agent: "omp",
     agentTitle: "omp",

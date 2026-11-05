@@ -29,7 +29,7 @@ webmux SHALL NOT 自动安装连接器或其运行时（例如 Node），也 SHA
 ### Requirement: 启动 ACP 进程之前检查连接器
 
 对声明了连接器的档案，系统 SHALL 在每一次启动 ACP 进程之前检查连接器是否已安装，包括：
-资格探测、从聊天开始、切到聊天、恢复到聊天、从休眠唤醒，以及 ACP 进程意外退出后的自动重连。
+资格探测、从聊天开始、切到聊天、恢复到聊天，以及 ACP 进程意外退出后的自动重连。
 
 检查 SHALL 使用与实际启动相同的写法与环境：
 
@@ -74,7 +74,7 @@ webmux SHALL NOT 自动安装连接器或其运行时（例如 Node），也 SHA
 `connector_missing` 出现在以下负载中时，SHALL 同时携带连接器信息 `connector: {executable, title, installCommand, docsUrl}`：
 
 - 会话信息中的聊天资格 `{available: false, reason: "connector_missing", connector}`；
-- 新建会话、切换、恢复、唤醒请求失败时的 409 冲突体 `{error, reason: "connector_missing", connector}`；
+- 新建会话、切换、恢复请求失败时的 409 冲突体 `{error, reason: "connector_missing", connector}`；
 - 自动重连失败后会话进入 `interrupted` 时发布的通知。
 
 连接器信息 SHALL 只来自档案，SHALL NOT 包含查找到的路径、PATH 内容或环境变量。
@@ -102,7 +102,7 @@ webmux SHALL NOT 自动安装连接器或其运行时（例如 Node），也 SHA
   内容为安装命令与“安装后会自动重新检测”；
 - 新建会话弹层：选中声明了连接器的混合配置时，在“从聊天开始”旁说明“聊天端需要另外安装 `<可执行文件>`”；
   从聊天开始失败且原因为 `connector_missing` 时，弹层 SHALL 保持打开、保留输入，显示安装命令，并提供“改为从终端开始”；
-- 聊天视图：恢复、唤醒或自动重连因 `connector_missing` 失败时，显示同样的安装提示与“切到终端”按钮；
+- 聊天视图：恢复或自动重连因 `connector_missing` 失败时，显示同样的安装提示与“切到终端”按钮；
 - 设置页：混合模式勾选框可用且档案声明了连接器时，在勾选框旁说明“聊天端需要另外安装 `<可执行文件>`”及安装命令。
 
 #### Scenario: 新建会话从聊天开始失败

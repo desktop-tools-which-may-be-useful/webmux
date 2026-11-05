@@ -266,7 +266,7 @@ Claude Code 2.1.316 的 `--permission-mode` 接受 `acceptEdits`、`auto`、`byp
 
 ### Requirement: Claude Code 的聊天端命令与回合能力
 
-Claude Code 档案 SHALL 声明 `session/resume` 可用于重连与休眠唤醒，SHALL 使用 `_session/steering` 和 `_meta.steering.idleBehavior=promptRequired` 处理插话竞态。本次实测中，空闲 steering 返回 `{"outcome":"promptRequired","reason":"noRunningTurn"}`，不得启动新回合。
+Claude Code 档案 SHALL 声明 `session/resume` 可用于崩溃重连，SHALL 使用 `_session/steering` 和 `_meta.steering.idleBehavior=promptRequired` 处理插话竞态。本次实测中，空闲 steering 返回 `{"outcome":"promptRequired","reason":"noRunningTurn"}`，不得启动新回合。
 
 图片与嵌入资源 SHALL 按握手中的 prompt 能力沿用现有附件管线。0.99.1 对二者均声明支持，并已在同一真实 prompt 中完成 `end_turn`。不支持的能力 SHALL 按现有规则降级，SHALL NOT 假定所有 MIME 类型均可发送。
 

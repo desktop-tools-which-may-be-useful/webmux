@@ -41,11 +41,10 @@ const (
 
 // SessionHybrid is SessionInfo.hybrid; ordinary sessions omit it.
 type SessionHybrid struct {
-	Side    HybridSide  `json:"side"`
-	Phase   HybridPhase `json:"phase,omitempty"`
-	Dormant bool        `json:"dormant"`
-	State   HybridState `json:"state"`
-	Agent   string      `json:"agent"`
+	Side  HybridSide  `json:"side"`
+	Phase HybridPhase `json:"phase,omitempty"`
+	State HybridState `json:"state"`
+	Agent string      `json:"agent"`
 	// AgentTitle is the agent's display name.
 	AgentTitle string `json:"agentTitle"`
 	// AgentIcon is the agent's brand glyph, a launch-config icon key.

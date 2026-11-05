@@ -24,8 +24,8 @@ import (
 )
 
 const sessionsJSON = `[{"id":"abcdefgh","title":"review","status":"running","cmd":["codex"],"cwd":"/w","exitCode":null},` +
-	`{"id":"hybrid22","title":"chat","status":"idle","cmd":["omp"],"cwd":"/w","exitCode":null,"hybrid":{"side":"acp","dormant":true,"state":"active","agent":"omp","agentSessionId":"01a"}},` +
-	`{"id":"hybrid33","title":"moving","status":"running","cmd":["omp"],"cwd":"/w","exitCode":null,"hybrid":{"side":"switching","phase":"stopping","dormant":false,"state":"active","agent":"omp","agentSessionId":null}}]`
+	`{"id":"hybrid22","title":"chat","status":"idle","cmd":["omp"],"cwd":"/w","exitCode":null,"hybrid":{"side":"acp","state":"active","agent":"omp","agentSessionId":"01a"}},` +
+	`{"id":"hybrid33","title":"moving","status":"running","cmd":["omp"],"cwd":"/w","exitCode":null,"hybrid":{"side":"switching","phase":"stopping","state":"active","agent":"omp","agentSessionId":null}}]`
 
 type fakeServer struct {
 	mu        sync.Mutex
@@ -237,7 +237,7 @@ func TestListAndOpen(t *testing.T) {
 	}
 	for id, want := range map[string]string{
 		"abcdefgh": "review running codex /w",
-		"hybrid22": "chat idle · 聊天·休眠 omp /w",
+		"hybrid22": "chat idle · 聊天 omp /w",
 		"hybrid33": "moving running · 切换中 omp /w",
 	} {
 		if rows[id] != want {

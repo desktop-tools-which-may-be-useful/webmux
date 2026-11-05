@@ -23,7 +23,6 @@ export type HybridPhase = z.infer<typeof HybridPhaseSchema>;
 export const SessionHybridSchema = z.object({
   side: HybridSideSchema,
   phase: HybridPhaseSchema.optional(),
-  dormant: z.boolean(),
   state: HybridStateSchema,
   agent: z.string(),
   // The agent's display name and its brand glyph, a launch-config icon key.
@@ -330,13 +329,7 @@ export const ChatEventSchema = z.discriminatedUnion("kind", [
     ...eventBase,
     kind: z.literal("marker"),
     marker: z.object({
-      kind: z.enum([
-        "loaded",
-        "switched",
-        "truncated",
-        "reconnected",
-        "resumed",
-      ]),
+      kind: z.enum(["loaded", "switched", "truncated", "reconnected"]),
       side: HybridSideSchema.optional(),
     }),
   }),
@@ -362,7 +355,6 @@ export type ChatEligibility = z.infer<typeof ChatEligibilitySchema>;
 export const ChatStateSchema = z.object({
   side: HybridSideSchema,
   phase: HybridPhaseSchema.optional(),
-  dormant: z.boolean(),
   agent: z.string(),
   agentSessionId: z.string().nullable(),
   // Components running below their verified versions.

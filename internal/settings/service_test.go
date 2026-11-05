@@ -99,26 +99,27 @@ func TestCorruptionPreserved(t *testing.T) {
 	}
 }
 
-// A file written before chatIdleSleepMinutes existed loads with it unset
-// instead of being reported corrupt.
-func TestLoadsFileWithoutChatIdleSleepMinutes(t *testing.T) {
+// Files written with legacy fontSize or chatIdleSleepMinutes keys load
+// cleanly and drop those keys on the next write.
+func TestLoadsFileWithLegacySettingsKeys(t *testing.T) {
 	dir := t.TempDir()
-	data := `{"v":1,"revision":11,"updatedAt":"2026-10-28T02:13:13.53185523Z","values":{"theme":"dark","fontSize":12,"preview":null,"codeReader":null,"quickCommands":null,"homeWorktrees":null,"forceSoftKeys":true}}`
+	data := `{"v":1,"revision":11,"updatedAt":"2026-10-28T02:13:13.53185523Z","values":{"theme":"dark","fontSize":12,"chatIdleSleepMinutes":15,"preview":null,"codeReader":null,"quickCommands":null,"homeWorktrees":null,"forceSoftKeys":true}}`
 	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
 	s := Open(dir)
 	defer s.Close()
 	v, err := s.Snapshot()
-	if err != nil || v.Revision != 11 || v.Values.Theme == nil || *v.Values.Theme != "dark" || v.Values.ChatIdleSleepMinutes != nil {
+	if err != nil || v.Revision != 11 || v.Values.Theme == nil || *v.Values.Theme != "dark" || v.Values.ForceSoftKeys == nil || !*v.Values.ForceSoftKeys {
 		t.Fatalf("snapshot: %+v %v", v, err)
 	}
-	minutes := 5
-	if v, err = s.Patch(11, Changes{Fields: map[string]bool{"chatIdleSleepMinutes": true}, Values: Values{ChatIdleSleepMinutes: &minutes}}); err != nil || *v.Values.ChatIdleSleepMinutes != 5 {
+	softKeys := false
+	if v, err = s.Patch(11, Changes{Fields: map[string]bool{"forceSoftKeys": true}, Values: Values{ForceSoftKeys: &softKeys}}); err != nil || v.Values.ForceSoftKeys == nil || *v.Values.ForceSoftKeys {
 		t.Fatalf("patch: %+v %v", v, err)
 	}
-	if raw, err := os.ReadFile(filepath.Join(dir, "settings.json")); err != nil || strings.Contains(string(raw), "fontSize") {
-		t.Fatalf("legacy fontSize rewritten: %s %v", raw, err)
+	raw, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil || strings.Contains(string(raw), "fontSize") || strings.Contains(string(raw), "chatIdleSleepMinutes") {
+		t.Fatalf("legacy keys rewritten: %s %v", raw, err)
 	}
 }
 func TestFailedCommitDoesNotPublish(t *testing.T) {
@@ -230,17 +231,6 @@ func TestValidationBoundaries(t *testing.T) {
 	for _, p := range []Preview{{1, 0}, {50, 50}} {
 		if err := validateValues(Values{Preview: &p}); err != nil {
 			t.Fatal(err)
-		}
-	}
-	for _, minutes := range []int{-1, MaxChatIdleSleepMinutes + 1} {
-		if validateValues(Values{ChatIdleSleepMinutes: &minutes}) == nil {
-			t.Fatalf("idle sleep %d accepted", minutes)
-		}
-	}
-	for _, minutes := range []int{0, DefaultChatIdleSleepMinutes, MaxChatIdleSleepMinutes} {
-		v, err := apply(Values{}, Changes{Fields: map[string]bool{"chatIdleSleepMinutes": true}, Values: Values{ChatIdleSleepMinutes: &minutes}})
-		if err != nil || *v.ChatIdleSleepMinutes != minutes {
-			t.Fatalf("idle sleep %d: %v", minutes, err)
 		}
 	}
 	duplicate := []Command{{ID: "a", Command: "echo a"}, {ID: "a", Command: "echo b"}}
