@@ -94,12 +94,7 @@ test("worktree management creates only a worktree even when launch configs are u
   await expect(
     page.getByRole("button", { name: "新建 worktree", exact: true }),
   ).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "仓库菜单 project", exact: true })
-    .click();
-  await page
-    .getByRole("menuitem", { name: "新建工作树…", exact: true })
-    .click();
+  await page.getByRole("button", { name: "新建工作树", exact: true }).click();
   await expect(
     page.getByRole("checkbox", { name: "创建后启动会话", exact: true }),
   ).not.toBeChecked();

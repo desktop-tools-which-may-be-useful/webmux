@@ -526,7 +526,7 @@
                 {/if}
                 {#if !instructionPreview.hasUser}
                   <p class="text-xs text-muted-foreground">
-                    指令没有 {"{{user}}"}，你的消息会接在后面空一行。
+                    指令没有 {"{{user}}"}，会放在你的消息前面，空一行后作为第一条消息一起发送。
                   </p>
                 {/if}
                 {#if usesArtifactDir(instructionPreview.text)}
@@ -535,7 +535,7 @@
                   </p>
                 {/if}
                 <p class="text-xs text-muted-foreground">
-                  会放在你的消息前面，空一行后作为第一条消息一起发送；取消勾选只影响这次发送。在首页侧栏底部的“仓库设置”中修改。
+                  取消勾选只影响这次发送。在首页侧栏底部的“仓库设置”中修改。
                 </p>
               </Popover.Content>
             </Popover.Root>

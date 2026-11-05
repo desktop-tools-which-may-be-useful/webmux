@@ -120,19 +120,15 @@ test("repository scope limits the home list, composes with filters and survives 
     page.getByRole("status").filter({ hasText: "个仓库" }),
   ).toHaveText("1 个仓库 · 1 个会话");
   const repo = page.locator("[data-repository-id]:visible");
-  await expect(repo.locator('[data-slot="repository-details"]')).toHaveCount(0);
+  await expect(page.locator('[data-slot="repository-details"]')).toHaveCount(0);
   await expect(repo.getByText("主工作区", { exact: true })).toBeHidden();
   await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeHidden();
-  await repo.getByRole("button", { name: /仓库菜单/ }).click();
-  await page.getByRole("menuitem", { name: "仓库详情", exact: true }).click();
-  await expect(repo.locator('[data-slot="repository-details"]')).toContainText(
-    "Git 读取时间",
+  await repo.getByRole("button", { name: /仓库详情/ }).click();
+  await expect(page.locator('[data-slot="repository-details"]')).toContainText(
+    "读取于",
   );
-  await repo.getByRole("button", { name: /仓库菜单/ }).click();
-  await page
-    .getByRole("menuitem", { name: "收起仓库详情", exact: true })
-    .click();
-  await expect(repo.locator('[data-slot="repository-details"]')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-slot="repository-details"]')).toHaveCount(0);
   await repo.getByRole("button", { name: "工作树详情 main" }).click();
   await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeVisible();
   await repo.getByRole("button", { name: "工作树详情 main" }).click();

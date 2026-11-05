@@ -24,7 +24,7 @@
   } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { homeLayout, setPinned, worktreeTitle } from "../homeWorktrees";
+  import { setPinned, worktreeTitle } from "../homeWorktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
@@ -53,7 +53,6 @@
     homeUpdate(setup.pendingUpdate, dismissedVersion),
   );
   let removing = $state<Worktree | null>(null);
-  let curating = $state<Repository | null>(null);
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
   let now = $state(Date.now());
@@ -361,7 +360,7 @@
             bind:query
             bind:statusFilter
             filtered={filtering && (visible.length > 0 || archivedMatches > 0)}
-            shortcutDisabled={Boolean(removing || curating || unregisterOpen)}
+            shortcutDisabled={Boolean(removing || unregisterOpen)}
             onclear={clearFilters}
           />
         </WorkspaceToolbar>
@@ -436,9 +435,6 @@
                       repositoryId: repo.id,
                       worktreeId,
                     })}
-              oncurate={() => {
-                curating = repo;
-              }}
               onunregister={() => {
                 unregistering = repo;
                 unregisterOpen = true;
@@ -490,24 +486,6 @@
         worktree={target}
         onchange={refreshWorktrees}
         onclose={() => (removing = null)}
-      />{/snippet}
-  </LazyDialog>
-{/if}
-{#if curating}
-  {@const target = curating}
-  <LazyDialog
-    load={() => import("../components/AddHomeWorktreesDialog.svelte")}
-    label="工作树选择"
-    onclose={() => (curating = null)}
-  >
-    {#snippet children(page)}<page.default
-        repositoryName={target.name}
-        worktrees={homeLayout(homeWorktrees.value, target, sessions).unpinned}
-        active={new Set(sessions.map((s) => s.workspace?.worktreeId ?? ""))}
-        onadd={(ids) => {
-          if (curating) pin(curating.id, ids, true);
-        }}
-        onclose={() => (curating = null)}
       />{/snippet}
   </LazyDialog>
 {/if}

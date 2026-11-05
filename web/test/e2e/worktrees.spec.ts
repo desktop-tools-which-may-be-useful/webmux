@@ -52,10 +52,7 @@ async function expand(group: Locator) {
     await toggle.click();
 }
 async function openWorktreeCreation(page: Page, withSession = true) {
-  await page.getByRole("button", { name: /仓库菜单/ }).click();
-  await page
-    .getByRole("menuitem", { name: "新建工作树…", exact: true })
-    .click();
+  await page.getByRole("button", { name: "新建工作树", exact: true }).click();
   // The start commit and path are folded until requested.
   await page
     .getByRole("button", { name: "高级：起始提交与存放目录", exact: true })
@@ -230,8 +227,8 @@ test("failed agent start retains new worktree and retry does not create again; u
   await page.goto("/");
   const repos = await (await request.get("/api/repositories")).json();
   expect(repos[0].worktrees).toHaveLength(2);
-  await page.getByRole("button", { name: /仓库菜单/ }).click();
-  await page.getByRole("menuitem", { name: "从列表移除仓库" }).click();
+  await page.getByRole("button", { name: /仓库详情/ }).click();
+  await page.getByRole("button", { name: "从列表移除仓库…" }).click();
   await page.getByRole("button", { name: "确认移除登记" }).click();
   await expect(
     page.getByRole("region", { name: "直接会话", exact: true }),
@@ -261,22 +258,13 @@ test("external changes refresh and restart retains registry but not sessions", a
   const repo = page.locator(`[data-repository-id="${before[0].id}"]`);
   await expand(repo);
   // Externally created worktrees stay off the home page until chosen.
-  if (!(await repo.locator('[data-slot="repository-details"]').count())) {
-    await repo.getByRole("button", { name: /仓库菜单/ }).click();
-    await page.getByRole("menuitem", { name: "仓库详情", exact: true }).click();
-  }
-  await expect(repo.getByText("主页 1 / 共 2 工作区")).toBeVisible();
+  await expect(
+    repo.getByRole("button", { name: /选择主页工作树/ }),
+  ).toContainText("1/2");
   await expect(repo.getByText("external", { exact: true })).toHaveCount(0);
-  await repo.getByRole("button", { name: /仓库菜单/ }).click();
-  await page
-    .getByRole("menuitem", { name: "选择主页工作树…", exact: true })
-    .click();
-  const curate = page.getByRole("dialog");
-  await curate.getByRole("option", { name: "external", exact: true }).click();
-  await curate
-    .getByRole("button", { name: "添加 1 个到主页", exact: true })
-    .click();
-  await expect(curate).toBeHidden();
+  await repo.getByRole("button", { name: /选择主页工作树/ }).click();
+  await page.getByRole("option", { name: "external", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(repo.getByText("external", { exact: true })).toBeVisible();
   const session = await (
     await request.post("/api/sessions", {
@@ -417,8 +405,8 @@ test("multiple repositories keep every session visible through local failure, co
     failed.getByText("已不可用工作区", { exact: true }),
   ).toBeVisible();
   await expect(page.locator("[data-session-link]")).toHaveCount(4);
-  await failed.getByRole("button", { name: /仓库菜单/ }).click();
-  await page.getByRole("menuitem", { name: "从列表移除仓库" }).click();
+  await failed.getByRole("button", { name: /仓库详情/ }).click();
+  await page.getByRole("button", { name: "从列表移除仓库…" }).click();
   await page.getByRole("button", { name: "确认移除登记" }).click();
   await expect(failed).toHaveCount(0);
   await expect(
@@ -619,11 +607,9 @@ test("late Git response cannot replace a newer refresh", async ({
   );
   const repo = page.locator("[data-repository-id]");
   await expand(repo);
-  if (!(await repo.locator('[data-slot="repository-details"]').count())) {
-    await repo.getByRole("button", { name: /仓库菜单/ }).click();
-    await page.getByRole("menuitem", { name: "仓库详情", exact: true }).click();
-  }
-  await expect(repo.getByText("主页 1 / 共 2 工作区")).toBeVisible();
+  await expect(
+    repo.getByRole("button", { name: /选择主页工作树/ }),
+  ).toContainText("1/2");
   const lateResponse = page.waitForResponse((response) =>
     response.url().endsWith("/api/repositories"),
   );
@@ -638,11 +624,9 @@ test("late Git response cannot replace a newer refresh", async ({
   await expect(
     page.getByRole("button", { name: "刷新 Git 状态" }),
   ).toHaveAttribute("aria-busy", "false");
-  if (!(await repo.locator('[data-slot="repository-details"]').count())) {
-    await repo.getByRole("button", { name: /仓库菜单/ }).click();
-    await page.getByRole("menuitem", { name: "仓库详情", exact: true }).click();
-  }
-  await expect(repo.getByText("主页 1 / 共 2 工作区")).toBeVisible();
+  await expect(
+    repo.getByRole("button", { name: /选择主页工作树/ }),
+  ).toContainText("1/2");
 });
 
 test("returning home keeps the cached snapshot until a slow Git refresh finishes", async ({
@@ -677,14 +661,6 @@ test("returning home keeps the cached snapshot until a slow Git refresh finishes
     await held.promise;
     await route.continue();
   });
-  const details = async () => {
-    if (!(await group.locator('[data-slot="repository-details"]').count())) {
-      await group.getByRole("button", { name: /仓库菜单/ }).click();
-      await page
-        .getByRole("menuitem", { name: "仓库详情", exact: true })
-        .click();
-    }
-  };
   try {
     await backToList(page);
     // The cached snapshot keeps the session grouped under its repository
@@ -696,16 +672,18 @@ test("returning home keeps the cached snapshot until a slow Git refresh finishes
     await expect(page.getByText(/Git 状态(?:刷新失败|读取失败)/)).toHaveCount(
       0,
     );
-    await details();
-    await expect(group.getByText("主页 1 / 共 1 工作区")).toBeVisible();
+    await expect(
+      group.getByRole("button", { name: /选择主页工作树/ }),
+    ).toContainText("1/1");
     const refreshed = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/repositories") && response.ok(),
     );
     held.resolve();
     await (await refreshed).finished();
-    await details();
-    await expect(group.getByText("主页 1 / 共 2 工作区")).toBeVisible();
+    await expect(
+      group.getByRole("button", { name: /选择主页工作树/ }),
+    ).toContainText("1/2");
   } finally {
     held.resolve();
   }

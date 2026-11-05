@@ -24,7 +24,7 @@ test("workspace defers settings and management forms until requested", async ({
   await expect(page.getByText("还没有会话", { exact: true })).toBeVisible();
   expect(
     scripts.filter((url) =>
-      /\/(Settings|NewSessionDialog|AddRepositoryDialog|RemoveWorktreeDialog|AddHomeWorktreesDialog)-/.test(
+      /\/(Settings|NewSessionDialog|AddRepositoryDialog|RemoveWorktreeDialog)-/.test(
         url,
       ),
     ),

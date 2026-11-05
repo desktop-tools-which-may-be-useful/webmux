@@ -1,7 +1,10 @@
 <script lang="ts">
   import IconChevronDown from "~icons/tabler/chevron-down";
+  import IconCopy from "~icons/tabler/copy";
+  import IconInfoCircle from "~icons/tabler/info-circle";
+  import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import * as Popover from "$lib/components/ui/popover";
   import * as Collapsible from "$lib/components/ui/collapsible";
   import type {
     HybridRecord,
@@ -18,6 +21,8 @@
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { homeLayout, worktreeTitle } from "../homeWorktrees";
   import { statusSummary } from "../session-status";
+  import { copyText } from "../clipboard";
+  import HomeWorktreePicker from "./HomeWorktreePicker.svelte";
   import WorkspaceGroup from "./WorkspaceGroup.svelte";
 
   let {
@@ -36,7 +41,6 @@
     refreshing,
     now,
     onstart,
-    oncurate,
     onunregister,
     ontogglepin,
     onremove,
@@ -63,7 +67,6 @@
     now: number;
     // Without a worktree id the sheet creates a new worktree.
     onstart: (worktreeId?: string) => void;
-    oncurate: () => void;
     onunregister: () => void;
     ontogglepin: (worktreeId: string, pinned: boolean) => void;
     onremove: (worktree: Worktree) => void;
@@ -76,10 +79,9 @@
   } = $props();
 
   let detailsOpen = $state(false);
-  let menuOpen = $state(false);
   $effect(() => {
     if (hidden || (filtering && !visible.length && !archivedVisible))
-      menuOpen = false;
+      detailsOpen = false;
   });
   let contentReady = $state(false);
   $effect(() => {
@@ -113,6 +115,27 @@
       ? homeLayout(homeWorktrees.value, repo, visible, archived.worktrees)
       : renderLayout,
   );
+  // Every worktree in a stable order, so a row does not jump when its check
+  // changes; a worktree with sessions is listed even when not pinned.
+  const sortedTrees = $derived(
+    [...repo.worktrees].sort((a, b) =>
+      a.kind === "main"
+        ? -1
+        : b.kind === "main"
+          ? 1
+          : a.path < b.path
+            ? -1
+            : a.path > b.path
+              ? 1
+              : 0,
+    ),
+  );
+  const pinnedIds = $derived(
+    new Set(renderLayout.shown.filter((w) => w.pinned).map((w) => w.tree.id)),
+  );
+  const activeIds = $derived(
+    new Set(renderLayout.shown.filter((w) => !w.pinned).map((w) => w.tree.id)),
+  );
 </script>
 
 <Collapsible.Root
@@ -124,69 +147,108 @@
   {open}
   onOpenChange={onopenchange}
 >
-  <div class="flex flex-wrap items-center gap-2">
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
     <h2 class="min-w-0 flex-1">
-      <Collapsible.Trigger
-        class="group flex min-w-0 max-w-full items-center gap-2 text-left font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <IconChevronDown
-          class="size-4 shrink-0 -rotate-90 transition-transform group-data-[state=open]:rotate-0"
-          aria-hidden="true"
-        />
-        <span class="min-w-0 break-all">{focused ? "工作树" : repo.name}</span>
-      </Collapsible.Trigger>
+      {#if focused}
+        <span class="flex min-w-0 items-baseline gap-2 font-semibold">
+          工作树
+          <span class="text-xs font-normal text-muted-foreground tabular-nums"
+            >主页 {layout.shown.length}/{repo.worktrees.length}</span
+          >
+        </span>
+      {:else}
+        <Collapsible.Trigger
+          class="group flex min-w-0 max-w-full items-center gap-2 text-left font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <IconChevronDown
+            class="size-4 shrink-0 -rotate-90 transition-transform group-data-[state=open]:rotate-0"
+            aria-hidden="true"
+          />
+          <span class="min-w-0 break-all">{repo.name}</span>
+        </Collapsible.Trigger>
+      {/if}
     </h2>
-    <DropdownMenu.Root bind:open={menuOpen}>
-      <DropdownMenu.Trigger
-        >{#snippet child({ props })}<Button
-            {...props}
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`仓库菜单 ${repo.name}`}
-            title={`仓库菜单 ${repo.name}`}>⋯</Button
-          >{/snippet}</DropdownMenu.Trigger
+    <div
+      class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
+    >
+      <HomeWorktreePicker
+        repositoryName={repo.name}
+        worktrees={sortedTrees}
+        pinned={pinnedIds}
+        active={activeIds}
+        shown={layout.shown.length}
+        ontoggle={ontogglepin}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        class="min-h-9 sm:min-h-8"
+        disabled={repo.availability !== "available" || !gitReady}
+        onclick={() => onstart()}
+        ><IconPlus class="size-4" aria-hidden="true" />新建工作树</Button
       >
-      <DropdownMenu.Content align="end">
-        <DropdownMenu.Item
-          disabled={repo.availability !== "available" || !gitReady}
-          onSelect={() => onstart()}>新建工作树…</DropdownMenu.Item
+      <Popover.Root bind:open={detailsOpen}>
+        <Popover.Trigger>
+          {#snippet child({ props })}<Button
+              {...props}
+              size="icon-touch"
+              variant="ghost"
+              aria-label={`仓库详情 ${repo.name}`}
+              title={`仓库详情 ${repo.name}`}
+              ><IconInfoCircle aria-hidden="true" /></Button
+            >{/snippet}
+        </Popover.Trigger>
+        <Popover.Content
+          align="end"
+          data-slot="repository-details"
+          class="w-[min(24rem,calc(100vw-2rem))] space-y-3"
         >
-        <DropdownMenu.Item
-          disabled={!layout.unpinned.length}
-          onSelect={oncurate}>选择主页工作树…</DropdownMenu.Item
-        >
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item onSelect={() => (detailsOpen = !detailsOpen)}
-          >{detailsOpen ? "收起仓库详情" : "仓库详情"}</DropdownMenu.Item
-        >
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item disabled={!registryReady} onSelect={onunregister}
-          >从列表移除仓库</DropdownMenu.Item
-        ></DropdownMenu.Content
-      >
-    </DropdownMenu.Root>
-    {#if detailsOpen}<div
-        data-slot="repository-details"
-        class="w-full space-y-2 rounded-lg border bg-muted/30 p-3"
-      >
-        <p class="w-full text-xs text-muted-foreground">
-          主页 {layout.shown.length} / 共 {repo.worktrees.length} 工作区 ·
-          {statusSummary(visible)}
-        </p>
-        <p
-          class="w-full font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground"
-        >
-          {repo.anchorPath}
-        </p>
-        <p class="w-full text-xs text-muted-foreground">
-          {refreshing
-            ? "正在重新读取 Git 状态…"
-            : `Git 读取时间：${new Date(repo.checkedAt).toLocaleString()}`}{repo.availability ===
-          "unavailable"
-            ? " · 不可用，状态未知"
-            : ""}
-        </p>
-      </div>{/if}
+          <Popover.Header
+            ><Popover.Title>{repo.name}</Popover.Title></Popover.Header
+          >
+          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
+            <dt class="text-muted-foreground">路径</dt>
+            <dd class="flex min-w-0 items-start gap-1">
+              <span class="min-w-0 flex-1 font-mono break-all"
+                >{repo.anchorPath}</span
+              >
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="复制仓库路径"
+                title="复制仓库路径"
+                onclick={() => void copyText(repo.anchorPath)}
+                ><IconCopy aria-hidden="true" /></Button
+              >
+            </dd>
+            <dt class="text-muted-foreground">工作区</dt>
+            <dd>主页 {layout.shown.length} / 共 {repo.worktrees.length}</dd>
+            <dt class="text-muted-foreground">会话</dt>
+            <dd>{statusSummary(visible)}</dd>
+            <dt class="text-muted-foreground">Git</dt>
+            <dd>
+              {refreshing
+                ? "正在重新读取状态…"
+                : `读取于 ${new Date(repo.checkedAt).toLocaleString()}`}{repo.availability ===
+              "unavailable"
+                ? " · 不可用，状态未知"
+                : ""}
+            </dd>
+          </dl>
+          <div class="border-t pt-3">
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={!registryReady}
+              onclick={() => {
+                detailsOpen = false;
+                onunregister();
+              }}>从列表移除仓库…</Button
+            >
+          </div>
+        </Popover.Content>
+      </Popover.Root>
+    </div>
     {#if repo.error}<p
         role="alert"
         class="w-full text-sm break-all text-destructive"
@@ -248,8 +310,7 @@
       {#if !layout.shown.length && layout.unpinned.length}<p
           class="text-sm text-muted-foreground"
         >
-          主页还没有
-          worktree。从仓库菜单选择「选择主页工作树」或「新建工作树」。
+          主页还没有 worktree。用上方“主页显示”选择，或“新建工作树”。
         </p>{/if}
       {#if !repo.worktrees.length && !missing.length && !archived.missing.length}<p
           class="text-sm text-muted-foreground"
