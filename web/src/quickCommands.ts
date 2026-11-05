@@ -4,12 +4,13 @@ export const QUICK_COMMANDS_LIMIT = 50;
 export const QUICK_COMMAND_NAME_MAX = 40;
 
 /** Placeholder replaced by the session's artifacts folder path. */
-const DIR_PLACEHOLDER = "{dir}";
+export const DIR_REFERENCE_NAME = "dir";
+const DIR_PLACEHOLDER = `{{${DIR_REFERENCE_NAME}}}`;
 
 const ARTIFACT_PRESET_COMMAND = [
-  "本会话的临时文件夹：{dir}",
-  "- 我上传给你的文件在 {dir}/uploads/ 中。",
-  "- 你生成给我的截图、报告、图表、导出数据等交付物，请保存到 {dir}（可以建子目录），不要放进项目仓库。",
+  "本会话的临时文件夹：{{dir}}",
+  "- 我上传给你的文件在 {{dir}}/uploads/ 中。",
+  "- 你生成给我的截图、报告、图表、导出数据等交付物，请保存到 {{dir}}（可以建子目录），不要放进项目仓库。",
   "- 我会在 WebMux 代码栏的“临时文件夹”中查看这些文件。",
   "- 完成后告诉我文件相对于该文件夹的路径。",
   "- 该文件夹会在会话删除后清理，不要存放需要长期保留的内容。",
@@ -32,7 +33,7 @@ export function usesArtifactDir(text: string) {
   return text.includes(DIR_PLACEHOLDER);
 }
 
-/** Replaces every `{dir}` with the folder path verbatim; bodies are prose, not shell. */
+/** Replaces every `{{dir}}` with the folder path verbatim; bodies are prose, not shell. */
 export function renderArtifactDir(text: string, dir: string) {
   return text.replaceAll(DIR_PLACEHOLDER, dir);
 }
@@ -52,7 +53,11 @@ export function quickCommandNameError(name: string, others: readonly string[]) {
   if (trimmed.length > QUICK_COMMAND_NAME_MAX)
     return `名称不能超过 ${QUICK_COMMAND_NAME_MAX} 个字符`;
   if (/[{}\r\n]/.test(trimmed)) return "名称不能包含 { }或换行";
-  if (trimmed === USER_REFERENCE_NAME || trimmed === RESERVED_REFERENCE_NAME)
+  if (
+    trimmed === USER_REFERENCE_NAME ||
+    trimmed === DIR_REFERENCE_NAME ||
+    trimmed === RESERVED_REFERENCE_NAME
+  )
     return `“${trimmed}”是初始化指令的保留变量，请换一个名称`;
   if (others.some((other) => other.trim() === trimmed))
     return "已有同名快捷指令";
@@ -101,6 +106,7 @@ export function expandInitInstruction(
       hasUser = true;
       return "{{user}}";
     }
+    if (name === DIR_REFERENCE_NAME) return DIR_PLACEHOLDER;
     if (name === RESERVED_REFERENCE_NAME) {
       reserved = true;
       return whole;

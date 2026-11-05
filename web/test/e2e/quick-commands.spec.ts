@@ -74,7 +74,7 @@ test("presets, settings round trip, direct sends and draft insertion", async ({
   expect(await commandNames(menu(page))).toEqual([
     "恢复会话：/resume（并回车）",
     "新会话：/new（并回车）",
-    "临时文件夹：本会话的临时文件夹：{dir} …",
+    "临时文件夹：本会话的临时文件夹：{{dir}} …",
   ]);
   await page.keyboard.press("Escape");
 
@@ -234,7 +234,7 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   expect(await commandNames(menu(page))).toEqual([
     "新会话：/new（并回车）",
     "恢复会话：/resume（并回车）",
-    "临时文件夹：本会话的临时文件夹：{dir} …",
+    "临时文件夹：本会话的临时文件夹：{{dir}} …",
   ]);
   await item(page, "管理快捷指令…").click();
   await expect(page).toHaveURL(

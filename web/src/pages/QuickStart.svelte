@@ -531,7 +531,7 @@
                 {/if}
                 {#if usesArtifactDir(instructionPreview.text)}
                   <p class="text-xs text-muted-foreground">
-                    {"{dir}"} 会在会话创建后替换为它的临时文件夹路径。
+                    {"{{dir}}"} 会在会话创建后替换为它的临时文件夹路径。
                   </p>
                 {/if}
                 <p class="text-xs text-muted-foreground">

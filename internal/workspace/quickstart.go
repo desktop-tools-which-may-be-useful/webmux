@@ -182,7 +182,7 @@ func (s *Service) quickStart(ctx context.Context, in QuickStartInput) (QuickStar
 }
 
 // composePrompt is the first prompt of session id: the expanded
-// instruction, whose {dir} becomes the session's artifacts folder, with the
+// instruction, whose {{dir}} becomes the session's artifacts folder, with the
 // user's text at its {{user}} or else after a blank line.
 func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) {
 	instruction := plan.instruction
@@ -211,7 +211,7 @@ func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) 
 type quickStartPlan struct {
 	path string
 	// text is the user's message; instruction is the expanded
-	// initialization instruction ("" for none), still holding {dir}.
+	// initialization instruction ("" for none), still holding {{dir}}.
 	text        string
 	instruction string
 	attachments []string

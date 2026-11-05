@@ -7,12 +7,14 @@ import (
 
 // artifactsDirPlaceholder stands for the session's interaction artifacts
 // folder in an expanded instruction; it is replaced once the session exists.
-const artifactsDirPlaceholder = "{dir}"
+const artifactsDirPlaceholder = "{{" + artifactsDirName + "}}"
 
 // userReference is the built-in {{user}}: where the user's own message goes
-// in an expanded instruction. {{webmux}} is reserved for a system template
-// that does not exist yet. A quick command cannot be named either.
+// in an expanded instruction. {{dir}} is the artifacts folder above.
+// {{webmux}} is reserved for a system template that does not exist yet. A
+// quick command cannot be named any of them.
 const (
+	artifactsDirName      = "dir"
 	userReferenceName     = "user"
 	userReference         = "{{" + userReferenceName + "}}"
 	reservedReferenceName = "webmux"
@@ -31,7 +33,7 @@ var instructionReference = regexp.MustCompile(`\{\{([^{}\n]+)\}\}`)
 
 // expandInstruction replaces each {{name}} of template with the text of the
 // quick command called name. Replacement is one pass: the inserted text is
-// not scanned again. {{user}} stays in the text, written {{user}}, for the
+// not scanned again. {{user}} and {{dir}} stay in the text for the
 // caller to fill. The names no command has are returned in order of first
 // appearance and their references are left as written.
 func expandInstruction(template string, commands []QuickCommand) (string, []string) {
@@ -45,6 +47,9 @@ func expandInstruction(template string, commands []QuickCommand) (string, []stri
 		name := strings.TrimSpace(ref[2 : len(ref)-2])
 		if name == userReferenceName {
 			return userReference
+		}
+		if name == artifactsDirName {
+			return artifactsDirPlaceholder
 		}
 		if replacement, ok := byName[name]; ok {
 			return replacement

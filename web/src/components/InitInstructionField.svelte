@@ -4,6 +4,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Textarea } from "$lib/components/ui/textarea";
   import {
+    DIR_REFERENCE_NAME,
     initInstructionReferences,
     RESERVED_REFERENCE_NAME,
     USER_REFERENCE_NAME,
@@ -34,6 +35,7 @@
     initInstructionReferences(value).filter(
       (name) =>
         name !== USER_REFERENCE_NAME &&
+        name !== DIR_REFERENCE_NAME &&
         name !== RESERVED_REFERENCE_NAME &&
         !names.includes(name),
     ),
@@ -58,9 +60,9 @@
 <div class="space-y-2">
   <Label for={id}>{label}</Label>
   <p id={`${id}-help`} class="text-xs text-muted-foreground">
-    这是一段模板：写 {"{{快捷指令名称}}"} 会插入该快捷指令的文本（只展开一层，不递归）；被引用指令里的
-    <code>{"{dir}"}</code>
-    会换成新会话的临时文件夹路径。写 <code>{"{{user}}"}</code>
+    这是一段模板：写 {"{{快捷指令名称}}"} 会插入该快捷指令的文本（只展开一层，不递归）；写
+    <code>{"{{dir}}"}</code>
+    会换成新会话的临时文件夹路径，写 <code>{"{{user}}"}</code>
     可指定你的第一条消息放在哪里，不写则接在指令后面空一行。只有快速开始时勾选“使用初始化指令”，才会随第一条消息发送。留空保存即清除。
   </p>
   <Textarea

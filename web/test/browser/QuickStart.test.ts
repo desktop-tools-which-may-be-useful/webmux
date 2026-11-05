@@ -168,7 +168,7 @@ test("unticking the init instruction applies to that send only", async () => {
 test("the preview expands quick command references and flags unknown ones", async () => {
   respond(/^GET \/api\/repositories$/, () =>
     Response.json([
-      repository({ initInstruction: "先 {{恢复会话}}，再 {{没有}}\n{dir}" }),
+      repository({ initInstruction: "先 {{恢复会话}}，再 {{没有}}\n{{dir}}" }),
     ]),
   );
   await open();

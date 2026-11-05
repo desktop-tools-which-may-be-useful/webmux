@@ -106,12 +106,12 @@ describe("labels", () => {
   });
 });
 
-describe("{dir}", () => {
-  test("replaces every {dir} with the path verbatim", () => {
-    expect(usesArtifactDir("看 {dir}")).toBe(true);
+describe("{{dir}}", () => {
+  test("replaces every {{dir}} with the path verbatim", () => {
+    expect(usesArtifactDir("看 {{dir}}")).toBe(true);
     expect(usesArtifactDir("git status")).toBe(false);
     expect(
-      renderArtifactDir("看 {dir}，上传在 {dir}/uploads/", "/tmp/a b/'s1'"),
+      renderArtifactDir("看 {{dir}}，上传在 {{dir}}/uploads/", "/tmp/a b/'s1'"),
     ).toBe("看 /tmp/a b/'s1'，上传在 /tmp/a b/'s1'/uploads/");
   });
 
@@ -120,7 +120,7 @@ describe("{dir}", () => {
       (cmd) => cmd.id === "preset-artifacts",
     );
     const text = renderArtifactDir(preset?.command ?? "", "/tmp/x/s1");
-    expect(text).not.toContain("{dir}");
+    expect(text).not.toContain("{{dir}}");
     expect(text).toContain("/tmp/x/s1/uploads/");
     expect(text).toContain("临时文件夹");
   });
@@ -146,7 +146,7 @@ describe("names", () => {
 
 describe("init instruction references", () => {
   const list = [
-    command({ name: "状态", command: "git status {dir}" }),
+    command({ name: "状态", command: "git status {{dir}}" }),
     command({ id: "b", name: "套娃", command: "{{状态}}" }),
   ];
 
@@ -161,7 +161,7 @@ describe("init instruction references", () => {
     expect(
       expandInitInstruction("先 {{状态}}；{{套娃}}；{{无}}", list),
     ).toEqual({
-      text: "先 git status {dir}；{{状态}}；{{无}}",
+      text: "先 git status {{dir}}；{{状态}}；{{无}}",
       missing: ["无"],
       hasUser: false,
       reserved: false,
@@ -183,5 +183,12 @@ describe("init instruction references", () => {
     });
     expect(quickCommandNameError("user", [])).not.toBe("");
     expect(quickCommandNameError("webmux", [])).not.toBe("");
+    expect(expandInitInstruction("放 {{ dir }}", list)).toEqual({
+      text: "放 {{dir}}",
+      missing: [],
+      hasUser: false,
+      reserved: false,
+    });
+    expect(quickCommandNameError("dir", [])).not.toBe("");
   });
 });

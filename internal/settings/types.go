@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -206,19 +207,24 @@ func apply(v Values, c Changes) (Values, error) {
 	return v, validateValues(v)
 }
 
+// legacyDirPlaceholder matches the artifacts folder placeholder: the current
+// {{dir}} and the single-brace {dir} older versions wrote.
+var legacyDirPlaceholder = regexp.MustCompile(`\{\{dir\}\}|\{dir\}`)
+
 // nameLegacyCommands makes every command name usable in a {{name}}
 // reference: a command saved before names were required (empty, repeated or
 // containing braces) is named from its name or text, so every list a client
 // reads can be saved back. The stored file changes only with the next write
-// of the list.
+// of the list. A {dir} placeholder in a text becomes {{dir}}.
 func nameLegacyCommands(list *[]Command) *[]Command {
 	if list == nil {
 		return nil
 	}
 	named := append([]Command{}, (*list)...)
-	// "user" and "webmux" are reserved by initialization instructions.
-	seen := map[string]bool{"user": true, "webmux": true}
+	// "user", "dir" and "webmux" are reserved by initialization instructions.
+	seen := map[string]bool{"user": true, "dir": true, "webmux": true}
 	for i := range named {
+		named[i].Command = legacyDirPlaceholder.ReplaceAllString(named[i].Command, "{{dir}}")
 		name := named[i].Name
 		if name == "" || seen[name] || strings.ContainsAny(name, "{}\n") {
 			source := name
@@ -261,7 +267,7 @@ func validCommandNames(list *[]Command) bool {
 	if list == nil {
 		return true
 	}
-	seen := map[string]bool{"user": true, "webmux": true}
+	seen := map[string]bool{"user": true, "dir": true, "webmux": true}
 	for _, c := range *list {
 		if c.Name == "" || seen[c.Name] || strings.ContainsAny(c.Name, "{}\n") {
 			return false

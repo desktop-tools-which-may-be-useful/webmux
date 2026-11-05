@@ -273,7 +273,7 @@ func TestQuickCommandNames(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	data := `{"v":1,"revision":3,"updatedAt":"2026-10-28T02:13:13.53185523Z","values":{"theme":"dark","preview":null,"codeReader":null,"quickCommands":[{"id":"a","name":"","command":"/resume","enter":true},{"id":"b","name":"","command":"/resume\n再来","enter":true},{"id":"c","name":"同名","command":"x","enter":false},{"id":"d","name":"同名","command":"y","enter":false}],"homeWorktrees":null,"forceSoftKeys":null,"artifactPrompt":"看 {dir}"}}`
+	data := `{"v":1,"revision":3,"updatedAt":"2026-10-28T02:13:13.53185523Z","values":{"theme":"dark","preview":null,"codeReader":null,"quickCommands":[{"id":"a","name":"","command":"/resume","enter":true},{"id":"b","name":"","command":"/resume\n再来","enter":true},{"id":"c","name":"同名","command":"x","enter":false},{"id":"d","name":"同名","command":"放 {dir} 与 {{dir}}","enter":false},{"id":"e","name":"dir","command":"z","enter":false}],"homeWorktrees":null,"forceSoftKeys":null,"artifactPrompt":"看 {dir}"}}`
 	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -287,8 +287,11 @@ func TestQuickCommandNames(t *testing.T) {
 	for _, c := range *snap.Values.QuickCommands {
 		names = append(names, c.Name)
 	}
-	if want := []string{"/resume", "/resume 2", "同名", "同名 2"}; !slices.Equal(names, want) {
+	if want := []string{"/resume", "/resume 2", "同名", "同名 2", "dir 2"}; !slices.Equal(names, want) {
 		t.Fatalf("legacy names %q, want %q", names, want)
+	}
+	if got := (*snap.Values.QuickCommands)[3].Command; got != "放 {{dir}} 与 {{dir}}" {
+		t.Fatalf("legacy placeholder %q", got)
 	}
 	theme := "light"
 	if _, err := s.Patch(3, Changes{Fields: map[string]bool{"theme": true}, Values: Values{Theme: &theme}}); err != nil {

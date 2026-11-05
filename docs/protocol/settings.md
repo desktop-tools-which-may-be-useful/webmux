@@ -8,9 +8,9 @@
 - preview：`{lines: 1..50, skip: 0..50}` 或 null（10/1）。
 - codeReader：`{lineNumbers: "show"|"hide", diffOverflow: "scroll"|"wrap"}` 或 null（show/scroll）。
 - quickCommands：最多 50 个 `{id, name, command, enter}`，唯一 ID；null 显示系统预设（`/resume`、`/new` 与“临时文件夹”），空数组表示明确清空。
-  - 保存列表时每条 `name` 必填、去首尾空白后唯一、不含 `{`、`}` 与换行、不为 `user` 或 `webmux`（初始化指令的内置与保留变量），初始化指令用 `{{name}}` 引用它。
-  - 校验只在 PATCH `quickCommands` 时进行；此前保存的未命名、重名、叫 `user` 或 `webmux`、或含花括号的指令在读取时由服务端按正文命名，下一次保存列表时写回。
-  - `command` 中的 `{dir}` 在运行时替换为会话临时文件夹的路径。
+  - 保存列表时每条 `name` 必填、去首尾空白后唯一、不含 `{`、`}` 与换行、不为 `user`、`dir` 或 `webmux`（初始化指令的内置与保留变量），初始化指令用 `{{name}}` 引用它。
+  - 校验只在 PATCH `quickCommands` 时进行；此前保存的未命名、重名、叫 `user`、`dir` 或 `webmux`、或含花括号的指令在读取时由服务端按正文命名，下一次保存列表时写回；正文里旧写法的 `{dir}` 同样在读取时改为 `{{dir}}`。
+  - `command` 中的 `{{dir}}` 在运行时替换为会话临时文件夹的路径。
 - homeWorktrees：仓库 ID 到工作树 ID 数组的映射；最多 200 个仓库、每仓库 1000 个、合计 2000 个，数组内 ID 不重复；null 使用默认主页选择。
 - forceSoftKeys：布尔或 null（false）。
 

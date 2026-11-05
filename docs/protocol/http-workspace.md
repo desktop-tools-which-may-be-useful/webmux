@@ -46,7 +46,7 @@
   - 展开按单次扫描把 `{{名称}}` 替换为同名快捷指令的正文，插入的正文不再被扫描；服务端读取当前的 `quickCommands` 设置。快捷指令不能命名为 `user` 或 `webmux`。
   - `{{webmux}}` 是保留给以后系统模板的变量，目前没有内容：指令里写了它时预检返回 400（`step: "precheck"`），不创建 worktree。
   - 引用了不存在的快捷指令在预检返回 400（`step: "precheck"`），错误体列出缺少的名称，此时不创建 worktree。
-  - 展开后文本里的 `{dir}` 在会话创建后替换为该会话临时文件夹的路径（必要时创建）；用户输入里的 `{dir}` 不替换。文件夹不可用时在 `prompt` 步骤失败。
+  - 展开后文本里的 `{{dir}}` 在会话创建后替换为该会话临时文件夹的路径（必要时创建）；用户输入里的 `{{dir}}` 不替换。文件夹不可用时在 `prompt` 步骤失败。
 
 `POST /api/quick-starts/options` 在发送前读取 agent 提供的配置项：请求 `{repositoryId, configId}`，服务端在仓库主工作区以聊天端临时启动该启动配置的 agent，`session/new` 后读取配置项，随即关闭会话（agent 支持时发 `session/close`）并结束进程，不创建 WebMux 会话或记录。
 

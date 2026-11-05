@@ -253,7 +253,7 @@ func TestQuickStartRunsEveryStep(t *testing.T) {
 }
 
 // The instruction goes first only when the request asks for it; its
-// {{name}} references become quick command text, and {dir} in that text
+// {{name}} references become quick command text, and {{dir}} in that text
 // becomes the new session's artifacts folder. The user's own text is never
 // rewritten.
 func TestQuickStartInstructionTemplate(t *testing.T) {
@@ -262,22 +262,22 @@ func TestQuickStartInstructionTemplate(t *testing.T) {
 	t.Cleanup(folders.Close)
 	h.s.UseArtifacts(folders)
 	h.s.UseQuickCommands(func() []QuickCommand {
-		return []QuickCommand{{Name: "规则", Text: "先读 AGENTS.md"}, {Name: "产物", Text: "文件放 {dir}，不要{{规则}}"}}
+		return []QuickCommand{{Name: "规则", Text: "先读 AGENTS.md"}, {Name: "产物", Text: "文件放 {{dir}}，不要{{规则}}"}}
 	})
 
 	off := h.input("quick-start-off1", "wt/off")
-	off.Text = "原样 {dir}"
+	off.Text = "原样 {{dir}}"
 	result, err := h.start(off)
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.waitTurnEnd(result.SessionID)
-	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != "原样 {dir}" {
+	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != "原样 {{dir}}" {
 		t.Fatalf("unticked instruction still sent: %q", got)
 	}
 
 	on := h.input("quick-start-on01", "wt/on")
-	on.Text = "原样 {dir}"
+	on.Text = "原样 {{dir}}"
 	on.UseInitInstruction = true
 	result, err = h.start(on)
 	if err != nil {
@@ -285,10 +285,10 @@ func TestQuickStartInstructionTemplate(t *testing.T) {
 	}
 	dir, err := folders.Existing(result.SessionID)
 	if err != nil {
-		t.Fatalf("folder for {dir} not created: %v", err)
+		t.Fatalf("folder for {{dir}} not created: %v", err)
 	}
 	h.waitTurnEnd(result.SessionID)
-	want := "规则：\n先读 AGENTS.md\n文件放 " + dir + "，不要{{规则}}\n\n原样 {dir}"
+	want := "规则：\n先读 AGENTS.md\n文件放 " + dir + "，不要{{规则}}\n\n原样 {{dir}}"
 	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != want {
 		t.Fatalf("first prompt %q, want %q", got, want)
 	}
@@ -314,14 +314,14 @@ func TestQuickStartInstructionUserVariable(t *testing.T) {
 	h := newQuickHarness(t, "任务：{{ user }}\n先读 AGENTS.md")
 	h.s.UseQuickCommands(func() []QuickCommand { return []QuickCommand{{Name: "user", Text: "不应被使用"}} })
 	in := h.input("quick-start-usr1", "wt/usr")
-	in.Text = "改 {{规则}} 与 {dir}"
+	in.Text = "改 {{规则}} 与 {{dir}}"
 	in.UseInitInstruction = true
 	result, err := h.start(in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.waitTurnEnd(result.SessionID)
-	want := "任务：改 {{规则}} 与 {dir}\n先读 AGENTS.md"
+	want := "任务：改 {{规则}} 与 {{dir}}\n先读 AGENTS.md"
 	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != want {
 		t.Fatalf("first prompt %q, want %q", got, want)
 	}

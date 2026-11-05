@@ -280,7 +280,7 @@
     unknown: "连接中断，快捷指令结果未知；重连后自动查询。",
   };
   // The operation binds this session's draft and target at selection. A body
-  // with `{dir}` first waits for the artifacts folder, then runs as written.
+  // with `{{dir}}` first waits for the artifacts folder, then runs as written.
   async function runQuickCommand(cmd: QuickCommand) {
     t.resetModifiers();
     const chat = hybrid.view === "chat";
