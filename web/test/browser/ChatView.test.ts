@@ -388,11 +388,16 @@ async function awaitingPermission() {
 
 test("answering a permission request posts the chosen option", async () => {
   const { prompt } = await awaitingPermission();
-  await expect
-    .element(
-      page.getByRole("button", { name: /pnpm --dir web exec vitest run/ }),
-    )
-    .toMatchTextContent(/等待授权/);
+  expect(prompt.element().classList.contains("border-destructive/40")).toBe(
+    true,
+  );
+  const toolButton = page.getByRole("button", {
+    name: /pnpm --dir web exec vitest run/,
+  });
+  await expect.element(toolButton).toMatchTextContent(/等待授权/);
+  expect(
+    toolButton.element().querySelector(".text-destructive"),
+  ).not.toBeNull();
   await prompt.getByRole("button", { name: /允许一次/ }).click();
   await expect.poll(commands).toEqual([
     {
@@ -765,4 +770,27 @@ test("the jump-to-latest button stays above a tall composer area", async () => {
     .getBoundingClientRect();
   expect(button.bottom).toBeLessThanOrEqual(area.bottom);
   expect(button.bottom).toBeLessThanOrEqual(queue.top);
+});
+
+test("a form request highlights the prompt in destructive red", async () => {
+  const socket = await open();
+  const formRequest = {
+    requestId: "form-1",
+    kind: "form" as const,
+    title: "确认发布参数",
+    form: {
+      message: "请填写目标环境",
+      fields: [
+        { name: "env", title: "环境", type: "string" as const, required: true },
+      ],
+      supported: true,
+    },
+  };
+  socket.frame(
+    snapshot(chatState({ turn: { running: true }, requests: [formRequest] })),
+  );
+  const form = page.getByRole("form", { name: "Agent 的表单" });
+  await expect.element(form).toMatchTextContent(/确认发布参数/);
+  expect(form.element().classList.contains("border-destructive/40")).toBe(true);
+  expect(form.element().querySelector("svg.text-destructive")).not.toBeNull();
 });

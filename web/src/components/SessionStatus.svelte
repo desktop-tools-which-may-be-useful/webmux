@@ -2,22 +2,10 @@
   import { Badge } from "$lib/components/ui/badge";
   import { sessionStatusText } from "../api";
   import type { SessionInfo } from "../schemas";
+  import { sessionStatusTone } from "../session-status";
 
   let { session }: { session: SessionInfo } = $props();
-  const failed = $derived(
-    session.status === "exited" &&
-      session.exitCode !== null &&
-      session.exitCode !== 0,
-  );
-  const variant = $derived(
-    failed
-      ? "destructive"
-      : session.status === "waiting"
-        ? "warning"
-        : session.status === "running"
-          ? "success"
-          : "secondary",
-  );
+  const variant = $derived(sessionStatusTone(session));
 </script>
 
 <Badge

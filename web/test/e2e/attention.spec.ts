@@ -33,6 +33,10 @@ test("agent attention survives spinner output and clears on user input", async (
 
   await page.goto("/");
   await expect(row).toContainText("需要回答");
+  await expect(row.locator("[data-tone]")).toHaveAttribute(
+    "data-tone",
+    "destructive",
+  );
   // Well past the 2-second output window that used to report "running".
   await page.waitForTimeout(2500);
   await expect(row).toContainText("需要回答");
@@ -49,6 +53,7 @@ test("agent attention survives spinner output and clears on user input", async (
   await page.goto(`/s/${id}`);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expect(page).toHaveTitle("E2E agent · WebMux");
+  await expect(page.locator(".status-dot")).toHaveClass(/status-failed/);
   await page.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("y");
   // The bell rung right after the keystroke is ignored ...
@@ -62,6 +67,10 @@ test("agent attention survives spinner output and clears on user input", async (
   // ... while the bell after 1.5 s of quiet raises attention again.
   await page.goto("/");
   await expect(row).toContainText("响铃提醒");
+  await expect(row.locator("[data-tone]")).toHaveAttribute(
+    "data-tone",
+    "warning",
+  );
   expect(
     (await (await request.get(`/api/sessions/${id}`)).json()).attention,
   ).toMatchObject({ kind: "bell", source: "terminal" });
@@ -165,6 +174,10 @@ test("program status reports drive attention and status", async ({
   await page.goto("/");
   await expect(row).toContainText("等待授权");
   await expect(row).toHaveAttribute("data-status", "waiting");
+  await expect(row.locator("[data-tone]")).toHaveAttribute(
+    "data-tone",
+    "destructive",
+  );
 
   await writeFile(join(workDir, "step1"), "");
   await expect.poll(info).toMatchObject({ status: "running", attention: null });
@@ -175,6 +188,10 @@ test("program status reports drive attention and status", async ({
   await writeFile(join(workDir, "step2"), "");
   await expect(row).toContainText("本轮完成");
   await expect(row).toHaveAttribute("data-status", "waiting");
+  await expect(row.locator("[data-tone]")).toHaveAttribute(
+    "data-tone",
+    "warning",
+  );
   const reported = await (await request.get(`/api/sessions/${id}`)).text();
   expect(reported).not.toContain("c2VjcmV0");
 

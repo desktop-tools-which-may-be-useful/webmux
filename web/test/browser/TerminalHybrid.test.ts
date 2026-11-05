@@ -463,6 +463,12 @@ test("the chat view names its agent beside the title, icon only on a phone", asy
       ...info,
       generation: "",
       title,
+      status: "waiting",
+      attention: {
+        kind: "question",
+        source: "agent",
+        since: "2026-10-16T00:00:02Z",
+      },
       hybrid: { ...info.hybrid!, side: "acp" },
     }),
   );
@@ -482,6 +488,8 @@ test("the chat view names its agent beside the title, icon only on a phone", asy
     .getByText(title, { exact: true })
     .element() as HTMLElement;
   const dot = badge.closest("header")!.querySelector(".status-dot")!;
+  await expect.poll(() => dot.classList.contains("status-failed")).toBe(true);
+  expect(dot.getAttribute("aria-label")).toMatch(/^需要回答 · /);
   await expect
     .poll(
       () =>

@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
   countSessions,
+  hasUrgentAttention,
   isActive,
   matchesStatusFilter,
+  sessionStatusTone,
   statusSummary,
   type SessionState,
 } from "../src/session-status";
@@ -75,5 +77,51 @@ describe("session status filter", () => {
     expect(statuses.filter((s) => matchesStatusFilter(s, "exited"))).toEqual([
       "exited",
     ]);
+  });
+});
+
+describe("session status tone", () => {
+  const since = "2026-10-16T00:00:02Z";
+
+  test("marks question, permission and error attention as urgent destructive", () => {
+    for (const kind of ["question", "permission", "error"] as const) {
+      const attention = { kind, source: "agent" as const, since };
+      expect(hasUrgentAttention({ attention })).toBe(true);
+      expect(
+        sessionStatusTone({ status: "waiting", exitCode: null, attention }),
+      ).toBe("destructive");
+    }
+  });
+
+  test("keeps non-blocking attention and heuristic waiting on warning", () => {
+    for (const kind of ["done", "notify", "bell"] as const) {
+      const attention = { kind, source: "agent" as const, since };
+      expect(hasUrgentAttention({ attention })).toBe(false);
+      expect(
+        sessionStatusTone({ status: "waiting", exitCode: null, attention }),
+      ).toBe("warning");
+    }
+    expect(hasUrgentAttention({ attention: null })).toBe(false);
+    expect(
+      sessionStatusTone({ status: "waiting", exitCode: null, attention: null }),
+    ).toBe("warning");
+  });
+
+  test("distinguishes running, idle, clean exit and failed exit", () => {
+    expect(
+      sessionStatusTone({ status: "running", exitCode: null, attention: null }),
+    ).toBe("success");
+    expect(
+      sessionStatusTone({ status: "idle", exitCode: null, attention: null }),
+    ).toBe("secondary");
+    expect(
+      sessionStatusTone({ status: "exited", exitCode: 0, attention: null }),
+    ).toBe("secondary");
+    expect(
+      sessionStatusTone({ status: "exited", exitCode: null, attention: null }),
+    ).toBe("secondary");
+    expect(
+      sessionStatusTone({ status: "exited", exitCode: 1, attention: null }),
+    ).toBe("destructive");
   });
 });

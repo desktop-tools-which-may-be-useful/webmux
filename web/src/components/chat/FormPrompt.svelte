@@ -50,7 +50,7 @@
 </script>
 
 <form
-  class="space-y-3 rounded-lg border border-warning/40 bg-card p-3 shadow-sm"
+  class="space-y-3 rounded-lg border border-destructive/40 bg-card p-3 shadow-sm"
   aria-label="Agent 的表单"
   onsubmit={(event) => {
     event.preventDefault();
@@ -59,7 +59,7 @@
   }}
 >
   <p class="flex items-center gap-1.5 text-sm font-medium">
-    <IconForms class="size-4 shrink-0 text-warning" aria-hidden="true" />
+    <IconForms class="size-4 shrink-0 text-destructive" aria-hidden="true" />
     {request.title || "Agent 需要更多信息"}
   </p>
   {#if form.message}<p class="text-sm break-words whitespace-pre-wrap">

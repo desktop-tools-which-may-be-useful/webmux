@@ -96,6 +96,20 @@
     },
     {
       ...session,
+      id: "demoaskx",
+      title: "omp · 等待你回答问题",
+      status: "waiting",
+      attention: {
+        kind: "question",
+        source: "agent",
+        since: "2026-01-01T11:59:00Z",
+      },
+      clients: 0,
+      preview: "请选择数据库迁移方案：\n1) 在线双写回填  2) 停机切换",
+      exitCode: null,
+    },
+    {
+      ...session,
       id: "demowait",
       title: "Shell · 等待你的输入",
       status: "waiting",
@@ -385,7 +399,7 @@
     <Card.Root>
       <Card.Header
         ><Card.Title>会话状态</Card.Title><Card.Description
-          >正常退出使用中性色，非零退出码使用危险色。</Card.Description
+          >需要回答、等待授权、出错停止和非零退出码使用危险色；普通等待使用警告色，正常退出使用中性色。</Card.Description
         ></Card.Header
       >
       <Card.Content class="flex flex-wrap gap-3">

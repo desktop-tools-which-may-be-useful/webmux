@@ -13,6 +13,7 @@
   import type { HybridView } from "../hooks/hybrid.svelte";
   import type { SwitchTarget } from "../hybrid";
   import type { SessionInfo } from "../schemas";
+  import { sessionStatusTone } from "../session-status";
   import type { TerminalDraft } from "../terminal-draft.svelte";
   import type { Connection } from "../ws";
   import DraftToggle from "./DraftToggle.svelte";
@@ -142,9 +143,7 @@
   <div class="flex min-w-8 flex-1 items-center gap-2">
     {#if t.info}<span
         class={`status-dot shrink-0 status-${t.info.status} sm:order-3`}
-        class:status-failed={t.info.status === "exited" &&
-          t.info.exitCode !== null &&
-          t.info.exitCode !== 0}
+        class:status-failed={sessionStatusTone(t.info) === "destructive"}
         class:motion-safe:animate-pulse={t.connection !== "connected"}
         role="img"
         aria-label={`${sessionStatusText(t.info)} · ${connectionText}`}

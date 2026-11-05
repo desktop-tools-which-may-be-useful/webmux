@@ -9,6 +9,7 @@
   import { ListButton } from "$lib/components/ui/list-button";
   import type { Repository, SessionInfo } from "../schemas";
   import { observeStickyHeaderOffset } from "../hooks/sticky-header";
+  import { hasUrgentAttention } from "../session-status";
 
   let {
     repositories,
@@ -38,14 +39,20 @@
       sidebar.style.setProperty("--sticky-header-offset", `${height}px`);
     }),
   );
+  function scopeSummary(items: readonly SessionInfo[]) {
+    const waitingItems = items.filter((item) => item.status === "waiting");
+    return {
+      count: items.length,
+      waiting: waitingItems.length,
+      urgent: waitingItems.some(hasUrgentAttention),
+    };
+  }
   const entries = $derived([
     {
       id: "all",
       name: "全部仓库",
       icon: IconList,
-      count: sessions.length,
-      waiting: sessions.filter((session) => session.status === "waiting")
-        .length,
+      ...scopeSummary(sessions),
       path: "",
     },
     ...repositories.map((repo) => {
@@ -56,8 +63,7 @@
         id: repo.id,
         name: repo.name,
         icon: IconFolder,
-        count: items.length,
-        waiting: items.filter((session) => session.status === "waiting").length,
+        ...scopeSummary(items),
         path: repo.anchorPath,
       };
     }),
@@ -65,9 +71,7 @@
       id: "direct",
       name: "直接会话",
       icon: IconTerminal2,
-      count: directSessions.length,
-      waiting: directSessions.filter((session) => session.status === "waiting")
-        .length,
+      ...scopeSummary(directSessions),
       path: "",
     },
   ]);
@@ -150,7 +154,7 @@
               {/if}
             </span>
             {#if entry.waiting}<Badge
-                variant="warning"
+                variant={entry.urgent ? "destructive" : "warning"}
                 class="shrink-0"
                 title={`等待 ${entry.waiting} 个会话`}>待 {entry.waiting}</Badge
               >{/if}

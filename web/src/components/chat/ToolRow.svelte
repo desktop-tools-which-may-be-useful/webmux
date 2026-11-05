@@ -92,10 +92,10 @@
       >
       {#if added || removed}<DiffCount {added} {removed} />{/if}
       <span
-        class={waiting || tool.status === "pending"
-          ? "flex shrink-0 items-center gap-1 text-xs text-warning"
-          : tool.status === "failed" || rejected
-            ? "flex shrink-0 items-center gap-1 text-xs text-destructive"
+        class={waiting || tool.status === "failed" || rejected
+          ? "flex shrink-0 items-center gap-1 text-xs text-destructive"
+          : tool.status === "pending"
+            ? "flex shrink-0 items-center gap-1 text-xs text-warning"
             : "flex shrink-0 items-center gap-1 text-xs"}
       >
         {#if waiting}<IconShieldQuestion

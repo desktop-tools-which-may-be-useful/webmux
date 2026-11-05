@@ -2,6 +2,39 @@ import type { SessionInfo } from "./schemas";
 
 export type SessionState = SessionInfo["status"];
 
+const urgentAttentionKinds = new Set<
+  NonNullable<SessionInfo["attention"]>["kind"]
+>(["question", "permission", "error"]);
+
+export function hasUrgentAttention(
+  session: Pick<SessionInfo, "attention">,
+): boolean {
+  return (
+    session.attention !== null &&
+    urgentAttentionKinds.has(session.attention.kind)
+  );
+}
+
+export type SessionStatusTone =
+  | "destructive"
+  | "warning"
+  | "success"
+  | "secondary";
+
+export function sessionStatusTone(
+  session: Pick<SessionInfo, "status" | "exitCode" | "attention">,
+): SessionStatusTone {
+  if (session.status === "exited") {
+    return session.exitCode !== null && session.exitCode !== 0
+      ? "destructive"
+      : "secondary";
+  }
+  if (hasUrgentAttention(session)) return "destructive";
+  if (session.status === "waiting") return "warning";
+  if (session.status === "running") return "success";
+  return "secondary";
+}
+
 export interface SessionCounts {
   // "Running" in list summaries covers both busy and quiet live sessions.
   active: number;

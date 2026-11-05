@@ -141,6 +141,38 @@ test("aggregate waiting badges include direct and unregistered-repository sessio
   await expect
     .element(repository.getByText("2", { exact: true }))
     .toBeVisible();
+  expect(
+    repository.element().querySelector('[data-slot="badge"].text-warning'),
+  ).not.toBeNull();
+  expect(
+    repository.element().querySelector('[data-slot="badge"].text-destructive'),
+  ).toBeNull();
+
+  await view.rerender({
+    sessions: sessions.map((item) =>
+      item.id === "repository-waiting"
+        ? {
+            ...item,
+            attention: {
+              kind: "question",
+              source: "agent",
+              since: "2026-10-29T00:00:01Z",
+            },
+          }
+        : item,
+    ),
+    directSessions: direct,
+  });
+  expect(
+    all.element().querySelector('[data-slot="badge"].text-destructive'),
+  ).not.toBeNull();
+  expect(
+    repository.element().querySelector('[data-slot="badge"].text-destructive'),
+  ).not.toBeNull();
+  expect(
+    directEntry.element().querySelector('[data-slot="badge"].text-warning'),
+  ).not.toBeNull();
+
   await view.rerender({
     sessions: sessions.map((item) => ({ ...item, status: "idle" })),
     directSessions: direct.map((item) => ({ ...item, status: "idle" })),

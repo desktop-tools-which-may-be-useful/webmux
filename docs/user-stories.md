@@ -72,4 +72,4 @@
 | -------------------------------------------------------------------------------------- | ------------------------ |
 | [verification-log-2026-10-23-to-26](user-stories/verification-log-2026-10-23-to-26.md) | 2026-10-23 至 2026-10-26 |
 | [verification-log-2026-10-27-to-31](user-stories/verification-log-2026-10-27-to-31.md) | 2026-10-27 至 2026-10-31 |
-| [verification-log-2026-11](user-stories/verification-log-2026-11.md)                   | 2026-11-01 至 2026-11-04 |
+| [verification-log-2026-11](user-stories/verification-log-2026-11.md)                   | 2026-11-01 至 2026-11-05 |

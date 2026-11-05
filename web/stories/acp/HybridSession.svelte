@@ -153,7 +153,11 @@
         ? "running"
         : "idle",
     attention: chat.requests.length
-      ? { kind: "permission", source: "agent", since: session.lastActiveAt }
+      ? {
+          kind: chat.requests[0]!.kind === "form" ? "question" : "permission",
+          source: "agent",
+          since: session.lastActiveAt,
+        }
       : null,
     preview: "",
     clients: 1,

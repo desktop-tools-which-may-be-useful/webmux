@@ -52,35 +52,60 @@ test("opens the terminal in this tab", async () => {
   history.replaceState(null, "", start);
 });
 
-test("an agent permission request is labelled precisely", async () => {
-  render(SessionRow, {
-    session: {
-      ...base,
-      attention: {
-        kind: "permission",
-        source: "agent",
-        since: "2026-10-16T00:00:02Z",
+test("blocking and error attention kinds use the destructive badge", async () => {
+  for (const [kind, label] of [
+    ["question", "需要回答"],
+    ["permission", "等待授权"],
+    ["error", "出错停止"],
+  ] as const) {
+    render(SessionRow, {
+      session: {
+        ...base,
+        attention: {
+          kind,
+          source: "agent",
+          since: "2026-10-16T00:00:02Z",
+        },
       },
-    },
-    now: Date.parse("2026-10-16T00:00:03Z"),
-    onclose: () => {},
-  });
-  await expect.element(page.getByText("等待授权")).toBeVisible();
-  expect(page.getByText("可能在等你").elements()).toHaveLength(0);
-  expect(
-    document.querySelector(
-      '[data-status="waiting"] [data-slot="session-status"][data-tone="warning"]',
-    ),
-  ).not.toBeNull();
+      now: Date.parse("2026-10-16T00:00:03Z"),
+      onclose: () => {},
+    });
+    await expect.element(page.getByText(label)).toBeVisible();
+    expect(page.getByText("可能在等你").elements()).toHaveLength(0);
+    expect(
+      document.querySelector(
+        '[data-status="waiting"] [data-slot="session-status"][data-tone="destructive"]',
+      ),
+    ).not.toBeNull();
+    await cleanup();
+  }
 });
 
-test("heuristic waiting keeps the cautious label", async () => {
-  render(SessionRow, {
-    session: base,
-    now: Date.parse("2026-10-16T00:00:03Z"),
-    onclose: () => {},
-  });
-  await expect.element(page.getByText("可能在等你")).toBeVisible();
+test("non-blocking attention and heuristic waiting keep the warning badge", async () => {
+  for (const [attention, label] of [
+    [
+      {
+        kind: "done" as const,
+        source: "agent" as const,
+        since: "2026-10-16T00:00:02Z",
+      },
+      "本轮完成",
+    ],
+    [null, "可能在等你"],
+  ] as const) {
+    render(SessionRow, {
+      session: { ...base, attention },
+      now: Date.parse("2026-10-16T00:00:03Z"),
+      onclose: () => {},
+    });
+    await expect.element(page.getByText(label)).toBeVisible();
+    expect(
+      document.querySelector(
+        '[data-status="waiting"] [data-slot="session-status"][data-tone="warning"]',
+      ),
+    ).not.toBeNull();
+    await cleanup();
+  }
 });
 
 test("shows the shell directory without repeating the group path", async () => {

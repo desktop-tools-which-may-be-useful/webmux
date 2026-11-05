@@ -43,13 +43,13 @@
 <svelte:window onkeydown={shortcut} />
 
 <section
-  class="space-y-3 rounded-lg border border-warning/40 bg-card p-3 shadow-sm"
+  class="space-y-3 rounded-lg border border-destructive/40 bg-card p-3 shadow-sm"
   aria-label="等待授权"
 >
   <div class="space-y-1.5">
     <p class="flex items-center gap-1.5 text-sm font-medium">
       <IconShieldQuestion
-        class="size-4 shrink-0 text-warning"
+        class="size-4 shrink-0 text-destructive"
         aria-hidden="true"
       />
       等待授权

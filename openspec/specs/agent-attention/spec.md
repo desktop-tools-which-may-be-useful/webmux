@@ -318,7 +318,17 @@
 - `notify`：“有通知”
 - `bell`：“响铃提醒”
 
-不存在关注时 SHALL 沿用既有状态文案（`waiting` 仍为“可能在等你”）。状态圆点颜色与列表计数 SHALL 继续由 `status` 决定。
+不存在关注时 SHALL 沿用既有状态文案（`waiting` 仍为“可能在等你”）。列表计数 SHALL 继续由 `status` 决定。
+
+视觉提示色 SHALL 区分需立即处理的关注与普通等待：
+
+- `question`、`permission` 与 `error`：会话状态徽章、会话页顶栏状态圆点，以及左侧仓库导航在对应范围含此类等待会话时的「待 N」徽章 SHALL 使用危险色（红色）。
+- `done`、`notify`、`bell` 与无关注的 `waiting`：上述位置 SHALL 继续使用警告色（琥珀色）。
+
+#### Scenario: 阻塞提问显示红色提示
+
+- **WHEN** 某仓库内的会话收到 `question_asked`
+- **THEN** 该会话行显示红色“需要回答”徽章，会话页顶栏状态圆点与左侧仓库导航的「待 N」徽章均为红色
 
 #### Scenario: 列表显示等待授权
 
