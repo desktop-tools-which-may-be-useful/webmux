@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, expectConnected, test } from "./fixtures";
@@ -178,6 +178,89 @@ test.describe("desktop sidebar", () => {
     await expect(
       tree(page).getByRole("treeitem", { name: /^wt\// }),
     ).toHaveCount(1);
+  });
+
+  test("the code panel keeps its state, width and tabs across session switches", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    test.slow();
+    await page.setViewportSize({ width: 1440, height: 800 });
+    const root = join(workDir, "panel-repo");
+    const repo = await repository(request, root);
+    await writeFile(join(root, "note.txt"), "kept open\n");
+    const workspace = {
+      repositoryId: repo.id,
+      worktreeId: repo.worktrees[0]!.id,
+    };
+    const first = await shell(request, "panel one", { cwd: root, workspace });
+    await shell(request, "panel two", { cwd: root, workspace });
+    const config = await request.post("/api/launch-configs", {
+      data: { name: "Claude Code", cmd: ["claude"], env: {}, hybrid: true },
+    });
+    expect(config.status(), await config.text()).toBe(201);
+    const configId = (await config.json()).id as string;
+    for (const name of ["面板甲", "面板乙"]) {
+      const response = await request.post("/api/sessions", {
+        data: { cwd: root, configId, startSide: "acp", name },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+    }
+    const code = page.getByRole("region", { name: "代码工作区" });
+    const toggle = page
+      .locator(".terminal-header")
+      .getByRole("button", { name: /^(代码|折叠代码)$/ });
+    const width = async () =>
+      Math.round((await page.locator(".code-pane").boundingBox())!.width);
+
+    await page.goto(`/s/${first}`);
+    await expectConnected(page);
+    await toggle.click();
+    await expect(code).toBeVisible();
+    await code.getByRole("button", { name: "note.txt", exact: true }).click();
+    const note = code.getByRole("tab", { name: /^note\.txt · / });
+    await expect(note).toBeVisible();
+    const before = await width();
+    await page.getByRole("separator", { name: "调整终端与代码宽度" }).focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowLeft");
+    await expect.poll(width).toBeGreaterThan(before + 20);
+    const wide = await width();
+
+    // Workbench mode: the next session opens with the same panel.
+    await tree(page)
+      .getByRole("treeitem", { name: /^panel two（/ })
+      .click();
+    await expect(page).not.toHaveURL(new RegExp(`/s/${first}$`));
+    await expect(code).toBeVisible();
+    await expect.poll(width).toBe(wide);
+    // Open files belong to their own session.
+    await expect(note).toHaveCount(0);
+
+    // Chat mode keeps it too, open or closed.
+    await page.getByRole("button", { name: "聊天模式" }).click();
+    const chats = page.getByRole("list", { name: "聊天历史" });
+    await chats.getByRole("button", { name: /^面板甲（/ }).click();
+    await expect(page.locator(".terminal-header")).toContainText("面板甲");
+    await expect(code).toBeVisible();
+    await expect.poll(width).toBe(wide);
+    await toggle.click();
+    await expect(code).toBeHidden();
+    await chats.getByRole("button", { name: /^面板乙（/ }).click();
+    await expect(page.locator(".terminal-header")).toContainText("面板乙");
+    await expect(code).toBeHidden();
+
+    // Back on the first session, its files are open again.
+    await page.getByRole("button", { name: "工作台模式" }).click();
+    await tree(page)
+      .getByRole("treeitem", { name: /^panel one（/ })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/s/${first}$`));
+    await toggle.click();
+    await expect(note).toHaveAttribute("aria-selected", "true");
+    await expect(code.locator("[data-code-reader]:visible")).toContainText(
+      "kept open",
+    );
   });
 });
 

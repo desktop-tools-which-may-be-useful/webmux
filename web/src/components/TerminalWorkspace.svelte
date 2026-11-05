@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import * as Resizable from "$lib/components/ui/resizable";
   import { terminalFindShortcut } from "../hooks/terminal-find-shortcut";
+  import { codePanelState } from "../hooks/code-panel-state";
 
   // Resizable split of the terminal, its draft composer below it and the code
   // panel beside it (stacked instead on narrow screens).
@@ -24,6 +25,7 @@
   } = $props();
   let composerSize = $state(25);
   let terminalHeight = $state(0);
+  const codeSize = codePanelState.size();
 </script>
 
 <div
@@ -33,7 +35,11 @@
   class:compact={!desktop}
 >
   <Resizable.PaneGroup direction="horizontal">
-    <Resizable.Pane defaultSize={50} minSize={25} class="terminal-pane">
+    <Resizable.Pane
+      defaultSize={100 - codeSize}
+      minSize={25}
+      class="terminal-pane"
+    >
       <div
         class="terminal-column"
         bind:clientHeight={terminalHeight}
@@ -74,7 +80,12 @@
       class="code-divider"
       aria-label="调整终端与代码宽度"
     />
-    <Resizable.Pane defaultSize={50} minSize={25} class="code-pane">
+    <Resizable.Pane
+      defaultSize={codeSize}
+      minSize={25}
+      onResize={(size) => codePanelState.setSize(size)}
+      class="code-pane"
+    >
       {@render codePane()}
     </Resizable.Pane>
   </Resizable.PaneGroup>

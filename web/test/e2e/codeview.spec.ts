@@ -394,7 +394,8 @@ test("main and linked worktrees bind their own roots and reject cross-session sn
     )
   ).json();
   const second = await createShell(page, "Linked root", join(linked, "src"));
-  await showCode(page);
+  // The panel stays open across sessions.
+  await expect(page.getByRole("region", { name: "代码工作区" })).toBeVisible();
   await page.getByRole("button", { name: "切换路径搜索", exact: true }).click();
   await page.getByLabel("搜索文件路径").fill("clean");
   await page.getByRole("button", { name: "搜索路径", exact: true }).click();

@@ -17,6 +17,7 @@
   import { useTerminal } from "../hooks/terminal.svelte";
   import { createKeyboardSizeHold } from "../hooks/keyboard-size-hold";
   import { keyboardSizeHold } from "../hooks/keyboard-size-hold-preference.svelte";
+  import { codePanelState } from "../hooks/code-panel-state";
   import type { KeyboardVisibility } from "../hooks/viewport.svelte";
   import { useHybrid } from "../hooks/hybrid.svelte";
   import { useChatUpload, useUpload } from "../hooks/upload.svelte";
@@ -113,7 +114,8 @@
   let scratchOpen = $state(false);
   const forceSoftKeys = $derived(settings.values.forceSoftKeys ?? false);
   let mounted = false;
-  let codeShown = $state(false);
+  let codeShown = $state(codePanelState.shown());
+  $effect(() => codePanelState.setShown(codeShown));
   let codePanel = $state<CodePanelComponent>();
   // A code location the code panel should open (from chat links or tool diffs).
   let codeTarget = $state<CodeReveal>();

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { errorMessage } from "../error";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import IconPictureInPictureOff from "~icons/tabler/picture-in-picture-off";
   import CodeWorkspace from "./CodeWorkspace.svelte";
@@ -13,6 +13,7 @@
   } from "../schemas";
   import type { TextInsertion } from "../terminal-draft.svelte";
   import { popoutAvailable, popOut, type CodePopout } from "./codePopout";
+  import { codePanelState } from "../hooks/code-panel-state";
 
   let {
     id,
@@ -72,7 +73,10 @@
   // While the window starts, the workspace here is inert: the window restores
   // the state captured when popping began.
   let popping = $state(false);
-  let snapshot = $state.raw<CodeWorkspaceSnapshot>();
+  // Back on this session the panel reopens as it was left.
+  let snapshot = $state.raw<CodeWorkspaceSnapshot | undefined>(
+    untrack(() => codePanelState.snapshot(id)),
+  );
   let generation = $state(0);
   let notice = $state("");
   let mounted = false;
@@ -126,9 +130,18 @@
     popout.reveal($state.snapshot(target));
   });
 
+  // Navigating away remounts the page for another session. The router's
+  // `popstate` runs while this workspace is still laid out, so reading
+  // positions are captured before teardown detaches its views.
+  function keep() {
+    if (workspace && !popout && !popping)
+      codePanelState.keep(id, workspace.capture());
+  }
   onMount(() => {
     mounted = true;
+    window.addEventListener("popstate", keep);
     return () => {
+      window.removeEventListener("popstate", keep);
       mounted = false;
       popout?.dispose();
     };
