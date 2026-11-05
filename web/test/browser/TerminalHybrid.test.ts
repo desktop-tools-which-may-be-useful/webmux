@@ -21,6 +21,7 @@ import {
   socketAt,
   sockets,
 } from "./chat-fixture";
+import { seedForwards } from "./forward-fixture";
 
 installChatFixture();
 
@@ -37,6 +38,7 @@ const info: SessionInfo = {
   cmd: ["omp"],
   status: "idle",
   exitCode: null,
+  listeningPorts: [],
   preview: "",
   createdAt: "2026-10-28T00:00:00Z",
   lastActiveAt: "2026-10-28T00:00:00Z",
@@ -359,6 +361,28 @@ test("an agent title refreshes the chat side's header", async () => {
   await expect
     .element(page.getByText("agent title", { exact: true }))
     .not.toBeInTheDocument();
+});
+
+test("port prompts follow the terminal side and stay off the chat view", async () => {
+  seedForwards([]);
+  const { terminal, chat } = await onTerminalSide(tuiState());
+  const port = { port: 5173, process: "node" };
+  terminal.binary(2, { ...info, listeningPorts: [port] });
+  const prompt = page.getByText("检测到端口 5173（node）正在监听");
+  await expect.element(prompt).toBeVisible();
+
+  // Moved to the chat side: the session info read then still lists the port
+  // the stopped run held, and nothing re-reads it when the port changes.
+  respond(/^GET \/api\/sessions\/hybrid22$/, () =>
+    Response.json({ ...info, generation: "", listeningPorts: [port] }),
+  );
+  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
+  terminal.drop(4409);
+  chat.frame({ type: "state", state: chatState() });
+  await expect
+    .element(page.getByRole("textbox", { name: "消息" }))
+    .toBeVisible();
+  await expect.element(prompt).not.toBeInTheDocument();
 });
 
 test("a session moved by another device shows the chat view; switching back reattaches the terminal", async () => {

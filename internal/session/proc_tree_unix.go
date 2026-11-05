@@ -20,11 +20,7 @@ func runChildren(pid int) []string {
 // runOpenFiles returns the absolute paths of the regular files pid and its
 // descendants hold open, each once, at most maxOpenFiles.
 func runOpenFiles(pid int) []string {
-	snapshot := newProcessSnapshot(processes())
-	pids := []int{pid}
-	for i := 0; i < len(pids); i++ {
-		pids = append(pids, snapshot.children[pids[i]]...)
-	}
+	pids := newProcessSnapshot(processes()).tree(pid)
 	seen := map[string]bool{}
 	var paths []string
 	for _, p := range pids {

@@ -1,0 +1,23 @@
+{
+  "body": {
+    "forwards": [
+      {
+        "createdAt": "<time>",
+        "label": "",
+        "options": {
+          "forwardedHeaders": true,
+          "prefix": "keep",
+          "rewriteHost": true,
+          "rewriteOrigin": true,
+          "rewriteResponse": true
+        },
+        "path": "/forward/5173/",
+        "port": 5173,
+        "process": "node",
+        "session": "abcdefgh",
+        "status": "unreachable"
+      }
+    ],
+    "type": "forwards"
+  }
+}

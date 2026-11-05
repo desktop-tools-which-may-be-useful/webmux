@@ -69,6 +69,10 @@ type SessionInfo struct {
 	ConfigID string `json:"configId,omitempty"`
 	// Hybrid describes a hybrid session; ordinary sessions omit it.
 	Hybrid *SessionHybrid `json:"hybrid,omitempty"`
+	// ListeningPorts are the loopback or wildcard TCP ports the session's
+	// process tree listens on, ascending; empty where detection is
+	// unsupported.
+	ListeningPorts []ListeningPort `json:"listeningPorts"`
 }
 
 // SessionWorkspace is the registered worktree a session was started in.

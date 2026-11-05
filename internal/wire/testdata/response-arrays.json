@@ -254,12 +254,14 @@
     "clients": 0,
     "workspace": null,
     "attention": null,
-    "reportedCwd": null
+    "reportedCwd": null,
+    "listeningPorts": []
   },
   "sessions": [],
   "snapshot": {
     "type": "snapshot",
-    "sessions": []
+    "sessions": [],
+    "forwards": []
   },
   "tailscale": {
     "provider": "none",

@@ -21,6 +21,7 @@ const session: SessionInfo = {
   cmd: ["omp"],
   status: "waiting",
   exitCode: null,
+  listeningPorts: [],
   preview: "",
   createdAt: "2026-10-16T00:00:00Z",
   lastActiveAt: "2026-10-16T00:00:01Z",

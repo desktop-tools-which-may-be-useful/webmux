@@ -31,6 +31,7 @@ const active: SessionInfo = {
   cmd: ["omp"],
   status: "idle",
   exitCode: null,
+  listeningPorts: [],
   preview: "",
   createdAt: "2026-10-28T00:00:00Z",
   lastActiveAt: "2026-10-28T00:00:00Z",
@@ -178,7 +179,7 @@ test("a snapshot keeps drafts of archived hybrid sessions and drops the rest", a
   } = draftsWith("hybrid22", "gone0000");
   render(SessionList, { drafts });
   const socket = await connected();
-  socket.message({ type: "snapshot", sessions: [] });
+  socket.message({ type: "snapshot", sessions: [], forwards: [] });
   await vi.waitFor(() => expect(drafts.valid(gone!)).toBe(false));
   expect(drafts.valid(recoverable!)).toBe(true);
   await expect
@@ -194,7 +195,7 @@ test("archiving a hybrid session keeps its draft; deleting the record deletes it
   } = draftsWith("hybrid33");
   render(SessionList, { drafts });
   const socket = await connected();
-  socket.message({ type: "snapshot", sessions: [active] });
+  socket.message({ type: "snapshot", sessions: [active], forwards: [] });
   records = [{ ...record, id: "hybrid33", name: "进行中", title: "进行中" }];
   socket.message({ type: "removed", id: "hybrid33" });
   const group = page.getByRole("region", { name: "work 的已归档会话" });
@@ -240,7 +241,7 @@ test("archived records sit in the group a live session of theirs would", async (
   ];
   render(SessionList, { drafts: createTerminalDrafts() });
   const socket = await connected();
-  socket.message({ type: "snapshot", sessions: [] });
+  socket.message({ type: "snapshot", sessions: [], forwards: [] });
   for (const [group, title] of [
     ["feature", "recorded"],
     ["main", "legacysb"],
@@ -263,6 +264,7 @@ test("status and search filters cover archived records", async () => {
   socket.message({
     type: "snapshot",
     sessions: [{ ...active, id: "livesess", hybrid: undefined }],
+    forwards: [],
   });
   const region = page.getByRole("region", { name: "work 的已归档会话" });
   await expect.element(region).toMatchTextContent(/已归档\s*1/);
@@ -313,7 +315,7 @@ test("a scope without archived matches shows the empty state", async () => {
   ];
   render(SessionList, { drafts: createTerminalDrafts() });
   const socket = await connected();
-  socket.message({ type: "snapshot", sessions: [] });
+  socket.message({ type: "snapshot", sessions: [], forwards: [] });
   await page.getByRole("button", { name: "仓库 other" }).click();
   await page
     .getByRole("radiogroup", { name: "按会话状态筛选" })
@@ -326,7 +328,7 @@ test("returning home after archiving leaves the archived section collapsed", asy
   history.replaceState(null, "", "/");
   render(SessionList, { drafts: createTerminalDrafts() });
   const socket = await connected();
-  socket.message({ type: "snapshot", sessions: [] });
+  socket.message({ type: "snapshot", sessions: [], forwards: [] });
   const region = page.getByRole("region", { name: "work 的已归档会话" });
   await expect.element(region.getByText("修复排序")).not.toBeVisible();
   expect(page.getByText("刚归档").elements()).toEqual([]);

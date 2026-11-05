@@ -12,7 +12,6 @@
   import {
     LaunchConfigsSchema,
     ConfigSchema,
-    SessionEventSchema,
     RepositoriesSchema,
     type HybridRecord,
     type PendingUpdate,
@@ -23,7 +22,8 @@
   import type { LaunchConfigsState } from "../launchConfigs";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
   import { dismissUpdate, dismissedUpdate, homeUpdate } from "../pendingUpdate";
-  import { connect, type Connection } from "../ws";
+  import type { Connection } from "../ws";
+  import { connectSessions } from "../forwards.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
@@ -95,6 +95,9 @@
   let dismissedVersion = $state(dismissedUpdate());
   const updateNotice = $derived(homeUpdate(pendingUpdate, dismissedVersion));
   let setupSettled = $state(!!cached.setup);
+  // Until the server says otherwise, assume listening ports are detected.
+  let portDetection = $state(cached.setup?.portDetection ?? true);
+  let forwarding = $state(false);
   let loading = $state(!cached.sessions);
   let initializing = $state(!cached.setup);
   let refreshing = $state(false);
@@ -407,8 +410,10 @@
           capabilityError: [c.workspace.gitError, c.workspace.registryError]
             .filter(Boolean)
             .join(" · "),
+          portDetection: c.portDetection,
         };
         ({ cwd, hostname, pendingUpdate, gitReady, registryReady } = next);
+        portDetection = next.portDetection;
         capabilityError = next.capabilityError;
         homeCache.rememberSetup(next);
       }),
@@ -433,12 +438,9 @@
     void startupRefresh.finally(() => {
       startupRefresh = undefined;
     });
-    const ws = connect(
-      "/ws/sessions",
-      (data) => {
-        if (typeof data !== "string")
-          throw new Error("会话列表帧必须是 JSON 文本");
-        const event = SessionEventSchema.parse(JSON.parse(data));
+    const ws = connectSessions(
+      (event) => {
+        if (event.type === "forwards") return;
         const removedHybrid =
           event.type === "removed" &&
           !!sessions.find((session) => session.id === event.id)?.hybrid;
@@ -505,6 +507,7 @@
     {setupSettled}
     canStart
     onstart={() => start()}
+    onforward={() => (forwarding = true)}
   />
   {#if connection === "reconnecting"}<div
       role="status"
@@ -713,6 +716,19 @@
         onchange={refreshWorktrees}
         onworktreecreated={(tree) => pin(tree.repositoryId, [tree.id], true)}
         onclose={() => (creating = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+{#if forwarding}
+  <LazyDialog
+    load={() => import("../components/ForwardDialog.svelte")}
+    label="端口转发"
+    onclose={() => (forwarding = false)}
+  >
+    {#snippet children(page)}<page.default
+        {sessions}
+        detection={portDetection}
+        onclose={() => (forwarding = false)}
       />{/snippet}
   </LazyDialog>
 {/if}

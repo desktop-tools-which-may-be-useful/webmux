@@ -45,6 +45,7 @@
 | O    | Windows/WSL 托盘管理                   | US-O01–US-O14 |
 | P    | Tailscale Serve / Funnel               | US-P01–US-P08 |
 | Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q17 |
+| R    | 端口转发预览                           | US-R01–US-R04 |
 
 ## 分组文档
 
@@ -60,6 +61,7 @@
 | [终端分屏用户故事](user-stories/terminal-splits.md)              | D13–D14            |
 | [网络压缩用户故事](user-stories/terminal-network.md)             | H10–H11            |
 | [混合会话](user-stories/hybrid-sessions.md)                      | Q                  |
+| [端口转发预览](user-stories/port-forwarding.md)                  | R                  |
 | [功能覆盖核对与后续维护](user-stories/coverage.md)               | 覆盖索引与维护约定 |
 
 ## 核对记录

@@ -28,6 +28,53 @@ export const ReportedCwdSchema = z.object({
 });
 export type ReportedCwd = z.infer<typeof ReportedCwdSchema>;
 
+// A TCP port a session's process tree listens on (loopback or wildcard).
+export const ListeningPortSchema = z.object({
+  port: z.number().int().min(1).max(65535),
+  process: z.string(),
+});
+export type ListeningPort = z.infer<typeof ListeningPortSchema>;
+
+export const ForwardOptionsSchema = z.strictObject({
+  rewriteHost: z.boolean(),
+  rewriteOrigin: z.boolean(),
+  forwardedHeaders: z.boolean(),
+  rewriteResponse: z.boolean(),
+  prefix: z.enum(["keep", "strip"]),
+});
+export type ForwardOptions = z.infer<typeof ForwardOptionsSchema>;
+// A forwarded loopback port served by the gateway at `path`.
+export const ForwardSchema = z.object({
+  port: ListeningPortSchema.shape.port,
+  path: z.string().startsWith("/forward/"),
+  label: z.string(),
+  // ID of the session the port was detected in, or "".
+  session: z.string(),
+  process: z.string(),
+  options: ForwardOptionsSchema,
+  status: z.enum(["listening", "unreachable"]),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+export type Forward = z.infer<typeof ForwardSchema>;
+export const ForwardsSchema = z.array(ForwardSchema);
+export const ForwardTicketSchema = z.object({
+  code: z.string().min(1),
+  expiresAt: z.iso.datetime({ offset: true }),
+});
+export const ForwardRequestSchema = z.strictObject({
+  port: ListeningPortSchema.shape.port,
+  label: z.string().max(64).optional(),
+  session: z.string().optional(),
+  process: z.string().optional(),
+  options: ForwardOptionsSchema.optional(),
+});
+export type ForwardRequest = z.infer<typeof ForwardRequestSchema>;
+export const ForwardUpdateSchema = z.strictObject({
+  label: z.string().max(64).optional(),
+  options: ForwardOptionsSchema.optional(),
+});
+export type ForwardUpdate = z.infer<typeof ForwardUpdateSchema>;
+
 // A terminal run's generation: output offsets and submissions are bound to it.
 const GenerationSchema = z.string().regex(/^[0-9a-f]{16}$/);
 // Required response arrays encode as [] even when service slices are nil.
@@ -57,6 +104,9 @@ export const SessionInfoSchema = z.object({
     .optional(),
   // Hybrid (chat ↔ terminal) sessions only; ordinary sessions omit it.
   hybrid: SessionHybridSchema.optional(),
+  // Ascending ports the session's processes listen on; always [] where the
+  // server cannot detect them.
+  listeningPorts: z.array(ListeningPortSchema),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
 export const WorkspaceReferenceSchema = z.object({
@@ -161,10 +211,12 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("snapshot"),
     sessions: z.array(SessionInfoSchema),
+    forwards: ForwardsSchema,
   }),
   z.object({ type: z.literal("created"), session: SessionInfoSchema }),
   z.object({ type: z.literal("updated"), session: SessionInfoSchema }),
   z.object({ type: z.literal("removed"), id: SessionInfoSchema.shape.id }),
+  z.object({ type: z.literal("forwards"), forwards: ForwardsSchema }),
 ]);
 export const ExitSchema = z.object({ exitCode: z.number().int() });
 // Terminal stream frames 0x04–0x06; see docs/protocol/websocket.md.
@@ -368,6 +420,8 @@ export const ConfigSchema = z.object({
   // Present only while a different version awaits a restart; older servers
   // never send it.
   pendingUpdate: PendingUpdateSchema.optional(),
+  // Whether sessions report listening ports on the server's platform.
+  portDetection: z.boolean(),
 });
 export const WorktreeSchema = z.object({
   id: z.string(),

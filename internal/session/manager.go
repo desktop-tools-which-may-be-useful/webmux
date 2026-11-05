@@ -37,6 +37,9 @@ type Options struct {
 	DisableBellAttention bool
 	// DisableProgramStatus ignores OSC 7501 and leaves its query unanswered.
 	DisableProgramStatus bool
+	// ExcludePorts are WebMux's own listening ports, never reported in
+	// Info.ListeningPorts.
+	ExcludePorts []int
 }
 type Event struct {
 	Type     string
@@ -330,7 +333,8 @@ func (m *Manager) updates() {
 	previous := make(map[string]Info)
 	previewSent := make(map[string]time.Time)
 	var snapshot processSnapshot
-	probeTick := false
+	var ports portScanner
+	probeTick, portTick := false, false
 	for {
 		select {
 		case <-m.done:
@@ -351,6 +355,13 @@ func (m *Manager) updates() {
 			// Classify every 500 ms using the once-per-second process table.
 			// This leaves headroom for delivering the 3-second waiting signal.
 			// Classification reads /proc, so it runs without the manager lock.
+			// Listening ports change rarely: every other process table.
+			if probeTick {
+				portTick = !portTick
+				if portTick {
+					m.scanPorts(&ports, snapshot, list)
+				}
+			}
 			infos := make(map[*Session]Info, len(list))
 			for _, s := range list {
 				s.evaluate(now, snapshot, m.options.IdleAfter, m.patterns)

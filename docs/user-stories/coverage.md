@@ -113,6 +113,10 @@
 | Tailscale 所有权、启动对账、失败关闭与来源并存                                                      | US-P06                                              |
 | Tailscale 网页设置、立即生效、Funnel 确认与恢复配置文件设置                                         | US-P07                                              |
 | 托盘“公网访问”子菜单、一键 Tailscale Serve、未就绪引导与 Windows 节点确认                           | US-P08；US-N06                                      |
+| 端口转发网关 `/forward/{port}/`、转发凭据 Cookie 与兑换、上游状态                                   | US-R01；US-A02                                      |
+| 转发兼容改写（Host、Origin、`X-Forwarded-*`、重定向与 Cookie）和路径前缀模式                        | US-R02                                              |
+| 首页端口转发按钮与对话框、转发管理 API、`/ws/sessions` 转发事件                                     | US-R03；US-A05                                      |
+| 会话监听端口检测（Linux/macOS）与终端页端口提示                                                     | US-R04；US-C02                                      |
 
 ## 后续维护
 

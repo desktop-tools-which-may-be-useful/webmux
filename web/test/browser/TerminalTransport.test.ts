@@ -467,6 +467,7 @@ function sessionInfo(title: string, status = "running") {
     cmd: ["bash"],
     status,
     exitCode: null,
+    listeningPorts: [],
     preview: "",
     createdAt: now,
     lastActiveAt: now,

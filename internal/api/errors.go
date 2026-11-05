@@ -12,6 +12,7 @@ import (
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
+	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
@@ -364,4 +365,19 @@ func settingsStatus(err error) int {
 	default:
 		return 500
 	}
+}
+
+// forwardFailure maps forward registry errors: a bad port or option is 400,
+// a port already forwarded 409, a missing forward 404.
+func forwardFailure(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, forward.ErrInvalid):
+		status = http.StatusBadRequest
+	case errors.Is(err, forward.ErrConflict):
+		status = http.StatusConflict
+	case errors.Is(err, forward.ErrNotFound):
+		status = http.StatusNotFound
+	}
+	failure(w, status, err)
 }

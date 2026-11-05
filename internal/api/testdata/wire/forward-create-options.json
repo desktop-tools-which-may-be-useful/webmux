@@ -1,0 +1,19 @@
+{
+  "status": 201,
+  "body": {
+    "createdAt": "<time>",
+    "label": "docs",
+    "options": {
+      "forwardedHeaders": false,
+      "prefix": "strip",
+      "rewriteHost": false,
+      "rewriteOrigin": true,
+      "rewriteResponse": true
+    },
+    "path": "/forward/8000/",
+    "port": 8000,
+    "process": "",
+    "session": "",
+    "status": "unreachable"
+  }
+}

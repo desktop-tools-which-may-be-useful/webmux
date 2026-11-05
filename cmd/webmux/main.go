@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
+	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -379,6 +381,10 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// Keep the child terminal identity tied to the running WebMux build. The
 	// session package still defaults to "dev" for embedders and tests.
 	sessionOptions.TerminalVersion = version
+	// A configured port 0 is chosen when binding: exclude the bound port.
+	if addr, ok := listener.Addr().(*net.TCPAddr); ok && !slices.Contains(sessionOptions.ExcludePorts, addr.Port) {
+		sessionOptions.ExcludePorts = append(sessionOptions.ExcludePorts, addr.Port)
+	}
 	m := session.NewManager(sessionOptions)
 	// Opening never fails: a locked, corrupt or unreadable store only
 	// disables launch configs, and the endpoints answer 503 with the reason.
@@ -418,6 +424,9 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	codes := codeview.New(m, folders)
 	defer codes.Close()
 	pushes := push.New(c.Push, c.StateDir, m, slog.Default(), nil)
+	// Forwards live in memory only; WebMux's own ports cannot be forwarded.
+	forwards := forward.New(forward.Config{ExcludePorts: sessionOptions.ExcludePorts})
+	defer forwards.Close()
 	local := localOrigin(listener.Addr())
 	tunnels := newTunnelController(tunnelControllerOptions{
 		Cfg: c.Tunnel, Store: c.TunnelSettings, Local: local, Token: c.Token,
@@ -431,6 +440,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
+		Forward:      forwards,
 		DefaultShell: agentprofile.DefaultShell(os.Getenv("SHELL")),
 		// The executable's identity is recorded now; later status and
 		// configuration requests compare against it.

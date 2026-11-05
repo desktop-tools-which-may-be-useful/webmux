@@ -92,6 +92,7 @@
       clients: 1,
       preview: "$ pnpm check\n正在检查 Svelte 与 TypeScript…",
       exitCode: null,
+      listeningPorts: [],
     },
     {
       ...session,
@@ -101,6 +102,7 @@
       clients: 0,
       preview: "$ git status\nOn branch main\nworking tree clean",
       exitCode: null,
+      listeningPorts: [],
     },
     {
       ...session,
@@ -110,6 +112,7 @@
       clients: 0,
       preview: "",
       exitCode: null,
+      listeningPorts: [],
     },
     {
       ...session,
@@ -119,6 +122,7 @@
       clients: 0,
       preview: "Build completed successfully.",
       exitCode: 0,
+      listeningPorts: [],
     },
     {
       ...session,
@@ -128,6 +132,7 @@
       clients: 0,
       preview: "1 test failed. See test report for details.",
       exitCode: 1,
+      listeningPorts: [],
     },
   ];
 </script>

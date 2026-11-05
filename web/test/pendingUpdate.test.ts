@@ -9,6 +9,7 @@ import { ConfigSchema } from "../src/schemas";
 
 const baseConfig = {
   defaultCwd: "/home/me",
+  portDetection: true,
   workspace: {
     gitAvailable: true,
     gitError: "",

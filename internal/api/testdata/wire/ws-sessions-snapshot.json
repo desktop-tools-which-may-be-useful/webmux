@@ -1,5 +1,6 @@
 {
   "body": {
+    "forwards": [],
     "sessions": [
       {
         "attention": null,
@@ -16,6 +17,7 @@
         "generation": "<generation#2>",
         "id": "<id#2>",
         "lastActiveAt": "<time>",
+        "listeningPorts": [],
         "preview": "x",
         "reportedCwd": null,
         "rows": 24,

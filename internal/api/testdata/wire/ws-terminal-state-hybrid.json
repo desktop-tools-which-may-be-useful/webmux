@@ -21,6 +21,7 @@
     },
     "id": "<id#1>",
     "lastActiveAt": "<time>",
+    "listeningPorts": [],
     "preview": "",
     "reportedCwd": null,
     "rows": 24,

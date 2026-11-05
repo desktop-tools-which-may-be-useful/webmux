@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
+	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/hub"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/jsonutil"
@@ -62,6 +64,8 @@ type Deps struct {
 	// Hybrid serves the chat channel of hybrid sessions; nil answers 404
 	// for every chat endpoint.
 	Hybrid *hybrid.Service
+	// Forward is the port forwarding registry; nil serves no forwards.
+	Forward *forward.Service
 	// InstalledVersion returns the installed version awaiting a restart,
 	// or ""; nil never reports one.
 	InstalledVersion func() string
@@ -75,6 +79,8 @@ type Server struct {
 	Deps
 	// local marks the Unix-socket handler, which serves no browser page.
 	local bool
+	// gatewayProxy serves /forward/{port}/; nil without Deps.Forward.
+	gatewayProxy *httputil.ReverseProxy
 }
 
 // New builds the TCP handler. Local-only endpoints are not found here.
@@ -86,6 +92,14 @@ func New(d Deps) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		// The gateway serves only browsers on the TCP listener.
+		if r.URL.Path == "/forward" || strings.HasPrefix(r.URL.Path, "/forward/") {
+			s.gateway(w, r)
+			return
+		}
+		if r.URL.Path == "/forward-auth" && r.Method == http.MethodGet && forwardAuthPage(w, r) {
+			return
+		}
 		mux.ServeHTTP(w, r)
 	}))
 }
@@ -94,7 +108,11 @@ func newServer(d Deps) *Server {
 	if d.Manager == nil || d.Workspace == nil || d.Code == nil || d.Files == nil {
 		panic("api: Deps requires Manager, Workspace, Code and Files")
 	}
-	return &Server{Deps: d}
+	s := &Server{Deps: d}
+	if d.Forward != nil {
+		s.gatewayProxy = newGatewayProxy(d.Forward)
+	}
+	return s
 }
 
 // routes registers the /api, /ws and static routes shared by both listeners.
@@ -107,7 +125,7 @@ func (s *Server) routes() *http.ServeMux {
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
-		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate()})
+		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported})
 	})
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, wire.Sessions(m.List())) })
 	mux.HandleFunc("POST /api/sessions", s.create)
@@ -125,6 +143,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.launchRoutes(mux)
 	s.settingsRoutes(mux)
 	s.tunnelRoutes(mux)
+	s.forwardRoutes(mux)
 	s.tailscaleRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
@@ -404,7 +423,7 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) *websocket.Conn 
 }
 func (s *Server) listWS(w http.ResponseWriter, r *http.Request) {
 	if c := s.accept(w, r); c != nil {
-		hub.List(r.Context(), s.Manager, c)
+		hub.List(r.Context(), s.Manager, s.Forward, c)
 	}
 }
 func (s *Server) terminalWS(w http.ResponseWriter, r *http.Request) {

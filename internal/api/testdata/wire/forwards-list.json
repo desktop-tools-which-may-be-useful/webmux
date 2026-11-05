@@ -1,0 +1,37 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "createdAt": "<time>",
+      "label": "web",
+      "options": {
+        "forwardedHeaders": true,
+        "prefix": "strip",
+        "rewriteHost": true,
+        "rewriteOrigin": true,
+        "rewriteResponse": true
+      },
+      "path": "/forward/5173/",
+      "port": 5173,
+      "process": "node",
+      "session": "abcdefgh",
+      "status": "unreachable"
+    },
+    {
+      "createdAt": "<time>",
+      "label": "docs",
+      "options": {
+        "forwardedHeaders": false,
+        "prefix": "strip",
+        "rewriteHost": false,
+        "rewriteOrigin": true,
+        "rewriteResponse": true
+      },
+      "path": "/forward/8000/",
+      "port": 8000,
+      "process": "",
+      "session": "",
+      "status": "unreachable"
+    }
+  ]
+}

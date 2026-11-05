@@ -2,6 +2,7 @@ package session
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -131,7 +132,8 @@ func sameDisplay(a, b Info) bool {
 		a.Clients == b.Clients && sameExit(a.ExitCode, b.ExitCode) &&
 		sameWorkspace(a.Workspace, b.Workspace) && sameAttention(a.Attention, b.Attention) &&
 		sameReportedCwd(a.ReportedCwd, b.ReportedCwd) &&
-		a.Generation == b.Generation && sameHybrid(a.Hybrid, b.Hybrid)
+		a.Generation == b.Generation && sameHybrid(a.Hybrid, b.Hybrid) &&
+		slices.Equal(a.ListeningPorts, b.ListeningPorts)
 }
 
 func sameHybrid(a, b *HybridInfo) bool {

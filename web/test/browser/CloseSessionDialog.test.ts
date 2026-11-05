@@ -21,6 +21,7 @@ const shell: SessionInfo = {
   cmd: ["bash"],
   status: "running",
   exitCode: null,
+  listeningPorts: [],
   preview: "",
   createdAt: "2026-10-28T00:00:00Z",
   lastActiveAt: "2026-10-28T00:00:00Z",

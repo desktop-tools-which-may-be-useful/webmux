@@ -2,9 +2,16 @@ import { z } from "zod";
 import {
   ArtifactsFolderSchema,
   ErrorSchema,
+  ForwardRequestSchema,
+  ForwardSchema,
+  ForwardTicketSchema,
+  ForwardUpdateSchema,
+  NoContentSchema,
   RecentDirsSchema,
   TextSettingSchema,
   UploadSchema,
+  type ForwardRequest,
+  type ForwardUpdate,
   type SessionInfo,
 } from "./schemas";
 
@@ -305,4 +312,35 @@ export function quoteArg(arg: string): string {
 // Inverse of parseArgs: parseArgs(joinArgs(argv)) equals argv.
 export function joinArgs(argv: readonly string[]): string {
   return argv.map(quoteArg).join(" ");
+}
+// Port forwarding (`/forward/{port}/` gateway). Failures reject with APIError
+// carrying the server's message: 400 for an invalid or WebMux's own port, 409
+// for a port already forwarded, 404 for a forward that no longer exists.
+export function createForward(request: ForwardRequest) {
+  return api(
+    "/forwards",
+    ForwardSchema,
+    "POST",
+    request,
+    undefined,
+    ForwardRequestSchema,
+  );
+}
+export function updateForward(port: number, update: ForwardUpdate) {
+  return api(
+    `/forwards/${port}`,
+    ForwardSchema,
+    "PATCH",
+    update,
+    undefined,
+    ForwardUpdateSchema,
+  );
+}
+export function deleteForward(port: number) {
+  return api(`/forwards/${port}`, NoContentSchema, "DELETE");
+}
+// A one-time code (60 s) the `/forward-auth` page exchanges for the gateway
+// cookie through a top-level form POST, so it never appears in a URL.
+export function forwardTicket() {
+  return api("/forwards/tickets", ForwardTicketSchema, "POST");
 }

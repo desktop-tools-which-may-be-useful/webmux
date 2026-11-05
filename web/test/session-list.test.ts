@@ -11,6 +11,7 @@ function session(id: string, second = 0): SessionInfo {
     cmd: ["bash"],
     status: "running",
     exitCode: null,
+    listeningPorts: [],
     preview: "",
     createdAt: new Date(second * 1000).toISOString(),
     lastActiveAt: new Date().toISOString(),
@@ -29,7 +30,11 @@ test("snapshot order uses creation time and deterministic ID ties without mutati
     session("cccccccc", 1),
     session("aaaaaaaa"),
   ];
-  const result = applySessionEvent([], { type: "snapshot", sessions: input });
+  const result = applySessionEvent([], {
+    type: "snapshot",
+    sessions: input,
+    forwards: [],
+  });
   expect(result.map((item) => item.id)).toEqual([
     "cccccccc",
     "aaaaaaaa",

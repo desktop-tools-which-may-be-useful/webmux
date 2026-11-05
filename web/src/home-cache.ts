@@ -8,6 +8,8 @@ export interface HomeSetup {
   gitReady: boolean;
   registryReady: boolean;
   capabilityError: string;
+  // Whether the server detects the ports sessions listen on.
+  portDetection: boolean;
 }
 
 // The last data the workspace page showed, kept in memory across route changes

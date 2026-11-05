@@ -40,7 +40,8 @@
       error = "";
       // Re-registers an existing push subscription, e.g. after the server
       // rebuilt its store; without one it touches nothing.
-      if (route.name !== "code") void syncPush().catch(() => undefined);
+      if (route.name !== "code" && route.name !== "forward-auth")
+        void syncPush().catch(() => undefined);
     } catch (err) {
       error = errorMessage(err);
     } finally {
@@ -200,6 +201,14 @@
   </LazyPage>
 {:else if route.name === "settings"}
   <LazyPage load={() => import("./pages/Settings.svelte")} label="设置">
+    {#snippet children(page)}<page.default />{/snippet}
+  </LazyPage>
+{:else if route.name === "forward-auth"}
+  <LazyPage
+    load={() => import("./pages/ForwardAuth.svelte")}
+    label="端口转发"
+    loadingText="正在打开转发…"
+  >
     {#snippet children(page)}<page.default />{/snippet}
   </LazyPage>
 {:else}

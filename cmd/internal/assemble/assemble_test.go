@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,23 @@ func TestAttentionSignalOptions(t *testing.T) {
 				t.Fatalf("options = %+v", o)
 			}
 		})
+	}
+}
+
+func TestSessionOptionsExcludeListenPort(t *testing.T) {
+	for _, row := range []struct {
+		listen string
+		want   []int
+	}{
+		{"127.0.0.1:7681", []int{7681}},
+		{"[::1]:8443", []int{8443}},
+		{":9000", []int{9000}},
+		{"127.0.0.1:0", nil},
+		{"no-port", nil},
+	} {
+		if got := SessionOptions(config.Config{Listen: row.listen}).ExcludePorts; !slices.Equal(got, row.want) {
+			t.Errorf("listen %q: ExcludePorts = %v, want %v", row.listen, got, row.want)
+		}
 	}
 }
 

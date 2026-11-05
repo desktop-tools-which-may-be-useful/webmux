@@ -56,6 +56,7 @@ flowchart LR
 | `internal/hub`                                | 终端 WebSocket：快照与订阅、输出合并、JSON 控制帧编码、输入写入与取消                           |
 | `internal/api`                                | REST 路由、认证、Origin 检查、上传请求解析、错误到状态码的映射、静态资源与 SPA 回退             |
 | `internal/files`                              | 目录补全、创建目录、上传文件落盘（私有临时目录）                                                |
+| `internal/forward`                            | 端口转发：内存中的转发登记、上游可达性探测、一次性兑换码与转发凭据（网关在 `internal/api`）     |
 | `internal/workspace`                          | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
 | `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
 | `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                      |

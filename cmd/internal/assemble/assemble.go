@@ -3,6 +3,7 @@
 package assemble
 
 import (
+	"net"
 	"time"
 
 	"github.com/rainchan/webmux/internal/config"
@@ -18,11 +19,26 @@ func SessionOptions(c config.Config) session.Options {
 		DefaultCwd:      c.DefaultCwd,
 		IdleAfter:       time.Duration(c.IdleAfterSeconds) * time.Second,
 		PromptPatterns:  c.PromptPatterns,
+		ExcludePorts:    listenPorts(c.Listen),
 
 		DisableAgentProtocol: !c.AgentProtocol,
 		DisableBellAttention: !c.BellAttention,
 		DisableProgramStatus: !c.ProgramStatus,
 	}
+}
+
+// listenPorts is the configured TCP port of WebMux's own listener. Port 0
+// is chosen when binding, so the caller adds the bound port.
+func listenPorts(listen string) []int {
+	_, service, err := net.SplitHostPort(listen)
+	if err != nil {
+		return nil
+	}
+	port, err := net.LookupPort("tcp", service)
+	if err != nil || port == 0 {
+		return nil
+	}
+	return []int{port}
 }
 
 // TailscaleOptions converts [tailscale] for tailscale.New.

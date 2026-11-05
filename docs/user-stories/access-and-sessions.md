@@ -16,6 +16,7 @@
   - 说明涵盖共享密码用途、初始化生成与保存、配置路径及启动参数覆盖；
   - 配置路径独立成行、窄屏可换行且无横向溢出；
   - 启用认证后，正确 token 才能访问 HTTP API 与 WebSocket；HTTP 只接受 `Authorization: Bearer`，WebSocket 只接受 Bearer 或 token 子协议，`webmux_token` Cookie 与 URL 参数都不能认证；
+  - 端口转发凭据 Cookie `webmux_forward` 独立于 token，只能访问 `/forward/` 网关，不能认证 `/api/` 与 `/ws/`，见 US-R01；
   - 当前浏览器保存 token；
   - 错误或变更后的 token 触发重新认证提示；
   - 本机套接字采用同用户身份校验，见 US-M08。

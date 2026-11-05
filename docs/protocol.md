@@ -8,7 +8,7 @@
 
 ## 认证与 Origin
 
-- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>`；服务端不接受 Cookie 认证。
+- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>`；`/api/` 与 `/ws/` 不接受 Cookie 认证。
 - WebSocket 握手不能设置请求头，因此：
   - 前端改为同时提供子协议 `webmux` 与 `webmux.token.<base64url(UTF-8 token)>`（无填充），服务端只选择 `webmux`、不回显 token。
   - 不接受 query `?token=`，token 不进入请求 URL。
@@ -17,6 +17,7 @@
 - token 以定长摘要做常量时间比较。
 - 带 `Origin` 的请求必须与 `Host` 同源，或在 `allowed_origins` 中。Origin 必须是完整的 HTTP(S) origin，不能含路径、query 或 fragment；`allowed_origins` 条目另须全小写，不带末尾斜杠与默认端口（`:80`、`:443`），否则启动失败。
 - 静态页面公开；所有 API 与 WebSocket 都受认证和 Origin 检查保护。认证失败返回 401，Origin 拒绝返回 403。
+- 端口转发网关 `/forward/{port}/` 是唯一使用 Cookie 的路径：`webmux_forward` 是独立于主 Token 的转发凭据，只能访问网关，见 [端口转发](protocol/http-forward.md)。
 - 错误响应为 JSON `{"error": "..."}`。
 
 ## 文档地图
@@ -26,6 +27,7 @@
 | [HTTP API：会话、启动配置与其他](protocol/http-sessions.md)  | 会话 CRUD、上传、目录、健康检查与启动配置                            |
 | [HTTP 与 WebSocket：混合会话](protocol/http-hybrid.md)       | 切换、恢复、记录、聊天通道与聊天命令                                 |
 | [HTTP API：仓库与代码工作区](protocol/http-workspace.md)     | 仓库与 worktree、只读代码、Diff、图片与下载                          |
+| [HTTP API：端口转发](protocol/http-forward.md)               | 转发管理接口、`/forward/{port}/` 网关、转发凭据与兼容改写            |
 | [HTTP API：公网隧道设置](protocol/http-tunnel.md)            | `/api/tunnel` 系列、持久化与错误语义                                 |
 | [HTTP API：Tailscale 状态与设置](protocol/http-tailscale.md) | `/api/tailscale` 检测、运行状态与网页设置                            |
 | [HTTP API：注意力推送](protocol/http-push.md)                | Web Push 订阅、来源资格与推送负载                                    |

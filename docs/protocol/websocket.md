@@ -5,13 +5,16 @@
 会话列表，文本帧 JSON。连接后先收到 `snapshot`，之后为增量事件：
 
 ```jsonc
-{"type": "snapshot", "sessions": [SessionInfo, ...]}
+{"type": "snapshot", "sessions": [SessionInfo, ...], "forwards": [Forward, ...]}
 {"type": "created", "session": SessionInfo}
 {"type": "updated", "session": SessionInfo}
 {"type": "removed", "id": "abc123"}
+{"type": "forwards", "forwards": [Forward, ...]}
 ```
 
 `updated` 每会话最多 500 ms 一次；仅预览变化最多 2 秒一次。客户端无需发送消息。
+
+`forwards` 在端口转发被添加、修改、移除或上游状态变化后发送，总是携带完整的转发列表（`Forward` 见 [端口转发](http-forward.md)）。连续变化会合并为一条，只保证最后一条是最新列表。
 
 ## WebSocket `/ws/s/{id}`
 

@@ -14,6 +14,8 @@ export function applySessionEvent(
   event: z.infer<typeof SessionEventSchema>,
 ): SessionInfo[] {
   if (event.type === "snapshot") return [...event.sessions].sort(compare);
+  // Forwards live in forwards.svelte.ts; the session list is unchanged.
+  if (event.type === "forwards") return sessions;
   const id = event.type === "removed" ? event.id : event.session.id;
   const index = sessions.findIndex((session) => session.id === id);
   if (event.type === "removed") {

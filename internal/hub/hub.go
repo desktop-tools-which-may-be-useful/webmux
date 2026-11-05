@@ -16,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/wire"
 )
@@ -428,8 +429,19 @@ func collectOutput(ctx context.Context, c *websocket.Conn, sub *session.Subscrib
 	return combined, next, false, true
 }
 
-func List(ctx context.Context, m *session.Manager, c *websocket.Conn) {
+// List streams /ws/sessions: a snapshot of the sessions and forwards, then
+// session events and a forwards event after each forward change. forwards
+// may be nil, which lists none.
+func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c *websocket.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
+	// Subscribing to forwards before reading the list leaves no change
+	// unannounced; a signal already covered by the snapshot only repeats it.
+	var changes <-chan struct{}
+	if forwards != nil {
+		fsub := forwards.Subscribe()
+		defer forwards.Unsubscribe(fsub)
+		changes = fsub.C
+	}
 	sub := m.Subscribe()
 	defer m.Unsubscribe(sub)
 	reader := c.CloseRead(ctx)
@@ -437,6 +449,20 @@ func List(ctx context.Context, m *session.Manager, c *websocket.Conn) {
 		cancel()
 		_ = c.CloseNow()
 	}()
+	send := func(event contract.SessionEvent) bool {
+		data, err := json.Marshal(event)
+		if err != nil || write(ctx, c, websocket.MessageText, data) != nil {
+			_ = c.Close(4408, "write timeout")
+			return false
+		}
+		return true
+	}
+	// Subscribe queued the snapshot first; it must precede forwards events.
+	snapshot := wire.SessionEvent(<-sub.Out)
+	snapshot.Forwards = forwardList(forwards)
+	if !send(snapshot) {
+		return
+	}
 	for {
 		select {
 		case <-reader.Done():
@@ -445,11 +471,20 @@ func List(ctx context.Context, m *session.Manager, c *websocket.Conn) {
 			_ = c.Close(4408, "slow client")
 			return
 		case event := <-sub.Out:
-			data, err := json.Marshal(wire.SessionEvent(event))
-			if err != nil || write(ctx, c, websocket.MessageText, data) != nil {
-				_ = c.Close(4408, "write timeout")
+			if !send(wire.SessionEvent(event)) {
+				return
+			}
+		case <-changes:
+			if !send(contract.SessionEvent{Type: "forwards", Forwards: forwardList(forwards)}) {
 				return
 			}
 		}
 	}
+}
+
+func forwardList(forwards *forward.Service) []contract.Forward {
+	if forwards == nil {
+		return []contract.Forward{}
+	}
+	return wire.Forwards(forwards.List())
 }

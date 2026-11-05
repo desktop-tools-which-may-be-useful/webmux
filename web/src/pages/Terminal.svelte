@@ -35,6 +35,8 @@
     type Divider,
     type SplitDirection,
   } from "../terminal-layout";
+  import { connectSessions } from "../forwards.svelte";
+  import { applySessionEvent } from "../session-list";
 
   let {
     id,
@@ -129,6 +131,28 @@
   const geometry = $derived(layoutGeometry(layout, width, height));
   $effect(() => store(key, JSON.stringify(layout)));
   $effect(() => store(`${key}.active`, active));
+  let forwarding = $state(false);
+  // Every session, for the forwarding dialog's detected ports.
+  let feedSessions = $state.raw<SessionInfo[]>([]);
+  const listening = $derived(
+    ids.some((sessionId) => !!info[sessionId]?.listeningPorts.length),
+  );
+  // The session-list connection carries the forward list. Port prompts need
+  // it only while a pane's session listens on a port, and the dialog while
+  // it is open; otherwise this page leaves the list alone.
+  $effect(() => {
+    if (!listening && !forwarding) return;
+    const socket = connectSessions(
+      (event) => {
+        feedSessions = applySessionEvent(feedSessions, event);
+      },
+      () => {},
+      (message) => {
+        error = message;
+      },
+    );
+    return () => socket.close();
+  });
   onMount(() => {
     mounted = true;
     return () => {
@@ -404,6 +428,7 @@
             }}
             onremoved={() => close(pane.sessionId)}
             onarchived={() => close(pane.sessionId)}
+            showForwards={() => (forwarding = true)}
             oninfo={(value, connection) => {
               info[value.id] = value;
               connections[value.id] = connection;
@@ -539,6 +564,20 @@
           void add(session.id, direction, targetId);
         }}
         onclose={closeCreation}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+<!-- Opened from a port prompt, so this server detects listening ports. -->
+{#if forwarding}
+  <LazyDialog
+    load={() => import("../components/ForwardDialog.svelte")}
+    label="端口转发"
+    onclose={() => (forwarding = false)}
+  >
+    {#snippet children(page)}<page.default
+        sessions={feedSessions}
+        detection
+        onclose={() => (forwarding = false)}
       />{/snippet}
   </LazyDialog>
 {/if}

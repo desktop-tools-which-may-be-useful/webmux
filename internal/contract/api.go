@@ -18,6 +18,9 @@ type ServerConfig struct {
 	// PendingUpdate is present when a different version is installed and
 	// takes effect after a restart; older servers omit it.
 	PendingUpdate *PendingUpdate `json:"pendingUpdate,omitempty"`
+	// PortDetection reports whether sessions report their listening ports on
+	// this platform.
+	PortDetection bool `json:"portDetection"`
 }
 
 // PendingUpdate is an installed version awaiting a restart. Launcher is the

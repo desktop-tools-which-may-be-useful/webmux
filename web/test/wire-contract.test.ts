@@ -117,11 +117,20 @@ const groups: Array<[z.ZodType, string[]]> = [
     [
       "ws-sessions-created",
       "ws-sessions-removed",
+      "ws-sessions-forwards",
       "ws-sessions-snapshot-empty",
       "ws-sessions-snapshot",
+      "ws-sessions-snapshot-forwards",
       "ws-sessions-updated",
     ],
   ],
+  [
+    S.ForwardSchema,
+    ["forward-create", "forward-create-options", "forward-update"],
+  ],
+  [S.ForwardsSchema, ["forwards-list", "forwards-list-empty"]],
+  [S.ForwardTicketSchema, ["forward-ticket"]],
+  [S.NoContentSchema, ["forward-delete"]],
   [
     S.ControlStateSchema,
     [

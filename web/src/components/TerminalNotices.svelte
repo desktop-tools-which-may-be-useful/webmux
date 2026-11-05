@@ -6,7 +6,8 @@
   import type { HybridNotice } from "../hooks/hybrid.svelte";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import FileUploadProgress from "./FileUploadProgress.svelte";
-  import type { ControlState } from "../schemas";
+  import TerminalPortPrompts from "./TerminalPortPrompts.svelte";
+  import type { ControlState, ListeningPort } from "../schemas";
   import type { TerminalDraft } from "../terminal-draft.svelte";
   import type { Connection } from "../ws";
 
@@ -40,6 +41,9 @@
     notices = [],
     dismiss = () => {},
     recovery,
+    session = "",
+    listening,
+    showForwards,
   }: {
     terminal: NoticeTerminal;
     uploads: NoticeUploads;
@@ -58,6 +62,12 @@
     dismiss?: (key: string) => void;
     /** Resume choices that replace the missing and exited strips. */
     recovery?: Snippet;
+    /** The session ID whose listening ports get forwarding prompts. */
+    session?: string;
+    /** Listening ports, or undefined while unknown (see TerminalPortPrompts). */
+    listening?: readonly ListeningPort[];
+    /** Opens the port-forwarding dialog. */
+    showForwards?: () => void;
   } = $props();
   const alertText = $derived([error, t.error].filter(Boolean).join(" "));
   let dismissedError = $state("");
@@ -128,6 +138,11 @@
     >
   </div>
 {/each}
+{#if session}<TerminalPortPrompts
+    {session}
+    {listening}
+    onshowall={showForwards}
+  />{/if}
 {#if t.control && !t.controlling && t.connection === "connected" && t.exitCode === null}
   <div
     class="flex shrink-0 items-center gap-2 border-b bg-muted px-3 py-1 text-xs"

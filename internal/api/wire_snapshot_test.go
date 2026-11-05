@@ -32,6 +32,7 @@ import (
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
@@ -95,6 +96,15 @@ func wireSchema(name string) wireRules {
 		sessionFields("/sessions/*")
 	case "ws-sessions-removed":
 		add("", "id", "id")
+	case "forward-create", "forward-create-options", "forward-update":
+		add("", "time", "createdAt")
+	case "forwards-list", "forwards-list-empty":
+		add("/*", "time", "createdAt")
+	case "ws-sessions-forwards", "ws-sessions-snapshot-forwards":
+		add("/forwards/*", "time", "createdAt")
+	case "forward-ticket":
+		add("", "id", "code")
+		add("", "time", "expiresAt")
 	case "ws-terminal-position-live", "ws-terminal-position-reset":
 		add("", "id", "generation")
 	case "ws-terminal-control-initial", "ws-terminal-control-observer", "ws-terminal-control-claimed", "ws-terminal-control-uncontrolled":
@@ -480,7 +490,9 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 		t.Fatal(err)
 	}
 	hybrids := hybrid.New(hybrid.Options{StateDir: t.TempDir(), Manager: m, Uploads: folders.UploadPath})
-	deps := Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs, Hybrid: hybrids, Artifacts: folders, DefaultShell: agentprofile.ShellBash}
+	forwards := forward.New(forward.Config{ExcludePorts: []int{7681}, Reachable: func(context.Context, int) bool { return false }})
+	t.Cleanup(forwards.Close)
+	deps := Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs, Hybrid: hybrids, Artifacts: folders, Forward: forwards, DefaultShell: agentprofile.ShellBash}
 	deps.InstalledVersion, deps.Launcher = func() string { return "0.5.0" }, contract.LauncherSystemd
 	server := httptest.NewServer(New(testDeps(t, deps)))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -657,12 +669,34 @@ func TestWireSnapshots(t *testing.T) {
 		{"settings", wireSettings},
 		{"hybrid", wireHybrid},
 		{"hybrid-records", wireHybridRecords},
+		{"forwards", wireForwards},
 	} {
 		t.Run(group.name, func(t *testing.T) {
 			rec := &wireRecorder{t: t, norm: newWireNormalizer(), seen: map[string]bool{}}
 			group.run(newWireFixture(t, rec))
 		})
 	}
+}
+
+func wireForwards(f *wireFixture) {
+	list := f.dial("/ws/sessions")
+	f.event(list, "ws-sessions-snapshot-forwards", func(e map[string]any) bool { return e["type"] == "snapshot" })
+	f.call("forwards-list-empty", "GET", "/api/forwards", nil, 200)
+	f.call("forward-create", "POST", "/api/forwards", map[string]any{"port": 5173, "session": "abcdefgh", "process": "node"}, 201)
+	f.event(list, "ws-sessions-forwards", func(e map[string]any) bool { return e["type"] == "forwards" })
+	f.call("forward-create-options", "POST", "/api/forwards", map[string]any{
+		"port": 8000, "label": "docs",
+		"options": map[string]any{"rewriteHost": false, "rewriteOrigin": true, "forwardedHeaders": false, "rewriteResponse": true, "prefix": "strip"},
+	}, 201)
+	f.call("error-400-forward-own-port", "POST", "/api/forwards", map[string]any{"port": 7681}, 400)
+	f.call("error-400-forward-port", "POST", "/api/forwards", map[string]any{"port": 70000}, 400)
+	f.call("error-409-forward", "POST", "/api/forwards", map[string]any{"port": 5173}, 409)
+	f.call("forward-update", "PATCH", "/api/forwards/5173", map[string]any{"label": "web", "options": map[string]any{"rewriteHost": true, "rewriteOrigin": true, "forwardedHeaders": true, "rewriteResponse": true, "prefix": "strip"}}, 200)
+	f.call("error-404-forward", "PATCH", "/api/forwards/9999", map[string]any{"label": "x"}, 404)
+	f.call("forwards-list", "GET", "/api/forwards", nil, 200)
+	f.call("forward-ticket", "POST", "/api/forwards/tickets", nil, 201)
+	f.call("forward-delete", "DELETE", "/api/forwards/8000", nil, 204)
+	_ = list.CloseNow()
 }
 
 func wireSessions(f *wireFixture) {

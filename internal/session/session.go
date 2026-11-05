@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,6 +63,9 @@ type Info struct {
 	ConfigID string
 	// Hybrid is set only on a shell whose driver published an overlay.
 	Hybrid *HybridInfo
+	// ListeningPorts are the TCP ports the current run's process tree
+	// listens on, refreshed every 2 seconds (see ListeningPortsSupported).
+	ListeningPorts []ListeningPort
 }
 
 // Message is one item queued for a terminal subscriber, in protocol order.
@@ -221,6 +225,7 @@ func (s *Session) infoLocked() Info {
 	i := s.info
 	i.Clients = len(s.subs)
 	i.Cmd = append([]string(nil), i.Cmd...)
+	i.ListeningPorts = slices.Clone(i.ListeningPorts)
 	if i.Workspace != nil {
 		workspace := *i.Workspace
 		i.Workspace = &workspace

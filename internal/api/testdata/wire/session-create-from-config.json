@@ -16,6 +16,7 @@
     "generation": "<generation#1>",
     "id": "<id#3>",
     "lastActiveAt": "<time>",
+    "listeningPorts": [],
     "preview": "",
     "reportedCwd": null,
     "rows": 24,

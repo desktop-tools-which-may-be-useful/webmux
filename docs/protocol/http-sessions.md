@@ -109,17 +109,20 @@ interface SessionInfo {
     agentIcon: string; // 品牌图标键，属于启动配置图标目录
     agentSessionId: string | null; // agent 自己的会话 ID，未知时为 null
   };
+  // 会话进程树中监听在回环或通配地址上的 TCP 端口，按端口升序，不含 WebMux 自身端口；
+  // 端口开始或停止监听后 3 秒内更新。不支持检测的平台（非 Linux/macOS）恒为 []。
+  listeningPorts: { port: number; process: string }[];
 }
 ```
 
 ## 其他
 
-| 方法 | 路径                   | 说明                                                                                                                                              |
-| ---- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                                                         |
-| GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel, pendingUpdate?}`，不含 token |
-| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                                  |
-| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                                     |
+| 方法 | 路径                   | 说明                                                                                                                                                                                                           |
+| ---- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                                                                                                                      |
+| GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel, pendingUpdate?, portDetection}`，不含 token；`portDetection` 表示本平台会话会报告监听端口 |
+| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                                                                                               |
+| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                                                                                                  |
 
 `tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。
 

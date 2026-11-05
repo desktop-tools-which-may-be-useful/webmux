@@ -5,6 +5,7 @@ package session
 import (
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -33,7 +34,28 @@ func newProcessSnapshot(table processTable) processSnapshot {
 	for child, state := range table {
 		children[state.ppid] = append(children[state.ppid], child)
 	}
+	// Ascending children keep tree walks independent of map order.
+	for _, list := range children {
+		slices.Sort(list)
+	}
 	return processSnapshot{table: table, children: children}
+}
+
+// tree returns pid and its descendants breadth first, each once. pid is
+// included even when it is newer than the snapshot.
+func (p processSnapshot) tree(pid int) []int {
+	pids := []int{pid}
+	seen := map[int]bool{pid: true}
+	for i := 0; i < len(pids); i++ {
+		for _, child := range p.children[pids[i]] {
+			// Process snapshots can contain cycles; visit each PID only once.
+			if !seen[child] {
+				seen[child] = true
+				pids = append(pids, child)
+			}
+		}
+	}
+	return pids
 }
 
 func (p processSnapshot) foregroundBlocked(pid int) bool {

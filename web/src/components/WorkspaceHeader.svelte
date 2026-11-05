@@ -1,5 +1,6 @@
 <script lang="ts">
   import Brand from "./Brand.svelte";
+  import ForwardButton from "./ForwardButton.svelte";
   import { onMount } from "svelte";
   import IconMoon from "~icons/tabler/moon";
   import IconSettings from "~icons/tabler/settings";
@@ -14,12 +15,15 @@
     setupSettled,
     canStart,
     onstart,
+    onforward,
   }: {
     connection: Connection;
     hostname: string;
     setupSettled: boolean;
     canStart: boolean;
     onstart: () => void;
+    /** Opens the port-forwarding dialog. */
+    onforward: () => void;
   } = $props();
 
   let dark = $state(document.documentElement.classList.contains("dark"));
@@ -69,6 +73,7 @@
       <Button size="sm" disabled={!canStart} onclick={() => onstart()}
         >＋ 新建会话</Button
       >
+      <ForwardButton onclick={onforward} />
       <Button
         href="/settings"
         variant="ghost"

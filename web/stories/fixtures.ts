@@ -17,6 +17,7 @@ export const session = SessionInfoSchema.parse({
   cmd: ["/bin/sh"],
   status: "waiting",
   exitCode: null,
+  listeningPorts: [],
   preview: `${longToken}\n等待确认权限…`,
   createdAt: "2026-01-01T10:00:00Z",
   lastActiveAt: "2026-01-01T11:59:30Z",

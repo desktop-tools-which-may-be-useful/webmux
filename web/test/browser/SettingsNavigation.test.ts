@@ -29,7 +29,8 @@ function stubBackend() {
           values: emptySettings,
         });
       if (path === "/api/launch-configs") return Response.json([]);
-      if (path === "/api/config") return Response.json({ defaultCwd: "/tmp" });
+      if (path === "/api/config")
+        return Response.json({ defaultCwd: "/tmp", portDetection: true });
       return Response.json({ error: "unavailable" }, { status: 503 });
     }),
   );

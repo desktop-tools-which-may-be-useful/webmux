@@ -97,23 +97,41 @@ type SubmissionQuery struct {
 }
 
 // SessionEvent is one /ws/sessions text message: a snapshot first, then
-// created, updated and removed events.
+// created, updated and removed session events and forwards events, which
+// carry the whole forward list.
 type SessionEvent struct {
 	Type     string        `json:"type"`
 	Sessions []SessionInfo `json:"sessions,omitempty"`
 	Session  *SessionInfo  `json:"session,omitempty"`
 	ID       string        `json:"id,omitempty"`
+	Forwards []Forward     `json:"forwards,omitempty"`
 }
 
 var _ json.Marshaler = SessionEvent{}
 
-// MarshalJSON always writes the sessions of a snapshot, even none.
+// MarshalJSON always writes the sessions and forwards of a snapshot and the
+// forwards of a forwards event, even none.
 func (e SessionEvent) MarshalJSON() ([]byte, error) {
-	if e.Type == "snapshot" {
+	forwards := e.Forwards
+	if forwards == nil {
+		forwards = []Forward{}
+	}
+	switch e.Type {
+	case "snapshot":
+		sessions := e.Sessions
+		if sessions == nil {
+			sessions = []SessionInfo{}
+		}
 		return json.Marshal(struct {
 			Type     string        `json:"type"`
 			Sessions []SessionInfo `json:"sessions"`
-		}{e.Type, e.Sessions})
+			Forwards []Forward     `json:"forwards"`
+		}{e.Type, sessions, forwards})
+	case "forwards":
+		return json.Marshal(struct {
+			Type     string    `json:"type"`
+			Forwards []Forward `json:"forwards"`
+		}{e.Type, forwards})
 	}
 	type plain SessionEvent
 	return json.Marshal(plain(e))

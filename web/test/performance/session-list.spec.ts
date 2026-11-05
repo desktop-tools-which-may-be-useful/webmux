@@ -23,6 +23,7 @@ test("4x CPU: a busy session among 120 cards keeps order, filtering and input re
     cmd: ["bash"],
     status: "running",
     exitCode: null,
+    listeningPorts: [],
     preview: `ready-${index}\nstatus`,
     createdAt: new Date(Date.UTC(2026, 9, 24, 0, 0, index)).toISOString(),
     lastActiveAt: new Date().toISOString(),
@@ -40,7 +41,7 @@ test("4x CPU: a busy session among 120 cards keeps order, filtering and input re
     throw new Error("Missing list socket");
   };
   await page.routeWebSocket("**/ws/sessions*", (socket) => {
-    socket.send(JSON.stringify({ type: "snapshot", sessions }));
+    socket.send(JSON.stringify({ type: "snapshot", sessions, forwards: [] }));
     remove = (id) => socket.send(JSON.stringify({ type: "removed", id }));
     update = (session) =>
       socket.send(JSON.stringify({ type: "updated", session }));

@@ -339,6 +339,7 @@
     },
     connection: "connected" as const,
     exitCode: null,
+    listeningPorts: [],
     restoring: false,
     historyTruncated: false,
     canFind: true,
@@ -351,6 +352,7 @@
     controlling: true,
     connection: "connected" as const,
     exitCode: null,
+    listeningPorts: [],
     error: "",
     claim() {},
   };

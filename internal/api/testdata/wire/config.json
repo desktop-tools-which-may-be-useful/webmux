@@ -8,6 +8,7 @@
       "installedVersion": "0.5.0",
       "launcher": "systemd"
     },
+    "portDetection": true,
     "tunnel": {
       "enabled": false,
       "hostname": "",

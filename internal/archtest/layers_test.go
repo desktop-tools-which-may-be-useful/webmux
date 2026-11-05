@@ -25,6 +25,7 @@ var webmux = manifest{
 		"internal/push":              service,
 		"internal/codeview":          service,
 		"internal/files":             service,
+		"internal/forward":           service,
 		"internal/artifacts":         service,
 		"internal/tunnelsettings":    service,
 		"internal/tailscale":         service,
@@ -99,10 +100,11 @@ var webmux = manifest{
 		"internal/codeview.version": "content digest of a snapshot, never sent as JSON",
 	},
 	bodyReaders: map[string]string{
-		"internal/api.decode":         "reads JSON bodies with a size limit and unknown fields rejected",
-		"internal/api.decodeOptional": "reads a JSON body that may be empty, then delegates to decode",
-		"internal/api.decodeStrict":   "reads JSON bodies that must also reject duplicate and case-folded keys",
-		"internal/api.receiveUpload":  "streams one multipart file upload within the upload size limit",
+		"internal/api.decode":                  "reads JSON bodies with a size limit and unknown fields rejected",
+		"internal/api.decodeOptional":          "reads a JSON body that may be empty, then delegates to decode",
+		"internal/api.decodeStrict":            "reads JSON bodies that must also reject duplicate and case-folded keys",
+		"internal/api.receiveUpload":           "streams one multipart file upload within the upload size limit",
+		"internal/api.(*Server).redeemForward": "reads one small URL-encoded form (ticket code and gateway path) that a top-level browser form posts",
 	},
 }
 

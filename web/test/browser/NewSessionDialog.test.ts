@@ -85,6 +85,7 @@ const session: SessionInfo = {
   cmd: ["claude", "--resume"],
   status: "running",
   exitCode: null,
+  listeningPorts: [],
   preview: "",
   createdAt: "2026-10-23T00:00:00Z",
   lastActiveAt: "2026-10-23T00:00:00Z",

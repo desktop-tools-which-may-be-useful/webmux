@@ -67,6 +67,7 @@
     oninfo,
     onremoved,
     onarchived,
+    showForwards,
   }: {
     id: string;
     drafts: TerminalDrafts;
@@ -86,6 +87,8 @@
     onremoved: () => void;
     // A live hybrid session was archived from this pane.
     onarchived: () => void;
+    /** Opens the port-forwarding dialog from a port prompt. */
+    showForwards: () => void;
   } = $props();
   const draft = untrack(() => drafts.get(id));
   let composer = $state<TerminalInputComposer>();
@@ -713,6 +716,11 @@
             notices={hybrid.notices}
             dismiss={(key) => hybrid.dismiss(key)}
             recovery={hybrid.recoverable ? recovery : undefined}
+            session={id}
+            listening={hybrid.view === "terminal"
+              ? hybrid.info?.listeningPorts
+              : undefined}
+            {showForwards}
           />
           {#if hybrid.connector && hybrid.view === "terminal"}<div
               class="shrink-0 border-b px-4 py-2"
