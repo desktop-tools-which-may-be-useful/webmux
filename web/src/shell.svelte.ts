@@ -28,7 +28,7 @@ let collapsed = $state(
   CollapsedSchema.safeParse(stored("sidebarCollapsed")).data === "true",
 );
 /** The full sidebar's width bounds in CSS pixels. */
-export const sidebarWidthMin = 224;
+export const sidebarWidthMin = 256;
 export const sidebarWidthMax = 480;
 const sidebarWidthDefault = 288;
 function clampWidth(width: number) {

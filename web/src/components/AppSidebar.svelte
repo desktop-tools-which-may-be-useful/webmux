@@ -118,6 +118,7 @@
   <div class="flex items-center gap-1 px-2 pt-2 pb-1">
     {#if collapsible}
       <Button
+        class="shrink-0"
         variant="ghost"
         size="icon-touch"
         aria-label="收起侧栏"
@@ -126,7 +127,9 @@
         ><IconLayoutSidebarLeftCollapse aria-hidden="true" /></Button
       >
     {/if}
-    <span class="brand mr-auto min-w-0 px-1"><Brand /></span>
+    <span class="brand mr-auto min-w-0 overflow-hidden px-1 whitespace-nowrap"
+      ><Brand /></span
+    >
     <ModeSwitch mode={shellUi.mode} onchange={onmode} />
   </div>
   <div class="px-2 pt-1">

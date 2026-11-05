@@ -18,7 +18,7 @@
 </script>
 
 <div
-  class={`flex items-center ${vertical ? "flex-col gap-1" : ""}`}
+  class={`flex shrink-0 items-center ${vertical ? "flex-col gap-1" : ""}`}
   role="group"
   aria-label="模式"
 >

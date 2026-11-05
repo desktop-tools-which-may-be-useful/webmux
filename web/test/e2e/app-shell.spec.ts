@@ -336,3 +336,42 @@ test.describe("sidebar is always reachable", () => {
       }
     });
 });
+
+// Required guard: the sidebar's top row (collapse button, brand, mode
+// switch) never overlaps, even at the narrowest sidebar and a larger font.
+test.describe("sidebar header never overlaps", () => {
+  for (const fontSize of ["100%", "150%"])
+    test(`collapse button, brand and mode switch stay apart at the narrowest width (font ${fontSize})`, async ({
+      page,
+    }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem("webmux.sidebarCollapsed", "false");
+        localStorage.setItem("webmux.sidebarWidth", "1");
+      });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto("/");
+      await page.evaluate((size) => {
+        document.documentElement.style.fontSize = size;
+      }, fontSize);
+      const sidebar = page.getByRole("complementary", { name: "侧栏" });
+      const nav = sidebar.getByRole("navigation", { name: "导航" });
+      await expect(nav).toBeVisible();
+      const boxes = [];
+      for (const part of [
+        nav.getByRole("button", { name: "收起侧栏" }),
+        nav.locator(".brand"),
+        nav.getByRole("group", { name: "模式" }),
+      ]) {
+        await expect(part).toBeVisible();
+        boxes.push((await part.boundingBox())!);
+      }
+      for (let i = 0; i < boxes.length - 1; i++)
+        expect(
+          boxes[i].x + boxes[i].width,
+          `part ${i} overlaps part ${i + 1}`,
+        ).toBeLessThanOrEqual(boxes[i + 1].x + 0.5);
+      const side = (await sidebar.boundingBox())!;
+      const last = boxes[2];
+      expect(last.x + last.width).toBeLessThanOrEqual(side.x + side.width);
+    });
+});
