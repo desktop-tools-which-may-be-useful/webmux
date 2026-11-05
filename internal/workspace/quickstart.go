@@ -189,6 +189,8 @@ func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) 
 	if instruction == "" {
 		return plan.text, nil
 	}
+	// A start with only the instruction has no message to place.
+	noMessage := plan.text == ""
 	if strings.Contains(instruction, artifactsDirPlaceholder) {
 		if s.artifacts == nil {
 			return "", problemf(ErrUnavailable, "临时文件夹不可用")
@@ -200,6 +202,9 @@ func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) 
 		instruction = strings.ReplaceAll(instruction, artifactsDirPlaceholder, dir)
 	}
 	text := fillUser(instruction, plan.text)
+	if noMessage {
+		text = strings.TrimSpace(strings.ReplaceAll(instruction, userReference, ""))
+	}
 	if len(text) > hybrid.MaxPromptBytes {
 		return "", problemf(ErrInvalid, "消息与初始化指令合计超过 %d 字节", hybrid.MaxPromptBytes)
 	}
@@ -264,18 +269,10 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 		return quickStartPlan{}, problemf(ErrUnavailable, "%s", snapshot.Error)
 	}
 	instruction := ""
-	if in.UseInitInstruction && snapshot.InitInstruction != "" {
-		if usesReservedReference(snapshot.InitInstruction) {
-			return quickStartPlan{}, problemf(ErrInvalid, "初始化指令里的 {{%s}} 是保留变量，暂不可用", reservedReferenceName)
-		}
-		var commands []QuickCommand
-		if s.commands != nil {
-			commands = s.commands()
-		}
-		var missing []string
-		instruction, missing = expandInstruction(snapshot.InitInstruction, commands)
-		if len(missing) > 0 {
-			return quickStartPlan{}, problemf(ErrInvalid, "初始化指令引用了不存在的快捷指令：%s", strings.Join(missing, "、"))
+	if in.UseInitInstruction {
+		instruction, err = s.expandRepositoryInstruction(snapshot.InitInstruction)
+		if err != nil {
+			return quickStartPlan{}, err
 		}
 	}
 	size := len(in.Text)
@@ -292,6 +289,27 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 	}
 	parent := filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")
 	return quickStartPlan{path: filepath.Join(parent, leaf), text: in.Text, instruction: instruction, attachments: staged}, nil
+}
+
+// expandRepositoryInstruction is a repository's initialization instruction
+// with its {{name}} references replaced by quick command text ("" for none).
+// A reserved or unknown reference is ErrInvalid; {{user}} and {{dir}} stay.
+func (s *Service) expandRepositoryInstruction(instruction string) (string, error) {
+	if instruction == "" {
+		return "", nil
+	}
+	if usesReservedReference(instruction) {
+		return "", problemf(ErrInvalid, "初始化指令里的 {{%s}} 是保留变量，暂不可用", reservedReferenceName)
+	}
+	var commands []QuickCommand
+	if s.commands != nil {
+		commands = s.commands()
+	}
+	expanded, missing := expandInstruction(instruction, commands)
+	if len(missing) > 0 {
+		return "", problemf(ErrInvalid, "初始化指令引用了不存在的快捷指令：%s", strings.Join(missing, "、"))
+	}
+	return expanded, nil
 }
 
 // adoptQuickStartUploads moves the staged attachments into session id's

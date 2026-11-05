@@ -87,7 +87,7 @@ func Sessions(in []session.Info) []contract.SessionInfo { return each(in, Sessio
 
 // SessionInput converts the body of POST /api/sessions.
 func SessionInput(r contract.CreateSessionRequest) workspace.SessionInput {
-	in := workspace.SessionInput{Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID, StartSide: string(r.StartSide)}
+	in := workspace.SessionInput{Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID, StartSide: string(r.StartSide), Prompt: r.Prompt, UseInitInstruction: r.UseInitInstruction}
 	if r.Workspace != nil {
 		ref := workspace.Reference(*r.Workspace)
 		in.Workspace = &ref

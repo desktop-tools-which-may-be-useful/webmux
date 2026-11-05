@@ -568,3 +568,46 @@ func TestQuickStartMatchesManualStart(t *testing.T) {
 		t.Fatalf("first messages differ: %q %q", a, b)
 	}
 }
+
+// A terminal start types the instruction and the user's message into the
+// program once it is quiet, then presses Enter; the chat side gets them as
+// its first prompt. The instruction needs a repository location.
+func TestCreateSessionFirstMessage(t *testing.T) {
+	h := newQuickHarness(t, "先读 AGENTS.md\n{{user}}")
+	ref := &Reference{RepositoryID: h.repo.ID, WorktreeID: h.repo.Worktrees[0].ID}
+	ctx := context.Background()
+
+	if _, err := h.s.CreateSession(ctx, SessionInput{Cmd: []string{"/bin/cat"}, UseInitInstruction: true}); errorKind(err) != ErrInvalid {
+		t.Fatalf("instruction without repository: %v", err)
+	}
+
+	item, err := h.s.CreateSession(ctx, SessionInput{
+		Cmd: []string{"/bin/sh", "-c", "echo ready; exec cat"}, Workspace: ref,
+		UseInitInstruction: true, Prompt: "修复排序",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for strings.Count(string(item.Buffer()), "修复排序") < 2 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	// cat echoes each typed line once as echo and once as output; Enter ends
+	// the line, so the whole message appears twice.
+	if got := strings.Count(string(item.Buffer()), "修复排序"); got < 2 {
+		t.Fatalf("terminal did not receive the message and Enter: %q", item.Buffer())
+	}
+	if !strings.Contains(string(item.Buffer()), "先读 AGENTS.md") {
+		t.Fatalf("instruction missing: %q", item.Buffer())
+	}
+
+	chat, err := h.s.CreateSession(ctx, SessionInput{ConfigID: &h.configID, StartSide: "acp", Workspace: ref, UseInitInstruction: true, Prompt: "修复排序"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := chat.Info().ID
+	h.waitTurnEnd(id)
+	if got := userTexts(h.events(id)); len(got) != 1 || got[0] != "先读 AGENTS.md\n修复排序" {
+		t.Fatalf("first chat prompt %q", got)
+	}
+}

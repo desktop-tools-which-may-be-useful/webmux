@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
@@ -146,6 +147,10 @@ func (s *Service) reassociate(ctx context.Context) {
 // SessionInput describes a session to start. ConfigID selects a saved launch
 // config instead of Cmd and Env. StartSide (tui or acp) applies only to a
 // config with hybrid mode; empty starts a hybrid session in the terminal.
+// Prompt is the user's first message and UseInitInstruction puts the
+// repository's initialization instruction before it (it needs Workspace);
+// whatever the session starts, the text is sent once it is up: as the first
+// chat prompt on the chat side, otherwise typed into the terminal with Enter.
 type SessionInput struct {
 	Cwd       string
 	Cmd       []string
@@ -154,6 +159,9 @@ type SessionInput struct {
 	Env       map[string]string
 	ConfigID  *string
 	StartSide string
+
+	Prompt             string
+	UseInitInstruction bool
 }
 
 // resolvedCommand is the command a session start runs.
@@ -211,8 +219,15 @@ func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.
 			return nil, err
 		}
 	}
+	if in.UseInitInstruction && in.Workspace == nil {
+		return nil, problemf(ErrInvalid, "初始化指令属于仓库，请选择仓库中的位置")
+	}
+	if len(in.Prompt) > hybrid.MaxPromptBytes {
+		return nil, problemf(ErrInvalid, "用户指令超过 %d 字节", hybrid.MaxPromptBytes)
+	}
 	cwd, name, reference := in.Cwd, in.Name, in.Workspace
 	requestCtx := ctx
+	instruction := ""
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 	var selected *Worktree
@@ -229,6 +244,15 @@ func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.
 		}
 		if snapshot.Availability != "available" {
 			return nil, problemf(ErrUnavailable, "%s", snapshot.Error)
+		}
+		if in.UseInitInstruction {
+			instruction, err = s.expandRepositoryInstruction(snapshot.InitInstruction)
+			if err != nil {
+				return nil, err
+			}
+			if strings.Contains(instruction, artifactsDirPlaceholder) && s.artifacts == nil {
+				return nil, problemf(ErrUnavailable, "临时文件夹不可用")
+			}
 		}
 		tree, err := findTree(snapshot, reference.WorktreeID)
 		if err != nil {
@@ -286,7 +310,36 @@ func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.
 		}
 	}
 	s.commitAssociation(item.Info(), association, false)
+	plan := quickStartPlan{text: strings.TrimSpace(in.Prompt), instruction: instruction}
+	if plan.text != "" || plan.instruction != "" {
+		chat := command.hybrid && in.StartSide == string(hybrid.SideACP)
+		if err := s.sendFirstMessage(requestCtx, item, chat, plan); err != nil {
+			// Nothing reached the program: leave no half-started session
+			// behind, so the user can fix the input and start again.
+			id := item.Info().ID
+			_ = s.manager.Close(id)
+			_ = s.manager.Remove(id)
+			return nil, err
+		}
+	}
 	return item, nil
+}
+
+// sendFirstMessage sends plan to a session just started: as the first chat
+// prompt, or typed into the terminal with Enter once the program is quiet
+// (in the background; it ends with the session).
+func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, chat bool, plan quickStartPlan) error {
+	id := item.Info().ID
+	text, err := s.composePrompt(id, plan)
+	if err != nil {
+		return err
+	}
+	if chat {
+		_, err := s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: "first-" + id, Text: text})
+		return err
+	}
+	go func() { _ = item.SendWhenReady(context.Background(), text) }()
+	return nil
 }
 
 // HybridResumeInput resumes a hybrid session record. Side is tui, acp or

@@ -231,3 +231,9 @@ func (s *Preview) row(y int) string {
 	}
 	return string(text)
 }
+
+// BracketedPaste reports whether the program turned bracketed paste on. It
+// is called with Session.mu held.
+func (s *Preview) BracketedPaste() bool {
+	return s.screen != nil && s.screen.CoreService().DecPrivateModes.BracketedPasteMode
+}

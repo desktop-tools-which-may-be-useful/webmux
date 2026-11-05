@@ -115,6 +115,12 @@ type CreateSessionRequest struct {
 	Env       map[string]string   `json:"env,omitempty"`
 	ConfigID  *string             `json:"configId,omitempty"`
 	StartSide HybridSide          `json:"startSide,omitempty"`
+	// Prompt is the user's first message, sent once the session is up: as
+	// the first chat prompt on the chat side, otherwise typed into the
+	// terminal with Enter. UseInitInstruction puts the repository's
+	// initialization instruction before it; it needs Workspace.
+	Prompt             string `json:"prompt,omitempty"`
+	UseInitInstruction bool   `json:"useInitInstruction,omitempty"`
 }
 
 // RenameSessionRequest is the body of PATCH /api/sessions/{id}. An empty

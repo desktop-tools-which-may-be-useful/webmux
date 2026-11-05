@@ -127,6 +127,11 @@ export const CreateSessionRequestSchema = z
     // Only for a launch config with hybrid mode; the server answers 400
     // otherwise.
     startSide: z.enum(["tui", "acp"]).optional(),
+    // The user's first message, sent once the session is up.
+    prompt: z.string().optional(),
+    // Puts the repository's initialization instruction before it; needs
+    // `workspace`.
+    useInitInstruction: z.boolean().optional(),
   })
   .refine(
     (body) =>
@@ -134,6 +139,9 @@ export const CreateSessionRequestSchema = z
       (!body.cmd?.length && Object.keys(body.env ?? {}).length === 0),
     { message: "configId 不能与 cmd 或 env 同时提供" },
   )
+  .refine((body) => !body.useInitInstruction || !!body.workspace, {
+    message: "useInitInstruction 需要 workspace",
+  })
   .refine((body) => !body.startSide || !!body.configId, {
     message: "startSide 只能与混合模式的 configId 一起提供",
   });

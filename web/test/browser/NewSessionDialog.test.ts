@@ -1091,3 +1091,52 @@ test.each(["/repos/project/subdir", "/other-project"])(
     });
   },
 );
+
+test("a first message and the repository instruction go with the new session", async () => {
+  const withInstruction = { ...repository, initInstruction: "先读 AGENTS.md" };
+  open(
+    { status: "ready", configs: [config] },
+    {
+      repositories: [withInstruction],
+      entry: { kind: "worktree", repositoryId: "repo-1", worktreeId: "main" },
+    },
+  );
+  await expect.element(page.getByLabelText("使用初始化指令")).toBeChecked();
+  await page.getByLabelText("用户指令", { exact: false }).fill("  修复排序 ");
+  await submit().click();
+  await vi.waitFor(() => expect(created).toHaveLength(1));
+  expect(created[0]).toEqual({
+    workspace: { repositoryId: "repo-1", worktreeId: "main" },
+    configId: "abcdefg2",
+    name: "",
+    prompt: "修复排序",
+    useInitInstruction: true,
+  });
+});
+
+test("the instruction is offered only where the repository has one and can be left out", async () => {
+  open({ status: "ready", configs: [config] }, { repositories: [repository] });
+  await expect
+    .element(page.getByLabelText("用户指令", { exact: false }))
+    .toBeVisible();
+  expect(page.getByLabelText("使用初始化指令").elements()).toHaveLength(0);
+  await submit().click();
+  await vi.waitFor(() => expect(created).toHaveLength(1));
+  expect(created[0]).not.toHaveProperty("prompt");
+  expect(created[0]).not.toHaveProperty("useInitInstruction");
+});
+
+test("an unticked instruction is not sent", async () => {
+  const withInstruction = { ...repository, initInstruction: "先读 AGENTS.md" };
+  open(
+    { status: "ready", configs: [config] },
+    {
+      repositories: [withInstruction],
+      entry: { kind: "worktree", repositoryId: "repo-1", worktreeId: "main" },
+    },
+  );
+  await page.getByLabelText("使用初始化指令").click();
+  await submit().click();
+  await vi.waitFor(() => expect(created).toHaveLength(1));
+  expect(created[0]).not.toHaveProperty("useInitInstruction");
+});

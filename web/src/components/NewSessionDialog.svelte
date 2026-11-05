@@ -40,6 +40,7 @@
   import SplitDirectionChoice from "./SplitDirectionChoice.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import AdvancedSection from "./AdvancedSection.svelte";
+  import FirstMessageFields from "./FirstMessageFields.svelte";
   import LaunchPicker from "./LaunchPicker.svelte";
   import LocationPicker from "./LocationPicker.svelte";
   import LazyDialog from "./LazyDialog.svelte";
@@ -117,6 +118,8 @@
     stored("hybridStartSide") === "acp" ? "acp" : "tui",
   );
   let name = $state("");
+  let prompt = $state("");
+  let useInstruction = $state(true);
   let error = $state("");
   // Starting on the chat side failed: its connector is not installed.
   let missingConnector = $state.raw<AgentConnector>();
@@ -153,6 +156,20 @@
   });
   // Each agent keeps the side it last started on; an agent never started
   // falls back to the side of the most recent hybrid session.
+  // The repository whose initialization instruction the new session can use:
+  // the chosen worktree's, or the pane's own when a split keeps its workspace.
+  const instructionRepository = $derived.by(() => {
+    if (kind === "directory") {
+      const id =
+        entryDirectory?.workspace && cwd === entryDirectory.cwd
+          ? entryDirectory.workspace.repositoryId
+          : "";
+      return repositories.find((r) => r.id === id);
+    }
+    return repository;
+  });
+  const hasInstruction = $derived(!!instructionRepository?.initInstruction);
+  const startsOnChat = $derived(!!chosenConfig?.hybrid && startSide === "acp");
   const hybridConfigId = $derived(chosenConfig?.hybrid ? chosenConfig.id : "");
   $effect(() => {
     if (!hybridConfigId) return;
@@ -315,14 +332,21 @@
                 : {}),
             }
           : { workspace: { repositoryId, worktreeId } };
+      const first = {
+        ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+        ...(hasInstruction && useInstruction
+          ? { useInitInstruction: true }
+          : {}),
+      };
       const payload = chosenConfig
         ? {
             ...target,
             configId: chosenConfig.id,
             name,
             ...(chosenConfig.hybrid ? { startSide } : {}),
+            ...first,
           }
-        : { ...target, cmd, name };
+        : { ...target, cmd, name, ...first };
       if (makeDirectory)
         await api("/fs/mkdir", NoContentSchema, "POST", { path: cwd });
       const session = await api(
@@ -457,6 +481,14 @@
           onchoose={() => {
             launchTouched = true;
           }}
+        />
+        <FirstMessageFields
+          repositoryName={instructionRepository?.name}
+          {hasInstruction}
+          bind:useInstruction
+          bind:prompt
+          chat={startsOnChat}
+          disabled={busy}
         />
         {#if split}<SplitDirectionChoice bind:direction />{/if}
         <AdvancedSection title="高级：会话名称" summary={name}>
