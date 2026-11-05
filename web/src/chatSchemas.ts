@@ -205,7 +205,7 @@ const ChatFormFieldSchema = z.object({
   name: z.string(),
   title: z.string().optional(),
   description: z.string().optional(),
-  type: z.enum(["string", "enum", "boolean", "unsupported"]),
+  type: z.enum(["string", "enum", "array", "boolean", "unsupported"]),
   required: z.boolean(),
   enum: z.array(z.string()).optional(),
   enumNames: z.array(z.string()).optional(),

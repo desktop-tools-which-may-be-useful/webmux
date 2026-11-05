@@ -911,3 +911,59 @@ test("a form request highlights the prompt in destructive red", async () => {
   expect(form.element().classList.contains("border-destructive/40")).toBe(true);
   expect(form.element().querySelector("svg.text-destructive")).not.toBeNull();
 });
+
+test("submits multi-select array fields in a form elicitation", async () => {
+  const socket = await open();
+  const formRequest = {
+    requestId: "form-multi",
+    kind: "form" as const,
+    form: {
+      message: "The agent has 2 questions.",
+      fields: [
+        {
+          name: "q1",
+          title: "Pick features",
+          type: "array" as const,
+          required: true,
+          enum: ["auth", "cache", "logs"],
+          enumNames: ["Authentication", "Caching", "Logging"],
+          default: ["cache"],
+        },
+        {
+          name: "q1_other",
+          title: "Other",
+          type: "string" as const,
+          required: false,
+        },
+      ],
+      supported: true,
+    },
+  };
+  socket.frame(
+    snapshot(chatState({ turn: { running: true }, requests: [formRequest] })),
+  );
+  const form = page.getByRole("form", { name: "Agent 的表单" });
+  await expect.element(form).toMatchTextContent(/The agent has 2 questions\./);
+  const submit = form.getByRole("button", { name: "提交" });
+  await expect.element(submit).toBeEnabled();
+
+  await form.getByRole("checkbox", { name: "Caching" }).click();
+  await expect.element(submit).toBeDisabled();
+
+  await form.getByRole("checkbox", { name: "Logging" }).click();
+  await form.getByRole("checkbox", { name: "Authentication" }).click();
+  await userEvent.fill(form.getByRole("textbox", { name: "Other" }), "metrics");
+
+  await submit.click();
+  await expect.poll(commands).toEqual([
+    {
+      method: "POST",
+      path: `${base}/requests/form-multi`,
+      body: {
+        clientRequestId: expect.stringMatching(/\S/),
+        outcome: "accept",
+        content: { q1: ["auth", "logs"], q1_other: "metrics" },
+      },
+    },
+  ]);
+});

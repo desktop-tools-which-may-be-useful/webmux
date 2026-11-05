@@ -325,6 +325,15 @@
   - Playwright：`quick-start.spec.ts` 桌面（1280×720）与 Pixel 7（390×844）通过；其余 E2E 交由 CI 运行。
 - 限制：未在真机上核对，未截取 PR 前后对比截图；E2E 使用 fake agent。
 
+本次局部核对（2026-11-05）：支持 ACP 表单提问的多选 `array` 字段（`items.anyOf` 与 `items.enum`），修复 `agy` 等 agent 发起含多选题的 `elicitation/create` 时在聊天端退化为“该表单需要在终端中完成”的问题，对应更新 US-Q06，不新增故事或改变覆盖索引。
+
+- 依据：
+  - `internal/hybrid`（`TestFormRequest` 与 `TestAgyFormElicitationMultiSelect`）、`internal/wire`、`internal/api` 的 Go race 测试。
+  - `ChatView` 浏览器组件测试（18 项通过，含多选复选框默认值、必填校验与提交字符串数组）。
+  - `make check`（生产构建、类型检查、测试类型检查、Oxlint、前端架构守卫、文档与持久化守卫、`go vet`、`golangci-lint`）通过。
+  - 隔离演示服务下桌面（1280×800）与手机（390×844）、浅色与深色主题前后对比截图及浏览器端完整表单提交验证。
+- 限制：未运行全量 E2E 套件，未在真机上核对；未重新核验其余故事能力。
+
 本次局部核对（2026-11-05）：代码查看器（`CodeReader`）与 Diff 查看器（`CodeDiffReader`）底部补充常驻横向滚动条，对应更新 US-I05，不新增故事或改变覆盖索引。
 
 - 行为：当源码或未开启自动换行的 Diff 行宽超出可视区域时，在阅读器视口底部显示横向滚动条，并与代码列双向同步 `scrollLeft`；无需滚到文件末尾即可横向拖动，切换到自动换行或无横向溢出时自动隐藏。

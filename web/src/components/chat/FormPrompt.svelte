@@ -10,8 +10,8 @@
   import type { ChatFormField, ChatRequest } from "../../schemas";
 
   // A form the agent asks the user to fill in (elicitation, form mode):
-  // text, choice and yes/no fields. A form with any other field type can
-  // only be declined or cancelled here.
+  // text, single/multi-choice and yes/no fields. A form with any other field
+  // type can only be declined or cancelled here.
   let {
     request,
     disabled,
@@ -24,25 +24,51 @@
   const form = $derived(
     request.form ?? { message: "", fields: [], supported: false },
   );
-  const initial = (field: ChatFormField) =>
+  const initial = (field: ChatFormField): string | boolean | string[] =>
     field.type === "boolean"
       ? field.default === true
-      : typeof field.default === "string"
-        ? field.default
-        : field.type === "enum"
-          ? (field.enum?.[0] ?? "")
-          : "";
-  let values = $state<Record<string, string | boolean>>(
+      : field.type === "array"
+        ? Array.isArray(field.default)
+          ? field.default.filter(
+              (item): item is string =>
+                typeof item === "string" &&
+                (field.enum?.includes(item) ?? false),
+            )
+          : []
+        : typeof field.default === "string"
+          ? field.default
+          : field.type === "enum"
+            ? (field.enum?.[0] ?? "")
+            : "";
+  let values = $state<Record<string, string | boolean | string[]>>(
     untrack(() =>
       Object.fromEntries(
         form.fields.map((field) => [field.name, initial(field)]),
       ),
     ),
   );
+  const selected = (field: ChatFormField) => {
+    const current = values[field.name];
+    return Array.isArray(current) ? current : [];
+  };
+  const toggleChoice = (
+    field: ChatFormField,
+    choice: string,
+    checked: boolean,
+  ) => {
+    const current = selected(field);
+    values[field.name] = checked
+      ? (field.enum ?? []).filter(
+          (item) => item === choice || current.includes(item),
+        )
+      : current.filter((item) => item !== choice);
+  };
   const missing = $derived(
     form.fields.some(
       (field) =>
-        field.required && field.type === "string" && !values[field.name],
+        field.required &&
+        ((field.type === "string" && !values[field.name]) ||
+          (field.type === "array" && selected(field).length === 0)),
     ),
   );
   const fieldId = (field: ChatFormField) =>
@@ -76,6 +102,24 @@
               onCheckedChange={(checked) => (values[field.name] = checked)}
             />{field.title || field.name}
           </Label>
+        {:else if field.type === "array"}
+          <fieldset class="space-y-1.5">
+            <legend class="text-sm leading-snug font-medium"
+              >{field.title || field.name}{field.required ? " *" : ""}</legend
+            >
+            <div class="space-y-1.5">
+              {#each field.enum ?? [] as choice, i (choice)}
+                <Label>
+                  <Checkbox
+                    checked={selected(field).includes(choice)}
+                    {disabled}
+                    onCheckedChange={(checked) =>
+                      toggleChoice(field, choice, checked)}
+                  />{field.enumNames?.[i] || choice}
+                </Label>
+              {/each}
+            </div>
+          </fieldset>
         {:else}
           <Label for={fieldId(field)}
             >{field.title || field.name}{field.required ? " *" : ""}</Label
@@ -92,7 +136,7 @@
             >
               {#each field.enum ?? [] as choice, i (choice)}
                 <NativeSelect.Option value={choice}
-                  >{field.enumNames?.[i] ?? choice}</NativeSelect.Option
+                  >{field.enumNames?.[i] || choice}</NativeSelect.Option
                 >
               {/each}
             </NativeSelect.Root>

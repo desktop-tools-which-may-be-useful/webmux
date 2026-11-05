@@ -77,7 +77,7 @@
 
 agent 发起权限请求时，聊天视图 SHALL 在输入框位置显示编号选项，选项文字与种类取自请求；请求关联工具调用时，SHALL 同时标注在对应的工具调用上。
 
-agent 发起 `form` 模式的表单请求时，聊天视图 SHALL 渲染 string、enum 与 boolean 字段，提供提交、拒绝与取消。其他字段类型 SHALL 提示“该表单需要在终端中完成”并只提供拒绝与取消。
+agent 发起 `form` 模式的表单请求时，聊天视图 SHALL 渲染 string、enum、array（多选）与 boolean 字段，提供提交、拒绝与取消。其他字段类型 SHALL 提示“该表单需要在终端中完成”并只提供拒绝与取消。
 
 答复 SHALL 经 `POST /api/sessions/{id}/chat/requests/{requestId}` 提交：
 

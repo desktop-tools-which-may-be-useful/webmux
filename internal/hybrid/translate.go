@@ -418,6 +418,14 @@ func formRequest(id string, req acp.CreateElicitationRequest) Request {
 				}
 			case p.Type == "string" && len(p.Enum) > 0:
 				field.Type, field.Enum = "enum", slices.Clone(p.Enum)
+			case p.Type == "array" && p.Items != nil && len(p.Items.AnyOf) > 0:
+				field.Type = "array"
+				for _, o := range p.Items.AnyOf {
+					field.Enum = append(field.Enum, o.Const)
+					field.EnumNames = append(field.EnumNames, o.Title)
+				}
+			case p.Type == "array" && p.Items != nil && p.Items.Type == "string" && len(p.Items.Enum) > 0:
+				field.Type, field.Enum = "array", slices.Clone(p.Items.Enum)
 			case p.Type == "string":
 				field.Type = "string"
 			default:

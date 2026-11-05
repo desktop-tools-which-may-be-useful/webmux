@@ -18,7 +18,7 @@ import {
 export type RequestAnswer =
   | { outcome: "selected"; optionId: string }
   | { outcome: "cancelled" }
-  | { outcome: "accept"; content: Record<string, string | boolean> }
+  | { outcome: "accept"; content: Record<string, string | boolean | string[]> }
   | { outcome: "decline" }
   | { outcome: "cancel" };
 

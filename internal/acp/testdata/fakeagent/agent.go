@@ -796,16 +796,46 @@ func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string)
 	}
 	if a.cfg.elicit {
 		var resp acp.CreateElicitationResponse
-		err := a.request(acp.MethodElicitationCreate, acp.CreateElicitationRequest{
+		req := acp.CreateElicitationRequest{
 			Mode: acp.ElicitationForm, Message: "Who are you?", SessionID: sid,
 			RequestedSchema: &acp.ElicitationSchema{Type: "object", Properties: map[string]acp.ElicitationProperty{
 				"name": {Type: "string", Title: "Name"},
 			}, Required: []string{"name"}},
-		}, &resp)
+		}
+		if a.cfg.profile == "agy" {
+			req = acp.CreateElicitationRequest{
+				Mode: acp.ElicitationForm, Message: "The agent has 3 questions.", SessionID: sid,
+				RequestedSchema: &acp.ElicitationSchema{Type: "object", Properties: map[string]acp.ElicitationProperty{
+					"q1": {
+						Type:  "string",
+						Title: "Which environment should we deploy to?",
+						OneOf: []acp.EnumOption{
+							{Const: "staging", Title: "(Recommended) Staging"},
+							{Const: "production", Title: "Production"},
+						},
+					},
+					"q1_other": {Type: "string", Title: "Other", Description: "Optional free-form answer to: Which environment should we deploy to?"},
+					"q2": {
+						Type:  "array",
+						Title: "Which checks should run before release?",
+						Items: &acp.MultiSelectItems{AnyOf: []acp.EnumOption{
+							{Const: "lint", Title: "(Recommended) Oxlint & golangci-lint"},
+							{Const: "unit", Title: "Unit tests"},
+							{Const: "e2e", Title: "Playwright E2E"},
+						}},
+					},
+					"q2_other": {Type: "string", Title: "Other", Description: "Optional free-form answer to: Which checks should run before release?"},
+					"q3":       {Type: "string", Title: "Any release notes to include?"},
+				}},
+			}
+		}
+		err := a.request(acp.MethodElicitationCreate, req, &resp)
 		a.st.event("elicitation "+resp.Action, sid)
 		switch {
 		case err != nil || ctx.Err() != nil || resp.Action == acp.ElicitCancel:
 			return "", acp.StopCancelled
+		case resp.Action == acp.ElicitAccept && a.cfg.profile == "agy":
+			extra += fmt.Sprintf(" (q1=%v q2=%v q3=%v)", resp.Content["q1"], resp.Content["q2"], resp.Content["q3"])
 		case resp.Action == acp.ElicitAccept:
 			extra += fmt.Sprintf(" (hello %v)", resp.Content["name"])
 		default:

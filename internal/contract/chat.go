@@ -341,7 +341,7 @@ type ChatForm struct {
 	Supported bool            `json:"supported"`
 }
 
-// ChatFormField is one field; Type is string, enum, boolean or unsupported.
+// ChatFormField is one field; Type is string, enum, array, boolean or unsupported.
 type ChatFormField struct {
 	Name        string          `json:"name"`
 	Title       string          `json:"title,omitempty"`

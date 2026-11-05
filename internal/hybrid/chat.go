@@ -271,7 +271,7 @@ type Form struct {
 	Supported bool
 }
 
-// FormField is one field; Type is string, enum, boolean or unsupported.
+// FormField is one field; Type is string, enum, array, boolean or unsupported.
 // Default is the agent's raw JSON default, passed through unchanged.
 type FormField struct {
 	Name        string

@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -185,21 +186,35 @@ func TestFormRequest(t *testing.T) {
 			"name":  {Type: "string", Default: []byte(`"x"`)},
 			"color": {Type: "string", OneOf: []acp.EnumOption{{Const: "r", Title: "Red"}}},
 			"ok":    {Type: "boolean"},
+			"tags":  {Type: "array", Items: &acp.MultiSelectItems{AnyOf: []acp.EnumOption{{Const: "a", Title: "Alpha"}}}},
+			"plain": {Type: "array", Items: &acp.MultiSelectItems{Type: "string", Enum: []string{"x", "y"}}},
 		},
 		Required: []string{"name"},
 	}})
 	f := r.Form
-	if r.Kind != RequestForm || !f.Supported || len(f.Fields) != 3 || f.Fields[0].Name != "color" || f.Fields[0].Type != "enum" || f.Fields[0].EnumNames[0] != "Red" {
+	if r.Kind != RequestForm || !f.Supported || len(f.Fields) != 5 || f.Fields[0].Name != "color" || f.Fields[0].Type != "enum" || f.Fields[0].EnumNames[0] != "Red" {
 		t.Fatalf("form %+v", f)
 	}
 	if f.Fields[1].Name != "name" || !f.Fields[1].Required || string(f.Fields[1].Default) != `"x"` || f.Fields[2].Type != "boolean" {
 		t.Fatalf("fields %+v", f.Fields)
+	}
+	if f.Fields[3].Name != "plain" || f.Fields[3].Type != "array" || !slices.Equal(f.Fields[3].Enum, []string{"x", "y"}) {
+		t.Fatalf("plain array %+v", f.Fields[3])
+	}
+	if f.Fields[4].Name != "tags" || f.Fields[4].Type != "array" || !slices.Equal(f.Fields[4].Enum, []string{"a"}) || !slices.Equal(f.Fields[4].EnumNames, []string{"Alpha"}) {
+		t.Fatalf("titled array %+v", f.Fields[4])
 	}
 	r = formRequest("r2", acp.CreateElicitationRequest{Mode: acp.ElicitationForm, RequestedSchema: &acp.ElicitationSchema{
 		Properties: map[string]acp.ElicitationProperty{"n": {Type: "number"}},
 	}})
 	if r.Form.Supported || r.Form.Fields[0].Type != "unsupported" {
 		t.Fatalf("number field %+v", r.Form)
+	}
+	r = formRequest("r3", acp.CreateElicitationRequest{Mode: acp.ElicitationForm, RequestedSchema: &acp.ElicitationSchema{
+		Properties: map[string]acp.ElicitationProperty{"empty": {Type: "array"}},
+	}})
+	if r.Form.Supported || r.Form.Fields[0].Type != "unsupported" {
+		t.Fatalf("empty array field %+v", r.Form)
 	}
 }
 
