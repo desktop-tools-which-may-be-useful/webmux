@@ -18,13 +18,16 @@
     pierreTheme,
   } from "../code-pierre";
   import {
+    bindHorizontalScrollbar,
     readerKeydown,
     releaseCodeView,
     syncViewerOptions,
     watchReader,
+    type CodeHorizontalTrack,
   } from "../code-reader-controls";
   import type { CodeReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
+  import CodeHorizontalScrollbar from "./CodeHorizontalScrollbar.svelte";
   import CodeReaderPanels from "./CodeReaderPanels.svelte";
   import IconListNumbers from "~icons/tabler/list-numbers";
   import IconNumber from "~icons/tabler/number";
@@ -87,7 +90,17 @@
   let known: Pick<CodeReaderState, "line" | "offset"> | undefined;
   let host: HTMLDivElement;
   let root: HTMLDivElement;
+  let trackElement = $state<HTMLDivElement>();
+  let track = $state<CodeHorizontalTrack>({ shown: false, width: 0 });
   let viewer: CodeView | undefined;
+  const horizontalScrollbar = bindHorizontalScrollbar(
+    () => viewer,
+    () => trackElement,
+    (next) => {
+      if (track.shown !== next.shown || track.width !== next.width)
+        track = next;
+    },
+  );
   let mounted = $state(false);
   let placed = false;
   // A jump made before the first render; the initial placement honors it
@@ -402,6 +415,7 @@
       // Defer until then so a pending restore can scroll in.
       onPostRender: () =>
         queueMicrotask(() => {
+          horizontalScrollbar.sync();
           if (pending) applyRestore();
           else placeInitial();
         }),
@@ -427,6 +441,7 @@
       },
       // A hidden tab has no layout; a pending restore waits until it is shown.
       onResize: () => {
+        horizontalScrollbar.sync();
         if (pending) applyRestore();
         else if (!placed) placeInitial();
       },
@@ -444,6 +459,7 @@
     root.addEventListener("keydown", keydown);
     return () => {
       mounted = false;
+      horizontalScrollbar.destroy();
       stopEnvironment();
       root.removeEventListener("keydown", keydown);
       releaseCodeView(viewer, highlighter);
@@ -526,6 +542,11 @@
       aria-label="只读代码"
     ></div>
   </div>
+  <CodeHorizontalScrollbar
+    {track}
+    bind:trackElement
+    onscroll={horizontalScrollbar.onTrackScroll}
+  />
 </div>
 
 <style>

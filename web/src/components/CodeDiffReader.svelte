@@ -20,13 +20,16 @@
     pierreTheme,
   } from "../code-pierre";
   import {
+    bindHorizontalScrollbar,
     readerKeydown,
     releaseCodeView,
     syncViewerOptions,
     watchReader,
+    type CodeHorizontalTrack,
   } from "../code-reader-controls";
   import type { CodeDiffReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
+  import CodeHorizontalScrollbar from "./CodeHorizontalScrollbar.svelte";
   import CodeReaderPanels from "./CodeReaderPanels.svelte";
   import IconSearch from "~icons/tabler/search";
   import IconTextWrap from "~icons/tabler/text-wrap";
@@ -61,8 +64,18 @@
   let selected = $state<SelectedLineRange | null>(null);
   let host: HTMLDivElement;
   let root: HTMLDivElement;
+  let trackElement = $state<HTMLDivElement>();
+  let track = $state<CodeHorizontalTrack>({ shown: false, width: 0 });
   let viewer: CodeView | undefined;
   let mounted = $state(false);
+  const horizontalScrollbar = bindHorizontalScrollbar(
+    () => viewer,
+    () => trackElement,
+    (next) => {
+      if (track.shown !== next.shown || track.width !== next.width)
+        track = next;
+    },
+  );
   const id = "diff";
   const expansionLines = 30;
   // Until applied, `capture()` returns it unchanged.
@@ -296,6 +309,7 @@
       // the first render, even when highlighting needs no second render.
       onPostRender: () =>
         queueMicrotask(() => {
+          horizontalScrollbar.sync();
           enhanceControls();
           applyRestore();
         }),
@@ -359,6 +373,7 @@
       // A hidden tab has no layout; a pending restore waits until it is shown.
       onResize: () => {
         width = host.clientWidth;
+        horizontalScrollbar.sync();
         applyRestore();
       },
       onScroll: () => {
@@ -413,6 +428,7 @@
     document.addEventListener("selectionchange", selectionChanged);
     return () => {
       mounted = false;
+      horizontalScrollbar.destroy();
       stopEnvironment();
       host.removeEventListener("pointerdown", guardExpansion, true);
       host.removeEventListener("click", guardExpansion, true);
@@ -520,6 +536,11 @@
       </p>
     {/if}
   </div>
+  <CodeHorizontalScrollbar
+    {track}
+    bind:trackElement
+    onscroll={horizontalScrollbar.onTrackScroll}
+  />
 </div>
 
 <style>

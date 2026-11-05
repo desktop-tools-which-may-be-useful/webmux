@@ -325,6 +325,12 @@
   - Playwright：`quick-start.spec.ts` 桌面（1280×720）与 Pixel 7（390×844）通过；其余 E2E 交由 CI 运行。
 - 限制：未在真机上核对，未截取 PR 前后对比截图；E2E 使用 fake agent。
 
+本次局部核对（2026-11-05）：代码查看器（`CodeReader`）与 Diff 查看器（`CodeDiffReader`）底部补充常驻横向滚动条，对应更新 US-I05，不新增故事或改变覆盖索引。
+
+- 行为：当源码或未开启自动换行的 Diff 行宽超出可视区域时，在阅读器视口底部显示横向滚动条，并与代码列双向同步 `scrollLeft`；无需滚到文件末尾即可横向拖动，切换到自动换行或无横向溢出时自动隐藏。
+- 依据：`CodeReader` 与 `CodeDocument` 浏览器组件测试（含 `N:列` 横向跳转同步、Diff 横向滚动同步与自动换行隐藏断言）、`make check`、`make test-fast`，以及桌面与移动视口明暗主题截图核对。
+- 限制：未在 iOS/Android 真机浏览器核对；未重新核验其余故事能力。
+
 本次局部核对（2026-11-05）：新增 `webmux-docs` 文档质量与由浅入深写作技能（`.agents/skills/webmux-docs/SKILL.md`），重组用户文档并同步近期提交能力，对应更新 US-L12 与覆盖索引（不新增故事编号）。
 
 - 范围：

@@ -11,6 +11,8 @@ const row = (line: number) =>
 const gutter = (line: number) =>
   shadow()?.querySelector<HTMLElement>(`[data-column-number="${line}"]`);
 const code = () => shadow()?.querySelector<HTMLElement>("[data-code]");
+const scrollbar = () =>
+  document.querySelector<HTMLElement>("[data-code-scrollbar]");
 const token = (text: string) =>
   [...(shadow()?.querySelectorAll<HTMLElement>("[data-line] span") ?? [])].find(
     (element) => element.textContent?.trim() === text,
@@ -109,11 +111,20 @@ test("goto accepts N:column and scrolls the code horizontally", async () => {
   ).join("\n");
   render(Harness, { text });
   await expect.poll(() => shadow()?.textContent ?? "").toContain("line 1");
+  expect(scrollbar()?.classList.contains("hidden")).toBe(true);
   await page.getByRole("button", { name: "跳转行" }).click();
   await page.getByRole("textbox", { name: "跳转到行" }).fill("500:200");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => row(500)?.textContent ?? "").toContain("xxxx");
   await expect.poll(() => code()?.scrollLeft ?? 0).toBeGreaterThan(0);
+  await expect
+    .poll(() => scrollbar()?.classList.contains("hidden") ?? true)
+    .toBe(false);
+  await expect
+    .poll(() => scrollbar()?.scrollLeft ?? 0)
+    .toBe(code()?.scrollLeft ?? -1);
+  scrollbar()!.scrollLeft = 0;
+  await expect.poll(() => code()?.scrollLeft ?? -1).toBe(0);
 });
 
 test("a goto submitted before the first placement survives it", async () => {

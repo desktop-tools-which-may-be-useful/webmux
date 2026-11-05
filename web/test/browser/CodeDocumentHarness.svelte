@@ -6,11 +6,13 @@
     syntax = false,
     unchanged = false,
     markdown = false,
+    wide = false,
   }: {
     deleted?: boolean;
     syntax?: boolean;
     unchanged?: boolean;
     markdown?: boolean;
+    wide?: boolean;
   } = $props();
   let revision = $state(1);
   let active = $state(true);
@@ -23,7 +25,7 @@
       : Array.from(
           { length: deleted ? 20000 : 120 },
           (_, i) =>
-            `ordinary line ${i + 1}${deleted ? " " + "x".repeat(60) : ""}`,
+            `ordinary line ${i + 1}${deleted || wide ? " " + "x".repeat(80) : ""}`,
         ).join("\n") + "\n",
   );
   const diff = $derived(
@@ -75,8 +77,8 @@
             : syntax
               ? original.replace("message", "content")
               : original.replace(
-                  "ordinary line 50\n",
-                  `changed revision ${revision}\n`,
+                  `ordinary line 50${wide ? " " + "x".repeat(80) : ""}\n`,
+                  `changed revision ${revision}${wide ? " " + "y".repeat(80) : ""}\n`,
                 ),
         lineCount: deleted ? 0 : 120,
         referenceable: !deleted,

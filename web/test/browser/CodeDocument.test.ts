@@ -11,6 +11,11 @@ beforeEach(async () => {
 
 const shadow = () => document.querySelector("diffs-container")?.shadowRoot;
 const code = () => shadow()?.querySelector("pre")?.textContent ?? "";
+const scrollbar = () =>
+  document.querySelector<HTMLElement>("[data-code-scrollbar]");
+const scrollers = () => [
+  ...(shadow()?.querySelectorAll<HTMLElement>("[data-code]") ?? []),
+];
 const gutter = (side: "deletion" | "addition", line: number) =>
   page.elementLocator(
     shadow()!.querySelector(
@@ -253,6 +258,32 @@ test("responsive layout, wrap and line ranges preserve the actual selected sourc
   await expect
     .element(page.getByRole("button", { name: "引用整个文件" }))
     .not.toBeInTheDocument();
+});
+
+test("horizontal scrollbar syncs diff columns and hides in wrap mode", async () => {
+  render(Harness, { wide: true });
+  await expect.poll(code, { timeout: 10000 }).toContain("changed revision 1");
+  await expect
+    .poll(() => scrollbar()?.classList.contains("hidden") ?? true)
+    .toBe(false);
+  scrollbar()!.scrollLeft = 40;
+  await expect.poll(() => scrollers()[0]?.scrollLeft ?? 0).toBe(40);
+  await page.getByRole("button", { name: "Toggle width" }).click();
+  await expect
+    .poll(() => shadow()?.querySelector("pre")?.dataset.diffType)
+    .toBe("split");
+  await expect.poll(() => scrollers().length).toBe(2);
+  scrollbar()!.scrollLeft = 60;
+  await expect
+    .poll(() => scrollers().map((el) => Math.round(el.scrollLeft)))
+    .toEqual([60, 60]);
+  scrollers()[1]!.scrollLeft = 25;
+  await expect.poll(() => Math.round(scrollbar()?.scrollLeft ?? 0)).toBe(25);
+  await expect.poll(() => Math.round(scrollers()[0]?.scrollLeft ?? 0)).toBe(25);
+  await page.getByRole("button", { name: "自动换行", exact: true }).click();
+  await expect
+    .poll(() => scrollbar()?.classList.contains("hidden") ?? false)
+    .toBe(true);
 });
 
 test("large deletions stay virtualized, with source-line goto and search", async () => {

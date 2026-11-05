@@ -11,6 +11,9 @@ export const codeTokenizeLimit = 4096;
 
 /** Only fixed application CSS enters the library's shadow roots. */
 export const codeUnsafeCSS = `
+  :host { --diffs-scrollbar-gutter-override: 0px; }
+  [data-code] { scrollbar-width: none; }
+  [data-code]::-webkit-scrollbar { display: none; width: 0; height: 0; }
   [data-line], [data-column-number] { font-variant-ligatures: none; }
 `;
 

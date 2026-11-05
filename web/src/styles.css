@@ -457,6 +457,25 @@
   min-width: 0;
   overflow: hidden;
 }
+[data-code-scrollbar]::-webkit-scrollbar {
+  width: 0;
+  height: 11px;
+}
+[data-code-scrollbar]::-webkit-scrollbar-track {
+  background: var(--card);
+}
+[data-code-scrollbar]::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  background-clip: padding-box;
+}
+@supports not selector(::-webkit-scrollbar) {
+  [data-code-scrollbar] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) var(--card);
+  }
+}
 .terminal-workspace:not(.code-shown) .terminal-pane {
   flex: 1 !important;
 }

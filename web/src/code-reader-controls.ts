@@ -218,3 +218,143 @@ export function syncViewerOptions(
     onSelection?.(selection.range);
   }
 }
+
+export type CodeHorizontalTrack = {
+  shown: boolean;
+  width: number;
+};
+
+/**
+ * Keeps a viewport-pinned horizontal scrollbar synchronized with the
+ * `<code data-code>` scrollers inside a virtualized `CodeView`.
+ *
+ * `CodeView` renders an overscrolled vertical window inside its sticky
+ * container, so `[data-code]`'s bottom edge lies below the visible viewport
+ * until the end of the file. A dedicated bottom track stays visible at the
+ * bottom of the reader whenever rendered lines overflow horizontally.
+ */
+export function bindHorizontalScrollbar(
+  viewer: () => CodeView | undefined,
+  track: () => HTMLElement | undefined,
+  onChange: (state: CodeHorizontalTrack) => void,
+) {
+  let left = 0;
+  let frame = 0;
+  const scrollers = new Set<HTMLElement>();
+  const observed = new Set<Element>();
+
+  function currentScrollers(): HTMLElement[] {
+    const item = viewer()?.getRenderedItems()[0];
+    if (!item) return [];
+    return [
+      ...(item.element.shadowRoot?.querySelectorAll<HTMLElement>(
+        "[data-code]",
+      ) ?? []),
+    ];
+  }
+
+  function applyLeft(targetLeft: number, source?: HTMLElement) {
+    left = Math.max(0, targetLeft);
+    for (const scroller of currentScrollers()) {
+      if (scroller !== source && Math.abs(scroller.scrollLeft - left) > 0.5)
+        scroller.scrollLeft = left;
+    }
+    const bar = track();
+    if (bar && bar !== source && Math.abs(bar.scrollLeft - left) > 0.5)
+      bar.scrollLeft = left;
+  }
+
+  const onCodeScroll = (event: Event) => {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return;
+    if (Math.abs(target.scrollLeft - left) <= 0.5) return;
+    applyLeft(target.scrollLeft, target);
+  };
+
+  const onTrackScroll = () => {
+    const bar = track();
+    if (!bar || Math.abs(bar.scrollLeft - left) <= 0.5) return;
+    applyLeft(bar.scrollLeft, bar);
+  };
+
+  function measure() {
+    const active = currentScrollers();
+    const bar = track();
+    for (const old of scrollers) {
+      if (!active.includes(old)) {
+        old.removeEventListener("scroll", onCodeScroll);
+        scrollers.delete(old);
+      }
+    }
+    const nextObserved = new Set<Element>();
+    if (bar) nextObserved.add(bar);
+    let maxOverflow = 0;
+    let sourceLeft: number | undefined;
+    for (const scroller of active) {
+      if (!scrollers.has(scroller)) {
+        scrollers.add(scroller);
+        scroller.addEventListener("scroll", onCodeScroll, { passive: true });
+      }
+      nextObserved.add(scroller);
+      for (const child of scroller.children) nextObserved.add(child);
+      const overflow = scroller.scrollWidth - scroller.clientWidth;
+      if (overflow > maxOverflow) maxOverflow = overflow;
+      if (scroller.scrollLeft > 0 && sourceLeft === undefined)
+        sourceLeft = scroller.scrollLeft;
+    }
+    for (const old of observed) {
+      if (!nextObserved.has(old)) {
+        resize.unobserve(old);
+        observed.delete(old);
+      }
+    }
+    for (const el of nextObserved) {
+      if (!observed.has(el)) {
+        observed.add(el);
+        resize.observe(el);
+      }
+    }
+    if (maxOverflow <= 1) {
+      left = 0;
+      onChange({ shown: false, width: 0 });
+      return;
+    }
+    const baseWidth =
+      bar && bar.clientWidth > 0
+        ? bar.clientWidth
+        : (active[0]?.clientWidth ?? 0);
+    const width = Math.ceil(baseWidth + maxOverflow);
+    const targetLeft = Math.min(sourceLeft ?? left, maxOverflow);
+    onChange({ shown: true, width });
+    applyLeft(targetLeft);
+    requestAnimationFrame(() => {
+      const currentBar = track();
+      if (currentBar && Math.abs(currentBar.scrollLeft - left) > 0.5)
+        currentBar.scrollLeft = left;
+    });
+  }
+
+  function scheduleMeasure() {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      measure();
+    });
+  }
+
+  const resize = new ResizeObserver(scheduleMeasure);
+
+  return {
+    sync: measure,
+    onTrackScroll,
+    destroy() {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      resize.disconnect();
+      observed.clear();
+      for (const scroller of scrollers)
+        scroller.removeEventListener("scroll", onCodeScroll);
+      scrollers.clear();
+    },
+  };
+}
