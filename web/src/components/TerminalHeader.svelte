@@ -235,8 +235,6 @@
     >
   {/if}
   <UploadFileInput bind:this={fileInput} {upload} />
-  <!-- The chat side has no soft-key bar, so its entry stays in the header. -->
-  {#if hybrid?.view === "chat"}{@render quickMenu("bottom")}{/if}
   {#if terminalShown}
     <div class="quick-commands-header flex">{@render quickMenu("bottom")}</div>
     <DraftToggle

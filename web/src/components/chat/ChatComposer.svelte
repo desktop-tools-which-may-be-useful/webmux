@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import IconArrowUp from "~icons/tabler/arrow-up";
   import IconMessageBolt from "~icons/tabler/message-bolt";
   import IconPlayerStopFilled from "~icons/tabler/player-stop-filled";
@@ -40,6 +41,7 @@
     uploadUnavailable,
     actions,
     onerror,
+    quickMenu,
   }: {
     draft: TerminalDraft;
     drafts: TerminalDrafts;
@@ -51,6 +53,7 @@
     uploadUnavailable: string;
     actions: ChatActions;
     onerror: (message: string) => void;
+    quickMenu?: Snippet<["top" | "bottom"]>;
   } = $props();
 
   let textarea = $state<HTMLTextAreaElement | null>(null);
@@ -290,6 +293,7 @@
           onclick={stop}><IconPlayerStopFilled aria-hidden="true" /></Button
         >
       {/if}
+      {@render quickMenu?.("top")}
       <Button
         size="icon-touch"
         aria-label={queueing ? "加入排队" : "发送"}

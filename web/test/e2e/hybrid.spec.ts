@@ -568,9 +568,9 @@ test.describe("hybrid sessions with the fake agent", () => {
     const id = await createHybrid(request, workDir, "acp");
     await openHybrid(page, id, "acp");
     await composer(page).fill("请执行 ");
-    // The chat side has no soft-key bar: the header holds the entry.
+    // The chat side has no soft-key bar: the entry sits beside the send button.
     await page
-      .locator(".terminal-header")
+      .locator("[data-chat-composer]")
       .getByRole("button", { name: "快捷指令", exact: true })
       .click();
     const menu = page.getByRole("menu");
