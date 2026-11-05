@@ -104,24 +104,22 @@ pnpm --dir web exec playwright test test/e2e/terminal.spec.ts
 - **Go**：标准 `testing` 包，始终使用 `-race`；默认 `-parallel=4`，多核本机可提高 `GO_TEST_PARALLEL`（例如 `make test GO_TEST_PARALLEL=8`）。
 - **单元测试**：Vitest 在 Node 中运行。
 - **组件测试**：真实 Svelte / Tailwind / xterm 渲染，不需要后端。
-- **端到端测试**：`make test` 与 `make test-e2e` 先构建一次真实的生产前端和 `.cache/webmux-e2e/webmux`，并在本次调用内复用；直接运行 `pnpm --dir web test:e2e` 时仍在私有临时目录构建。各 worker 使用独立后端、临时 HOME、配置、工作目录与动态端口，结束后自动清理进程。本地默认最多 2 个 worker，可用 `WEBMUX_E2E_WORKERS=1` 回退串行；直接运行 Playwright 时可加 `--workers=N`。CI 保持 Ubuntu 2 个、macOS 4 个。测试不会连接你正在使用的 WebMux 服务。
+- **端到端测试**：`make test` 与 `make test-e2e` 先构建一次真实的生产前端和 `.cache/webmux-e2e/webmux`，并在本次调用内复用；直接运行 `pnpm --dir web test:e2e` 时仍在私有临时目录构建。各 worker 使用独立后端、临时 HOME、配置、工作目录与动态端口，结束后自动清理进程。本地默认最多 2 个 worker，可用 `WEBMUX_E2E_WORKERS=1` 回退串行；直接运行 Playwright 时可加 `--workers=N`。CI 在 Ubuntu 上分四片运行（每片 2 个 worker）。测试不会连接你正在使用的 WebMux 服务。
 
 E2E 失败时的截图、trace 和日志位于 `web/playwright-report/` 与 `web/test-results/`，可通过 `pnpm --dir web test:e2e:report` 查看。
 
 CI 先由 `Classify changes` job 按变更路径裁剪测试：
 仅文档变更只跑格式、文档、持久化与 agent/web 静态守卫；仅 Go 变更跳过 Vitest、Storybook 与性能，
-仅前端变更跳过两个 Go race job、Windows 交叉编译与 Windows 安装程序冒烟，E2E 在两类变更下都保留；
+仅前端变更跳过 Go race job、Windows 交叉编译与 Windows 安装程序冒烟，E2E 在两类变更下都保留；
 未知路径、`.github/**`、`Makefile`、模块/锁文件与安装脚本变更一律全量运行。
 分类 job 会自行校验 base，`.github/` 变更独立触发全量，并执行 base 版本的分类脚本，
 避免 PR 修改分类器后跳过自身的测试。
 
-CI 将各套件拆成并行 job：格式检查与前端构建、Go race、Vitest、Storybook
-以及分四片的 E2E（桌面与手机项目）在 Ubuntu 上运行。`E2E runtime` job
-按冻结锁文件安装依赖，一次构建前端、Linux/macOS E2E 程序并打包 Playwright
-的三个运行包，Go race、macOS Go race 与所有分片依赖该 job 复用同一产物。
-分片不再各自安装 pnpm、前端依赖或 Go，也不重复构建。macOS 分别运行原生
-Go race（不含静态守卫与 Windows 托盘/WSL 包）和两个仅桌面项目的隔离 E2E
-分片，避免编译与浏览器争用同一 runner；`Test result` 汇总全部 job，
+CI 将各套件拆成并行 job：格式检查与前端构建、Go race（含 `GOOS=darwin go vet` 交叉检查）、Vitest、Storybook、性能回归
+以及分四片的 E2E（桌面与手机项目）均在 Ubuntu 上运行。`E2E runtime` job
+按冻结锁文件安装依赖，一次构建前端、Linux E2E 程序并打包 Playwright
+的三个运行包，Go race 与所有 E2E 分片依赖该 job 复用同一产物。
+分片不再各自安装 pnpm、前端依赖或 Go，也不重复构建；`Test result` 汇总全部 job，
 接受被有意跳过的 `skipped`，并按分类结果交叉校验应运行的 job 均为 `success`。
 同一 PR 的新推送会取消仍在运行的旧检查。
 
@@ -149,7 +147,7 @@ DeepSeek 直连的 `DEEPSEEK_API_KEY`。
 - Go 使用 gofmt；前端使用 Oxfmt（80 列、两空格缩进、分号、尾随逗号）。提交前运行 `make format`。
 - 使用 `pnpm --dir web lint` 运行 Oxlint，`pnpm --dir web lint:fix` 应用自动修复。Oxlint 通过 `oxlint-tsgolint` 对 `.ts` 与 `.svelte.ts` 启用类型感知 Promise 规则，并检查 Svelte 的脚本部分；Oxlint 没有 Svelte 模板规则，也没有 `.svelte` 脚本的类型感知，模板事件处理器仍需按 [前端代码质量基线](docs/frontend-style.md) 第 6 条处理 rejection。`check:arch` 额外运行 Svelte 推荐模板规则；`check`、`build`、`check:test`、`check:storybook` 均拒绝 warning。
 - 使用 `pnpm --dir web check:arch` 检查组件复用、设计令牌与分层；基线已清空，任何违规都会失败；只有引入带存量违规的新规则时才记录基线，并在修复后运行 `pnpm --dir web arch:ratchet` 收紧。规则见 [前端架构守卫](docs/frontend-architecture.md)。
-- 文档与 OpenSpec 规格遵循 [文档治理](docs/doc-governance.md)：单个文件 20–400 行、单行不超过 300 显示列（汉字与全角标点算 2 列，表格行与围栏代码块除外）且不超过 48 KiB，`docs/` 与 `openspec/` 每一级直接子目录不超过 20 个；`make docs-check` 失败时会给出具体指令，超长行按语义改写而非机械折行，并更新引用。
+- 文档与 OpenSpec 规格遵循 [文档治理](docs/doc-governance.md)：单个文件 20–400 行、单行不超过 300 显示列（汉字与全角标点算 2 列，仅围栏代码块除外）且不超过 48 KiB，`docs/` 与 `openspec/` 每一级直接子目录不超过 20 个；`make docs-check` 失败时会给出具体指令，超长行按语义改写而非机械折行，并更新引用。
 - 前端代码遵循 [前端代码质量基线](docs/frontend-style.md)：`$state` 只用于驱动界面更新，派生值用 `$derived`，`$effect` 只做副作用并清理，列表用稳定业务 ID 作 key，props 必须带类型，事件使用 Svelte 5 属性写法。
 - TypeScript 开启严格模式；HTTP 响应、WebSocket JSON 和本地设置必须经过 Zod 校验。
 - 修改后端 JSON 字段时，同步更新 `web/src/schemas.ts` 及其使用方；`web/test/wire-contract.test.ts` 消费 Go wire 快照并检查必填字段，新增或变更快照映射时一并更新。

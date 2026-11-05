@@ -558,7 +558,9 @@ test.describe("hybrid sessions with the fake agent", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toContainText("插入消息");
     // An Enter command only inserts here: sending stays with the message box.
-    await menu.getByRole("menuitem", { name: "/resume", exact: true }).click();
+    await menu
+      .getByRole("menuitem", { name: "恢复会话：/resume", exact: true })
+      .click();
     await expect(composer(page)).toHaveValue("请执行 /resume");
     await expect(conversation(page)).not.toContainText("/resume");
   });

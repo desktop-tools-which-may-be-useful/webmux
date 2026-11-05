@@ -44,11 +44,12 @@ test("isolated desktop and phone synchronize preferences in both directions", as
       .getByRole("button", { name: "添加快捷指令", exact: true })
       .click();
     const dialog = a.getByRole("dialog", { name: "添加快捷指令" });
+    await dialog.getByLabel("名称", { exact: true }).fill("共享回显");
     await dialog.getByLabel("指令", { exact: true }).fill("echo shared");
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(
-      b.getByRole("button", { name: "编辑 echo shared" }),
+      b.getByRole("button", { name: "编辑 共享回显" }),
     ).toBeVisible();
     expect(
       (await (await request.get("/api/settings")).json()).values,
@@ -59,7 +60,7 @@ test("isolated desktop and phone synchronize preferences in both directions", as
     await expect(a.getByLabel("终端字号", { exact: true })).toHaveValue("18");
     await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("13");
     await expect(
-      b.getByRole("button", { name: "编辑 echo shared" }),
+      b.getByRole("button", { name: "编辑 共享回显" }),
     ).toBeVisible();
     expect(
       await b.evaluate(

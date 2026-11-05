@@ -324,3 +324,12 @@
   - 前端：`svelte-check`、测试类型检查、Oxlint、前端架构守卫通过；Vitest 单元与浏览器全量通过，新增 AppShell、WorkbenchTree、ChatHistory、QuickStart、仓库初始化指令组件测试。
   - Playwright：`quick-start.spec.ts` 桌面（1280×720）与 Pixel 7（390×844）通过；其余 E2E 交由 CI 运行。
 - 限制：未在真机上核对，未截取 PR 前后对比截图；E2E 使用 fake agent。
+
+本次局部核对（2026-11-05）：新增 `webmux-docs` 文档质量与由浅入深写作技能（`.agents/skills/webmux-docs/SKILL.md`），重组用户文档并同步近期提交能力，对应更新 US-L12 与覆盖索引（不新增故事编号）。
+
+- 范围：
+  - 新增 `.agents/skills/webmux-docs/SKILL.md`（及 `.claude/skills/webmux-docs` 软链接）并在 `AGENTS.md` 登记，规定面向网站读者的三层渐进式披露、信息守恒原则、页面模板与提交同步核对清单。
+  - 将逼近 400 行上限的 `docs/usage.md` 按由浅入深重构为新手两步上手、侧栏双模式（含快速开始 `/new` 分支搜索、附件、初始化指令、侧栏拖宽）、新建会话四步说明（含单选起始端记忆、首条用户指令与初始化指令），并将 `OSC 7501` 协议与旧版钩子独立拆分为 `docs/usage/attention.md`（保留原锚点与全部细节）。
+  - 同步更新 `docs/README.md`、`docs/overview.md`、`docs/hybrid-sessions.md`、`docs/faq.md`、`docs/website.md` 及 `docs/website/*.md`（修正十一款 CLI agent 与七款混合会话 agent 数量）、`CONTRIBUTING.md`（同步移除 macOS CI runner 后的实际流水线描述）。
+- 依据：`make format-check`、`make docs-check`（`go test -count=1 ./internal/docguard`）、`go test ./internal/archtest -run TestAgentsGuideSize`、`make check` 通过。
+- 限制：本次仅涉及文档与技能说明，未改动运行时代码，未运行完整 `make test` 或真机测试。

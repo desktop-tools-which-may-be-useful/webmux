@@ -240,7 +240,7 @@
   - `TestAgentsSizeViolationMessage` 验证恰好超限一字节即失败并包含上述指令；
   - `TestAgentsRulePagesExist` 保证索引页链接的下沉页面都存在；
   - 下沉页面见 [Agent 规则](../agent-rules.md)。
-- **US-L12 文档导航与首页**：作为初次访问者、使用者或 coding agent，我希望从 `README.md` 或 `AGENTS.md` 出发总能沿链接找到任何一份文档，首页保持简短并直接给出项目介绍、截图、快速开始与获取帮助的入口，以便快速了解项目并在遇到问题时找到答案。
+- **US-L12 文档导航与首页**：作为初次访问者、使用者或 coding agent，我希望从 `README.md` 或 `AGENTS.md` 出发总能沿链接找到任何一份文档，首页直接给出介绍、截图、快速开始与帮助入口，且用户文档按由浅入深组织，以便快速了解项目并找到答案。
   验收要点：
   - `make docs-check` 运行 `TestDocsNavigation`：从 `README.md`、`AGENTS.md` 沿相对链接遍历，链接到目录时视为到达其 `README.md`；
   - `docs/**/*.md`、`baseline/*.md`、`openspec/specs/*/spec.md` 与根目录 `*.md` 必须可达；在途 `openspec/changes/` 与归档不要求可达；
@@ -249,6 +249,7 @@
   - `README.md` 至少引用 4 张 `docs/images/` 下的界面截图（品牌图除外）、至多 20 张图片，每张 `<img>` 与 Markdown 图片都有替代文本；
   - 失败信息写明失效链接的行号与原因、不可达文档应登记的索引位置，以及 README 超限时把详细内容迁往 `docs/` 的去向；
   - `TestNavigationRules` 与 `TestSlug` 用内存目录树固定可达性、失效链接、锚点、代码豁免与 README 各项规则；
+  - `.agents/skills/webmux-docs/SKILL.md` 定义面向网站读者的由浅入深（三层金字塔）写作规范、信息守恒原则、页面模板与近期提交同步核对清单，并在 `AGENTS.md` 中登记；
   - 文档入口见 [文档中心](../README.md)，项目介绍见 [项目介绍](../overview.md)，帮助见 [常见问题与获取帮助](../faq.md)，规格索引见 [OpenSpec 规格索引](../specs.md)。
 - **US-L13 发布签名**：作为维护者，我希望每次发布自动签名校验和文件并在发布前验证，以便自动更新与用户手动校验都有独立于镜像和下载来源的信任根。
   验收要点：

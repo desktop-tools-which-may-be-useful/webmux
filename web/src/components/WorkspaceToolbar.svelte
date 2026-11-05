@@ -51,13 +51,18 @@
       class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
     >
       {@render controls?.()}
-      {#if onsettings}<Button
-          variant="ghost"
-          size="sm"
-          class="min-h-9 sm:min-h-8"
-          onclick={() => onsettings()}
-          ><IconSettings aria-hidden="true" />仓库设置</Button
-        >{/if}
+      <Button
+        variant="ghost"
+        size="sm"
+        class="min-h-9 sm:min-h-8"
+        aria-label="仓库设置"
+        title="仓库设置"
+        disabled={!onsettings}
+        onclick={() => onsettings?.()}
+        ><IconSettings aria-hidden="true" /><span class="hidden sm:inline"
+          >仓库设置</span
+        ></Button
+      >
       <Button
         variant="ghost"
         size="icon-sm"

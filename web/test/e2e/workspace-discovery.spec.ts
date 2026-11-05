@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { test, expect, nameSession } from "./fixtures";
+import { test, expect, nameSession, revealSidebar } from "./fixtures";
 
 test("workspace search shortcuts clear filters without capturing dialog input", async ({
   page,
@@ -42,6 +42,7 @@ test("an older config without hostname keeps creation available", async ({
     await route.fulfill({ response, json: config });
   });
   await page.goto("/");
+  await revealSidebar(page);
   await expect(page.getByRole("button", { name: "添加仓库" })).toBeEnabled();
   await expect(
     page.getByRole("main").getByRole("button", { name: "＋ 新建会话" }).first(),
@@ -65,9 +66,12 @@ test("invalid config can be retried without blocking temporary commands", async 
   await expect(
     page.getByRole("main").getByRole("button", { name: "＋ 新建会话" }).first(),
   ).toBeEnabled();
+  const opened = await revealSidebar(page);
   await expect(page.getByRole("button", { name: "添加仓库" })).toBeDisabled();
+  if (opened) await page.keyboard.press("Escape");
   invalid = false;
   await page.getByRole("button", { name: "重试", exact: true }).click();
+  await revealSidebar(page);
   await expect(page.getByRole("button", { name: "添加仓库" })).toBeEnabled();
   await expect(
     page.getByText("服务端设置加载失败，可重试；仍可使用临时命令创建会话。"),

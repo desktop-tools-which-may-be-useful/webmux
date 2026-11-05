@@ -2,6 +2,12 @@
 
 这里是所有文档的入口，按“你想做什么”分组。每份文档都能从本页或 [AGENTS.md](../AGENTS.md) 沿链接找到，`make docs-check` 会拒绝无法到达的文档与失效链接（规则见 [文档治理](doc-governance.md)）。
 
+**初次接触 WebMux？推荐按这三步上手：**
+
+1. **一分钟看懂定位与功能**：先读首页 [README](../README.md) 或 [项目介绍](overview.md)，了解持久终端、混合会话（聊天 ↔ 终端）与代码工作区。
+2. **安装并连通手机**：按 [安装与升级](deployment/install-and-upgrade.md) 启动服务，再用 [远程访问与 HTTPS](deployment/remote-access.md) 在手机上扫码或打开访问链接。
+3. **开始第一次对话**：阅读 [使用指南](usage.md) 的两步上手指南，用“快速开始”或“新建会话”启动你的第一个 CLI agent。
+
 ## 了解 WebMux
 
 - [项目介绍](overview.md)：定位、设计理念、全部特性、混合会话概览与技术栈。
@@ -12,6 +18,7 @@
 
 - [部署指南](deployment.md)：总索引。
   - [安装与升级](deployment/install-and-upgrade.md)：一键脚本、deb / rpm、手动下载与升级。
+  - [自动更新](deployment/updates.md)：后台定时检查新版本、设置页一键更新与回退策略。
   - [配置](deployment/configuration.md)：命令行参数、配置项与状态目录。
   - [服务管理与平台差异](deployment/services.md)：systemd / launchd、agent 的 PATH。
   - [远程访问与 HTTPS](deployment/remote-access.md)：手机访问、访问链接、HTTPS。
@@ -23,10 +30,11 @@
 
 ## 日常使用
 
-- [使用指南](usage.md)：会话、新建会话、后台启动、终端附着、草稿、代码工作区、仓库与 worktree、移动端。
+- [使用指南](usage.md)：侧栏与快速开始、新建会话、后台启动、终端附着、草稿、代码工作区、仓库与 worktree、移动端。
   - [终端使用](usage/terminal.md)：查找、分屏、复制粘贴、终端图形与文件上传。
   - [仓库与 worktree](usage/worktrees.md)：仓库登记、上游基线刷新、工作树创建与安全删除。
   - [移动端使用](usage/mobile.md)：软键栏、虚拟键盘、触摸手势、锁定尺寸与全屏。
+  - [需要你介入的提醒](usage/attention.md)：agent 状态识别、徽章与声音提醒、`OSC 7501` 协议及旧版钩子。
   - [端口转发预览](usage/port-forwarding.md)：把服务器上的开发服务器经 WebMux 转发到浏览器，终端端口提示与兼容选项。
   - [Shell 目录报告](usage/shell-directory.md)：可选的 OSC 7 目录报告与 bash / zsh 配置片段。
 - [混合会话](hybrid-sessions.md)：OpenCode / omp / Codex CLI / Claude Code / Antigravity CLI / Qoder / QoderCN 在聊天视图与终端间切换。

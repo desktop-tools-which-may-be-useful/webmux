@@ -13,6 +13,7 @@ import {
   useCustomCommand,
   useDirectory,
   backToList,
+  revealSidebar,
 } from "./fixtures";
 import { startE2EServer } from "./server.mjs";
 
@@ -40,8 +41,9 @@ async function repository(root: string, name = "project with spaces") {
   return path;
 }
 async function register(page: Page, path: string) {
+  await revealSidebar(page);
   await page.getByRole("button", { name: "添加仓库", exact: true }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "添加仓库" });
   await dialog.getByLabel("仓库目录").fill(path);
   await dialog.getByRole("button", { name: "添加仓库", exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -302,9 +304,11 @@ test("without Git an isolated real service still starts and runs a direct shell"
   const isolated = await startE2EServer({ noGit: true });
   try {
     await page.goto(isolated.baseURL);
+    const closedDrawer = await revealSidebar(page);
     await expect(
       page.getByRole("button", { name: "添加仓库", exact: true }),
     ).toBeDisabled();
+    if (closedDrawer) await page.keyboard.press("Escape");
     const config = await (await fetch(isolated.apiURL + "/api/config")).json();
     expect(config.workspace.gitAvailable).toBe(false);
     expect(config).not.toHaveProperty("token");
@@ -414,15 +418,16 @@ test("multiple repositories keep every session visible through local failure, co
       .getByRole("region", { name: "直接会话", exact: true })
       .getByRole("link", { name: "Second shell", exact: true }),
   ).toBeVisible();
+  await revealSidebar(page);
   await page.getByRole("button", { name: "添加仓库", exact: true }).click();
-  await page.getByLabel("仓库目录").fill(workDir);
-  await page
-    .getByRole("dialog")
+  const addDialog = page.getByRole("dialog", { name: "添加仓库" });
+  await addDialog.getByLabel("仓库目录").fill(workDir);
+  await addDialog
     .getByRole("button", { name: "添加仓库", exact: true })
     .click();
-  await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
+  await expect(addDialog.getByRole("alert")).toBeVisible();
   await expect(access(join(workDir, ".git"))).rejects.toThrow();
-  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await addDialog.getByRole("button", { name: "取消", exact: true }).click();
 });
 
 test("upstream refresh selects remote commits and falls back to a creatable local base", async ({

@@ -43,8 +43,8 @@
 - 单二进制，Linux amd64 约 20 MB（Release 资产大小，构建期读取）。
 - 空闲常驻内存约 13 MB，一个 shell 会话约 18 MB（[项目介绍](../overview.md#高性能低占用)）。
 - 每会话 2 MiB 字节环形缓冲，重连只补发缺失部分（[项目介绍](../overview.md#高性能低占用)）。
-- 预置九款 CLI agent 启动配置（[CLI agent 接入](../cli-agents.md)）。
-- 四款 agent 支持 TUI 与聊天视图互切（[混合会话](../hybrid-sessions.md)）。
+- 预置十一款 CLI agent 启动配置（[CLI agent 接入](../cli-agents.md)）。
+- 七款 agent 支持 TUI 与聊天视图互切（[混合会话](../hybrid-sessions.md)）。
 - 终端分屏最多 8 个窗格；Kitty 图形协议；Web Push 锁屏提醒（[项目介绍](../overview.md#特性)）。
 - Linux、macOS、Windows（WSL 2）；无需 root、tmux、数据库或 Node 运行时；MIT 许可。
 - 安装脚本校验 SHA-256，默认装到用户目录，不需要 sudo（[安装与升级](../deployment/install-and-upgrade.md)）。

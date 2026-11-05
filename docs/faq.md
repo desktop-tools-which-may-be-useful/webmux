@@ -14,9 +14,24 @@
 </details>
 
 <details>
+<summary><b>聊天模式（快速开始）和工作台模式有什么区别？怎么选？</b></summary>
+
+两者只是侧栏与主区域的导航组织方式不同，底层会话完全互通，可随时在侧栏左上角切换（当前浏览器会记住上一次的选择）：
+
+- **工作台模式（首次打开默认）**：侧栏按“仓库 → 工作树 → 会话”树状分组，在侧栏选择「全部仓库」即可在主区域查看所有工作树卡片与终端实时预览；适合同时管理多个仓库、长期终端会话与多窗格分屏。
+- **聊天模式**：切到聊天模式后点击侧栏顶部「新聊天」进入 **快速开始（`/new`）**，选好仓库、基准分支和 agent 后直接输入任务，WebMux 会自动新建独立 worktree 并进入聊天视图；适合围绕单次任务高频发起 AI 对话。
+
+</details>
+
+<details>
 <summary><b>创建会话时找不到 claude / codex？</b></summary>
 
-systemd 和 launchd 不会加载你的交互 shell 配置。可在自定义启动配置中显式使用 `bash -ic 'exec opencode "$@"' opencode` 来加载 `~/.bashrc` 中的 PATH 和环境变量，或把程序目录加入服务的 `PATH`，参见 [agent 的 PATH](deployment/services.md#agent-的-path)。
+systemd 和 launchd 不会自动加载你的交互 shell 配置（如 `~/.bashrc` 或 `~/.zshrc` 里由 nvm、bun、mise、cargo 配置的 `PATH`）。
+
+最简单的解决方式（按优先级选择）：
+
+1. 在“设置 → 启动配置”中编辑对应配置，勾选 **“加载 shell 启动文件”**（可选 Bash 或 Zsh，新安装的预置配置已默认开启 Bash）。
+2. 若使用一次性自定义命令，可显式写成 `bash -ic 'exec opencode "$@"' opencode`，或把程序目录加入服务的 `PATH`，参见 [agent 的 PATH](deployment/services.md#agent-的-path)。
 
 </details>
 

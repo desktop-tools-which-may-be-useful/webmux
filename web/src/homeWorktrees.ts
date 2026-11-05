@@ -43,6 +43,20 @@ export interface HomeLayout {
   unpinned: Worktree[];
 }
 
+export function sortWorktrees(worktrees: readonly Worktree[]): Worktree[] {
+  return [...worktrees].sort((a, b) =>
+    a.kind === "main"
+      ? -1
+      : b.kind === "main"
+        ? 1
+        : a.path < b.path
+          ? -1
+          : a.path > b.path
+            ? 1
+            : 0,
+  );
+}
+
 // Sessions are never hidden: a worktree with sessions or archived records
 // stays on the home page whether or not it is pinned, so curation only
 // removes idle clutter.
@@ -59,17 +73,7 @@ export function homeLayout(
       .map((s) => s.workspace?.worktreeId),
     ...archived.keys(),
   ]);
-  const trees = [...repo.worktrees].sort((a, b) =>
-    a.kind === "main"
-      ? -1
-      : b.kind === "main"
-        ? 1
-        : a.path < b.path
-          ? -1
-          : a.path > b.path
-            ? 1
-            : 0,
-  );
+  const trees = sortWorktrees(repo.worktrees);
   return {
     shown: trees
       .filter((tree) => pinned.has(tree.id) || active.has(tree.id))

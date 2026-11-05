@@ -50,6 +50,7 @@ Windows 不是“顺带能用”的平台。
 ### 会话与终端
 
 - **持久会话**：浏览器断开后会话继续运行；短暂断线或回到前台时只续接缺失的输出，否则清屏并回放服务端缓冲（默认每会话 2 MiB）。
+- **两种导航模式**：侧栏支持在 **工作台模式**（首次打开默认，按仓库 / 工作树分组并展示会话总览卡片）与 **聊天模式**（按最近活动列出全部聊天，搭配一键创建独立 worktree 并进入对话的 **快速开始** `/new`）之间切换，侧栏宽度可拖动调整（224–480px）。
 - **会话总览**：按仓库 / 工作树分组展示所有会话，实时显示标题、状态（运行中 / 可能在等你 / 空闲 / 已退出）和终端屏幕预览。
 - **终端分屏**：同一页面左右 / 上下嵌套最多 8 个窗格，拖动调整比例。
   - tmux 风格 `Ctrl+B` 前缀切换、放大和关闭窗格。
@@ -67,13 +68,13 @@ Windows 不是“顺带能用”的平台。
   - 新安装首次启动时预置 [十一款 CLI agent](cli-agents.md)，以及 Shell 和 omp；每项附带本地品牌图标，均可编辑或删除。
   - Codex CLI、Antigravity CLI、Open Code、omp、Claude Code、Qoder 与 QoderCN 默认开启混合模式；也可填写一次性命令。
 - **ACP 混合会话**：OpenCode / omp / Codex CLI / Claude Code / Antigravity CLI / Qoder / QoderCN 对话在原生 TUI 与聊天视图之间切换，支持多设备队列、插话、权限请求、附件与重启恢复，见下节。
-- **需要你介入的提醒**：识别 agent 的终端通知与状态信号，在总览、标签页和手机推送中提示，见 [使用指南](usage.md#需要你介入的提醒)。
+- **需要你介入的提醒**：识别 agent 的终端通知与状态信号，在总览、侧栏、标签页和手机推送中提示，见 [需要你介入的提醒](usage/attention.md)。
 
 ### 代码与仓库
 
-- **Git worktree 管理**：登记已有仓库，创建 / 安全删除 worktree，并在其中直接启动 agent。
-- **代码工作区**：在终端旁只读浏览文件和 Git 修改、查看 Diff，预览 Markdown 与图片，把 `路径:行号` 引用一键插入终端。
-  - 资源管理器右键即可上传、下载（目录打包 ZIP）、重命名、复制、移动和删除文件。
+- **Git worktree 管理**：登记已有仓库，创建 / 安全删除 worktree，设置仓库初始化指令模板，并在工作树中直接启动 agent。
+- **代码工作区**：在终端或聊天旁浏览文件和 Git 修改、查看与审阅 Diff，预览 Markdown、图片、HTML、CSV / TSV、JSON 与 PDF，把 `路径:行号` 引用或行级评论一键插入对话；支持弹出独立浏览器窗口双屏对照。
+  - 资源管理器右键即可上传、下载（目录打包 ZIP）、重命名、复制、移动和删除文件，并提供直达本会话上传与产物目录的 **会话临时文件夹**。
 
 ### 多设备与平台
 
@@ -100,7 +101,10 @@ OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN �
   - 上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
 - **持久运行、可恢复**：聊天端保持 agent 进程运行直到切换或显式归档；归档或服务重启后，从首页所属工作树的“已归档”中恢复到聊天或终端。
 
-新安装预置的 Open Code、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 启动配置已开启混合模式，新建会话时选择”从终端开始”或”从聊天开始”即可。详见 [混合会话](hybrid-sessions.md)。
+新安装预置的 Open Code、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 启动配置已开启混合模式：
+
+- 既可以在 **快速开始（`/new`）** 中选定仓库和分支，一键创建 worktree 并直接进入聊天视图；
+- 也可以在新建会话对话框中选择“从终端开始”或“从聊天开始”（按 agent 记住你的偏好）。详见 [混合会话](hybrid-sessions.md)。
 
 ## 截图
 

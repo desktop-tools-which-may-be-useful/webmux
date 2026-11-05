@@ -74,7 +74,7 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 | `Select`            | —                                                           | 需要跨平台一致样式、同时展示名称与命令或路径的下拉框；保留完整内容提示与键盘选择                                                             |
 | `Tabs.List`         | `variant="line"`、`size="form"`                             | 带关联面板的标签页统一使用 `line`，不使用填充胶囊样式的 `default`；`form` 用于表单中的分组切换                                               |
 | `SegmentedControl`  | `size="form"`、`wrap`                                       | 基于 RadioGroup（`radiogroup`/`radio`）的下划线分段控件；`form` 用于表单，`wrap` 在窄屏换行（如状态筛选）                                    |
-| `RadioGroup`        | —                                                           | 每个选项都带说明文字的单选（如新建会话的起始端）；传 `aria-label` 作为名称，边框标出当前项 |
+| `RadioGroup`        | —                                                           | 每个选项都带说明文字的单选（如新建会话的起始端）；传 `aria-label` 作为名称，边框标出当前项                                                   |
 | `Checkbox`          | —                                                           | 复选框，配合 `Label` 使用                                                                                                                    |
 | `ListButton`        | `row` / `text` / `content` / `option` / `tab` / `tab-close` | 列表、标签栏与卡片中的可点击区域。它不带控件尺寸，虚拟列表的固定行高不受影响；独立的操作按钮仍用 `Button`                                    |
 | `ListButton`        | `navigation` / `navigation-action` / `file-tree-overlay`    | 侧栏导航行：`aria-pressed` 标记选中的筛选，`aria-current="page"` 标记当前页面；后两者用于带行尾操作按钮的侧栏行，见表下说明                  |
