@@ -219,7 +219,7 @@ export const permissionRequest: ChatRequest = {
   ],
 };
 
-const configs: Record<Agent, ChatState["config"]> = {
+export const configs: Record<Agent, ChatState["config"]> = {
   omp: [
     {
       id: "model",
