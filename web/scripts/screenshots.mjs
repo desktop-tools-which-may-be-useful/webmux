@@ -314,18 +314,43 @@ async function startBackend(extraEnv) {
 const PROMPT =
   "export PS1='\\[\\e[1;32m\\]rain@dev\\[\\e[0m\\]:\\[\\e[1;34m\\]~/bookshelf-api\\[\\e[0m\\]$ '; clear";
 
-async function createSession(page, command, name) {
+// Opens the new-session dialog from the workspace overview.
+async function openNewSession(page) {
   await page.goto("/");
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .first()
     .click();
-  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
-  await page.getByLabel("自定义启动命令", { exact: true }).fill(command);
-  await page.getByLabel("工作目录", { exact: true }).fill(demo);
+}
+
+// Picks an entry of the dialog's 运行 or 位置 picker; option names start
+// with the entry title and continue with its command or path.
+async function pick(page, field, title) {
+  await page.getByRole("button", { name: field, exact: true }).click();
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await page
+    .getByRole("option", { name: new RegExp(`^${escaped}`) })
+    .first()
+    .click();
+}
+
+// Fills the directory and name, then creates the session.
+async function finishNewSession(page, name) {
+  const cwd = page.getByLabel("工作目录", { exact: true });
+  if (!(await cwd.isVisible())) await pick(page, "位置", "输入或浏览目录…");
+  await cwd.fill(demo);
+  await page.getByRole("button", { name: "高级：会话名称" }).click();
   await page.getByLabel("会话名称", { exact: false }).fill(name);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await page.waitForURL(/\/s\/[a-z0-9]+$/);
+}
+
+async function createSession(page, command, name) {
+  await openNewSession(page);
+  await pick(page, "运行", "自定义命令…");
+  await page.getByLabel("自定义启动命令", { exact: true }).fill(command);
+  await finishNewSession(page, name);
   await page
     .locator(".terminal-header")
     .getByRole("img", { name: /已连接/ })
@@ -336,24 +361,13 @@ async function createSession(page, command, name) {
 
 // Starts a saved launch configuration (a seeded preset) on the terminal side.
 async function createFromConfig(page, configName, name) {
-  await page.goto("/");
+  await openNewSession(page);
+  await pick(page, "运行", configName);
   await page
-    .locator("header")
-    .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .getByRole("radiogroup", { name: "起始端", exact: true })
+    .getByRole("radio", { name: "从终端开始", exact: true })
     .click();
-  await page.getByRole("tab", { name: "预先输入", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "选择启动配置", exact: true })
-    .click();
-  await page.getByRole("option", { name: configName, exact: true }).click();
-  await page
-    .getByRole("tablist", { name: "起始端", exact: true })
-    .getByRole("tab", { name: "从终端开始", exact: true })
-    .click();
-  await page.getByLabel("工作目录", { exact: true }).fill(demo);
-  await page.getByLabel("会话名称", { exact: false }).fill(name);
-  await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
-  await page.waitForURL(/\/s\/[a-z0-9]+$/);
+  await finishNewSession(page, name);
   await page.locator(".xterm-helper-textarea").waitFor({ state: "attached" });
   return new URL(page.url()).pathname.split("/").at(-1);
 }
@@ -537,9 +551,10 @@ async function main() {
       .waitFor();
     await delay(1500);
     await shoot(mobile, "mobile-terminal.png");
+    // Phones switch to code through the header's 会话视图 tabs.
     await mobile
-      .locator(".terminal-header")
-      .getByRole("button", { name: "代码", exact: true })
+      .getByRole("tablist", { name: "会话视图", exact: true })
+      .getByRole("tab", { name: "代码", exact: true })
       .click();
     await mobile.getByRole("region", { name: "代码工作区" }).waitFor();
     await mobile.getByRole("tab", { name: "修改", exact: true }).click();
@@ -551,6 +566,39 @@ async function main() {
       .first()
       .waitFor();
     await shoot(mobile, "mobile-diff.png");
+
+    // Port forwarding: the demo API listens on :8080, which raises the
+    // terminal's 检测到端口 banner.
+    await createSession(desktop, "/bin/bash --noprofile --norc -i", "api");
+    // The code pane stays open from the diff view; give the terminal the width.
+    const fold = desktop
+      .locator(".terminal-header")
+      .getByRole("button", { name: "折叠代码", exact: true });
+    if (await fold.isVisible()) await fold.click();
+    await type(desktop, PROMPT);
+    await delay(500);
+    await type(desktop, "go vet ./... && go test ./...");
+    await delay(5000);
+    await type(desktop, "go run .");
+    await desktop.getByText(/^检测到端口 8080（/).waitFor({ timeout: 120_000 });
+    await shoot(desktop, "desktop-port-forward.png");
+
+    // Quick Start (/new) needs a registered repository to start from.
+    const registered = await fetch(`${baseURL}/api/repositories`, {
+      method: "POST",
+      headers: { Origin: baseURL, "Content-Type": "application/json" },
+      body: JSON.stringify({ path: demo }),
+    });
+    if (!registered.ok)
+      throw new Error(`register repository: ${await registered.text()}`);
+    await desktop.goto("/new");
+    await desktop
+      .getByRole("button", { name: "仓库：bookshelf-api", exact: true })
+      .waitFor();
+    await desktop
+      .getByRole("textbox", { name: "任务描述", exact: true })
+      .fill("Add a POST /books endpoint that validates the title and year");
+    await shoot(desktop, "desktop-quick-start.png");
     if (record) exportSession();
   } finally {
     await browser.close();

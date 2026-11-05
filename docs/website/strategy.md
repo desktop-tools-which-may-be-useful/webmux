@@ -68,7 +68,13 @@
 
 ## 差异化与对比规则
 
-对比对象限定为用户真实会拿来比较的方案：SSH + tmux、ttyd / gotty、mosh、VS Code Remote Tunnels、code-server，以及各类“手机上用 agent”的客户端。对比表只列可核实的事实维度，不做主观评价：
+对比对象限定为用户真实会拿来比较的方案，按三类分表：
+
+- **终端与远程 shell**：SSH + tmux、ttyd / gotty、mosh、Zellij Web 客户端、sshx。
+- **遥控 coding agent**：各类“手机上用 agent”的方案，如 Happy、Claude Code Remote Control、OpenAI Codex cloud。
+- **浏览器与远程编辑器**：VS Code Remote Tunnels、code-server。
+
+对比表只列可核实的事实维度，不做主观评价：
 
 - 浏览器断开后会话是否继续、重连是否只补发缺失输出。
 - 手机上的 TUI 适配：软键栏、触摸滚动、键盘视口。
@@ -76,6 +82,7 @@
 - 是否提供聊天视图与 TUI 的互切。
 - 是否单二进制、是否需要 root、是否需要额外守护进程或数据库。
 - 是否在终端旁提供代码与 Diff 浏览、worktree 管理。
+- 是否能经同一地址访问开发服务器端口；是否自托管、不经第三方中转；是否适用任意 CLI agent；开源许可。
 
 对方的情况以其官方文档为准，表下注明核对日期；拿不准的格子写“未核实”，不要猜。对比页的目的不是贬低对方，而是帮用户判断适用场景，必要时写明“如果你只需要 X，用 Y 更简单”。
 
