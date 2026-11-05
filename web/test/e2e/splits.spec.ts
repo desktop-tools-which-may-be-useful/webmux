@@ -338,6 +338,11 @@ test("a split preserves hybrid chat and terminal switching beside a shell", asyn
   await expect(
     chat.getByRole("list", { name: "对话", exact: true }),
   ).toContainText("echo: split chat stays independent");
+  // The echo arrives before the turn ends. Switching while it still runs
+  // asks to interrupt it first, so wait for the turn to end.
+  await expect(
+    chat.getByRole("status").filter({ hasText: "正在工作…" }),
+  ).toHaveCount(0);
   await chat
     .getByRole("tablist", { name: "会话视图", exact: true })
     .getByRole("tab", { name: "终端", exact: true })
