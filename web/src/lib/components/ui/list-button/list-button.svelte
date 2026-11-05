@@ -4,6 +4,9 @@
   // Clickable regions inside lists, tab strips and cards. Unlike Button they
   // take no control sizing, so virtualized rows keep their fixed height; use
   // Button for standalone controls.
+  // A file-tree row without its end padding; the variants below add it.
+  const fileTree =
+    "flex min-h-7 w-full touch-manipulation items-center gap-1.5 rounded-sm py-1 pl-1.5 text-left text-xs outline-none select-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-ring/50 disabled:opacity-50 data-[drop-target=true]:bg-primary/10 data-[drop-target=true]:ring-1 data-[drop-target=true]:ring-inset data-[drop-target=true]:ring-primary max-sm:min-h-(--control-touch-compact) max-sm:text-sm any-pointer-coarse:min-h-(--control-touch-compact) [-webkit-touch-callout:none]";
   const navigation =
     "relative flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-primary/10 aria-pressed:text-primary aria-pressed:before:absolute aria-pressed:before:inset-y-3 aria-pressed:before:left-0 aria-pressed:before:w-0.5 aria-pressed:before:rounded-full aria-pressed:before:bg-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-3 aria-[current=page]:before:left-0 aria-[current=page]:before:w-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-primary";
   export const listButtonVariants = tv({
@@ -17,15 +20,20 @@
         // aria-pressed marks a chosen filter, aria-current the page shown.
         navigation,
         // A navigation row with a file-tree-action button over its end
-        // (sidebar chat rows); the padding keeps the text clear of it, and
-        // rows without one use it too so their ends line up.
-        "navigation-action": `${navigation} pr-9 max-sm:pr-(--control-touch) any-pointer-coarse:pr-(--control-touch)`,
+        // (sidebar chat rows). With a mouse the button appears over the
+        // row's trailing mark on hover; touch screens keep room for the
+        // always-shown button, and rows without one use it too so their
+        // ends line up.
+        "navigation-action": `${navigation} any-pointer-coarse:pr-(--control-touch)`,
         // Tree rows follow the code panel's compact touch target on touch
         // screens and narrow windows; a long press must not select text or
         // raise the iOS link callout. data-drop-target marks the folder that
         // receives files dragged over the tree.
-        "file-tree":
-          "flex min-h-7 w-full touch-manipulation items-center gap-1.5 rounded-sm py-1 pr-7 pl-1.5 text-left text-xs outline-none select-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-ring/50 disabled:opacity-50 data-[drop-target=true]:bg-primary/10 data-[drop-target=true]:ring-1 data-[drop-target=true]:ring-inset data-[drop-target=true]:ring-primary max-sm:min-h-(--control-touch-compact) max-sm:pr-(--control-touch-compact) max-sm:text-sm any-pointer-coarse:min-h-(--control-touch-compact) any-pointer-coarse:pr-(--control-touch-compact) [-webkit-touch-callout:none]",
+        "file-tree": `${fileTree} pr-7 max-sm:pr-(--control-touch-compact) any-pointer-coarse:pr-(--control-touch-compact)`,
+        // A file-tree row whose action button appears over its end on
+        // hover with a mouse (the sidebar tree), so its trailing mark sits
+        // at the edge; touch screens keep room for the always-shown button.
+        "file-tree-overlay": `${fileTree} pr-1.5 any-pointer-coarse:pr-(--control-touch-compact)`,
         "file-tree-root":
           "flex min-h-8 w-full touch-manipulation items-center gap-1.5 rounded-sm py-1 pr-7 pl-1.5 text-left text-xs font-semibold outline-none select-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring data-[drop-target=true]:bg-primary/10 data-[drop-target=true]:ring-1 data-[drop-target=true]:ring-inset data-[drop-target=true]:ring-primary max-sm:min-h-(--control-touch-compact) max-sm:pr-(--control-touch-compact) max-sm:text-sm any-pointer-coarse:min-h-(--control-touch-compact) any-pointer-coarse:pr-(--control-touch-compact) [-webkit-touch-callout:none]",
         // The actions button over the end of a file-tree row: shown while

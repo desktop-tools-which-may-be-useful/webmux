@@ -172,6 +172,7 @@
   import { rowStatusLabels } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
+  import { underRowAction } from "../sidebar-row";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
   // The workbench-mode sidebar: repositories → worktrees → live sessions.
@@ -333,13 +334,14 @@
   }
 </script>
 
-{#snippet counts(node: TreeNode)}
-  <!-- Right-aligned, so counts end where session rows' status dots do. -->
+{#snippet counts(node: TreeNode, actioned: boolean)}
+  <!-- Right-aligned, so counts end where session rows' status dots do; a
+       row's "+" takes their place on hover. -->
   {#if node.waiting}<span
-      class="w-12 shrink-0 truncate text-right text-xs text-warning"
+      class={`w-12 shrink-0 truncate text-right text-xs text-warning ${actioned ? underRowAction : ""}`}
       title={`${node.waiting} 个会话在等待`}>{node.waiting} 等待</span
     >{:else if node.count}<span
-      class="w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums"
+      class={`w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums ${actioned ? underRowAction : ""}`}
       >{node.count}</span
     >{/if}
 {/snippet}
@@ -376,7 +378,7 @@
       ></span>{/if}
     <div class="group/row relative min-w-0 flex-1">
       <ListButton
-        variant="file-tree"
+        variant="file-tree-overlay"
         role="treeitem"
         aria-level={node.level}
         aria-expanded={node.children.length && !node.reason ? open : undefined}
@@ -421,7 +423,10 @@
             aria-hidden="true"
           />
         {:else if status}<RowStatus {status} />
-        {:else}{@render counts(node)}{/if}
+        {:else}{@render counts(
+            node,
+            node.kind === "repository" && !node.reason && canCreate,
+          )}{/if}
       </ListButton>
       {#if node.kind === "repository" && !node.reason && canCreate}
         <ListButton
