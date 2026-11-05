@@ -53,7 +53,9 @@ test("agent attention survives spinner output and clears on user input", async (
   await page.goto(`/s/${id}`);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expect(page).toHaveTitle("E2E agent · WebMux");
-  await expect(page.locator(".status-dot")).toHaveClass(/status-failed/);
+  await expect(page.locator(".terminal-header .status-dot")).toHaveClass(
+    /status-failed/,
+  );
   await page.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("y");
   // The bell rung right after the keystroke is ignored ...

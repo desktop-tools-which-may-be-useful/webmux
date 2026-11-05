@@ -1,0 +1,215 @@
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { page, userEvent } from "vitest/browser";
+import { render } from "vitest-browser-svelte/pure";
+import { openSession, shellUi } from "../../src/shell.svelte";
+import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
+import {
+  commands,
+  installChatFixture,
+  respond,
+  socketAt,
+} from "./chat-fixture";
+import ShellHarness from "./ShellHarness.svelte";
+import {
+  chat,
+  launchConfig,
+  record,
+  repository,
+  session,
+} from "./shell-fixture";
+
+installChatFixture();
+beforeEach(() => {
+  shellUi.setMode("workbench");
+  shellUi.setCollapsed(false);
+  history.replaceState(null, "", "/");
+  respond(/^GET \/api\/repositories$/, () => Response.json([repository()]));
+  respond(/^GET \/api\/launch-configs$/, () => Response.json([launchConfig()]));
+  respond(/^GET \/api\/hybrid-sessions/, () => Response.json([record()]));
+});
+afterEach(() => {
+  localStorage.removeItem("webmux.shellMode");
+  localStorage.removeItem("webmux.sidebarCollapsed");
+  history.replaceState(null, "", "/");
+});
+
+const sidebar = () => page.getByRole("complementary", { name: "侧栏" });
+
+async function snapshot(
+  sessions = [chat({ id: "chataaaa", title: "修复排序" })],
+) {
+  const socket = await socketAt("/ws/sessions");
+  socket.frame({ type: "snapshot", sessions, forwards: [] } as never);
+  return socket;
+}
+
+test("the chat button takes a workbench home to quick start", async () => {
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  const chatMode = sidebar().getByRole("button", { name: "聊天模式" });
+  await expect.element(chatMode).toHaveAttribute("aria-pressed", "false");
+  await chatMode.click();
+  expect(location.pathname).toBe("/new");
+  expect(localStorage.getItem("webmux.shellMode")).toBe("chat");
+  await expect.element(chatMode).toHaveAttribute("aria-pressed", "true");
+  // Quick start puts the caret in its input.
+  await expect
+    .element(page.getByRole("textbox", { name: "任务描述" }))
+    .toHaveFocus();
+  await expect
+    .element(sidebar().getByRole("list", { name: "聊天历史" }))
+    .toBeVisible();
+});
+
+test("on a session page switching mode only swaps the sidebar", async () => {
+  history.replaceState(null, "", "/s/shellaaa");
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot([session({ id: "shellaaa", title: "pnpm dev" })]);
+  await expect
+    .element(sidebar().getByRole("tree", { name: "仓库与会话" }))
+    .toBeVisible();
+  await sidebar().getByRole("button", { name: "聊天模式" }).click();
+  expect(location.pathname).toBe("/s/shellaaa");
+  await expect
+    .element(sidebar().getByRole("button", { name: "聊天模式" }))
+    .toHaveFocus();
+  await expect.element(page.getByTestId("session-page")).toBeVisible();
+  // A terminal session has no row among the chats.
+  const chats = sidebar().getByRole("list", { name: "聊天历史" });
+  await expect.element(chats).toBeVisible();
+  expect(
+    chats
+      .getByRole("button")
+      .elements()
+      .filter((row) => row.getAttribute("aria-current") === "page"),
+  ).toEqual([]);
+});
+
+test("the collapsed rail is remembered and keeps the mode and primary action", async () => {
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  await page.getByRole("button", { name: "收起侧栏" }).click();
+  expect(localStorage.getItem("webmux.sidebarCollapsed")).toBe("true");
+  const rail = page.getByRole("navigation", { name: "窄栏导航" });
+  await expect
+    .element(rail.getByRole("button", { name: "展开侧栏" }))
+    .toBeVisible();
+  await expect
+    .element(rail.getByRole("button", { name: "新建会话" }))
+    .toBeVisible();
+  expect(
+    document.querySelector(".app-shell")?.getAttribute("data-collapsed"),
+  ).toBe("true");
+  await rail.getByRole("button", { name: "展开侧栏" }).click();
+  expect(localStorage.getItem("webmux.sidebarCollapsed")).toBe("false");
+});
+
+test("the sidebar's new-session action opens the shared dialog", async () => {
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  await sidebar().getByRole("button", { name: "新建会话" }).click();
+  await expect
+    .element(page.getByRole("dialog", { name: "新建会话" }))
+    .toBeVisible();
+});
+
+test("opening a chat-side hybrid session from the workbench switches to chat", () => {
+  shellUi.setMode("workbench");
+  openSession(session({ id: "shellaaa" }));
+  expect(shellUi.mode).toBe("workbench");
+  expect(location.pathname).toBe("/s/shellaaa");
+  openSession(chat({ id: "chataaaa" }, "tui"));
+  expect(shellUi.mode).toBe("workbench");
+  openSession(chat({ id: "chataaaa" }));
+  expect(shellUi.mode).toBe("chat");
+  expect(location.pathname).toBe("/s/chataaaa");
+});
+
+test("renaming from the sidebar uses the shared dialog", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  respond(/^PATCH \/api\/sessions\/chataaaa$/, () =>
+    Response.json(chat({ id: "chataaaa", title: "首页排序" })),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  const socket = await snapshot();
+  const chats = sidebar().getByRole("list", { name: "聊天历史" });
+  // Archived records offer no rename.
+  await expect
+    .element(chats.getByRole("button", { name: "整理文档（已结束）" }))
+    .toBeVisible();
+  expect(
+    chats.getByRole("button", { name: "修改标题：整理文档" }).elements(),
+  ).toEqual([]);
+  await chats.getByRole("button", { name: "修改标题：修复排序" }).click();
+  const dialog = page.getByRole("dialog");
+  const field = dialog.getByRole("textbox");
+  await expect.element(field).toHaveValue("修复排序");
+  await field.fill("首页排序");
+  await userEvent.keyboard("{Enter}");
+  await expect.element(dialog).not.toBeInTheDocument();
+  expect(commands().at(-1)).toMatchObject({
+    method: "PATCH",
+    path: "/api/sessions/chataaaa",
+    body: { name: "首页排序" },
+  });
+  // The sidebar shows what the list event brings.
+  socket.frame({
+    type: "updated",
+    session: chat({ id: "chataaaa", title: "首页排序" }),
+  } as never);
+  await expect
+    .element(chats.getByRole("button", { name: "首页排序（空闲）" }))
+    .toBeVisible();
+});
+
+test("a rejected name stays in the dialog and the row keeps its title", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  respond(/^PATCH \/api\/sessions\/chataaaa$/, () =>
+    Response.json({ error: "名称不能包含控制字符" }, { status: 400 }),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  const chats = sidebar().getByRole("list", { name: "聊天历史" });
+  await chats.getByRole("button", { name: "修改标题：修复排序" }).click();
+  await page.getByRole("dialog").getByRole("textbox").fill("坏\u0007名");
+  await page.getByRole("dialog").getByRole("button", { name: "保存" }).click();
+  await expect
+    .element(page.getByRole("dialog").getByText("名称不能包含控制字符"))
+    .toBeVisible();
+  await expect
+    .element(chats.getByRole("button", { name: "修复排序（空闲）" }))
+    .toBeVisible();
+});
+
+test("an archived chat resumes on its chat side, or says why it cannot", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  respond(/^POST \/api\/sessions\/archivea\/resume$/, () =>
+    Response.json(
+      { error: "工作目录 /repos/webmux 已不存在" },
+      { status: 409 },
+    ),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  const chats = sidebar().getByRole("list", { name: "聊天历史" });
+  await chats.getByRole("button", { name: "整理文档（已结束）" }).click();
+  await expect
+    .element(sidebar().getByRole("alert"))
+    .toMatchTextContent(
+      /无法恢复“整理文档”：工作目录 \/repos\/webmux 已不存在/,
+    );
+  expect(location.pathname).toBe("/s/otherabc");
+  expect(commands().at(-1)).toMatchObject({
+    path: "/api/sessions/archivea/resume",
+    body: { side: "acp" },
+  });
+
+  respond(/^POST \/api\/sessions\/archivea\/resume$/, () =>
+    Response.json(chat({ id: "archivea", title: "整理文档" })),
+  );
+  await chats.getByRole("button", { name: "整理文档（已结束）" }).click();
+  await expect.poll(() => location.pathname).toBe("/s/archivea");
+});

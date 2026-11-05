@@ -44,6 +44,8 @@ type LaunchConfig struct {
 }
 
 // LaunchConfigSummary is a list entry; it names environment variables only.
+// ChatOptions are the agent options the config's latest chat session
+// reported, with their last values; [] before any did.
 type LaunchConfigSummary struct {
 	ID            string           `json:"id"`
 	Name          string           `json:"name"`
@@ -53,6 +55,7 @@ type LaunchConfigSummary struct {
 	Preview       *PreviewSettings `json:"preview"`
 	Hybrid        bool             `json:"hybrid"`
 	HybridSupport HybridSupport    `json:"hybridSupport"`
+	ChatOptions   []ChatConfig     `json:"chatOptions"`
 	CreatedAt     time.Time        `json:"createdAt"`
 	UpdatedAt     time.Time        `json:"updatedAt"`
 }

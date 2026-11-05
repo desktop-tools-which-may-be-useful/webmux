@@ -384,6 +384,7 @@ func (a *actor) emit(events ...Event) {
 			a.chat.Config = e.Config
 			values := configValues(e.Config)
 			a.record(false, func(r *Record) { r.Config = values })
+			a.svc.options.remember(a.configID, e.Config, time.Now())
 		case EventUsage:
 			a.chat.Usage = e.Usage
 		case EventInfo:

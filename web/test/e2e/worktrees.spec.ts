@@ -12,6 +12,7 @@ import {
   nameSession,
   useCustomCommand,
   useDirectory,
+  backToList,
 } from "./fixtures";
 import { startE2EServer } from "./server.mjs";
 
@@ -320,8 +321,9 @@ test("without Git an isolated real service still starts and runs a direct shell"
     expect(config.workspace.gitAvailable).toBe(false);
     expect(config).not.toHaveProperty("token");
     await page
-      .locator("header")
+      .getByRole("main")
       .getByRole("button", { name: "＋ 新建会话", exact: true })
+      .first()
       .click();
     await useCustomCommand(page, "/bin/bash --noprofile --norc -i");
     await page
@@ -367,13 +369,12 @@ test("multiple repositories keep every session visible through local failure, co
     entries.push(await response.json());
   }
   await page.goto("/");
-  const navigation = page.getByRole("navigation", { name: "仓库导航" });
-  await expect(page.locator('[data-repository-scope="all"]')).toHaveCount(1);
-  if (!(await navigation.isVisible()))
-    await page.getByRole("button", { name: /仓库导航：/ }).click();
-  await navigation
-    .getByRole("button", { name: "全部仓库", exact: true })
-    .click();
+  const tree = page.getByRole("tree", { name: "仓库与会话" });
+  const open = page.getByRole("button", { name: "打开侧栏" });
+  await expect(tree.or(open).first()).toBeVisible();
+  if (!(await tree.isVisible()))
+    await page.getByRole("button", { name: "打开侧栏" }).click();
+  await tree.locator('[data-tree-key="all"]').click();
   await expect(page.locator("[data-session-link]")).toHaveCount(4);
   for (const item of entries)
     await expect(
@@ -685,9 +686,7 @@ test("returning home keeps the cached snapshot until a slow Git refresh finishes
     }
   };
   try {
-    await page
-      .getByRole("button", { name: "返回会话列表", exact: true })
-      .click();
+    await backToList(page);
     // The cached snapshot keeps the session grouped under its repository
     // while the delayed refresh is still in flight.
     await expect(group).toHaveCount(1);
@@ -720,8 +719,9 @@ test("direct launch still offers explicit directory creation without registering
   const path = join(workDir, "new direct directory");
   await page.goto("/");
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .first()
     .click();
   await useDirectory(page, path);
   await useCustomCommand(page, "/bin/bash --noprofile --norc -i");

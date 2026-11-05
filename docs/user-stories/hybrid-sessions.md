@@ -157,6 +157,22 @@
   - 首页混合会话卡片（聊天端、切换中与终端端，含“恢复到终端”后）以 agent 单色品牌小图标替换通用聊天/终端图标，元信息行形如“OpenCode · 聊天 · 2 个设备已连接”或“OpenCode · 终端 · 后台会话”；
   - 会话页显示聊天视图时，头部在标题后、状态点前显示低强调的图标与名称；窄屏（小于 640px）只显示图标，可访问名称与悬停提示均为“Agent：<名称>”，空间不足时先截断标题；
   - 标识只用于展示，不可聚焦或点击；切到终端视图后隐藏；浏览器不认识的图标键只显示名称，不用其他图标代替。
+- **US-Q18 快速开始聊天**：作为想直接把任务交给 agent 的使用者，我希望在一个输入框写下任务、选好仓库和 agent 后按一次发送，就在新 worktree 里以聊天方式开工，以便省去建 worktree、选配置和等待聊天就绪这几步。
+  验收要点：
+  - 快速开始页 `/new` 是聊天模式的主区域：底部输入框，下方一行是仓库、基准分支、agent、该 agent 的配置项与权限模式；窄屏下 agent 与配置收进输入卡片；
+  - 仓库列出全部已登记仓库（不可用的禁用并说明原因），agent 只列出勾选了混合模式的启动配置；缺少可用仓库或 agent 时禁用发送并提供“添加仓库”或“新建启动配置”入口；
+  - 本设备记住上次成功时的仓库和 agent，失效时回退到第一个可用项；基准分支默认为仓库主工作区当前的分支，只列本地分支；未发送的文字单独保存在本设备，成功后清除；
+  - 配置项来自该启动配置最近一次聊天端报告的清单（`chatOptions`）；没有清单时显示“配置首次启动后可选”；agent 不接受的值不阻断发送，只在聊天中留下说明；
+  - 发送后服务端依次创建 worktree（自动分支名，路径为默认父目录下的分支名末段）、以聊天端启动混合会话、应用配置与权限模式，并把首条消息作为第一轮提示发出，浏览器断开不影响；同一请求 ID 在执行中及完成后 10 分钟内重复提交只返回同一结果；
+  - 仓库设置了初始化指令时，首条消息为“指令、空行、用户输入”，输入框上方提示会附带并可查看全文；
+  - 成功后当前标签页进入新会话的聊天视图；失败时停在原页面、保留文字，说明失败步骤与原因，已创建的 worktree 或会话保留并提供入口；
+  - 生成的是标准混合会话：切换、恢复、关闭、归档与删除 worktree 都按本节其他故事进行。
+- **US-Q19 聊天历史**：作为同时进行多个聊天的使用者，我希望聊天模式的侧栏按最近活动列出全部聊天，以便不回首页就切换聊天或恢复已结束的聊天。
+  验收要点：
+  - 列出运行中的混合会话与服务端保存的已归档记录，纯终端会话不列出，同一会话只出现一次，按最近活动从新到旧平铺，随会话事件实时更新；
+  - 每行显示 agent 图标、标题和状态（工作中、等待、空闲、已结束，颜色加文字），当前会话标 `aria-current`；
+  - 点运行中的行在当前标签页进入该会话；点已归档记录按现有流程恢复到聊天端并进入，需要选择时转到该记录的恢复页，无法恢复时在侧栏说明原因、不新建会话；
+  - “新聊天”回到快速开始页；手机上从抽屉中选择后抽屉关闭。
 
 依据：
 
@@ -167,4 +183,6 @@
 - [启动配置](../../internal/launch/types.go)、[聊天视图](../../web/src/components/chat/)、[代码链接解析](../../web/src/markdown-link.ts)、[代码工作区](../../web/src/components/CodeWorkspace.svelte)、[会话页](../../web/src/pages/Terminal.svelte)
 - [已归档记录](../../web/src/components/ArchivedSessions.svelte)、[归位规则](../../web/src/archived.ts)、[安装提示](../../web/src/components/ConnectorInstallHint.svelte)、[原生附着](../../internal/attach/attach.go)
 - [使用说明](../hybrid-sessions.md)、[协议](../protocol/http-hybrid.md)、[端到端测试](../../web/test/e2e/hybrid.spec.ts)。
-- [会话卡片](../../web/src/components/SessionRow.svelte)、[会话页头部](../../web/src/components/TerminalHeader.svelte)、[品牌图标](../../web/src/components/LaunchConfigIcon.svelte)、[图标一致性测试](../../internal/launch/presets_test.go)。
+- [会话卡片](../../web/src/components/SessionRow.svelte)、[会话页头部](../../web/src/components/TerminalHeader.svelte)、[品牌图标](../../web/src/components/LaunchConfigIcon.svelte)、[图标一致性测试](../../internal/launch/presets_test.go)
+- [快速开始页](../../web/src/pages/QuickStart.svelte)、[快速开始状态](../../web/src/quickStart.ts)、[编排](../../internal/workspace/quickstart.go)、[接口](../../internal/api/quickstart.go)、[配置项清单](../../internal/hybrid/options.go)
+- [聊天历史](../../web/src/components/ChatHistory.svelte)、[快速开始浏览器用例](../../web/test/browser/QuickStart.test.ts)、[聊天历史浏览器用例](../../web/test/browser/ChatHistory.test.ts)、[快速开始端到端用例](../../web/test/e2e/quick-start.spec.ts)。

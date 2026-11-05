@@ -381,3 +381,48 @@ func forwardFailure(w http.ResponseWriter, err error) {
 	}
 	failure(w, status, err)
 }
+
+// quickStartStatus maps the error of a quick start step like the endpoint
+// of that step does: launch configs and hybrid sessions keep their
+// statuses, the rest are workspace errors.
+func quickStartStatus(err error) int {
+	if errors.Is(err, launch.ErrInvalid) || errors.Is(err, launch.ErrNotFound) || errors.Is(err, launch.ErrDuplicate) || errors.Is(err, launch.ErrUnavailable) {
+		return launchStatus(err)
+	}
+	if status, ok := hybridStatus(err); ok {
+		return status
+	}
+	return workspaceStatus(err)
+}
+
+// quickStartFailure answers a failed quick start with its step, what it
+// had created, and the HybridConflict details of a hybrid conflict;
+// Reason is "conflict" for an existing branch or path.
+func quickStartFailure(w http.ResponseWriter, err error) {
+	body := contract.QuickStartFailure{Step: workspace.StepPrecheck}
+	var failed *workspace.QuickStartError
+	if errors.As(err, &failed) {
+		body.Step, body.Worktree, body.SessionID = failed.Step, wire.QuickStartWorktree(failed.Worktree), failed.SessionID
+		err = failed.Err
+	}
+	status := quickStartStatus(err)
+	body.Error = err.Error()
+	if status == http.StatusInternalServerError {
+		slog.Error("quick start failed", "step", body.Step, "error", err)
+		body.Error = http.StatusText(status)
+	}
+	if _, ok := hybridStatus(err); ok {
+		body.Reason = hybridReason(err)
+		var ineligible *hybrid.IneligibleError
+		if errors.As(err, &ineligible) {
+			body.Eligibility = ineligible.Reason
+		}
+		var connector *hybrid.ConnectorMissingError
+		if errors.As(err, &connector) {
+			body.Connector = wire.AgentConnector(connector.Connector)
+		}
+	} else if errors.Is(err, workspace.ErrConflict) {
+		body.Reason = "conflict"
+	}
+	reply(w, status, body)
+}

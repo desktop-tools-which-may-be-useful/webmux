@@ -315,3 +315,12 @@
   - Storybook `acp-chat.spec.ts`（241 项）与 `design-system.spec.ts`（84 项），以及 Playwright `hybrid.spec.ts` 全量（45 项通过，含桌面 / Pixel 7 代码链接跳转用例）。
   - 隔离演示服务下桌面 1280×720 与手机 390×844、浅色与深色主题前后对比截图。
 - 限制：未运行完整 `make test`；截图与 E2E 使用 fake agent，未在 iOS/Android 真机浏览器核对；未重新核验其余故事能力。
+
+本次局部核对（2026-11-05）：实现 OpenSpec 变更 `quick-start-chat`，新增 US-C16、US-C17、US-J12、US-Q18、US-Q19，更新 US-C14、US-C15、US-R 端口转发入口位置与覆盖索引。
+
+- 范围：侧栏外壳与聊天/工作台模式、工作台导航树、聊天历史、侧栏改名、快速开始页与 `POST /api/quick-starts`、仓库初始化指令、按启动配置记忆的 agent 配置项清单。
+- 依据：
+  - Go：`go test -race` 覆盖 `internal/workspace`、`internal/hybrid`、`internal/statefile`、`internal/api`（含 wire 快照重录）、`internal/archtest`、`./cmd/...`；`go vet` 与 `golangci-lint` 通过。
+  - 前端：`svelte-check`、测试类型检查、Oxlint、前端架构守卫通过；Vitest 单元与浏览器全量通过，新增 AppShell、WorkbenchTree、ChatHistory、QuickStart、仓库初始化指令组件测试。
+  - Playwright：`quick-start.spec.ts` 桌面（1280×720）与 Pixel 7（390×844）通过；其余 E2E 交由 CI 运行。
+- 限制：未在真机上核对，未截取 PR 前后对比截图；E2E 使用 fake agent。

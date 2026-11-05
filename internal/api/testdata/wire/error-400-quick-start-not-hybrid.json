@@ -1,0 +1,7 @@
+{
+  "status": 400,
+  "body": {
+    "error": "startSide 只适用于启用混合模式的启动配置",
+    "step": "precheck"
+  }
+}

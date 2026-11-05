@@ -8,6 +8,7 @@
       "commonDir": "<repo>/.git",
       "error": "",
       "id": "<id#1>",
+      "initInstruction": "",
       "name": "repo",
       "worktrees": [
         {

@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/svelte-vite";
 import { userEvent, within } from "storybook/test";
 import ForwardingHome from "./port-forwarding/ForwardingHome.svelte";
 
-// The home page port-forwarding entry and dialog: the real WorkspaceHeader
-// and ForwardDialog over demo forwards answered in memory.
+// The port-forwarding entry in the sidebar footer and its dialog: the real
+// SidebarFooter and ForwardDialog over demo forwards answered in memory.
 const meta = {
   title: "Workspace/Port forwarding",
   component: ForwardingHome,

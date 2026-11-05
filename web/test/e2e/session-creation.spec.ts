@@ -34,12 +34,15 @@ async function register(request: APIRequestContext, path: string) {
   return response.json();
 }
 
+// Picks a home view in the workbench tree (sidebar or phone drawer).
 async function selectScope(page: Page, id: string) {
-  await expect(page.locator('[data-repository-scope="all"]')).toHaveCount(1);
-  const navigation = page.getByRole("navigation", { name: "仓库导航" });
-  if (!(await navigation.isVisible()))
-    await page.getByRole("button", { name: /仓库导航：/ }).click();
-  await page.locator(`[data-repository-scope="${id}"]`).click();
+  const tree = page.getByRole("tree", { name: "仓库与会话" });
+  const open = page.getByRole("button", { name: "打开侧栏" });
+  await expect(tree.or(open).first()).toBeVisible();
+  if (!(await tree.isVisible()))
+    await page.getByRole("button", { name: "打开侧栏" }).click();
+  const key = id === "all" || id === "direct" ? id : `r:${id}`;
+  await tree.locator(`[data-tree-key="${key}"]`).click();
 }
 
 test("global and worktree creation use the selected repository instead of an unrelated recent directory", async ({
@@ -56,8 +59,9 @@ test("global and worktree creation use the selected repository instead of an unr
   await page.goto("/");
   await selectScope(page, second.id);
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .first()
     .click();
   const location = page.getByRole("button", { name: "位置", exact: true });
   await expect(location).toContainText("second · 主工作区 · main");

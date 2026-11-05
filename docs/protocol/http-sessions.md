@@ -139,13 +139,13 @@ interface SessionInfo {
 
 启动配置保存在服务端 `<state_dir>/launch-configs.json`，在所有已认证设备间共享。只提供用户自定义的启动配置，不再提供内置预设或 `/api/presets` 路由；新安装首次启动时服务端在该文件写入常见 agent 的普通配置，经同一接口列出、修改和删除。
 
-| 方法   | 路径                       | 说明                                                                                              |
-| ------ | -------------------------- | ------------------------------------------------------------------------------------------------- |
-| GET    | `/api/launch-configs`      | 摘要数组（按创建顺序）：`{id, name, icon?, cmd, envNames, preview, createdAt, updatedAt}`         |
-| GET    | `/api/launch-configs/{id}` | 完整配置：`{id, name, icon?, cmd, env, preview, createdAt, updatedAt}`                            |
-| POST   | `/api/launch-configs`      | `{name, icon?, cmd, env?, preview?}`，201 返回完整配置                                            |
-| PUT    | `/api/launch-configs/{id}` | `{name, icon?, cmd, env?, preview?}` 整体替换，省略的 `env` 与 `preview` 被清空，200 返回完整配置 |
-| DELETE | `/api/launch-configs/{id}` | 204                                                                                               |
+| 方法   | 路径                       | 说明                                                                                                   |
+| ------ | -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/launch-configs`      | 摘要数组（按创建顺序）：`{id, name, icon?, cmd, envNames, chatOptions, preview, createdAt, updatedAt}` |
+| GET    | `/api/launch-configs/{id}` | 完整配置：`{id, name, icon?, cmd, env, preview, createdAt, updatedAt}`                                 |
+| POST   | `/api/launch-configs`      | `{name, icon?, cmd, env?, preview?}`，201 返回完整配置                                                 |
+| PUT    | `/api/launch-configs/{id}` | `{name, icon?, cmd, env?, preview?}` 整体替换，省略的 `env` 与 `preview` 被清空，200 返回完整配置      |
+| DELETE | `/api/launch-configs/{id}` | 204                                                                                                    |
 
 `icon` 为可选的本地图标 ID：`terminal`、`antigravity`、`claudecode`、`codex`、`geminicli`、`cursor`、`githubcopilot`、
 `opencode`、`qwen`、`kimi`、`codebuddy` 或 `pi`。
@@ -156,6 +156,8 @@ interface SessionInfo {
 - `terminal` 可显式覆盖自动匹配。
 
 `preview` 为 `null` 或省略时沿用服务端同步的全局预览设置；否则为 `{lines, skip}`，`lines` 为 1–50 的整数、`skip` 为 0–50 的整数。会话卡片按创建时记录的 `configId` 读取该配置的当前预览值，配置被删除或不可用时回退全局设置。
+
+列表的 `chatOptions` 是该配置最近一次聊天端会话报告的配置项清单与最后的值（结构同聊天状态的 `config`），还没有时为空数组。服务端保存在 `<state_dir>/agent-options.json`，删除启动配置时一并清除；它只供快速开始在 agent 启动前展示配置，不参与切换或恢复。
 
 列表只含环境变量名（字典序），值只由单条读取与创建/更新响应返回。限制：
 

@@ -11,15 +11,17 @@ type WorkspaceCapability struct {
 }
 
 // Repository is a registered Git repository and its worktrees.
+// InitInstruction prefixes the first prompt of a quick start; "" for none.
 type Repository struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	CommonDir    string     `json:"commonDir"`
-	AnchorPath   string     `json:"anchorPath"`
-	Availability string     `json:"availability"`
-	Error        string     `json:"error"`
-	CheckedAt    time.Time  `json:"checkedAt"`
-	Worktrees    []Worktree `json:"worktrees"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	CommonDir       string     `json:"commonDir"`
+	AnchorPath      string     `json:"anchorPath"`
+	Availability    string     `json:"availability"`
+	Error           string     `json:"error"`
+	CheckedAt       time.Time  `json:"checkedAt"`
+	Worktrees       []Worktree `json:"worktrees"`
+	InitInstruction string     `json:"initInstruction"`
 }
 
 type Worktree struct {
@@ -93,9 +95,17 @@ type RefreshBranchBaseResponse struct {
 	FetchWarning string `json:"fetchWarning"`
 }
 
-// RegisterRepositoryRequest is the body of POST /api/repositories.
+// RegisterRepositoryRequest is the body of POST /api/repositories. An
+// already registered repository keeps its instruction.
 type RegisterRepositoryRequest struct {
-	Path string `json:"path"`
+	Path            string `json:"path"`
+	InitInstruction string `json:"initInstruction,omitempty"`
+}
+
+// UpdateRepositoryRequest is the body of PATCH /api/repositories/{id}; an
+// empty instruction clears it. It answers 200 with the Repository.
+type UpdateRepositoryRequest struct {
+	InitInstruction string `json:"initInstruction"`
 }
 
 // CreateWorktreeRequest is the body of POST /api/repositories/{id}/worktrees.

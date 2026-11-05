@@ -1,0 +1,8 @@
+{
+  "status": 409,
+  "body": {
+    "error": "目标路径已存在或无法确认可用，不会覆盖",
+    "reason": "conflict",
+    "step": "worktree"
+  }
+}

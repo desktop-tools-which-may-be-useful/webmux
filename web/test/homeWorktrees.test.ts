@@ -36,6 +36,7 @@ const repo = (
   availability: "available",
   error: "",
   checkedAt: "2026-10-20T00:00:00Z",
+  initInstruction: "",
   worktrees,
   ...overrides,
 });

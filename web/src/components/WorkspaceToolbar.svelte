@@ -16,6 +16,7 @@
     refreshing,
     onadd,
     onrefresh,
+    onstart,
     children,
   }: {
     title?: string;
@@ -29,6 +30,8 @@
     refreshing: boolean;
     onadd: () => void;
     onrefresh: () => void;
+    // Opens the new-session dialog; the old header's primary action.
+    onstart: () => void;
     // Search and status filters below the title row.
     children: Snippet;
   } = $props();
@@ -69,6 +72,9 @@
           class={refreshing ? "animate-spin motion-reduce:animate-none" : ""}
           aria-hidden="true"
         /></Button
+      >
+      <Button size="sm" class="min-h-9 sm:min-h-8" onclick={() => onstart()}
+        >＋ 新建会话</Button
       >
     </div>
   </div>

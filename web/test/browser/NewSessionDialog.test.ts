@@ -11,6 +11,7 @@ const config = {
   name: "Claude 恢复",
   cmd: ["claude", "--resume"],
   envNames: ["API_KEY", "BASE_URL"],
+  chatOptions: [],
   hybrid: false,
   hybridSupport: {
     supported: false,
@@ -26,6 +27,7 @@ const otherConfig = {
   name: "Open Code",
   cmd: ["opencode", "--continue", "a b"],
   envNames: [],
+  chatOptions: [],
   hybridSupport: { supported: true, supportedAgents: [], agent: "opencode" },
 };
 const mainTree: Worktree = {
@@ -53,6 +55,7 @@ const repository = {
   availability: "available",
   error: "",
   checkedAt: "2026-10-23T00:00:00Z",
+  initInstruction: "",
   worktrees: [mainTree],
 } satisfies Repository;
 const secondRepository: Repository = {

@@ -292,6 +292,7 @@ describe("launch config schemas", () => {
     name: "Claude",
     cmd: ["claude"],
     envNames: [],
+    chatOptions: [],
     hybrid: false,
     hybridSupport: {
       supported: false,

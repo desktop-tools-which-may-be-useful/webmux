@@ -12,8 +12,10 @@
   import * as Card from "$lib/components/ui/card";
   import TokenHelp from "./components/TokenHelp.svelte";
   import LazyPage from "./components/LazyPage.svelte";
+  import AppShell from "./components/AppShell.svelte";
   import SessionList from "./pages/SessionList.svelte";
-  import { matchRoute } from "./route";
+  import { matchRoute, type Route } from "./route";
+  import { enterHome } from "./shell.svelte";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
   import { browserDraftStorage } from "./draftStorage";
   import { clearHomeCache } from "./home-cache";
@@ -21,6 +23,7 @@
   const drafts = createTerminalDrafts({ storage: browserDraftStorage() });
   let uploadNotice = $state("");
 
+  enterHome();
   let path = $state(location.pathname);
   let ready = $state(false);
   let checking = $state(true);
@@ -28,6 +31,16 @@
   let error = $state("");
   const route = $derived(matchRoute(path));
   const sessionId = $derived(route.name === "terminal" ? route.id : "");
+  const shellRoute = $derived(
+    route.name === "sessions" ||
+      route.name === "quick-start" ||
+      route.name === "terminal"
+      ? (route as Extract<
+          Route,
+          { name: "sessions" | "quick-start" | "terminal" }
+        >)
+      : null,
+  );
   // The frame of a pop-out code window; it only shows the code workspace.
   const codeId = $derived(route.name === "code" ? route.id : "");
 
@@ -56,6 +69,8 @@
       const main = document.querySelector("main");
       if (!main) return;
       focusRoute = false;
+      // A page that already placed focus (quick start's input) keeps it.
+      if (main.contains(document.activeElement)) return;
       main.tabIndex = -1;
       main.focus({ preventScroll: true });
     };
@@ -65,6 +80,7 @@
       subtree: true,
     });
     const change = () => {
+      if (!shellRoute) enterHome();
       path = location.pathname;
       focusRoute = true;
       void tick().then(focusMain);
@@ -167,23 +183,6 @@
   >
     {#snippet children(page)}<page.default id={codeId} />{/snippet}
   </LazyPage>
-{:else if sessionId}
-  <LazyPage
-    load={() => import("./pages/Terminal.svelte")}
-    label="终端"
-    errorMessage={(error) =>
-      error instanceof Error ? error.message : "终端加载失败"}
-  >
-    {#snippet children(page)}
-      {#key sessionId}<page.default
-          id={sessionId}
-          {drafts}
-          onUploadNotice={(message) => {
-            if (ready) uploadNotice = message;
-          }}
-        />{/key}
-    {/snippet}
-  </LazyPage>
 {:else if route.name === "settings-tailscale"}
   <LazyPage
     load={() => import("./pages/TailscaleSettingsPage.svelte")}
@@ -211,8 +210,36 @@
   >
     {#snippet children(page)}<page.default />{/snippet}
   </LazyPage>
-{:else}
-  <SessionList {drafts} />
+{:else if shellRoute}
+  <AppShell route={shellRoute} {drafts}>
+    {#if sessionId}
+      <LazyPage
+        load={() => import("./pages/Terminal.svelte")}
+        label="终端"
+        errorMessage={(error) =>
+          error instanceof Error ? error.message : "终端加载失败"}
+      >
+        {#snippet children(page)}
+          {#key sessionId}<page.default
+              id={sessionId}
+              {drafts}
+              onUploadNotice={(message: string) => {
+                if (ready) uploadNotice = message;
+              }}
+            />{/key}
+        {/snippet}
+      </LazyPage>
+    {:else if route.name === "quick-start"}
+      <LazyPage
+        load={() => import("./pages/QuickStart.svelte")}
+        label="快速开始"
+      >
+        {#snippet children(page)}<page.default />{/snippet}
+      </LazyPage>
+    {:else}
+      <SessionList />
+    {/if}
+  </AppShell>
 {/if}
 
 {#if ready && uploadNotice}

@@ -186,6 +186,22 @@ func (m *Manager) CreateShell(in ShellInput, d Driver) (*Session, error) {
 	return s, nil
 }
 
+// ProbeShell returns a shell that is never registered, listed or published,
+// for the checks a start makes before anything exists: it only answers
+// LookPath, Getenv and short-lived sidecars (Output) in in's directory and
+// launch environment. Its sidecars end before Output returns, so the caller
+// just drops it.
+func (m *Manager) ProbeShell(in CreateInput) (*Session, error) {
+	cwd, err := m.resolveCreate(in)
+	if err != nil {
+		return nil, err
+	}
+	s := newSession("", cwd, in.Name, m.startOptions(in))
+	s.shell = true
+	s.sidecars = make(map[*Sidecar]struct{})
+	return s, nil
+}
+
 // validID accepts the generated form: eight lowercase base32 characters.
 func validID(id string) bool {
 	if len(id) != 8 {

@@ -4,6 +4,8 @@
   // Clickable regions inside lists, tab strips and cards. Unlike Button they
   // take no control sizing, so virtualized rows keep their fixed height; use
   // Button for standalone controls.
+  const navigation =
+    "relative flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-primary/10 aria-pressed:text-primary aria-pressed:before:absolute aria-pressed:before:inset-y-3 aria-pressed:before:left-0 aria-pressed:before:w-0.5 aria-pressed:before:rounded-full aria-pressed:before:bg-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-3 aria-[current=page]:before:left-0 aria-[current=page]:before:w-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-primary";
   export const listButtonVariants = tv({
     base: "",
     variants: {
@@ -12,8 +14,11 @@
         text: "",
         // A file or change in a navigation list.
         row: "gap-1.5 rounded-sm px-2 py-1 text-left text-xs hover:bg-muted",
-        navigation:
-          "relative flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-primary/10 aria-pressed:text-primary aria-pressed:before:absolute aria-pressed:before:inset-y-3 aria-pressed:before:left-0 aria-pressed:before:w-0.5 aria-pressed:before:rounded-full aria-pressed:before:bg-primary",
+        // aria-pressed marks a chosen filter, aria-current the page shown.
+        navigation,
+        // A navigation row with a file-tree-action button over its end
+        // (sidebar chat rows); the padding keeps the text clear of it.
+        "navigation-action": `${navigation} pr-9 max-sm:pr-(--control-touch) any-pointer-coarse:pr-(--control-touch)`,
         // Tree rows follow the code panel's compact touch target on touch
         // screens and narrow windows; a long press must not select text or
         // raise the iOS link callout. data-drop-target marks the folder that

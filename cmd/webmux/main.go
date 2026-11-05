@@ -410,6 +410,12 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if err := hybrids.Unavailable(); err != nil {
 		slog.Warn("hybrid records unreadable; session artifacts folders kept", "error", err)
 	}
+	// A deleted launch config's remembered agent options go with it.
+	launches.OnDelete(func(id string) {
+		if err := hybrids.ForgetAgentOptions(id); err != nil {
+			slog.Warn("forget agent options of a deleted launch config", "error", err)
+		}
+	})
 	// A recoverable hybrid session keeps its folder after leaving the
 	// manager; an unreadable record store keeps every folder.
 	folders.Start(func(id string) bool {

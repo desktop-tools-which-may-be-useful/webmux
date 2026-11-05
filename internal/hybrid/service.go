@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rainchan/webmux/internal/acp"
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/session"
@@ -77,8 +78,11 @@ var defaultTiming = timing{
 
 // Service owns the hybrid sessions of one server.
 type Service struct {
-	manager  *session.Manager
-	records  *records
+	manager *session.Manager
+	records *records
+	// options remembers each launch config's agent options for display
+	// before a session starts (agent-options.json).
+	options  *agentOptions
 	capacity int
 	version  string
 	log      *slog.Logger
@@ -119,7 +123,7 @@ func New(o Options) *Service {
 	}
 	userHome, _ := os.UserHomeDir()
 	s := &Service{
-		manager: o.Manager, records: openRecords(o.StateDir), capacity: capacity, version: o.Version, log: log,
+		manager: o.Manager, records: openRecords(o.StateDir), options: openAgentOptions(o.StateDir), capacity: capacity, version: o.Version, log: log,
 		uploads: o.Uploads, userHome: userHome, agents: agents.Default(),
 		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
 		recovering: make(map[string]bool),
@@ -127,6 +131,7 @@ func New(o Options) *Service {
 	if err := s.records.recoverAfterRestart(time.Now()); err != nil {
 		log.Warn("hybrid sessions unavailable", "error", err)
 	}
+	logAgentOptions(log, s.options)
 	o.Manager.SetIDReserver(s.records.reserved)
 	return s
 }
@@ -175,6 +180,7 @@ func (s *Service) Close() {
 		}
 	}
 	s.records.close()
+	s.options.close()
 }
 
 // CreateInput starts a hybrid session from a saved launch config. Cwd is
@@ -189,44 +195,72 @@ type CreateInput struct {
 	StartSide Side
 }
 
-// Create registers a hybrid session shell, records it, and starts its first
-// side: the terminal UI (default) or the ACP chat (initialize, then
-// session/new). A failed start removes the shell and the record; an ACP
-// failure carries the agent's stderr tail in its message.
-func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session, error) {
+// CheckCreate makes the checks of a Create of in before anything exists:
+// the record store, the start side, the launch command's profile, the
+// directory, the record limit and, for a chat-first start, the profile's
+// connector, looked up as the start would in in.Cwd with in.Env. A missing
+// connector is a *ConnectorMissingError. It registers nothing and starts
+// only the connector lookup.
+func (s *Service) CheckCreate(ctx context.Context, in CreateInput) error {
+	cmd, side, cwd, err := s.admit(in)
+	if err != nil || side != SideACP || cmd.Profile.Connector == nil {
+		return err
+	}
+	probe, err := s.manager.ProbeShell(session.CreateInput{Cwd: cwd, Cmd: cmd.TUIArgv(), Env: in.Env, ConfigID: in.ConfigID})
+	if err != nil {
+		return shellError(err)
+	}
+	_, err = prepareACP(ctx, cmd, probe)
+	return err
+}
+
+// admit runs the checks that precede every create.
+func (s *Service) admit(in CreateInput) (agentprofile.Command, Side, string, error) {
 	if err := s.records.unavailable(); err != nil {
-		return nil, err
+		return agentprofile.Command{}, "", "", err
 	}
 	side := in.StartSide
 	if side == "" {
 		side = SideTUI
 	}
 	if side != SideTUI && side != SideACP {
-		return nil, fmt.Errorf("%w: startSide 只能是 tui 或 acp", ErrInvalid)
+		return agentprofile.Command{}, "", "", fmt.Errorf("%w: startSide 只能是 tui 或 acp", ErrInvalid)
 	}
 	cmd, err := s.agents.Parse(in.Cmd)
 	if err != nil {
 		var unsupported *agentprofile.UnsupportedError
 		if errors.As(err, &unsupported) {
-			return nil, fmt.Errorf("%w: 该启动配置不能用于混合会话: %s", ErrInvalid, s.agents.Explain(unsupported.Reason))
+			return agentprofile.Command{}, "", "", fmt.Errorf("%w: 该启动配置不能用于混合会话: %s", ErrInvalid, s.agents.Explain(unsupported.Reason))
 		}
-		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+		return agentprofile.Command{}, "", "", fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	cwd, err := filepath.EvalSymlinks(in.Cwd)
 	if err == nil {
 		cwd, err = filepath.Abs(cwd)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("%w: 目录: %v", ErrInvalid, err)
+		return agentprofile.Command{}, "", "", fmt.Errorf("%w: 目录: %v", ErrInvalid, err)
 	}
 	if s.records.count() >= MaxRecords {
-		return nil, ErrLimit
+		return agentprofile.Command{}, "", "", ErrLimit
 	}
 	s.mu.Lock()
 	closed := s.closed
 	s.mu.Unlock()
 	if closed {
-		return nil, fmt.Errorf("%w: 服务已关闭", ErrUnavailable)
+		return agentprofile.Command{}, "", "", fmt.Errorf("%w: 服务已关闭", ErrUnavailable)
+	}
+	return cmd, side, cwd, nil
+}
+
+// Create registers a hybrid session shell, records it, and starts its first
+// side: the terminal UI (default) or the ACP chat (initialize, then
+// session/new). A failed start removes the shell and the record; an ACP
+// failure carries the agent's stderr tail in its message.
+func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session, error) {
+	cmd, side, cwd, err := s.admit(in)
+	if err != nil {
+		return nil, err
 	}
 	a := newActor(s, cmd, cwd, in.ConfigID, side)
 	// The shell shows the terminal command, with the options the profile
@@ -536,5 +570,37 @@ func (s *Service) SetPermissionMode(ctx context.Context, id string, in Permissio
 // recovered session keeps it. A session without a record answers ErrNotFound.
 func (s *Service) SetName(id, name string) error {
 	_, err := s.records.update(id, true, func(r *Record) { r.Name = name })
+	return err
+}
+
+// ChatSettings are the agent options and permission mode a chat runs with.
+type ChatSettings struct {
+	Config         []ConfigOption
+	PermissionMode PermissionMode
+}
+
+// Settings returns session id's current agent options and permission mode,
+// as every device sees them.
+func (s *Service) Settings(ctx context.Context, id string) (ChatSettings, error) {
+	a, err := s.actor(id)
+	if err != nil {
+		return ChatSettings{}, err
+	}
+	return call(ctx, a, func() (ChatSettings, error) {
+		return ChatSettings{Config: a.chat.Config, PermissionMode: a.chat.PermissionMode}, nil
+	})
+}
+
+// Notice adds a WebMux warning to session id's chat timeline, like the
+// notices of options that could not be restored.
+func (s *Service) Notice(ctx context.Context, id, text string) error {
+	a, err := s.actor(id)
+	if err != nil {
+		return err
+	}
+	_, err = call(ctx, a, func() (struct{}, error) {
+		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: text}})
+		return struct{}{}, nil
+	})
 	return err
 }

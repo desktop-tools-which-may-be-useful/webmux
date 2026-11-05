@@ -18,7 +18,7 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		if !decode(w, r, &req) {
 			return
 		}
-		repository, created, err := s.Workspace.Register(r.Context(), req.Path)
+		repository, created, err := s.Workspace.Register(r.Context(), req.Path, req.InitInstruction)
 		if err != nil {
 			workspaceFailure(w, err)
 			return
@@ -31,6 +31,10 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 	})
 	serveDone(mux, "DELETE "+repo, workspaceFailure, func(r *http.Request) error {
 		return s.Workspace.Unregister(r.PathValue("id"))
+	})
+	serveIn(mux, "PATCH "+repo, http.StatusOK, workspaceFailure, func(r *http.Request, req contract.UpdateRepositoryRequest) (contract.Repository, error) {
+		repository, err := s.Workspace.SetInitInstruction(r.Context(), r.PathValue("id"), req.InitInstruction)
+		return wire.Repository(repository), err
 	})
 	serve(mux, "GET "+repo+"/worktrees", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Repository, error) {
 		repository, err := s.Workspace.Refresh(r.Context(), r.PathValue("id"))

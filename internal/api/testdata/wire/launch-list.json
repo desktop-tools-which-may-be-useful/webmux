@@ -2,6 +2,7 @@
   "status": 200,
   "body": [
     {
+      "chatOptions": [],
       "cmd": [
         "claude",
         "--resume"
@@ -30,6 +31,7 @@
       "updatedAt": "<time>"
     },
     {
+      "chatOptions": [],
       "cmd": [
         "/bin/sh",
         "-c",

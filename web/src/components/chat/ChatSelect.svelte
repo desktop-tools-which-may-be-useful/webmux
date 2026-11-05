@@ -5,25 +5,33 @@
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
-  // A compact icon-only select below the chat input: a quiet button showing
-  // the option's icon that opens a radio menu. The value comes from the
-  // server state; the accessible name and tooltip keep the full name and
-  // current value, and a pick only reports the choice.
+  // A compact select below the chat input: a quiet button showing the
+  // option's icon that opens a radio menu. The value comes from the server
+  // state; the accessible name and tooltip keep the full name and current
+  // value, and a pick only reports the choice. `labeled` also shows the
+  // current value's text, for choices that must read at a glance (quick
+  // start's repository, base branch and agent); a choice with a `reason`
+  // stays in the menu, disabled, with the reason under it.
   let {
     name,
     value,
     choices,
     disabled,
     title,
+    labeled = false,
     icon,
+    choiceIcon,
     onchange,
   }: {
     name: string;
     value: string;
-    choices: { value: string; name: string }[];
+    choices: { value: string; name: string; reason?: string }[];
     disabled: boolean;
     title?: string;
+    labeled?: boolean;
     icon?: Snippet;
+    /** A per-choice icon, shown in the menu and, when labeled, the button. */
+    choiceIcon?: Snippet<[string]>;
     onchange: (value: string) => void;
   } = $props();
   const current = $derived(
@@ -39,24 +47,36 @@
         {...props}
         variant="quiet"
         size="xs"
-        class="shrink-0"
+        class={labeled ? "max-w-48 min-w-0 shrink-0" : "shrink-0"}
         aria-label={label}
         title={title ?? label}
       >
-        {#if icon}{@render icon()}{:else}<IconSettings
+        {#if labeled && choiceIcon}{@render choiceIcon(
+            value,
+          )}{:else if icon}{@render icon()}{:else}<IconSettings
             aria-hidden="true"
           />{/if}
+        {#if labeled}<span class="min-w-0 truncate">{current}</span>{/if}
         <IconChevronDown aria-hidden="true" />
       </Button>
     {/snippet}
   </DropdownMenu.Trigger>
-  <DropdownMenu.Content align="start" class="min-w-52">
+  <DropdownMenu.Content align="start" class="max-h-80 min-w-52">
     <DropdownMenu.Label>{name}</DropdownMenu.Label>
     <DropdownMenu.RadioGroup {value} onValueChange={onchange}>
       {#each choices as choice (choice.value)}
-        <DropdownMenu.RadioItem value={choice.value} {disabled}
-          >{choice.name}</DropdownMenu.RadioItem
+        <DropdownMenu.RadioItem
+          value={choice.value}
+          disabled={disabled || !!choice.reason}
         >
+          {#if choiceIcon}{@render choiceIcon(choice.value)}{/if}
+          <span class="min-w-0">
+            {choice.name}
+            {#if choice.reason}<span class="block text-xs text-muted-foreground"
+                >{choice.reason}</span
+              >{/if}
+          </span>
+        </DropdownMenu.RadioItem>
       {/each}
     </DropdownMenu.RadioGroup>
   </DropdownMenu.Content>

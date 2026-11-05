@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/hybrid"
@@ -17,21 +19,32 @@ import (
 	"github.com/rainchan/webmux/internal/statefile"
 )
 
+// MaxInitInstruction is the most characters a repository's initialization
+// instruction may have.
+const MaxInitInstruction = 4000
+
 type registration struct {
 	ID          string `json:"id"`
 	CommonDir   string `json:"commonDir"`
 	AnchorPath  string `json:"anchorPath"`
 	DisplayName string `json:"displayName"`
+	// InitInstruction prefixes a quick start's first prompt. Files written
+	// before it existed lack it: no instruction.
+	InitInstruction string `json:"initInstruction,omitempty"`
 }
 type registry struct {
 	Version      int            `json:"version"`
 	Repositories []registration `json:"repositories"`
 }
 type repositoryState struct {
-	entry    registration
-	gate     chan struct{}
-	flightMu sync.Mutex
-	flight   *snapshotFlight
+	// entry is immutable; its InitInstruction is always empty; the current
+	// instruction is instruction.
+	entry registration
+	// instruction is guarded by Service.mu.
+	instruction string
+	gate        chan struct{}
+	flightMu    sync.Mutex
+	flight      *snapshotFlight
 }
 type snapshotFlight struct {
 	done       chan struct{}
@@ -63,6 +76,7 @@ type Service struct {
 	reservations  map[string]bool
 	changed       chan struct{}
 	confirmations map[string]confirmation
+	quickStarts   quickStarts
 }
 
 // New never makes optional Git or storage availability a server startup failure.
@@ -134,15 +148,36 @@ func validateRegistry(stored registry) error {
 	return nil
 }
 func newRepository(entry registration) *repositoryState {
-	r := &repositoryState{entry: entry, gate: make(chan struct{}, 1)}
+	r := &repositoryState{entry: entry, instruction: entry.InitInstruction, gate: make(chan struct{}, 1)}
+	r.entry.InitInstruction = ""
 	r.gate <- struct{}{}
 	return r
 }
+
+// initInstruction is r's current initialization instruction.
+func (s *Service) initInstruction(r *repositoryState) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return r.instruction
+}
+
 func (s *Service) save(entries []*repositoryState) error {
+	return s.saveWith(entries, nil, "")
+}
+
+// saveWith writes entries, with instruction in place of changed's.
+func (s *Service) saveWith(entries []*repositoryState, changed *repositoryState, instruction string) error {
 	stored := registry{Version: 1, Repositories: make([]registration, 0, len(entries))}
+	s.mu.Lock()
 	for _, entry := range entries {
-		stored.Repositories = append(stored.Repositories, entry.entry)
+		item := entry.entry
+		item.InitInstruction = entry.instruction
+		if entry == changed {
+			item.InitInstruction = instruction
+		}
+		stored.Repositories = append(stored.Repositories, item)
 	}
+	s.mu.Unlock()
 	err := s.store.Commit(stored)
 	if statefile.IsKind(err, statefile.CommitUncertain) {
 		// Rename already published different bytes. Keep the last confirmed
@@ -155,6 +190,68 @@ func (s *Service) save(entries []*repositoryState) error {
 		return errors.New(message)
 	}
 	return err
+}
+
+// validInstruction normalizes an initialization instruction: blank is none,
+// more than MaxInitInstruction characters is ErrInvalid.
+func validInstruction(text string) (string, error) {
+	if strings.TrimSpace(text) == "" {
+		return "", nil
+	}
+	if n := utf8.RuneCountInString(text); n > MaxInitInstruction {
+		return "", problemf(ErrInvalid, "初始化指令最多 %d 个字符，当前 %d 个", MaxInitInstruction, n)
+	}
+	return text, nil
+}
+
+// SetInitInstruction replaces repository id's initialization instruction;
+// blank clears it. The registry is saved first: a failed save leaves the
+// instruction as it was.
+func (s *Service) SetInitInstruction(ctx context.Context, id, text string) (Repository, error) {
+	instruction, err := validInstruction(text)
+	if err != nil {
+		return Repository{}, err
+	}
+	r, err := s.repository(id)
+	if err != nil {
+		return Repository{}, err
+	}
+	s.saveMu.Lock()
+	s.mu.Lock()
+	if err := s.requireRegistryLocked(); err != nil {
+		s.mu.Unlock()
+		s.saveMu.Unlock()
+		return Repository{}, err
+	}
+	entries := append([]*repositoryState(nil), s.entries...)
+	s.mu.Unlock()
+	found := false
+	for _, item := range entries {
+		found = found || item == r
+	}
+	if !found {
+		s.saveMu.Unlock()
+		return Repository{}, problemf(ErrNotFound, "仓库不存在")
+	}
+	err = s.saveWith(entries, r, instruction)
+	if err == nil {
+		s.mu.Lock()
+		r.instruction = instruction
+		s.mu.Unlock()
+	}
+	s.saveMu.Unlock()
+	if err != nil {
+		return Repository{}, fmt.Errorf("保存仓库清单: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+	snapshot, err := s.snapshot(ctx, r)
+	if err != nil {
+		// The instruction is saved; a failed read still answers the entry.
+		snapshot = s.unavailableRepository(r, err)
+	}
+	snapshot.InitInstruction = instruction
+	return snapshot, nil
 }
 func (s *Service) requireRegistryLocked() error {
 	if !s.capability.RegistryAvailable {
@@ -185,10 +282,18 @@ func (s *Service) registered(r *repositoryState) bool {
 	}
 	return false
 }
-func (s *Service) Register(ctx context.Context, path string) (Repository, bool, error) {
+
+// Register adds the repository at path with an optional initialization
+// instruction. A repository already registered is returned as it is, its
+// instruction unchanged.
+func (s *Service) Register(ctx context.Context, path, instruction string) (Repository, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 	if err := s.requireRegistry(); err != nil {
+		return Repository{}, false, err
+	}
+	instruction, err := validInstruction(instruction)
+	if err != nil {
 		return Repository{}, false, err
 	}
 	if path == "" {
@@ -220,7 +325,7 @@ func (s *Service) Register(ctx context.Context, path string) (Repository, bool, 
 		s.saveMu.Unlock()
 		return Repository{}, false, err
 	}
-	r := newRepository(registration{ID: id, CommonDir: common, AnchorPath: anchor, DisplayName: filepath.Base(anchor)})
+	r := newRepository(registration{ID: id, CommonDir: common, AnchorPath: anchor, DisplayName: filepath.Base(anchor), InitInstruction: instruction})
 	next := append(append([]*repositoryState(nil), s.entries...), r)
 	s.mu.Unlock()
 	err = s.save(next)
@@ -321,7 +426,7 @@ func (s *Service) List(ctx context.Context) ([]Repository, error) {
 			// A single unreadable repository keeps the rest of the list and
 			// its sessions reachable instead of failing the whole response.
 			if s.registered(entries[i]) {
-				out = append(out, unavailableRepository(entries[i], failures[i]))
+				out = append(out, s.unavailableRepository(entries[i], failures[i]))
 			}
 		}
 	}

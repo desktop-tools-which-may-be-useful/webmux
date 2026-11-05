@@ -1,0 +1,129 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "chatOptions": [
+        {
+          "category": "mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "name": "Code",
+              "value": "code"
+            },
+            {
+              "name": "Plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select",
+          "value": "code"
+        },
+        {
+          "category": "model",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "name": "fast",
+              "value": "fast"
+            },
+            {
+              "name": "smart",
+              "value": "smart"
+            }
+          ],
+          "type": "select",
+          "value": "smart"
+        }
+      ],
+      "cmd": [
+        "<fakeagent>/omp"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "FAKEAGENT_STORE",
+        "FAKEAGENT_TURN_DELAY"
+      ],
+      "hybrid": true,
+      "hybridSupport": {
+        "agent": "omp",
+        "supported": true,
+        "supportedAgents": [
+          "omp",
+          "OpenCode",
+          "Codex CLI",
+          "Claude Code",
+          "Qoder",
+          "QoderCN",
+          "Antigravity CLI"
+        ]
+      },
+      "id": "<id#4>",
+      "name": "agent",
+      "preview": null,
+      "updatedAt": "<time>"
+    },
+    {
+      "chatOptions": [],
+      "cmd": [
+        "/bin/sh"
+      ],
+      "createdAt": "<time>",
+      "envNames": [],
+      "hybrid": false,
+      "hybridSupport": {
+        "reason": "unknown_agent",
+        "supported": false,
+        "supportedAgents": [
+          "omp",
+          "OpenCode",
+          "Codex CLI",
+          "Claude Code",
+          "Qoder",
+          "QoderCN",
+          "Antigravity CLI"
+        ]
+      },
+      "id": "<id#5>",
+      "name": "plain",
+      "preview": null,
+      "updatedAt": "<time>"
+    },
+    {
+      "chatOptions": [],
+      "cmd": [
+        "<fakeagent>/codex"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "PATH"
+      ],
+      "hybrid": true,
+      "hybridSupport": {
+        "agent": "codex",
+        "connector": {
+          "docsUrl": "https://github.com/agentclientprotocol/codex-acp",
+          "executable": "codex-acp",
+          "installCommand": "npm install -g @agentclientprotocol/codex-acp",
+          "title": "Codex ACP 适配器"
+        },
+        "supported": true,
+        "supportedAgents": [
+          "omp",
+          "OpenCode",
+          "Codex CLI",
+          "Claude Code",
+          "Qoder",
+          "QoderCN",
+          "Antigravity CLI"
+        ]
+      },
+      "id": "<id#6>",
+      "name": "codex",
+      "preview": null,
+      "updatedAt": "<time>"
+    }
+  ]
+}

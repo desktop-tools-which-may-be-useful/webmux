@@ -5,6 +5,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/wire"
 )
 
@@ -14,7 +15,7 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 	const base = "/api/launch-configs"
 	serve(mux, "GET "+base, http.StatusOK, launchFailure, func(*http.Request) ([]contract.LaunchConfigSummary, error) {
 		list, err := s.Launch.List()
-		return wire.LaunchSummaries(list), err
+		return wire.LaunchSummaries(list, s.chatOptions), err
 	})
 	serve(mux, "GET "+base+"/presets", http.StatusOK, launchFailure, func(*http.Request) ([]contract.LaunchPreset, error) {
 		list, err := s.Launch.Presets()
@@ -22,7 +23,7 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 	})
 	serveIn(mux, "POST "+base+"/presets", http.StatusOK, launchFailure, func(_ *http.Request, req contract.RestoreLaunchPresetsRequest) ([]contract.LaunchConfigSummary, error) {
 		list, err := s.Launch.RestorePresets(req.Name)
-		return wire.LaunchSummaries(list), err
+		return wire.LaunchSummaries(list, s.chatOptions), err
 	})
 	// Read-only: the settings page asks whether an edited command can use
 	// hybrid mode, so the browser never mirrors the profile rules.
@@ -44,4 +45,15 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 	serveDone(mux, "DELETE "+base+"/{id}", launchFailure, func(r *http.Request) error {
 		return s.Launch.Delete(r.PathValue("id"))
 	})
+}
+
+// chatOptions returns the agent options remembered for launch config id;
+// none without hybrid sessions or when agent-options.json is unusable
+// (hybrid.New logged why), so the list itself never fails for it.
+func (s *Server) chatOptions(id string) []hybrid.ConfigOption {
+	if s.Hybrid == nil {
+		return nil
+	}
+	options, _ := s.Hybrid.AgentOptions(id)
+	return options
 }

@@ -53,7 +53,12 @@ const groups: Array<[z.ZodType, string[]]> = [
   ],
   [
     S.LaunchConfigsSchema,
-    ["launch-list-empty", "launch-list", "launch-presets-restore"],
+    [
+      "launch-list-chat-options",
+      "launch-list-empty",
+      "launch-list",
+      "launch-presets-restore",
+    ],
   ],
   [S.LaunchPresetsSchema, ["launch-presets"]],
   [
@@ -68,6 +73,15 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.PushSubscriptionResultSchema, ["push-subscribe-gone", "push-subscribe"]],
   [S.PushTestResultSchema, ["push-test"]],
   [S.RepositoriesSchema, ["repositories-empty", "repositories"]],
+  [S.QuickStartResultSchema, ["quick-start", "quick-start-retry"]],
+  [
+    S.QuickStartFailureSchema,
+    [
+      "error-400-quick-start-not-hybrid",
+      "error-409-quick-start-connector-missing",
+      "error-409-quick-start-worktree",
+    ],
+  ],
   [S.BranchesSchema, ["repository-branches"]],
   [S.CommitsSchema, ["repository-commits"]],
   [S.RefreshBranchBaseResponseSchema, ["repository-branch-refresh"]],
@@ -75,7 +89,9 @@ const groups: Array<[z.ZodType, string[]]> = [
     S.RepositorySchema,
     [
       "repository-register-again",
+      "repository-register-instruction",
       "repository-register",
+      "repository-update",
       "repository-worktrees",
     ],
   ],
@@ -173,7 +189,7 @@ function normalize(value: unknown): unknown {
       Object.entries(value).map(([key, item]) => [key, normalize(item)]),
     );
   if (typeof value !== "string") return value;
-  const id = /^<id#(\d+)>$/.exec(value);
+  const id = /^<(?:id|sessionId)#(\d+)>$/.exec(value);
   if (id?.[1]) {
     const suffix = id[1].replace(/\d/g, (digit) =>
       "abcdefghij".charAt(Number(digit)),
@@ -206,9 +222,10 @@ describe("Go wire snapshots", () => {
         body: unknown;
       };
       const schema =
-        file.startsWith("error-") || file.startsWith("tunnel-error-")
+        snapshotSchemas.get(file) ??
+        (file.startsWith("error-") || file.startsWith("tunnel-error-")
           ? S.ErrorSchema
-          : snapshotSchemas.get(file);
+          : undefined);
       expect(schema, file).toBeDefined();
       const body =
         snapshot.status === 204 && snapshot.body === null

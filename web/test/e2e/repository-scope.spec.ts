@@ -7,18 +7,21 @@ import { test, expect } from "./fixtures";
 
 const exec = promisify(execFile);
 
+// The workbench tree: in the sidebar on desktop, in the drawer on phones.
 async function openNavigation(page: Page) {
-  const navigation = page.getByRole("navigation", { name: "仓库导航" });
-  await expect(page.locator('[data-repository-scope="all"]')).toHaveCount(1);
-  if (!(await navigation.isVisible()))
-    await page.getByRole("button", { name: /仓库导航：/ }).click();
-  await expect(navigation).toBeVisible();
-  return navigation;
+  const tree = page.getByRole("tree", { name: "仓库与会话" });
+  const open = page.getByRole("button", { name: "打开侧栏" });
+  await expect(tree.or(open).first()).toBeVisible();
+  if (!(await tree.isVisible())) await open.click();
+  await expect(tree).toBeVisible();
+  return tree;
 }
 
 async function selectRepository(page: Page, name: RegExp) {
-  const navigation = await openNavigation(page);
-  await navigation.getByRole("button", { name }).click();
+  const tree = await openNavigation(page);
+  await tree.getByRole("treeitem", { name }).click();
+  // The phone drawer closes after a pick; let it finish before the next.
+  await expect(page.getByRole("dialog", { name: "导航" })).toHaveCount(0);
 }
 
 test("repository scope limits the home list, composes with filters and survives navigation", async ({
@@ -87,20 +90,20 @@ test("repository scope limits the home list, composes with filters and survives 
     }
   }
 
-  const scope = page.locator('[data-repository-scope][aria-pressed="true"]');
-  const navigation = page.getByRole("navigation", { name: "仓库导航" });
-  const toggle = page.getByRole("button", { name: /仓库导航：/ });
+  // The current scope row of the tree (the drawer's tree while it is open).
+  const scope = page.locator('[role="treeitem"][aria-current="page"]').last();
+  const sidebar = page.getByRole("complementary", { name: "侧栏" });
+  const toggle = page.getByRole("button", { name: "打开侧栏" });
   if (testInfo.project.name === "chromium-desktop") {
-    await expect(navigation).toBeVisible();
-    const sidebarBox = await navigation.boundingBox();
+    await expect(sidebar).toBeVisible();
+    const sidebarBox = await sidebar.boundingBox();
     const contentBox = await page.locator("main").boundingBox();
     expect(sidebarBox!.x + sidebarBox!.width).toBeLessThanOrEqual(
       contentBox!.x,
     );
     await expect(toggle).toBeHidden();
   } else {
-    await expect(navigation).toBeHidden();
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(sidebar).toBeHidden();
     await openNavigation(page);
     if (evidence)
       await page.screenshot({
@@ -108,8 +111,8 @@ test("repository scope limits the home list, composes with filters and survives 
         fullPage: true,
         animations: "disabled",
       });
-    await toggle.click();
-    await expect(navigation).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tree", { name: "仓库与会话" })).toBeHidden();
   }
   await expect(page.locator("[data-repository-id]:visible")).toHaveCount(1);
   await expect(page.locator("[data-session-id]:visible")).toHaveCount(1);
@@ -154,7 +157,7 @@ test("repository scope limits the home list, composes with filters and survives 
   await expect(page.locator('[aria-label="终端输出预览"]:visible')).toHaveCount(
     0,
   );
-  await selectRepository(page, /^仓库 api-server$/);
+  await selectRepository(page, /^api-server/);
   await expect(scope).toContainText("api-server");
   await expect(page.getByRole("link", { name: "API review" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Scratch shell" })).toHaveCount(
@@ -184,25 +187,24 @@ test("repository scope limits the home list, composes with filters and survives 
   await page.goto("/");
   await expect(scope).toContainText("api-server");
 
+  // Arrow keys move between rows; left folds an open repository.
   const nav = await openNavigation(page);
-  await nav.getByRole("button", { name: /^仓库 api-server$/ }).focus();
-  await page.keyboard.press("Tab");
+  await nav.getByRole("treeitem", { name: /^mobile-app/ }).focus();
+  await page.keyboard.press("ArrowLeft");
   await expect(
-    nav.getByRole("button", { name: /^仓库 mobile-app$/ }),
-  ).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(nav.getByRole("button", { name: /直接会话/ })).toBeFocused();
+    nav.getByRole("treeitem", { name: /^mobile-app/ }),
+  ).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("ArrowDown");
+  await expect(nav.getByRole("treeitem", { name: /^直接会话/ })).toBeFocused();
   await page.keyboard.press("Enter");
-  if (testInfo.project.name === "chromium-mobile") {
-    await expect(navigation).toBeHidden();
-    await expect(toggle).toBeFocused();
-  }
+  if (testInfo.project.name === "chromium-mobile")
+    await expect(nav).toBeHidden();
   await expect(page.locator("[data-repository-id]:visible")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Scratch shell" })).toBeVisible();
   await expect(
     page.getByRole("status").filter({ hasText: "个仓库" }),
   ).toHaveText("0 个仓库 · 1 个会话");
-  await selectRepository(page, /全部仓库/);
+  await selectRepository(page, /^全部仓库/);
   await expect(page.locator("[data-repository-id]:visible")).toHaveCount(3);
   await expect(page.locator("[data-session-id]:visible")).toHaveCount(4);
   await expect(
@@ -221,7 +223,7 @@ test("repository scope limits the home list, composes with filters and survives 
     ),
   ).toBe(true);
 
-  await selectRepository(page, /^仓库 api-server$/);
+  await selectRepository(page, /^api-server/);
   expect(
     (await request.delete(`/api/repositories/${repositories[1].id}`)).status(),
   ).toBe(204);
@@ -242,9 +244,9 @@ test("repository scope limits the home list, composes with filters and survives 
     await page.evaluate(() => document.documentElement.scrollWidth),
     JSON.stringify(overflow),
   ).toBeLessThanOrEqual(321);
-  await openNavigation(page);
+  const drawer = await openNavigation(page);
   await expect(
-    navigation.getByRole("button", { name: /直接会话/ }),
+    drawer.getByRole("treeitem", { name: /^直接会话/ }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -271,9 +273,11 @@ test("an unknown saved repository falls back to the full home list", async ({
   await expect(
     page.getByRole("link", { name: "Available shell" }),
   ).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "仓库导航" })).toHaveCount(
-    0,
-  );
+  // The tree keeps only the full view and direct sessions.
+  const tree = await openNavigation(page);
+  await expect(
+    tree.getByRole("treeitem", { name: /^全部仓库/ }),
+  ).toHaveAttribute("aria-current", "page");
 });
 
 test("repository refresh failure keeps direct sessions reachable and preserves the saved choice", async ({

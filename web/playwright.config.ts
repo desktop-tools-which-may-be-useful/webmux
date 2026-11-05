@@ -52,7 +52,13 @@ export default defineConfig({
   projects: [
     {
       name: "chromium-desktop",
-      use: { ...devices["Desktop Chrome"], browserName: "chromium" },
+      // Wide enough that a session beside the expanded app sidebar keeps the
+      // side-by-side (>= 1024px) code layout; 1280px tests set it themselves.
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        browserName: "chromium",
+      },
     },
     {
       name: "chromium-mobile",

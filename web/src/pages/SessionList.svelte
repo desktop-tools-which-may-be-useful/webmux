@@ -1,38 +1,22 @@
 <script lang="ts">
-  import { errorMessage } from "../error";
   import InlineNotice from "../components/InlineNotice.svelte";
   import LazyDialog from "../components/LazyDialog.svelte";
-  import { applySessionEvent } from "../session-list";
-  import { onMount } from "svelte";
-  import { z } from "zod";
-  import RepositorySidebar from "../components/RepositorySidebar.svelte";
+  import { onMount, tick } from "svelte";
   import SessionViewControls from "../components/SessionViewControls.svelte";
   import WorkspaceToolbar from "../components/WorkspaceToolbar.svelte";
-  import { api, APIError, stored, store } from "../api";
-  import {
-    LaunchConfigsSchema,
-    ConfigSchema,
-    RepositoriesSchema,
-    type HybridRecord,
-    type PendingUpdate,
-    type SessionInfo,
-    type Repository,
-    type Worktree,
-  } from "../schemas";
-  import type { LaunchConfigsState } from "../launchConfigs";
+  import { store, stored } from "../api";
+  import type { Repository, SessionInfo, Worktree } from "../schemas";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
   import { dismissUpdate, dismissedUpdate, homeUpdate } from "../pendingUpdate";
-  import type { Connection } from "../ws";
-  import { connectSessions } from "../forwards.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
   import UnregisterRepositoryDialog from "../components/UnregisterRepositoryDialog.svelte";
-  import WorkspaceHeader from "../components/WorkspaceHeader.svelte";
   import SessionFilters from "../components/SessionFilters.svelte";
   import RepositoryGroup from "../components/RepositoryGroup.svelte";
   import DirectSessions from "../components/DirectSessions.svelte";
-  import { loadRecoverable, removeRecord, resumeHybrid } from "../recoverable";
+  import SidebarButton from "../components/SidebarButton.svelte";
+  import { removeRecord, resumeHybrid } from "../recoverable";
   import {
     repositoryRecords,
     matchesArchivedQuery,
@@ -41,91 +25,47 @@
   } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { setLaunchPreviews } from "../launchPreviews.svelte";
   import { homeLayout, setPinned } from "../homeWorktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
-  import { homeCache } from "../home-cache";
-  import type { TerminalDrafts } from "../terminal-draft.svelte";
-  import type { LaunchEntry } from "../newSessionDefaults";
+  import { getShell } from "../shell.svelte";
+  import { z } from "zod";
 
-  let { drafts }: { drafts: TerminalDrafts } = $props();
-
-  // Returning from a terminal mounts this page again. The previous session
-  // list, settings and grouping render immediately and are refreshed behind
-  // the page, so a slow link never puts a skeleton back in front of them.
-  const cached = { sessions: homeCache.sessions(), setup: homeCache.setup() };
-  let sessions = $state.raw<SessionInfo[]>(cached.sessions ?? []);
-  // Closed and interrupted hybrid sessions; their drafts stay on this device.
-  let recoverable = $state.raw<HybridRecord[]>([]);
-  let recoverableRequest = 0;
-  // Resolves to the record IDs, or null when they could not be read.
-  async function refreshRecoverable() {
-    const request = ++recoverableRequest;
-    try {
-      const records = await loadRecoverable();
-      if (request === recoverableRequest) recoverable = records;
-      return records.map((record) => record.id);
-    } catch (err) {
-      // An unavailable store (503) or a server without hybrid sessions
-      // (404) has nothing to recover; a failed request proves nothing.
-      if (
-        err instanceof APIError &&
-        (err.status === 503 || err.status === 404)
-      ) {
-        if (request === recoverableRequest) recoverable = [];
-        return [];
-      }
-      return null;
-    }
-  }
-  // Returning from a terminal mounts this page again; the previous grouping
-  // renders immediately instead of flashing ungrouped sessions while Git runs.
-  let repositories = $state.raw<Repository[]>(homeCache.repositories() ?? []);
-  // A saved scope is only validated after a read settles; until then an empty
-  // or cached list must not discard it.
-  let repositoriesSettled = $state(false);
-  let launchConfigs = $state<LaunchConfigsState>({ status: "loading" });
-  let cwd = $state(cached.setup?.cwd ?? "~");
-  let hostname = $state(cached.setup?.hostname ?? "");
-  let pendingUpdate = $state<PendingUpdate | undefined>(
-    cached.setup?.pendingUpdate,
-  );
+  // The workbench home: every live session grouped by repository and
+  // worktree, beside the shell's tree. The shell owns the shared data.
+  const shell = getShell();
+  const { drafts } = shell;
+  const sessions = $derived(shell.sessions.sessions);
+  const recoverable = $derived(shell.archived.records);
+  const repositories = $derived(shell.repositories.list);
+  const repositoriesSettled = $derived(shell.repositories.settled);
+  const refreshing = $derived(shell.repositories.refreshing);
+  const repositoryError = $derived(shell.repositories.error);
+  const setup = $derived(shell.setup.value);
+  const gitReady = $derived(setup.gitReady);
+  const registryReady = $derived(setup.registryReady);
+  const capabilityError = $derived(setup.capabilityError);
+  const loading = $derived(shell.sessions.loading);
+  const initializing = $derived(!shell.setup.settled);
+  const error = $derived(shell.sessions.error);
   let dismissedVersion = $state(dismissedUpdate());
-  const updateNotice = $derived(homeUpdate(pendingUpdate, dismissedVersion));
-  let setupSettled = $state(!!cached.setup);
-  // Until the server says otherwise, assume listening ports are detected.
-  let portDetection = $state(cached.setup?.portDetection ?? true);
-  let forwarding = $state(false);
-  let loading = $state(!cached.sessions);
-  let initializing = $state(!cached.setup);
-  let refreshing = $state(false);
-  let repositoryError = $state("");
-  let capabilityError = $state(cached.setup?.capabilityError ?? "");
-  let gitReady = $state(cached.setup?.gitReady ?? false);
-  let registryReady = $state(cached.setup?.registryReady ?? false);
-  let connection = $state<Connection>("connecting");
-  // The new-session dialog is open; `entry` names a contextual entry.
-  let creating = $state<{ entry?: LaunchEntry } | null>(null);
-  let adding = $state(false);
+  const updateNotice = $derived(
+    homeUpdate(setup.pendingUpdate, dismissedVersion),
+  );
   let removing = $state<Worktree | null>(null);
   let curating = $state<Repository | null>(null);
+  let instructing = $state<Repository | null>(null);
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
   let closing = $state<SessionInfo | null>(null);
-  let error = $state("");
   let now = $state(Date.now());
   let focusedExpanded = $state<Record<string, boolean>>({});
   let expansionOverrides = $state<Record<string, boolean>>({});
   let query = $state("");
-  let setupError = $state("");
-  let setupBusy = $state(false);
   let statusFilter = $state<StatusFilter>("all");
   let filterExpanded = $state<Record<string, boolean>>({});
-  let repositoryChoice = $state(
-    z.string().min(1).max(256).safeParse(stored("homeRepository")).data ?? null,
-  );
+  const repositoryChoice = $derived(shell.repositories.choice);
   // Output previews are the default; only an explicit choice keeps rows compact.
   let compact = $state(
     z.enum(["compact", "preview"]).safeParse(stored("homeSessionView")).data ===
@@ -146,17 +86,6 @@
   );
   // Archived records sit in the group a live session of theirs would.
   const placement = $derived(placeArchived(recoverable, repositories));
-  // A workspace session proves at least one repository exists, so reserve the
-  // sidebar frame before Git discovery returns instead of moving the list when
-  // the repositories appear.
-  const awaitingRepositories = $derived(
-    !repositoriesSettled &&
-      !repositories.length &&
-      list.some((session) => session.workspace),
-  );
-  const sidebarVisible = $derived(
-    repositories.length > 0 || awaitingRepositories,
-  );
   const selectedRepository = $derived(
     repositoryChoice &&
       (repositoryChoice === "direct" ||
@@ -190,7 +119,7 @@
     if (loading || initializing || !repositoriesSettled || repositoryError)
       return;
     if (!repositoryChoice) {
-      repositoryChoice =
+      shell.repositories.select(
         repositories.length > 1
           ? ((
               repositories.find((repo) =>
@@ -199,28 +128,20 @@
                 ),
               ) ?? repositories[0]
             )?.id ?? "all")
-          : "all";
+          : "all",
+      );
     } else if (
       repositoryChoice !== "all" &&
       repositoryChoice !== "direct" &&
       !repositories.some((repo) => repo.id === repositoryChoice)
     ) {
-      repositoryChoice = "all";
-      store("homeRepository", "all");
+      shell.repositories.select("all");
     }
   });
-  function selectRepository(id: string) {
-    repositoryChoice = id;
-    store("homeRepository", id);
-  }
   function setCompact(value: boolean) {
     compact = value;
     store("homeSessionView", value ? "compact" : "preview");
   }
-  let startupRefresh: Promise<void> | undefined;
-  let refreshGeneration = 0;
-  let disposed = false;
-  const abort = new AbortController();
   const search = $derived(query.trim().toLocaleLowerCase());
   const filtering = $derived(Boolean(search) || statusFilter !== "all");
   const visible = $derived(
@@ -294,9 +215,9 @@
     remove: async (id) => {
       await removeRecord(id);
       drafts.remove(id);
-      await refreshRecoverable();
+      await shell.archived.refresh();
     },
-    onresumed: () => void refreshRecoverable(),
+    onresumed: () => void shell.archived.refresh(),
   });
   // Only an actively producing session follows the tab indicator; idle live
   // sessions are still "active" for the list summary but not for this marker.
@@ -328,31 +249,6 @@
       ]),
     ),
   );
-  function start(entry?: LaunchEntry) {
-    creating = { entry };
-    // Pick up configs changed on other devices since the page loaded.
-    if (launchConfigs.status !== "ready") launchConfigs = { status: "loading" };
-    void loadLaunchConfigs();
-  }
-  async function loadLaunchConfigs(initial = false) {
-    try {
-      const configs = await api("/launch-configs", LaunchConfigsSchema);
-      if (!disposed) {
-        launchConfigs = { status: "ready", configs };
-        setLaunchPreviews(configs);
-      }
-    } catch (err) {
-      if (!disposed) {
-        launchConfigs = {
-          status: "unavailable",
-          error: errorMessage(err),
-        };
-        // Cards keep the last loaded previews while a reload is in flight or
-        // fails; only an unavailable store on page load falls back to global.
-        if (initial) setLaunchPreviews([]);
-      }
-    }
-  }
   function pin(repositoryId: string, ids: string[], pinned: boolean) {
     const repo = repositories.find((r) => r.id === repositoryId);
     if (repo)
@@ -361,160 +257,71 @@
   // After a worktree change: a removal also forgets the archived records of
   // sessions in the removed directory.
   function refreshWorktrees() {
-    void refresh();
-    void refreshRecoverable();
+    void shell.repositories.refresh();
+    void shell.archived.refresh();
   }
-  async function refresh(force = false) {
-    // A lifecycle refresh coalesces with the startup read instead of starting
-    // another slow discovery. Explicit and later refreshes still supersede an
-    // older request, and generation ordering discards its late reply.
-    if (!force && startupRefresh) return startupRefresh;
-    const generation = ++refreshGeneration;
-    refreshing = true;
-    repositoriesSettled = false;
-    repositoryError = "";
-    try {
-      const result = await api(
-        "/repositories",
-        RepositoriesSchema,
-        "GET",
-        undefined,
-        abort.signal,
+  // The workbench tree links a worktree as /#wt-<id>: once its group is on
+  // the page, scroll to it and move focus to its title. A worktree that is
+  // not shown leaves the view at the top of its repository.
+  let anchor = $state(location.hash);
+  $effect(() => {
+    if (!anchor.startsWith("#wt-") || loading || initializing) return;
+    void repositories;
+    void tick().then(() => {
+      const group = document.getElementById(
+        decodeURIComponent(anchor.slice(1)),
       );
-      if (!disposed && generation === refreshGeneration) {
-        repositories = result;
-        homeCache.rememberRepositories(result);
-      }
-    } catch (err) {
-      if (!disposed && generation === refreshGeneration)
-        repositoryError = errorMessage(err);
-    } finally {
-      if (!disposed && generation === refreshGeneration) {
-        refreshing = false;
-        repositoriesSettled = true;
-      }
-    }
-  }
-  async function loadSetup(signal?: AbortSignal) {
-    if (setupBusy) return;
-    setupBusy = true;
-    const results = await Promise.allSettled([
-      api("/config", ConfigSchema, "GET", undefined, signal).then((c) => {
-        if (disposed) return;
-        const next = {
-          cwd: c.defaultCwd,
-          hostname: c.hostname,
-          pendingUpdate: c.pendingUpdate,
-          gitReady: c.workspace.gitAvailable,
-          registryReady: c.workspace.registryAvailable,
-          capabilityError: [c.workspace.gitError, c.workspace.registryError]
-            .filter(Boolean)
-            .join(" · "),
-          portDetection: c.portDetection,
-        };
-        ({ cwd, hostname, pendingUpdate, gitReady, registryReady } = next);
-        portDetection = next.portDetection;
-        capabilityError = next.capabilityError;
-        homeCache.rememberSetup(next);
-      }),
-    ]);
-    if (!disposed) {
-      setupBusy = false;
-      setupSettled = true;
-      setupError = results.some((result) => result.status === "rejected")
-        ? "服务端设置加载失败，可重试；仍可使用临时命令创建会话。"
-        : "";
-    }
-  }
+      if (!group || group.hidden) return;
+      group.scrollIntoView({ block: "start" });
+      group.querySelector<HTMLElement>("h3")?.focus({ preventScroll: true });
+      anchor = "";
+    });
+  });
   onMount(() => {
-    // Optional Git discovery must not hold existing terminals behind the
-    // startup skeleton. Git keeps reading in the background while the session
-    // snapshot and server settings decide when the page becomes usable.
-    void loadSetup(abort.signal).finally(() => {
-      if (!disposed) initializing = false;
-    });
-    void loadLaunchConfigs(true);
-    startupRefresh = refresh();
-    void startupRefresh.finally(() => {
-      startupRefresh = undefined;
-    });
-    const ws = connectSessions(
-      (event) => {
-        if (event.type === "forwards") return;
-        const removedHybrid =
-          event.type === "removed" &&
-          !!sessions.find((session) => session.id === event.id)?.hybrid;
-        sessions = applySessionEvent(sessions, event);
-        homeCache.rememberSessions(sessions);
-        if (event.type === "snapshot") {
-          const ids = event.sessions.map((session) => session.id);
-          // Recoverable hybrid sessions still own their drafts; without
-          // their IDs, leave saved drafts alone rather than guess.
-          void refreshRecoverable().then((records) => {
-            if (records) drafts.reconcile([...ids, ...records]);
-          });
-          loading = false;
-          now = Date.now();
-        } else if (event.type === "removed") {
-          if (removedHybrid) void refreshRecoverable();
-          else drafts.remove(event.id);
-        } else if (
-          event.session.hybrid &&
-          (event.type === "created" || event.session.hybrid.state !== "active")
-        ) {
-          // A resumed shell or one that just closed or was interrupted.
-          void refreshRecoverable();
-        }
-      },
-      (state) => {
-        const reconnected =
-          state === "connected" && connection === "reconnecting";
-        connection = state;
-        if (reconnected) void refresh();
-      },
-      (message) => {
-        error = message;
-      },
-    );
+    // Coming home re-reads Git, as the page did before the shell kept the
+    // last snapshot; the snapshot stays on screen meanwhile.
+    void shell.repositories.refresh();
     const visible = () => {
       if (!document.hidden) {
         now = Date.now();
-        void refresh();
+        void shell.repositories.refresh();
       }
+    };
+    const hash = () => {
+      anchor = location.hash;
     };
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("pageshow", visible);
+    window.addEventListener("popstate", hash);
     const clock = setInterval(() => {
       now = Date.now();
     }, 30000);
     return () => {
-      disposed = true;
-      ++refreshGeneration;
-      abort.abort();
-      ws.close();
       resetBrowserChrome();
       clearInterval(clock);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("pageshow", visible);
+      window.removeEventListener("popstate", hash);
     };
   });
 </script>
 
 <div class="workspace-page safe-area-page min-h-dvh">
-  <WorkspaceHeader
-    {connection}
-    {hostname}
-    {setupSettled}
-    canStart
-    onstart={() => start()}
-    onforward={() => (forwarding = true)}
-  />
-  {#if connection === "reconnecting"}<div
-      role="status"
-      class="notice-warning fixed inset-x-0 top-12 z-40"
-    >
-      连接已断开，重连中…
-    </div>{/if}
+  <!-- Phones reach the sidebar from this bar; wider screens show it. -->
+  <header
+    class="app-header flex min-h-(--app-header-height) items-center gap-1 border-b bg-card px-1 sm:hidden"
+  >
+    <SidebarButton />
+    <h1 class="min-w-0 truncate text-sm font-medium">
+      {selectedRepository === "all" ? "全部仓库" : scopeLabel}
+    </h1>
+    <!-- The sidebar footer is out of sight here, so phones keep this notice. -->
+    {#if shell.sessions.connection === "reconnecting"}<span
+        role="status"
+        class="ml-auto shrink-0 pr-2 text-xs text-warning"
+        >连接已断开，重连中…</span
+      >{/if}
+  </header>
   {#if updateNotice}
     {@const version = updateNotice.installedVersion}
     <div class="mx-auto max-w-7xl px-4 pt-5 sm:px-8 sm:pt-6">
@@ -535,18 +342,7 @@
       {#each [0, 1, 2] as item (item)}<Skeleton class="h-40 w-full" />{/each}
     </div>
   {:else}
-    <div
-      class={`mx-auto grid max-w-7xl gap-6 px-4 py-5 sm:px-8 sm:py-6 ${sidebarVisible ? "lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8" : ""}`}
-    >
-      {#if sidebarVisible}<RepositorySidebar
-          {repositories}
-          sessions={list}
-          directSessions={direct}
-          selected={selectedRepository}
-          label={selectedRepository === "all" ? "全部仓库" : scopeLabel}
-          loading={awaitingRepositories}
-          onselect={selectRepository}
-        />{/if}
+    <div class="mx-auto max-w-6xl px-4 py-5 sm:px-8 sm:py-6">
       <main class="min-w-0">
         <WorkspaceToolbar
           title={scopeLabel}
@@ -561,10 +357,9 @@
               : 1}
           canAddRepository={gitReady && registryReady}
           {refreshing}
-          onadd={() => {
-            adding = true;
-          }}
-          onrefresh={() => void refresh(true)}
+          onadd={shell.addRepository}
+          onrefresh={() => void shell.repositories.refresh(true)}
+          onstart={() => shell.start()}
         >
           {#snippet controls()}<SessionViewControls
               {compact}
@@ -577,27 +372,22 @@
             bind:statusFilter
             filtered={filtering && (visible.length > 0 || archivedMatches > 0)}
             shortcutDisabled={Boolean(
-              creating ||
-              adding ||
-              removing ||
-              curating ||
-              unregisterOpen ||
-              closing,
+              removing || curating || instructing || unregisterOpen || closing,
             )}
             onclear={clearFilters}
           />
         </WorkspaceToolbar>
-        {#if setupError}<InlineNotice tone="warning" class="mb-4">
+        {#if shell.setup.error}<InlineNotice tone="warning" class="mb-4">
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <span>{setupError}</span>
+              <span>{shell.setup.error}</span>
               <Button
                 variant="ghost"
                 size="sm"
                 class="min-h-9 sm:min-h-8"
-                disabled={setupBusy}
-                onclick={() => void loadSetup()}
+                disabled={shell.setup.busy}
+                onclick={() => void shell.setup.load()}
               >
-                {setupBusy ? "正在重试…" : "重试"}
+                {shell.setup.busy ? "正在重试…" : "重试"}
               </Button>
             </div>
           </InlineNotice>{/if}
@@ -646,14 +436,20 @@
               {now}
               onstart={(worktreeId) =>
                 worktreeId === undefined
-                  ? start({ kind: "new-worktree", repositoryId: repo.id })
-                  : start({
+                  ? shell.start({
+                      kind: "new-worktree",
+                      repositoryId: repo.id,
+                    })
+                  : shell.start({
                       kind: "worktree",
                       repositoryId: repo.id,
                       worktreeId,
                     })}
               oncurate={() => {
                 curating = repo;
+              }}
+              oninstruction={() => {
+                instructing = repo;
               }}
               onunregister={() => {
                 unregistering = repo;
@@ -692,46 +488,13 @@
               filtered={filtering && !visible.length && !archivedMatches}
               canStart
               onclear={clearFilters}
-              onstart={() => start()}
+              onstart={() => shell.start()}
             />{/if}
         </div>
       </main>
     </div>
   {/if}
 </div>
-{#if creating}
-  {@const target = creating}
-  <LazyDialog
-    load={() => import("../components/NewSessionDialog.svelte")}
-    label="创建表单"
-    onclose={() => (creating = null)}
-  >
-    {#snippet children(page)}<page.default
-        {launchConfigs}
-        {repositories}
-        defaultCwd={cwd}
-        entry={target.entry}
-        selectedRepositoryId={selectedRepository}
-        intent={target.entry?.kind === "new-worktree" ? "worktree" : "session"}
-        onchange={refreshWorktrees}
-        onworktreecreated={(tree) => pin(tree.repositoryId, [tree.id], true)}
-        onclose={() => (creating = null)}
-      />{/snippet}
-  </LazyDialog>
-{/if}
-{#if forwarding}
-  <LazyDialog
-    load={() => import("../components/ForwardDialog.svelte")}
-    label="端口转发"
-    onclose={() => (forwarding = false)}
-  >
-    {#snippet children(page)}<page.default
-        {sessions}
-        detection={portDetection}
-        onclose={() => (forwarding = false)}
-      />{/snippet}
-  </LazyDialog>
-{/if}
 {#if closing}<CloseSessionDialog
     session={closing}
     onremoved={() => {
@@ -741,16 +504,17 @@
       closing = null;
     }}
   />{/if}
-{#if adding}
+{#if instructing}
+  {@const target = instructing}
   <LazyDialog
-    load={() => import("../components/AddRepositoryDialog.svelte")}
-    label="仓库表单"
-    onclose={() => (adding = false)}
+    load={() => import("../components/InitInstructionDialog.svelte")}
+    label="初始化指令"
+    onclose={() => (instructing = null)}
   >
     {#snippet children(page)}<page.default
-        defaultCwd={cwd}
-        onchange={() => void refresh()}
-        onclose={() => (adding = false)}
+        repository={target}
+        onchange={() => void shell.repositories.refresh(true)}
+        onclose={() => (instructing = null)}
       />{/snippet}
   </LazyDialog>
 {/if}
@@ -789,5 +553,5 @@
 <UnregisterRepositoryDialog
   repository={unregistering}
   bind:open={unregisterOpen}
-  onchange={refresh}
+  onchange={() => shell.repositories.refresh(true)}
 />

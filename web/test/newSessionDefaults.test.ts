@@ -39,6 +39,7 @@ function repo(id: string, worktrees: Worktree[]): Repository {
     availability: "available",
     error: "",
     checkedAt: "2026-11-04T00:00:00Z",
+    initInstruction: "",
     worktrees,
   };
 }
@@ -146,6 +147,7 @@ const configs = (...ids: string[]): LaunchConfigsState => ({
     name: id,
     cmd: [id],
     envNames: [],
+    chatOptions: [],
     hybrid: false,
     hybridSupport: {
       supported: false,

@@ -39,8 +39,9 @@ async function createConfig(page: Page, name: string) {
 async function startFromConfig(page: Page, name: string, cwd: string) {
   await page.goto("/");
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .first()
     .click();
   await chooseLaunch(page, name);
   await useDirectory(page, cwd);
@@ -190,8 +191,9 @@ test("configs persist across a settings reload and remain selectable alongside m
   ).toBeVisible();
   await page.goto("/");
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .first()
     .click();
   const select = page.getByRole("button", { name: "运行", exact: true });
   await expect(select).toContainText("E2E persisted");

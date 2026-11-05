@@ -89,6 +89,15 @@
       "failure": "unavailable",
       "web": "是",
       "source": "internal/hybrid/records.go"
+    },
+    {
+      "id": "agent-options",
+      "path": "agent-options.json",
+      "lock": "agent-options.json.lock",
+      "owner": "internal/hybrid",
+      "failure": "unavailable",
+      "web": "是",
+      "source": "internal/hybrid/options.go"
     }
   ],
   "exceptions": {
@@ -339,6 +348,10 @@
       "count": 1,
       "owner": "user-files"
     },
+    "internal/hybrid/options.go|openAgentOptions|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "agent-options"
+    },
     "internal/hybrid/records.go|openRecords|github.com/rainchan/webmux/internal/statefile.Open": {
       "count": 1,
       "owner": "hybrid"
@@ -434,6 +447,10 @@
     "internal/statefile/catalog.go|path|.lock": {
       "count": 1,
       "owner": "atomic-publisher"
+    },
+    "internal/statefile/catalog.go|path|agent-options.json": {
+      "count": 1,
+      "owner": "agent-options"
     },
     "internal/statefile/catalog.go|path|hybrid-sessions.json": {
       "count": 1,

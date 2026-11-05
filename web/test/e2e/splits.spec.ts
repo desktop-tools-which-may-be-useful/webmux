@@ -252,7 +252,10 @@ test("existing sessions can join a split and missing panes can be dismissed", as
   await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
   await page.getByRole("radio", { name: "上下分屏", exact: true }).click();
-  await page.getByRole("button", { name: /Existing agent/ }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Existing agent/ })
+    .click();
   await expect(page.locator(".split-terminal")).toHaveCount(2);
   const joined = page.locator(`[data-session-id="${existing.id}"]`);
   await ready(joined);
@@ -326,7 +329,10 @@ test("a split preserves hybrid chat and terminal switching beside a shell", asyn
   const chatId = (await created.json()).id;
   await openPaneMenu(anchor);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
-  await page.getByRole("button", { name: /Chat agent/ }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Chat agent/ })
+    .click();
   const chat = page.locator(`[data-session-id="${chatId}"]`);
   await expect(
     chat.getByRole("textbox", { name: "消息", exact: true }),

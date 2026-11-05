@@ -56,28 +56,30 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 
 常用的设计系统扩展：
 
-| 组件                | variant / size                                              | 用途                                                                                                      |
-| ------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `Button`            | `variant="quiet"`                                           | 平时弱化、悬停时恢复前景色的 ghost 按钮                                                                   |
-| `Button`            | `aria-pressed` / `aria-expanded` / `aria-current="true"`    | outline、ghost、quiet 在开关按下、展开或当前项时显示前景色描边；不再提供填充的 `secondary`                |
-| `Button`            | `raised`                                                    | 浮在终端或代码上的按钮（边框加阴影）                                                                      |
-| `Button`            | `size="icon-touch"` / `size="sm-touch"`                     | 窄屏（小于 `sm`）44px 触控尺寸，`sm` 以上恢复常规尺寸                                                     |
-| `Input`、`Textarea` | `mono`                                                      | 命令、路径、环境变量与终端文本                                                                            |
-| `Textarea`          | `variant="ghost"`                                           | 在列表项或卡片中原地编辑                                                                                  |
-| `Textarea`          | `variant="bare"`                                            | 填满自带边框与焦点环的容器（如聊天输入框），自身不再显示焦点环                                            |
-| `Empty`             | `variant="outline"` / `variant="card"`                      | 区块内的虚线空状态 / 独立卡片上的空页面                                                                   |
-| `Command`           | `variant="outline"`                                         | 嵌在表单或对话框中的列表                                                                                  |
-| `DropdownMenuLabel` | `variant="title"`                                           | 整个菜单的标题                                                                                            |
-| `Item`              | `variant="card"`、`size="flush"`                            | 卡片表面、悬停高亮的列表项；内容自带内边距（如整行链接）                                                  |
-| `Input`、`Label`    | `size="sm"`                                                 | 代码导航等紧凑面板                                                                                        |
-| `NativeSelect`      | `size="sm"`                                                 | 原生下拉选择；手机保留系统选择器                                                                          |
-| `Select`            | —                                                           | 需要跨平台一致样式、同时展示名称与命令或路径的下拉框；保留完整内容提示与键盘选择                          |
-| `Tabs.List`         | `variant="line"`、`size="form"`                             | 带关联面板的标签页统一使用 `line`，不使用填充胶囊样式的 `default`；`form` 用于表单中的分组切换            |
-| `SegmentedControl`  | `size="form"`、`wrap`                                       | 基于 RadioGroup（`radiogroup`/`radio`）的下划线分段控件；`form` 用于表单，`wrap` 在窄屏换行（如状态筛选） |
-| `Checkbox`          | —                                                           | 复选框，配合 `Label` 使用                                                                                 |
-| `ListButton`        | `row` / `text` / `content` / `option` / `tab` / `tab-close` | 列表、标签栏与卡片中的可点击区域。它不带控件尺寸，虚拟列表的固定行高不受影响；独立的操作按钮仍用 `Button` |
+| 组件                | variant / size                                              | 用途                                                                                                                                        |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`            | `variant="quiet"`                                           | 平时弱化、悬停时恢复前景色的 ghost 按钮                                                                                                     |
+| `Button`            | `aria-pressed` / `aria-expanded` / `aria-current="true"`    | outline、ghost、quiet 在开关按下、展开或当前项时显示前景色描边；不再提供填充的 `secondary`                                                  |
+| `Button`            | `raised`                                                    | 浮在终端或代码上的按钮（边框加阴影）                                                                                                        |
+| `Button`            | `size="icon-touch"` / `size="sm-touch"`                     | 窄屏（小于 `sm`）44px 触控尺寸，`sm` 以上恢复常规尺寸                                                                                       |
+| `Input`、`Textarea` | `mono`                                                      | 命令、路径、环境变量与终端文本                                                                                                              |
+| `Textarea`          | `variant="ghost"`                                           | 在列表项或卡片中原地编辑                                                                                                                    |
+| `Textarea`          | `variant="bare"`                                            | 填满自带边框与焦点环的容器（如聊天输入框），自身不再显示焦点环                                                                              |
+| `Empty`             | `variant="outline"` / `variant="card"`                      | 区块内的虚线空状态 / 独立卡片上的空页面                                                                                                     |
+| `Command`           | `variant="outline"`                                         | 嵌在表单或对话框中的列表                                                                                                                    |
+| `DropdownMenuLabel` | `variant="title"`                                           | 整个菜单的标题                                                                                                                              |
+| `Item`              | `variant="card"`、`size="flush"`                            | 卡片表面、悬停高亮的列表项；内容自带内边距（如整行链接）                                                                                    |
+| `Input`、`Label`    | `size="sm"`                                                 | 代码导航等紧凑面板                                                                                                                          |
+| `NativeSelect`      | `size="sm"`                                                 | 原生下拉选择；手机保留系统选择器                                                                                                            |
+| `Select`            | —                                                           | 需要跨平台一致样式、同时展示名称与命令或路径的下拉框；保留完整内容提示与键盘选择                                                            |
+| `Tabs.List`         | `variant="line"`、`size="form"`                             | 带关联面板的标签页统一使用 `line`，不使用填充胶囊样式的 `default`；`form` 用于表单中的分组切换                                              |
+| `SegmentedControl`  | `size="form"`、`wrap`                                       | 基于 RadioGroup（`radiogroup`/`radio`）的下划线分段控件；`form` 用于表单，`wrap` 在窄屏换行（如状态筛选）                                   |
+| `Checkbox`          | —                                                           | 复选框，配合 `Label` 使用                                                                                                                   |
+| `ListButton`        | `row` / `text` / `content` / `option` / `tab` / `tab-close` | 列表、标签栏与卡片中的可点击区域。它不带控件尺寸，虚拟列表的固定行高不受影响；独立的操作按钮仍用 `Button`                                   |
+| `ListButton`        | `navigation` / `navigation-action`                          | 侧栏导航行：`aria-pressed` 标记选中的筛选，`aria-current="page"` 标记当前页面；`navigation-action` 为行尾的 `file-tree-action` 按钮留出空间 |
+| `ChatSelect`        | `labeled`                                                   | 输入框下方的选择同时显示当前值文字（快速开始的仓库、基准分支与 agent）；带 `reason` 的选项保留在菜单中并禁用                                |
 
-`ItemGroup variant="panel"` 统一提供紧凑列表的边框与分隔线；`Item variant="row"` 提供无独立卡片边框的行；`ListButton variant="navigation"` 提供仓库导航的选中与键盘焦点样式。
+`ItemGroup variant="panel"` 统一提供紧凑列表的边框与分隔线；`Item variant="row"` 提供无独立卡片边框的行；`ListButton variant="navigation"` 提供侧栏导航行的选中与键盘焦点样式。
 
 粗指针设备的最小触控高度用 Tailwind 的 `any-pointer-coarse:` 变体（如 `any-pointer-coarse:min-h-11`）。
 

@@ -8,6 +8,7 @@ import {
   expectTerminalLine,
   expectConnected,
   viewSwitch,
+  backToList,
 } from "./fixtures";
 
 type Point = { x: number; y: number };
@@ -338,7 +339,7 @@ test("closed OSC 52 copy dialog does not reopen when the terminal is entered aga
   await page.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(dialog).toBeHidden();
 
-  await page.getByRole("button", { name: "返回会话列表", exact: true }).click();
+  await backToList(page);
   await expect(page).toHaveURL(/\/$/);
   await page.goto(`/s/${id}`);
   await expectConnected(page);

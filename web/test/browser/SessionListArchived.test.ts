@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
-import SessionList from "../../src/pages/SessionList.svelte";
+import ShellHarness from "./ShellHarness.svelte";
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
 import type { HybridRecord, Repository, SessionInfo } from "../../src/schemas";
 
@@ -76,6 +76,7 @@ const repository = {
   availability: "available",
   error: "",
   checkedAt: "2026-10-28T00:00:00Z",
+  initInstruction: "",
   worktrees: [
     worktree,
     {
@@ -176,7 +177,7 @@ test("a snapshot keeps drafts of archived hybrid sessions and drops the rest", a
     drafts,
     entries: [recoverable, gone],
   } = draftsWith("hybrid22", "gone0000");
-  render(SessionList, { drafts });
+  render(ShellHarness, { drafts });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [], forwards: [] });
   await vi.waitFor(() => expect(drafts.valid(gone!)).toBe(false));
@@ -192,7 +193,7 @@ test("archiving a hybrid session keeps its draft; deleting the record deletes it
     drafts,
     entries: [closed],
   } = draftsWith("hybrid33");
-  render(SessionList, { drafts });
+  render(ShellHarness, { drafts });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [active], forwards: [] });
   records = [{ ...record, id: "hybrid33", name: "进行中", title: "进行中" }];
@@ -238,7 +239,7 @@ test("archived records sit in the group a live session of theirs would", async (
     }),
     archived("elsewher", { cwd: "/srv/elsewhere" }),
   ];
-  render(SessionList, { drafts: createTerminalDrafts() });
+  render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [], forwards: [] });
   for (const [group, title] of [
@@ -258,7 +259,7 @@ test("archived records sit in the group a live session of theirs would", async (
 
 test("status and search filters cover archived records", async () => {
   records = [archived("archivd1", { title: "整理灯塔文档" })];
-  render(SessionList, { drafts: createTerminalDrafts() });
+  render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await connected();
   socket.message({
     type: "snapshot",
@@ -275,7 +276,7 @@ test("status and search filters cover archived records", async () => {
   // Only archived records remain, revealed without a click.
   await expect.element(region.getByText("整理灯塔文档")).toBeVisible();
   await expect
-    .element(page.getByText("进行中", { exact: true }))
+    .element(page.getByRole("main").getByText("进行中", { exact: true }))
     .not.toBeVisible();
 
   await filters.getByRole("radio", { name: /全部/ }).click();
@@ -312,10 +313,10 @@ test("a scope without archived matches shows the empty state", async () => {
       workspace: { repositoryId: "repo-1", worktreeId: "main" },
     }),
   ];
-  render(SessionList, { drafts: createTerminalDrafts() });
+  render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [], forwards: [] });
-  await page.getByRole("button", { name: "仓库 other" }).click();
+  await page.getByRole("treeitem", { name: "other", exact: true }).click();
   await page
     .getByRole("radiogroup", { name: "按会话状态筛选" })
     .getByRole("radio", { name: /已归档/ })
@@ -325,7 +326,7 @@ test("a scope without archived matches shows the empty state", async () => {
 
 test("returning home after archiving leaves the archived section collapsed", async () => {
   history.replaceState(null, "", "/");
-  render(SessionList, { drafts: createTerminalDrafts() });
+  render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [], forwards: [] });
   const region = page.getByRole("region", { name: "work 的已归档会话" });

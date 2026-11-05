@@ -116,6 +116,62 @@
 .workspace-page [data-slot="collapsible-trigger"] {
   min-height: 44px;
 }
+/* The app shell: a fixed sidebar beside the page. Pages place themselves
+   with --app-sidebar-width so the fixed session page starts where the
+   sidebar ends. Wide screens show the full sidebar or, collapsed, the rail;
+   tablets (640–1023px) always show the rail, whose expand button opens the
+   drawer, so the session keeps its width; phones only have the drawer. */
+.app-shell {
+  --app-sidebar-width: 18rem;
+}
+.app-shell[data-collapsed="true"] {
+  --app-sidebar-width: 3.5rem;
+}
+.app-sidebar {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  z-index: 30;
+  width: var(--app-sidebar-width);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+.app-sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline: 0.5rem;
+  padding-top: calc(env(safe-area-inset-top) + 0.5rem);
+}
+.app-shell[data-collapsed="false"] .app-sidebar-rail,
+.app-shell[data-collapsed="true"] .app-sidebar-full {
+  display: none;
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-shell {
+    --app-sidebar-width: 3.5rem;
+  }
+  .app-shell .app-sidebar-full {
+    display: none;
+  }
+  .app-shell .app-sidebar-rail {
+    display: flex;
+  }
+}
+@media (max-width: 639px) {
+  .app-shell {
+    --app-sidebar-width: 0px;
+  }
+  .app-shell .app-sidebar {
+    display: none;
+  }
+}
+.app-shell-main {
+  padding-left: var(--app-sidebar-width);
+}
 .notice-warning {
   display: flex;
   align-items: center;
@@ -136,11 +192,12 @@
 .terminal-page {
   position: fixed;
   top: 0;
-  left: 0;
+  /* Beside the app shell's sidebar; 0 without one. */
+  left: var(--app-sidebar-width, 0px);
   right: 0;
   display: flex;
   flex-direction: column;
-  width: 100%;
+  width: auto;
   /* The visual viewport height, which excludes an open soft keyboard. */
   height: var(--viewport-height, 100dvh);
   overflow: hidden;

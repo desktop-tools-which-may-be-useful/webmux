@@ -70,6 +70,9 @@ type Repository struct {
 	Error        string     `json:"error"`
 	CheckedAt    time.Time  `json:"checkedAt"`
 	Worktrees    []Worktree `json:"worktrees"`
+	// InitInstruction prefixes the first prompt of a quick start; empty
+	// for none.
+	InitInstruction string `json:"initInstruction"`
 }
 type Worktree struct {
 	ID           string  `json:"id"`

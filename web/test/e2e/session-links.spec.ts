@@ -6,6 +6,7 @@ import {
   expectTerminalLine,
   openSessionLink,
   runCommand,
+  backToList,
 } from "./fixtures";
 import { startE2EServer } from "./server.mjs";
 
@@ -40,7 +41,7 @@ test("session links open the terminal in this tab without reloading", async ({
   await expectTerminalLine(page, "webmux-e2e$");
   await runCommand(page, "printf '\\n%s%s\\n' 'same-tab-' 'live-output'");
   await expectTerminalLine(page, "same-tab-live-output");
-  await page.getByRole("button", { name: "返回会话列表", exact: true }).click();
+  await backToList(page);
   await expect(page).toHaveURL(/\/$/);
   const row = page.locator(`[data-session-id="${id}"]`);
   await expect(row.getByLabel("终端输出预览")).toContainText(
@@ -121,9 +122,7 @@ test("Home Screen session links keep authenticated navigation inside the app", a
     expect(
       await page.evaluate(() => localStorage.getItem("webmux.token")),
     ).toBe(token);
-    await page
-      .getByRole("button", { name: "返回会话列表", exact: true })
-      .click();
+    await backToList(page);
     await expect(page).toHaveURL(`${server.baseURL}/`);
     await expect(link).toBeVisible();
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);

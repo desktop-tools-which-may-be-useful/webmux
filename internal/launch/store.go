@@ -40,7 +40,14 @@ type Service struct {
 	fresh bool
 	// broken is the unavailability reason; nil when the store works.
 	broken error
+	// deleted is told each deleted config ID, after the deletion is saved
+	// and without the lock (OnDelete).
+	deleted func(id string)
 }
+
+// OnDelete installs, once at assembly before serving, fn to be told the ID
+// of every deleted config, so state kept per config elsewhere goes with it.
+func (s *Service) OnDelete(fn func(id string)) { s.deleted = fn }
 
 // Open loads the store. It never fails: a lock conflict, an unreadable
 // directory or a corrupt file leaves the service unavailable and the file
@@ -298,16 +305,21 @@ func (s *Service) Delete(id string) error {
 	if err := s.lockAvailable(); err != nil {
 		return err
 	}
-	defer s.mu.Unlock()
 	i := s.indexLocked(id)
 	if i < 0 {
+		s.mu.Unlock()
 		return ErrNotFound
 	}
 	next := slices.Delete(slices.Clone(s.configs), i, i+1)
 	if err := s.saveLocked(next); err != nil {
+		s.mu.Unlock()
 		return err
 	}
 	s.configs = next
+	s.mu.Unlock()
+	if s.deleted != nil {
+		s.deleted(id)
+	}
 	return nil
 }
 

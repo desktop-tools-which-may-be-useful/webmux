@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { shellUi } from "../shell.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import { api, navigate, store, stored } from "../api";
   import {
@@ -172,7 +173,7 @@
     delete terminals[sessionId];
     delete info[sessionId];
     if (!next) {
-      navigate("/");
+      navigate(shellUi.home);
       return;
     }
     const previous = ids.indexOf(sessionId);

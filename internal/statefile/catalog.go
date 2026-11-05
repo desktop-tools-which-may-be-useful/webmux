@@ -13,6 +13,7 @@ const (
 	Runtime            ID = "runtime"
 	Settings           ID = "settings"
 	Hybrid             ID = "hybrid"
+	AgentOptions       ID = "agent-options"
 )
 
 // Descriptor is the single runtime source of storage paths and policy.
@@ -39,6 +40,7 @@ var catalog = []Descriptor{
 	{Runtime, "run/server.json", "internal/runtime", "local_api_unavailable", "fingerprint", 1, "v", 64 << 10, false, ""},
 	{Settings, "settings.json", "internal/settings", "unavailable", "commands", 1, "v", 4 << 20, true, ""},
 	{Hybrid, "hybrid-sessions.json", "internal/hybrid", "unavailable", "argv/cwd", 1, "v", 1 << 20, true, ""},
+	{AgentOptions, "agent-options.json", "internal/hybrid", "unavailable", "none", 1, "v", 1 << 20, true, ""},
 }
 
 func Catalog() []Descriptor { return append([]Descriptor(nil), catalog...) }

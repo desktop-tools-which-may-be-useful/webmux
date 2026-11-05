@@ -10,6 +10,7 @@ const config = {
   name: "Claude 恢复",
   cmd: ["claude", "--resume", "a b"],
   envNames: ["API_KEY"],
+  chatOptions: [],
   hybrid: false,
   hybridSupport: {
     supported: false,
@@ -115,6 +116,7 @@ test("the new button is disabled at the 100 config limit", async () => {
         id: `abcd${"234567"[index % 6]}${"234567"[Math.floor(index / 6) % 6]}${"abcdef"[Math.floor(index / 36)]}a`,
         name: `配置 ${index}`,
         envNames: [],
+        chatOptions: [],
       })),
     ),
   );
@@ -200,6 +202,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       icon: "terminal",
       cmd: ["/bin/bash", "-l", "-i"],
       envNames: [],
+      chatOptions: [],
       hybrid: false,
     },
     {
@@ -207,6 +210,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       icon: "claudecode",
       cmd: ["claude", "--dangerously-skip-permissions"],
       envNames: [],
+      chatOptions: [],
       hybrid: true,
     },
     {
@@ -214,6 +218,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       icon: "pi",
       cmd: ["omp", "--auto-approve"],
       envNames: ["PI_FORCE_IMAGE_PROTOCOL"],
+      chatOptions: [],
       hybrid: true,
     },
   ];
@@ -225,6 +230,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       icon: "terminal",
       cmd: ["/bin/zsh", "-l"],
       envNames: [],
+      chatOptions: [],
     },
   ];
   const restoredCalls: unknown[] = [];
@@ -260,6 +266,7 @@ test("preset menu marks existing configs and restores one or all missing presets
             icon: p.icon,
             cmd: p.cmd,
             envNames: p.envNames,
+            chatOptions: [],
             hybrid: p.hybrid,
           })),
         ];

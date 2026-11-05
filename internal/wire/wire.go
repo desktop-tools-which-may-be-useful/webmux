@@ -10,6 +10,7 @@ import (
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
@@ -113,7 +114,7 @@ func Repository(r workspace.Repository) contract.Repository {
 	return contract.Repository{
 		ID: r.ID, Name: r.Name, CommonDir: r.CommonDir, AnchorPath: r.AnchorPath,
 		Availability: r.Availability, Error: r.Error, CheckedAt: r.CheckedAt,
-		Worktrees: each(r.Worktrees, Worktree),
+		Worktrees: each(r.Worktrees, Worktree), InitInstruction: r.InitInstruction,
 	}
 }
 
@@ -184,11 +185,17 @@ func LaunchConfig(c launch.Config) contract.LaunchConfig {
 	}
 }
 
-func LaunchSummaries(in []launch.Summary) []contract.LaunchConfigSummary {
+// LaunchSummaries converts the launch config list; chatOptions returns the
+// remembered agent options of a config (nil: none known).
+func LaunchSummaries(in []launch.Summary, chatOptions func(configID string) []hybrid.ConfigOption) []contract.LaunchConfigSummary {
 	return each(in, func(s launch.Summary) contract.LaunchConfigSummary {
+		var options []hybrid.ConfigOption
+		if chatOptions != nil {
+			options = chatOptions(s.ID)
+		}
 		return contract.LaunchConfigSummary{
 			ID: s.ID, Name: s.Name, Icon: s.Icon, Cmd: required(s.Cmd), EnvNames: required(s.EnvNames), Preview: previewSettings(s.Preview),
-			Hybrid: s.Hybrid, HybridSupport: HybridSupport(s.HybridSupport),
+			Hybrid: s.Hybrid, HybridSupport: HybridSupport(s.HybridSupport), ChatOptions: each(options, chatConfig),
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		}
 	})

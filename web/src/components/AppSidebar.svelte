@@ -1,0 +1,158 @@
+<script lang="ts">
+  import IconLayoutSidebarLeftCollapse from "~icons/tabler/layout-sidebar-left-collapse";
+  import IconMessagePlus from "~icons/tabler/message-plus";
+  import IconPlus from "~icons/tabler/plus";
+  import { Button } from "$lib/components/ui/button";
+  import { errorMessage } from "../error";
+  import { homeWorktrees } from "../homeWorktrees.svelte";
+  import { connectorMissingText } from "../hybrid";
+  import { resumeHybrid } from "../recoverable";
+  import type { Route } from "../route";
+  import type { HybridRecord } from "../schemas";
+  import {
+    getShell,
+    openPage,
+    openSession,
+    shellUi,
+    type ShellMode,
+  } from "../shell.svelte";
+  import Brand from "./Brand.svelte";
+  import ChatHistory from "./ChatHistory.svelte";
+  import ModeSwitch from "./ModeSwitch.svelte";
+  import SidebarFooter from "./SidebarFooter.svelte";
+  import WorkbenchTree from "./WorkbenchTree.svelte";
+
+  // The sidebar body, the same on desktop and in the phone drawer: brand and
+  // mode switch, the mode's primary action, its navigation, then the global
+  // footer that replaced the home page header.
+  let {
+    route,
+    collapsible = false,
+    onmode,
+    onprimary,
+  }: {
+    route: Extract<Route, { name: "sessions" | "quick-start" | "terminal" }>;
+    /** Desktop only; the drawer closes on its own. */
+    collapsible?: boolean;
+    onmode: (mode: ShellMode) => void;
+    onprimary: () => void;
+  } = $props();
+  const shell = getShell();
+  const current = $derived(route.name === "terminal" ? route.id : "");
+  const live = $derived(
+    shell.sessions.sessions.filter(
+      (session) => !session.hybrid || session.hybrid.state === "active",
+    ),
+  );
+  const configs = $derived(
+    shell.launchConfigs.state.status === "ready"
+      ? shell.launchConfigs.state.configs
+      : [],
+  );
+  const configIcons = $derived(
+    new Map(configs.map((config) => [config.id, config.icon ?? ""])),
+  );
+  const setup = $derived(shell.setup.value);
+
+  let resuming = $state("");
+  let resumeError = $state("");
+  // An archived chat resumes on its chat side through the existing flow;
+  // choices that need the user (another agent session, a deleted launch
+  // config) are made on the record's own page.
+  async function resume(record: HybridRecord) {
+    resuming = record.id;
+    resumeError = "";
+    try {
+      const outcome = await resumeHybrid(record.id, "acp");
+      if (outcome.status === "resumed") {
+        void shell.archived.refresh();
+        openSession(outcome.session);
+      } else if (outcome.status === "connector_missing")
+        resumeError = `${outcome.message}。${connectorMissingText(outcome.connector)}`;
+      else openPage(`/s/${record.id}`);
+    } catch (err) {
+      resumeError = `无法恢复“${record.name || record.title}”：${errorMessage(err)}`;
+    } finally {
+      resuming = "";
+    }
+  }
+  function scope(next: string, worktreeId?: string) {
+    shellUi.setMode("workbench");
+    shell.repositories.select(next);
+    openPage(worktreeId ? `/#wt-${worktreeId}` : "/");
+  }
+</script>
+
+<nav class="flex h-full min-h-0 flex-col" aria-label="导航">
+  <div class="flex items-center gap-1 px-2 pt-2 pb-1">
+    {#if collapsible}
+      <Button
+        variant="ghost"
+        size="icon-touch"
+        aria-label="收起侧栏"
+        title="收起侧栏"
+        onclick={() => shellUi.setCollapsed(true)}
+        ><IconLayoutSidebarLeftCollapse aria-hidden="true" /></Button
+      >
+    {/if}
+    <span class="brand mr-auto min-w-0 px-1"><Brand /></span>
+    <ModeSwitch mode={shellUi.mode} onchange={onmode} />
+  </div>
+  <div class="px-2 pt-1">
+    <Button
+      variant="outline"
+      size="sm-touch"
+      class="w-full"
+      onclick={onprimary}
+    >
+      {#if shellUi.mode === "chat"}<IconMessagePlus
+          aria-hidden="true"
+        />新聊天{:else}<IconPlus aria-hidden="true" />新建会话{/if}
+    </Button>
+  </div>
+  <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+    {#if resumeError}<p
+        role="alert"
+        class="mb-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"
+      >
+        {resumeError}
+      </p>{/if}
+    {#if shellUi.mode === "chat"}
+      <ChatHistory
+        sessions={live}
+        records={shell.archived.records}
+        {configs}
+        {current}
+        {resuming}
+        onopen={openSession}
+        onresume={(record) => void resume(record)}
+        onrename={shell.rename}
+      />
+    {:else if !shell.sessions.loading && (shell.repositories.settled || shell.repositories.list.length)}
+      <!-- Drawn once sessions and repositories are known, so rows never
+           appear between rows already on screen during startup. -->
+      <WorkbenchTree
+        repositories={shell.repositories.list}
+        sessions={live}
+        home={homeWorktrees.value}
+        scope={route.name === "sessions"
+          ? (shell.repositories.choice ?? "all")
+          : ""}
+        {current}
+        canCreate={setup.gitReady && setup.registryReady}
+        {configIcons}
+        onscope={scope}
+        onopen={openSession}
+        onnewworktree={(repositoryId) =>
+          shell.start({ kind: "new-worktree", repositoryId })}
+        onrename={shell.rename}
+      />
+    {/if}
+  </div>
+  <SidebarFooter
+    connection={shell.sessions.connection}
+    hostname={setup.hostname}
+    setupSettled={shell.setup.settled}
+    onforward={shell.forward}
+  />
+</nav>

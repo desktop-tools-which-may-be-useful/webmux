@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { shellUi } from "../shell.svelte";
   import { Button } from "$lib/components/ui/button";
   import { navigate } from "../api";
   import { resumeHybrid } from "../recoverable";
@@ -40,7 +41,7 @@
       onbusy={(active) => (busy = active)}
       onerror={(message) => (error = message)}
     />
-    <Button variant="ghost" size="sm" onclick={() => navigate("/")}
+    <Button variant="ghost" size="sm" onclick={() => navigate(shellUi.home)}
       >返回列表</Button
     >
   </div>

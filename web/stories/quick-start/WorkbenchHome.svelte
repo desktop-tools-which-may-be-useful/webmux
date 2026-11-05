@@ -80,6 +80,7 @@
       refreshing={false}
       onadd={sample}
       onrefresh={sample}
+      onstart={sample}
     >
       <SessionFilters
         {sessions}

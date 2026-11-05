@@ -27,6 +27,7 @@ const repository: Repository = {
   availability: "available",
   error: "",
   checkedAt: "2026-10-20T00:00:00Z",
+  initInstruction: "",
   worktrees: [tree("main", "/work/main"), tree("nested", "/work/main/nested")],
 };
 const record = (id: string, patch: Partial<HybridRecord>): HybridRecord => ({

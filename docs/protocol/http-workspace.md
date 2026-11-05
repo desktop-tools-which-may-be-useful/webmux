@@ -4,7 +4,8 @@
 
 | 方法       | 路径                                                            | 说明                                                                                                                                                       |
 | ---------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET / POST | `/api/repositories`                                             | 列出仓库快照；POST `{path}` 登记仓库（新增 201，已存在 200）                                                                                               |
+| GET / POST | `/api/repositories`                                             | 列出仓库快照；POST `{path, initInstruction?}` 登记仓库（新增 201，已存在 200 且保留原指令）                                                                |
+| PATCH      | `/api/repositories/{id}`                                        | `{initInstruction}` 修改或清空（空字符串）初始化指令，200 返回仓库；超过 4000 个字符 400                                                                   |
 | DELETE     | `/api/repositories/{id}`                                        | 仅移除登记，204                                                                                                                                            |
 | GET        | `/api/repositories/{id}/worktrees`                              | 刷新仓库快照（含 `checkedAt` 与 `worktrees`）                                                                                                              |
 | GET        | `/api/repositories/{id}/branches`                               | `{branches, bases, defaultBase, defaultBaseSubject, defaultBranch, defaultParent}`，不 fetch                                                               |
@@ -27,6 +28,19 @@
 - 安全：响应不包含 remote URL、命令行或原始 stderr；普通 GET 分支清单始终无网络行为。
 
 错误码：400 输入错误，404 不存在，409 冲突或确认过期，503 Git / 清单不可用，504 超时，500 存储或非预期错误。JSON 结构见 `internal/contract/workspace.go`。
+
+仓库快照带 `initInstruction`（未设置时为空字符串），保存在 `repositories.json` 的登记记录中；旧清单缺字段视为没有指令。它只作为快速开始首条消息的前缀，不会被执行。
+
+## 快速开始
+
+`POST /api/quick-starts` 一次完成快速开始：在仓库中新建 worktree、以聊天端启动混合会话、应用配置与权限模式，并发送首条提示。请求与响应结构见 `internal/contract/quickstart.go`。
+
+- 请求：`{clientRequestId, repositoryId, configId, base, branch, text, config, permissionMode}`。`config` 为配置项 ID 到值的映射（布尔项为 `"true"`/`"false"`）；路径由服务端取 `defaultParent/<分支名末段>`。
+- 成功：201 `{sessionId, worktree, configWarnings}`。agent 不接受的配置值记为 `configWarnings` 并作为聊天提示写入时间线，不阻断发送。
+- 预检：仓库可用、启动配置勾选了混合模式、第三方连接器已安装，都在创建 worktree 之前校验；连接器缺失返回 409 `connector_missing`。
+- 失败：错误体为 `{error, step, reason?, eligibility?, connector?, worktree?, sessionId?}`，`step` 为 `precheck`、`worktree`、`session`、`config` 或 `prompt`；已创建的 worktree 与会话不会自动删除。分支或路径冲突为 409、`step: "worktree"`、`reason: "conflict"`。
+- 幂等：同一 `clientRequestId` 在执行中及完成后 10 分钟内重复提交，等待并返回第一次的结果；首条提示复用该 ID。处理不依赖客户端连接，最长 3 分钟。
+- 仓库有初始化指令时，首条提示为“指令、空行、用户输入”。
 
 ## 代码工作区
 

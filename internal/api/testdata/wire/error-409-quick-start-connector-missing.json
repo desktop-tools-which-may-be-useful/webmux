@@ -1,0 +1,14 @@
+{
+  "status": 409,
+  "body": {
+    "connector": {
+      "docsUrl": "https://github.com/agentclientprotocol/codex-acp",
+      "executable": "codex-acp",
+      "installCommand": "npm install -g @agentclientprotocol/codex-acp",
+      "title": "Codex ACP 适配器"
+    },
+    "error": "未安装 Codex ACP 适配器（codex-acp）",
+    "reason": "connector_missing",
+    "step": "precheck"
+  }
+}

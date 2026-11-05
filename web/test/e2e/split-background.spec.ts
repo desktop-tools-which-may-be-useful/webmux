@@ -171,7 +171,10 @@ test("background hybrid choice waits for pane activation", async ({
   );
   await openPaneMenu(foreground);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
-  await page.getByRole("button", { name: /Pending agent/ }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Pending agent/ })
+    .click();
   const background = page.locator(`[data-session-id="${agentId}"]`);
   await expect(background.locator(".xterm-rows")).toContainText("prompt>");
   await expect.poll(() => !!ask).toBe(true);

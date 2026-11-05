@@ -11,6 +11,8 @@ import {
   expectTerminalLine,
   expectConnected,
   viewSwitch,
+  backToList,
+  revealSidebar,
 } from "../e2e/fixtures";
 import { observePerformance, performanceReport, settled } from "./performance";
 
@@ -66,7 +68,10 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/");
     await expect(page.getByText("还没有会话", { exact: true })).toBeVisible();
     await expect(
-      page.locator("header").getByRole("button", { name: "＋ 新建会话" }),
+      page
+        .getByRole("main")
+        .getByRole("button", { name: "＋ 新建会话" })
+        .first(),
     ).toBeEnabled();
     await settled(page);
     await page.screenshot({
@@ -126,9 +131,11 @@ test("4x CPU: background output and status updates do not move session cards", a
   await page.screenshot({
     path: testInfo.outputPath("after-output-light.png"),
   });
+  const drawer = await revealSidebar(page);
   await page
     .getByRole("button", { name: "切换为黑色主题", exact: true })
     .click();
+  if (drawer) await page.keyboard.press("Escape");
   await page.screenshot({
     path: testInfo.outputPath("after-output-dark.png"),
   });
@@ -212,7 +219,7 @@ test("4x CPU: create, type, replay, switch, filter and open dialogs remain usabl
     inputRoundTripMs,
   });
 
-  await page.getByRole("button", { name: "返回会话列表", exact: true }).click();
+  await backToList(page);
   const search = page.getByRole("searchbox", { name: "搜索会话" });
   await search.fill("no matching session");
   await expect(page.getByText("没有匹配的会话", { exact: true })).toBeVisible();

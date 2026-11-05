@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { shellUi } from "../shell.svelte";
   import type { Snippet } from "svelte";
   import { navigate } from "../api";
   import { Button } from "$lib/components/ui/button";
@@ -179,7 +180,7 @@
     会话不存在或已被移除。<Button
       variant="outline"
       size="sm"
-      onclick={() => navigate("/")}>返回列表</Button
+      onclick={() => navigate(shellUi.home)}>返回列表</Button
     >
   </div>{/if}
 {#if t.exitCode !== null && !recovery}
@@ -188,7 +189,7 @@
     role="status"
   >
     <span>进程已退出（code {t.exitCode}）</span>
-    <Button variant="outline" size="sm" onclick={() => navigate("/")}
+    <Button variant="outline" size="sm" onclick={() => navigate(shellUi.home)}
       >返回列表</Button
     >
     <Button variant="outline" size="sm" onclick={remove}>移除会话</Button>

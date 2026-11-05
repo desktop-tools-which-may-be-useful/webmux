@@ -211,8 +211,9 @@ test.describe("hybrid sessions with the fake agent", () => {
       await hybridConfig(request, name, { agent });
       await page.goto("/");
       await page
-        .locator("header")
+        .getByRole("main")
         .getByRole("button", { name: "＋ 新建会话", exact: true })
+        .first()
         .click();
       await chooseLaunch(page, name);
       await page
@@ -938,8 +939,9 @@ test.describe("hybrid sessions with the fake agent", () => {
       expect(response.status(), await response.text()).toBe(201);
       await page.goto("/");
       await page
-        .locator("header")
+        .getByRole("main")
         .getByRole("button", { name: "＋ 新建会话", exact: true })
+        .first()
         .click();
       await chooseLaunch(page, name);
       await expect(

@@ -79,7 +79,8 @@ test("narrow headers keep one row and move rare actions into the menu", async ({
         await expect(
           header(page).getByRole("button", { name, exact: true }),
         ).toBeHidden();
-      // The phone header keeps back, title, the view switch and the menu.
+      // The phone header keeps the sidebar button, title, the view switch
+      // and the menu.
       await expect(
         header(page).getByRole("button", { name: /^草稿模式/ }),
       ).toBeHidden();
@@ -91,7 +92,7 @@ test("narrow headers keep one row and move rare actions into the menu", async ({
         views.getByRole("tab", { name: "终端", exact: true }),
       ).toHaveAttribute("aria-selected", view === "代码" ? "true" : "false");
       await expect(
-        header(page).getByRole("button", { name: "返回会话列表" }),
+        header(page).getByRole("button", { name: "打开侧栏" }),
       ).toBeVisible();
       await views.getByRole("tab", { name: view, exact: true }).click();
     }

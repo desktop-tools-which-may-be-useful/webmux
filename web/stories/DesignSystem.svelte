@@ -19,6 +19,8 @@
   import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import { ListButton } from "$lib/components/ui/list-button";
+  import ChatSelect from "../src/components/chat/ChatSelect.svelte";
   import InlineNotice from "../src/components/InlineNotice.svelte";
   import SessionStatus from "../src/components/SessionStatus.svelte";
   import SessionRow from "../src/components/SessionRow.svelte";
@@ -43,6 +45,7 @@
   let confirmOpen = $state(false);
   let wrapping = $state(true);
   let name = $state("检查构建");
+  let repository = $state("webmux");
   const sections = {
     foundations: [
       "设计基础",
@@ -393,6 +396,56 @@
             >重置名称</Button
           >
         </div>
+      </Card.Content>
+    </Card.Root>
+    <Card.Root>
+      <Card.Header
+        ><Card.Title>输入框下方的选择</Card.Title><Card.Description
+          >聊天配置只显示图标；快速开始的仓库、基准分支和 agent 用 labeled
+          显示当前值，不可用的选项保留在菜单中并说明原因。</Card.Description
+        ></Card.Header
+      >
+      <Card.Content class="flex flex-wrap items-center gap-1">
+        <ChatSelect
+          labeled
+          name="仓库"
+          value={repository}
+          choices={[
+            { value: "webmux", name: "webmux" },
+            { value: "docs-site", name: "docs-site" },
+            {
+              value: "legacy-api",
+              name: "legacy-api",
+              reason: "路径不可用：/srv/legacy-api 不存在",
+            },
+          ]}
+          disabled={false}
+          onchange={(value) => (repository = value)}
+        />
+        <ChatSelect
+          name="思考"
+          value="high"
+          choices={[
+            { value: "low", name: "低" },
+            { value: "high", name: "高" },
+          ]}
+          disabled={false}
+          onchange={() => {}}
+        />
+      </Card.Content>
+    </Card.Root>
+    <Card.Root>
+      <Card.Header
+        ><Card.Title>侧栏导航行</Card.Title><Card.Description
+          >aria-current 标记当前页面，与 aria-pressed
+          的筛选选中态使用同一条线条。</Card.Description
+        ></Card.Header
+      >
+      <Card.Content class="max-w-72 space-y-0.5">
+        <ListButton variant="navigation" aria-current="page"
+          >修复首页排序</ListButton
+        >
+        <ListButton variant="navigation">更新文档</ListButton>
       </Card.Content>
     </Card.Root>
   {:else if section === "feedback"}

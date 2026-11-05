@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   AgentConnectorSchema,
+  ChatConfigSchema,
+  ChatPermissionModeSchema,
   HybridRecordSchema,
   SessionHybridSchema,
 } from "./chatSchemas";
@@ -182,6 +184,9 @@ const launchConfigFields = {
 export const LaunchConfigSummarySchema = z.object({
   ...launchConfigFields,
   envNames: z.array(z.string()),
+  // The chat options the config's latest chat side reported, with their
+  // last values; [] until one has started.
+  chatOptions: z.array(ChatConfigSchema),
 });
 export type LaunchConfigSummary = z.infer<typeof LaunchConfigSummarySchema>;
 export const LaunchConfigSchema = z.object({
@@ -441,6 +446,8 @@ export const WorktreeSchema = z.object({
   error: z.string(),
 });
 export type Worktree = z.infer<typeof WorktreeSchema>;
+// The longest repository init instruction the server accepts, in characters.
+export const INIT_INSTRUCTION_MAX = 4000;
 export const RepositorySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -449,10 +456,50 @@ export const RepositorySchema = z.object({
   availability: z.enum(["available", "unavailable"]),
   error: z.string(),
   checkedAt: z.iso.datetime({ offset: true }),
+  // Quick start puts it before the first message; "" when unset.
+  initInstruction: z.string(),
   worktrees: z.array(WorktreeSchema),
 });
 export type Repository = z.infer<typeof RepositorySchema>;
 export const RepositoriesSchema = z.array(RepositorySchema);
+export const RegisterRepositoryRequestSchema = z.object({
+  path: z.string().min(1),
+  initInstruction: z.string().max(INIT_INSTRUCTION_MAX).optional(),
+});
+export const UpdateRepositoryRequestSchema = z.object({
+  initInstruction: z.string().max(INIT_INSTRUCTION_MAX),
+});
+// One send of the quick start page: a worktree from `base`, the chat side of
+// the hybrid launch config, its options and the first prompt.
+export const QuickStartRequestSchema = z.object({
+  clientRequestId: z.string().min(1),
+  repositoryId: z.string().min(1),
+  configId: z.string().regex(/^[a-z2-7]{8}$/),
+  base: z.string(),
+  branch: z.string().min(1),
+  text: z.string().trim().min(1),
+  // Option id to value; booleans are "true" or "false".
+  config: z.record(z.string(), z.string()),
+  permissionMode: ChatPermissionModeSchema,
+});
+export type QuickStartRequest = z.infer<typeof QuickStartRequestSchema>;
+export const QuickStartResultSchema = z.object({
+  sessionId: z.string().regex(/^[a-z2-7]{8}$/),
+  worktree: WorktreeSchema,
+  configWarnings: z.array(z.string()),
+});
+// The body of a failed quick start: the step that failed and what earlier
+// steps left behind, which is never removed automatically.
+export const QuickStartFailureSchema = z.object({
+  error: z.string(),
+  step: z.enum(["precheck", "worktree", "session", "config", "prompt"]),
+  reason: z.string().optional(),
+  eligibility: z.string().optional(),
+  connector: AgentConnectorSchema.optional(),
+  worktree: WorktreeSchema.optional(),
+  sessionId: z.string().optional(),
+});
+export type QuickStartFailure = z.infer<typeof QuickStartFailureSchema>;
 // Server-synchronized choice of worktrees shown on the home page, keyed by
 // repository ID. A repository without an entry was never curated.
 export const HomeWorktreesSchema = z.record(

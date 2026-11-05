@@ -14,6 +14,7 @@ const repository = {
   availability: "available",
   error: "",
   checkedAt: "2026-10-14T00:00:00Z",
+  initInstruction: "",
   worktrees: [
     {
       id: "main",

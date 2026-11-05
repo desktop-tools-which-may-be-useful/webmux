@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, revealSidebar } from "./fixtures";
 import { settled } from "../performance/performance";
 
 // Published UI evidence uses an isolated fixture identity.
@@ -30,8 +30,9 @@ test("workspace defers settings and management forms until requested", async ({
     ),
   ).toEqual([]);
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
+    .first()
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
   expect(scripts.some((url) => /\/NewSessionDialog-/.test(url))).toBe(true);
@@ -41,6 +42,7 @@ test("workspace defers settings and management forms until requested", async ({
   await expect(page.getByRole("dialog")).toBeVisible();
   expect(scripts.some((url) => /\/AddRepositoryDialog-/.test(url))).toBe(true);
   await page.keyboard.press("Escape");
+  await revealSidebar(page);
   await page.getByRole("link", { name: "设置", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "设置", exact: true }),
@@ -66,8 +68,9 @@ for (const theme of ["light", "dark"] as const) {
     });
     await page.goto("/");
     await page
-      .locator("header")
+      .getByRole("main")
       .getByRole("button", { name: "＋ 新建会话", exact: true })
+      .first()
       .click();
     await requested.promise;
     try {
@@ -84,8 +87,9 @@ for (const theme of ["light", "dark"] as const) {
     await settled(page);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page
-      .locator("header")
+      .getByRole("main")
       .getByRole("button", { name: "＋ 新建会话", exact: true })
+      .first()
       .click();
     await expect(page.getByRole("dialog")).toBeVisible();
   });
@@ -105,8 +109,9 @@ for (const theme of ["light", "dark"] as const) {
     );
     await page.goto("/");
     await page
-      .locator("header")
+      .getByRole("main")
       .getByRole("button", { name: "＋ 新建会话", exact: true })
+      .first()
       .click();
     await expect(page.getByRole("alert")).toContainText("创建表单加载失败");
     await page.screenshot({
@@ -114,6 +119,7 @@ for (const theme of ["light", "dark"] as const) {
     });
     await page.getByRole("button", { name: "关闭", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveCount(0);
+    await revealSidebar(page);
     await page.getByRole("link", { name: "设置", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "设置", exact: true }),

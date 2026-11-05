@@ -246,7 +246,10 @@ func (s *Service) snapshot(ctx context.Context, r *repositoryState) (Repository,
 	case <-ctx.Done():
 		return Repository{}, ctx.Err()
 	case <-flight.done:
-		return flight.repository, flight.err
+		// A shared read may predate an instruction change.
+		repository := flight.repository
+		repository.InitInstruction = s.initInstruction(r)
+		return repository, flight.err
 	}
 }
 func repositoryResult(e registration) Repository {
@@ -255,8 +258,9 @@ func repositoryResult(e registration) Repository {
 
 // unavailableRepository reports a read that failed before Git produced a
 // snapshot, so one repository cannot hide the others in a list.
-func unavailableRepository(r *repositoryState, err error) Repository {
+func (s *Service) unavailableRepository(r *repositoryState, err error) Repository {
 	result := repositoryResult(r.entry)
+	result.InitInstruction = s.initInstruction(r)
 	result.Error = err.Error()
 	return result
 }
@@ -264,6 +268,7 @@ func unavailableRepository(r *repositoryState, err error) Repository {
 func (s *Service) readRepository(ctx context.Context, r *repositoryState) Repository {
 	e := r.entry
 	result := repositoryResult(e)
+	result.InitInstruction = s.initInstruction(r)
 	common, err := s.common(ctx, e.AnchorPath)
 	if err == nil && common != e.CommonDir {
 		err = errors.New("仓库 common directory 身份已改变，请移除并重新注册")

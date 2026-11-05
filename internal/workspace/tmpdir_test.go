@@ -16,6 +16,14 @@ func runWorkspaceTests(m *testing.M) (status int) {
 	if dir, err := filepath.EvalSymlinks(os.TempDir()); err == nil {
 		_ = os.Setenv("TMPDIR", dir)
 	}
+	// The fake ACP agent is built in the developer's environment, before
+	// HOME moves away from the Go build cache.
+	fakeAgent.base, fakeAgent.env = os.TempDir(), os.Environ()
+	defer func() {
+		if fakeAgent.dir != "" {
+			_ = os.RemoveAll(fakeAgent.dir)
+		}
+	}()
 	home, err := os.MkdirTemp("", "webmux-workspace-test-home-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

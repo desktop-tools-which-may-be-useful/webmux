@@ -10,6 +10,7 @@ import {
   headerAction,
   expectConnected,
   viewSwitch,
+  backToList,
 } from "./fixtures";
 
 for (const initialization of ["connected", "font-pending"] as const) {
@@ -17,7 +18,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
     page,
     request,
     workDir,
-  }) => {
+  }, info) => {
     const errors: string[] = [];
     let opened = 0;
     let closed = 0;
@@ -57,11 +58,11 @@ for (const initialization of ["connected", "font-pending"] as const) {
     await page.goto(`/s/${id}`);
     const timeOrigin = await page.evaluate(() => performance.timeOrigin);
     const session = page.getByRole("link", { name, exact: true });
+    // Phones reach the list through the sidebar drawer instead.
     const back = page.getByRole("button", {
-      name: "返回会话列表",
-      exact: true,
+      name: /^(返回会话列表|打开侧栏)$/,
     });
-    await expect(back).toBeVisible();
+    await expect(back.first()).toBeVisible();
     if (initialization === "connected") {
       await expectConnected(page);
       await expect(page.locator(".restore-overlay")).toBeHidden();
@@ -71,16 +72,21 @@ for (const initialization of ["connected", "font-pending"] as const) {
     }
 
     const returnToList = async () => {
-      await back.click();
+      await backToList(page);
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.locator("header")).toContainText(`${hostname()} 在线`);
+      // Phones keep the host in the drawer.
+      if (!info.project.use.isMobile)
+        await expect(
+          page.getByRole("complementary", { name: "侧栏" }).getByRole("status"),
+        ).toHaveAttribute("title", `${hostname()} 在线`);
       await expect(
         page.getByLabel("正在加载会话", { exact: true }),
       ).toBeHidden();
       await expect(session).toBeVisible();
       const create = page
-        .locator("header")
-        .getByRole("button", { name: "＋ 新建会话", exact: true });
+        .getByRole("main")
+        .getByRole("button", { name: "＋ 新建会话", exact: true })
+        .first();
       await expect(create).toBeEnabled();
       await create.click();
       await expect(

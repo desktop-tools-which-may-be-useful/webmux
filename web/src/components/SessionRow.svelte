@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { navigate } from "../api";
+  import { openSession } from "../shell.svelte";
   import SessionStatus from "./SessionStatus.svelte";
   import RenameSessionDialog from "./RenameSessionDialog.svelte";
   import type { SessionInfo } from "../schemas";
@@ -105,7 +105,8 @@
         !event.altKey
       ) {
         event.preventDefault();
-        navigate(`/s/${session.id}`);
+        // A chat-side hybrid session takes the shell to chat mode.
+        openSession(session);
       }
     }}
   >

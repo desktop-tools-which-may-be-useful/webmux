@@ -21,8 +21,9 @@ test("workspace search shortcuts clear filters without capturing dialog input", 
     "true",
   );
   await page
-    .locator("header")
+    .getByRole("main")
     .getByRole("button", { name: "＋ 新建会话" })
+    .first()
     .click();
   await nameSession(page, "review");
   const name = page.getByLabel("会话名称", { exact: false });
@@ -43,7 +44,7 @@ test("an older config without hostname keeps creation available", async ({
   await page.goto("/");
   await expect(page.getByRole("button", { name: "添加仓库" })).toBeEnabled();
   await expect(
-    page.locator("header").getByRole("button", { name: "＋ 新建会话" }),
+    page.getByRole("main").getByRole("button", { name: "＋ 新建会话" }).first(),
   ).toBeEnabled();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
@@ -62,7 +63,7 @@ test("invalid config can be retried without blocking temporary commands", async 
   ).toBeVisible();
   await expect(page.getByText("invalid_type", { exact: false })).toHaveCount(0);
   await expect(
-    page.locator("header").getByRole("button", { name: "＋ 新建会话" }),
+    page.getByRole("main").getByRole("button", { name: "＋ 新建会话" }).first(),
   ).toBeEnabled();
   await expect(page.getByRole("button", { name: "添加仓库" })).toBeDisabled();
   invalid = false;
@@ -250,7 +251,9 @@ test("a disconnected session list reconnects and restores the latest snapshot", 
   await disconnect!();
   await expect.poll(() => blockedReconnects).toBeGreaterThan(0);
   await expect(
-    page.getByText("连接已断开，重连中…", { exact: true }),
+    page
+      .getByText("连接已断开，重连中…", { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   const created = await request.post("/api/sessions", {
     data: {
@@ -269,6 +272,8 @@ test("a disconnected session list reconnects and restores the latest snapshot", 
     page.getByRole("link", { name: "Recovered snapshot" }),
   ).toBeVisible();
   await expect(
-    page.getByText("连接已断开，重连中…", { exact: true }),
+    page
+      .getByText("连接已断开，重连中…", { exact: true })
+      .filter({ visible: true }),
   ).toBeHidden();
 });

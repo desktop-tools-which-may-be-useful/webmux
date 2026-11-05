@@ -309,7 +309,7 @@ func TestUnavailableRepositoryIsLocalToList(t *testing.T) {
 }
 func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 	handler, service, m, root := workspaceAPI(t)
-	repository, _, err := service.Register(context.Background(), root)
+	repository, _, err := service.Register(context.Background(), root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

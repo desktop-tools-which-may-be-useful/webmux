@@ -129,10 +129,17 @@ func wireSchema(name string) wireRules {
 	case "launch-list", "launch-list-empty", "launch-presets-restore":
 		add("/*", "id", "id")
 		add("/*", "time", "createdAt", "updatedAt")
-	case "repository-register", "repository-register-again", "repository-worktrees":
+	case "launch-list-chat-options":
+		add("/*", "id", "id")
+		add("/*", "time", "createdAt", "updatedAt")
+		add("/*", "path", "cmd/*")
+	case "repository-register", "repository-register-again", "repository-worktrees", "repository-update", "repository-register-instruction":
 		repositoryFields("")
 	case "repositories", "repositories-empty":
 		repositoryFields("/*")
+	case "quick-start", "quick-start-retry":
+		add("", "id", "sessionId")
+		worktreeFields("/worktree")
 	case "repository-branches":
 		add("", "path", "defaultParent", "branches/*/worktreePaths/*")
 	case "worktree-create":
@@ -670,12 +677,50 @@ func TestWireSnapshots(t *testing.T) {
 		{"hybrid", wireHybrid},
 		{"hybrid-records", wireHybridRecords},
 		{"forwards", wireForwards},
+		{"quick-start", wireQuickStart},
 	} {
 		t.Run(group.name, func(t *testing.T) {
 			rec := &wireRecorder{t: t, norm: newWireNormalizer(), seen: map[string]bool{}}
 			group.run(newWireFixture(t, rec))
 		})
 	}
+}
+
+// wireQuickStart pins a quick start, its retry, its failure bodies and the
+// launch list's remembered agent options.
+func wireQuickStart(f *wireFixture) {
+	agent := fakeAgentPath(f.t, omp.Name)
+	f.norm.path(filepath.Dir(agent), "<fakeagent>")
+	repository := f.call("repository-register-instruction", "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: f.root, InitInstruction: "先读 AGENTS.md"}, 201)
+	saved, err := f.launches.Create(launch.Input{Name: "agent", Cmd: []string{agent}, Env: map[string]string{"FAKEAGENT_STORE": f.t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms"}, Hybrid: true})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	req := contract.QuickStartRequest{
+		ClientRequestID: "wire-quick-1", RepositoryID: str(repository, "id"), ConfigID: saved.ID, Base: "HEAD",
+		Branch: "wt/brisk-otter", Text: "修复首页排序", Config: map[string]string{"model": "smart", "effort": "high"},
+		PermissionMode: contract.ChatPermissionAsk,
+	}
+	f.call("quick-start", "POST", "/api/quick-starts", req, 201)
+	f.call("quick-start-retry", "POST", "/api/quick-starts", req, 201)
+	conflict := req
+	conflict.ClientRequestID = "wire-quick-2"
+	f.call("error-409-quick-start-worktree", "POST", "/api/quick-starts", conflict, 409)
+	plain, err := f.launches.Create(launch.Input{Name: "plain", Cmd: []string{"/bin/sh"}})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	notHybrid := req
+	notHybrid.ClientRequestID, notHybrid.ConfigID, notHybrid.Branch = "wire-quick-3", plain.ID, "wt/plain"
+	f.call("error-400-quick-start-not-hybrid", "POST", "/api/quick-starts", notHybrid, 400)
+	codexConfig, err := f.launches.Create(launch.Input{Name: "codex", Cmd: []string{fakeAgentPath(f.t, codex.Name)}, Env: map[string]string{"PATH": "/nonexistent"}, Hybrid: true})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	missing := req
+	missing.ClientRequestID, missing.ConfigID, missing.Branch = "wire-quick-4", codexConfig.ID, "wt/codex"
+	f.call("error-409-quick-start-connector-missing", "POST", "/api/quick-starts", missing, 409)
+	f.call("launch-list-chat-options", "GET", "/api/launch-configs", nil, 200)
 }
 
 func wireForwards(f *wireFixture) {
@@ -858,6 +903,8 @@ func wireWorkspace(f *wireFixture) {
 	base := "/api/repositories/" + repositoryID
 	f.call("repositories", "GET", "/api/repositories", nil, 200)
 	f.call("repository-worktrees", "GET", base+"/worktrees", nil, 200)
+	f.call("repository-update", "PATCH", base, contract.UpdateRepositoryRequest{InitInstruction: "先读 AGENTS.md"}, 200)
+	f.call("error-400-repository-update", "PATCH", base, contract.UpdateRepositoryRequest{InitInstruction: strings.Repeat("长", 4001)}, 400)
 	branches := f.call("repository-branches", "GET", base+"/branches", nil, 200)
 	f.call("repository-commits", "GET", base+"/commits?from="+str(branches, "defaultBase"), nil, 200)
 	f.call("error-400-commits", "GET", base+"/commits?from=main", nil, 400)

@@ -61,7 +61,13 @@ type acpTools struct {
 // that cannot be found is a *ConnectorMissingError; a check that fails
 // (timeout, broken startup file) is ErrAgent. It blocks: run it in subtasks.
 func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
-	p := a.cmd.Profile
+	return prepareACP(ctx, a.cmd, a.shell)
+}
+
+// prepareACP is the check of actor.prepareACP for command cmd run by shell,
+// which may be a probe shell (session.Manager.ProbeShell).
+func prepareACP(ctx context.Context, cmd agentprofile.Command, shell *session.Session) (acpTools, error) {
+	p := cmd.Profile
 	tools := acpTools{env: maps.Clone(p.ACPEnv)}
 	if tools.env == nil {
 		tools.env = make(map[string]string)
@@ -74,16 +80,16 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 	agentPath := ""
 	resolveAgent := p.AgentPathEnv != ""
 	if resolveAgent {
-		agentPath = a.shell.Getenv(p.AgentPathEnv)
+		agentPath = shell.Getenv(p.AgentPathEnv)
 		resolveAgent = agentPath == ""
 	}
 	var connectorPath string
-	if a.cmd.Form == agentprofile.FormStartup {
+	if cmd.Form == agentprofile.FormStartup {
 		names := []string{p.Connector.Executable}
 		if resolveAgent {
-			names = append(names, a.cmd.Executable)
+			names = append(names, cmd.Executable)
 		}
-		out, _, err := a.shell.Output(ctx, a.cmd.Lookup(names...), lookupOutputBytes)
+		out, _, err := shell.Output(ctx, cmd.Lookup(names...), lookupOutputBytes)
 		paths, ok := lookupAnswers(out, len(names))
 		if err != nil || !ok {
 			if err == nil {
@@ -97,12 +103,12 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 		}
 	} else {
 		var err error
-		connectorPath, err = a.shell.LookPath(p.Connector.Executable)
+		connectorPath, err = shell.LookPath(p.Connector.Executable)
 		if err != nil && !errors.Is(err, session.ErrNoExecutable) {
 			return tools, fmt.Errorf("%w: 检查 %s 失败: %v", ErrAgent, p.Connector.Executable, err)
 		}
 		if resolveAgent {
-			agentPath, _ = a.shell.LookPath(a.cmd.Executable)
+			agentPath, _ = shell.LookPath(cmd.Executable)
 		}
 	}
 	if !strings.HasPrefix(connectorPath, "/") {
@@ -117,7 +123,7 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 		}
 	}
 	if agentPath != "" {
-		tools.agentVersion = a.agentVersion(ctx, agentPath)
+		tools.agentVersion = agentVersion(ctx, shell, agentPath)
 	}
 	return tools, nil
 }
@@ -139,10 +145,10 @@ func lookupAnswers(out []byte, n int) ([]string, bool) {
 
 // agentVersion asks the agent executable for its version, empty when it
 // fails.
-func (a *actor) agentVersion(ctx context.Context, path string) string {
+func agentVersion(ctx context.Context, shell *session.Session, path string) string {
 	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
 	defer cancel()
-	out, code, err := a.shell.Output(ctx, []string{path, "--version"}, 4<<10)
+	out, code, err := shell.Output(ctx, []string{path, "--version"}, 4<<10)
 	if err != nil || code != 0 {
 		return ""
 	}

@@ -1,0 +1,289 @@
+package hybrid
+
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"sync"
+	"time"
+
+	"github.com/rainchan/webmux/internal/pathutil"
+	"github.com/rainchan/webmux/internal/statefile"
+)
+
+const (
+	optionsVersion = 1
+	// maxAgentOptions bounds the remembered launch configs; the least
+	// recently updated entry goes first. Deleting a launch config forgets
+	// its entry, so the bound only matters for configs deleted elsewhere.
+	maxAgentOptions = 256
+)
+
+// storedAgentOptions is agent-options.json: per launch config, the agent
+// options its latest chat session reported, with their last values.
+type storedAgentOptions struct {
+	V       int                `json:"v"`
+	Configs []agentOptionEntry `json:"configs"`
+}
+
+type agentOptionEntry struct {
+	ConfigID  string         `json:"configId"`
+	Options   []storedOption `json:"options"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+}
+
+type storedOption struct {
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Category string         `json:"category,omitempty"`
+	Type     string         `json:"type"`
+	Value    string         `json:"value,omitempty"`
+	Enabled  *bool          `json:"enabled,omitempty"`
+	Choices  []storedChoice `json:"options"`
+}
+
+type storedChoice struct {
+	Value       string `json:"value"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+func validateAgentOptions(f storedAgentOptions) error {
+	if f.V != optionsVersion || f.Configs == nil {
+		return errors.New("文件损坏或版本不受支持")
+	}
+	if len(f.Configs) > maxAgentOptions {
+		return fmt.Errorf("记录超过 %d 条", maxAgentOptions)
+	}
+	seen := map[string]bool{}
+	for i, e := range f.Configs {
+		if e.ConfigID == "" || seen[e.ConfigID] || e.Options == nil {
+			return fmt.Errorf("第 %d 条记录: 启动配置无效、重复或缺少配置项", i+1)
+		}
+		seen[e.ConfigID] = true
+		for _, o := range e.Options {
+			if o.ID == "" || o.Choices == nil {
+				return fmt.Errorf("第 %d 条记录: 配置项无效", i+1)
+			}
+		}
+	}
+	return nil
+}
+
+// agentOptions owns <state_dir>/agent-options.json, a display cache of the
+// agent options per launch config: nothing restores or switches from it.
+// A lock conflict, corrupt or unreadable file leaves it unavailable (it
+// reports nothing and is left untouched) while hybrid sessions keep
+// working.
+type agentOptions struct {
+	mu      sync.Mutex
+	path    string
+	store   *statefile.Handle[storedAgentOptions]
+	broken  error
+	list    []agentOptionEntry
+	pending *time.Timer
+	closed  bool
+}
+
+func openAgentOptions(stateDir string) *agentOptions {
+	o := &agentOptions{}
+	dir, err := pathutil.Expand(stateDir)
+	if err == nil {
+		dir, err = filepath.Abs(dir)
+	}
+	if err != nil {
+		o.path = filepath.Join(stateDir, statefile.Describe(statefile.AgentOptions).Path)
+		o.broken = fmt.Errorf("状态目录无效: %w", err)
+		return o
+	}
+	var f storedAgentOptions
+	o.store, f, err = statefile.Open[storedAgentOptions](dir, statefile.AgentOptions, validateAgentOptions)
+	o.path = filepath.Join(dir, statefile.Describe(statefile.AgentOptions).Path)
+	switch {
+	case statefile.IsKind(err, statefile.Missing):
+		o.list = []agentOptionEntry{}
+	case err != nil:
+		o.broken = err
+	default:
+		o.list = f.Configs
+	}
+	return o
+}
+
+func (o *agentOptions) unavailableLocked() error {
+	if o.broken != nil {
+		return fmt.Errorf("%w: %s（%s）", ErrUnavailable, o.broken, o.path)
+	}
+	if o.closed {
+		return fmt.Errorf("%w: 服务已关闭", ErrUnavailable)
+	}
+	return nil
+}
+
+func (o *agentOptions) unavailable() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.unavailableLocked()
+}
+
+// get returns the options remembered for configID, empty when none are.
+func (o *agentOptions) get(configID string) ([]ConfigOption, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if err := o.unavailableLocked(); err != nil {
+		return []ConfigOption{}, err
+	}
+	i := slices.IndexFunc(o.list, func(e agentOptionEntry) bool { return e.ConfigID == configID })
+	if i < 0 {
+		return []ConfigOption{}, nil
+	}
+	return loadOptions(o.list[i].Options), nil
+}
+
+// remember keeps options as configID's latest report. An unchanged report
+// writes nothing; a change is written coalesced, like record updates.
+func (o *agentOptions) remember(configID string, options []ConfigOption, now time.Time) {
+	if configID == "" {
+		return
+	}
+	stored := storeOptions(options)
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.unavailableLocked() != nil {
+		return
+	}
+	i := slices.IndexFunc(o.list, func(e agentOptionEntry) bool { return e.ConfigID == configID })
+	if i >= 0 && reflect.DeepEqual(o.list[i].Options, stored) {
+		return
+	}
+	next := slices.Clone(o.list)
+	if i >= 0 {
+		next = slices.Delete(next, i, i+1)
+	}
+	next = append(next, agentOptionEntry{ConfigID: configID, Options: stored, UpdatedAt: now.UTC()})
+	if extra := len(next) - maxAgentOptions; extra > 0 {
+		next = next[extra:]
+	}
+	o.list = next
+	o.scheduleLocked()
+}
+
+// forget drops configID's options and writes the file now: the launch
+// config is gone.
+func (o *agentOptions) forget(configID string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if err := o.unavailableLocked(); err != nil {
+		return err
+	}
+	i := slices.IndexFunc(o.list, func(e agentOptionEntry) bool { return e.ConfigID == configID })
+	if i < 0 {
+		return nil
+	}
+	next := slices.Delete(slices.Clone(o.list), i, i+1)
+	if err := o.commitLocked(next); err != nil {
+		return err
+	}
+	o.list = next
+	return nil
+}
+
+func (o *agentOptions) scheduleLocked() {
+	if o.pending != nil {
+		return
+	}
+	o.pending = time.AfterFunc(persistDelay, func() {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		o.pending = nil
+		if o.unavailableLocked() == nil {
+			// A failed delayed write freezes the store inside statefile and
+			// surfaces through later operations.
+			_ = o.commitLocked(o.list)
+		}
+	})
+}
+
+func (o *agentOptions) commitLocked(list []agentOptionEntry) error {
+	if o.pending != nil {
+		o.pending.Stop()
+		o.pending = nil
+	}
+	if list == nil {
+		list = []agentOptionEntry{}
+	}
+	if err := o.store.Commit(storedAgentOptions{V: optionsVersion, Configs: list}); err != nil {
+		return fmt.Errorf("%w: %v", ErrUnavailable, err)
+	}
+	return nil
+}
+
+// close writes any pending change and releases the file lock.
+func (o *agentOptions) close() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
+		return
+	}
+	if o.pending != nil && o.broken == nil {
+		_ = o.commitLocked(o.list)
+	}
+	o.closed = true
+	o.store.Close()
+}
+
+func storeOptions(in []ConfigOption) []storedOption {
+	out := make([]storedOption, 0, len(in))
+	for _, c := range in {
+		s := storedOption{ID: c.ID, Name: c.Name, Category: c.Category, Type: c.Type, Value: c.Value, Choices: make([]storedChoice, 0, len(c.Options))}
+		if c.Enabled != nil {
+			enabled := *c.Enabled
+			s.Enabled = &enabled
+		}
+		for _, choice := range c.Options {
+			s.Choices = append(s.Choices, storedChoice(choice))
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func loadOptions(in []storedOption) []ConfigOption {
+	out := make([]ConfigOption, 0, len(in))
+	for _, s := range in {
+		c := ConfigOption{ID: s.ID, Name: s.Name, Category: s.Category, Type: s.Type, Value: s.Value, Options: make([]ConfigChoice, 0, len(s.Choices))}
+		if s.Enabled != nil {
+			enabled := *s.Enabled
+			c.Enabled = &enabled
+		}
+		for _, choice := range s.Choices {
+			c.Options = append(c.Options, ConfigChoice(choice))
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// AgentOptions returns the agent options the latest chat session of launch
+// config configID reported, with their last values; empty when no chat
+// session of it has reported any. An unreadable agent-options.json is
+// ErrUnavailable, with empty options.
+func (s *Service) AgentOptions(configID string) ([]ConfigOption, error) {
+	return s.options.get(configID)
+}
+
+// ForgetAgentOptions drops the options remembered for a deleted launch
+// config.
+func (s *Service) ForgetAgentOptions(configID string) error {
+	return s.options.forget(configID)
+}
+
+// logAgentOptions reports an unusable agent-options.json once at startup.
+func logAgentOptions(log *slog.Logger, o *agentOptions) {
+	if err := o.unavailable(); err != nil {
+		log.Warn("agent options unavailable", "error", err)
+	}
+}

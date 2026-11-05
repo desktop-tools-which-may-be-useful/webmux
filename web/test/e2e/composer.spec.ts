@@ -11,6 +11,7 @@ import {
   quote,
   recordInput,
   viewSwitch,
+  backToList,
 } from "./fixtures";
 
 const mode = (page: Page) => page.getByRole("button", { name: /^草稿模式/ });
@@ -236,8 +237,7 @@ test("drafts survive navigation and reload, remain session-local and stop persis
   });
   expect(response.status()).toBe(201);
   const { id: b } = await response.json();
-  const back = () =>
-    page.getByRole("button", { name: "返回会话列表", exact: true }).click();
+  const back = () => backToList(page);
   await back();
   await page.goto(`/s/${b}`);
   await expect(mode(page)).toHaveAttribute("aria-pressed", "false");

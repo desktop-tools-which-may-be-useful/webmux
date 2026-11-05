@@ -8,6 +8,8 @@ export type Route =
   | { name: "settings-tunnel" }
   // Exchanges a ticket for the port-forward gateway cookie, then leaves.
   | { name: "forward-auth" }
+  // Chat mode's home: write a task and start an agent in a new worktree.
+  | { name: "quick-start" }
   | { name: "sessions" };
 
 // Unknown paths fall back to the session list; there is no 404 page.
@@ -19,6 +21,7 @@ export function matchRoute(pathname: string): Route {
   if (pathname === "/settings/tailscale") return { name: "settings-tailscale" };
   if (pathname === "/settings/tunnel") return { name: "settings-tunnel" };
   if (pathname === "/forward-auth") return { name: "forward-auth" };
+  if (pathname === "/new") return { name: "quick-start" };
   if (pathname === "/settings") return { name: "settings" };
   return { name: "sessions" };
 }

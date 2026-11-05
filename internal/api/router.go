@@ -139,6 +139,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/fs/mkdir", s.mkdir)
 	s.chatRoutes(mux)
 	s.workspaceRoutes(mux)
+	s.quickStartRoutes(mux)
 	s.pushRoutes(mux)
 	s.launchRoutes(mux)
 	s.settingsRoutes(mux)

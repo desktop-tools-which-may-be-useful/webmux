@@ -103,6 +103,7 @@ var webmux = manifest{
 		"internal/api.decode":                  "reads JSON bodies with a size limit and unknown fields rejected",
 		"internal/api.decodeOptional":          "reads a JSON body that may be empty, then delegates to decode",
 		"internal/api.decodeStrict":            "reads JSON bodies that must also reject duplicate and case-folded keys",
+		"internal/api.decodeQuickStart":        "reads the quick start JSON body like decode, answering its failure as a quick start failure",
 		"internal/api.receiveUpload":           "streams one multipart file upload within the upload size limit",
 		"internal/api.(*Server).redeemForward": "reads one small URL-encoded form (ticket code and gateway path) that a top-level browser form posts",
 	},
