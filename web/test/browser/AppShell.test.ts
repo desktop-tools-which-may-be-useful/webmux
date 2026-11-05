@@ -43,6 +43,17 @@ async function snapshot(
   return socket;
 }
 
+// Must stay first: shellUi reads the saved width once, when it loads.
+test("without a saved width the sidebar starts at its default 288px", async () => {
+  expect(localStorage.getItem("webmux.sidebarWidth")).toBeNull();
+  expect(shellUi.width).toBe(288);
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  await expect
+    .poll(() => sidebar().element().getBoundingClientRect().width)
+    .toBe(288);
+});
+
 test("the chat button takes a workbench home to quick start", async () => {
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await snapshot();

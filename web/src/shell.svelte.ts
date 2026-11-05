@@ -36,10 +36,12 @@ function clampWidth(width: number) {
     Math.max(sidebarWidthMin, Math.min(sidebarWidthMax, width)),
   );
 }
-const storedWidth = z.coerce
-  .number()
-  .finite()
-  .safeParse(stored("sidebarWidth") ?? undefined).data;
+// stored() answers "" for a missing key; only a saved pixel width counts.
+const storedWidth = z
+  .string()
+  .regex(/^\d{1,4}$/)
+  .transform(Number)
+  .safeParse(stored("sidebarWidth")).data;
 let width = $state(
   storedWidth === undefined ? sidebarWidthDefault : clampWidth(storedWidth),
 );
