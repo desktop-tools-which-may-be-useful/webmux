@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import IconFolderPlus from "~icons/tabler/folder-plus";
+  import IconSettings from "~icons/tabler/settings";
   import IconRefresh from "~icons/tabler/refresh";
   import { Button } from "$lib/components/ui/button";
 
@@ -15,6 +16,7 @@
     canAddRepository,
     refreshing,
     onadd,
+    onsettings,
     onrefresh,
     onstart,
     children,
@@ -29,6 +31,8 @@
     canAddRepository: boolean;
     refreshing: boolean;
     onadd: () => void;
+    // Opens the settings of the repository in scope; absent when none is.
+    onsettings?: () => void;
     onrefresh: () => void;
     // Opens the new-session dialog; the old header's primary action.
     onstart: () => void;
@@ -60,6 +64,13 @@
         onclick={() => onadd()}
         ><IconFolderPlus aria-hidden="true" />添加仓库</Button
       >
+      {#if onsettings}<Button
+          variant="ghost"
+          size="sm"
+          class="min-h-9 sm:min-h-8"
+          onclick={() => onsettings()}
+          ><IconSettings aria-hidden="true" />仓库设置</Button
+        >{/if}
       <Button
         variant="ghost"
         size="icon-sm"

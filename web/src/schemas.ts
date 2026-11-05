@@ -465,7 +465,6 @@ export type Repository = z.infer<typeof RepositorySchema>;
 export const RepositoriesSchema = z.array(RepositorySchema);
 export const RegisterRepositoryRequestSchema = z.object({
   path: z.string().min(1),
-  initInstruction: z.string().max(INIT_INSTRUCTION_MAX).optional(),
 });
 export const UpdateRepositoryRequestSchema = z.object({
   initInstruction: z.string().max(INIT_INSTRUCTION_MAX),
@@ -484,6 +483,8 @@ export const QuickStartRequestSchema = z.object({
   permissionMode: ChatPermissionModeSchema,
   // Files returned by POST /quick-starts/uploads; they go with the message.
   attachments: z.array(ChatAttachmentSchema).optional(),
+  // Whether the repository's init instruction goes before the first message.
+  useInitInstruction: z.boolean(),
 });
 export type QuickStartRequest = z.infer<typeof QuickStartRequestSchema>;
 export const QuickStartResultSchema = z.object({
@@ -618,11 +619,6 @@ export const QuickCommandsSchema = z
       new Set(commands.map((cmd) => cmd.id)).size === commands.length,
     "快捷指令 ID 不能重复",
   );
-export const ArtifactPromptSchema = z
-  .string()
-  .max(4096, "提示词不能超过 4096 个字符")
-  .refine((value) => value.trim() !== "", "提示词不能为空")
-  .refine((value) => value.includes("{dir}"), "提示词需要包含 {dir}");
 export const NoContentSchema = z.undefined();
 export const PushReasonSchema = z.enum([
   "disabled",
@@ -1048,8 +1044,6 @@ export const SettingsValuesSchema = z.strictObject({
     })
     .nullable(),
   quickCommands: QuickCommandsSchema.nullable(),
-  // Prompt template for the session artifacts folder; null is the built-in.
-  artifactPrompt: ArtifactPromptSchema.nullable(),
   homeWorktrees: HomeWorktreesSchema.refine((value) => {
     const entries = Object.entries(value);
     return (

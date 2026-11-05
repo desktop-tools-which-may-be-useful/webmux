@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -247,37 +248,54 @@ func TestValidationBoundaries(t *testing.T) {
 	}
 }
 
-// A custom artifacts prompt must name the folder; it is normalized like a
-// quick command, and the built-in default (null) is not written to the file
-// so earlier releases can still read it.
-func TestArtifactPrompt(t *testing.T) {
-	set := func(p string) Changes {
-		return Changes{Fields: map[string]bool{"artifactPrompt": true}, Values: Values{ArtifactPrompt: &p}}
+// A quick command needs a unique name that a {{name}} reference can hold,
+// checked when the list is saved. Commands stored before names were
+// required are named from their text when the file loads, and a file with
+// the retired artifactPrompt key loads and drops the key on the next write.
+func TestQuickCommandNames(t *testing.T) {
+	set := func(list ...Command) Changes {
+		return Changes{Fields: map[string]bool{"quickCommands": true}, Values: Values{QuickCommands: &list}}
 	}
-	for _, bad := range []string{"", " \n", "保存到临时文件夹", "{DIR}", "{dir}" + strings.Repeat("x", 4092)} {
-		if _, err := apply(Values{}, set(bad)); !errors.Is(err, ErrInvalid) {
-			t.Errorf("accepted %q: %v", bad, err)
+	for name, list := range map[string][]Command{
+		"empty":     {{ID: "a", Name: " ", Command: "x"}},
+		"duplicate": {{ID: "a", Name: "同名", Command: "x"}, {ID: "b", Name: "同名", Command: "y"}},
+		"brace":     {{ID: "a", Name: "a}b", Command: "x"}},
+		"newline":   {{ID: "a", Name: "a\nb", Command: "x"}},
+		"reserved":  {{ID: "a", Name: "user", Command: "x"}},
+		"reserved2": {{ID: "a", Name: "webmux", Command: "x"}},
+	} {
+		if _, err := apply(Values{}, set(list...)); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s name accepted: %v", name, err)
 		}
 	}
-	v, err := apply(Values{}, set("文件夹：{dir}\r\n用完告诉我\r\n\n"))
-	if err != nil || *v.ArtifactPrompt != "文件夹：{dir}\n用完告诉我" {
-		t.Fatalf("normalized %q %v", *v.ArtifactPrompt, err)
+	if _, err := apply(Values{}, set(Command{ID: "a", Name: "临时文件夹", Command: "x"}, Command{ID: "b", Name: "Plan", Command: "y"})); err != nil {
+		t.Fatalf("valid names: %v", err)
 	}
 
 	dir := t.TempDir()
-	s := Open(dir)
-	defer s.Close()
-	if _, err := s.Patch(0, set("看 {dir}")); err != nil {
+	data := `{"v":1,"revision":3,"updatedAt":"2026-10-28T02:13:13.53185523Z","values":{"theme":"dark","preview":null,"codeReader":null,"quickCommands":[{"id":"a","name":"","command":"/resume","enter":true},{"id":"b","name":"","command":"/resume\n再来","enter":true},{"id":"c","name":"同名","command":"x","enter":false},{"id":"d","name":"同名","command":"y","enter":false}],"homeWorktrees":null,"forceSoftKeys":null,"artifactPrompt":"看 {dir}"}}`
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if data, _ := os.ReadFile(filepath.Join(dir, "settings.json")); !strings.Contains(string(data), `"artifactPrompt"`) {
-		t.Fatalf("custom prompt not stored: %s", data)
+	s := Open(dir)
+	defer s.Close()
+	snap, err := s.Snapshot()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if snap, err := s.Patch(1, Changes{Fields: map[string]bool{"artifactPrompt": true}}); err != nil || snap.Values.ArtifactPrompt != nil {
-		t.Fatalf("reset: %+v %v", snap, err)
+	var names []string
+	for _, c := range *snap.Values.QuickCommands {
+		names = append(names, c.Name)
 	}
-	if data, _ := os.ReadFile(filepath.Join(dir, "settings.json")); strings.Contains(string(data), "artifactPrompt") {
-		t.Fatalf("default written to the file: %s", data)
+	if want := []string{"/resume", "/resume 2", "同名", "同名 2"}; !slices.Equal(names, want) {
+		t.Fatalf("legacy names %q, want %q", names, want)
+	}
+	theme := "light"
+	if _, err := s.Patch(3, Changes{Fields: map[string]bool{"theme": true}, Values: Values{Theme: &theme}}); err != nil {
+		t.Fatalf("unrelated patch with a legacy unnamed command: %v", err)
+	}
+	if stored, _ := os.ReadFile(filepath.Join(dir, "settings.json")); strings.Contains(string(stored), "artifactPrompt") {
+		t.Fatalf("retired key written back: %s", stored)
 	}
 }
 

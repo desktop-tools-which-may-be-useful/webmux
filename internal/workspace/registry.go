@@ -55,10 +55,13 @@ type snapshotFlight struct {
 	waiters    int
 }
 type Service struct {
-	manager      *session.Manager
-	launches     *launch.Service
-	hybrids      *hybrid.Service
-	artifacts    *artifacts.Service
+	manager   *session.Manager
+	launches  *launch.Service
+	hybrids   *hybrid.Service
+	artifacts *artifacts.Service
+	// commands lists the saved quick commands an initialization instruction
+	// may reference; nil means none exist.
+	commands     func() []QuickCommand
 	defaultCwd   string
 	gitPath      string
 	fetchTimeout time.Duration
@@ -120,6 +123,11 @@ func (s *Service) UseHybrid(h *hybrid.Service) { s.hybrids = h }
 // UseArtifacts installs, once at assembly before serving, the folders quick
 // starts stage uploads in. Without it a quick start takes no attachments.
 func (s *Service) UseArtifacts(a *artifacts.Service) { s.artifacts = a }
+
+// UseQuickCommands installs, once at assembly before serving, the source of
+// the saved quick commands that initialization instructions reference by
+// name.
+func (s *Service) UseQuickCommands(list func() []QuickCommand) { s.commands = list }
 
 func (s *Service) load() error {
 	expanded, err := pathutil.Expand(s.stateDir)
@@ -289,17 +297,13 @@ func (s *Service) registered(r *repositoryState) bool {
 	return false
 }
 
-// Register adds the repository at path with an optional initialization
-// instruction. A repository already registered is returned as it is, its
-// instruction unchanged.
-func (s *Service) Register(ctx context.Context, path, instruction string) (Repository, bool, error) {
+// Register adds the repository at path. A repository already registered is
+// returned as it is. Its initialization instruction is set afterwards with
+// SetInitInstruction.
+func (s *Service) Register(ctx context.Context, path string) (Repository, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 	if err := s.requireRegistry(); err != nil {
-		return Repository{}, false, err
-	}
-	instruction, err := validInstruction(instruction)
-	if err != nil {
 		return Repository{}, false, err
 	}
 	if path == "" {
@@ -331,7 +335,7 @@ func (s *Service) Register(ctx context.Context, path, instruction string) (Repos
 		s.saveMu.Unlock()
 		return Repository{}, false, err
 	}
-	r := newRepository(registration{ID: id, CommonDir: common, AnchorPath: anchor, DisplayName: filepath.Base(anchor), InitInstruction: instruction})
+	r := newRepository(registration{ID: id, CommonDir: common, AnchorPath: anchor, DisplayName: filepath.Base(anchor)})
 	next := append(append([]*repositoryState(nil), s.entries...), r)
 	s.mu.Unlock()
 	err = s.save(next)

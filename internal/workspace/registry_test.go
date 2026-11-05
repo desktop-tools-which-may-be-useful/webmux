@@ -74,7 +74,7 @@ func testService(t *testing.T, state, cwd string) (*Service, *session.Manager) {
 }
 func registerTest(t *testing.T, s *Service, path string) Repository {
 	t.Helper()
-	repository, created, err := s.Register(context.Background(), path, "")
+	repository, created, err := s.Register(context.Background(), path)
 	if err != nil || !created {
 		t.Fatalf("register: created=%v err=%v", created, err)
 	}
@@ -136,7 +136,7 @@ func TestRegistryIdentityPersistenceAndRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{root, child, alias} {
-		duplicate, created, err := s.Register(context.Background(), path, "")
+		duplicate, created, err := s.Register(context.Background(), path)
 		if err != nil || created || duplicate.ID != repository.ID {
 			t.Fatalf("duplicate %q: %+v %v %v", path, duplicate, created, err)
 		}
@@ -188,7 +188,7 @@ func TestRegistryFaultsDoNotPublishOrOverwrite(t *testing.T) {
 	if second.Capability().RegistryAvailable {
 		t.Fatal("second instance acquired same registry")
 	}
-	if _, _, err := second.Register(context.Background(), root, ""); errorKind(err) != ErrUnavailable {
+	if _, _, err := second.Register(context.Background(), root); errorKind(err) != ErrUnavailable {
 		t.Fatalf("second writer error: %v", err)
 	}
 	// Replace the destination with a directory: deterministic write failure even
@@ -216,7 +216,7 @@ func TestRegistryFaultsDoNotPublishOrOverwrite(t *testing.T) {
 	if broken.Capability().RegistryAvailable {
 		t.Fatal("corrupt registry accepted")
 	}
-	if _, _, err := broken.Register(context.Background(), root, ""); errorKind(err) != ErrUnavailable {
+	if _, _, err := broken.Register(context.Background(), root); errorKind(err) != ErrUnavailable {
 		t.Fatalf("corrupt writer error: %v", err)
 	}
 	data, _ := os.ReadFile(filepath.Join(state, "repositories.json"))
@@ -243,7 +243,7 @@ func TestNoGitAndNonRepositoryRemainDirect(t *testing.T) {
 	if s.Capability().GitAvailable {
 		t.Fatal("unexpected Git capability")
 	}
-	if _, _, err := s.Register(context.Background(), root, ""); errorKind(err) != ErrUnavailable {
+	if _, _, err := s.Register(context.Background(), root); errorKind(err) != ErrUnavailable {
 		t.Fatalf("missing Git error: %v", err)
 	}
 	item, err := s.CreateSession(context.Background(), SessionInput{Cmd: []string{"/bin/sh", "-c", "printf DIRECT"}})
@@ -261,7 +261,7 @@ func TestNonRepositoryDoesNotInitializeAndUnavailableEntryCanBeRemoved(t *testin
 	root := initRepo(t)
 	s, _ := testService(t, t.TempDir(), root)
 	ordinary := t.TempDir()
-	if _, _, err := s.Register(context.Background(), ordinary, ""); errorKind(err) != ErrInvalid {
+	if _, _, err := s.Register(context.Background(), ordinary); errorKind(err) != ErrInvalid {
 		t.Fatalf("ordinary directory error: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(ordinary, ".git")); !os.IsNotExist(err) {

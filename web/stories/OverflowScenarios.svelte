@@ -87,6 +87,7 @@
         enter: false,
       }}
       save={() => saveError}
+      existing={[]}
     />
   {:else if scenario === "close"}
     <Button onclick={() => (open = true)}>打开关闭确认</Button>

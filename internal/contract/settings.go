@@ -23,8 +23,6 @@ type SettingsValues struct {
 	QuickCommands *[]SettingsCommand  `json:"quickCommands"`
 	HomeWorktrees map[string][]string `json:"homeWorktrees"`
 	ForceSoftKeys *bool               `json:"forceSoftKeys"`
-	// ArtifactPrompt: template containing "{dir}"; null is the built-in one.
-	ArtifactPrompt *string `json:"artifactPrompt"`
 }
 type SettingsSnapshot struct {
 	Revision  int64          `json:"revision"`

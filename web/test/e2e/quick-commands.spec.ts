@@ -26,13 +26,19 @@ const commandNames = (scope: Locator) =>
       items.map((item) => item.getAttribute("aria-label")).filter(Boolean),
     );
 
-async function addCommand(page: Page, command: string, enter: boolean) {
+async function addCommand(
+  page: Page,
+  name: string,
+  command: string,
+  enter: boolean,
+) {
   await card(page)
     .getByRole("button", { name: "添加快捷指令", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "添加快捷指令" });
   const body = dialog.getByLabel("指令", { exact: true });
   await expect(body).toBeFocused();
+  await dialog.getByLabel("名称", { exact: true }).fill(name);
   await body.fill(command);
   const toggle = dialog.getByRole("switch", { name: "发送后自动回车" });
   await expect(toggle).not.toBeChecked();
@@ -66,8 +72,9 @@ test("presets, settings round trip, direct sends and draft insertion", async ({
     menu(page).getByText("发送到终端", { exact: true }),
   ).toBeVisible();
   expect(await commandNames(menu(page))).toEqual([
-    "/resume（并回车）",
-    "/new（并回车）",
+    "恢复会话：/resume（并回车）",
+    "新会话：/new（并回车）",
+    "临时文件夹：本会话的临时文件夹：{dir} …",
   ]);
   await page.keyboard.press("Escape");
 
@@ -83,23 +90,23 @@ test("presets, settings round trip, direct sends and draft insertion", async ({
   await expect(
     page.getByRole("link", { name: "返回工作区", exact: true }),
   ).toHaveCount(0);
-  await addCommand(page, "echo quick-ok\n\n", true);
-  await addCommand(page, "echo pending", false);
+  await addCommand(page, "快速确认", "echo quick-ok\n\n", true);
+  await addCommand(page, "待确认", "echo pending", false);
   await expect(
-    card(page).getByRole("button", { name: "编辑 echo pending" }),
+    card(page).getByRole("button", { name: "编辑 待确认" }),
   ).not.toContainText("回车");
   await expect(
-    card(page).getByRole("button", { name: "编辑 echo quick-ok" }),
+    card(page).getByRole("button", { name: "编辑 快速确认" }),
   ).toContainText("回车");
 
   // Another open tab picks up the saved list without a reload.
   await quick(other).click();
-  await expect(item(other, "echo quick-ok（并回车）")).toBeVisible();
+  await expect(item(other, "快速确认：echo quick-ok（并回车）")).toBeVisible();
   await other.close();
 
   await backToTerminal(page, id);
   await quick(page).click();
-  await item(page, "echo quick-ok（并回车）").click();
+  await item(page, "快速确认：echo quick-ok（并回车）").click();
   await expectTerminalLine(page, "quick-ok");
 
   const received = await recordInput(page, workDir);
@@ -107,7 +114,7 @@ test("presets, settings round trip, direct sends and draft insertion", async ({
   await ctrl.click();
   await expect(ctrl).toHaveAttribute("aria-pressed", "true");
   await quick(page).click();
-  await item(page, "echo pending").click();
+  await item(page, "待确认：echo pending").click();
   await expect
     .poll(() => readFile(received, "utf8"))
     .toBe("\x1b[200~echo pending\x1b[201~");
@@ -121,7 +128,7 @@ test("presets, settings round trip, direct sends and draft insertion", async ({
   });
   await quick(page).click();
   await expect(menu(page).getByText("插入草稿", { exact: true })).toBeVisible();
-  await item(page, "echo quick-ok").click();
+  await item(page, "快速确认：echo quick-ok").click();
   await expect(draft(page)).toHaveValue("请先 echo quick-ok然后提交");
   expect(await readFile(received, "utf8")).toBe(
     "\x1b[200~echo pending\x1b[201~",
@@ -166,7 +173,7 @@ test("commands are disabled while the terminal cannot send, but drafts still acc
   );
   await quick(page).click();
   await expect(menu(page).getByText("终端未就绪，暂不能发送")).toBeVisible();
-  await expect(item(page, "/resume（并回车）")).toBeDisabled();
+  await expect(item(page, "恢复会话：/resume（并回车）")).toBeDisabled();
   await expect(item(page, "管理快捷指令…")).toBeEnabled();
   await page.keyboard.press("Escape");
 
@@ -179,12 +186,12 @@ test("commands are disabled while the terminal cannot send, but drafts still acc
   );
   await quick(page).click();
   await expect(menu(page).getByText("会话已退出，无法发送")).toBeVisible();
-  await expect(item(page, "/new（并回车）")).toBeDisabled();
+  await expect(item(page, "新会话：/new（并回车）")).toBeDisabled();
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "草稿模式", exact: true }).click();
   await quick(page).click();
-  await item(page, "/new").click();
+  await item(page, "新会话：/new").click();
   await expect(draft(page)).toHaveValue("/new");
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
@@ -204,41 +211,51 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
       .evaluateAll((buttons) =>
         buttons.map((button) => button.getAttribute("aria-label")),
       );
-  expect(await labels()).toEqual(["编辑 /resume", "编辑 /new"]);
+  expect(await labels()).toEqual([
+    "编辑 恢复会话",
+    "编辑 新会话",
+    "编辑 临时文件夹",
+  ]);
   await expect(
-    card(page).getByRole("button", { name: "上移 /resume" }),
+    card(page).getByRole("button", { name: "上移 恢复会话" }),
   ).toBeDisabled();
   await expect(
-    card(page).getByRole("button", { name: "下移 /new" }),
+    card(page).getByRole("button", { name: "下移 临时文件夹" }),
   ).toBeDisabled();
-  await card(page).getByRole("button", { name: "上移 /new" }).click();
-  expect(await labels()).toEqual(["编辑 /new", "编辑 /resume"]);
+  await card(page).getByRole("button", { name: "上移 新会话" }).click();
+  expect(await labels()).toEqual([
+    "编辑 新会话",
+    "编辑 恢复会话",
+    "编辑 临时文件夹",
+  ]);
 
   const id = await createShell(page, "Reordered quick commands", workDir);
   await quick(page).click();
   expect(await commandNames(menu(page))).toEqual([
-    "/new（并回车）",
-    "/resume（并回车）",
+    "新会话：/new（并回车）",
+    "恢复会话：/resume（并回车）",
+    "临时文件夹：本会话的临时文件夹：{dir} …",
   ]);
   await item(page, "管理快捷指令…").click();
   await expect(page).toHaveURL(
     new RegExp(`/settings\\?session=${id}#quick-commands$`),
   );
 
-  await card(page).getByRole("button", { name: "编辑 /new" }).click();
+  await card(page).getByRole("button", { name: "编辑 新会话" }).click();
   const dialog = page.getByRole("dialog", { name: "编辑快捷指令" });
   await expect(dialog.getByRole("switch")).toBeChecked();
-  await dialog.getByLabel("名称（可选）").fill("新会话");
+  await dialog.getByLabel("名称", { exact: true }).fill("换个名字");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  expect(await labels()).toEqual(["编辑 /new", "编辑 /resume"]);
+  const reordered = ["编辑 新会话", "编辑 恢复会话", "编辑 临时文件夹"];
+  expect(await labels()).toEqual(reordered);
 
-  await card(page).getByRole("button", { name: "删除 /new" }).click();
+  await card(page).getByRole("button", { name: "删除 新会话" }).click();
   const confirm = page.getByRole("alertdialog", { name: "删除快捷指令？" });
-  await expect(confirm).toContainText("/new");
+  await expect(confirm).toContainText("新会话");
   await confirm.getByRole("button", { name: "取消", exact: true }).click();
-  expect(await labels()).toEqual(["编辑 /new", "编辑 /resume"]);
-  for (const name of ["/new", "/resume"]) {
+  expect(await labels()).toEqual(reordered);
+  for (const name of ["新会话", "恢复会话", "临时文件夹"]) {
     await card(page)
       .getByRole("button", { name: `删除 ${name}` })
       .click();
@@ -269,7 +286,7 @@ test("corrupt legacy commands do not override server presets", async ({
   );
   await page.reload();
   await expect(
-    card(page).getByRole("button", { name: "编辑 /resume" }),
+    card(page).getByRole("button", { name: "编辑 恢复会话" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 });
@@ -286,7 +303,7 @@ test("an open add dialog preserves input when another tab fills the list", async
       changes: {
         quickCommands: Array.from({ length: 49 }, (_, index) => ({
           id: `command-${index}`,
-          name: "",
+          name: `cmd ${index}`,
           command: `echo ${index}`,
           enter: false,
         })),
@@ -297,13 +314,14 @@ test("an open add dialog preserves input when another tab fills the list", async
   await card(page).getByRole("button", { name: "添加快捷指令" }).click();
   const dialog = page.getByRole("dialog", { name: "添加快捷指令" });
   const body = dialog.getByLabel("指令", { exact: true });
+  await dialog.getByLabel("名称", { exact: true }).fill("tab-a");
   await body.fill("echo tab-a");
   const other = await page.context().newPage();
   try {
     await other.goto("/settings");
-    await addCommand(other, "echo tab-b", false);
+    await addCommand(other, "tab-b", "echo tab-b", false);
     await expect(
-      card(page).getByRole("button", { name: "编辑 echo tab-b" }),
+      card(page).getByRole("button", { name: "编辑 tab-b" }),
     ).toBeAttached();
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(dialog.getByRole("alert")).toBeVisible();
@@ -318,27 +336,27 @@ test("an open add dialog preserves input when another tab fills the list", async
     ]);
 
     await card(other)
-      .getByRole("button", { name: "删除 echo 0", exact: true })
+      .getByRole("button", { name: "删除 cmd 0", exact: true })
       .click();
     await other
       .getByRole("alertdialog")
       .getByRole("button", { name: "删除", exact: true })
       .click();
     await expect(
-      card(page).getByRole("button", { name: "编辑 echo 0", exact: true }),
+      card(page).getByRole("button", { name: "编辑 cmd 0", exact: true }),
     ).toHaveCount(0);
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(
-      card(other).getByRole("button", { name: "编辑 echo tab-a" }),
+      card(other).getByRole("button", { name: "编辑 tab-a" }),
     ).toBeVisible();
-    await card(page).getByRole("button", { name: "编辑 echo tab-a" }).click();
+    await card(page).getByRole("button", { name: "编辑 tab-a" }).click();
     const edit = page.getByRole("dialog", { name: "编辑快捷指令" });
-    await edit.getByLabel("指令", { exact: true }).fill("echo edited");
+    await edit.getByLabel("名称", { exact: true }).fill("edited");
     await edit.getByRole("button", { name: "保存", exact: true }).click();
     await expect(edit).toBeHidden();
     await expect(
-      card(other).getByRole("button", { name: "编辑 echo edited" }),
+      card(other).getByRole("button", { name: "编辑 edited" }),
     ).toBeVisible();
   } finally {
     await other.close();

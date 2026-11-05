@@ -92,6 +92,7 @@ const groups: Array<[z.ZodType, string[]]> = [
       "repository-register-again",
       "repository-register-instruction",
       "repository-register",
+      "repository-update-instruction",
       "repository-update",
       "repository-worktrees",
     ],

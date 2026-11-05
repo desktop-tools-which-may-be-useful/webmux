@@ -37,7 +37,6 @@
     now,
     onstart,
     oncurate,
-    oninstruction,
     onunregister,
     ontogglepin,
     onremove,
@@ -65,8 +64,6 @@
     // Without a worktree id the sheet creates a new worktree.
     onstart: (worktreeId?: string) => void;
     oncurate: () => void;
-    // Opens the dialog that edits or clears the repository init instruction.
-    oninstruction: () => void;
     onunregister: () => void;
     ontogglepin: (worktreeId: string, pinned: boolean) => void;
     onremove: (worktree: Worktree) => void;
@@ -157,9 +154,6 @@
         <DropdownMenu.Item
           disabled={!layout.unpinned.length}
           onSelect={oncurate}>选择主页工作树…</DropdownMenu.Item
-        >
-        <DropdownMenu.Item disabled={!registryReady} onSelect={oninstruction}
-          >初始化指令…</DropdownMenu.Item
         >
         <DropdownMenu.Separator />
         <DropdownMenu.Item onSelect={() => (detailsOpen = !detailsOpen)}

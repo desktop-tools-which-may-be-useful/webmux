@@ -53,7 +53,10 @@ type QuickStartInput struct {
 	Text            string
 	Config          map[string]string
 	PermissionMode  string
-	Attachments     []string
+	// UseInitInstruction puts the repository's initialization instruction,
+	// its {{name}} references expanded, before Text.
+	UseInitInstruction bool
+	Attachments        []string
 }
 
 // QuickStartResult is a quick start that sent its first prompt.
@@ -168,17 +171,49 @@ func (s *Service) quickStart(ctx context.Context, in QuickStartInput) (QuickStar
 	if err != nil {
 		return fail(StepPrompt, &tree, id, err)
 	}
-	if _, err := s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: in.ClientRequestID, Text: plan.text, Attachments: attachments}); err != nil {
+	text, err := s.composePrompt(id, plan)
+	if err != nil {
+		return fail(StepPrompt, &tree, id, err)
+	}
+	if _, err := s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: in.ClientRequestID, Text: text, Attachments: attachments}); err != nil {
 		return fail(StepPrompt, &tree, id, err)
 	}
 	return QuickStartResult{SessionID: id, Worktree: tree, ConfigWarnings: warnings}, nil
 }
 
+// composePrompt is the first prompt of session id: the expanded
+// instruction, whose {dir} becomes the session's artifacts folder, with the
+// user's text at its {{user}} or else after a blank line.
+func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) {
+	instruction := plan.instruction
+	if instruction == "" {
+		return plan.text, nil
+	}
+	if strings.Contains(instruction, artifactsDirPlaceholder) {
+		if s.artifacts == nil {
+			return "", problemf(ErrUnavailable, "临时文件夹不可用")
+		}
+		dir, err := s.artifacts.Ensure(id)
+		if err != nil {
+			return "", problemf(ErrUnavailable, "临时文件夹不可用：%v", err)
+		}
+		instruction = strings.ReplaceAll(instruction, artifactsDirPlaceholder, dir)
+	}
+	text := fillUser(instruction, plan.text)
+	if len(text) > hybrid.MaxPromptBytes {
+		return "", problemf(ErrInvalid, "消息与初始化指令合计超过 %d 字节", hybrid.MaxPromptBytes)
+	}
+	return text, nil
+}
+
 // quickStartPlan is a checked quick start: the worktree path, the first
 // prompt's text and its staged attachments.
 type quickStartPlan struct {
-	path        string
+	path string
+	// text is the user's message; instruction is the expanded
+	// initialization instruction ("" for none), still holding {dir}.
 	text        string
+	instruction string
 	attachments []string
 }
 
@@ -228,11 +263,26 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 	if snapshot.Availability != "available" {
 		return quickStartPlan{}, problemf(ErrUnavailable, "%s", snapshot.Error)
 	}
-	text := in.Text
-	if instruction := snapshot.InitInstruction; instruction != "" {
-		text = instruction + "\n\n" + in.Text
+	instruction := ""
+	if in.UseInitInstruction && snapshot.InitInstruction != "" {
+		if usesReservedReference(snapshot.InitInstruction) {
+			return quickStartPlan{}, problemf(ErrInvalid, "初始化指令里的 {{%s}} 是保留变量，暂不可用", reservedReferenceName)
+		}
+		var commands []QuickCommand
+		if s.commands != nil {
+			commands = s.commands()
+		}
+		var missing []string
+		instruction, missing = expandInstruction(snapshot.InitInstruction, commands)
+		if len(missing) > 0 {
+			return quickStartPlan{}, problemf(ErrInvalid, "初始化指令引用了不存在的快捷指令：%s", strings.Join(missing, "、"))
+		}
 	}
-	if len(text) > hybrid.MaxPromptBytes {
+	size := len(in.Text)
+	if instruction != "" {
+		size = promptSize(instruction, in.Text)
+	}
+	if size > hybrid.MaxPromptBytes {
 		return quickStartPlan{}, problemf(ErrInvalid, "消息与初始化指令合计超过 %d 字节", hybrid.MaxPromptBytes)
 	}
 	if err := s.hybrids.CheckCreate(ctx, hybrid.CreateInput{
@@ -241,7 +291,7 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 		return quickStartPlan{}, err
 	}
 	parent := filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")
-	return quickStartPlan{path: filepath.Join(parent, leaf), text: text, attachments: staged}, nil
+	return quickStartPlan{path: filepath.Join(parent, leaf), text: in.Text, instruction: instruction, attachments: staged}, nil
 }
 
 // adoptQuickStartUploads moves the staged attachments into session id's

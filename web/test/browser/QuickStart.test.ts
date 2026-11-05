@@ -113,10 +113,10 @@ test("defaults skip what is unusable, and the first send goes in one request", a
     .toBeVisible();
   expect(page.getByRole("menuitemradio").elements()).toHaveLength(2);
   await userEvent.keyboard("{Escape}");
-  // The init instruction is announced above the input.
+  // The init instruction is an explicit, default-ticked choice above the input.
   await expect
-    .element(page.getByRole("button", { name: "附带 webmux 的初始化指令" }))
-    .toBeVisible();
+    .element(page.getByRole("checkbox", { name: "使用初始化指令" }))
+    .toBeChecked();
   // The remembered option catalog is editable before the agent starts.
   await toolbar.getByRole("button", { name: "思考：中" }).click();
   await page.getByRole("menuitemradio", { name: "高" }).click();
@@ -133,12 +133,67 @@ test("defaults skip what is unusable, and the first send goes in one request", a
     text: "修复首页排序",
     config: { effort: "high" },
     permissionMode: "auto",
+    useInitInstruction: true,
   });
   expect(JSON.parse(localStorage.getItem("webmux.quickStart")!)).toEqual({
     repositoryId: "repo1",
     configId: "cfgclaud",
   });
   expect(localStorage.getItem("webmux.quick-start-draft")).toBeNull();
+});
+
+const created = () =>
+  Response.json(
+    {
+      sessionId: "chataaaa",
+      worktree: worktree({ id: "otter", kind: "linked" }),
+      configWarnings: [],
+    },
+    { status: 201 },
+  );
+
+test("unticking the init instruction applies to that send only", async () => {
+  respond(/^POST \/api\/quick-starts$/, created);
+  const { input } = await open();
+  const box = page.getByRole("checkbox", { name: "使用初始化指令" });
+  await box.click();
+  await expect.element(box).not.toBeChecked();
+  await input.fill("修复首页排序");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  const sent = commands().find((c) => c.path === "/api/quick-starts");
+  expect(sent?.body).toMatchObject({ useInitInstruction: false });
+});
+
+test("the preview expands quick command references and flags unknown ones", async () => {
+  respond(/^GET \/api\/repositories$/, () =>
+    Response.json([
+      repository({ initInstruction: "先 {{恢复会话}}，再 {{没有}}\n{dir}" }),
+    ]),
+  );
+  await open();
+  await page.getByRole("button", { name: "预览" }).click();
+  await expect
+    .element(page.getByText(/先 \/resume，再 \{\{没有\}\}/))
+    .toBeVisible();
+  await expect
+    .element(page.getByText(/找不到快捷指令：\{\{没有\}\}/))
+    .toBeVisible();
+  await expect.element(page.getByText(/创建后替换/)).toBeVisible();
+});
+
+test("the control is hidden and false is sent without an instruction", async () => {
+  respond(/^GET \/api\/repositories$/, () => Response.json([repository()]));
+  respond(/^POST \/api\/quick-starts$/, created);
+  const { input } = await open();
+  expect(
+    page.getByRole("checkbox", { name: "使用初始化指令" }).elements(),
+  ).toEqual([]);
+  await input.fill("修复首页排序");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  const sent = commands().find((c) => c.path === "/api/quick-starts");
+  expect(sent?.body).toMatchObject({ useInitInstruction: false });
 });
 
 test("the base branch is searched and picked by name", async () => {

@@ -241,15 +241,16 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   - 单仓库失败保留错误和原会话入口；
   - Git 缺失或仓库存储不可用时禁用相关管理能力，直接目录终端仍可用；
   - 损坏清单不被静默覆盖。
-- **US-J12 仓库初始化指令**：作为常在同一仓库开新任务的使用者，我希望给仓库保存一段固定的开场要求，以便快速开始时不用每次手动粘贴。
+- **US-J12 仓库初始化指令**：作为常在同一仓库开新任务的使用者，我希望给仓库保存一段可引用快捷指令的开场要求，并在快速开始时明确选择是否附带，以便不用每次手动粘贴。
   验收要点：
-  - 添加仓库弹窗有可选的多行“初始化指令”，之后可在仓库菜单的“初始化指令…”中修改或清空（留空保存即清除）；
-  - 最多 4000 个字符，超出时前端禁用提交，服务端拒绝并保留原指令；指令随仓库清单持久保存，服务重启后仍在，旧版清单缺字段视为没有指令；
-  - 重复添加同一仓库不覆盖已有指令，弹窗提示到菜单中修改；
+  - 首页工具栏在“添加仓库”旁有“仓库设置”按钮（侧栏选中某个仓库，或只登记了一个仓库时显示），其中的“初始化指令”是一段多行模板，可修改或清空（留空保存即清除）；仓库菜单与添加仓库弹窗不再有指令入口；
+  - 模板里用 `{{快捷指令名称}}` 引用设置中的快捷指令，用内置的 `{{user}}` 指定快速开始时你的第一条消息放在哪里（不写则接在指令后面）；`{{webmux}}` 是保留变量，暂不可用，写了会提示且快速开始拒绝；设置页列出可引用的名称并可点击插入，引用不存在的名称时给出提示（不阻止保存）；
+  - 最多 4000 个字符，超出时前端禁用提交，服务端拒绝并保留原指令；指令随仓库清单持久保存，服务重启后仍在，旧版清单缺字段视为没有指令；已保存的旧指令按纯文本继续可用；
   - 指令只作为快速开始首条消息的前缀（US-Q18），不会被当作命令执行；`PATCH /api/repositories/{id}` 沿用认证与 Origin 校验。
 
 依据：
 
 - [工作区总览](../../web/src/components/WorkspaceGroup.svelte)、[主页选择](../../web/src/homeWorktrees.ts)、[分支与路径表单](../../web/src/components/WorktreeCreateFields.svelte)、[分支与提交信息](../../internal/workspace/git.go)、[删除确认](../../web/src/components/RemoveWorktreeDialog.svelte)
 - [仓库清单](../../internal/workspace/registry.go)、[创建](../../internal/workspace/create.go)、[删除](../../internal/workspace/remove.go)、[工作区 API](../../internal/api/workspace.go)
-- [初始化指令弹窗](../../web/src/components/InitInstructionDialog.svelte)、[添加仓库弹窗](../../web/src/components/AddRepositoryDialog.svelte)、[指令浏览器用例](../../web/test/browser/RepositoryInstruction.test.ts)、[指令服务端测试](../../internal/workspace/instruction_test.go)。
+- [仓库设置弹窗](../../web/src/components/RepositorySettingsDialog.svelte)、[指令输入框](../../web/src/components/InitInstructionField.svelte)、[添加仓库弹窗](../../web/src/components/AddRepositoryDialog.svelte)
+- [指令浏览器用例](../../web/test/browser/RepositoryInstruction.test.ts)、[指令服务端测试](../../internal/workspace/instruction_test.go)。

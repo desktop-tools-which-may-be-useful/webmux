@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
@@ -94,9 +95,14 @@ func newQuickHarness(t *testing.T, instruction string) *quickHarness {
 		defer cancel()
 		h.manager.Shutdown(ctx)
 	})
-	repo, _, err := h.s.Register(context.Background(), root, instruction)
+	repo, _, err := h.s.Register(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if instruction != "" {
+		if repo, err = h.s.SetInitInstruction(context.Background(), repo.ID, instruction); err != nil {
+			t.Fatal(err)
+		}
 	}
 	h.repo = repo
 	h.configID = h.config("agent", agent, map[string]string{"FAKEAGENT_STORE": h.store, "FAKEAGENT_TURN_DELAY": "5ms"}, true)
@@ -203,6 +209,7 @@ func quickFailure(t *testing.T, err error, step string, kind error) *QuickStartE
 func TestQuickStartRunsEveryStep(t *testing.T) {
 	h := newQuickHarness(t, "先读 AGENTS.md")
 	in := h.input("quick-start-001", "wt/brisk-otter")
+	in.UseInitInstruction = true
 	in.Config = map[string]string{"mode": "code", "model": "smart", "effort": "high"}
 	in.PermissionMode = "ask"
 	result, err := h.start(in)
@@ -242,6 +249,99 @@ func TestQuickStartRunsEveryStep(t *testing.T) {
 	}
 	if got := h.setConfigCalls(); got != 1 {
 		t.Fatalf("set_config_option calls %d, want only the changed model", got)
+	}
+}
+
+// The instruction goes first only when the request asks for it; its
+// {{name}} references become quick command text, and {dir} in that text
+// becomes the new session's artifacts folder. The user's own text is never
+// rewritten.
+func TestQuickStartInstructionTemplate(t *testing.T) {
+	h := newQuickHarness(t, "规则：\n{{规则}}\n{{ 产物 }}")
+	folders := artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: t.TempDir(), Manager: h.manager})
+	t.Cleanup(folders.Close)
+	h.s.UseArtifacts(folders)
+	h.s.UseQuickCommands(func() []QuickCommand {
+		return []QuickCommand{{Name: "规则", Text: "先读 AGENTS.md"}, {Name: "产物", Text: "文件放 {dir}，不要{{规则}}"}}
+	})
+
+	off := h.input("quick-start-off1", "wt/off")
+	off.Text = "原样 {dir}"
+	result, err := h.start(off)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.waitTurnEnd(result.SessionID)
+	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != "原样 {dir}" {
+		t.Fatalf("unticked instruction still sent: %q", got)
+	}
+
+	on := h.input("quick-start-on01", "wt/on")
+	on.Text = "原样 {dir}"
+	on.UseInitInstruction = true
+	result, err = h.start(on)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := folders.Existing(result.SessionID)
+	if err != nil {
+		t.Fatalf("folder for {dir} not created: %v", err)
+	}
+	h.waitTurnEnd(result.SessionID)
+	want := "规则：\n先读 AGENTS.md\n文件放 " + dir + "，不要{{规则}}\n\n原样 {dir}"
+	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != want {
+		t.Fatalf("first prompt %q, want %q", got, want)
+	}
+}
+
+// {{webmux}} is reserved and not available yet: the quick start stops
+// before anything is created.
+func TestQuickStartInstructionReservedReference(t *testing.T) {
+	h := newQuickHarness(t, "背景：{{ webmux }}")
+	before := h.worktrees()
+	in := h.input("quick-start-rsv1", "wt/rsv")
+	in.UseInitInstruction = true
+	_, err := h.start(in)
+	failed := quickFailure(t, err, StepPrecheck, ErrInvalid)
+	if !strings.Contains(failed.Error(), "保留变量") || h.worktrees() != before {
+		t.Fatalf("reserved reference: %v", err)
+	}
+}
+
+// {{user}} puts the user's message inside the instruction instead of after
+// it, wherever it is written; the message is not read as a reference.
+func TestQuickStartInstructionUserVariable(t *testing.T) {
+	h := newQuickHarness(t, "任务：{{ user }}\n先读 AGENTS.md")
+	h.s.UseQuickCommands(func() []QuickCommand { return []QuickCommand{{Name: "user", Text: "不应被使用"}} })
+	in := h.input("quick-start-usr1", "wt/usr")
+	in.Text = "改 {{规则}} 与 {dir}"
+	in.UseInitInstruction = true
+	result, err := h.start(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.waitTurnEnd(result.SessionID)
+	want := "任务：改 {{规则}} 与 {dir}\n先读 AGENTS.md"
+	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != want {
+		t.Fatalf("first prompt %q, want %q", got, want)
+	}
+}
+
+// A reference to a quick command that does not exist stops the quick start
+// before anything is created.
+func TestQuickStartInstructionUnknownReference(t *testing.T) {
+	h := newQuickHarness(t, "{{缺失}}和{{也缺}}和{{缺失}}")
+	h.s.UseQuickCommands(func() []QuickCommand { return nil })
+	before := h.worktrees()
+	in := h.input("quick-start-bad1", "wt/bad")
+	in.UseInitInstruction = true
+	_, err := h.start(in)
+	failed := quickFailure(t, err, StepPrecheck, ErrInvalid)
+	if !strings.Contains(failed.Error(), "缺失、也缺") {
+		t.Fatalf("error %q does not name the missing commands", failed.Error())
+	}
+	if h.worktrees() != before {
+		t.Fatal("a worktree was created for an invalid instruction")
 	}
 }
 

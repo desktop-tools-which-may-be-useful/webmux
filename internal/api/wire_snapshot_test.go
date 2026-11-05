@@ -133,7 +133,7 @@ func wireSchema(name string) wireRules {
 		add("/*", "id", "id")
 		add("/*", "time", "createdAt", "updatedAt")
 		add("/*", "path", "cmd/*")
-	case "repository-register", "repository-register-again", "repository-worktrees", "repository-update", "repository-register-instruction":
+	case "repository-register", "repository-register-again", "repository-worktrees", "repository-update", "repository-register-instruction", "repository-update-instruction":
 		repositoryFields("")
 	case "repositories", "repositories-empty":
 		repositoryFields("/*")
@@ -691,7 +691,8 @@ func TestWireSnapshots(t *testing.T) {
 func wireQuickStart(f *wireFixture) {
 	agent := fakeAgentPath(f.t, omp.Name)
 	f.norm.path(filepath.Dir(agent), "<fakeagent>")
-	repository := f.call("repository-register-instruction", "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: f.root, InitInstruction: "先读 AGENTS.md"}, 201)
+	repository := f.call("repository-register-instruction", "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: f.root}, 201)
+	f.call("repository-update-instruction", "PATCH", "/api/repositories/"+str(repository, "id"), contract.UpdateRepositoryRequest{InitInstruction: "先读 AGENTS.md"}, 200)
 	saved, err := f.launches.Create(launch.Input{Name: "agent", Cmd: []string{agent}, Env: map[string]string{"FAKEAGENT_STORE": f.t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms"}, Hybrid: true})
 	if err != nil {
 		f.t.Fatal(err)
@@ -699,7 +700,7 @@ func wireQuickStart(f *wireFixture) {
 	req := contract.QuickStartRequest{
 		ClientRequestID: "wire-quick-1", RepositoryID: str(repository, "id"), ConfigID: saved.ID, Base: "HEAD",
 		Branch: "wt/brisk-otter", Text: "修复首页排序", Config: map[string]string{"model": "smart", "effort": "high"},
-		PermissionMode: contract.ChatPermissionAsk,
+		PermissionMode: contract.ChatPermissionAsk, UseInitInstruction: true,
 	}
 	f.call("quick-start-options", "POST", "/api/quick-starts/options", contract.QuickStartOptionsRequest{RepositoryID: str(repository, "id"), ConfigID: saved.ID}, 200)
 	f.call("quick-start", "POST", "/api/quick-starts", req, 201)

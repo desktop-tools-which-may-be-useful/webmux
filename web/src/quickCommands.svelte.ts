@@ -1,12 +1,15 @@
 import { settings, saveSettings } from "./settings.svelte";
 import { QuickCommandsSchema, type QuickCommand } from "./schemas";
-import { parseQuickCommands } from "./quickCommands";
+import { parseQuickCommands, quickCommandsNameError } from "./quickCommands";
 
 export const quickCommands = {
   get list() {
     return settings.values.quickCommands ?? parseQuickCommands("");
   },
 };
-export function saveQuickCommands(list: QuickCommand[]) {
-  return saveSettings({ quickCommands: QuickCommandsSchema.parse(list) });
+/** Saves a list after the strict name check the snapshot schema skips. */
+export async function saveQuickCommands(list: QuickCommand[]) {
+  const problem = quickCommandsNameError(list);
+  if (problem) throw new Error(problem);
+  await saveSettings({ quickCommands: QuickCommandsSchema.parse(list) });
 }

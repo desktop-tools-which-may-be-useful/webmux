@@ -18,7 +18,7 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		if !decode(w, r, &req) {
 			return
 		}
-		repository, created, err := s.Workspace.Register(r.Context(), req.Path, req.InitInstruction)
+		repository, created, err := s.Workspace.Register(r.Context(), req.Path)
 		if err != nil {
 			workspaceFailure(w, err)
 			return

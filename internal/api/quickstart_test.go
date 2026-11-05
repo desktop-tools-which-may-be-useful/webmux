@@ -37,14 +37,16 @@ func authBoundary(t *testing.T, handler http.Handler, method, path, body string)
 func TestRepositoryInitInstructionAPI(t *testing.T) {
 	handler, _, _, root := workspaceAPI(t)
 	var repository contract.Repository
-	register := workspaceRequest(t, handler, "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: root, InitInstruction: "先读 AGENTS.md"}, 201)
-	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil || repository.InitInstruction != "先读 AGENTS.md" {
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: root}, 201)
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil || repository.InitInstruction != "" {
 		t.Fatalf("register: %+v %v", repository, err)
 	}
 	base := "/api/repositories/" + repository.ID
 	authBoundary(t, handler, "PATCH", base, `{"initInstruction":"forged"}`)
+	workspaceRequest(t, handler, "POST", "/api/repositories", map[string]any{"path": root, "initInstruction": "x"}, 400)
+	workspaceRequest(t, handler, "PATCH", base, contract.UpdateRepositoryRequest{InitInstruction: "先读 AGENTS.md"}, 200)
 	var again contract.Repository
-	duplicate := workspaceRequest(t, handler, "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: root, InitInstruction: "other"}, 200)
+	duplicate := workspaceRequest(t, handler, "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: root}, 200)
 	if err := json.Unmarshal(duplicate.Body.Bytes(), &again); err != nil || again.InitInstruction != "先读 AGENTS.md" {
 		t.Fatalf("duplicate registration: %+v %v", again, err)
 	}

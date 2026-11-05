@@ -41,29 +41,28 @@ func listedInstruction(t *testing.T, s *Service, id string) string {
 	return ""
 }
 
-// The instruction is saved with the registration, survives a restart,
-// can be replaced and cleared, is limited to MaxInitInstruction characters,
-// and a duplicate registration keeps it.
+// The instruction is set after registration, survives a restart, can be
+// replaced and cleared, and is limited to MaxInitInstruction characters.
 func TestInitInstructionLifecycle(t *testing.T) {
 	isolateGit(t)
 	root := initRepo(t)
 	state := t.TempDir()
 	s, _ := testService(t, state, root)
 	ctx := context.Background()
-	if _, _, err := s.Register(ctx, root, strings.Repeat("长", MaxInitInstruction+1)); errorKind(err) != ErrInvalid {
-		t.Fatalf("over-long registration: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(state, "repositories.json")); !os.IsNotExist(err) {
-		t.Fatalf("rejected registration wrote the registry: %v", err)
-	}
-	repository, created, err := s.Register(ctx, root, "先读 AGENTS.md")
-	if err != nil || !created || repository.InitInstruction != "先读 AGENTS.md" {
+	repository, created, err := s.Register(ctx, root)
+	if err != nil || !created || repository.InitInstruction != "" {
 		t.Fatalf("register: %+v %v %v", repository, created, err)
+	}
+	if _, err := s.SetInitInstruction(ctx, repository.ID, strings.Repeat("长", MaxInitInstruction+1)); errorKind(err) != ErrInvalid {
+		t.Fatalf("over-long instruction: %v", err)
+	}
+	if _, err := s.SetInitInstruction(ctx, repository.ID, "先读 AGENTS.md"); err != nil {
+		t.Fatal(err)
 	}
 	if got := storedInstructions(t, state)[repository.ID]; got != "先读 AGENTS.md" {
 		t.Fatalf("stored instruction %q", got)
 	}
-	again, created, err := s.Register(ctx, root, "另一条指令")
+	again, created, err := s.Register(ctx, root)
 	if err != nil || created || again.ID != repository.ID || again.InitInstruction != "先读 AGENTS.md" {
 		t.Fatalf("duplicate registration: %+v %v %v", again, created, err)
 	}
@@ -135,7 +134,13 @@ func TestInitInstructionSaveFailureKeepsPrevious(t *testing.T) {
 	root := initRepo(t)
 	state := t.TempDir()
 	s, _ := testService(t, state, root)
-	repository, _, err := s.Register(context.Background(), root, "before")
+	repository, _, err := s.Register(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetInitInstruction(context.Background(), repository.ID, "before"); err != nil {
+		t.Fatal(err)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

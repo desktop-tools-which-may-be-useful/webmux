@@ -59,7 +59,7 @@ test("uploads land in the session folder the code panel browses", async ({
   ).toBeVisible();
 });
 
-test("the quick menu pastes the folder prompt without Enter, and removal deletes the folder", async ({
+test("the system preset pastes the folder prompt without Enter, and removal deletes the folder", async ({
   page,
   request,
   workDir,
@@ -67,9 +67,7 @@ test("the quick menu pastes the folder prompt without Enter, and removal deletes
   const id = await createShell(page, "Artifacts prompt", workDir);
   const received = await recordInput(page, workDir);
   await quick(page).click();
-  await page
-    .getByRole("menuitem", { name: "插入临时文件夹提示词", exact: true })
-    .click();
+  await page.getByRole("menuitem", { name: /^临时文件夹：/ }).click();
   const folder = await (
     await request.post(`/api/sessions/${id}/artifacts`)
   ).json();

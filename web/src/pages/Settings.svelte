@@ -1,7 +1,6 @@
 <script lang="ts">
   import Brand from "../components/Brand.svelte";
   import AppearanceSettings from "../components/AppearanceSettings.svelte";
-  import ArtifactPromptSetting from "../components/ArtifactPromptSetting.svelte";
   import { settings, changeSettings, saveSettings } from "../settings.svelte";
   import { errorMessage } from "../error";
   import { onMount } from "svelte";
@@ -51,6 +50,7 @@
   } from "../quickCommands";
   import { quickCommands, saveQuickCommands } from "../quickCommands.svelte";
   import QuickCommandDialog from "../components/QuickCommandDialog.svelte";
+  import QuickCommandPresetMenu from "../components/QuickCommandPresetMenu.svelte";
   import LaunchConfigDialog from "../components/LaunchConfigDialog.svelte";
   import InlineNotice from "../components/InlineNotice.svelte";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
@@ -90,6 +90,19 @@
         : [...list, cmd],
     );
     return "";
+  }
+  let presetBusy = $state(false);
+  let presetError = $state("");
+  async function addPresets(presets: QuickCommand[]) {
+    presetBusy = true;
+    presetError = "";
+    try {
+      await saveQuickCommands([...quickCommands.list, ...presets]);
+    } catch (err) {
+      presetError = errorMessage(err);
+    } finally {
+      presetBusy = false;
+    }
   }
   function move(index: number, offset: -1 | 1) {
     const list = [...quickCommands.list];
@@ -247,6 +260,13 @@
     {onclick}><IconTrash aria-hidden="true" /></Button
   >
 {/snippet}
+{#snippet presetMenu()}
+  <QuickCommandPresetMenu
+    commands={quickCommands.list}
+    busy={!settings.ready || presetBusy}
+    onadd={(presets) => void addPresets(presets)}
+  />
+{/snippet}
 {#snippet launchCreateActions(
   variant: "default" | "outline",
   disabled: boolean,
@@ -314,9 +334,12 @@
                 >
               </Empty.Header>
               <Empty.Content>
-                <Button disabled={!settings.ready} onclick={() => edit()}
-                  ><IconPlus aria-hidden="true" />添加快捷指令</Button
-                >
+                <div class="flex flex-wrap items-center justify-center gap-2">
+                  <Button disabled={!settings.ready} onclick={() => edit()}
+                    ><IconPlus aria-hidden="true" />添加快捷指令</Button
+                  >
+                  {@render presetMenu()}
+                </div>
               </Empty.Content>
             </Empty.Root>
           {:else}
@@ -375,10 +398,16 @@
                 onclick={() => edit()}
                 ><IconPlus aria-hidden="true" />添加快捷指令</Button
               >
+              {@render presetMenu()}
               {#if full}<span class="text-xs text-muted-foreground"
                   >最多 {QUICK_COMMANDS_LIMIT} 条</span
                 >{/if}
             </div>
+          {/if}
+          {#if presetError}
+            <InlineNotice tone="danger">
+              <p>添加系统预设失败：{presetError}</p>
+            </InlineNotice>
           {/if}
           <div class="flex flex-wrap gap-2">
             <Button
@@ -396,9 +425,6 @@
                 clearQuickOpen = true;
               }}>删除全部快捷指令</Button
             >
-          </div>
-          <div class="border-t pt-4">
-            <ArtifactPromptSetting />
           </div>
         </Card.Content>
       </Card.Root>
@@ -667,7 +693,12 @@
   </div>
 </div>
 
-<QuickCommandDialog bind:open={dialogOpen} initial={editing} save={upsert} />
+<QuickCommandDialog
+  bind:open={dialogOpen}
+  initial={editing}
+  existing={quickCommands.list}
+  save={upsert}
+/>
 <LaunchConfigDialog
   bind:open={launchDialogOpen}
   configId={launchEditing}

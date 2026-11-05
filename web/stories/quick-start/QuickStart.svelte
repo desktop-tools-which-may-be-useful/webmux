@@ -8,6 +8,8 @@
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconNotes from "~icons/tabler/notes";
   import { Button } from "$lib/components/ui/button";
+  import { Checkbox } from "$lib/components/ui/checkbox";
+  import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
   import { Textarea } from "$lib/components/ui/textarea";
   import ChatConfig from "../../src/components/chat/ChatConfig.svelte";
@@ -226,7 +228,9 @@
         class="rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20"
       >
         {#if repository?.instruction}
-          <div class="flex items-center border-b px-2 py-1">
+          <div class="flex items-center gap-2 border-b px-3 py-1">
+            <Checkbox id="prototype-use-instruction" checked />
+            <Label for="prototype-use-instruction">使用初始化指令</Label>
             <Popover.Root>
               <Popover.Trigger>
                 {#snippet child({ props })}
@@ -234,18 +238,18 @@
                     {...props}
                     variant="quiet"
                     size="xs"
-                    title="查看将附带的仓库初始化指令"
-                    ><IconNotes aria-hidden="true" />附带 {repository.name} 的初始化指令</Button
+                    title="预览将附带的初始化指令"
+                    ><IconNotes aria-hidden="true" />预览</Button
                   >
                 {/snippet}
               </Popover.Trigger>
               <Popover.Content align="start" class="w-80 space-y-2 text-sm">
-                <p class="font-medium">仓库初始化指令</p>
+                <p class="font-medium">{repository.name} 的初始化指令</p>
                 <p class="whitespace-pre-wrap text-muted-foreground">
                   {repository.instruction}
                 </p>
                 <p class="text-xs text-muted-foreground">
-                  会放在你的消息前面，作为第一条消息一起发送。在仓库菜单的“初始化指令”中修改。
+                  会放在你的消息前面，作为第一条消息一起发送；取消勾选只影响这次发送。在首页工具栏的“仓库设置”中修改。
                 </p>
               </Popover.Content>
             </Popover.Root>

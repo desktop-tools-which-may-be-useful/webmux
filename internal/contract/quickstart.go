@@ -5,7 +5,8 @@ package contract
 // chat-first hybrid session of launch config ConfigID in it, applies Config
 // (option ID to value: the select value, or "true"/"false" for a boolean)
 // and PermissionMode ("" keeps the default), then sends Text as the first
-// prompt, after the repository's initialization instruction if it has one.
+// prompt, after the repository's initialization instruction when
+// UseInitInstruction is set and it has one.
 // ClientRequestID dedupes retries and is the first prompt's request ID.
 type QuickStartRequest struct {
 	ClientRequestID string             `json:"clientRequestId"`
@@ -16,6 +17,9 @@ type QuickStartRequest struct {
 	Text            string             `json:"text"`
 	Config          map[string]string  `json:"config"`
 	PermissionMode  ChatPermissionMode `json:"permissionMode"`
+	// UseInitInstruction puts the repository's initialization instruction
+	// before Text, its {{name}} references replaced by quick command text.
+	UseInitInstruction bool `json:"useInitInstruction"`
 	// Attachments are files returned by POST /api/quick-starts/uploads;
 	// only their path is read. They go with the first prompt.
 	Attachments []ChatAttachment `json:"attachments,omitempty"`

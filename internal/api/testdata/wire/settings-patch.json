@@ -4,7 +4,6 @@
     "revision": 1,
     "updatedAt": "<time>",
     "values": {
-      "artifactPrompt": null,
       "codeReader": null,
       "forceSoftKeys": null,
       "homeWorktrees": null,

@@ -4,6 +4,7 @@ package settings
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -37,21 +38,13 @@ type Values struct {
 	QuickCommands *[]Command          `json:"quickCommands"`
 	HomeWorktrees map[string][]string `json:"homeWorktrees"`
 	ForceSoftKeys *bool               `json:"forceSoftKeys"`
-	// ArtifactPrompt is the template inserted to tell an agent about the
-	// session artifacts folder; "{dir}" stands for its path, nil is the
-	// client's built-in template. omitempty keeps files without it readable
-	// by earlier releases.
-	ArtifactPrompt *string `json:"artifactPrompt,omitempty"`
-	// LegacyFontSize and LegacyChatIdleSleepMinutes only let files written
-	// before those settings were removed load under strict decoding. Open
-	// discards them and they are never written back.
+	// LegacyFontSize, LegacyChatIdleSleepMinutes and LegacyArtifactPrompt
+	// only let files written before those settings were removed load under
+	// strict decoding. Open discards them and they are never written back.
 	LegacyFontSize             json.RawMessage `json:"fontSize,omitempty"`
 	LegacyChatIdleSleepMinutes json.RawMessage `json:"chatIdleSleepMinutes,omitempty"`
+	LegacyArtifactPrompt       json.RawMessage `json:"artifactPrompt,omitempty"`
 }
-
-// ArtifactPromptPlaceholder is replaced by the folder's path; a custom
-// template must contain it.
-const ArtifactPromptPlaceholder = "{dir}"
 
 type Snapshot struct {
 	Revision  int64  `json:"revision"`
@@ -120,9 +113,6 @@ func validateValues(v Values) error {
 			ids[c.ID] = true
 		}
 	}
-	if p := v.ArtifactPrompt; p != nil && (strings.TrimSpace(*p) == "" || !validText(*p, 4096) || !strings.Contains(*p, ArtifactPromptPlaceholder)) {
-		return ErrInvalid
-	}
 	if len(v.HomeWorktrees) > 200 {
 		return ErrInvalid
 	}
@@ -154,10 +144,6 @@ func normalize(v Values) Values {
 			c.Command = normalizeText(c.Command)
 		}
 	}
-	if v.ArtifactPrompt != nil {
-		p := normalizeText(*v.ArtifactPrompt)
-		v.ArtifactPrompt = &p
-	}
 	return v
 }
 
@@ -177,7 +163,6 @@ func cloneValues(v Values) Values {
 	v.Preview = clonePtr(v.Preview)
 	v.CodeReader = clonePtr(v.CodeReader)
 	v.ForceSoftKeys = clonePtr(v.ForceSoftKeys)
-	v.ArtifactPrompt = clonePtr(v.ArtifactPrompt)
 	if v.QuickCommands != nil {
 		list := append([]Command{}, (*v.QuickCommands)...)
 		v.QuickCommands = &list
@@ -210,12 +195,78 @@ func apply(v Values, c Changes) (Values, error) {
 			v.HomeWorktrees = c.Values.HomeWorktrees
 		case "forceSoftKeys":
 			v.ForceSoftKeys = c.Values.ForceSoftKeys
-		case "artifactPrompt":
-			v.ArtifactPrompt = c.Values.ArtifactPrompt
 		default:
 			return v, ErrInvalid
 		}
 	}
 	v = normalize(v)
+	if c.Fields["quickCommands"] && !validCommandNames(v.QuickCommands) {
+		return v, ErrInvalid
+	}
 	return v, validateValues(v)
+}
+
+// nameLegacyCommands makes every command name usable in a {{name}}
+// reference: a command saved before names were required (empty, repeated or
+// containing braces) is named from its name or text, so every list a client
+// reads can be saved back. The stored file changes only with the next write
+// of the list.
+func nameLegacyCommands(list *[]Command) *[]Command {
+	if list == nil {
+		return nil
+	}
+	named := append([]Command{}, (*list)...)
+	// "user" and "webmux" are reserved by initialization instructions.
+	seen := map[string]bool{"user": true, "webmux": true}
+	for i := range named {
+		name := named[i].Name
+		if name == "" || seen[name] || strings.ContainsAny(name, "{}\n") {
+			source := name
+			if strings.TrimSpace(source) == "" {
+				source = named[i].Command
+			}
+			first, _, _ := strings.Cut(strings.TrimSpace(source), "\n")
+			base := strings.TrimSpace(strings.NewReplacer("{", "", "}", "").Replace(first))
+			if base == "" {
+				base = "未命名"
+			}
+			base = truncateUTF16(base, 30)
+			name = base
+			for n := 2; seen[name]; n++ {
+				name = fmt.Sprintf("%s %d", base, n)
+			}
+			named[i].Name = name
+		}
+		seen[name] = true
+	}
+	return &named
+}
+
+// truncateUTF16 cuts s to at most units UTF-16 code units, the unit the
+// browser counts name lengths in.
+func truncateUTF16(s string, units int) string {
+	used := 0
+	for i, r := range s {
+		if used += utf16.RuneLen(r); used > units {
+			return s[:i]
+		}
+	}
+	return s
+}
+
+// validCommandNames reports whether every command has a unique, non-empty
+// name usable in a {{name}} reference. It is checked only on a patch of the
+// list: files saved before names were required still load.
+func validCommandNames(list *[]Command) bool {
+	if list == nil {
+		return true
+	}
+	seen := map[string]bool{"user": true, "webmux": true}
+	for _, c := range *list {
+		if c.Name == "" || seen[c.Name] || strings.ContainsAny(c.Name, "{}\n") {
+			return false
+		}
+		seen[c.Name] = true
+	}
+	return true
 }

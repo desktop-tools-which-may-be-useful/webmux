@@ -425,6 +425,18 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)
 	workspaces.UseHybrid(hybrids)
 	workspaces.UseArtifacts(folders)
+	// Initialization instructions reference the saved quick commands by name.
+	workspaces.UseQuickCommands(func() []workspace.QuickCommand {
+		snapshot, err := preferences.Snapshot()
+		if err != nil || snapshot.Values.QuickCommands == nil {
+			return nil
+		}
+		list := make([]workspace.QuickCommand, 0, len(*snapshot.Values.QuickCommands))
+		for _, c := range *snapshot.Values.QuickCommands {
+			list = append(list, workspace.QuickCommand{Name: c.Name, Text: c.Command})
+		}
+		return list
+	})
 	defer workspaces.Close()
 	codes := codeview.New(m, folders)
 	defer codes.Close()

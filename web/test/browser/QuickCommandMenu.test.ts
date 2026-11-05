@@ -23,7 +23,6 @@ function open(
     unavailable?: string;
   } = {},
 ) {
-  const artifact = vi.fn();
   const run = vi.fn();
   render(QuickCommandMenu, {
     props: {
@@ -33,53 +32,44 @@ function open(
       disabled: false,
       side: "bottom",
       run,
-      artifact,
       manage: () => {},
       onCloseAutoFocus: () => {},
     },
   });
-  return { artifact, run };
+  return { run };
 }
-const fixed = () =>
-  page.getByRole("menuitem", { name: "插入临时文件夹提示词" });
 
-test("the fixed item precedes user commands and invokes its callback", async () => {
-  const { artifact, run } = open();
+test("lists only saved commands and runs the chosen one", async () => {
+  const { run } = open();
   await page.getByRole("button", { name: "快捷指令" }).click();
   const items = page.getByRole("menuitem");
+  await expect.element(items.first()).toHaveAccessibleName(/状态/);
   await expect
-    .element(items.first())
-    .toHaveAccessibleName("插入临时文件夹提示词");
-  await expect.element(items.nth(1)).toHaveAccessibleName(/状态/);
-  await fixed().click();
-  expect(artifact).toHaveBeenCalledOnce();
-  expect(run).not.toHaveBeenCalled();
+    .element(page.getByRole("menuitem", { name: "插入临时文件夹提示词" }))
+    .not.toBeInTheDocument();
+  await items.first().click();
+  expect(run).toHaveBeenCalledWith(command);
 });
 
-test("the fixed item stays above the empty state", async () => {
+test("an empty list shows the empty state", async () => {
   open({ commands: [] });
   await page.getByRole("button", { name: "快捷指令" }).click();
-  await expect.element(fixed()).toBeEnabled();
-  const empty = page.getByText("还没有快捷指令");
-  await expect.element(empty).toBeVisible();
-  expect(
-    fixed().element().compareDocumentPosition(empty.element()) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
+  await expect.element(page.getByText("还没有快捷指令")).toBeVisible();
 });
 
-test("blocked direct mode disables the fixed item; draft mode keeps it", async () => {
+test("blocked direct mode disables commands; draft mode keeps them", async () => {
   open({ unavailable: "终端正在重连" });
   await page.getByRole("button", { name: "快捷指令" }).click();
   await expect
     .element(page.getByRole("status"))
     .toHaveTextContent("终端正在重连");
-  await expect.element(fixed()).toHaveAttribute("aria-disabled", "true");
+  const item = page.getByRole("menuitem", { name: /状态/ });
+  await expect.element(item).toHaveAttribute("aria-disabled", "true");
   await cleanup();
 
-  const { artifact } = open({ target: "draft", unavailable: "终端正在重连" });
+  const { run } = open({ target: "draft", unavailable: "终端正在重连" });
   await page.getByRole("button", { name: "快捷指令" }).click();
-  await expect.element(fixed()).toHaveAttribute("aria-disabled", "false");
-  await fixed().click();
-  expect(artifact).toHaveBeenCalledOnce();
+  await expect.element(item).toHaveAttribute("aria-disabled", "false");
+  await item.click();
+  expect(run).toHaveBeenCalledOnce();
 });

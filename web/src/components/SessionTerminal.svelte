@@ -10,10 +10,7 @@
     stored,
     uploadFile,
   } from "../api";
-  import {
-    BUILTIN_ARTIFACT_PROMPT,
-    renderArtifactPrompt,
-  } from "../artifactPrompt";
+  import { renderArtifactDir, usesArtifactDir } from "../quickCommands";
   import { clipboardFiles, copyText as writeClipboard } from "../clipboard";
   import { useTerminal } from "../hooks/terminal.svelte";
   import { createKeyboardSizeHold } from "../hooks/keyboard-size-hold";
@@ -282,12 +279,28 @@
     partial: "快捷指令正文已写入，但回车未写入；请检查终端后手动提交。",
     unknown: "连接中断，快捷指令结果未知；重连后自动查询。",
   };
-  function runQuickCommand(cmd: QuickCommand) {
+  // The operation binds this session's draft and target at selection. A body
+  // with `{dir}` first waits for the artifacts folder, then runs as written.
+  async function runQuickCommand(cmd: QuickCommand) {
     t.resetModifiers();
     const chat = hybrid.view === "chat";
+    let text = cmd.command;
+    let operation: DraftOperation | undefined;
+    if (usesArtifactDir(text)) {
+      operation = beginInput();
+      let dir: string;
+      try {
+        dir = await ensureArtifactsFolder(id);
+      } catch (err) {
+        if (mounted) error = `临时文件夹不可用：${errorMessage(err)}`;
+        return;
+      }
+      if (!mounted) return;
+      text = renderArtifactDir(text, dir);
+    }
     if (!chat && cmd.enter && drafts.destination(draft) === "terminal") {
       // Text and Enter form one acknowledged submission.
-      const sent = t.submit(newSubmissionId(), cmd.command, true, (state) => {
+      const sent = t.submit(newSubmissionId(), text, true, (state) => {
         if (!mounted) return;
         if (quickMessages[state]) error = quickMessages[state];
         else if (state === "written" && error === quickMessages.unknown)
@@ -297,34 +310,12 @@
       return;
     }
     // The chat side only inserts: sending stays with the message box.
-    const result = insertText(cmd.command, beginInput());
-    if (result === "failed")
-      error = chat
-        ? "草稿正在提交到终端，快捷指令未插入；请确认结果后重试。"
-        : "终端未就绪，快捷指令未发送；请恢复连接后重试。";
-    else error = "";
-  }
-  // The operation binds this session's draft and target at selection; the
-  // prompt is inserted (never submitted) once the folder exists.
-  async function insertArtifactPrompt() {
-    t.resetModifiers();
-    const operation = beginInput();
-    const session = id;
-    let dir: string;
-    try {
-      dir = await ensureArtifactsFolder(session);
-    } catch (err) {
-      if (mounted) error = `临时文件夹不可用：${errorMessage(err)}`;
-      return;
-    }
-    if (!mounted) return;
-    const template = settings.values.artifactPrompt ?? BUILTIN_ARTIFACT_PROMPT;
-    const result = insertText(renderArtifactPrompt(template, dir), operation);
+    const result = insertText(text, operation ?? beginInput());
     if (result === "failed")
       error =
-        drafts.destination(draft, operation) === "draft"
-          ? "草稿正在提交到终端，提示词未插入；请确认结果后重试。"
-          : "终端未就绪，提示词未插入；请恢复连接后重试。";
+        chat || drafts.destination(draft, operation) === "draft"
+          ? "草稿正在提交到终端，快捷指令未插入；请确认结果后重试。"
+          : "终端未就绪，快捷指令未发送；请恢复连接后重试。";
     else error = "";
   }
   let sizeLocked = $state(stored("sizeLocked") === "1");
@@ -643,8 +634,7 @@
       ? hybrid.missing
       : t.connection === "missing"}
     {side}
-    run={runQuickCommand}
-    artifact={() => void insertArtifactPrompt()}
+    run={(cmd) => void runQuickCommand(cmd)}
     manage={() => navigate(`/settings?session=${id}#quick-commands`)}
     onCloseAutoFocus={focusTerminal}
   />

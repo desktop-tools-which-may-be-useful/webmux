@@ -29,10 +29,17 @@ async function repository(
   ])
     expect(spawnSync("git", ["-C", root, ...args]).status).toBe(0);
   const response = await request.post("/api/repositories", {
-    data: { path: root, initInstruction },
+    data: { path: root },
   });
   expect(response.status(), await response.text()).toBe(201);
-  return response.json() as Promise<{ id: string }>;
+  const repo = (await response.json()) as { id: string };
+  if (initInstruction) {
+    const patch = await request.patch(`/api/repositories/${repo.id}`, {
+      data: { initInstruction },
+    });
+    expect(patch.status(), await patch.text()).toBe(200);
+  }
+  return repo;
 }
 
 async function hybridConfig(request: APIRequestContext, name: string) {
@@ -100,8 +107,8 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
     toolbar.getByRole("button", { name: "基准分支：main" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "附带 qs-repo 的初始化指令" }),
-  ).toBeVisible();
+    page.getByRole("checkbox", { name: "使用初始化指令" }),
+  ).toBeChecked();
   const input = page.getByRole("textbox", { name: "任务描述" });
   await input.fill("修复首页排序");
   await page.getByRole("button", { name: "发送", exact: true }).click();

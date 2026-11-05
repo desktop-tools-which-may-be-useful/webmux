@@ -87,7 +87,7 @@ test("legacy browser keys never overwrite server preferences", async ({
   expect(snapshot.values.theme).toBeNull();
   expect(snapshot.values.quickCommands).toBeNull();
   await expect(
-    page.getByRole("button", { name: "编辑 /resume" }),
+    page.getByRole("button", { name: "编辑 恢复会话" }),
   ).toBeVisible();
 });
 

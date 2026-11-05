@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { errorMessage } from "../error";
   import { api } from "../api";
+  import { quickCommands } from "../quickCommands.svelte";
   import {
     INIT_INSTRUCTION_MAX,
     RepositorySchema,
@@ -12,8 +13,8 @@
   import InitInstructionField from "./InitInstructionField.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
 
-  // Edits or clears a repository's init instruction from its menu; saving an
-  // empty text removes it.
+  // Edits a repository's settings from the home toolbar: today the init
+  // instruction template; saving it empty removes it.
   let {
     repository,
     onclose,
@@ -49,8 +50,8 @@
 </script>
 
 <ResponsiveDialog
-  title="初始化指令"
-  description={`快速开始在 ${repository.name} 新建聊天时，这段文字会放在你的消息前面。留空保存即清除。`}
+  title="仓库设置"
+  description={`${repository.name} 的设置。`}
   {onclose}
   {busy}
 >
@@ -63,7 +64,7 @@
   >
     <InitInstructionField
       id="repository-instruction-edit"
-      label="初始化指令"
+      commands={quickCommands.list}
       bind:value={instruction}
     />
     {#if error}<p role="alert" class="break-all text-sm text-destructive">

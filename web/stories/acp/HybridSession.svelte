@@ -377,7 +377,6 @@
     disabled={false}
     {side}
     run={() => {}}
-    artifact={() => {}}
     manage={() => {}}
     onCloseAutoFocus={() => {}}
   />

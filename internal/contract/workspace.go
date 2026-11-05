@@ -96,10 +96,9 @@ type RefreshBranchBaseResponse struct {
 }
 
 // RegisterRepositoryRequest is the body of POST /api/repositories. An
-// already registered repository keeps its instruction.
+// already registered repository is returned unchanged.
 type RegisterRepositoryRequest struct {
-	Path            string `json:"path"`
-	InitInstruction string `json:"initInstruction,omitempty"`
+	Path string `json:"path"`
 }
 
 // UpdateRepositoryRequest is the body of PATCH /api/repositories/{id}; an

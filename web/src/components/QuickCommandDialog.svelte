@@ -9,12 +9,18 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import * as Dialog from "$lib/components/ui/dialog";
   import { QuickCommandSchema, type QuickCommand } from "../schemas";
-  import { newQuickCommandId, normalizeCommand } from "../quickCommands";
+  import {
+    QUICK_COMMAND_NAME_MAX,
+    newQuickCommandId,
+    normalizeCommand,
+    quickCommandNameError,
+  } from "../quickCommands";
 
   let {
     open = $bindable(false),
     initial,
     save,
+    existing,
     disabled = false,
   }: {
     open: boolean;
@@ -22,6 +28,8 @@
     /** Command being edited; undefined creates a new one. */
     initial: QuickCommand | undefined;
     save: (cmd: QuickCommand) => string | Promise<string>;
+    /** The saved list, for the unique-name check. */
+    existing: QuickCommand[];
   } = $props();
   let name = $state("");
   let command = $state("");
@@ -37,6 +45,14 @@
       enter,
     }),
   );
+  const nameError = $derived(
+    quickCommandNameError(
+      name,
+      existing.filter((cmd) => cmd.id !== initial?.id).map((cmd) => cmd.name),
+    ),
+  );
+  // An untouched new form is not an error yet; a saved empty name is.
+  const showNameError = $derived(!!nameError && (name !== "" || !!initial));
 
   // Each opening starts from the saved value, so cancel/Esc discards edits.
   $effect.pre(() => {
@@ -51,7 +67,7 @@
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (!draft.success) return;
+    if (!draft.success || nameError) return;
     saving = true;
     try {
       error = await save({
@@ -87,14 +103,27 @@
         >
       </Dialog.Header>
       <div class="grid gap-2">
-        <Label for="quick-command-name">名称（可选）</Label>
+        <Label for="quick-command-name">名称</Label>
         <Input
           id="quick-command-name"
           bind:value={name}
-          maxlength={40}
+          maxlength={QUICK_COMMAND_NAME_MAX}
           placeholder="例如：查看状态"
           autocomplete="off"
+          aria-invalid={showNameError}
+          aria-describedby="quick-command-name-help"
         />
+        <p
+          id="quick-command-name-help"
+          class={[
+            "text-xs",
+            showNameError ? "text-destructive" : "text-muted-foreground",
+          ]}
+        >
+          {showNameError
+            ? nameError
+            : "名称唯一；仓库初始化指令用 {{名称}} 引用这条指令。"}
+        </p>
       </div>
       <div class="grid gap-2">
         <Label for="quick-command-body">指令</Label>
@@ -139,7 +168,9 @@
             open = false;
           }}>取消</Button
         >
-        <Button type="submit" disabled={!draft.success || saving || disabled}
+        <Button
+          type="submit"
+          disabled={!draft.success || !!nameError || saving || disabled}
           >保存</Button
         >
       </Dialog.Footer>

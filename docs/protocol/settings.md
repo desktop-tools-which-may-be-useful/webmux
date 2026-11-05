@@ -1,14 +1,16 @@
 # 服务端偏好协议
 
-`GET /api/settings` 返回 `{revision, updatedAt, values}`。`values` 始终包含 theme、preview、codeReader、quickCommands、artifactPrompt、homeWorktrees、forceSoftKeys 七个键。
+`GET /api/settings` 返回 `{revision, updatedAt, values}`。`values` 始终包含 theme、preview、codeReader、quickCommands、homeWorktrees、forceSoftKeys 六个键。
 
 ## 值与默认
 
 - theme：light / dark / null；null 跟随系统。
 - preview：`{lines: 1..50, skip: 0..50}` 或 null（10/1）。
 - codeReader：`{lineNumbers: "show"|"hide", diffOverflow: "scroll"|"wrap"}` 或 null（show/scroll）。
-- quickCommands：最多 50 个 `{id, name, command, enter}`，唯一 ID；null 显示预置指令，空数组表示明确清空。
-- artifactPrompt：插入会话临时文件夹说明时使用的模板，去首尾空白后非空、不超过 4096 字符且含 `{dir}`（插入时替换为文件夹路径）；保存时统一换行并去掉末尾换行；null 使用客户端内置模板，且不写入 `settings.json`。
+- quickCommands：最多 50 个 `{id, name, command, enter}`，唯一 ID；null 显示系统预设（`/resume`、`/new` 与“临时文件夹”），空数组表示明确清空。
+  - 保存列表时每条 `name` 必填、去首尾空白后唯一、不含 `{`、`}` 与换行、不为 `user` 或 `webmux`（初始化指令的内置与保留变量），初始化指令用 `{{name}}` 引用它。
+  - 校验只在 PATCH `quickCommands` 时进行；此前保存的未命名、重名、叫 `user` 或 `webmux`、或含花括号的指令在读取时由服务端按正文命名，下一次保存列表时写回。
+  - `command` 中的 `{dir}` 在运行时替换为会话临时文件夹的路径。
 - homeWorktrees：仓库 ID 到工作树 ID 数组的映射；最多 200 个仓库、每仓库 1000 个、合计 2000 个，数组内 ID 不重复；null 使用默认主页选择。
 - forceSoftKeys：布尔或 null（false）。
 
@@ -28,4 +30,4 @@
 
 `settings.json` 与 `settings.json.lock` 通过统一 statefile handle 管理。缺失时 revision 0、updatedAt 空、全部值 null；读取不会创建数据文件。损坏原文件保留，禁用设置但不影响终端。目录同步不确定时冻结写入，不前进修订号或广播成功。
 
-旧浏览器键不迁移；旧 `settings.json` 中遗留的历史键（`fontSize`、`chatIdleSleepMinutes`）读取时忽略，下次写入时移除。`webmux.settingsCache` 只缓存最后确认的快照；不能用作离线写入队列。Token、Web Push 身份、草稿、最近目录和临时命令不属于此协议。
+旧浏览器键不迁移；旧 `settings.json` 中遗留的历史键（`fontSize`、`chatIdleSleepMinutes`、`artifactPrompt`）读取时忽略，下次写入时移除。`webmux.settingsCache` 只缓存最后确认的快照；不能用作离线写入队列。Token、Web Push 身份、草稿、最近目录和临时命令不属于此协议。

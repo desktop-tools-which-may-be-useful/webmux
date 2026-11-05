@@ -7,7 +7,7 @@
     "commonDir": "<repo>/.git",
     "error": "",
     "id": "<id#1>",
-    "initInstruction": "先读 AGENTS.md",
+    "initInstruction": "",
     "name": "repo",
     "worktrees": [
       {
