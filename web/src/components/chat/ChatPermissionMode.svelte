@@ -20,7 +20,7 @@
   } = $props();
   const choices = [
     { value: "ask", name: "每次询问" },
-    { value: "auto", name: "自动批准" },
+    { value: "auto", name: "全部接受" },
   ];
 </script>
 
@@ -30,7 +30,7 @@
   {choices}
   {disabled}
   title={mode === "auto"
-    ? "权限：自动批准 Agent 的工具调用请求（表单仍需回答）"
+    ? "权限：全部接受 Agent 的工具调用请求（表单仍需回答）"
     : "权限：每次工具调用都询问"}
   onchange={(value) => {
     const parsed = ChatPermissionModeSchema.safeParse(value);

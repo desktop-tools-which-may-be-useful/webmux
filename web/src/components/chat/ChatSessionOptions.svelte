@@ -32,7 +32,7 @@
   } = $props();
   const modes = [
     { value: "ask", name: "每次询问" },
-    { value: "auto", name: "自动批准" },
+    { value: "auto", name: "全部接受" },
   ];
 </script>
 

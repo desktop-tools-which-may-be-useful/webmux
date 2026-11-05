@@ -665,7 +665,7 @@ test("the permission select sets the session's mode and shows the server's", asy
     .element(select)
     .toHaveAttribute("title", "权限：每次工具调用都询问");
   await select.click();
-  await page.getByRole("menuitemradio", { name: "自动批准" }).click();
+  await page.getByRole("menuitemradio", { name: "全部接受" }).click();
   await expect.poll(commands).toEqual([
     {
       method: "PUT",
@@ -680,13 +680,13 @@ test("the permission select sets the session's mode and shows the server's", asy
     type: "state",
     state: chatState({ permissionMode: "auto" }),
   });
-  const auto = page.getByRole("button", { name: "权限：自动批准" });
+  const auto = page.getByRole("button", { name: "权限：全部接受" });
   await expect.element(auto).toBeEnabled();
   await expect
     .element(auto)
     .toHaveAttribute(
       "title",
-      "权限：自动批准 Agent 的工具调用请求（表单仍需回答）",
+      "权限：全部接受 Agent 的工具调用请求（表单仍需回答）",
     );
 
   respond(/^PUT .*\/chat\/permission-mode$/, () =>
@@ -694,7 +694,7 @@ test("the permission select sets the session's mode and shows the server's", asy
   );
   // The menu stays open on a pick, showing the server's value.
   await expect
-    .element(page.getByRole("menuitemradio", { name: "自动批准" }))
+    .element(page.getByRole("menuitemradio", { name: "全部接受" }))
     .toHaveAttribute("aria-checked", "true");
   await page.getByRole("menuitemradio", { name: "每次询问" }).click();
   await expect.element(page.getByText("混合会话正在切换")).toBeVisible();
