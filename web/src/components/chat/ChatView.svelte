@@ -5,6 +5,7 @@
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconX from "~icons/tabler/x";
   import { Button } from "$lib/components/ui/button";
+  import FileDropZone from "../FileDropZone.svelte";
   import InlineNotice from "../InlineNotice.svelte";
   import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
   import { outdatedText } from "../../hybrid";
@@ -13,13 +14,14 @@
   import { errorMessage } from "../../error";
   import type { ChatUploads } from "../../hooks/upload.svelte";
   import type { ChatCodeLink } from "../../markdown-link";
-  import type { ChatState } from "../../schemas";
+  import type { ChatState, SessionInfo } from "../../schemas";
   import type {
     TerminalDraft,
     TerminalDrafts,
   } from "../../terminal-draft.svelte";
   import type { Connection } from "../../ws";
   import ChatComposer from "./ChatComposer.svelte";
+  import ChatLocation from "./ChatLocation.svelte";
   import ChatPlan from "./ChatPlan.svelte";
   import ChatQueue from "./ChatQueue.svelte";
   import FormPrompt from "./FormPrompt.svelte";
@@ -39,6 +41,7 @@
     actions,
     unavailable = "",
     uploadUnavailable = "",
+    location,
     onreview,
     onopenlocation,
     onterminal,
@@ -54,6 +57,8 @@
     unavailable?: string;
     /** Why uploads are refused (session gone or exited); "" otherwise. */
     uploadUnavailable?: string;
+    /** Where the session runs, shown read-only above the input. */
+    location?: Pick<SessionInfo, "workspace" | "cwd">;
     /** Opens a changed file in the code panel. */
     onreview: (path: string) => void;
     /** Opens a code-location link in the code panel. */
@@ -66,9 +71,7 @@
   let stick = $state(true);
   let error = $state("");
   let answering = $state(false);
-  let dragging = $state(false);
   let now = $state(Date.now());
-  let dragDepth = 0;
   let composer = $state<ChatComposer>();
   export function focus() {
     composer?.focus();
@@ -155,40 +158,6 @@
     return () => window.clearInterval(timer);
   });
 
-  const hasFiles = (event: DragEvent) =>
-    event.dataTransfer?.types.includes("Files") ?? false;
-  function dragEnter(event: DragEvent) {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    if (uploadBlocked) return;
-    dragging = true;
-    dragDepth++;
-  }
-  function dragOver(event: DragEvent) {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    if (event.dataTransfer)
-      event.dataTransfer.dropEffect = uploadBlocked
-        ? "none"
-        : uploads.progress
-          ? "none"
-          : "copy";
-  }
-  function dragLeave() {
-    if (--dragDepth <= 0) {
-      dragDepth = 0;
-      dragging = false;
-    }
-  }
-  function drop(event: DragEvent) {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    dragDepth = 0;
-    dragging = false;
-    if (uploadBlocked) return;
-    void uploads.uploadFiles(Array.from(event.dataTransfer?.files ?? []));
-  }
-
   function follow() {
     if (!scroller) return;
     stick =
@@ -218,24 +187,15 @@
   }
 </script>
 
-<div
+<FileDropZone
   class="relative flex h-full min-h-0 flex-col bg-background"
   data-chat-view
   role="region"
   aria-label="聊天"
-  ondragenter={dragEnter}
-  ondragover={dragOver}
-  ondragleave={dragLeave}
-  ondrop={drop}
+  {uploads}
+  blocked={!!uploadBlocked}
+  label="松开以上传文件到聊天"
 >
-  {#if dragging}
-    <div
-      class="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-ring bg-background/85 text-sm"
-      role="status"
-    >
-      {uploads.progress ? "请等待当前上传完成" : "松开以上传文件到聊天"}
-    </div>
-  {/if}
   <div class="relative flex min-h-0 flex-1 flex-col">
     <div
       bind:this={scroller}
@@ -356,6 +316,10 @@
         onerror={(message) => (error = message)}
       />
     {/if}
+    {#if location}<ChatLocation
+        workspace={location.workspace}
+        cwd={location.cwd}
+      />{/if}
     {#if request?.kind === "permission"}
       <PermissionPrompt
         {request}
@@ -385,4 +349,4 @@
       />
     {/if}
   </div>
-</div>
+</FileDropZone>

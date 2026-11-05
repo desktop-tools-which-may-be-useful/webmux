@@ -105,7 +105,6 @@
         !event.altKey
       ) {
         event.preventDefault();
-        // A chat-side hybrid session takes the shell to chat mode.
         openSession(session);
       }
     }}

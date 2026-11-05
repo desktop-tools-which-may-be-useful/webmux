@@ -92,7 +92,7 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
     await page.keyboard.press("Escape");
   }
 
-  const toolbar = page.getByRole("toolbar", { name: "启动选项" });
+  const toolbar = page.getByRole("toolbar", { name: "仓库与分支" });
   await expect(
     toolbar.getByRole("button", { name: "仓库：qs-repo" }),
   ).toBeVisible();
@@ -120,6 +120,11 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   const session = await (await request.get(`/api/sessions/${id}`)).json();
   expect(session.hybrid.side).toBe("acp");
   expect(session.workspace.worktreeId).not.toBe(listed.worktrees[0].id);
+  // The chat shows where it runs above the input, read-only.
+  const where = page.getByRole("group", { name: "会话位置" });
+  await expect(where).toContainText("qs-repo");
+  await expect(where).toContainText(/wt\//);
+  await expect(where.getByRole("button")).toHaveCount(0);
 
   // The chat history lists it as the current chat.
   const chats = (await sidebar(page)).getByRole("list", { name: "聊天历史" });

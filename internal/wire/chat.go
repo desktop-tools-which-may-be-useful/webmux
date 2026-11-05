@@ -164,6 +164,10 @@ func chatLocation(l hybrid.Location) contract.ChatLocation { return contract.Cha
 
 func chatCommand(c hybrid.Command) contract.ChatCommand { return contract.ChatCommand(c) }
 
+// ChatConfigs converts agent options, as a quick start options probe
+// reports them.
+func ChatConfigs(in []hybrid.ConfigOption) []contract.ChatConfig { return each(in, chatConfig) }
+
 func chatConfig(c hybrid.ConfigOption) contract.ChatConfig {
 	return contract.ChatConfig{
 		ID: c.ID, Name: c.Name, Category: c.Category, Type: c.Type, Value: c.Value, Enabled: c.Enabled,

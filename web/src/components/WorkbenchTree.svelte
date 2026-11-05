@@ -165,7 +165,6 @@
   import IconFolder from "~icons/tabler/folder";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLayoutDashboard from "~icons/tabler/layout-dashboard";
-  import IconPencil from "~icons/tabler/pencil";
   import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
@@ -173,6 +172,7 @@
   import { rowStatusLabels } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
+  import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
   // The workbench-mode sidebar: repositories → worktrees → live sessions.
   // One roving tab stop for the rows (arrow keys move, left and right fold),
@@ -191,6 +191,7 @@
     onopen,
     onnewworktree,
     onrename,
+    onclose,
   }: {
     repositories: readonly Repository[];
     /** Live sessions, as the home page lists them. */
@@ -210,6 +211,7 @@
     onopen: (session: SessionInfo) => void;
     onnewworktree: (repositoryId: string) => void;
     onrename: (session: SessionInfo) => void;
+    onclose: (session: SessionInfo) => void;
   } = $props();
 
   const nodes = $derived(workbenchTree(repositories, sessions, home));
@@ -332,11 +334,12 @@
 </script>
 
 {#snippet counts(node: TreeNode)}
+  <!-- Right-aligned, so counts end where session rows' status dots do. -->
   {#if node.waiting}<span
-      class="w-12 shrink-0 truncate text-xs text-warning"
+      class="w-12 shrink-0 truncate text-right text-xs text-warning"
       title={`${node.waiting} 个会话在等待`}>{node.waiting} 等待</span
     >{:else if node.count}<span
-      class="w-12 shrink-0 text-xs text-muted-foreground tabular-nums"
+      class="w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums"
       >{node.count}</span
     >{/if}
 {/snippet}
@@ -430,15 +433,11 @@
           ><IconPlus aria-hidden="true" /></ListButton
         >
       {:else if node.session}
-        {@const session = node.session}
-        <ListButton
-          variant="file-tree-action"
-          aria-label={`修改标题：${node.label}`}
-          title={`修改标题：${node.label}`}
+        <SidebarSessionMenu
+          label={node.label}
           tabindex={tabStop === node.key ? 0 : -1}
-          onclick={() => onrename(session)}
-          ><IconPencil aria-hidden="true" /></ListButton
-        >
+          target={{ kind: "live", session: node.session, onrename, onclose }}
+        />
       {/if}
     </div>
   </li>

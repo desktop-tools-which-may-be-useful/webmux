@@ -39,7 +39,7 @@ interface ForwardRequest {
   label?: string;
   session?: string;
   process?: string;
-  options?: ForwardOptions; // 省略时全部开启、prefix 为 keep
+  options?: ForwardOptions; // 省略时全部开启、prefix 为 strip
 }
 ```
 
@@ -56,7 +56,7 @@ interface ForwardRequest {
 - 响应删除 `Service-Worker-Allowed`；不使用 WebMux 的 `Referrer-Policy: no-referrer`，保留上游自己的策略；`X-Content-Type-Options: nosniff` 保留。
 - 网关执行与其他路径相同的 Host 检查；WebSocket 升级还执行与 `/ws/` 相同的 Origin 检查，不通过返回 403。
 - 每次请求都读取最新的转发选项，修改选项只影响之后的新请求。
-- 网关不改写 HTML、CSS 或 JS 响应体：使用绝对路径的应用必须把 base 设为 `/forward/{port}/`（Vite `--base /forward/5173/`，Next.js `basePath`），并使用默认的 `keep` 前缀模式。
+- 网关不改写 HTML、CSS 或 JS 响应体：默认的 `strip` 模式只适合使用相对路径的应用；使用绝对路径的应用必须改为 `keep` 前缀模式，并把 base 设为 `/forward/{port}/`（Vite `--base /forward/5173/`，Next.js `basePath`）。
 
 ## 认证
 

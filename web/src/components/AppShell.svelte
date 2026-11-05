@@ -20,13 +20,17 @@
     openPage,
     setShell,
     shellUi,
+    sidebarWidthMax,
+    sidebarWidthMin,
     type Shell,
     type ShellMode,
   } from "../shell.svelte";
+  import { dragWidth, keyWidth } from "../splitter";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
   import AppSidebar from "./AppSidebar.svelte";
   import LazyDialog from "./LazyDialog.svelte";
   import ModeSwitch from "./ModeSwitch.svelte";
+  import CloseSessionDialog from "./CloseSessionDialog.svelte";
   import RenameSessionDialog from "./RenameSessionDialog.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
 
@@ -65,6 +69,7 @@
 
   let creating = $state<{ entry?: LaunchEntry } | null>(null);
   let renaming = $state<SessionInfo | null>(null);
+  let closing = $state<SessionInfo | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
 
@@ -84,6 +89,10 @@
     rename(session) {
       shellUi.drawerOpen = false;
       renaming = session;
+    },
+    close(session) {
+      shellUi.drawerOpen = false;
+      closing = session;
     },
     forward() {
       shellUi.drawerOpen = false;
@@ -153,12 +162,26 @@
     void repositories.refresh();
     void archived.refresh();
   }
+  // Dragging or arrow keys on the sidebar's edge set its width.
+  const setWidth = (width: number) => shellUi.setWidth(width);
+  function resizeStart(event: PointerEvent) {
+    dragWidth(event, shellUi.width, setWidth);
+  }
+  function resizeKey(event: KeyboardEvent) {
+    keyWidth(
+      event,
+      shellUi.width,
+      { min: sidebarWidthMin, max: sidebarWidthMax },
+      setWidth,
+    );
+  }
 </script>
 
 <div
   class="app-shell"
   data-collapsed={shellUi.collapsed}
   data-mode={shellUi.mode}
+  style:--app-sidebar-full-width={`${shellUi.width}px`}
 >
   <nav class="app-sidebar app-sidebar-rail" aria-label="窄栏导航">
     <Button
@@ -196,6 +219,21 @@
   </nav>
   <aside class="app-sidebar app-sidebar-full" aria-label="侧栏">
     <AppSidebar {route} collapsible onmode={changeMode} onprimary={primary} />
+    <!-- A focusable separator with aria-valuenow is an interactive widget (WAI-ARIA window splitter). -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div
+      class="app-sidebar-divider"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="调整侧栏宽度"
+      title="拖动调整侧栏宽度"
+      aria-valuemin={sidebarWidthMin}
+      aria-valuemax={sidebarWidthMax}
+      aria-valuenow={shellUi.width}
+      tabindex="0"
+      onpointerdown={resizeStart}
+      onkeydown={resizeKey}
+    ></div>
   </aside>
   <div class="app-shell-main">
     {@render children()}
@@ -267,4 +305,12 @@
 {#if renaming}<RenameSessionDialog
     session={renaming}
     onclose={() => (renaming = null)}
+  />{/if}
+{#if closing}<CloseSessionDialog
+    session={closing}
+    onremoved={() => {
+      if (closing) ownDrafts.remove(closing.id);
+    }}
+    onarchived={() => void archived.refresh()}
+    onclose={() => (closing = null)}
   />{/if}

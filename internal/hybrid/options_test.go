@@ -149,3 +149,34 @@ func TestCheckCreate(t *testing.T) {
 		t.Fatal("a check started an ACP process")
 	}
 }
+
+// ProbeAgentOptions reads the options the agent offers before any chat
+// session exists, remembers them for the launch config, and leaves no
+// session, record or process behind; a missing connector is reported.
+func TestProbeAgentOptions(t *testing.T) {
+	h := newHarness(t, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	options, err := h.svc.ProbeAgentOptions(ctx, h.input(omp.Name, SideTUI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options) != 2 || configValue(options, "model") != "fast" || configValue(options, "mode") != "code" {
+		t.Fatalf("probed options %+v", options)
+	}
+	if got := h.agentOptions("cfgtest01"); len(got) != 2 || configValue(got, "model") != "fast" {
+		t.Fatalf("remembered options %+v", got)
+	}
+	if recs, _ := h.svc.Records(false); len(recs) != 0 || len(h.manager.List()) != 0 {
+		t.Fatalf("probe left records %v sessions %v", recs, h.manager.List())
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(agentPath(t, codex.Name), filepath.Join(dir, "codex")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = h.svc.ProbeAgentOptions(ctx, h.codexInput(SideACP, dir))
+	var missing *ConnectorMissingError
+	if !errors.As(err, &missing) {
+		t.Fatalf("codex without its connector: %v", err)
+	}
+}

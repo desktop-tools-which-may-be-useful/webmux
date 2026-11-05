@@ -56,12 +56,14 @@ export const demoSessions = [
 ];
 
 export const demoForwards = [
-  demoForward(5173, { session: "webwebwe", process: "node" }),
-  demoForward(8000, {
-    label: "docs 静态预览",
-    status: "unreachable",
-    options: { ...defaultForwardOptions, prefix: "strip" },
+  // Vite started with --base /forward/5173/ keeps the prefix; the static
+  // docs preview uses the default, which strips it.
+  demoForward(5173, {
+    session: "webwebwe",
+    process: "node",
+    options: { ...defaultForwardOptions, prefix: "keep" },
   }),
+  demoForward(8000, { label: "docs 静态预览", status: "unreachable" }),
 ];
 
 let forwards: Forward[] = [];

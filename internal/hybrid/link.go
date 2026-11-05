@@ -119,7 +119,7 @@ func (a *actor) connect(epoch int) (*acpLink, acp.InitializeResponse, *failure) 
 	sidecar, err := a.shell.StartSidecar(argv, a.cmd.ProtocolOnFD3(), tools.env)
 	if err != nil {
 		a.svc.log.Warn("hybrid acp start failed", "id", a.id, "error", err)
-		return nil, acp.InitializeResponse{}, a.startFailure(err)
+		return nil, acp.InitializeResponse{}, startFailure(a.cmd, err)
 	}
 	link := &acpLink{epoch: epoch, sidecar: sidecar, tools: tools}
 	link.conn = acp.NewConn(sidecar.Stdout(), sidecar.Stdin(), acp.Options{Handler: &handler{a: a, epoch: epoch}, Logger: a.svc.log})
@@ -136,7 +136,7 @@ func (a *actor) connect(epoch int) (*acpLink, acp.InitializeResponse, *failure) 
 	}
 	if err != nil {
 		f := a.callFailed(link, acp.MethodInitialize, err)
-		if missing := a.exitedNotFound(link.sidecar); missing != nil {
+		if missing := exitedNotFound(a.cmd, link.sidecar); missing != nil {
 			f = missing
 		}
 		return nil, init, f

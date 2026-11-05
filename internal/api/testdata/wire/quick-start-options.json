@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "category": "mode",
+      "id": "mode",
+      "name": "Mode",
+      "options": [
+        {
+          "name": "Code",
+          "value": "code"
+        },
+        {
+          "name": "Plan",
+          "value": "plan"
+        }
+      ],
+      "type": "select",
+      "value": "code"
+    },
+    {
+      "category": "model",
+      "id": "model",
+      "name": "Model",
+      "options": [
+        {
+          "name": "fast",
+          "value": "fast"
+        },
+        {
+          "name": "smart",
+          "value": "smart"
+        }
+      ],
+      "type": "select",
+      "value": "fast"
+    }
+  ]
+}

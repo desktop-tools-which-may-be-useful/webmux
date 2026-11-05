@@ -29,20 +29,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusConflict, errors.New("cannot upload to an exited session"))
 		return
 	}
-	var upload *files.Upload
-	received := receiveUpload(w, r, func(filename string, src io.Reader) bool {
-		dir, err := s.Artifacts.EnsureUploads(item.Info().ID)
-		if err != nil {
-			artifactsFailure(w, err)
-			return false
-		}
-		upload, err = s.Files.StoreUpload(dir, filename, src, maxUploadBytes)
-		if err != nil {
-			filesFailure(w, err)
-			return false
-		}
-		return true
-	})
+	upload, received := s.storeUpload(w, r, func() (string, error) { return s.Artifacts.EnsureUploads(item.Info().ID) })
 	if received && item.Info().Status == session.StatusExited {
 		failure(w, http.StatusConflict, errors.New("session exited during upload"))
 		received = false
@@ -54,6 +41,40 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusCreated, contract.UploadResult{Path: upload.Path})
+}
+
+// quickStartUpload stores an attachment of a quick start that has no
+// session yet in the shared staging folder; the quick start moves it to
+// its session.
+func (s *Server) quickStartUpload(w http.ResponseWriter, r *http.Request) {
+	upload, received := s.storeUpload(w, r, s.Artifacts.EnsureStaging)
+	if !received {
+		if upload != nil {
+			upload.Discard()
+		}
+		return
+	}
+	reply(w, http.StatusCreated, contract.UploadResult{Path: upload.Path})
+}
+
+// storeUpload receives one file into the folder dir returns, answering
+// every failure. The caller discards the file when it reports false.
+func (s *Server) storeUpload(w http.ResponseWriter, r *http.Request, dir func() (string, error)) (*files.Upload, bool) {
+	var upload *files.Upload
+	received := receiveUpload(w, r, func(filename string, src io.Reader) bool {
+		folder, err := dir()
+		if err != nil {
+			artifactsFailure(w, err)
+			return false
+		}
+		upload, err = s.Files.StoreUpload(folder, filename, src, maxUploadBytes)
+		if err != nil {
+			filesFailure(w, err)
+			return false
+		}
+		return true
+	})
+	return upload, received
 }
 
 // receiveUpload reads a multipart body of exactly one part named "file",

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
+  import { uploadFile } from "../../src/api";
   import ChatView from "../../src/components/chat/ChatView.svelte";
   import { chatActions } from "../../src/chat-api";
   import { createChatSocket } from "../../src/hooks/chat-socket.svelte";
@@ -21,9 +22,12 @@
   let openedLocation = $state<ChatCodeLink | null>(null);
   let error = $state("");
   let terminalRequests = $state(0);
-  const uploads = useChatUpload(session, (message) => {
-    error = message;
-  });
+  const uploads = useChatUpload(
+    (file, progress, signal) => uploadFile(session, file, progress, signal),
+    (message) => {
+      error = message;
+    },
+  );
 </script>
 
 <div style="height: 800px">

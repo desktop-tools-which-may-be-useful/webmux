@@ -701,6 +701,7 @@ func wireQuickStart(f *wireFixture) {
 		Branch: "wt/brisk-otter", Text: "修复首页排序", Config: map[string]string{"model": "smart", "effort": "high"},
 		PermissionMode: contract.ChatPermissionAsk,
 	}
+	f.call("quick-start-options", "POST", "/api/quick-starts/options", contract.QuickStartOptionsRequest{RepositoryID: str(repository, "id"), ConfigID: saved.ID}, 200)
 	f.call("quick-start", "POST", "/api/quick-starts", req, 201)
 	f.call("quick-start-retry", "POST", "/api/quick-starts", req, 201)
 	conflict := req

@@ -1,11 +1,7 @@
 <script lang="ts">
   import IconArrowUp from "~icons/tabler/arrow-up";
-  import IconFile from "~icons/tabler/file";
   import IconMessageBolt from "~icons/tabler/message-bolt";
-  import IconPaperclip from "~icons/tabler/paperclip";
-  import IconPhoto from "~icons/tabler/photo";
   import IconPlayerStopFilled from "~icons/tabler/player-stop-filled";
-  import IconX from "~icons/tabler/x";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { Textarea } from "$lib/components/ui/textarea";
@@ -24,10 +20,11 @@
   } from "../../terminal-draft.svelte";
   import { hasTouchInput } from "../../touchInput";
   import FileUploadProgress from "../FileUploadProgress.svelte";
-  import UploadFileInput from "../UploadFileInput.svelte";
+  import ChatAttachmentList from "./ChatAttachmentList.svelte";
   import ChatConfig from "./ChatConfig.svelte";
   import ChatPermissionMode from "./ChatPermissionMode.svelte";
   import ChatSessionOptions from "./ChatSessionOptions.svelte";
+  import ChatUploadButton from "./ChatUploadButton.svelte";
   import UsageRing from "./UsageRing.svelte";
 
   // The chat input. Its text is the session's draft, saved on this device
@@ -57,7 +54,6 @@
   } = $props();
 
   let textarea = $state<HTMLTextAreaElement | null>(null);
-  let fileInput = $state<{ open(): void }>();
   let sending = $state(false);
   const selection = useTextareaDraft(
     () => textarea,
@@ -209,36 +205,7 @@
         {/each}
       </div>
     {/if}
-    {#if uploads.attachments.length}
-      <ul
-        class="flex flex-wrap gap-1 border-b px-2 py-1.5"
-        aria-label="待发送附件"
-      >
-        {#each uploads.attachments as item (item.path)}
-          <li
-            class="flex max-w-full min-w-0 items-center gap-1 rounded-sm border bg-muted/50 px-2 py-0.5 text-xs"
-          >
-            {#if item.kind === "image"}<IconPhoto
-                class="size-3.5 shrink-0"
-                aria-hidden="true"
-              />{:else}<IconFile
-                class="size-3.5 shrink-0"
-                aria-hidden="true"
-              />{/if}
-            <span class="min-w-0 truncate">{item.name ?? item.path}</span>
-            <Button
-              variant="quiet"
-              size="icon-xs"
-              aria-label={`移除附件 ${item.name ?? item.path}`}
-              title="移除附件"
-              disabled={sending}
-              onclick={() => uploads.remove(item.path)}
-              ><IconX aria-hidden="true" /></Button
-            >
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <ChatAttachmentList {uploads} disabled={sending} />
     {#if imageDegraded}
       <p class="border-b px-3 py-1.5 text-xs text-warning" role="status">
         该 agent 不支持图片，图片将按服务器路径发送。
@@ -285,16 +252,11 @@
        send controls (they wrap only at very large text). -->
     <div class="flex flex-wrap items-center justify-end gap-1 px-2 pb-2">
       <div class="mr-auto flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-touch"
-          aria-label="上传文件"
-          title={uploadUnavailable || "上传文件"}
-          disabled={disabled || uploading || !!uploadUnavailable}
-          onclick={() => fileInput?.open()}
-          ><IconPaperclip aria-hidden="true" /></Button
-        >
-        <UploadFileInput bind:this={fileInput} upload={uploads.uploadFiles} />
+        <ChatUploadButton
+          {uploads}
+          {disabled}
+          unavailable={uploadUnavailable}
+        />
         <span class="sm:hidden">
           <ChatSessionOptions
             mode={chat.permissionMode}

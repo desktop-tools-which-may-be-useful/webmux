@@ -5,12 +5,11 @@
   import SessionViewControls from "../components/SessionViewControls.svelte";
   import WorkspaceToolbar from "../components/WorkspaceToolbar.svelte";
   import { store, stored } from "../api";
-  import type { Repository, SessionInfo, Worktree } from "../schemas";
+  import type { Repository, Worktree } from "../schemas";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
   import { dismissUpdate, dismissedUpdate, homeUpdate } from "../pendingUpdate";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
-  import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
   import UnregisterRepositoryDialog from "../components/UnregisterRepositoryDialog.svelte";
   import SessionFilters from "../components/SessionFilters.svelte";
   import RepositoryGroup from "../components/RepositoryGroup.svelte";
@@ -58,7 +57,6 @@
   let instructing = $state<Repository | null>(null);
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
-  let closing = $state<SessionInfo | null>(null);
   let now = $state(Date.now());
   let focusedExpanded = $state<Record<string, boolean>>({});
   let expansionOverrides = $state<Record<string, boolean>>({});
@@ -364,7 +362,7 @@
             bind:statusFilter
             filtered={filtering && (visible.length > 0 || archivedMatches > 0)}
             shortcutDisabled={Boolean(
-              removing || curating || instructing || unregisterOpen || closing,
+              removing || curating || instructing || unregisterOpen,
             )}
             onclear={clearFilters}
           />
@@ -455,9 +453,7 @@
               onremove={(tree) => {
                 removing = tree;
               }}
-              onclose={(s) => {
-                closing = s;
-              }}
+              onclose={shell.close}
               archived={placement.repositories.get(repo.id)}
               {visibleArchiveIds}
               {archive}
@@ -469,9 +465,7 @@
               focused={selectedRepository === "direct"}
               {visibleIds}
               {now}
-              onclose={(s) => {
-                closing = s;
-              }}
+              onclose={shell.close}
               archived={placement.direct}
               visibleArchiveIds={selectedRepository === "all" ||
               selectedRepository === "direct"
@@ -490,15 +484,6 @@
     </div>
   {/if}
 </div>
-{#if closing}<CloseSessionDialog
-    session={closing}
-    onremoved={() => {
-      if (closing) drafts.remove(closing.id);
-    }}
-    onclose={() => {
-      closing = null;
-    }}
-  />{/if}
 {#if instructing}
   {@const target = instructing}
   <LazyDialog

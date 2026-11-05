@@ -35,12 +35,20 @@
 
 `POST /api/quick-starts` 一次完成快速开始：在仓库中新建 worktree、以聊天端启动混合会话、应用配置与权限模式，并发送首条提示。请求与响应结构见 `internal/contract/quickstart.go`。
 
-- 请求：`{clientRequestId, repositoryId, configId, base, branch, text, config, permissionMode}`。`config` 为配置项 ID 到值的映射（布尔项为 `"true"`/`"false"`）；路径由服务端取 `defaultParent/<分支名末段>`。
+- 请求：`{clientRequestId, repositoryId, configId, base, branch, text, config, permissionMode, attachments?}`。`config` 为配置项 ID 到值的映射（布尔项为 `"true"`/`"false"`）；路径由服务端取 `defaultParent/<分支名末段>`。
+- 附件：`attachments` 为 `POST /api/quick-starts/uploads` 返回的 `{path}`，最多 8 个，只读取 `path`；不是暂存文件夹中的普通文件时在预检返回 400。会话创建并应用配置后，文件移入该会话的上传目录，随首条提示按聊天附件规则发送。
 - 成功：201 `{sessionId, worktree, configWarnings}`。agent 不接受的配置值记为 `configWarnings` 并作为聊天提示写入时间线，不阻断发送。
 - 预检：仓库可用、启动配置勾选了混合模式、第三方连接器已安装，都在创建 worktree 之前校验；连接器缺失返回 409 `connector_missing`。
 - 失败：错误体为 `{error, step, reason?, eligibility?, connector?, worktree?, sessionId?}`，`step` 为 `precheck`、`worktree`、`session`、`config` 或 `prompt`；已创建的 worktree 与会话不会自动删除。分支或路径冲突为 409、`step: "worktree"`、`reason: "conflict"`。
 - 幂等：同一 `clientRequestId` 在执行中及完成后 10 分钟内重复提交，等待并返回第一次的结果；首条提示复用该 ID。处理不依赖客户端连接，最长 3 分钟。
 - 仓库有初始化指令时，首条提示为“指令、空行、用户输入”。
+
+`POST /api/quick-starts/options` 在发送前读取 agent 提供的配置项：请求 `{repositoryId, configId}`，服务端在仓库主工作区以聊天端临时启动该启动配置的 agent，`session/new` 后读取配置项，随即关闭会话（agent 支持时发 `session/close`）并结束进程，不创建 WebMux 会话或记录。
+
+- 成功：200，结构同聊天状态的 `config` 数组，同时记为该启动配置的 `chatOptions`。
+- 失败：与创建会话相同的状态码；连接器缺失为 409 `connector_missing`，agent 调用失败为 502。与资格探测共享并发上限，最长 45 秒，客户端断开即取消。
+
+`POST /api/quick-starts/uploads` 在会话存在之前接收附件：multipart 正文与 `/api/sessions/{id}/upload` 相同（单个名为 `file` 的部分），201 返回 `{path}`。文件存放在服务实例临时根目录下共享的 `quick-start/` 暂存文件夹（0700/0600），被快速开始移走前保留；服务启动时清空。
 
 ## 代码工作区
 

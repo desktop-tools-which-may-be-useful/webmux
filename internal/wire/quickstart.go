@@ -9,6 +9,7 @@ func QuickStartInput(r contract.QuickStartRequest) workspace.QuickStartInput {
 	return workspace.QuickStartInput{
 		ClientRequestID: r.ClientRequestID, RepositoryID: r.RepositoryID, ConfigID: r.ConfigID,
 		Base: r.Base, Branch: r.Branch, Text: r.Text, Config: r.Config, PermissionMode: string(r.PermissionMode),
+		Attachments: each(r.Attachments, func(a contract.ChatAttachment) string { return a.Path }),
 	}
 }
 

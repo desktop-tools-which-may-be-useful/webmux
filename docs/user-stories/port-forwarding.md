@@ -23,7 +23,7 @@
     - 添加 `X-Forwarded-For/Host/Proto/Prefix`；
     - 把指向 `localhost:{port}` 或 `127.0.0.1:{port}` 的 `Location`、`Access-Control-Allow-Origin` 改回网关，并去掉 `Set-Cookie` 的 `Domain`、给 `Path` 加转发前缀；
   - 选项关闭时对应头原样转发；浏览器传入的 `X-Forwarded-*` 不会到达上游；
-  - 路径前缀模式默认“保留前缀”（适合 `vite --base /forward/5173/`、Next.js `basePath`），可改为“去除前缀”（适合只用相对路径的服务）；
+  - 路径前缀模式默认“去除前缀”（只用相对路径的服务无需改配置），可改为“保留前缀”（适合 `vite --base /forward/5173/`、Next.js `basePath` 等使用绝对路径的应用）；
   - 不改写 HTML、CSS 或 JS 响应体；修改选项只影响之后的新请求。
 - **US-R03 首页转发管理**：作为使用者，我希望在首页查看和管理所有转发，以便手动添加端口、打开或复制链接、调整选项和移除转发。
   验收要点：

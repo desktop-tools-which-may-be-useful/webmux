@@ -42,6 +42,8 @@ var quickStartID = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
 // QuickStartInput starts a chat in a new worktree in one request. Config
 // maps option IDs to values (a select value, or "true"/"false" for a
 // boolean); PermissionMode is ask, auto or empty for the default.
+// Attachments are files uploaded to the quick start staging folder; they
+// move to the new session and go with the first prompt.
 type QuickStartInput struct {
 	ClientRequestID string
 	RepositoryID    string
@@ -51,6 +53,7 @@ type QuickStartInput struct {
 	Text            string
 	Config          map[string]string
 	PermissionMode  string
+	Attachments     []string
 }
 
 // QuickStartResult is a quick start that sent its first prompt.
@@ -161,17 +164,22 @@ func (s *Service) quickStart(ctx context.Context, in QuickStartInput) (QuickStar
 	if err != nil {
 		return fail(StepConfig, &tree, id, err)
 	}
-	if _, err := s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: in.ClientRequestID, Text: plan.text}); err != nil {
+	attachments, err := s.adoptQuickStartUploads(id, plan.attachments)
+	if err != nil {
+		return fail(StepPrompt, &tree, id, err)
+	}
+	if _, err := s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: in.ClientRequestID, Text: plan.text, Attachments: attachments}); err != nil {
 		return fail(StepPrompt, &tree, id, err)
 	}
 	return QuickStartResult{SessionID: id, Worktree: tree, ConfigWarnings: warnings}, nil
 }
 
-// quickStartPlan is a checked quick start: the worktree path and the
-// first prompt's text.
+// quickStartPlan is a checked quick start: the worktree path, the first
+// prompt's text and its staged attachments.
 type quickStartPlan struct {
-	path string
-	text string
+	path        string
+	text        string
+	attachments []string
 }
 
 // quickStartPlan makes the checks a quick start can make before it
@@ -187,6 +195,17 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 	leaf := path.Base(in.Branch)
 	if in.Branch == "" || leaf == "." || leaf == "/" || strings.HasPrefix(leaf, "-") {
 		return quickStartPlan{}, problemf(ErrInvalid, "分支名无效")
+	}
+	if len(in.Attachments) > hybrid.MaxAttachments {
+		return quickStartPlan{}, problemf(ErrInvalid, "每条消息最多 %d 个附件", hybrid.MaxAttachments)
+	}
+	staged := make([]string, 0, len(in.Attachments))
+	for _, p := range in.Attachments {
+		clean, err := s.artifacts.StagedPath(p)
+		if err != nil || slices.Contains(staged, clean) {
+			return quickStartPlan{}, problemf(ErrInvalid, "附件不是本次快速开始上传的文件")
+		}
+		staged = append(staged, clean)
 	}
 	configID := in.ConfigID
 	command, err := s.resolveCommand(SessionInput{ConfigID: &configID, StartSide: string(hybrid.SideACP)})
@@ -222,7 +241,41 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 		return quickStartPlan{}, err
 	}
 	parent := filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")
-	return quickStartPlan{path: filepath.Join(parent, leaf), text: text}, nil
+	return quickStartPlan{path: filepath.Join(parent, leaf), text: text, attachments: staged}, nil
+}
+
+// adoptQuickStartUploads moves the staged attachments into session id's
+// uploads, where its prompts take files from.
+func (s *Service) adoptQuickStartUploads(id string, staged []string) ([]hybrid.Attachment, error) {
+	paths, err := s.artifacts.Adopt(id, staged)
+	if err != nil {
+		return nil, problemf(ErrUnavailable, "附件无法交给会话：%v", err)
+	}
+	out := make([]hybrid.Attachment, 0, len(paths))
+	for _, p := range paths {
+		out = append(out, hybrid.Attachment{Path: p})
+	}
+	return out, nil
+}
+
+// QuickStartOptions reads the agent options launch config configID offers
+// before any chat of it exists: the agent opens a throwaway session in the
+// repository's main worktree and reports them (hybrid ProbeAgentOptions).
+func (s *Service) QuickStartOptions(ctx context.Context, repositoryID, configID string) ([]hybrid.ConfigOption, error) {
+	command, err := s.resolveCommand(SessionInput{ConfigID: &configID, StartSide: string(hybrid.SideACP)})
+	if err != nil {
+		return nil, err
+	}
+	if s.hybrids == nil {
+		return nil, problemf(ErrUnavailable, "混合会话不可用")
+	}
+	r, err := s.repository(repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	return s.hybrids.ProbeAgentOptions(ctx, hybrid.CreateInput{
+		Cwd: r.entry.AnchorPath, ConfigID: command.configID, Cmd: command.cmd, Env: command.env,
+	})
 }
 
 // applyQuickStartConfig sets each requested option that differs from what

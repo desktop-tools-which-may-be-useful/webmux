@@ -240,6 +240,14 @@
       "count": 1,
       "owner": "user-files"
     },
+    "internal/artifacts/staging.go|*Service.Adopt|os.Rename": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/artifacts/staging.go|*Service.clearStaging|os.RemoveAll": {
+      "count": 1,
+      "owner": "user-files"
+    },
     "internal/codeview/archive.go|*Archive.WriteTo|golang.org/x/sys/unix.Openat": {
       "count": 1,
       "owner": "read-only-codeview"

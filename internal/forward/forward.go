@@ -48,10 +48,10 @@ type Options struct {
 	Prefix           Prefix
 }
 
-// DefaultOptions turns every rewrite on and keeps the prefix, which suits a
-// dev server such as Vite started with --base /forward/{port}/.
+// DefaultOptions turns every rewrite on and strips the prefix, so a server
+// that only uses relative paths works without changing its configuration.
 func DefaultOptions() Options {
-	return Options{RewriteHost: true, RewriteOrigin: true, ForwardedHeaders: true, RewriteResponse: true, Prefix: PrefixKeep}
+	return Options{RewriteHost: true, RewriteOrigin: true, ForwardedHeaders: true, RewriteResponse: true, Prefix: PrefixStrip}
 }
 
 // Status is the reachability of the forwarded loopback port.

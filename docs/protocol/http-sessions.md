@@ -157,7 +157,11 @@ interface SessionInfo {
 
 `preview` 为 `null` 或省略时沿用服务端同步的全局预览设置；否则为 `{lines, skip}`，`lines` 为 1–50 的整数、`skip` 为 0–50 的整数。会话卡片按创建时记录的 `configId` 读取该配置的当前预览值，配置被删除或不可用时回退全局设置。
 
-列表的 `chatOptions` 是该配置最近一次聊天端会话报告的配置项清单与最后的值（结构同聊天状态的 `config`），还没有时为空数组。服务端保存在 `<state_dir>/agent-options.json`，删除启动配置时一并清除；它只供快速开始在 agent 启动前展示配置，不参与切换或恢复。
+列表的 `chatOptions` 是该配置最近报告的配置项清单与最后的值（结构同聊天状态的 `config`），还没有时为空数组：
+
+- 来源是该配置最近一次聊天端会话，或快速开始的配置读取 `POST /api/quick-starts/options`；
+- 服务端保存在 `<state_dir>/agent-options.json`，删除启动配置时一并清除；
+- 它只供快速开始在 agent 启动前展示配置，不参与切换或恢复。
 
 列表只含环境变量名（字典序），值只由单条读取与创建/更新响应返回。限制：
 

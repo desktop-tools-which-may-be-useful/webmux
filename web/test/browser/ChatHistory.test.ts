@@ -55,6 +55,8 @@ test("chats and archived records share one list, newest first", async () => {
     onopen,
     onresume,
     onrename: vi.fn(),
+    onclose: vi.fn(),
+    onremove: vi.fn(),
   });
   const rows = list().getByRole("button", { name: /（/ });
   await expect.element(rows.first()).toBeVisible();

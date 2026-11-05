@@ -77,17 +77,17 @@ func TestRegistryLifecycle(t *testing.T) {
 	default:
 		t.Fatal("add did not signal")
 	}
-	if _, err := s.Add(t.Context(), Input{Port: 5173, Options: &Options{Prefix: PrefixStrip}}); !errors.Is(err, ErrConflict) {
+	if _, err := s.Add(t.Context(), Input{Port: 5173, Options: &Options{Prefix: PrefixKeep}}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate add = %v", err)
 	}
-	if got, _, _ := s.Lookup(5173); got.Options.Prefix != PrefixKeep {
+	if got, _, _ := s.Lookup(5173); got.Options.Prefix != PrefixStrip {
 		t.Fatalf("duplicate add changed options: %+v", got.Options)
 	}
 
 	label := "web"
-	strip := DefaultOptions()
-	strip.Prefix = PrefixStrip
-	if f, err = s.Update(5173, Update{Label: &label, Options: &strip}); err != nil || f.Label != "web" || f.Options.Prefix != PrefixStrip {
+	keep := DefaultOptions()
+	keep.Prefix = PrefixKeep
+	if f, err = s.Update(5173, Update{Label: &label, Options: &keep}); err != nil || f.Label != "web" || f.Options.Prefix != PrefixKeep {
 		t.Fatalf("update = %+v, %v", f, err)
 	}
 	if _, err := s.Update(8000, Update{Label: &label}); !errors.Is(err, ErrNotFound) {

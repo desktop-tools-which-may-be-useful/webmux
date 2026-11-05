@@ -167,21 +167,21 @@ func versionField(out string) string {
 	return ""
 }
 
-// startFailure classifies a failed ACP process start: an executable that
-// cannot be found is a missing connector when the profile has one.
-func (a *actor) startFailure(err error) *failure {
-	if c := a.cmd.Profile.Connector; c != nil && errors.Is(err, session.ErrNoExecutable) {
+// startFailure classifies a failed ACP process start of cmd: an executable
+// that cannot be found is a missing connector when the profile has one.
+func startFailure(cmd agentprofile.Command, err error) *failure {
+	if c := cmd.Profile.Connector; c != nil && errors.Is(err, session.ErrNoExecutable) {
 		return &failure{err: &ConnectorMissingError{Connector: c}, public: connectorText(c)}
 	}
 	return &failure{err: fmt.Errorf("%w: %v", ErrAgent, err), public: "启动 agent 失败"}
 }
 
-// exitedNotFound reports a connector run through a startup file that ended
-// with the shell's command-not-found status before answering: it was
-// removed after the check.
-func (a *actor) exitedNotFound(sidecar *session.Sidecar) *failure {
-	c := a.cmd.Profile.Connector
-	if c == nil || a.cmd.Form != agentprofile.FormStartup || sidecar.ExitCode() != exitNotFound {
+// exitedNotFound reports a connector of cmd run through a startup file
+// that ended with the shell's command-not-found status before answering:
+// it was removed after the check.
+func exitedNotFound(cmd agentprofile.Command, sidecar *session.Sidecar) *failure {
+	c := cmd.Profile.Connector
+	if c == nil || cmd.Form != agentprofile.FormStartup || sidecar.ExitCode() != exitNotFound {
 		return nil
 	}
 	return &failure{err: &ConnectorMissingError{Connector: c}, public: connectorText(c)}

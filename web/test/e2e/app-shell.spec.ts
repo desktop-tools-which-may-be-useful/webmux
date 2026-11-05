@@ -134,19 +134,23 @@ test.describe("desktop sidebar", () => {
       page.getByRole("button", { name: "工作台模式" }),
     ).toHaveAttribute("aria-pressed", "true");
 
-    // A chat-side hybrid session takes the shell to chat mode.
+    // A chat-side hybrid session keeps the workbench; switching to chat
+    // mode only swaps the sidebar.
     await page.goto("/");
     await tree(page).locator('[data-tree-key="all"]').click();
     await page.getByRole("link", { name: "修复排序" }).click();
     await expect(page).toHaveURL(new RegExp(`/s/${agent}$`));
     await expect(
-      page.getByRole("button", { name: "聊天模式" }),
+      page.getByRole("button", { name: "工作台模式" }),
     ).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "聊天模式" }).click();
+    await expect(page).toHaveURL(new RegExp(`/s/${agent}$`));
     const chats = page.getByRole("list", { name: "聊天历史" });
     await expect(chats.locator('[aria-current="page"]')).toHaveCount(1);
 
     // Renamed from the sidebar, the title follows everywhere.
-    await chats.getByRole("button", { name: "修改标题：修复排序" }).click();
+    await chats.getByRole("button", { name: "会话操作：修复排序" }).click();
+    await page.getByRole("menuitem", { name: "修改标题" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("textbox").fill("首页排序");
     await page.keyboard.press("Enter");
@@ -154,7 +158,8 @@ test.describe("desktop sidebar", () => {
       chats.getByRole("button", { name: /^首页排序（/ }),
     ).toBeVisible();
     await expect(page.locator(".terminal-header")).toContainText("首页排序");
-    await chats.getByRole("button", { name: "修改标题：首页排序" }).click();
+    await chats.getByRole("button", { name: "会话操作：首页排序" }).click();
+    await page.getByRole("menuitem", { name: "修改标题" }).click();
     await dialog.getByRole("textbox").fill("");
     await dialog.getByRole("button", { name: "保存" }).click();
     await expect(

@@ -122,7 +122,7 @@
    tablets (640–1023px) always show the rail, whose expand button opens the
    drawer, so the session keeps its width; phones only have the drawer. */
 .app-shell {
-  --app-sidebar-width: 18rem;
+  --app-sidebar-width: var(--app-sidebar-full-width, 18rem);
 }
 .app-shell[data-collapsed="true"] {
   --app-sidebar-width: 3.5rem;
@@ -149,6 +149,20 @@
 .app-shell[data-collapsed="false"] .app-sidebar-rail,
 .app-shell[data-collapsed="true"] .app-sidebar-full {
   display: none;
+}
+/* The full sidebar's right edge drags to resize it. */
+.app-sidebar-divider {
+  position: absolute;
+  inset-block: 0;
+  right: -3px;
+  width: 5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.app-sidebar-divider:hover,
+.app-sidebar-divider:focus-visible {
+  background: var(--border);
+  outline: none;
 }
 @media (min-width: 640px) and (max-width: 1023px) {
   .app-shell {

@@ -49,6 +49,7 @@ function renderTree(
     onopen: vi.fn(),
     onnewworktree: vi.fn(),
     onrename: vi.fn(),
+    onclose: vi.fn(),
   };
   render(WorkbenchTree, {
     repositories: [webmux, legacy],

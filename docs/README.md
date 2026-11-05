@@ -28,6 +28,7 @@
   - [仓库与 worktree](usage/worktrees.md)：仓库登记、上游基线刷新、工作树创建与安全删除。
   - [移动端使用](usage/mobile.md)：软键栏、虚拟键盘、触摸手势、锁定尺寸与全屏。
   - [端口转发预览](usage/port-forwarding.md)：把服务器上的开发服务器经 WebMux 转发到浏览器，终端端口提示与兼容选项。
+  - [Shell 目录报告](usage/shell-directory.md)：可选的 OSC 7 目录报告与 bash / zsh 配置片段。
 - [混合会话](hybrid-sessions.md)：OpenCode / omp / Codex CLI / Claude Code / Antigravity CLI / Qoder / QoderCN 在聊天视图与终端间切换。
 - [CLI agent 接入](cli-agents.md)：预置的十一款 CLI agent 启动配置与提醒。
 

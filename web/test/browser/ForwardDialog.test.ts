@@ -77,7 +77,7 @@ test("adding a port sends its compatibility options and lists it", async () => {
   await expect.element(page.getByText("还没有转发")).toBeVisible();
   await portField.fill("3000");
   await page.getByRole("button", { name: /兼容选项/ }).click();
-  await page.getByRole("radio", { name: "去除前缀" }).click();
+  await page.getByRole("radio", { name: "保留前缀" }).click();
   await page.getByRole("switch", { name: "改写 Host" }).click();
   await page.getByRole("button", { name: "添加转发" }).click();
 
@@ -87,7 +87,7 @@ test("adding a port sends its compatibility options and lists it", async () => {
   expect(init?.method).toBe("POST");
   expect(body(init)).toEqual({
     port: 3000,
-    options: { ...defaultForwardOptions, rewriteHost: false, prefix: "strip" },
+    options: { ...defaultForwardOptions, rewriteHost: false, prefix: "keep" },
   });
   await expect.poll(rowTexts).toEqual(["3000 手动添加 可访问 /forward/3000/"]);
   await expect.element(portField).toHaveValue("");
@@ -135,14 +135,18 @@ test("settings save the label and options of one forward", async () => {
   const settings = page.getByRole("button", { name: "端口 5173 的设置" });
   await settings.click();
   await expect.element(settings).toHaveAttribute("aria-expanded", "true");
+  // The default strips the prefix; keeping it asks for the server's base.
+  const form = page.getByRole("form", { name: "端口 5173 的设置" });
   await expect
-    .element(page.getByText("--base /forward/5173/", { exact: false }))
+    .element(
+      form.getByText("后转发，适合只使用相对路径的服务", { exact: false }),
+    )
     .toBeVisible();
   await page.getByRole("textbox", { name: "名称（可选）" }).fill(" 前端 ");
-  await page
-    .getByRole("form", { name: "端口 5173 的设置" })
-    .getByRole("radio", { name: "去除前缀" })
-    .click();
+  await form.getByRole("radio", { name: "保留前缀" }).click();
+  await expect
+    .element(form.getByText("--base /forward/5173/", { exact: false }))
+    .toBeVisible();
   await page
     .getByRole("form", { name: "端口 5173 的设置" })
     .getByRole("switch", { name: "改写重定向和 Cookie" })
@@ -158,7 +162,7 @@ test("settings save the label and options of one forward", async () => {
     options: {
       ...defaultForwardOptions,
       rewriteResponse: false,
-      prefix: "strip",
+      prefix: "keep",
     },
   });
   await expect

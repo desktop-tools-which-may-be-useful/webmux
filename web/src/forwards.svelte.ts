@@ -30,14 +30,15 @@ export const forwards = {
   },
 };
 
-// Every compatibility rewrite on and the prefix kept: what a Vite dev server
-// started with `--base /forward/{port}/` needs.
+// Every compatibility rewrite on and the prefix stripped, so a server that
+// only uses relative paths works unchanged; servers with absolute paths
+// switch to keeping it and set their base to `/forward/{port}/`.
 export const defaultForwardOptions: ForwardOptions = {
   rewriteHost: true,
   rewriteOrigin: true,
   forwardedHeaders: true,
   rewriteResponse: true,
-  prefix: "keep",
+  prefix: "strip",
 };
 
 function replace(next: readonly Forward[]) {

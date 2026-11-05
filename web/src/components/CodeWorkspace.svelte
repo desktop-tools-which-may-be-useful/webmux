@@ -1,5 +1,6 @@
 <script lang="ts">
   import { errorMessage } from "../error";
+  import { dragWidth, keyWidth } from "../splitter";
   import { onMount, untrack, type Snippet } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import CodeNavigator from "./CodeNavigator.svelte";
@@ -184,31 +185,10 @@
     navWidth = Math.round(Math.max(navMin, Math.min(limit, width)));
   }
   function resizeStart(event: PointerEvent) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    const handle = event.currentTarget as HTMLElement;
-    handle.setPointerCapture(event.pointerId);
-    const startX = event.clientX,
-      startWidth = navWidth;
-    const move = (e: PointerEvent) =>
-      setNavWidth(startWidth + e.clientX - startX);
-    const end = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", end);
-      handle.removeEventListener("pointercancel", end);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", end);
-    handle.addEventListener("pointercancel", end);
+    dragWidth(event, navWidth, setNavWidth);
   }
   function resizeKey(event: KeyboardEvent) {
-    const step = event.shiftKey ? 64 : 16;
-    if (event.key === "ArrowLeft") setNavWidth(navWidth - step);
-    else if (event.key === "ArrowRight") setNavWidth(navWidth + step);
-    else if (event.key === "Home") setNavWidth(navMin);
-    else if (event.key === "End") setNavWidth(navMax);
-    else return;
-    event.preventDefault();
+    keyWidth(event, navWidth, { min: navMin, max: navMax }, setNavWidth);
   }
   let includeIgnored = $state(seed?.includeIgnored ?? false);
   let directory = $state(seed?.directory ?? "");

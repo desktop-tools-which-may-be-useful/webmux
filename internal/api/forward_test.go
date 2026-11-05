@@ -423,16 +423,8 @@ func TestGatewayWithoutToken(t *testing.T) {
 
 func TestGatewayPrefixModes(t *testing.T) {
 	env := newGatewayEnv(t, "secret", nil)
+	// The default strips the prefix.
 	cookie := withCookie(func() *http.Cookie { env.add(env.port, nil); return env.cookie() }())
-	env.do(http.MethodGet, env.path("@vite/client?t=1"), nil, cookie)
-	if got := env.last().path; got != env.path("@vite/client?t=1") {
-		t.Fatalf("keep sent %q", got)
-	}
-	strip := forward.DefaultOptions()
-	strip.Prefix = forward.PrefixStrip
-	if _, err := env.forwards.Update(env.port, forward.Update{Options: &strip}); err != nil {
-		t.Fatal(err)
-	}
 	env.do(http.MethodGet, env.path("docs/index.html?q=1"), nil, cookie)
 	if got := env.last().path; got != "/docs/index.html?q=1" {
 		t.Fatalf("strip sent %q", got)
@@ -440,6 +432,15 @@ func TestGatewayPrefixModes(t *testing.T) {
 	env.do(http.MethodGet, env.path(""), nil, cookie)
 	if got := env.last().path; got != "/" {
 		t.Fatalf("strip root sent %q", got)
+	}
+	keep := forward.DefaultOptions()
+	keep.Prefix = forward.PrefixKeep
+	if _, err := env.forwards.Update(env.port, forward.Update{Options: &keep}); err != nil {
+		t.Fatal(err)
+	}
+	env.do(http.MethodGet, env.path("@vite/client?t=1"), nil, cookie)
+	if got := env.last().path; got != env.path("@vite/client?t=1") {
+		t.Fatalf("keep sent %q", got)
 	}
 }
 

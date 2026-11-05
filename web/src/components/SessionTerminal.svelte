@@ -8,6 +8,7 @@
     navigate,
     store,
     stored,
+    uploadFile,
   } from "../api";
   import {
     BUILTIN_ARTIFACT_PROMPT,
@@ -422,8 +423,9 @@
   // Chat uploads and their pending attachments live on this page, not in
   // ChatView, so switching sides neither aborts an upload nor drops them.
   // Leaving the page aborts the upload: its attachment has nowhere to go.
+  const sessionId = untrack(() => id);
   const chatUploads = useChatUpload(
-    untrack(() => id),
+    (file, progress, signal) => uploadFile(sessionId, file, progress, signal),
     (message) => (error = message),
   );
   const chatUploadUnavailable = $derived(
@@ -794,6 +796,7 @@
               {drafts}
               uploads={chatUploads}
               uploadUnavailable={chatUploadUnavailable}
+              location={hybrid.info}
               actions={hybrid.actions}
               onreview={review}
               onopenlocation={openCodeLocation}

@@ -6,7 +6,7 @@
   import { errorMessage } from "../error";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { connectorMissingText } from "../hybrid";
-  import { resumeHybrid } from "../recoverable";
+  import { removeRecord, resumeHybrid } from "../recoverable";
   import type { Route } from "../route";
   import type { HybridRecord } from "../schemas";
   import {
@@ -17,6 +17,7 @@
     type ShellMode,
   } from "../shell.svelte";
   import Brand from "./Brand.svelte";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import ChatHistory from "./ChatHistory.svelte";
   import ModeSwitch from "./ModeSwitch.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
@@ -55,7 +56,31 @@
   const setup = $derived(shell.setup.value);
 
   let resuming = $state("");
+  // The last failed sidebar action (resume or record deletion), shown above
+  // the list.
   let resumeError = $state("");
+  let removing = $state<HybridRecord | null>(null);
+  let removeOpen = $state(false);
+  function askRemove(record: HybridRecord) {
+    removing = record;
+    removeOpen = true;
+  }
+  async function confirmRemove() {
+    const record = removing;
+    removeOpen = false;
+    if (!record) return;
+    resumeError = "";
+    try {
+      await removeRecord(record.id);
+      shell.drafts.remove(record.id);
+      await shell.archived.refresh();
+    } catch (err) {
+      resumeError = `无法删除“${recordTitle(record)}”的记录：${errorMessage(err)}`;
+    }
+  }
+  function recordTitle(record: HybridRecord) {
+    return record.name || record.title || record.agent;
+  }
   // An archived chat resumes on its chat side through the existing flow;
   // choices that need the user (another agent session, a deleted launch
   // config) are made on the record's own page.
@@ -127,6 +152,8 @@
         onopen={openSession}
         onresume={(record) => void resume(record)}
         onrename={shell.rename}
+        onclose={shell.close}
+        onremove={askRemove}
       />
     {:else if !shell.sessions.loading && (shell.repositories.settled || shell.repositories.list.length)}
       <!-- Drawn once sessions and repositories are known, so rows never
@@ -149,6 +176,7 @@
         onnewworktree={(repositoryId) =>
           shell.start({ kind: "new-worktree", repositoryId })}
         onrename={shell.rename}
+        onclose={shell.close}
       />
     {/if}
   </div>
@@ -159,3 +187,11 @@
     onforward={shell.forward}
   />
 </nav>
+
+<ConfirmDialog
+  bind:open={removeOpen}
+  title={`删除“${removing ? recordTitle(removing) : ""}”的记录？`}
+  onconfirm={() => void confirmRemove()}
+>
+  只删除 WebMux 的记录与本机草稿；agent 自己保存的会话不受影响。
+</ConfirmDialog>

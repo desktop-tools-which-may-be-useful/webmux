@@ -22,7 +22,7 @@
   import * as Select from "$lib/components/ui/select";
   import IconRefresh from "~icons/tabler/refresh";
   import AdvancedSection from "./AdvancedSection.svelte";
-  import * as Command from "$lib/components/ui/command";
+  import BranchCommandList from "./BranchCommandList.svelte";
   import IconGitBranch from "~icons/tabler/git-branch";
   import PickerField from "./PickerField.svelte";
   import * as SegmentedControl from "$lib/components/ui/segmented-control";
@@ -461,55 +461,22 @@
             </span>
           {/if}
         {/snippet}
-        <Command.Root
+        <BranchCommandList
           label="已有本地分支"
-          class="h-auto min-w-0"
-          filter={(value, search) =>
-            value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0}
-          disableInitialScroll
-        >
-          <Command.Input
-            bind:value={branchSearch}
-            placeholder="搜索本地分支…"
-            aria-label="搜索本地分支"
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck={false}
-          />
-          <Command.List
-            aria-label="本地分支列表"
-            class="max-h-[min(14rem,50dvh)] p-1"
-          >
-            <Command.Empty>
-              {loading
-                ? "正在读取本地分支…"
-                : error
-                  ? "无法读取本地分支"
-                  : "没有匹配的本地分支"}
-            </Command.Empty>
-            {#each data?.branches || [] as item (item.name)}
-              <Command.Item
-                value={item.name}
-                disabled={disabled || item.worktreePaths.length > 0}
-                data-checked={branch === item.name}
-                onSelect={() => {
-                  branch = item.name;
-                  setBranchPickerOpen(false);
-                }}
-              >
-                <span class="min-w-0 flex-1 break-all">
-                  {item.name}
-                  {#if item.worktreePaths.length}
-                    <span class="block text-muted-foreground"
-                      >已被工作树占用</span
-                    >
-                  {/if}
-                </span>
-              </Command.Item>
-            {/each}
-          </Command.List>
-        </Command.Root>
+          branches={(data?.branches ?? []).map((item) => ({
+            name: item.name,
+            reason: item.worktreePaths.length ? "已被工作树占用" : undefined,
+          }))}
+          selected={branch}
+          {loading}
+          failed={!!error}
+          {disabled}
+          bind:search={branchSearch}
+          onselect={(name) => {
+            branch = name;
+            setBranchPickerOpen(false);
+          }}
+        />
       </PickerField>
     </div>
   {/if}

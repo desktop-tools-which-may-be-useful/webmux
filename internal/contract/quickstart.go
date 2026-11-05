@@ -16,6 +16,18 @@ type QuickStartRequest struct {
 	Text            string             `json:"text"`
 	Config          map[string]string  `json:"config"`
 	PermissionMode  ChatPermissionMode `json:"permissionMode"`
+	// Attachments are files returned by POST /api/quick-starts/uploads;
+	// only their path is read. They go with the first prompt.
+	Attachments []ChatAttachment `json:"attachments,omitempty"`
+}
+
+// QuickStartOptionsRequest is the body of POST /api/quick-starts/options:
+// the agent of launch config ConfigID reports the options it offers in a
+// throwaway session in repository RepositoryID's main worktree. The 200
+// body is []ChatConfig, also remembered as the config's chatOptions.
+type QuickStartOptionsRequest struct {
+	RepositoryID string `json:"repositoryId"`
+	ConfigID     string `json:"configId"`
 }
 
 // QuickStartResult is the 201 body of POST /api/quick-starts.

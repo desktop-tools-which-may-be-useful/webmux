@@ -6,7 +6,7 @@
         "label": "",
         "options": {
           "forwardedHeaders": true,
-          "prefix": "keep",
+          "prefix": "strip",
           "rewriteHost": true,
           "rewriteOrigin": true,
           "rewriteResponse": true

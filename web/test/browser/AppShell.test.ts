@@ -113,19 +113,19 @@ test("the sidebar's new-session action opens the shared dialog", async () => {
     .toBeVisible();
 });
 
-test("opening a chat-side hybrid session from the workbench switches to chat", () => {
-  shellUi.setMode("workbench");
-  openSession(session({ id: "shellaaa" }));
-  expect(shellUi.mode).toBe("workbench");
-  expect(location.pathname).toBe("/s/shellaaa");
-  openSession(chat({ id: "chataaaa" }, "tui"));
-  expect(shellUi.mode).toBe("workbench");
-  openSession(chat({ id: "chataaaa" }));
-  expect(shellUi.mode).toBe("chat");
-  expect(location.pathname).toBe("/s/chataaaa");
+test("opening any session keeps the sidebar's mode", () => {
+  for (const mode of ["workbench", "chat"] as const) {
+    shellUi.setMode(mode);
+    openSession(session({ id: "shellaaa" }));
+    expect(shellUi.mode).toBe(mode);
+    expect(location.pathname).toBe("/s/shellaaa");
+    openSession(chat({ id: "chataaaa" }));
+    expect(shellUi.mode).toBe(mode);
+    expect(location.pathname).toBe("/s/chataaaa");
+  }
 });
 
-test("renaming from the sidebar uses the shared dialog", async () => {
+test("renaming from the sidebar menu uses the shared dialog", async () => {
   shellUi.setMode("chat");
   history.replaceState(null, "", "/s/otherabc");
   respond(/^PATCH \/api\/sessions\/chataaaa$/, () =>
@@ -134,14 +134,17 @@ test("renaming from the sidebar uses the shared dialog", async () => {
   render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await snapshot();
   const chats = sidebar().getByRole("list", { name: "聊天历史" });
-  // Archived records offer no rename.
+  // Archived records resume or delete their record; they have no rename.
+  await chats.getByRole("button", { name: "会话操作：整理文档" }).click();
   await expect
-    .element(chats.getByRole("button", { name: "整理文档（已结束）" }))
+    .element(page.getByRole("menuitem", { name: "删除记录" }))
     .toBeVisible();
-  expect(
-    chats.getByRole("button", { name: "修改标题：整理文档" }).elements(),
-  ).toEqual([]);
-  await chats.getByRole("button", { name: "修改标题：修复排序" }).click();
+  expect(page.getByRole("menuitem", { name: "修改标题" }).elements()).toEqual(
+    [],
+  );
+  await userEvent.keyboard("{Escape}");
+  await chats.getByRole("button", { name: "会话操作：修复排序" }).click();
+  await page.getByRole("menuitem", { name: "修改标题" }).click();
   const dialog = page.getByRole("dialog");
   const field = dialog.getByRole("textbox");
   await expect.element(field).toHaveValue("修复排序");
@@ -172,7 +175,8 @@ test("a rejected name stays in the dialog and the row keeps its title", async ()
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await snapshot();
   const chats = sidebar().getByRole("list", { name: "聊天历史" });
-  await chats.getByRole("button", { name: "修改标题：修复排序" }).click();
+  await chats.getByRole("button", { name: "会话操作：修复排序" }).click();
+  await page.getByRole("menuitem", { name: "修改标题" }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("坏\u0007名");
   await page.getByRole("dialog").getByRole("button", { name: "保存" }).click();
   await expect
@@ -212,4 +216,48 @@ test("an archived chat resumes on its chat side, or says why it cannot", async (
   );
   await chats.getByRole("button", { name: "整理文档（已结束）" }).click();
   await expect.poll(() => location.pathname).toBe("/s/archivea");
+});
+
+test("the sidebar menu archives a live chat and deletes an archived record", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  respond(
+    /^DELETE \/api\/sessions\/chataaaa$/,
+    () => new Response(null, { status: 204 }),
+  );
+  respond(
+    /^DELETE \/api\/hybrid-sessions\/archivea$/,
+    () => new Response(null, { status: 204 }),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  const chats = sidebar().getByRole("list", { name: "聊天历史" });
+  await chats.getByRole("button", { name: "会话操作：修复排序" }).click();
+  await page.getByRole("menuitem", { name: "归档会话" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "归档", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      commands().some(
+        (c) => c.method === "DELETE" && c.path === "/api/sessions/chataaaa",
+      ),
+    )
+    .toBe(true);
+
+  await chats.getByRole("button", { name: "会话操作：整理文档" }).click();
+  await page.getByRole("menuitem", { name: "删除记录" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "确认" })
+    .click();
+  await expect
+    .poll(() =>
+      commands().some(
+        (c) =>
+          c.method === "DELETE" && c.path === "/api/hybrid-sessions/archivea",
+      ),
+    )
+    .toBe(true);
 });

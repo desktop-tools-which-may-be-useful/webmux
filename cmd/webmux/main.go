@@ -424,6 +424,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	})
 	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)
 	workspaces.UseHybrid(hybrids)
+	workspaces.UseArtifacts(folders)
 	defer workspaces.Close()
 	codes := codeview.New(m, folders)
 	defer codes.Close()

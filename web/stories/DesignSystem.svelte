@@ -401,7 +401,7 @@
     <Card.Root>
       <Card.Header
         ><Card.Title>输入框下方的选择</Card.Title><Card.Description
-          >聊天配置只显示图标；快速开始的仓库、基准分支和 agent 用 labeled
+          >聊天配置只显示图标；快速开始的仓库和 agent 用 labeled
           显示当前值，不可用的选项保留在菜单中并说明原因。</Card.Description
         ></Card.Header
       >

@@ -40,15 +40,16 @@
 </script>
 
 <script lang="ts">
-  import IconPencil from "~icons/tabler/pencil";
   import { ListButton } from "$lib/components/ui/list-button";
   import { rowStatus, rowStatusLabels } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
+  import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
   // The chat-mode sidebar: every chat flat by latest activity. The current
-  // row carries aria-current; live rows offer the shared rename dialog,
-  // archived ones resume through the existing flow when clicked.
+  // row carries aria-current and every row ends in a status dot; the "⋯"
+  // menu offers a live chat's rename and close, and an archived one's
+  // resume and record deletion. Archived rows also resume when clicked.
   let {
     sessions,
     records,
@@ -58,6 +59,8 @@
     onopen,
     onresume,
     onrename,
+    onclose,
+    onremove,
   }: {
     sessions: readonly SessionInfo[];
     records: readonly HybridRecord[];
@@ -69,6 +72,9 @@
     onopen: (session: SessionInfo) => void;
     onresume: (record: HybridRecord) => void;
     onrename: (session: SessionInfo) => void;
+    onclose: (session: SessionInfo) => void;
+    /** Asks to delete an archived record. */
+    onremove: (record: HybridRecord) => void;
   } = $props();
   const entries = $derived(chatEntries(sessions, records));
 </script>
@@ -95,20 +101,19 @@
             <span class="min-w-0 flex-1 truncate">{session.title}</span>
             <RowStatus {status} />
           </ListButton>
-          <ListButton
-            variant="file-tree-action"
-            aria-label={`修改标题：${session.title}`}
-            title={`修改标题：${session.title}`}
-            onclick={() => onrename(session)}
-            ><IconPencil aria-hidden="true" /></ListButton
-          >
+          <SidebarSessionMenu
+            label={session.title}
+            target={{ kind: "live", session, onrename, onclose }}
+          />
         </li>
       {:else}
         {@const record = entry.record}
         {@const title = record.name || record.title || record.agent}
-        <li>
+        <li class="group/row relative">
+          <!-- The same end padding as live rows keeps every status in one
+               column. -->
           <ListButton
-            variant="navigation"
+            variant="navigation-action"
             aria-current={record.id === current ? "page" : undefined}
             aria-label={`${title}（${resuming === record.id ? "正在恢复" : "已结束"}）`}
             title={`${title}（${record.agent} · 已结束，点击恢复）`}
@@ -129,6 +134,15 @@
                 >恢复中…</span
               >{:else}<RowStatus status="ended" />{/if}
           </ListButton>
+          <SidebarSessionMenu
+            label={title}
+            disabled={!!resuming}
+            target={{
+              kind: "archived",
+              onresume: () => onresume(record),
+              onremove: () => onremove(record),
+            }}
+          />
         </li>
       {/if}
     {/each}

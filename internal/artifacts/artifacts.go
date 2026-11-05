@@ -1,7 +1,8 @@
 // Package artifacts owns each session's interaction artifacts folder: a
 // private directory under the system temporary directory where the user
 // and the programs in a session exchange files. Uploads land in its
-// uploads/ subdirectory; the code view browses it as a second root.
+// uploads/ subdirectory; the code view browses it as a second root. Quick
+// starts upload into a shared staging folder until their session exists.
 //
 // Folders are created on demand and deleted when their session is removed,
 // unless a retain predicate keeps them (a recoverable hybrid session). A
@@ -99,10 +100,12 @@ func instanceRoot(tempDir, stateDir string) (string, error) {
 	return filepath.Join(tmp, name), nil
 }
 
-// Start sweeps folders left by sessions that no longer exist, then deletes
-// each removed session's folder as the manager reports it. retain keeps a
-// folder whose session left the manager but may come back.
+// Start drops files staged by quick starts before this start, sweeps
+// folders left by sessions that no longer exist, then deletes each removed
+// session's folder as the manager reports it. retain keeps a folder whose
+// session left the manager but may come back.
 func (s *Service) Start(retain func(id string) bool) {
+	s.clearStaging()
 	s.Sweep(retain)
 	s.wg.Add(1)
 	go s.watch(retain)

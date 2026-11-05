@@ -17,7 +17,9 @@
 
 ## 让开发服务器在子路径下工作
 
-网关不改写页面内容，使用绝对路径的应用需要把 base 设为转发前缀，并保留默认的“保留前缀”模式：
+转发默认“去除前缀”：网关去掉 `/forward/{port}` 后转发，只使用相对路径的服务（例如 `python3 -m http.server`）不需要改配置。
+
+网关不改写页面内容。使用绝对路径的应用（如默认配置的 Vite、Next.js）在“去除前缀”下会向 `/` 请求资源而失效，需要在转发设置中改为“保留前缀”，并把 base 设为转发前缀：
 
 ```sh
 # Vite
@@ -25,9 +27,7 @@ pnpm vite --base /forward/5173/
 # Next.js：next.config.js 中设置 basePath: "/forward/3000"
 ```
 
-只使用相对路径的服务（例如 `python3 -m http.server`）可以在转发设置中把路径前缀改为“去除前缀”，不需要改配置。
-
-默认开启的兼容选项让 Vite 等开发服务器开箱可用：
+默认开启的兼容选项处理开发服务器的其余检查（Vite 等仍需按上面保留前缀并设置 base）：
 
 - 改写 Host：上游看到 `localhost:5173`，满足 Vite 默认的 `server.allowedHosts`；
 - 改写 Origin/Referer：HMR WebSocket 通过 Vite 的来源检查；

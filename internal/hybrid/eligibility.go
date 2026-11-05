@@ -616,7 +616,7 @@ func (a *actor) sessions(ctx context.Context, cwd, until string) ([]acp.SessionI
 	argv, _ := a.cmd.ACPArgv()
 	sidecar, err := a.shell.StartSidecar(argv, a.cmd.ProtocolOnFD3(), tools.env)
 	if err != nil {
-		return nil, a.startFailure(err).err
+		return nil, startFailure(a.cmd, err).err
 	}
 	link := &acpLink{sidecar: sidecar}
 	link.conn = acp.NewConn(sidecar.Stdout(), sidecar.Stdin(), acp.Options{Logger: a.svc.log})
@@ -628,7 +628,7 @@ func (a *actor) sessions(ctx context.Context, cwd, until string) ([]acp.SessionI
 	if err != nil {
 		a.svc.log.Warn("hybrid probe failed", "id", a.id, "method", acp.MethodInitialize, "error", err)
 		_ = link.stop()
-		if missing := a.exitedNotFound(sidecar); missing != nil {
+		if missing := exitedNotFound(a.cmd, sidecar); missing != nil {
 			return nil, missing.err
 		}
 		return nil, agentFailure(acp.MethodInitialize, err, sidecar).err

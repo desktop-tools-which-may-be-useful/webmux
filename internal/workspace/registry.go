@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
@@ -57,6 +58,7 @@ type Service struct {
 	manager      *session.Manager
 	launches     *launch.Service
 	hybrids      *hybrid.Service
+	artifacts    *artifacts.Service
 	defaultCwd   string
 	gitPath      string
 	fetchTimeout time.Duration
@@ -114,6 +116,10 @@ func (s *Service) Capability() Capability { s.mu.Lock(); defer s.mu.Unlock(); re
 // starts sessions of hybrid launch configs. Without it they answer
 // ErrUnavailable.
 func (s *Service) UseHybrid(h *hybrid.Service) { s.hybrids = h }
+
+// UseArtifacts installs, once at assembly before serving, the folders quick
+// starts stage uploads in. Without it a quick start takes no attachments.
+func (s *Service) UseArtifacts(a *artifacts.Service) { s.artifacts = a }
 
 func (s *Service) load() error {
 	expanded, err := pathutil.Expand(s.stateDir)

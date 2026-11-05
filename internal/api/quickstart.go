@@ -13,11 +13,16 @@ import (
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
-// quickStartRoutes serves POST /api/quick-starts. The quick start runs to
-// its end (or workspace.QuickStartTimeout) even if the client goes away; a
-// retry with the same clientRequestId gets its outcome. Every failure is a
-// contract.QuickStartFailure.
+// quickStartRoutes serves POST /api/quick-starts and its options probe.
+// The quick start runs to its end (or workspace.QuickStartTimeout) even if
+// the client goes away; a retry with the same clientRequestId gets its
+// outcome. Every quick start failure is a contract.QuickStartFailure.
 func (s *Server) quickStartRoutes(mux *http.ServeMux) {
+	serveIn(mux, "POST /api/quick-starts/options", http.StatusOK, sessionFailure, func(r *http.Request, req contract.QuickStartOptionsRequest) ([]contract.ChatConfig, error) {
+		options, err := s.Workspace.QuickStartOptions(r.Context(), req.RepositoryID, req.ConfigID)
+		return wire.ChatConfigs(options), err
+	})
+	mux.HandleFunc("POST /api/quick-starts/uploads", s.quickStartUpload)
 	mux.HandleFunc("POST /api/quick-starts", func(w http.ResponseWriter, r *http.Request) {
 		var req contract.QuickStartRequest
 		if err := decodeQuickStart(w, r, &req); err != nil {

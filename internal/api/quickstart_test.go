@@ -221,3 +221,54 @@ func TestQuickStartAPICompletesAfterDisconnect(t *testing.T) {
 		t.Fatalf("existing worktree: %+v", failed)
 	}
 }
+
+// A file uploaded before the session exists goes with the first prompt
+// from the new session's uploads; a path from anywhere else is refused
+// before anything is created.
+func TestQuickStartAPISendsStagedAttachments(t *testing.T) {
+	q := newQuickAPI(t)
+	body, contentType := uploadBody(t, "spec.md", []byte("# 规格"), "")
+	upload := func(auth bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "http://webmux.example/api/quick-starts/uploads", strings.NewReader(string(body)))
+		if auth {
+			r.Header.Set("Authorization", "Bearer secret")
+		}
+		r.Header.Set("Content-Type", contentType)
+		w := httptest.NewRecorder()
+		q.handler.ServeHTTP(w, r)
+		return w
+	}
+	if w := upload(false); w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated upload: %d", w.Code)
+	}
+	w := upload(true)
+	var stored contract.UploadResult
+	if err := json.Unmarshal(w.Body.Bytes(), &stored); err != nil || w.Code != http.StatusCreated {
+		t.Fatalf("upload: %d %s", w.Code, w.Body.String())
+	}
+
+	forged := q.request("api-quick-201", q.agent, "wt/forged")
+	forged.Attachments = []contract.ChatAttachment{{Path: q.root + "/README.md"}}
+	if failed := q.failure(forged, http.StatusBadRequest); failed.Step != "precheck" || q.worktrees() != 1 {
+		t.Fatalf("forged attachment: %+v", failed)
+	}
+
+	req := q.request("api-quick-202", q.agent, "wt/attached")
+	req.Attachments = []contract.ChatAttachment{{Path: stored.Path}}
+	var result contract.QuickStartResult
+	if err := json.Unmarshal(q.expectCommand("POST", "/api/quick-starts", req, 201), &result); err != nil {
+		t.Fatal(err)
+	}
+	watch := observe(t, q.hybrids, result.SessionID)
+	watch.until("first prompt with its attachment", func(o *observer) bool {
+		for _, e := range o.events {
+			if e.Kind != hybrid.EventMessage || e.Message == nil || e.Message.Role != hybrid.RoleUser || len(e.Message.Attachments) != 1 {
+				continue
+			}
+			got := e.Message.Attachments[0]
+			path, err := q.folders.UploadPath(result.SessionID, got.Path)
+			return err == nil && path == got.Path && got.Name == "spec.md"
+		}
+		return false
+	})
+}

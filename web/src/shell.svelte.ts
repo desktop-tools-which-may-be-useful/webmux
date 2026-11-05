@@ -11,8 +11,10 @@ import type { SessionInfo } from "./schemas";
 import type { TerminalDrafts } from "./terminal-draft.svelte";
 
 // The app shell around the home page, quick start and session pages: which
-// mode the sidebar shows, and whether it is collapsed (desktop) or open as a
-// drawer (phones). The mode and the collapse survive reloads on this device.
+// mode the sidebar shows, its width, and whether it is collapsed (desktop)
+// or open as a drawer (phones). The sidebar is only a way to navigate:
+// opening a session never changes its mode. Mode, width and collapse
+// survive reloads on this device.
 
 export type ShellMode = "chat" | "workbench";
 const ModeSchema = z.enum(["chat", "workbench"]);
@@ -24,6 +26,22 @@ let mode = $state<ShellMode>(
 );
 let collapsed = $state(
   CollapsedSchema.safeParse(stored("sidebarCollapsed")).data === "true",
+);
+/** The full sidebar's width bounds in CSS pixels. */
+export const sidebarWidthMin = 224;
+export const sidebarWidthMax = 480;
+const sidebarWidthDefault = 288;
+function clampWidth(width: number) {
+  return Math.round(
+    Math.max(sidebarWidthMin, Math.min(sidebarWidthMax, width)),
+  );
+}
+const storedWidth = z.coerce
+  .number()
+  .finite()
+  .safeParse(stored("sidebarWidth") ?? undefined).data;
+let width = $state(
+  storedWidth === undefined ? sidebarWidthDefault : clampWidth(storedWidth),
 );
 let drawerOpen = $state(false);
 
@@ -42,6 +60,14 @@ export const shellUi = {
   setCollapsed(next: boolean) {
     collapsed = next;
     store("sidebarCollapsed", String(next));
+  },
+  get width() {
+    return width;
+  },
+  /** Sets the full sidebar's width, kept within its bounds. */
+  setWidth(next: number) {
+    width = clampWidth(next);
+    store("sidebarWidth", String(width));
   },
   get drawerOpen() {
     return drawerOpen;
@@ -81,6 +107,8 @@ export interface Shell {
   start(entry?: LaunchEntry): void;
   /** Opens the shared rename dialog for a live session. */
   rename(session: SessionInfo): void;
+  /** Opens the shared close, archive or remove dialog for a session. */
+  close(session: SessionInfo): void;
   /** Opens the port-forwarding dialog. */
   forward(): void;
   /** Opens the add-repository dialog. */
@@ -101,18 +129,8 @@ export function getShell(): Shell {
   return shell;
 }
 
-/**
- * Opens a session from the sidebar or a home card. In the workbench, a
- * hybrid session on its chat side takes the whole shell to chat mode;
- * anything else keeps the mode. Decided once, on the click.
- */
-export function openSession(session: Pick<SessionInfo, "id" | "hybrid">) {
-  if (
-    mode === "workbench" &&
-    session.hybrid?.state === "active" &&
-    session.hybrid.side === "acp"
-  )
-    shellUi.setMode("chat");
+/** Opens a session from the sidebar or a home card; the mode stays. */
+export function openSession(session: Pick<SessionInfo, "id">) {
   drawerOpen = false;
   navigate(`/s/${session.id}`);
 }

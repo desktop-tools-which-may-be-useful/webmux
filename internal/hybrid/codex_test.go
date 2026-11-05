@@ -211,7 +211,7 @@ func TestExitedNotFound(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := (&actor{cmd: cmd}).exitedNotFound(sidecar)
+			got := exitedNotFound(cmd, sidecar)
 			if (got != nil) != tt.want {
 				t.Fatalf("exitedNotFound = %+v, want failure=%v", got, tt.want)
 			}

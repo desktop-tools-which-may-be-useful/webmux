@@ -46,8 +46,15 @@ export interface ChatUploads {
   restore(attachments: ChatAttachment[]): void;
 }
 
+/** Stores one file on the server and returns where it landed. */
+export type UploadSend = (
+  file: File,
+  progress: (percent: number) => void,
+  signal: AbortSignal,
+) => Promise<{ path: string }>;
+
 interface UploadRun {
-  id: string;
+  send: UploadSend;
   files: File[];
   signal: AbortSignal;
   /** Progress shows "等待" between upload and insertion while the PTY settles. */
@@ -68,8 +75,7 @@ async function runUploads(run: UploadRun) {
       waiting: false,
     };
     run.report(current);
-    const { path } = await uploadFile(
-      run.id,
+    const { path } = await run.send(
       file,
       (percent) => run.report({ ...current, percent }),
       run.signal,
@@ -178,7 +184,7 @@ export function useUpload(
     const inserted = { terminal: false };
     try {
       await runUploads({
-        id,
+        send: (file, percent, signal) => uploadFile(id, file, percent, signal),
         files,
         signal: current.signal,
         waiting: true,
@@ -314,9 +320,10 @@ const imageTypes: Record<string, true> = {
 
 // Chat uploads become attachments of the next message rather than text in
 // the draft: the server sends them as ACP content blocks, or as server paths
-// when the agent cannot take them.
+// when the agent cannot take them. send stores each file: in a session's
+// uploads, or in the quick start staging folder before a session exists.
 export function useChatUpload(
-  id: string,
+  send: UploadSend,
   setError: (message: string) => void,
 ): ChatUploads {
   let progress = $state<UploadProgress | null>(null);
@@ -351,7 +358,7 @@ export function useChatUpload(
     controller = current;
     try {
       await runUploads({
-        id,
+        send,
         files,
         signal: current.signal,
         waiting: false,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   AgentConnectorSchema,
+  ChatAttachmentSchema,
   ChatConfigSchema,
   ChatPermissionModeSchema,
   HybridRecordSchema,
@@ -481,6 +482,8 @@ export const QuickStartRequestSchema = z.object({
   // Option id to value; booleans are "true" or "false".
   config: z.record(z.string(), z.string()),
   permissionMode: ChatPermissionModeSchema,
+  // Files returned by POST /quick-starts/uploads; they go with the message.
+  attachments: z.array(ChatAttachmentSchema).optional(),
 });
 export type QuickStartRequest = z.infer<typeof QuickStartRequestSchema>;
 export const QuickStartResultSchema = z.object({
@@ -488,6 +491,13 @@ export const QuickStartResultSchema = z.object({
   worktree: WorktreeSchema,
   configWarnings: z.array(z.string()),
 });
+// The agent options a launch config's agent offers before any chat of it,
+// read through a throwaway session in the repository.
+export const QuickStartOptionsRequestSchema = z.object({
+  repositoryId: z.string().min(1),
+  configId: z.string().regex(/^[a-z2-7]{8}$/),
+});
+export const QuickStartOptionsSchema = z.array(ChatConfigSchema);
 // The body of a failed quick start: the step that failed and what earlier
 // steps left behind, which is never removed automatically.
 export const QuickStartFailureSchema = z.object({
