@@ -1,7 +1,7 @@
 <script lang="ts">
   import InlineNotice from "../components/InlineNotice.svelte";
   import LazyDialog from "../components/LazyDialog.svelte";
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
   import SessionViewControls from "../components/SessionViewControls.svelte";
   import WorkspaceToolbar from "../components/WorkspaceToolbar.svelte";
   import { store, stored } from "../api";
@@ -25,7 +25,7 @@
   } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { homeLayout, setPinned } from "../homeWorktrees";
+  import { homeLayout, setPinned, worktreeTitle } from "../homeWorktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
@@ -93,10 +93,18 @@
       ? repositoryChoice
       : "all",
   );
+  // A worktree picked in the tree narrows the repository view to it.
+  const selectedWorktree = $derived(
+    repositories
+      .find((repo) => repo.id === selectedRepository)
+      ?.worktrees.find((tree) => tree.id === shell.repositories.worktree),
+  );
   const scopeLabel = $derived(
-    selectedRepository === "direct"
-      ? "直接会话"
-      : (repositories.find((repo) => repo.id === selectedRepository)?.name ??
+    selectedWorktree
+      ? `${repositories.find((repo) => repo.id === selectedRepository)?.name} · ${worktreeTitle(selectedWorktree)}`
+      : selectedRepository === "direct"
+        ? "直接会话"
+        : (repositories.find((repo) => repo.id === selectedRepository)?.name ??
           "工作区"),
   );
   const scopedSessions = $derived(
@@ -105,13 +113,18 @@
       : selectedRepository === "direct"
         ? direct
         : list.filter(
-            (session) => session.workspace?.repositoryId === selectedRepository,
+            (session) =>
+              session.workspace?.repositoryId === selectedRepository &&
+              (!selectedWorktree ||
+                session.workspace.worktreeId === selectedWorktree.id),
           ),
   );
   const scopedArchive = $derived.by(() => {
     if (selectedRepository === "all") return recoverable;
     if (selectedRepository === "direct") return placement.direct;
     const entry = placement.repositories.get(selectedRepository);
+    if (selectedWorktree)
+      return [...(entry?.worktrees.get(selectedWorktree.id) ?? [])];
     return entry ? repositoryRecords(entry) : [];
   });
   const scopedArchiveCount = $derived(scopedArchive.length);
@@ -233,6 +246,7 @@
     void query;
     void statusFilter;
     void selectedRepository;
+    void selectedWorktree;
     filterExpanded = {};
   });
   function clearFilters() {
@@ -260,23 +274,6 @@
     void shell.repositories.refresh();
     void shell.archived.refresh();
   }
-  // The workbench tree links a worktree as /#wt-<id>: once its group is on
-  // the page, scroll to it and move focus to its title. A worktree that is
-  // not shown leaves the view at the top of its repository.
-  let anchor = $state(location.hash);
-  $effect(() => {
-    if (!anchor.startsWith("#wt-") || loading || initializing) return;
-    void repositories;
-    void tick().then(() => {
-      const group = document.getElementById(
-        decodeURIComponent(anchor.slice(1)),
-      );
-      if (!group || group.hidden) return;
-      group.scrollIntoView({ block: "start" });
-      group.querySelector<HTMLElement>("h3")?.focus({ preventScroll: true });
-      anchor = "";
-    });
-  });
   onMount(() => {
     // Coming home re-reads Git, as the page did before the shell kept the
     // last snapshot; the snapshot stays on screen meanwhile.
@@ -287,12 +284,8 @@
         void shell.repositories.refresh();
       }
     };
-    const hash = () => {
-      anchor = location.hash;
-    };
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("pageshow", visible);
-    window.addEventListener("popstate", hash);
     const clock = setInterval(() => {
       now = Date.now();
     }, 30000);
@@ -301,7 +294,6 @@
       clearInterval(clock);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("pageshow", visible);
-      window.removeEventListener("popstate", hash);
     };
   });
 </script>
@@ -412,6 +404,9 @@
               {filtering}
               {compact}
               focused={selectedRepository === repo.id}
+              worktree={selectedRepository === repo.id
+                ? selectedWorktree?.id
+                : undefined}
               hidden={selectedRepository !== "all" &&
                 selectedRepository !== repo.id}
               {visibleIds}

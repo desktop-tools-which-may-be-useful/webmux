@@ -78,8 +78,8 @@
   }
   function scope(next: string, worktreeId?: string) {
     shellUi.setMode("workbench");
-    shell.repositories.select(next);
-    openPage(worktreeId ? `/#wt-${worktreeId}` : "/");
+    shell.repositories.select(next, worktreeId);
+    openPage("/");
   }
 </script>
 
@@ -137,6 +137,9 @@
         home={homeWorktrees.value}
         scope={route.name === "sessions"
           ? (shell.repositories.choice ?? "all")
+          : ""}
+        worktree={route.name === "sessions"
+          ? (shell.repositories.worktree ?? "")
           : ""}
         {current}
         canCreate={setup.gitReady && setup.registryReady}

@@ -117,8 +117,13 @@ test.describe("desktop sidebar", () => {
 
     // A terminal session keeps the workbench and shows its terminal.
     await tree(page).getByRole("treeitem", { name: /^main/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/#wt-${main}$`));
-    await expect(page.locator(`#wt-${main} h3`)).toBeFocused();
+    // The home view narrows to that worktree's sessions.
+    await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole("main").getByRole("heading", { level: 1 }),
+    ).toHaveText("tree-repo · main");
+    await expect(page.getByRole("link", { name: "pnpm dev" })).toBeVisible();
+    await expect(page.locator("[data-worktree-id]:visible")).toHaveCount(1);
     // The home view has no current session, so its worktree is folded.
     await tree(page).getByRole("button", { name: "展开main" }).click();
     await tree(page)
@@ -131,6 +136,7 @@ test.describe("desktop sidebar", () => {
 
     // A chat-side hybrid session takes the shell to chat mode.
     await page.goto("/");
+    await tree(page).locator('[data-tree-key="all"]').click();
     await page.getByRole("link", { name: "修复排序" }).click();
     await expect(page).toHaveURL(new RegExp(`/s/${agent}$`));
     await expect(

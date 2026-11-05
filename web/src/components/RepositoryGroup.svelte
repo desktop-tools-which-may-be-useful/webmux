@@ -27,6 +27,7 @@
     filtering,
     hidden = false,
     focused = false,
+    worktree,
     compact = false,
     open,
     onopenchange,
@@ -52,6 +53,8 @@
     filtering: boolean;
     hidden?: boolean;
     focused?: boolean;
+    /** Shows only this worktree's group (picked in the workbench tree). */
+    worktree?: string;
     compact?: boolean;
     open: boolean;
     onopenchange: (open: boolean) => void;
@@ -213,6 +216,7 @@
           {compact}
           hidden={hidden ||
             !open ||
+            (!!worktree && worktree !== tree.id) ||
             (filtering &&
               !treeArchive.length &&
               !visible.some(
@@ -236,6 +240,7 @@
           {compact}
           hidden={hidden ||
             !open ||
+            !!worktree ||
             Boolean(
               visibleIds &&
               !missingArchive.length &&

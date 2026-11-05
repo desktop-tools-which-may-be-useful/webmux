@@ -168,7 +168,7 @@ agent 不接受的值记为 `configWarnings`，并作为聊天 notice 写入时�
 
 - 取代 `RepositorySidebar`，组件 `components/WorkbenchTree.svelte`。分组与排序复用 `homeWorktrees.ts`、`homeLayout` 现有的规则，保证树与主区域顺序一致。
 - 选择视图：现在的仓库选择保存在 `localStorage` 的 `homeRepository`，只有 `SessionList` 读写。改为外壳中的共享状态（仍落在同一个键上，兼容已有取值），树和首页一起读写。
-- 工作树跳转：导航到 `/#wt-<worktreeId>`，首页在分组渲染后滚动到对应锚点并聚焦标题；锚点不存在时停在仓库视图顶部。
+- 工作树视图：点工作树把选择设为该仓库并记下工作树（`homeWorktree`），首页只显示该工作树的分组、会话和归档记录；工作树不存在时回到整个仓库。
 - 展开状态按节点 ID 存在 `localStorage`；当前会话所在路径自动展开，不写回存储。
 - 键盘：`role="tree"`，用 roving tabindex 实现方向键导航；树的节点只占一个 Tab 停靠点，焦点所在行的“+”按钮是紧随其后的下一个停靠点。
 - `RepositorySidebar.svelte` 在切换后删除；其中的计数逻辑移到树节点。

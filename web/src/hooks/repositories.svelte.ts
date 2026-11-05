@@ -18,8 +18,13 @@ export interface Repositories {
    * resolves that once a read settles.
    */
   readonly choice: string | null;
-  /** Chooses and remembers the view. */
-  select(id: string): void;
+  /**
+   * The worktree the view narrows to inside the chosen repository; null
+   * for the whole repository. Saved like the choice.
+   */
+  readonly worktree: string | null;
+  /** Chooses and remembers the view, optionally one worktree of it. */
+  select(id: string, worktreeId?: string): void;
   /**
    * Reads the repositories. Until the first read finishes, a lifecycle
    * refresh joins it instead of starting another slow discovery; `force`
@@ -39,6 +44,9 @@ export function createRepositories(): Repositories {
   let refreshing = $state(false);
   let error = $state("");
   let choice = $state(ChoiceSchema.safeParse(stored("homeRepository")).data);
+  let worktree = $state(
+    ChoiceSchema.safeParse(stored("homeWorktree")).data ?? null,
+  );
   let startup: Promise<void> | undefined;
   let generation = 0;
   let disposed = false;
@@ -87,9 +95,14 @@ export function createRepositories(): Repositories {
     get choice() {
       return choice ?? null;
     },
-    select(id) {
+    get worktree() {
+      return worktree;
+    },
+    select(id, worktreeId) {
       choice = id;
+      worktree = worktreeId ?? null;
       store("homeRepository", id);
+      store("homeWorktree", worktreeId ?? "");
     },
     refresh(force = false) {
       if (!force && startup) return startup;

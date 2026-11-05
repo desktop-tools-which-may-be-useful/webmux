@@ -66,8 +66,7 @@
 </script>
 
 <section
-  class="min-w-0 scroll-mt-4 space-y-3"
-  id={worktree ? `wt-${worktree.id}` : undefined}
+  class="min-w-0 space-y-3"
   data-worktree-id={worktree?.id}
   {hidden}
   aria-label={title}
@@ -87,10 +86,7 @@
           aria-hidden="true"
         />
       {/if}
-      <!-- The workbench tree jumps here and moves focus to the title. -->
-      <h3 class="min-w-0 break-all text-sm font-semibold" tabindex="-1">
-        {title}
-      </h3>
+      <h3 class="min-w-0 break-all text-sm font-semibold">{title}</h3>
       {#if visible.length > 1}<span
           class="shrink-0 text-xs text-muted-foreground">{visible.length}</span
         >{/if}

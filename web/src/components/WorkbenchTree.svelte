@@ -183,6 +183,7 @@
     sessions,
     home,
     scope,
+    worktree,
     current,
     canCreate,
     configIcons,
@@ -197,6 +198,8 @@
     home: HomeWorktrees;
     /** The home view shown ("all", "direct" or a repository ID); "" elsewhere. */
     scope: string;
+    /** The worktree the home view narrows to; "" for none. */
+    worktree: string;
     /** The session page shown; "" elsewhere. */
     current: string;
     /** Git and the registry can create worktrees. */
@@ -302,10 +305,11 @@
   }
   function isCurrent(node: TreeNode) {
     if (node.kind === "session") return node.session?.id === current;
-    if (current || node.kind === "worktree" || node.kind === "missing")
-      return false;
+    if (current || node.kind === "missing") return false;
+    if (node.kind === "worktree")
+      return scope === node.repositoryId && worktree === node.worktreeId;
     return node.kind === "repository"
-      ? scope === node.repositoryId
+      ? scope === node.repositoryId && !worktree
       : scope === node.key;
   }
   function activate(node: TreeNode) {
