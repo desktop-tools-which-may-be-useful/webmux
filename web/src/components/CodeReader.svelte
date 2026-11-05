@@ -93,6 +93,7 @@
   // A jump made before the first render; the initial placement honors it
   // instead of scrolling back to the restore line.
   let requested: number | undefined;
+  let requestedColumn: number | undefined;
   let coarse = $state(false);
   let dark = $state(false);
   let selected = $state<{ start: number; end: number } | null>(null);
@@ -154,7 +155,10 @@
   // derive it from the numeric line layout instead of the stale DOM.
   function position(): Pick<CodeReaderState, "line" | "offset"> {
     const fallback = () =>
-      known ?? { line: lineNumber(untrack(() => restoreLine)), offset: 0 };
+      known ?? {
+        line: lineNumber(untrack(() => requested ?? restoreLine)),
+        offset: 0,
+      };
     if (!viewer || host.clientHeight === 0) return fallback();
     const item = viewer.getRenderedItems()[0];
     if (!item) return fallback();
@@ -250,8 +254,11 @@
       onselect(Math.min(start, end), Math.max(start, end));
     }
     find.cursor = restoreCursor(state.cursor, find.matches);
-    if (requested !== undefined) scrollToLine(requested, "center");
-    else
+    if (requested !== undefined) {
+      scrollToLine(requested, "center");
+      if (requestedColumn !== undefined)
+        scrollToColumn(requested, requestedColumn);
+    } else
       viewer.scrollTo({
         type: "line",
         id,
@@ -264,14 +271,47 @@
   }
 
   function placeInitial() {
-    if (placed || pending) return;
+    if (placed || pending || !viewer || host.clientHeight === 0) return;
+    if (!viewer.getRenderedItems()[0]) return;
     placed = true;
-    if (requested !== undefined) scrollToLine(requested, "center");
-    else
+    if (selected)
+      viewer.setSelectedLines({ id, range: selected }, { notify: false });
+    if (requested !== undefined) {
+      scrollToLine(requested, "center");
+      if (requestedColumn !== undefined)
+        scrollToColumn(requested, requestedColumn);
+    } else
       scrollToLine(
         untrack(() => restoreLine),
         "start",
       );
+  }
+
+  /** Scrolls to `startLine` and selects `startLine..endLine` in the source reader. */
+  export function revealLine(
+    startLine: number,
+    endLine = startLine,
+    column?: number,
+  ) {
+    const a = lineNumber(Math.min(startLine, endLine));
+    const z = lineNumber(Math.max(startLine, endLine));
+    anchor = a;
+    if (!placed) {
+      requested = a;
+      requestedColumn = column;
+      if (pending) {
+        const { panel: _, ...rest } = pending;
+        pending = {
+          ...rest,
+          line: a,
+          offset: 0,
+          selection: { start: a, end: z },
+        };
+      }
+    }
+    choose(a, z);
+    scrollToLine(a, "center");
+    if (column !== undefined) scrollToColumn(a, column);
   }
 
   function scrollToColumn(line: number, column: number) {
@@ -388,6 +428,7 @@
       // A hidden tab has no layout; a pending restore waits until it is shown.
       onResize: () => {
         if (pending) applyRestore();
+        else if (!placed) placeInitial();
       },
       onScroll: () => {
         if (!pending) position();

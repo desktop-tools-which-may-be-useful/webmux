@@ -26,6 +26,7 @@
     switchTarget,
     type SwitchTarget,
   } from "../../src/hybrid";
+  import type { ChatCodeLink } from "../../src/markdown-link";
   import type {
     ChatAttachment,
     ChatState,
@@ -63,6 +64,7 @@
   let candidatePick = $state(claudeCandidates[0]!.agentSessionId);
   let connectorDismissed = $state(false);
   let codeShown = $state(false);
+  let openedLocation = $state<ChatCodeLink | null>(null);
   let notice = $state("");
   let dismissed = $state<string[]>([]);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -448,7 +450,14 @@
           {drafts}
           uploads={chatUploads}
           {actions}
-          onreview={() => (codeShown = true)}
+          onreview={(path) => {
+            openedLocation = { path };
+            codeShown = true;
+          }}
+          onopenlocation={(target) => {
+            openedLocation = target;
+            codeShown = true;
+          }}
           onterminal={() => hybrid.request("tui")}
         />
       {:else if view === "switching"}
@@ -481,7 +490,17 @@
     {/snippet}
     {#snippet draftPane()}{/snippet}
     {#snippet codePane()}
-      <div class="h-full overflow-y-auto bg-card p-2">
+      <div class="h-full space-y-2 overflow-y-auto bg-card p-2">
+        {#if openedLocation}
+          <p
+            class="rounded-md border bg-muted/40 px-2.5 py-1.5 font-mono text-xs break-all text-foreground"
+            role="status"
+          >
+            已定位：{openedLocation.path}{openedLocation.line === undefined
+              ? ""
+              : `:${openedLocation.line}${openedLocation.endLine ? `-${openedLocation.endLine}` : ""}`}
+          </p>
+        {/if}
         <CodeChangesList
           entries={codeChanges}
           total={codeChanges.length}

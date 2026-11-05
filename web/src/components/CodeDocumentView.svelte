@@ -64,6 +64,8 @@
     workspace,
     heading,
     onHeading,
+    jump,
+    onJump,
     diffAvailable = true,
     restore,
   }: {
@@ -84,9 +86,12 @@
     menu?: Snippet;
     /** Lets Markdown previews open workspace links and load relative images. */
     workspace?: MarkdownWorkspace;
-    /** A one-time request from a Markdown link to preview and show a heading. */
+    /** A one-time request from a link to preview and show a heading. */
     heading?: { slug: string; key: number };
     onHeading?: () => void;
+    /** A one-time request from a link to show the file and optional line range. */
+    jump?: { line?: number; endLine?: number; column?: number; key: number };
+    onJump?: () => void;
     /** False for roots without Git (the artifacts folder): no Diff toggle. */
     diffAvailable?: boolean;
     /** Reading state from another window, applied once. */
@@ -313,14 +318,40 @@
   const indents = ["", "ps-3", "ps-6", "ps-9", "ps-12", "ps-15"];
   // Runs after the resets above, so a file opened by the link stays in
   // preview; the request is consumed even when the file is not Markdown.
+  // Leaving a comparison resets the view in the next flush, so the preview
+  // is shown only after that reset has run.
   $effect(() => {
     const request = heading;
     if (!request) return;
     untrack(() => {
       onHeading?.();
-      if (formatFile !== "markdown") return;
-      showFormat("preview");
-      void tick().then(() => markdownPreview?.scrollToHeading(request.slug));
+      const leaving = !!shownDiff && !diff;
+      mode = "file";
+      const current = file?.document;
+      if (!current || current.kind !== "text") return;
+      if (previewFormat(current.path) !== "markdown") return;
+      const reveal = () => {
+        showFormat("preview");
+        void tick().then(() => markdownPreview?.scrollToHeading(request.slug));
+      };
+      if (leaving) void tick().then(reveal);
+      else reveal();
+    });
+  });
+  $effect(() => {
+    const request = jump;
+    if (!request) return;
+    untrack(() => {
+      onJump?.();
+      mode = "file";
+      if (request.line === undefined) return;
+      showFormat("source");
+      const current = file?.document;
+      if (current?.kind === "text" && current.mediaType === "image/svg+xml")
+        showSvg("source");
+      void tick().then(() =>
+        reader?.revealLine(request.line!, request.endLine, request.column),
+      );
     });
   });
   $effect(() => {

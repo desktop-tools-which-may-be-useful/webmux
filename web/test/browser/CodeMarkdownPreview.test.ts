@@ -2,7 +2,11 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import CodeMarkdownPreview from "./CodeMarkdownPreviewHarness.svelte";
-import type { MarkdownImage, MarkdownWorkspace } from "../../src/markdown-link";
+import type {
+  ChatCodeLink,
+  MarkdownImage,
+  MarkdownWorkspace,
+} from "../../src/markdown-link";
 
 afterEach(async () => {
   await cleanup();
@@ -129,11 +133,69 @@ test("chat messages keep images, relative links and headings inert", async () =>
   const link = page.getByText("说明").element();
   expect(link.hasAttribute("href")).toBe(false);
   expect(link.hasAttribute("data-md-href")).toBe(false);
+  expect(getComputedStyle(link).textDecorationLine).toBe("none");
   expect(
     document.querySelector(
       "img, [data-md-src], [data-md-href], #chat-app, a[name]",
     ),
   ).toBeNull();
+  expect(requests).toEqual([]);
+});
+
+test("chat messages open code links in the code browser while keeping unsafe links and images inert", async () => {
+  const requests = watchFetch();
+  const opened: ChatCodeLink[] = [];
+  render(CodeMarkdownPreview, {
+    text: [
+      "## 标题",
+      "![截图](docs/a.png)",
+      "[绝对路径](file:///repo/web/src/App.svelte#L42-L50) [`sortWorkspaces`](web/src/homeWorktrees.ts:15) [部署说明](docs/deploy.md#systemd)",
+      "[外部文档](https://example.com/docs) [危险](javascript:alert(1)) [远端文件](file://evil/etc/passwd) [纯锚点](#section)",
+      '<span data-md-href="README.md">伪造</span>',
+    ].join("\n\n"),
+    variant: "message",
+    onopenlink: (target) => opened.push(target),
+  });
+  const before = location.href;
+  await page.getByRole("link", { name: "绝对路径" }).click();
+  await page
+    .getByRole("link", { name: "sortWorkspaces" })
+    .click({ modifiers: ["ControlOrMeta"] });
+  (
+    page.getByRole("link", { name: "部署说明" }).element() as HTMLElement
+  ).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(opened).toEqual([
+    {
+      path: "/repo/web/src/App.svelte",
+      fromUri: true,
+      line: 42,
+      endLine: 50,
+    },
+    {
+      path: "web/src/homeWorktrees.ts",
+      rawPath: "web/src/homeWorktrees.ts:15",
+      line: 15,
+    },
+    {
+      path: "docs/deploy.md",
+      heading: "systemd",
+    },
+  ]);
+  expect(location.href).toBe(before);
+  const external = page
+    .getByRole("link", { name: "外部文档" })
+    .element() as HTMLAnchorElement;
+  expect(external.getAttribute("href")).toBe("https://example.com/docs");
+  expect(external.target).toBe("_blank");
+  expect(external.rel).toBe("noopener noreferrer");
+  for (const name of ["危险", "远端文件", "纯锚点", "伪造"]) {
+    const el = page.getByText(name, { exact: true }).element();
+    expect(el.hasAttribute("href"), name).toBe(false);
+    expect(el.hasAttribute("data-md-href"), name).toBe(false);
+    expect(getComputedStyle(el).textDecorationLine, name).toBe("none");
+  }
+  expect(document.querySelector("img, [data-md-src]")).toBeNull();
   expect(requests).toEqual([]);
 });
 

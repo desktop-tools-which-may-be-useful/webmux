@@ -627,11 +627,172 @@ test("requests to show a file while popped out go to the window, once", async ()
   expect(popup.frame!.messages.filter((m) => m.type === "reveal")).toHaveLength(
     0,
   );
-  await page.getByRole("button", { name: "Reveal file 3" }).click();
+  await page.getByRole("button", { name: "Reveal file 3 lines" }).click();
   expect(await received(popup, "reveal")).toEqual({
     type: "reveal",
-    reveal: { path: "/root/file-3.txt", key: 1 },
+    reveal: {
+      path: "file-3.txt",
+      mode: "file",
+      line: 2,
+      endLine: 4,
+      key: 1,
+    },
   });
+});
+
+test("revealing a file location opens file mode, selects its line range and resolves repo-root or literal-colon fallbacks", async () => {
+  serve();
+  const server = globalThis.fetch;
+  const multiline = (name: string) => ({
+    snapshotId: `snapshot-${name}`,
+    checkedAt: now,
+    document: {
+      nodeId: btoa(name),
+      path: name,
+      absolutePath: `/root/${name}`,
+      source: "worktree" as const,
+      oid: "",
+      contentVersion: "v1",
+      kind: "text" as const,
+      text: ["one", "two", "three", "four", "five", ""].join("\n"),
+      lineCount: 5,
+      referenceable: true,
+      reason: "",
+      mediaType: "",
+      size: 23,
+      downloadable: true,
+    },
+  });
+  // Once set, the cwd has its own src/app.ts shadowing the repo-root one.
+  let shadowed = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), location.href);
+      if (url.pathname.endsWith("/context")) {
+        const response = await server(input, init);
+        return Response.json({
+          ...(await response.json()),
+          diffAvailable: true,
+        });
+      }
+      if (url.pathname.endsWith("/changes")) {
+        const id = url.searchParams.get("nodeId");
+        const all = [
+          {
+            nodeId: btoa("file-3.txt"),
+            changeId: "change-3",
+            group: "unstaged",
+            oldPath: "file-3.txt",
+            newPath: "file-3.txt",
+            status: "M",
+            oldOid: "",
+            newOid: "",
+            oldMode: "100644",
+            newMode: "100644",
+          },
+        ];
+        const entries = id ? all.filter((entry) => entry.nodeId === id) : all;
+        return Response.json({
+          entries,
+          nextCursor: "",
+          total: entries.length,
+          contentVersion: "changes",
+          checkedAt: now,
+        });
+      }
+      if (url.pathname.endsWith("/locate")) {
+        const requested = url.searchParams.get("path") ?? "";
+        if (requested === "file-3.txt")
+          return Response.json({
+            nodeId: btoa("file-3.txt"),
+            path: "file-3.txt",
+            name: "file-3.txt",
+            kind: "file",
+            gitStatus: "M",
+            ignored: false,
+            referenceable: true,
+            mediaType: "",
+          });
+        if (requested === "src/app.ts" && shadowed)
+          return Response.json({
+            nodeId: btoa("sub/src/app.ts"),
+            path: "sub/src/app.ts",
+            name: "app.ts",
+            kind: "file",
+            gitStatus: "",
+            ignored: false,
+            referenceable: true,
+            mediaType: "",
+          });
+        if (requested === "/root/src/app.ts")
+          return Response.json({
+            nodeId: btoa("src/app.ts"),
+            path: "src/app.ts",
+            name: "app.ts",
+            kind: "file",
+            gitStatus: "",
+            ignored: false,
+            referenceable: true,
+            mediaType: "",
+          });
+        if (requested === "literal:1")
+          return Response.json({
+            nodeId: btoa("literal:1"),
+            path: "literal:1",
+            name: "literal:1",
+            kind: "file",
+            gitStatus: "",
+            ignored: false,
+            referenceable: true,
+            mediaType: "",
+          });
+        return Response.json({ error: "not found" }, { status: 404 });
+      }
+      if (url.pathname.endsWith("/file")) {
+        const name = atob(url.searchParams.get("nodeId")!);
+        return Response.json(multiline(name));
+      }
+      return server(input, init);
+    }),
+  );
+
+  render(Harness, { sessionCwd: "/root/sub" });
+  await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
+
+  // Even when file-3.txt has an unstaged diff, mode: "file" opens file view and selects lines 2-4.
+  await page.getByRole("button", { name: "Reveal file 3 lines" }).click();
+  const sendRange = page.getByRole("button", {
+    name: "发送位置到终端（2-4 行）",
+  });
+  await expect.element(sendRange).toBeEnabled();
+  await sendRange.click();
+  await expect
+    .element(page.getByLabelText("Inserted reference"))
+    .toMatchTextContent(/file-3\.txt.*2.*4/);
+
+  // Relative path from repo root resolves via /root/src/app.ts when cwd is /root/sub.
+  await page.getByRole("button", { name: "Reveal repo relative" }).click();
+  await expect
+    .element(page.getByRole("button", { name: "发送位置到终端（3 行）" }))
+    .toBeEnabled();
+
+  // Literal colon filename falls back to rawPath ("literal:1") without applying the suffix line.
+  await page.getByRole("button", { name: "Reveal raw path" }).click();
+  await expect
+    .element(
+      page.getByRole("tab", { name: "literal:1 · worktree", exact: true }),
+    )
+    .toHaveAttribute("aria-selected", "true");
+
+  // A same-named file under the cwd wins over the repo-root one.
+  shadowed = true;
+  await page.getByRole("button", { name: "Reveal repo relative" }).click();
+  await expect
+    .element(
+      page.getByRole("tab", { name: "sub/src/app.ts · worktree", exact: true }),
+    )
+    .toHaveAttribute("aria-selected", "true");
 });
 
 test("the frame inserts references through the opener and the opener closes it on leave", async () => {

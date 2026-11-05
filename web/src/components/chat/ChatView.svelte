@@ -12,6 +12,7 @@
   import { groupTimeline, type ChatModel } from "../../chat-model";
   import { errorMessage } from "../../error";
   import type { ChatUploads } from "../../hooks/upload.svelte";
+  import type { ChatCodeLink } from "../../markdown-link";
   import type { ChatState } from "../../schemas";
   import type {
     TerminalDraft,
@@ -39,6 +40,7 @@
     unavailable = "",
     uploadUnavailable = "",
     onreview,
+    onopenlocation,
     onterminal,
   }: {
     model: ChatModel;
@@ -54,6 +56,8 @@
     uploadUnavailable?: string;
     /** Opens a changed file in the code panel. */
     onreview: (path: string) => void;
+    /** Opens a code-location link in the code panel. */
+    onopenlocation?: (target: ChatCodeLink) => void;
     /** Moves the session to its terminal, such as to log in there. */
     onterminal: () => void;
   } = $props();
@@ -253,7 +257,7 @@
         <ol class="flex flex-col gap-2.5" aria-label="对话">
           {#each entries as entry (`${entry.type}:${entry.id}`)}
             <li class="min-w-0">
-              <TimelineItem {entry} {waiting} {onreview} />
+              <TimelineItem {entry} {waiting} {onreview} {onopenlocation} />
             </li>
           {/each}
         </ol>

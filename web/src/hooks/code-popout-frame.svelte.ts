@@ -5,6 +5,7 @@ import {
   codePopoutHandshake,
   type CodeHostState,
   type CodePopoutOutbound,
+  type CodeReveal,
   type CodeWorkspaceSnapshot,
 } from "../schemas";
 import type { CodeHost } from "../code-host";
@@ -35,7 +36,7 @@ export function useCodePopoutFrame() {
   const state = $state<{
     phase: "waiting" | "standalone" | "ready";
     host: CodeHostState;
-    reveal?: { path: string; key: number };
+    reveal?: CodeReveal;
     initial: CodeWorkspaceSnapshot | undefined;
   }>({
     phase: window.parent === window ? "standalone" : "waiting",

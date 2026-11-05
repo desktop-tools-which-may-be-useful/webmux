@@ -24,7 +24,12 @@
   import { hasTouchInput, isIOS } from "../touchInput";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import { quickCommands } from "../quickCommands.svelte";
-  import type { QuickCommand, SubmissionProgress } from "../schemas";
+  import type { ChatCodeLink } from "../markdown-link";
+  import type {
+    CodeReveal,
+    QuickCommand,
+    SubmissionProgress,
+  } from "../schemas";
   import { newSubmissionId } from "../terminalProtocol";
   import { browserDraftStorage } from "../draftStorage";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
@@ -109,8 +114,9 @@
   const forceSoftKeys = $derived(settings.values.forceSoftKeys ?? false);
   let mounted = false;
   let codeShown = $state(false);
-  // A path the code panel should open (a chat tool call's diff).
-  let codeTarget = $state<{ path: string; key: number }>();
+  let codePanel = $state<CodePanelComponent>();
+  // A code location the code panel should open (from chat links or tool diffs).
+  let codeTarget = $state<CodeReveal>();
   let paneWidth = $state(0);
   const desktop = $derived(paneWidth >= 1024);
   let choiceClosed = $state(false);
@@ -461,8 +467,12 @@
     resync: () => t.resync(),
   };
   function review(path: string) {
-    codeShown = true;
-    codeTarget = { path, key: (codeTarget?.key ?? 0) + 1 };
+    if (!codePanel?.isPoppedOut()) codeShown = true;
+    codeTarget = { path, mode: "diff", key: (codeTarget?.key ?? 0) + 1 };
+  }
+  function openCodeLocation(target: ChatCodeLink) {
+    if (!codePanel?.isPoppedOut()) codeShown = true;
+    codeTarget = { ...target, mode: "file", key: (codeTarget?.key ?? 0) + 1 };
   }
   $effect(() => {
     const generation = t.info?.generation;
@@ -784,6 +794,7 @@
               uploadUnavailable={chatUploadUnavailable}
               actions={hybrid.actions}
               onreview={review}
+              onopenlocation={openCodeLocation}
               onterminal={() => hybrid.request("tui")}
             />
           </div>
@@ -816,6 +827,7 @@
     {/snippet}
     {#snippet codePane()}
       {#if CodePanel}<CodePanel
+          bind:this={codePanel}
           {id}
           visible={visible && codeShown}
           connection={hybrid.view === "chat"

@@ -305,3 +305,13 @@
   - 受影响的 Playwright E2E（`hybrid.spec.ts` 含聊天端空闲保活与显式归档清理用例、`settings-sync.spec.ts`）与 Storybook 套件（`contracts.spec.ts`、`acp-chat.spec.ts`）。
   - 隔离演示服务下设置页“启动配置”分区的桌面（1280×800）与手机（390×844）、明暗主题前后对比截图。
 - 限制：未运行其余未受影响的 E2E 与性能基准用例，未在真机上核对；未重新核验其余故事能力。
+
+本次局部核对（2026-11-05）：聊天视图支持点击代码位置链接直达代码浏览器，对应更新 US-Q05 与覆盖索引，不新增故事。
+
+- 范围：agent 消息中的本机 `file://` URI、绝对或相对路径（含行范围与标题锚点），以及工具调用与“已浏览 N 项”中的文件位置、`resource_link`，点击后在当前会话的代码浏览器（含独立弹出窗口）中打开文件源码并定位行范围或标题。
+- 依据：
+  - `make check`（生产构建、类型检查、测试类型检查、Oxlint、前端架构守卫、文档与持久化守卫、`go vet`、`golangci-lint`）与 `make test-frontend`（Vitest 单元与浏览器全量）通过。
+  - 新增 `parseChatCodeLink` 单元测试、`CodeMarkdownPreview` / `ChatView` / `CodePanel` 浏览器组件测试（含 `file://` URI、相对路径回退、字面冒号文件名回退与弹出窗口转发）。
+  - Storybook `acp-chat.spec.ts`（241 项）与 `design-system.spec.ts`（84 项），以及 Playwright `hybrid.spec.ts` 全量（45 项通过，含桌面 / Pixel 7 代码链接跳转用例）。
+  - 隔离演示服务下桌面 1280×720 与手机 390×844、浅色与深色主题前后对比截图。
+- 限制：未运行完整 `make test`；截图与 E2E 使用 fake agent，未在 iOS/Android 真机浏览器核对；未重新核验其余故事能力。

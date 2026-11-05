@@ -42,6 +42,10 @@
         // A document tab and its close button.
         tab: "px-2 py-1.5 text-xs whitespace-nowrap aria-selected:font-medium aria-selected:text-foreground",
         "tab-close": "px-2",
+        // Inline-flowing link and monospace code-location link inside rows.
+        link: "rounded-sm text-left break-all text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring",
+        "code-link":
+          "rounded-sm text-left font-mono text-xs break-all text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring",
       },
     },
     defaultVariants: {
@@ -56,26 +60,43 @@
 
 <script lang="ts">
   import { cn, type WithElementRef } from "$lib/utils.js";
-  import type { HTMLButtonAttributes } from "svelte/elements";
+  import type {
+    HTMLAnchorAttributes,
+    HTMLButtonAttributes,
+  } from "svelte/elements";
 
   let {
     ref = $bindable(null),
     class: className,
     variant = "text",
+    href = undefined,
     type = "button",
     children,
     ...restProps
-  }: WithElementRef<HTMLButtonAttributes> & {
-    variant?: ListButtonVariant;
-  } = $props();
+  }: WithElementRef<HTMLButtonAttributes> &
+    WithElementRef<HTMLAnchorAttributes> & {
+      variant?: ListButtonVariant;
+    } = $props();
 </script>
 
-<button
-  bind:this={ref}
-  data-slot="list-button"
-  class={cn(listButtonVariants({ variant }), className)}
-  {type}
-  {...restProps}
->
-  {@render children?.()}
-</button>
+{#if href}
+  <a
+    bind:this={ref}
+    data-slot="list-button"
+    class={cn(listButtonVariants({ variant }), className)}
+    {href}
+    {...restProps}
+  >
+    {@render children?.()}
+  </a>
+{:else}
+  <button
+    bind:this={ref}
+    data-slot="list-button"
+    class={cn(listButtonVariants({ variant }), className)}
+    {type}
+    {...restProps}
+  >
+    {@render children?.()}
+  </button>
+{/if}

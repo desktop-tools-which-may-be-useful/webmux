@@ -930,6 +930,19 @@ export const codePopoutHandshake: z.infer<typeof CodePopoutHandshakeSchema> = {
   type: "webmux-code-popout",
   version: 1,
 };
+// A code location another view asks the code workspace to open.
+export const CodeRevealSchema = z.object({
+  path: z.string(),
+  key: z.number(),
+  mode: z.enum(["diff", "file"]).optional(),
+  rawPath: z.string().optional(),
+  fromUri: z.boolean().optional(),
+  line: z.number().int().positive().optional(),
+  endLine: z.number().int().positive().optional(),
+  column: z.number().int().positive().optional(),
+  heading: z.string().optional(),
+});
+export type CodeReveal = z.infer<typeof CodeRevealSchema>;
 // Opener to pop-out frame, over the handshake's port.
 export const CodePopoutInboundSchema = z.discriminatedUnion("type", [
   z.object({
@@ -940,7 +953,7 @@ export const CodePopoutInboundSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("host"), host: CodeHostStateSchema }),
   z.object({
     type: z.literal("reveal"),
-    reveal: z.object({ path: z.string(), key: z.number() }),
+    reveal: CodeRevealSchema,
   }),
   z.object({
     type: z.literal("pasteResult"),

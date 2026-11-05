@@ -16,7 +16,13 @@
   import IconWorld from "~icons/tabler/world";
   import IconX from "~icons/tabler/x";
   import { Button } from "$lib/components/ui/button";
+  import { ListButton } from "$lib/components/ui/list-button";
   import { diffStats, type ToolEntry } from "../../chat-model";
+  import {
+    isExternalLink,
+    parseChatCodeLink,
+    type ChatCodeLink,
+  } from "../../markdown-link";
   import ChatDisclosure from "./ChatDisclosure.svelte";
   import DiffCount from "./DiffCount.svelte";
 
@@ -27,12 +33,15 @@
     tool,
     waiting = false,
     onreview,
+    onopenlocation,
   }: {
     tool: ToolEntry;
     /** A permission request on this call waits for an answer. */
     waiting?: boolean;
     /** Opens a changed file in the code panel. */
     onreview: (path: string) => void;
+    /** Opens a referenced code file or line in the code panel. */
+    onopenlocation?: (target: ChatCodeLink) => void;
   } = $props();
 
   const kinds: Record<string, Component> = {
@@ -139,7 +148,28 @@
           {/if}
         </div>
       {:else if block.type === "resource_link"}
-        <p class="font-mono text-xs break-all">{block.name || block.uri}</p>
+        {@const label = block.name || block.uri}
+        {@const target =
+          block.uri && onopenlocation ? parseChatCodeLink(block.uri) : null}
+        {#if block.uri && isExternalLink(block.uri)}
+          <p>
+            <ListButton
+              variant="code-link"
+              href={block.uri}
+              target="_blank"
+              rel="noopener noreferrer">{label}</ListButton
+            >
+          </p>
+        {:else if target}
+          <p>
+            <ListButton
+              variant="code-link"
+              onclick={() => onopenlocation?.(target)}>{label}</ListButton
+            >
+          </p>
+        {:else}
+          <p class="font-mono text-xs break-all">{label}</p>
+        {/if}
       {:else}
         <p>不支持的内容：{block.unsupported || "未知类型"}</p>
       {/if}
@@ -150,9 +180,23 @@
       </p>
     {/each}
     {#each tool.locations as location, i (i)}
-      <p class="font-mono text-xs break-all">
-        {location.path}{location.line === undefined ? "" : `:${location.line}`}
-      </p>
+      {@const label = `${location.path}${location.line === undefined ? "" : `:${location.line}`}`}
+      {#if onopenlocation && location.path}
+        <p>
+          <ListButton
+            variant="code-link"
+            onclick={() =>
+              onopenlocation({
+                path: location.path,
+                ...(location.line !== undefined && location.line >= 1
+                  ? { line: location.line }
+                  : {}),
+              })}>{label}</ListButton
+          >
+        </p>
+      {:else}
+        <p class="font-mono text-xs break-all">{label}</p>
+      {/if}
     {/each}
   </ChatDisclosure>
 </div>

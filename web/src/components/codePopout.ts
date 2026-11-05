@@ -12,6 +12,7 @@ import {
   CodePopoutOutboundSchema,
   type CodeHostState,
   type CodePopoutInbound,
+  type CodeReveal,
   type CodeWorkspaceSnapshot,
 } from "../schemas";
 import type { TextInsertion } from "../terminal-draft.svelte";
@@ -60,7 +61,7 @@ export type CodePopout = {
   /** Collects the frame's latest state, then closes the window. */
   close(): Promise<void>;
   host(state: CodeHostState): void;
-  reveal(target: { path: string; key: number }): void;
+  reveal(target: CodeReveal): void;
   /** Closes the window without handing state back, for a leaving opener. */
   dispose(): void;
 };

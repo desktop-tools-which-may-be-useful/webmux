@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import { APIError } from "../src/api";
 import {
   SymlinkTargetError,
+  isExternalLink,
   isWorkspaceReference,
+  parseChatCodeLink,
   resolveMarkdownReference,
   targetFailure,
 } from "../src/markdown-link";
@@ -126,4 +128,98 @@ test("targetFailure names the reason", () => {
   expect(targetFailure("链接目标", new APIError(400, "无法解析路径"))).toBe(
     "链接目标不可读：无法解析路径",
   );
+});
+
+describe("parseChatCodeLink", () => {
+  test("parses file:// URIs with line ranges, columns, suffixes and headings", () => {
+    expect(
+      parseChatCodeLink("file:///home/dev/repo/web/src/App.svelte#L42-L50"),
+    ).toEqual({
+      path: "/home/dev/repo/web/src/App.svelte",
+      fromUri: true,
+      line: 42,
+      endLine: 50,
+    });
+    expect(
+      parseChatCodeLink("file://localhost/home/dev/my%20file.ts#L10C5"),
+    ).toEqual({
+      path: "/home/dev/my file.ts",
+      fromUri: true,
+      line: 10,
+      column: 5,
+    });
+    expect(parseChatCodeLink("file:///home/dev/main.go:24:8")).toEqual({
+      path: "/home/dev/main.go",
+      rawPath: "/home/dev/main.go:24:8",
+      fromUri: true,
+      line: 24,
+      column: 8,
+    });
+    expect(
+      parseChatCodeLink("file:///home/dev/README.md#%E5%AE%89%E8%A3%85"),
+    ).toEqual({
+      path: "/home/dev/README.md",
+      fromUri: true,
+      heading: "安装",
+    });
+  });
+
+  test("parses relative and absolute paths with hash or colon line anchors", () => {
+    expect(parseChatCodeLink("web/src/App.svelte#L12")).toEqual({
+      path: "web/src/App.svelte",
+      line: 12,
+    });
+    expect(parseChatCodeLink("web/src/App.svelte#L20-10")).toEqual({
+      path: "web/src/App.svelte",
+      line: 10,
+      endLine: 20,
+    });
+    expect(parseChatCodeLink("/repo/internal/api/server.go:88-96")).toEqual({
+      path: "/repo/internal/api/server.go",
+      rawPath: "/repo/internal/api/server.go:88-96",
+      line: 88,
+      endLine: 96,
+    });
+    expect(parseChatCodeLink("Makefile:15")).toEqual({
+      path: "Makefile",
+      rawPath: "Makefile:15",
+      line: 15,
+    });
+    expect(parseChatCodeLink("main.go:10:4")).toEqual({
+      path: "main.go",
+      rawPath: "main.go:10:4",
+      line: 10,
+      column: 4,
+    });
+    expect(parseChatCodeLink("docs/deploy.md?plain=1#systemd")).toEqual({
+      path: "docs/deploy.md",
+      heading: "systemd",
+    });
+  });
+
+  test("rejects external URLs, remote file hosts, bare fragments and unsafe schemes", () => {
+    expect(isExternalLink("https://example.com/a")).toBe(true);
+    expect(isExternalLink("mailto:dev@example.com")).toBe(true);
+    expect(isExternalLink("file:///tmp/a.ts")).toBe(false);
+    for (const value of [
+      "",
+      "   ",
+      "#section",
+      "//example.com/path",
+      "https://example.com/file.ts#L10",
+      "mailto:dev@example.com",
+      "javascript:alert(1)",
+      "javascript:1",
+      "data:text/html,hi",
+      "blob:https://example.com/id",
+      "vscode://file/repo/a.ts",
+      "localhost:8080",
+      "file://evil.example/etc/passwd",
+      "file:relative.ts",
+      "file:///tmp/a%00b.ts",
+      "src/a%00b.ts",
+    ]) {
+      expect(parseChatCodeLink(value), value).toBeNull();
+    }
+  });
 });

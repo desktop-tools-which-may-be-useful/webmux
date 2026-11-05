@@ -3,10 +3,17 @@
   import CodeDocumentView from "../../src/components/CodeDocumentView.svelte";
   import * as DropdownMenu from "../../src/lib/components/ui/dropdown-menu";
   import { Button } from "../../src/lib/components/ui/button";
-  import { CodeFileSchema } from "../../src/schemas";
+  import { CodeDiffSchema, CodeFileSchema } from "../../src/schemas";
   import type { MarkdownWorkspace } from "../../src/markdown-link";
-  let { text, workspace }: { text: string; workspace?: MarkdownWorkspace } =
-    $props();
+  let {
+    text,
+    workspace,
+    compared = false,
+  }: {
+    text: string;
+    workspace?: MarkdownWorkspace;
+    compared?: boolean;
+  } = $props();
   let heading = $state<{ slug: string; key: number }>();
   let menu = $state<Snippet>();
   let requests = 0;
@@ -31,6 +38,31 @@
         downloadable: true,
       },
     }),
+  );
+  // An uncommitted change of the same file, for the 查看 Diff toggle.
+  const comparison = $derived(
+    compared
+      ? CodeDiffSchema.parse({
+          snapshotId: "snapshot-1",
+          old: { ...file.document, source: "index", text: "# 指南\n" },
+          new: file.document,
+          kind: "text",
+          reason: "",
+          checkedAt: "2026-10-30T00:00:00Z",
+          change: {
+            nodeId: "ZG9jcy9ndWlkZS5tZA",
+            changeId: "change-1",
+            group: "unstaged",
+            oldPath: "docs/guide.md",
+            newPath: "docs/guide.md",
+            status: "M",
+            oldOid: "",
+            newOid: "",
+            oldMode: "100644",
+            newMode: "100644",
+          },
+        })
+      : undefined,
   );
 </script>
 
@@ -58,6 +90,7 @@
     refresh={() => {}}
     beginOpen={() => 1}
     openSide={() => {}}
+    {comparison}
     onComparison={() => {}}
     onState={() => {}}
     {workspace}

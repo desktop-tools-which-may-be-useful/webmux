@@ -100,3 +100,17 @@ test("a heading request from another file's link previews and scrolls once", asy
   await expect.element(page.getByLabelText("Markdown 预览")).toBeVisible();
   await expect.poll(() => Math.abs(offset("第三节"))).toBeLessThan(2);
 });
+
+test("a heading request leaves an open comparison for the preview at the heading", async () => {
+  render(Harness, { text: outlined, compared: true });
+  await page.getByRole("button", { name: "查看 Diff" }).click();
+  await expect
+    .element(page.getByRole("button", { name: "返回文件" }))
+    .toBeVisible();
+  await page.getByRole("button", { name: "Request heading" }).click();
+  await expect.element(page.getByLabelText("Markdown 预览")).toBeVisible();
+  await expect.poll(() => Math.abs(offset("第三节"))).toBeLessThan(2);
+  await expect
+    .element(page.getByRole("button", { name: "查看 Diff" }))
+    .toBeVisible();
+});

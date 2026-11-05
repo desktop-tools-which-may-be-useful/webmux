@@ -7,6 +7,7 @@
   import type { CodeHost } from "../code-host";
   import type {
     CodeHostState,
+    CodeReveal,
     CodeWorkspaceSnapshot,
     ReportedCwd,
   } from "../schemas";
@@ -30,8 +31,8 @@
     draftEnabled: boolean;
     sessionCwd: string;
     reportedCwd: ReportedCwd | null;
-    /** A path another view asks to show, such as a chat tool call's diff. */
-    reveal?: { path: string; key: number };
+    /** A code location another view asks to show, such as from chat output. */
+    reveal?: CodeReveal;
   } = $props();
 
   const host: CodeHost = {
@@ -65,6 +66,9 @@
   // While popped out the window's frame owns the workspace; this page keeps
   // only the latest state it reported, and remounts from it on return.
   let popout = $state<CodePopout>();
+  export function isPoppedOut() {
+    return !!popout;
+  }
   // While the window starts, the workspace here is inert: the window restores
   // the state captured when popping began.
   let popping = $state(false);
@@ -119,7 +123,7 @@
     if (!popout || !target || target.key === forwarded) return;
     forwarded = target.key;
     // Reactive props are proxies, which a message port cannot clone.
-    popout.reveal({ path: target.path, key: target.key });
+    popout.reveal($state.snapshot(target));
   });
 
   onMount(() => {

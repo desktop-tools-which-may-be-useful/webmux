@@ -124,6 +124,123 @@ test("renders the snapshot's timeline and updates a tool row in place", async ()
     .toHaveTextContent("web/src/homeWorktrees.ts");
 });
 
+test("opens code links from agent messages, tool locations, resource links and read rows", async () => {
+  const socket = await open();
+  socket.frame(snapshot(chatState()));
+  socket.frame({
+    type: "events",
+    generation: "g1",
+    items: events(
+      {
+        kind: "tool.upsert",
+        tool: {
+          toolCallId: "read-single",
+          kind: "read",
+          title: "读取 Home.svelte",
+          status: "completed",
+          locations: [{ path: "web/src/pages/Home.svelte", line: 48 }],
+        },
+      },
+      {
+        kind: "tool.upsert",
+        tool: {
+          toolCallId: "read-multi",
+          kind: "search",
+          title: "搜索 sortWorkspaces",
+          status: "completed",
+          locations: [
+            { path: "web/src/homeWorktrees.ts", line: 15 },
+            { path: "web/src/pages/Home.svelte", line: 60 },
+          ],
+        },
+      },
+      {
+        kind: "message.append",
+        message: {
+          messageId: "a-links",
+          role: "agent",
+          text: [
+            "请查看 [sortWorkspaces](web/src/homeWorktrees.ts#L15-L30)",
+            "以及 [Home.svelte:48](file:///repo/web/src/pages/Home.svelte#L48)",
+            "或 [文档说明](docs/hybrid-sessions.md#聊天视图)。",
+          ].join(" "),
+        },
+      },
+      {
+        kind: "tool.upsert",
+        tool: {
+          toolCallId: "search-tool",
+          kind: "other",
+          title: "定位引用",
+          status: "completed",
+          locations: [{ path: "/repo/internal/session/manager.go", line: 120 }],
+          content: [
+            {
+              type: "resource_link",
+              uri: "file:///repo/internal/api/routes.go#L42",
+              name: "routes.go",
+            },
+          ],
+        },
+      },
+    ),
+  });
+
+  const transcript = page.getByRole("list", { name: "对话" });
+  const opened = page.getByRole("status", { name: "Opened location" });
+  const readOpened = () => JSON.parse(opened.element().textContent || "null");
+
+  await transcript.getByRole("button", { name: "已浏览 2 项" }).click();
+  await transcript.getByRole("button", { name: "读取 Home.svelte" }).click();
+  await expect.poll(readOpened).toEqual({
+    path: "web/src/pages/Home.svelte",
+    line: 48,
+  });
+  await transcript
+    .getByRole("button", { name: "web/src/pages/Home.svelte:60" })
+    .click();
+  await expect.poll(readOpened).toEqual({
+    path: "web/src/pages/Home.svelte",
+    line: 60,
+  });
+
+  await transcript.getByRole("link", { name: "sortWorkspaces" }).click();
+  await expect.poll(readOpened).toEqual({
+    path: "web/src/homeWorktrees.ts",
+    line: 15,
+    endLine: 30,
+  });
+
+  await transcript.getByRole("link", { name: "Home.svelte:48" }).click();
+  await expect.poll(readOpened).toEqual({
+    path: "/repo/web/src/pages/Home.svelte",
+    fromUri: true,
+    line: 48,
+  });
+
+  await transcript.getByRole("link", { name: "文档说明" }).click();
+  await expect.poll(readOpened).toEqual({
+    path: "docs/hybrid-sessions.md",
+    heading: "聊天视图",
+  });
+
+  await transcript.getByRole("button", { name: /定位引用/ }).click();
+  await transcript
+    .getByRole("button", { name: "/repo/internal/session/manager.go:120" })
+    .click();
+  await expect.poll(readOpened).toEqual({
+    path: "/repo/internal/session/manager.go",
+    line: 120,
+  });
+
+  await transcript.getByRole("button", { name: "routes.go" }).click();
+  await expect.poll(readOpened).toEqual({
+    path: "/repo/internal/api/routes.go",
+    fromUri: true,
+    line: 42,
+  });
+});
+
 test("shows server-timed progress and keeps the final duration", async () => {
   const socket = await open();
   vi.useFakeTimers({

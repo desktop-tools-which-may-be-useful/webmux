@@ -55,6 +55,10 @@
 - **US-Q05 阅读聊天时间线**：作为手机上的使用者，我希望以对话形式阅读 agent 的输出，以便比滚动终端更容易理解进度。
   验收要点：
   - 用户消息为气泡、agent 消息为正文，思考默认折叠；活动 `session/prompt` 回合期间忽略 agent 回显的 `user_message_chunk` 通知，仅在 `session/load` 回放阶段转换，避免实时回显产生重复的用户消息气泡；
+  - 聊天时间线中的链接与位置跳转：
+    - agent 消息中的外部 `http(s):` / `mailto:` 链接在新标签页打开，图片显示为文字且标题不生成 `id`，危险或非代码协议链接只保留纯文本；
+    - 指向代码位置的链接（本机 `file://` URI、绝对或相对路径，含 `#L10-L20`、`:10-20` 行范围与 `#标题` 片段）点击后在当前会话的代码浏览器（含已弹出的独立窗口）中打开文件源码并定位目标行范围或标题；相对路径先按会话当前目录、再按仓库根目录解析；文件正在显示对比时，标题链接切回预览并定位；
+    - 工具调用与“已浏览 N 项”中的文件位置、`resource_link` 点击后同样在代码浏览器中打开目标文件与行号；
   - 工具调用显示一行摘要可展开，连续读取与搜索合并为“已浏览 N 项”，diff 显示增删行数并可在代码面板查看，同一 `toolCallId` 的更新只保留一行；
   - 回合状态由服务端记录 `startedAt` / `endedAt`，进行中每秒显示已用时间，结束后保留总用时，刷新、重连与其他设备不重新计时；
   - 计划、用量（输入框旁的上下文用量环，点击弹出已用、上下文窗口、剩余 token 与费用）、压缩、提示与回合结束（已中断、错误）分别呈现；
@@ -160,7 +164,7 @@
 - [agent 注册表](../../internal/agentprofile/agents/agents.go)、[Codex 适配器](../../internal/agentprofile/codex/codex.go)、[适配器契约测试](../../internal/agentprofile/agenttest/agenttest.go)
 - [Claude Code 适配器](../../internal/agentprofile/claudecode/claudecode.go)、[Claude 注册记录](../../internal/agentprofile/claudecode/registry.go)、[Antigravity CLI 适配器](../../internal/agentprofile/agy/agy.go)
 - [会话外壳与伴随进程](../../internal/session/shell.go)、[进程事实](../../internal/session/process_facts.go)、[聊天接口](../../internal/api/chat.go)、[聊天通道](../../internal/hub/chat.go)
-- [启动配置](../../internal/launch/types.go)、[聊天视图](../../web/src/components/chat/)、[会话页](../../web/src/pages/Terminal.svelte)
+- [启动配置](../../internal/launch/types.go)、[聊天视图](../../web/src/components/chat/)、[代码链接解析](../../web/src/markdown-link.ts)、[代码工作区](../../web/src/components/CodeWorkspace.svelte)、[会话页](../../web/src/pages/Terminal.svelte)
 - [已归档记录](../../web/src/components/ArchivedSessions.svelte)、[归位规则](../../web/src/archived.ts)、[安装提示](../../web/src/components/ConnectorInstallHint.svelte)、[原生附着](../../internal/attach/attach.go)
 - [使用说明](../hybrid-sessions.md)、[协议](../protocol/http-hybrid.md)、[端到端测试](../../web/test/e2e/hybrid.spec.ts)。
 - [会话卡片](../../web/src/components/SessionRow.svelte)、[会话页头部](../../web/src/components/TerminalHeader.svelte)、[品牌图标](../../web/src/components/LaunchConfigIcon.svelte)、[图标一致性测试](../../internal/launch/presets_test.go)。

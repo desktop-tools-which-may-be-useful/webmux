@@ -12,7 +12,7 @@
 | 设置页自定义启动配置与图标、启动配置 API 与按配置启动                                               | US-B01；US-B08                                      |
 | 混合模式勾选、Claude Code 与 Antigravity CLI 默认混合、hybrid-support 判定、起始端选择              | US-Q01–US-Q02；US-B01；US-B08                       |
 | 终端 ↔ 聊天切换、Claude 注册记录身份/候选/外部占用、中断等待、草稿退回与回滚                        | US-Q03–US-Q04                                       |
-| 聊天视图时间线、权限与表单、权限模式、配置项、命令菜单及 Claude 恢复后配置重应用                    | US-Q05–US-Q07                                       |
+| 聊天视图时间线、代码链接打开代码浏览器、权限与表单、权限模式、配置项、命令菜单及 Claude 配置重应用  | US-Q05–US-Q07                                       |
 | 聊天端服务端队列、去重与 omp/Codex/Claude 插话                                                      | US-Q08                                              |
 | 聊天附件能力块构造、降级、队列与路径安全                                                            | US-Q15                                              |
 | 第三方 ACP 连接器（Codex 的 codex-acp、Claude 的 claude-agent-acp）启动前检查与安装提示             | US-Q16；US-Q01；US-Q03                              |

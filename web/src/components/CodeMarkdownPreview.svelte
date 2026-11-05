@@ -1,8 +1,12 @@
 <script module lang="ts">
   import DOMPurify, { type Config } from "dompurify";
-  import { isWorkspaceReference } from "../markdown-link";
+  import {
+    isExternalLink,
+    isWorkspaceReference,
+    parseChatCodeLink,
+    type ChatCodeLink,
+  } from "../markdown-link";
 
-  const external = /^(?:https?:|mailto:)/i;
   const forbiddenTags = [
     "image",
     "svg",
@@ -36,24 +40,58 @@
 
   // Each variant owns its DOMPurify instance: hooks are instance-wide state,
   // so the file preview's link and image handling never reaches chat messages.
+  let allowMessageCodeLinks = false;
+  const pendingCodeHrefs = new WeakMap<Element, string>();
   const messagePurifier = DOMPurify(window);
-  // Raw HTML links bypass the Markdown renderer: send absolute links to a new
-  // tab and drop relative hrefs that would reload the app at an unknown route.
+  messagePurifier.addHook("uponSanitizeAttribute", (node, data) => {
+    if (data.attrName.startsWith("data-md-")) {
+      data.keepAttr = false;
+      return;
+    }
+    // Capture valid code-location targets before DOMPurify's built-in URI
+    // filter strips non-HTTP schemes (`file:///...`) or colon line suffixes
+    // (`Makefile:15`), and never leave a non-external `href` on `<a>`.
+    if (
+      node.tagName === "A" &&
+      data.attrName === "href" &&
+      !isExternalLink(data.attrValue)
+    ) {
+      if (allowMessageCodeLinks && parseChatCodeLink(data.attrValue))
+        pendingCodeHrefs.set(node, data.attrValue);
+      data.keepAttr = false;
+    }
+  });
   messagePurifier.addHook("afterSanitizeAttributes", (node) => {
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const element = node as Element;
     if (element.tagName !== "A") return;
-    const href = element.getAttribute("href") ?? "";
-    if (external.test(href)) {
+    const href = element.getAttribute("href");
+    if (href !== null && isExternalLink(href)) {
       element.setAttribute("target", "_blank");
       element.setAttribute("rel", "noopener noreferrer");
-    } else element.removeAttribute("href");
+      return;
+    }
+    element.removeAttribute("href");
+    const codeHref = pendingCodeHrefs.get(element);
+    if (!codeHref) return;
+    pendingCodeHrefs.delete(element);
+    element.setAttribute("data-md-href", codeHref);
+    element.setAttribute("role", "link");
+    element.setAttribute("tabindex", "0");
   });
   const messageConfig: Config = {
     FORBID_TAGS: ["img", ...forbiddenTags],
     FORBID_ATTR: forbiddenAttributes,
     ADD_ATTR: ["target", "rel"],
   };
+  function sanitizeMessageHtml(html: string, codeLinks: boolean) {
+    allowMessageCodeLinks = codeLinks;
+    try {
+      return messagePurifier.sanitize(html, messageConfig);
+    } finally {
+      allowMessageCodeLinks = false;
+    }
+  }
 
   const documentPurifier = DOMPurify(window);
   // `data-md-*` attributes carry the preview's own resolved references; an
@@ -69,7 +107,7 @@
     if (element.tagName === "A") {
       const href = element.getAttribute("href");
       if (href === null) return;
-      if (external.test(href)) {
+      if (isExternalLink(href)) {
         element.setAttribute("target", "_blank");
         element.setAttribute("rel", "noopener noreferrer");
         return;
@@ -127,6 +165,7 @@
     workspace,
     headings = $bindable([]),
     restore,
+    onopenlink,
   }: {
     text: string;
     variant?: "document" | "message";
@@ -138,6 +177,8 @@
     headings?: MarkdownHeading[];
     /** A captured reading position, applied after the first render with layout. */
     restore?: CodeMarkdownState;
+    /** Opens a code-location link from a chat message in the code browser. */
+    onopenlink?: (target: ChatCodeLink) => void;
   } = $props();
 
   const escapeHtml = (value: string) =>
@@ -163,7 +204,7 @@
   type Block = { kind: "html"; html: string } | { kind: "code"; code: string };
   // Prose between fenced code blocks is rendered (and sanitized) as before;
   // the code blocks themselves stay plain text next to their copy buttons.
-  function blocks(source: string): Block[] {
+  function blocks(source: string, codeLinks: boolean): Block[] {
     const tokens = marked.lexer(source, { gfm: true });
     const out: Block[] = [];
     let run: Token[] = [];
@@ -172,9 +213,9 @@
       const list = Object.assign(run, { links: tokens.links }) as TokensList;
       out.push({
         kind: "html",
-        html: messagePurifier.sanitize(
+        html: sanitizeMessageHtml(
           marked.parser(list, { gfm: true, renderer: messageRenderer }),
-          messageConfig,
+          codeLinks,
         ),
       });
       run = [];
@@ -191,7 +232,9 @@
     return out;
   }
 
-  const parts = $derived(variant === "message" ? blocks(text) : []);
+  const parts = $derived(
+    variant === "message" ? blocks(text, Boolean(onopenlink)) : [],
+  );
   let copied = $state(-1);
   async function copy(index: number, code: string) {
     if (await copyText(code)) copied = index;
@@ -208,6 +251,7 @@
   };
   const maxImages = 50;
   const parallelImages = 2;
+  let messageRoot = $state<HTMLDivElement>();
   let region = $state<HTMLDivElement>();
   let content = $state<HTMLDivElement>();
   let pictures = $state.raw<Picture[]>([]);
@@ -522,23 +566,33 @@
   // Delegated so links and loaded images inside the rendered markup work the
   // same with or without modifier keys, and never navigate the app.
   $effect(() => {
-    const element = content;
+    const element = variant === "message" ? messageRoot : content;
     if (!element) return;
     const hit = (event: Event) =>
       (event.target as Element | null)?.closest(
         "[data-md-href], [data-md-open]",
       );
+    const activateLink = (link: Element) => {
+      if (variant === "message") {
+        const parsed = parseChatCodeLink(
+          link.getAttribute("data-md-href") ?? "",
+        );
+        if (parsed) onopenlink?.(parsed);
+        return;
+      }
+      void follow(link);
+    };
     const click = (event: MouseEvent) => {
       const link = hit(event);
       if (!link) return;
       event.preventDefault();
-      void follow(link);
+      activateLink(link);
     };
     const keydown = (event: KeyboardEvent) => {
       const link = hit(event);
       if (!link || event.key !== "Enter") return;
       event.preventDefault();
-      void follow(link);
+      activateLink(link);
     };
     element.addEventListener("click", click);
     element.addEventListener("keydown", keydown);
@@ -550,7 +604,10 @@
 </script>
 
 {#if variant === "message"}
-  <div class="markdown-preview markdown-message text-sm">
+  <div
+    bind:this={messageRoot}
+    class="markdown-preview markdown-message text-sm"
+  >
     {#each parts as part, i (i)}
       {#if part.kind === "html"}
         <!-- Sanitized by DOMPurify; raw HTML never reaches the page unsanitized. -->
@@ -679,12 +736,25 @@
     padding: 0;
     font-size: 0.9em;
   }
-  .markdown-preview :global(a),
+  .markdown-preview :global(a[href]),
+  .markdown-preview :global(a[data-md-href]),
   .markdown-preview :global([data-md-open]) {
+    border-radius: var(--radius-sm);
     color: var(--primary);
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
+  }
+  .markdown-preview :global(a[href]:hover),
+  .markdown-preview :global(a[data-md-href]:hover),
+  .markdown-preview :global([data-md-open]:hover) {
+    opacity: 0.8;
+  }
+  .markdown-preview :global(a[href]:focus-visible),
+  .markdown-preview :global(a[data-md-href]:focus-visible),
+  .markdown-preview :global([data-md-open]:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
   .markdown-preview :global(hr) {
     margin: 1.5em 0;

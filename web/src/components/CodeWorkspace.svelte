@@ -16,6 +16,7 @@
     type CodeDiff,
     type CodeChange,
     type CodeListing,
+    type CodeReveal,
     type CodeWorkspaceSnapshot,
     type CodeDocumentViewState,
   } from "../schemas";
@@ -73,6 +74,8 @@
     menu?: Snippet;
     // A heading a Markdown link asked to show once the file is previewed.
     heading?: { slug: string; key: number };
+    // A line or file view a code link asked to show in the file tab.
+    jump?: { line?: number; endLine?: number; column?: number; key: number };
     // Reading state captured in another window, handed to the first view.
     restore?: CodeDocumentViewState;
   };
@@ -430,15 +433,22 @@
     directory = target.path;
     return "";
   }
-  async function openFile(path: string, opaqueId = nodeId(path)) {
-    const origin = context;
-    if (!origin) return "";
+  async function openFileInOrigin(
+    origin: TabOrigin,
+    path: string,
+    opaqueId = nodeId(path),
+  ) {
     return openTab(
       `${origin.contextId}:${opaqueId}:worktree`,
-      `${base}/file?${params({ nodeId: opaqueId })}`,
+      `${base}/file?${params({ contextId: origin.contextId, nodeId: opaqueId })}`,
       CodeFileSchema,
       (value, activate) => install(origin, value, undefined, activate),
     );
+  }
+  async function openFile(path: string, opaqueId = nodeId(path)) {
+    const origin = context;
+    if (!origin) return "";
+    return openFileInOrigin(origin, path, opaqueId);
   }
   // Resolves a root-relative path from a Markdown preview. The server walks
   // the absolute path through symlinks, so a canonical path that differs from
@@ -457,6 +467,7 @@
     return target;
   }
   let headingSequence = 0;
+  let jumpSequence = 0;
   const markdownWorkspace: MarkdownWorkspace = {
     async open(path, heading = "") {
       let target: z.infer<typeof CodeLocationSchema>;
@@ -855,34 +866,153 @@
     const target = host.reveal;
     const current = context;
     if (!target || target.key === revealed) return;
-    // Revealed paths come from the workspace, such as a chat tool call.
+    // Revealed paths resolve in the workspace root before the artifacts one.
     if (untrack(() => root) !== "workspace") {
       untrack(() => switchRoot("workspace"));
       return;
     }
     if (!current) return;
     revealed = target.key;
-    untrack(() => void showPath(target.path));
+    untrack(() => void showReveal(target));
   });
-  async function showPath(path: string) {
+  // Candidate order: a relative path resolves against the session's current
+  // directory first (where the agent runs, so where its paths are written
+  // from), then the repository root. A same-named file under the current
+  // directory therefore wins over the repository-root one.
+  function revealCandidates(origin: CodeContext, target: CodeReveal) {
+    const rootPrefix = origin.rootPath.replace(/\/+$/, "");
+    const list: { path: string; raw?: boolean }[] = [{ path: target.path }];
+    const add = (path: string, raw = false) => {
+      if (path && !list.some((item) => item.path === path))
+        list.push({ path, raw });
+    };
+    if (!target.fromUri) {
+      if (!target.path.startsWith("/")) add(`${rootPrefix}/${target.path}`);
+      else if (
+        target.path !== origin.rootPath &&
+        !target.path.startsWith(`${rootPrefix}/`)
+      )
+        add(`${rootPrefix}${target.path}`);
+    }
+    if (target.rawPath && target.rawPath !== target.path) {
+      add(target.rawPath, true);
+      if (!target.fromUri && !target.rawPath.startsWith("/"))
+        add(`${rootPrefix}/${target.rawPath}`, true);
+    }
+    return list;
+  }
+  async function locateReveal(origin: CodeContext, target: CodeReveal) {
+    const candidates = revealCandidates(origin, target);
+    let firstError: unknown;
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i]!;
+      try {
+        const location = await api(
+          `${base}/locate?${params({ contextId: origin.contextId, path: candidate.path })}`,
+          CodeLocationSchema,
+        );
+        return { origin, location, usedRawPath: !!candidate.raw };
+      } catch (e) {
+        if (i === 0) firstError = e;
+        if (
+          !(
+            e instanceof APIError &&
+            (e.status === 404 ||
+              e.status === 409 ||
+              (!target.fromUri && e.status === 403))
+          )
+        )
+          break;
+      }
+    }
+    if (
+      target.path.startsWith("/") &&
+      firstError instanceof APIError &&
+      firstError.status === 403
+    ) {
+      try {
+        const artifactsOrigin = await api(
+          `${base}/context?root=artifacts`,
+          CodeContextSchema,
+        );
+        const artifactPaths =
+          target.rawPath && target.rawPath !== target.path
+            ? [
+                { path: target.path, raw: false },
+                { path: target.rawPath, raw: true },
+              ]
+            : [{ path: target.path, raw: false }];
+        for (const item of artifactPaths) {
+          try {
+            const location = await api(
+              `${base}/locate?${params({ contextId: artifactsOrigin.contextId, path: item.path })}`,
+              CodeLocationSchema,
+            );
+            return {
+              origin: artifactsOrigin,
+              location,
+              usedRawPath: item.raw,
+            };
+          } catch {
+            // Try rawPath if present; otherwise report the workspace error.
+          }
+        }
+      } catch {
+        // No existing artifacts folder; report the workspace error.
+      }
+    }
+    throw firstError;
+  }
+  async function showReveal(target: CodeReveal) {
+    const current = context;
+    if (!current) return;
     try {
-      const location = await api(
-        `${base}/locate?${params({ path })}`,
-        CodeLocationSchema,
+      const { origin, location, usedRawPath } = await locateReveal(
+        current,
+        target,
       );
       if (location.kind !== "file") {
-        await locate(path);
+        if (origin.contextId === context?.contextId) await show(location);
         return;
       }
-      const found = await api(
-        `${base}/changes?${params({ nodeId: location.nodeId })}`,
-        CodeChangesSchema,
+      const mode =
+        target.mode ??
+        (target.line !== undefined || target.heading ? "file" : "diff");
+      if (mode === "diff" && origin.diffAvailable) {
+        const found = await api(
+          `${base}/changes?${params({ contextId: origin.contextId, nodeId: location.nodeId })}`,
+          CodeChangesSchema,
+        );
+        const change =
+          found.entries.find((entry) => entry.group !== "staged") ??
+          found.entries[0];
+        if (change) {
+          await openDiff(change);
+          return;
+        }
+      }
+      const failure = await openFileInOrigin(
+        origin,
+        location.path,
+        location.nodeId,
       );
-      const change =
-        found.entries.find((entry) => entry.group !== "staged") ??
-        found.entries[0];
-      if (change) await openDiff(change);
-      else await openFile(location.path, location.nodeId);
+      if (failure || mode !== "file") return;
+      const tab = tabs.find(
+        (t) => t.key === `${origin.contextId}:${location.nodeId}:worktree`,
+      );
+      if (!tab) return;
+      if (!usedRawPath && target.line !== undefined) {
+        tab.jump = {
+          line: target.line,
+          endLine: target.endLine,
+          column: target.column,
+          key: ++jumpSequence,
+        };
+      } else if (!usedRawPath && target.heading) {
+        tab.heading = { slug: target.heading, key: ++headingSequence };
+      } else {
+        tab.jump = { key: ++jumpSequence };
+      }
     } catch (e) {
       if (mounted) error = errorMessage(e);
     }
@@ -1114,6 +1244,8 @@
               : undefined}
             heading={tab.heading}
             onHeading={() => (tab.heading = undefined)}
+            jump={tab.jump}
+            onJump={() => (tab.jump = undefined)}
             diffAvailable={tab.rootKind !== "artifacts"}
           />
         </div>{/each}

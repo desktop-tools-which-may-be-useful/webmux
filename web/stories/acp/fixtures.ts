@@ -128,6 +128,7 @@ const tool = (
   title: string,
   status: "pending" | "in_progress" | "completed" | "failed",
   content: { path: string; oldText: string; newText: string }[] = [],
+  locations?: { path: string; line?: number }[],
 ): EventBody => ({
   kind: "tool.upsert",
   tool: {
@@ -136,6 +137,7 @@ const tool = (
     title,
     status,
     content: content.map((diff) => ({ type: "diff", ...diff })),
+    ...(locations ? { locations } : {}),
   },
 });
 
@@ -177,13 +179,27 @@ const history: EventBody[] = [
       text: "先找到首页的排序函数，确认置顶状态从哪里来，再补一个回归测试。",
     },
   },
-  tool("read-0", "read", "web/src/pages/Home.svelte", "completed"),
-  tool("read-1", "read", "web/src/homeWorktrees.ts", "completed"),
+  tool(
+    "read-0",
+    "read",
+    "web/src/pages/Home.svelte",
+    "completed",
+    [],
+    [{ path: "web/src/pages/Home.svelte", line: 48 }],
+  ),
+  tool(
+    "read-1",
+    "read",
+    "web/src/homeWorktrees.ts",
+    "completed",
+    [],
+    [{ path: "web/src/homeWorktrees.ts", line: 15 }],
+  ),
   tool("read-2", "read", "web/src/session-list.ts", "completed"),
   tool("search-0", "search", "sortWorkspaces", "completed"),
   agentText(
     "a1",
-    "排序只比较了最近活动时间，没有考虑置顶。我先补测试，再修改 `sortWorkspaces`。",
+    "排序只比较了 [homeWorktrees.ts](web/src/homeWorktrees.ts#L15-L30) 中的最近活动时间，没有考虑 [Home.svelte](file:///home/developer/webmux/web/src/pages/Home.svelte#L48) 的置顶状态。我先补测试，再修改 [`sortWorkspaces`](web/src/homeWorktrees.ts:15)。",
   ),
   tool("edit-1", "edit", "编辑 web/src/homeWorktrees.ts", "completed", [
     worktreesDiff,

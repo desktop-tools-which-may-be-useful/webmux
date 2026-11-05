@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { APIRequestContext, Page } from "@playwright/test";
@@ -560,6 +560,49 @@ test.describe("hybrid sessions with the fake agent", () => {
     await menu.getByRole("menuitem", { name: "/resume", exact: true }).click();
     await expect(composer(page)).toHaveValue("请执行 /resume");
     await expect(conversation(page)).not.toContainText("/resume");
+  });
+
+  test("clicking a code link in chat opens the file at its line range in the code browser", async ({
+    page,
+    request,
+    workDir,
+  }, testInfo) => {
+    const srcDir = join(workDir, "src");
+    await mkdir(srcDir);
+    const lines = Array.from(
+      { length: 40 },
+      (_, i) => `export const line${i + 1} = ${i + 1};`,
+    );
+    await writeFile(join(srcDir, "target.ts"), `${lines.join("\n")}\n`);
+    const id = await createHybrid(request, workDir, "acp");
+    await openHybrid(page, id, "acp");
+
+    await sendChat(page, "请看 [target.ts:25-27](src/target.ts#L25-L27)");
+    const link = conversation(page).getByRole("link", {
+      name: "target.ts:25-27",
+      exact: true,
+    });
+    await expect(link).toBeVisible();
+    await expect(working(page)).toHaveCount(0);
+    await link.click();
+
+    const code = page.getByRole("region", { name: "代码工作区", exact: true });
+    await expect(code).toBeVisible();
+    await expect(
+      code.getByRole("tab", { name: "src/target.ts · worktree", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    const sendRange = code.getByRole("button", {
+      name: "发送位置到草稿（25-27 行）",
+      exact: true,
+    });
+    await expect(sendRange).toBeEnabled();
+    await sendRange.click();
+
+    if (testInfo.project.use.isMobile) {
+      await sideTab(page, "acp").click();
+      await expectSide(page, "acp");
+    }
+    await expect(composer(page)).toHaveValue(/src\/target\.ts.*25.*27/);
   });
 
   test("an idle chat side keeps the same agent process alive until explicitly archived", async ({
