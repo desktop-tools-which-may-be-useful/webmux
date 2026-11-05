@@ -1,5 +1,10 @@
 import type { ResumeChoice, ResumeOutcome } from "./recoverable";
-import type { HybridRecord, Repository, SessionInfo } from "./schemas";
+import type {
+  HybridRecord,
+  Repository,
+  SessionInfo,
+  Worktree,
+} from "./schemas";
 
 // Archived records are the closed and interrupted hybrid sessions. The home
 // page shows each one under the group a live session would have: its
@@ -30,6 +35,8 @@ export interface ArchiveActions {
     choice?: ResumeChoice,
   ) => Promise<ResumeOutcome>;
   remove: (id: string) => Promise<unknown>;
+  /** Opens the worktree removal confirmation when the record's linked worktree still exists. */
+  removeWorktree?: (worktree: Worktree) => void;
   onresumed: (session: SessionInfo) => void;
 }
 
@@ -46,6 +53,52 @@ function within(root: string, path: string) {
   const base = trimmed(root);
   const target = trimmed(path);
   return target === base || target.startsWith(base === "/" ? "/" : `${base}/`);
+}
+
+/**
+ * Resolves the registered worktree a record belongs to: its recorded
+ * worktree association wins; a record without one (written before
+ * associations were recorded) joins the registered worktree with the
+ * longest path containing its `cwd`.
+ */
+export function recordWorktree(
+  record: HybridRecord,
+  repositories: readonly Repository[],
+): Worktree | undefined {
+  const recorded = record.workspace;
+  if (recorded) {
+    const repository = repositories.find(
+      (repo) => repo.id === recorded.repositoryId,
+    );
+    return repository?.worktrees.find(
+      (tree) => tree.id === recorded.worktreeId,
+    );
+  }
+  let best: { tree: Worktree; length: number } | undefined;
+  for (const repo of repositories)
+    for (const tree of repo.worktrees)
+      if (
+        within(tree.path, record.cwd) &&
+        (!best || trimmed(tree.path).length > best.length)
+      )
+        best = { tree, length: trimmed(tree.path).length };
+  return best?.tree;
+}
+
+/**
+ * The linked worktree that deleting `record` should remove through the
+ * worktree confirmation dialog, or undefined when only the record itself can
+ * be deleted (main/bare checkout, unavailable directory, or worktree already
+ * gone).
+ */
+export function removableRecordWorktree(
+  record: HybridRecord,
+  repositories: readonly Repository[],
+): Worktree | undefined {
+  const tree = recordWorktree(record, repositories);
+  return tree && tree.kind === "linked" && tree.available && !tree.prunable
+    ? tree
+    : undefined;
 }
 
 /**
@@ -82,35 +135,18 @@ export function placeArchived(
     else entry.worktrees.set(worktreeId, [record]);
   };
   for (const record of records) {
-    const recorded = record.workspace;
-    const repository =
-      recorded &&
-      repositories.find((repo) => repo.id === recorded.repositoryId);
-    if (recorded && repository) {
-      if (repository.worktrees.some((tree) => tree.id === recorded.worktreeId))
-        toWorktree(repository.id, recorded.worktreeId, record);
-      else repositoryOf(repository.id).missing.push(record);
+    const tree = recordWorktree(record, repositories);
+    if (tree) {
+      toWorktree(tree.repositoryId, tree.id, record);
       continue;
     }
-    if (!recorded) {
-      let best:
-        | { repositoryId: string; worktreeId: string; length: number }
-        | undefined;
-      for (const repo of repositories)
-        for (const tree of repo.worktrees)
-          if (
-            within(tree.path, record.cwd) &&
-            (!best || trimmed(tree.path).length > best.length)
-          )
-            best = {
-              repositoryId: repo.id,
-              worktreeId: tree.id,
-              length: trimmed(tree.path).length,
-            };
-      if (best) {
-        toWorktree(best.repositoryId, best.worktreeId, record);
-        continue;
-      }
+    const recorded = record.workspace;
+    if (
+      recorded &&
+      repositories.some((repo) => repo.id === recorded.repositoryId)
+    ) {
+      repositoryOf(recorded.repositoryId).missing.push(record);
+      continue;
     }
     direct.push(record);
   }

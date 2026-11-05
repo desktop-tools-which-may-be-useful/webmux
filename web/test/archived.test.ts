@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { placeArchived, repositoryRecords } from "../src/archived";
+import {
+  placeArchived,
+  recordWorktree,
+  removableRecordWorktree,
+  repositoryRecords,
+} from "../src/archived";
 import type { HybridRecord, Repository, Worktree } from "../src/schemas";
 
 const tree = (id: string, path: string): Worktree => ({
@@ -89,5 +94,31 @@ describe("placeArchived", () => {
     const placed = placeArchived(records, []);
     expect(placed.repositories.size).toBe(0);
     expect(ids(placed.direct)).toEqual(ids(records));
+  });
+
+  test("resolves removable linked worktrees for archived records", () => {
+    const repos: Repository[] = [
+      {
+        ...repository,
+        worktrees: [
+          { ...tree("main", "/work/main"), kind: "main" },
+          tree("nested", "/work/main/nested"),
+          { ...tree("prunable", "/work/prunable"), prunable: true },
+        ],
+      },
+    ];
+    expect(recordWorktree(records[0]!, repos)?.id).toBe("main");
+    expect(removableRecordWorktree(records[0]!, repos)).toBeUndefined();
+    expect(removableRecordWorktree(records[1]!, repos)).toBeUndefined();
+    expect(removableRecordWorktree(records[2]!, repos)?.id).toBe("nested");
+    expect(
+      removableRecordWorktree(
+        record("stale", {
+          cwd: "/work/prunable",
+          workspace: { repositoryId: "r1", worktreeId: "prunable" },
+        }),
+        repos,
+      ),
+    ).toBeUndefined();
   });
 });

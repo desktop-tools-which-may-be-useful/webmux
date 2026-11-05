@@ -744,10 +744,14 @@ test.describe("hybrid sessions with the fake agent", () => {
     await chatTurn(page, "keep-this");
 
     await page.getByRole("button", { name: "会话菜单", exact: true }).click();
-    await page.getByRole("menuitem", { name: "归档会话", exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: "停止会话并归档", exact: true })
+      .click();
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText("对话保留在 agent 中");
-    await dialog.getByRole("button", { name: "归档", exact: true }).click();
+    await dialog
+      .getByRole("button", { name: "停止并归档", exact: true })
+      .click();
 
     await expect(page).toHaveURL(/\/$/);
     const archived = page.getByRole("region", { name: "main 的已归档会话" });

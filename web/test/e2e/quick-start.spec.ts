@@ -151,15 +151,33 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
 
   // Archived, it stays in the chat history and resumes from there.
   await page.getByRole("button", { name: "会话菜单", exact: true }).click();
-  await page.getByRole("menuitem", { name: "归档会话", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "停止会话并归档", exact: true })
+    .click();
   await page
     .getByRole("alertdialog")
-    .getByRole("button", { name: "归档", exact: true })
+    .getByRole("button", { name: "停止并归档", exact: true })
     .click();
   await expect(page).toHaveURL(/\/new$/);
-  const history = (await sidebar(page)).getByRole("list", { name: "聊天历史" });
+  const navAfterArchive = await sidebar(page);
+  await navAfterArchive.getByRole("button", { name: /^已归档/ }).click();
+  const history = navAfterArchive.getByRole("list", { name: "已归档聊天" });
   const archived = history.getByRole("button", { name: /（已结束）$/ });
   await expect(archived).toHaveCount(1);
+  // Deleting an archived record whose linked worktree still exists opens the
+  // worktree removal confirmation dialog.
+  await history.getByRole("button", { name: /^会话操作：/ }).click();
+  await page.getByRole("menuitem", { name: "删除记录", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "删除 worktree" }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog", { name: "删除 worktree" })
+    .getByRole("button", { name: "取消", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "删除 worktree" }),
+  ).toBeHidden();
   // The workbench home shows the same record in its worktree group.
   if (phone(page)) await page.keyboard.press("Escape");
   const nav2 = await sidebar(page);
@@ -172,8 +190,9 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   // Back in chat mode, the record resumes on its chat side.
   const nav3 = await sidebar(page);
   await nav3.getByRole("button", { name: "聊天模式" }).click();
+  await nav3.getByRole("button", { name: /^已归档/ }).click();
   await nav3
-    .getByRole("list", { name: "聊天历史" })
+    .getByRole("list", { name: "已归档聊天" })
     .getByRole("button", { name: /（已结束）$/ })
     .click();
   await expect(page).toHaveURL(new RegExp(`/s/${id}$`));

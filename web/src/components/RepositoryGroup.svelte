@@ -19,7 +19,7 @@
     type RepositoryArchive,
   } from "../archived";
   import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { homeLayout, sortWorktrees, worktreeTitle } from "../homeWorktrees";
+  import { homeLayout, worktreeTitle } from "../homeWorktrees";
   import { statusSummary } from "../session-status";
   import { copyText } from "../clipboard";
   import HomeWorktreePicker from "./HomeWorktreePicker.svelte";
@@ -117,7 +117,7 @@
   );
   // Every worktree in a stable order, so a row does not jump when its check
   // changes; a worktree with sessions is listed even when not pinned.
-  const sortedTrees = $derived(sortWorktrees(repo.worktrees));
+  const sortedTrees = $derived(renderLayout.trees);
   const pinnedIds = $derived(
     new Set(renderLayout.shown.filter((w) => w.pinned).map((w) => w.tree.id)),
   );

@@ -7,7 +7,7 @@ import type { Repositories } from "./hooks/repositories.svelte";
 import type { ServerSetup } from "./hooks/server-setup.svelte";
 import type { SessionList } from "./hooks/session-list.svelte";
 import type { LaunchEntry } from "./newSessionDefaults";
-import type { Repository, SessionInfo } from "./schemas";
+import type { Repository, SessionInfo, Worktree } from "./schemas";
 import type { TerminalDrafts } from "./terminal-draft.svelte";
 
 // The app shell around the home page, quick start and session pages: which
@@ -111,6 +111,8 @@ export interface Shell {
   rename(session: SessionInfo): void;
   /** Opens the shared close, archive or remove dialog for a session. */
   close(session: SessionInfo): void;
+  /** Opens the shared worktree removal confirmation dialog. */
+  removeWorktree(worktree: Worktree): void;
   /** Opens the port-forwarding dialog. */
   forward(): void;
   /** Opens the add-repository dialog. */

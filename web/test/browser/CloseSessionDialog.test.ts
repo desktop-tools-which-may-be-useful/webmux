@@ -64,9 +64,12 @@ test("a live hybrid session is archived without a destructive confirmation", asy
   const dialog = page.getByRole("alertdialog");
   await expect
     .element(dialog.getByRole("heading"))
-    .toHaveTextContent("归档“修复排序”？");
+    .toHaveTextContent("停止并归档“修复排序”？");
   await expect.element(dialog).toMatchTextContent(/对话保留在 agent 中/);
-  const archive = dialog.getByRole("button", { name: "归档", exact: true });
+  const archive = dialog.getByRole("button", {
+    name: "停止并归档",
+    exact: true,
+  });
   // Archiving keeps the conversation: not styled as a destructive action.
   expect(archive.element().className).not.toMatch(/\bbg-destructive/);
   await archive.click();
@@ -77,7 +80,7 @@ test("a live hybrid session is archived without a destructive confirmation", asy
 
 test("a failed archive stays in the dialog with the error", async () => {
   const { onarchived, onclose } = show(hybrid, 500);
-  await page.getByRole("button", { name: "归档", exact: true }).click();
+  await page.getByRole("button", { name: "停止并归档", exact: true }).click();
   await expect.element(page.getByRole("alert")).toHaveTextContent("无法关闭");
   expect(onarchived).not.toHaveBeenCalled();
   expect(onclose).not.toHaveBeenCalled();

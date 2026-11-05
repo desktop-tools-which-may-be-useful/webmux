@@ -237,6 +237,12 @@
       {title}
       records={archived}
       {groupPath}
+      worktree={worktree &&
+      worktree.kind === "linked" &&
+      worktree.available &&
+      !worktree.prunable
+        ? worktree
+        : undefined}
       {archive}
     />{/if}
 </section>

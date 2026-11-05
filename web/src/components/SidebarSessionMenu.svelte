@@ -34,7 +34,7 @@
     if (target.kind !== "live") return "";
     const { session } = target;
     if (session.status === "exited") return "移除会话";
-    return session.hybrid?.state === "active" ? "归档会话" : "关闭会话";
+    return session.hybrid?.state === "active" ? "停止会话并归档" : "关闭会话";
   });
 </script>
 
@@ -63,7 +63,7 @@
         >
         <DropdownMenu.Separator />
         <DropdownMenu.Item
-          variant={closeLabel === "归档会话" ? "default" : "destructive"}
+          variant={closeLabel === "停止会话并归档" ? "default" : "destructive"}
           onSelect={() => onclose(session)}>{closeLabel}</DropdownMenu.Item
         >
       {:else}

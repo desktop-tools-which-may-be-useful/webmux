@@ -4,6 +4,7 @@
   import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import { errorMessage } from "../error";
+  import { removableRecordWorktree } from "../archived";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { connectorMissingText } from "../hybrid";
   import { removeRecord, resumeHybrid } from "../recoverable";
@@ -62,6 +63,11 @@
   let removing = $state<HybridRecord | null>(null);
   let removeOpen = $state(false);
   function askRemove(record: HybridRecord) {
+    const worktree = removableRecordWorktree(record, shell.repositories.list);
+    if (worktree) {
+      shell.removeWorktree(worktree);
+      return;
+    }
     removing = record;
     removeOpen = true;
   }

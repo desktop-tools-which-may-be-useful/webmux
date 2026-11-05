@@ -17,6 +17,7 @@ import {
   record,
   repository,
   session,
+  worktree,
 } from "./shell-fixture";
 
 installChatFixture();
@@ -89,11 +90,14 @@ test("on a session page switching mode only swaps the sidebar", async () => {
     .element(sidebar().getByRole("button", { name: "聊天模式" }))
     .toHaveFocus();
   await expect.element(page.getByTestId("session-page")).toBeVisible();
-  // A terminal session has no row among the chats.
-  const chats = sidebar().getByRole("list", { name: "聊天历史" });
-  await expect.element(chats).toBeVisible();
+  // A terminal session has no row among the chats; archived records fold below.
+  await sidebar()
+    .getByRole("button", { name: /已归档/ })
+    .click();
+  const archived = sidebar().getByRole("list", { name: "已归档聊天" });
+  await expect.element(archived).toBeVisible();
   expect(
-    chats
+    archived
       .getByRole("button")
       .elements()
       .filter((row) => row.getAttribute("aria-current") === "page"),
@@ -149,8 +153,12 @@ test("renaming from the sidebar menu uses the shared dialog", async () => {
   render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await snapshot();
   const chats = sidebar().getByRole("list", { name: "聊天历史" });
+  await sidebar()
+    .getByRole("button", { name: /已归档/ })
+    .click();
+  const archived = sidebar().getByRole("list", { name: "已归档聊天" });
   // Archived records resume or delete their record; they have no rename.
-  await chats.getByRole("button", { name: "会话操作：整理文档" }).click();
+  await archived.getByRole("button", { name: "会话操作：整理文档" }).click();
   await expect
     .element(page.getByRole("menuitem", { name: "删除记录" }))
     .toBeVisible();
@@ -213,8 +221,11 @@ test("an archived chat resumes on its chat side, or says why it cannot", async (
   );
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await snapshot();
-  const chats = sidebar().getByRole("list", { name: "聊天历史" });
-  await chats.getByRole("button", { name: "整理文档（已结束）" }).click();
+  await sidebar()
+    .getByRole("button", { name: /已归档/ })
+    .click();
+  const archived = sidebar().getByRole("list", { name: "已归档聊天" });
+  await archived.getByRole("button", { name: "整理文档（已结束）" }).click();
   await expect
     .element(sidebar().getByRole("alert"))
     .toMatchTextContent(
@@ -229,7 +240,7 @@ test("an archived chat resumes on its chat side, or says why it cannot", async (
   respond(/^POST \/api\/sessions\/archivea\/resume$/, () =>
     Response.json(chat({ id: "archivea", title: "整理文档" })),
   );
-  await chats.getByRole("button", { name: "整理文档（已结束）" }).click();
+  await archived.getByRole("button", { name: "整理文档（已结束）" }).click();
   await expect.poll(() => location.pathname).toBe("/s/archivea");
 });
 
@@ -248,10 +259,10 @@ test("the sidebar menu archives a live chat and deletes an archived record", asy
   await snapshot();
   const chats = sidebar().getByRole("list", { name: "聊天历史" });
   await chats.getByRole("button", { name: "会话操作：修复排序" }).click();
-  await page.getByRole("menuitem", { name: "归档会话" }).click();
+  await page.getByRole("menuitem", { name: "停止会话并归档" }).click();
   await page
     .getByRole("alertdialog")
-    .getByRole("button", { name: "归档", exact: true })
+    .getByRole("button", { name: "停止并归档", exact: true })
     .click();
   await expect
     .poll(() =>
@@ -261,7 +272,11 @@ test("the sidebar menu archives a live chat and deletes an archived record", asy
     )
     .toBe(true);
 
-  await chats.getByRole("button", { name: "会话操作：整理文档" }).click();
+  await sidebar()
+    .getByRole("button", { name: /已归档/ })
+    .click();
+  const archived = sidebar().getByRole("list", { name: "已归档聊天" });
+  await archived.getByRole("button", { name: "会话操作：整理文档" }).click();
   await page.getByRole("menuitem", { name: "删除记录" }).click();
   await page
     .getByRole("alertdialog")
@@ -272,6 +287,75 @@ test("the sidebar menu archives a live chat and deletes an archived record", asy
       commands().some(
         (c) =>
           c.method === "DELETE" && c.path === "/api/hybrid-sessions/archivea",
+      ),
+    )
+    .toBe(true);
+});
+
+test("deleting an archived record whose linked worktree still exists opens worktree removal confirmation", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  const linked = worktree({
+    id: "wt1",
+    path: "/repos/webmux.worktrees/wt1",
+    kind: "linked",
+    branch: "wt/fix-sort",
+  });
+  respond(/^GET \/api\/repositories$/, () =>
+    Response.json([repository({ worktrees: [worktree(), linked] })]),
+  );
+  respond(/^GET \/api\/hybrid-sessions/, () =>
+    Response.json([
+      record({
+        id: "archivew",
+        title: "分支聊天",
+        cwd: linked.path,
+        workspace: { repositoryId: "repo1", worktreeId: "wt1" },
+      }),
+    ]),
+  );
+  respond(
+    /^POST \/api\/repositories\/repo1\/worktrees\/wt1\/removal-preview$/,
+    () =>
+      Response.json({
+        confirmationId: "conf1234",
+        expiresAt: "2026-10-28T01:00:00Z",
+        worktree: linked,
+        sessions: [],
+        archived: [
+          record({
+            id: "archivew",
+            title: "分支聊天",
+            cwd: linked.path,
+            workspace: { repositoryId: "repo1", worktreeId: "wt1" },
+          }),
+        ],
+        blockers: [],
+        forceAllowed: true,
+      }),
+  );
+  respond(
+    /^POST \/api\/repositories\/repo1\/worktrees\/wt1\/remove$/,
+    () => new Response(null, { status: 204 }),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  await sidebar()
+    .getByRole("button", { name: /已归档/ })
+    .click();
+  const archived = sidebar().getByRole("list", { name: "已归档聊天" });
+  await archived.getByRole("button", { name: "会话操作：分支聊天" }).click();
+  await page.getByRole("menuitem", { name: "删除记录" }).click();
+  const dialog = page.getByRole("dialog", { name: "删除 worktree" });
+  await expect.element(dialog).toBeVisible();
+  await expect.element(dialog).toMatchTextContent(/wt\/fix-sort/);
+  await dialog.getByRole("button", { name: "确认安全删除" }).click();
+  await expect
+    .poll(() =>
+      commands().some(
+        (c) =>
+          c.method === "POST" &&
+          c.path === "/api/repositories/repo1/worktrees/wt1/remove",
       ),
     )
     .toBe(true);

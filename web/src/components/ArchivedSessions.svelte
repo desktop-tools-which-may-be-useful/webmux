@@ -14,7 +14,7 @@
   import InlineNotice from "./InlineNotice.svelte";
   import { errorMessage } from "../error";
   import type { ArchiveActions } from "../archived";
-  import type { HybridRecord } from "../schemas";
+  import type { HybridRecord, Worktree } from "../schemas";
 
   // The archived (closed or interrupted) hybrid sessions of one workspace
   // group, below its live sessions: collapsed to a count by default, newest
@@ -25,12 +25,14 @@
     title,
     records,
     groupPath,
+    worktree,
     archive,
   }: {
     // The workspace group's title, naming the section for assistive tech.
     title: string;
     records: HybridRecord[];
     groupPath?: string;
+    worktree?: Worktree;
     archive: ArchiveActions;
   } = $props();
 
@@ -191,6 +193,10 @@
                 <DropdownMenu.Item
                   variant="destructive"
                   onSelect={() => {
+                    if (worktree && archive.removeWorktree) {
+                      archive.removeWorktree(worktree);
+                      return;
+                    }
                     removing = record;
                     removeOpen = true;
                   }}>删除记录</DropdownMenu.Item

@@ -57,7 +57,7 @@
         >{removing
           ? "移除"
           : archiving
-            ? "归档"
+            ? "停止并归档"
             : "关闭"}“{session.title}”？</AlertDialog.Title
       >
       <AlertDialog.Description>
@@ -81,7 +81,7 @@
           : removing
             ? "确认移除"
             : archiving
-              ? "归档"
+              ? "停止并归档"
               : "确认关闭"}
       </Button>
     </AlertDialog.Footer>

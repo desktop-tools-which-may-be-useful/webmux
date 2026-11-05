@@ -19,7 +19,7 @@
     type LaunchScope,
   } from "../newSessionDefaults";
   import type { Route } from "../route";
-  import type { Repository, SessionInfo } from "../schemas";
+  import type { Repository, SessionInfo, Worktree } from "../schemas";
   import {
     openPage,
     setShell,
@@ -78,6 +78,7 @@
   } | null>(null);
   let renaming = $state<SessionInfo | null>(null);
   let closing = $state<SessionInfo | null>(null);
+  let removingWorktree = $state<Worktree | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
   let configuring = $state<Repository | null>(null);
@@ -121,6 +122,10 @@
     close(session) {
       shellUi.drawerOpen = false;
       closing = session;
+    },
+    removeWorktree(worktree) {
+      shellUi.drawerOpen = false;
+      removingWorktree = worktree;
     },
     forward() {
       shellUi.drawerOpen = false;
@@ -195,7 +200,13 @@
   }
   function refreshWorktrees() {
     void repositories.refresh();
-    void archived.refresh();
+    void archived.refresh().then((records) => {
+      if (records)
+        ownDrafts.reconcile([
+          ...sessions.sessions.map((session) => session.id),
+          ...records,
+        ]);
+    });
   }
   // Dragging or arrow keys on the sidebar's edge set its width.
   const setWidth = (width: number) => shellUi.setWidth(width);
@@ -367,3 +378,17 @@
     onarchived={() => void archived.refresh()}
     onclose={() => (closing = null)}
   />{/if}
+{#if removingWorktree}
+  {@const target = removingWorktree}
+  <LazyDialog
+    load={() => import("./RemoveWorktreeDialog.svelte")}
+    label="删除确认"
+    onclose={() => (removingWorktree = null)}
+  >
+    {#snippet children(page)}<page.default
+        worktree={target}
+        onchange={refreshWorktrees}
+        onclose={() => (removingWorktree = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}

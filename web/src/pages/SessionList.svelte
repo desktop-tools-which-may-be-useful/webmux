@@ -226,6 +226,9 @@
       drafts.remove(id);
       await shell.archived.refresh();
     },
+    removeWorktree: (tree) => {
+      removing = tree;
+    },
     onresumed: () => void shell.archived.refresh(),
   });
   // Only an actively producing session follows the tab indicator; idle live
@@ -268,7 +271,13 @@
   // sessions in the removed directory.
   function refreshWorktrees() {
     void shell.repositories.refresh();
-    void shell.archived.refresh();
+    void shell.archived.refresh().then((records) => {
+      if (records)
+        drafts.reconcile([
+          ...sessions.map((session) => session.id),
+          ...records,
+        ]);
+    });
   }
   onMount(() => {
     // Coming home re-reads Git, as the page did before the shell kept the

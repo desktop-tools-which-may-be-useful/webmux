@@ -10,8 +10,9 @@ afterEach(async () => {
 });
 
 const list = () => page.getByRole("list", { name: "聊天历史" });
+const archivedList = () => page.getByRole("list", { name: "已归档聊天" });
 
-test("chats and archived records share one list, newest first", async () => {
+test("live chats show newest first and archived records fold below", async () => {
   const onopen = vi.fn();
   const onresume = vi.fn();
   const working = chat({
@@ -62,7 +63,6 @@ test("chats and archived records share one list, newest first", async () => {
   await expect.element(rows.first()).toBeVisible();
   expect(rows.elements().map((row) => row.getAttribute("aria-label"))).toEqual([
     "工作中的聊天（工作中）",
-    "整理文档（已结束）",
     "等授权（等待）",
     "空闲的聊天（空闲）",
   ]);
@@ -71,8 +71,41 @@ test("chats and archived records share one list, newest first", async () => {
     .toHaveAttribute("aria-current", "page");
   await list().getByRole("button", { name: "工作中的聊天（工作中）" }).click();
   expect(onopen).toHaveBeenCalledWith(working);
-  await list().getByRole("button", { name: "整理文档（已结束）" }).click();
+
+  // Archived records are collapsed by default; expanding shows them.
+  const trigger = page.getByRole("button", { name: /已归档/ });
+  await expect.element(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.click();
+  await expect.element(trigger).toHaveAttribute("aria-expanded", "true");
+  await archivedList()
+    .getByRole("button", { name: "整理文档（已结束）" })
+    .click();
   expect(onresume).toHaveBeenCalledWith(
     expect.objectContaining({ id: "archivea" }),
   );
+});
+
+test("archived section opens automatically when viewing or resuming an archived record", async () => {
+  render(ChatHistory, {
+    sessions: [],
+    records: [
+      record({
+        id: "archivea",
+        title: "整理文档",
+        updatedAt: "2026-10-28T02:30:00Z",
+      }),
+    ],
+    configs: [launchConfig()],
+    current: "archivea",
+    onopen: vi.fn(),
+    onresume: vi.fn(),
+    onrename: vi.fn(),
+    onclose: vi.fn(),
+    onremove: vi.fn(),
+  });
+  const trigger = page.getByRole("button", { name: /已归档/ });
+  await expect.element(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect
+    .element(archivedList().getByRole("button", { name: "整理文档（已结束）" }))
+    .toHaveAttribute("aria-current", "page");
 });

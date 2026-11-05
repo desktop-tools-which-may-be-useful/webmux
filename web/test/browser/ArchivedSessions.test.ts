@@ -4,7 +4,7 @@ import { cleanup, render } from "vitest-browser-svelte/pure";
 import ArchivedSessions from "../../src/components/ArchivedSessions.svelte";
 import type { ArchiveActions } from "../../src/archived";
 import type { ResumeOutcome } from "../../src/recoverable";
-import type { HybridRecord, SessionInfo } from "../../src/schemas";
+import type { HybridRecord, SessionInfo, Worktree } from "../../src/schemas";
 
 afterEach(async () => {
   await cleanup();
@@ -35,11 +35,14 @@ const now = Date.parse("2026-10-28T00:05:00Z");
 function show(
   records: HybridRecord[],
   resume: (...args: unknown[]) => Promise<ResumeOutcome>,
-  patch: Partial<ArchiveActions> & { groupPath?: string } = {},
+  patch: Partial<ArchiveActions> & {
+    groupPath?: string;
+    worktree?: Worktree;
+  } = {},
 ) {
   const remove = vi.fn(async () => {});
   const onresumed = vi.fn();
-  const { groupPath, ...actions } = patch;
+  const { groupPath, worktree, ...actions } = patch;
   const archive: ArchiveActions = {
     now,
     filtering: false,
@@ -48,7 +51,13 @@ function show(
     onresumed,
     ...actions,
   };
-  render(ArchivedSessions, { title: "main", records, groupPath, archive });
+  render(ArchivedSessions, {
+    title: "main",
+    records,
+    groupPath,
+    worktree,
+    archive,
+  });
   return { remove, onresumed };
 }
 const group = () => page.getByRole("region", { name: "main 的已归档会话" });
@@ -262,6 +271,35 @@ test("hides the directory a group already names and pages long lists", async () 
   await group().getByRole("button", { name: "显示全部 8 条" }).click();
   await expect.element(group().getByText("记录 6")).toBeVisible();
   await expect.element(group().getByText("/repos/project/web")).toBeVisible();
+});
+
+test("removing a record in a linked worktree delegates to worktree removal", async () => {
+  const removeWorktree = vi.fn();
+  const linked: Worktree = {
+    id: "wt1",
+    repositoryId: "repo1",
+    path: "/repos/project-wt",
+    kind: "linked",
+    branch: "wt/fix",
+    head: "a".repeat(40),
+    detached: false,
+    locked: false,
+    lockReason: "",
+    prunable: false,
+    available: true,
+    dirty: false,
+    hasUntracked: false,
+    hasIgnored: false,
+    error: "",
+  };
+  const { remove } = show([record], vi.fn(), {
+    worktree: linked,
+    removeWorktree,
+  });
+  await expand();
+  await removeRecord();
+  expect(removeWorktree).toHaveBeenCalledWith(linked);
+  expect(remove).not.toHaveBeenCalled();
 });
 
 test("filters open the section on their own", async () => {
