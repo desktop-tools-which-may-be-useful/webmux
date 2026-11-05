@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
+	"github.com/rainchan/webmux/internal/attentionkind"
 )
 
 func strPtr(s string) *string { return &s }
@@ -126,6 +127,94 @@ func TestWorkEndTurnDropsInterruptedCalls(t *testing.T) {
 	w.endTurn()
 	if got := w.line(); got != "" {
 		t.Fatalf("interrupted calls are not work: %q", got)
+	}
+}
+
+func TestWorkRunningOnlyForInProgress(t *testing.T) {
+	var w workTracker
+	inProgress, pending, done := "in_progress", "pending", "completed"
+	w.tool(Tool{ToolCallID: "a", Status: &pending})
+	w.tool(Tool{ToolCallID: "b", Status: &done})
+	if w.running() {
+		t.Fatal("pending and completed calls are not running")
+	}
+	w.tool(Tool{ToolCallID: "c", Status: &inProgress})
+	if !w.running() {
+		t.Fatal("in-progress call must count as running")
+	}
+	w.tool(Tool{ToolCallID: "c", Status: &done})
+	if w.running() {
+		t.Fatal("finished call must not count as running")
+	}
+}
+
+func TestTurnWithBackgroundCommandIsDoneOnlyAfterItEnds(t *testing.T) {
+	h := newHarness(t, 0)
+	h.fast()
+	s := h.create(h.input(omp.Name, SideACP))
+	id := s.Info().ID
+	st := h.follow(id)
+	prompt(t, h, id, "hi /background")
+	st.until("turn end", hasKind(EventTurnEnd))
+	if a := s.Info().Attention; a != nil {
+		t.Fatalf("attention %+v while the command still runs", a)
+	}
+	if !h.chatState(id).Turn.Unfinished {
+		t.Fatal("turn should report Unfinished while tool was left in_progress")
+	}
+	waitFor(t, "done once the command ended", func() bool {
+		a := s.Info().Attention
+		return a != nil && a.Kind == attentionkind.Done
+	})
+}
+
+func TestTurnWithOpenToolWithoutNewProcessBecomesDoneAfterQuietPolls(t *testing.T) {
+	h := newHarness(t, 0)
+	h.fast()
+	s := h.create(h.input(omp.Name, SideACP))
+	id := s.Info().ID
+	st := h.follow(id)
+	prompt(t, h, id, "hi /background-noprocess")
+	st.until("turn end", hasKind(EventTurnEnd))
+	if !h.chatState(id).Turn.Unfinished {
+		t.Fatal("turn should report Unfinished")
+	}
+	waitFor(t, "done after two quiet polls", func() bool {
+		a := s.Info().Attention
+		return a != nil && a.Kind == attentionkind.Done
+	})
+}
+
+func TestBackgroundWatchStoppedByNewTurnOrSwitch(t *testing.T) {
+	h := newHarness(t, 0)
+	h.fast()
+	s := h.create(h.input(omp.Name, SideACP))
+	id := s.Info().ID
+	st := h.follow(id)
+	prompt(t, h, id, "first /background")
+	st.until("first turn end", hasKind(EventTurnEnd))
+	if !actorState(h, id, func(a *actor) bool { return a.bgCancel != nil }) {
+		t.Fatal("background watch should be active")
+	}
+	// A new turn clears Unfinished and stops the previous watch.
+	chatTurn(t, h, id, "second")
+	if h.chatState(id).Turn.Unfinished {
+		t.Fatal("normal turn must clear Unfinished")
+	}
+	// Start another backgrounded turn, then switch to TUI: the watch stops.
+	prompt(t, h, id, "third /background")
+	st.until("third turn end", func(ev []Event) bool {
+		n := 0
+		for _, e := range ev {
+			if e.Kind == EventTurnEnd {
+				n++
+			}
+		}
+		return n >= 3
+	})
+	h.mustSwitch(id, SideTUI)
+	if actorState(h, id, func(a *actor) bool { return a.bgCancel != nil }) {
+		t.Fatal("switching to TUI must stop the background watch")
 	}
 }
 

@@ -127,3 +127,10 @@
   - `make check`（生产构建、`svelte-check`、测试类型检查、Oxlint、`check:arch`、`docs-check`、`persistence-check`、`go vet`、`golangci-lint`）；
   - `web/test/browser/QuickStart.test.ts` Vitest 浏览器用例。
 - 限制：完整套件与 E2E 交给 CI；未做真机核对。
+
+本次局部核对（2026-11-06，后台命令未结束时回合以 `end_turn` 结束的缓解 #332）：回合以 `end_turn` 结束但仍有 `in_progress` 工具调用时，服务端记录 `turn.unfinished` 并推迟 `done` 提醒至本轮新进程退出，聊天视图显示“本轮已结束，仍有任务未完成”。
+
+- 更新的故事：US-Q05；索引与故事数量不变。
+- 已运行：`go test -race` 覆盖 `internal/hybrid`（`TestWorkRunningOnlyForInProgress`、`TestTurnWithBackgroundCommandIsDoneOnlyAfterItEnds`、`TestTurnWithOpenToolWithoutNewProcessBecomesDoneAfterQuietPolls`、`TestBackgroundWatchStoppedByNewTurnOrSwitch`）、`session`、`wire`、`api`、`archtest`；
+  `web/test/wire-contract.test.ts`、`web/test/browser/ChatView.test.ts`（含重连/截断后凭 `turn.unfinished` 保持提示）；`make check`；隔离演示场景在 1280×720 与 390×844、浅色与深色主题下的前后对比截图。
+- 限制：使用 fake agent 替身模拟后台命令与无子进程场景，未连接真实 agy 跑完整端到端；非 Linux/macOS 平台 `ProcessTree` 返回空切片（退化为两次静默轮询后记 `done`），未在 macOS 或真机移动浏览器上核对。

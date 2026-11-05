@@ -79,6 +79,16 @@ func (w *workTracker) prune() {
 	}
 }
 
+// running reports whether a tool call is still in progress.
+func (w *workTracker) running() bool {
+	for _, t := range w.tools {
+		if t.status == "in_progress" {
+			return true
+		}
+	}
+	return false
+}
+
 // endTurn clears the finished turn's tool calls so the next turn starts clean.
 func (w *workTracker) endTurn() {
 	clear(w.tools)

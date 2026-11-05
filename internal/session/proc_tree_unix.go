@@ -17,6 +17,12 @@ func runChildren(pid int) []string {
 	return names
 }
 
+// ProcessTree returns pid and its descendant processes, each once. Threads
+// are not processes and are not listed.
+func ProcessTree(pid int) []int {
+	return newProcessSnapshot(processes()).tree(pid)
+}
+
 // runOpenFiles returns the absolute paths of the regular files pid and its
 // descendants hold open, each once, at most maxOpenFiles.
 func runOpenFiles(pid int) []string {

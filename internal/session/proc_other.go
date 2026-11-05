@@ -23,3 +23,6 @@ func (s *Session) resizePTYLocked(cols, rows uint16) error {
 
 func runChildren(int) []string  { return nil }
 func runOpenFiles(int) []string { return nil }
+
+// ProcessTree is unsupported on this platform and returns nil.
+func ProcessTree(int) []int { return nil }

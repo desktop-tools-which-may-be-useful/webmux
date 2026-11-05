@@ -377,6 +377,7 @@ export const ChatStateSchema = z.object({
   eligibility: ChatEligibilitySchema,
   turn: z.object({
     running: z.boolean(),
+    unfinished: z.boolean().optional(),
     turnId: z.string().optional(),
     stopReason: StopReasonSchema.optional(),
     startedAt: datetime.optional(),
