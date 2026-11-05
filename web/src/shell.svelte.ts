@@ -7,7 +7,7 @@ import type { Repositories } from "./hooks/repositories.svelte";
 import type { ServerSetup } from "./hooks/server-setup.svelte";
 import type { SessionList } from "./hooks/session-list.svelte";
 import type { LaunchEntry } from "./newSessionDefaults";
-import type { SessionInfo } from "./schemas";
+import type { Repository, SessionInfo } from "./schemas";
 import type { TerminalDrafts } from "./terminal-draft.svelte";
 
 // The app shell around the home page, quick start and session pages: which
@@ -115,6 +115,13 @@ export interface Shell {
   forward(): void;
   /** Opens the add-repository dialog. */
   addRepository(): void;
+  /**
+   * The repository the home view is narrowed to (or the only one), whose
+   * settings the sidebar footer opens; undefined elsewhere.
+   */
+  readonly settingsRepository: Repository | undefined;
+  /** Opens the settings of `settingsRepository`. */
+  openRepositorySettings(): void;
 }
 
 const key = Symbol("shell");

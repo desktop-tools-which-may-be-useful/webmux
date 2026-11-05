@@ -8,6 +8,12 @@ export type LaunchEntry =
   | { kind: "directory"; cwd: string; workspace: SessionInfo["workspace"] };
 
 /**
+ * Where a new session may start: inside one repository, or inside one of
+ * its worktrees (that worktree, or a new one from its branch). Without a
+ * scope the dialog offers every repository and any directory.
+ */
+export type LaunchScope = { repositoryId: string; worktreeId?: string };
+/**
  * The dialog's location. A worktree target with an empty `worktreeId` is the
  * unset state: the repository is kept but the user must pick a target.
  */
@@ -28,6 +34,37 @@ export function worktreeLabel(tree: Worktree) {
 }
 
 /**
+ * The scope of a new session started from the home page: a contextual entry
+ * names its own repository or worktree; otherwise the repository (and
+ * worktree) the home view is narrowed to. Directory entries, "all" and
+ * "direct" views have none.
+ */
+export function resolveLaunchScope(input: {
+  entry?: LaunchEntry;
+  home: boolean;
+  choice: string | null;
+  worktreeId: string | null;
+  repositories: readonly Repository[];
+}): LaunchScope | undefined {
+  const { entry } = input;
+  if (entry?.kind === "worktree")
+    return { repositoryId: entry.repositoryId, worktreeId: entry.worktreeId };
+  if (entry?.kind === "new-worktree")
+    return { repositoryId: entry.repositoryId };
+  if (entry || !input.home) return undefined;
+  const repository = input.repositories.find(
+    (repo) => repo.id === input.choice,
+  );
+  if (!repository) return undefined;
+  const tree = repository.worktrees.find(
+    (item) => item.id === input.worktreeId,
+  );
+  return tree
+    ? { repositoryId: repository.id, worktreeId: tree.id }
+    : { repositoryId: repository.id };
+}
+
+/**
  * Initial location by precedence: an explicit contextual entry, then the home
  * page's selected repository (its available main worktree, else another
  * available non-bare tree, else unset), then the latest recent directory,
@@ -35,13 +72,25 @@ export function worktreeLabel(tree: Worktree) {
  */
 export function resolveInitialTarget(input: {
   entry?: LaunchEntry;
+  scope?: LaunchScope;
   selectedRepositoryId?: string;
   repositories: readonly Repository[];
   recent: readonly string[];
   defaultCwd: string;
 }): InitialTarget {
   const fallbackCwd = input.recent[0] || input.defaultCwd;
-  const { entry } = input;
+  const { entry, scope } = input;
+  if (scope?.worktreeId) {
+    const tree = input.repositories
+      .find((repo) => repo.id === scope.repositoryId)
+      ?.worktrees.find((item) => item.id === scope.worktreeId);
+    return {
+      kind: tree && selectableWorktree(tree) ? "worktree" : "new-worktree",
+      cwd: fallbackCwd,
+      repositoryId: scope.repositoryId,
+      worktreeId: tree && selectableWorktree(tree) ? tree.id : "",
+    };
+  }
   if (entry?.kind === "directory")
     return {
       kind: "directory",

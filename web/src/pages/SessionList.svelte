@@ -54,7 +54,6 @@
   );
   let removing = $state<Worktree | null>(null);
   let curating = $state<Repository | null>(null);
-  let configuring = $state<Repository | null>(null);
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
   let now = $state(Date.now());
@@ -104,14 +103,6 @@
         ? "直接会话"
         : (repositories.find((repo) => repo.id === selectedRepository)?.name ??
           "工作区"),
-  );
-  // The repository the toolbar's settings button edits: the one in scope, or
-  // the only one registered.
-  const settingsTarget = $derived(
-    repositories.find((repo) => repo.id === selectedRepository) ??
-      (selectedRepository === "all" && repositories.length === 1
-        ? repositories[0]
-        : undefined),
   );
   const scopedSessions = $derived(
     selectedRepository === "all"
@@ -353,11 +344,9 @@
             : selectedRepository === "direct"
               ? 0
               : 1}
-          canAddRepository={gitReady && registryReady}
           {refreshing}
-          onadd={shell.addRepository}
-          onsettings={settingsTarget && registryReady
-            ? () => (configuring = settingsTarget)
+          onsettings={shell.settingsRepository
+            ? shell.openRepositorySettings
             : undefined}
           onrefresh={() => void shell.repositories.refresh(true)}
           onstart={() => shell.start()}
@@ -372,9 +361,7 @@
             bind:query
             bind:statusFilter
             filtered={filtering && (visible.length > 0 || archivedMatches > 0)}
-            shortcutDisabled={Boolean(
-              removing || curating || configuring || unregisterOpen,
-            )}
+            shortcutDisabled={Boolean(removing || curating || unregisterOpen)}
             onclear={clearFilters}
           />
         </WorkspaceToolbar>
@@ -492,20 +479,6 @@
     </div>
   {/if}
 </div>
-{#if configuring}
-  {@const target = configuring}
-  <LazyDialog
-    load={() => import("../components/RepositorySettingsDialog.svelte")}
-    label="仓库设置"
-    onclose={() => (configuring = null)}
-  >
-    {#snippet children(page)}<page.default
-        repository={target}
-        onchange={() => void shell.repositories.refresh(true)}
-        onclose={() => (configuring = null)}
-      />{/snippet}
-  </LazyDialog>
-{/if}
 {#if removing}
   {@const target = removing}
   <LazyDialog

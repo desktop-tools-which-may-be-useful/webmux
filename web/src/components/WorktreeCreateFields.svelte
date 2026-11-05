@@ -35,6 +35,7 @@
     base = $bindable(""),
     startBranch = $bindable(""),
     disabled = false,
+    preferredStartBranch,
   }: {
     repository: Repository;
     path: string;
@@ -44,6 +45,8 @@
     /** The local branch a new branch starts from. */
     startBranch?: string;
     disabled?: boolean;
+    /** The start branch to use when it is a local branch, else the default. */
+    preferredStartBranch?: string;
   } = $props();
   let data = $state<z.infer<typeof BranchesSchema> | null>(null);
   let error = $state("");
@@ -258,7 +261,11 @@
         base = value.defaultBase || "";
         baseSubject = value.defaultBaseSubject;
         fillSuggestedBranch();
-        startBranch = value.defaultBranch || "";
+        startBranch =
+          preferredStartBranch &&
+          value.branches.some((item) => item.name === preferredStartBranch)
+            ? preferredStartBranch
+            : value.defaultBranch || "";
         if (mode === "new") chooseStartBranch(startBranch);
       })
       .catch((err) => {

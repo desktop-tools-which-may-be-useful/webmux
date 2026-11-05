@@ -13,9 +13,13 @@
   import { createSessionList } from "../hooks/session-list.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { setPinned } from "../homeWorktrees";
-  import type { LaunchEntry } from "../newSessionDefaults";
+  import {
+    resolveLaunchScope,
+    type LaunchEntry,
+    type LaunchScope,
+  } from "../newSessionDefaults";
   import type { Route } from "../route";
-  import type { SessionInfo } from "../schemas";
+  import type { Repository, SessionInfo } from "../schemas";
   import {
     openPage,
     setShell,
@@ -67,11 +71,25 @@
   void launchConfigs.load(true);
   void repositories.refresh();
 
-  let creating = $state<{ entry?: LaunchEntry } | null>(null);
+  let creating = $state<{
+    entry?: LaunchEntry;
+    scope?: LaunchScope;
+  } | null>(null);
   let renaming = $state<SessionInfo | null>(null);
   let closing = $state<SessionInfo | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
+  let configuring = $state<Repository | null>(null);
+  // The home view's repository; elsewhere the toolbar has no settings button.
+  const settingsRepository = $derived(
+    route.name === "sessions" && setup.value.registryReady
+      ? (repositories.list.find((repo) => repo.id === repositories.choice) ??
+          ((repositories.choice ?? "all") === "all" &&
+          repositories.list.length === 1
+            ? repositories.list[0]
+            : undefined))
+      : undefined,
+  );
 
   const shell: Shell = {
     drafts: ownDrafts,
@@ -82,7 +100,16 @@
     launchConfigs,
     start(entry) {
       shellUi.drawerOpen = false;
-      creating = { entry };
+      creating = {
+        entry,
+        scope: resolveLaunchScope({
+          entry,
+          home: route.name === "sessions",
+          choice: repositories.choice,
+          worktreeId: repositories.worktree,
+          repositories: repositories.list,
+        }),
+      };
       // Pick up configs changed on other devices since the page loaded.
       void launchConfigs.load();
     },
@@ -101,6 +128,13 @@
     addRepository() {
       shellUi.drawerOpen = false;
       adding = true;
+    },
+    get settingsRepository() {
+      return settingsRepository;
+    },
+    openRepositorySettings() {
+      shellUi.drawerOpen = false;
+      configuring = settingsRepository ?? null;
     },
   };
   setShell(shell);
@@ -214,6 +248,8 @@
         hostname={setup.value.hostname}
         setupSettled={setup.settled}
         onforward={shell.forward}
+        onadd={shell.addRepository}
+        canAdd={setup.value.gitReady && setup.value.registryReady}
       />
     </div>
   </nav>
@@ -260,6 +296,7 @@
         repositories={[...repositories.list]}
         defaultCwd={setup.value.cwd}
         entry={target.entry}
+        scope={target.scope}
         selectedRepositoryId={repositories.choice ?? "all"}
         intent={target.entry?.kind === "new-worktree" ? "worktree" : "session"}
         onchange={refreshWorktrees}
@@ -273,6 +310,20 @@
             );
         }}
         onclose={() => (creating = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+{#if configuring}
+  {@const target = configuring}
+  <LazyDialog
+    load={() => import("./RepositorySettingsDialog.svelte")}
+    label="仓库设置"
+    onclose={() => (configuring = null)}
+  >
+    {#snippet children(page)}<page.default
+        repository={target}
+        onchange={() => void repositories.refresh(true)}
+        onclose={() => (configuring = null)}
       />{/snippet}
   </LazyDialog>
 {/if}

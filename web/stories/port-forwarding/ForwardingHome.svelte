@@ -22,6 +22,7 @@
       hostname="devbox"
       setupSettled
       onforward={() => (open = true)}
+      onadd={() => {}}
     />
   </aside>
   <main class="flex-1 px-8 py-6 text-sm text-muted-foreground">

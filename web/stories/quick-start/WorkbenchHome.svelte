@@ -76,9 +76,8 @@
       visibleCount={sessions.length}
       sessionCount={sessions.length}
       repositoryCount={scope === "all" ? shown.length : 1}
-      canAddRepository
       refreshing={false}
-      onadd={sample}
+      onsettings={sample}
       onrefresh={sample}
       onstart={sample}
     >

@@ -17,6 +17,7 @@
     selectableWorktree,
     worktreeLabel,
     type LaunchEntry,
+    type LaunchScope,
     type LaunchSource,
   } from "../newSessionDefaults";
   import { hybridConflict } from "../recoverable";
@@ -51,6 +52,7 @@
     defaultCwd,
     repositories = [],
     entry,
+    scope,
     selectedRepositoryId = "",
     intent = "session",
     split = false,
@@ -65,6 +67,8 @@
     repositories?: Repository[];
     /** The contextual entry the dialog was opened from, if any. */
     entry?: LaunchEntry;
+    /** Narrows the places offered; see LaunchScope. */
+    scope?: LaunchScope;
     /** The home page's selected repository; read only. */
     selectedRepositoryId?: string;
     intent?: "session" | "worktree";
@@ -80,7 +84,8 @@
   const initial = untrack(() =>
     resolveInitialTarget({
       entry,
-      selectedRepositoryId,
+      scope,
+      selectedRepositoryId: scope?.repositoryId ?? selectedRepositoryId,
       repositories,
       recent,
       defaultCwd,
@@ -369,6 +374,7 @@
     <fieldset disabled={busy} class="min-w-0 space-y-4">
       <LocationPicker
         {repositories}
+        {scope}
         {recent}
         {preferredRepositoryId}
         {createdTree}
@@ -403,6 +409,11 @@
           {#key fieldsRepository.id}<WorktreeCreateFields
               bind:this={worktreeFields}
               repository={fieldsRepository}
+              preferredStartBranch={scope?.worktreeId
+                ? (fieldsRepository.worktrees.find(
+                    (tree) => tree.id === scope.worktreeId,
+                  )?.branch ?? undefined)
+                : undefined}
               disabled={busy || kind !== "new-worktree"}
               bind:path={newPath}
               bind:mode={branchMode}

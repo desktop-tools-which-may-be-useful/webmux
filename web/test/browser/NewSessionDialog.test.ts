@@ -647,6 +647,58 @@ test("a contextual entry overrides the selected repository", async () => {
   });
 });
 
+const featureTree: Worktree = {
+  ...mainTree,
+  id: "feature",
+  kind: "linked",
+  branch: "feature",
+  path: "/repos/project-feature",
+};
+const twoTrees: Repository = {
+  ...repository,
+  worktrees: [mainTree, featureTree],
+};
+
+test("a repository scope lists only its worktrees and a new one", async () => {
+  localStorage.setItem("webmux.recentDirs", JSON.stringify(["/recent"]));
+  open(
+    { status: "ready", configs: [config] },
+    {
+      repositories: [secondRepository, twoTrees],
+      scope: { repositoryId: "repo-1" },
+    },
+  );
+  await locationField().click();
+  await expect.poll(() => page.getByRole("option").elements().length).toBe(3);
+  await expect.element(page.getByText("新建工作树…")).toBeVisible();
+  await expect.element(page.getByText("other project")).not.toBeInTheDocument();
+  await expect
+    .element(page.getByText("输入或浏览目录…"))
+    .not.toBeInTheDocument();
+  await expect.element(page.getByText("最近目录")).not.toBeInTheDocument();
+});
+
+test("a worktree scope offers that worktree or a new one from its branch", async () => {
+  open(
+    { status: "ready", configs: [config] },
+    {
+      repositories: [secondRepository, twoTrees],
+      scope: { repositoryId: "repo-1", worktreeId: "feature" },
+    },
+  );
+  await expect.element(locationField()).toMatchTextContent(/project · feature/);
+  await locationField().click();
+  await expect.poll(() => page.getByRole("option").elements().length).toBe(2);
+  await expect.element(page.getByText("从当前工作树分支新建…")).toBeVisible();
+  await expect.element(page.getByText("主工作区")).not.toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+  await submit().click();
+  await vi.waitFor(() => expect(created).toHaveLength(1));
+  expect(created[0]).toMatchObject({
+    workspace: { repositoryId: "repo-1", worktreeId: "feature" },
+  });
+});
+
 test("a selected repository without usable targets stays selected and asks for a choice", async () => {
   open(
     { status: "ready", configs: [config] },

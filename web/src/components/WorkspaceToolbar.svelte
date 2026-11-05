@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import IconFolderPlus from "~icons/tabler/folder-plus";
-  import IconSettings from "~icons/tabler/settings";
   import IconRefresh from "~icons/tabler/refresh";
+  import IconSettings from "~icons/tabler/settings";
   import { Button } from "$lib/components/ui/button";
 
   let {
@@ -13,9 +12,7 @@
     visibleCount,
     sessionCount,
     repositoryCount,
-    canAddRepository,
     refreshing,
-    onadd,
     onsettings,
     onrefresh,
     onstart,
@@ -28,9 +25,7 @@
     visibleCount: number;
     sessionCount: number;
     repositoryCount: number;
-    canAddRepository: boolean;
     refreshing: boolean;
-    onadd: () => void;
     // Opens the settings of the repository in scope; absent when none is.
     onsettings?: () => void;
     onrefresh: () => void;
@@ -56,14 +51,6 @@
       class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
     >
       {@render controls?.()}
-      <Button
-        variant="ghost"
-        size="sm"
-        class="min-h-9 sm:min-h-8"
-        disabled={!canAddRepository}
-        onclick={() => onadd()}
-        ><IconFolderPlus aria-hidden="true" />添加仓库</Button
-      >
       {#if onsettings}<Button
           variant="ghost"
           size="sm"

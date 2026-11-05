@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import {
   resolveInitialLaunch,
   resolveInitialTarget,
+  resolveLaunchScope,
 } from "../src/newSessionDefaults";
 import type { LaunchConfigsState } from "../src/launchConfigs";
 import type { Repository, Worktree } from "../src/schemas";
@@ -195,4 +196,52 @@ test("a remembered custom command applies before configs load; configs wait", ()
   });
   expect(resolveInitialLaunch("config:one", loading)).toBeNull();
   expect(resolveInitialLaunch("", loading)).toBeNull();
+});
+
+test("a worktree scope starts in that worktree; an unusable one asks for a new worktree", () => {
+  const scope = { repositoryId: "a", worktreeId: "feature" };
+  expect(resolveInitialTarget({ ...base, scope })).toMatchObject({
+    kind: "worktree",
+    repositoryId: "a",
+    worktreeId: "feature",
+  });
+  expect(
+    resolveInitialTarget({
+      ...base,
+      scope: { repositoryId: "a", worktreeId: "gone" },
+    }),
+  ).toMatchObject({ kind: "new-worktree", repositoryId: "a", worktreeId: "" });
+});
+
+test("the launch scope follows the home view or the contextual entry", () => {
+  const home = { home: true, repositories: [a, b], worktreeId: null };
+  expect(resolveLaunchScope({ ...home, choice: "a" })).toEqual({
+    repositoryId: "a",
+  });
+  expect(
+    resolveLaunchScope({ ...home, choice: "a", worktreeId: "feature" }),
+  ).toEqual({ repositoryId: "a", worktreeId: "feature" });
+  // A worktree of another repository narrows nothing.
+  expect(
+    resolveLaunchScope({ ...home, choice: "b", worktreeId: "feature" }),
+  ).toEqual({ repositoryId: "b" });
+  for (const choice of ["all", "direct", null, "gone"])
+    expect(resolveLaunchScope({ ...home, choice })).toBeUndefined();
+  expect(
+    resolveLaunchScope({ ...home, choice: "a", home: false }),
+  ).toBeUndefined();
+  expect(
+    resolveLaunchScope({
+      ...home,
+      choice: "all",
+      entry: { kind: "worktree", repositoryId: "b", worktreeId: "main" },
+    }),
+  ).toEqual({ repositoryId: "b", worktreeId: "main" });
+  expect(
+    resolveLaunchScope({
+      ...home,
+      choice: "a",
+      entry: { kind: "directory", cwd: "/x", workspace: null },
+    }),
+  ).toBeUndefined();
 });

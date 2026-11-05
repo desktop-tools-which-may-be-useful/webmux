@@ -249,7 +249,7 @@
                   {repository.instruction}
                 </p>
                 <p class="text-xs text-muted-foreground">
-                  会放在你的消息前面，作为第一条消息一起发送；取消勾选只影响这次发送。在首页工具栏的“仓库设置”中修改。
+                  会放在你的消息前面，作为第一条消息一起发送；取消勾选只影响这次发送。在首页侧栏底部的“仓库设置”中修改。
                 </p>
               </Popover.Content>
             </Popover.Root>

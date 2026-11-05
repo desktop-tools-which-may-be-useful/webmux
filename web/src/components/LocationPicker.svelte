@@ -16,6 +16,7 @@
     directoryName,
     selectableWorktree,
     worktreeLabel,
+    type LaunchScope,
     type TargetKind,
   } from "../newSessionDefaults";
   import type { Repository, Worktree } from "../schemas";
@@ -29,6 +30,7 @@
     createdTree,
     newWorktreeSummary,
     onremove,
+    scope,
     kind = $bindable(),
     cwd = $bindable(),
     repositoryId = $bindable(),
@@ -44,6 +46,11 @@
     newWorktreeSummary: string;
     /** Asks to delete a linked worktree; the picker never deletes itself. */
     onremove?: (tree: Worktree) => void;
+    /**
+     * Narrows the list to the current repository, or to the current
+     * worktree and a new worktree from its branch; no other places.
+     */
+    scope?: LaunchScope;
     kind: TargetKind;
     cwd: string;
     repositoryId: string;
@@ -65,10 +72,20 @@
       ? [...repo.worktrees, createdTree]
       : repo.worktrees;
   }
-  const ordered = $derived([
-    ...repositories.filter((repo) => repo.id === preferredRepositoryId),
-    ...repositories.filter((repo) => repo.id !== preferredRepositoryId),
-  ]);
+  function scopedTrees(repo: Repository) {
+    const trees = treesOf(repo);
+    return scope?.worktreeId
+      ? trees.filter((tree) => tree.id === scope.worktreeId)
+      : trees;
+  }
+  const ordered = $derived(
+    scope
+      ? repositories.filter((repo) => repo.id === scope.repositoryId)
+      : [
+          ...repositories.filter((repo) => repo.id === preferredRepositoryId),
+          ...repositories.filter((repo) => repo.id !== preferredRepositoryId),
+        ],
+  );
   const repository = $derived(
     repositories.find((repo) => repo.id === repositoryId),
   );
@@ -103,7 +120,7 @@
 
 {#snippet treeGroup(repo: Repository)}
   <Command.Group heading={repo.name} value="repo:{repo.id}">
-    {#each treesOf(repo) as tree (tree.id)}
+    {#each scopedTrees(repo) as tree (tree.id)}
       <Command.Item
         value="tree:{repo.id}:{tree.id}"
         keywords={[repo.name, worktreeLabel(tree), tree.path]}
@@ -145,7 +162,9 @@
       onSelect={() => chooseNewWorktree(repo)}
     >
       <IconCirclePlus class="text-muted-foreground" aria-hidden="true" />
-      <span class="text-sm">新建工作树…</span>
+      <span class="text-sm"
+        >{scope?.worktreeId ? "从当前工作树分支新建…" : "新建工作树…"}</span
+      >
     </Command.Item>
   </Command.Group>
 {/snippet}
@@ -206,7 +225,7 @@
         {#if ordered[0]?.id === preferredRepositoryId}
           {@render treeGroup(ordered[0])}
         {/if}
-        {#if recent.length}
+        {#if recent.length && !scope}
           <Command.Group heading="最近目录" value="recent">
             {#each recent as dir (dir)}
               <Command.Item
@@ -224,16 +243,18 @@
         {#each ordered.filter((repo) => repo.id !== preferredRepositoryId) as repo (repo.id)}
           {@render treeGroup(repo)}
         {/each}
-        <Command.Group heading="其他" value="other">
-          <Command.Item
-            value="action:directory"
-            keywords={["目录", "directory"]}
-            onSelect={typeDirectory}
-          >
-            <IconPencil class="text-muted-foreground" aria-hidden="true" />
-            <span class="text-sm">输入或浏览目录…</span>
-          </Command.Item>
-        </Command.Group>
+        {#if !scope}
+          <Command.Group heading="其他" value="other">
+            <Command.Item
+              value="action:directory"
+              keywords={["目录", "directory"]}
+              onSelect={typeDirectory}
+            >
+              <IconPencil class="text-muted-foreground" aria-hidden="true" />
+              <span class="text-sm">输入或浏览目录…</span>
+            </Command.Item>
+          </Command.Group>
+        {/if}
       </Command.List>
     </Command.Root>
   </PickerField>
