@@ -160,6 +160,7 @@ beforeEach(() => {
           commit: "c".repeat(40),
           push: { state: "noRemote", branches: [], more: 0 },
           blockers: [],
+          warnings: [],
           forceAllowed: true,
         });
       }

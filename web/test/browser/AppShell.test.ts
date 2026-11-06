@@ -343,6 +343,7 @@ test("deleting an archived record whose linked worktree still exists opens workt
         commit: "c".repeat(40),
         push: { state: "unpushed", branches: [], more: 0 },
         blockers: [],
+        warnings: [],
         forceAllowed: true,
       }),
   );

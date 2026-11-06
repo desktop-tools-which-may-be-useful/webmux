@@ -57,10 +57,10 @@ type blocker struct {
 }
 
 type removalState struct {
-	tree      Worktree
-	identity  identity
-	sessions  []session.Info
-	blockers  []blocker
+	tree     Worktree
+	identity identity
+	sessions []session.Info
+	blockers []blocker
 	// warnings do not block removal or release; the preview shows them.
 	warnings  []string
 	supported bool

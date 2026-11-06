@@ -144,7 +144,9 @@
       {#if preview.warnings.length}
         <InlineNotice tone="warning">
           <ul class="space-y-1">
-            {#each preview.warnings as warning (warning)}<li>{warning}</li>{/each}
+            {#each preview.warnings as warning (warning)}<li>
+                {warning}
+              </li>{/each}
           </ul>
         </InlineNotice>
       {/if}
