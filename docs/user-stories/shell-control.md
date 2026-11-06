@@ -107,7 +107,9 @@
   - `end_turn` 以 0 退出并输出最终回复（`--json` 为该回合事件），其他结束原因以 1 退出；遇到授权或提问时输出请求 ID 与选项并以 1 退出，
     `--auto-wait-requests` 继续等待；排队的提示被删除时以 1 退出；超时 124 且不取消回合；
   - `webmux chat` 组只保留聊天视图专有的操作：`chat status` 列出所在视图（取自会话信息的 `view` 与 `transition`）、回合、队列、权限模式、待回答请求（ID、选项、表单字段）与 agent 设置，
-    `chat watch` 持续输出消息、工具调用、请求与回合（`--json` 为 NDJSON 帧，默认跳过历史）；
+    `chat watch` 持续输出消息、工具调用、请求与回合（`--json` 为 NDJSON 帧，默认跳过历史；`--history` 的历史部分每个工具调用只显示最终状态，实时帧不变）；
+  - `webmux chat log SESSION [--last N] [--tools] [--json]` 一次性读取聊天历史后退出（只读，聊天与终端视图均可）：默认输出最后一条用户或 agent 消息，`--last` 取 1 到 1000 条（其他值以 2 结束）；
+    工具调用默认不显示，`--tools` 时每个调用一行（标题与最终状态，同一调用的进度帧折叠），`--json` 输出一个 `ChatFrame`（`events`）；服务端历史已被丢弃部分或回合进行中时在标准错误提示；
   - `chat answer`（`--option`、`--content`、`--decline`、`--cancel`）、`chat set ID=VALUE`（校验设置与可选值，失败的项报告后以 1 结束）、
     `chat permission ask|auto`、`chat queue ls|rm|edit|send-now|clear|resume` 使用与 Web 端相同的接口并同步到所有设备；结束当前回合用 `webmux interrupt`；
   - 目标没有聊天视图（`no_chat_view`）时以 1 结束并说明原因，需要聊天视图却在终端视图时以 1 结束并提示 `webmux view SESSION chat`；每次写操作带新的 `clientRequestId`；

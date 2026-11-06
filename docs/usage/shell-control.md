@@ -104,6 +104,8 @@ webmux view <ID> chat                            # 切到聊天视图并等待�
 webmux chat status <ID>                          # 视图、回合、队列、待回答请求与选项、agent 设置
 webmux chat answer <ID> <请求ID> --option allow_once
 webmux chat watch <ID>                           # 持续输出聊天
+webmux chat log <ID>                             # 一次性读取最后一条消息（通常是 agent 的最后回复）后退出
+webmux chat log <ID> --last 3 --tools           # 最近三条消息与其间的工具调用（标题与最终状态）
 webmux chat set <ID> model=sonnet; webmux chat permission <ID> ask
 webmux ls --archived --repo .                    # 已关闭或已中断、可以恢复的会话
 webmux resume <ID> --view chat --detach
@@ -111,8 +113,11 @@ webmux rm <ID> --forget --yes                    # 删除归档记录与临时�
 ```
 
 - 从开启了聊天视图的启动配置创建的会话有终端与聊天两个视图，`webmux ls` 在状态列显示它当前的视图。
-- `chat` 只保留聊天视图专有的操作（`status`、`watch`、`answer`、`set`、`permission`、`queue`）。会话没有聊天视图时以 1 结束；
+- `chat` 只保留聊天视图专有的操作（`status`、`watch`、`log`、`answer`、`set`、`permission`、`queue`）。会话没有聊天视图时以 1 结束；
   需要聊天视图而会话在终端视图时以 1 结束，并提示 `webmux view <ID> chat`。
+- `chat log` 读取服务端仍保留的聊天历史后立即退出，只读、不取得控制：默认输出最后一条消息，`--last N`（1 到 1000，其他值以 2 结束）取最近 N 条用户与 agent 消息，
+  `--tools` 加上工具调用（同一个调用的进度帧折叠为一行：标题与最终状态），`--json` 输出一个 `ChatFrame`（`type` 为 `events`，消息的分段已合并）。历史有长度上限，较早的消息可能已被丢弃（标准错误提示）。
+  与 `send --reply` 不同，它不发送输入，也不等待回合；`chat watch --history` 的历史部分同样只显示每个工具调用的最终状态，实时帧不变。
 - `view` 等到切换结束；终端 TUI 忙时不强制就取消切换并以 1 结束。找不到 agent 会话时列出候选并接受重试。
 - 带聊天视图的会话结束后成为已归档（`closed` 或 `interrupted`），`ls` 默认不列出；`resume` 以原 ID 恢复，`rm` 对它以 1 结束并提示改用 `--forget`。
 

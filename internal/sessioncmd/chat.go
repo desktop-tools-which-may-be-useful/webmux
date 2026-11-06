@@ -143,7 +143,8 @@ var chatWatchCommand = &Command{
 	Summary: "Stream a session's chat view: messages, tool calls, requests and turns.",
 	Description: "Watching follows the chat stream until interrupted or the session ends. Text output shows each user and agent " +
 		"message, tool call titles with their status, requests and turn boundaries; --json prints every server frame as one " +
-		"line of JSON (the ChatFrame of /ws/s/{id}/chat). Earlier history is skipped unless --history is given. Watching " +
+		"line of JSON (the ChatFrame of /ws/s/{id}/chat). Earlier history is skipped unless --history is given; the history " +
+		"shows each tool call once, in its final state, while live frames are printed as they arrive. Watching " +
 		"works on either view and changes nothing.",
 	Arguments: []Item{chatSessionArgument},
 	Env:       []Item{sessionIDEnv},
@@ -153,7 +154,7 @@ var chatWatchCommand = &Command{
 		{Command: "webmux chat watch abcd2345", Text: "Follow what an agent is doing."},
 		{Command: "webmux chat watch abcd2345 --json | jq -c 'select(.type==\"events\") | .items[]'", Text: "Process chat events in a script."},
 	},
-	SeeAlso: []string{"webmux chat status", "webmux events"},
+	SeeAlso: []string{"webmux chat log", "webmux chat status", "webmux events"},
 	Bind: func(fs *flag.FlagSet) Action {
 		asJSON := fs.Bool("json", false, "print each frame as one line of JSON")
 		history := fs.Bool("history", false, "also print the history the server still holds")
@@ -200,11 +201,15 @@ func (e Env) watchChat(ctx context.Context, stream *chatStream, asJSON, history 
 			}
 			return err
 		}
-		// The events frame right after a snapshot replays the history.
-		skip := replay && !history && frame.Type == contract.ChatFrameEvents
+		// The events frame right after a snapshot replays the history; it
+		// shows each tool call once, in its final state.
+		replayed := replay && frame.Type == contract.ChatFrameEvents
 		replay = frame.Type == contract.ChatFrameSnapshot
-		if skip {
+		if replayed && !history {
 			continue
+		}
+		if replayed {
+			frame.Items = foldTools(frame.Items)
 		}
 		if asJSON {
 			line, _ := json.Marshal(frame)
@@ -233,6 +238,14 @@ func (t *chatText) line(format string, args ...any) {
 		t.message = ""
 	}
 	_, _ = fmt.Fprintf(t.w, format+"\n", args...)
+}
+
+// end finishes the line of the message still open.
+func (t *chatText) end() {
+	if t.message != "" {
+		_, _ = t.w.WriteString("\n")
+		t.message = ""
+	}
 }
 
 func (t *chatText) event(ev contract.ChatEvent) {

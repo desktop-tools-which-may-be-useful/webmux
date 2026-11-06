@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -105,6 +106,38 @@ func TestSessionVerbsDriveAChatSession(t *testing.T) {
 	_ = watch.Wait()
 	if strings.Join(users, "|") != "hello there" {
 		t.Fatalf("watch saw user messages %q; want only the new one", users)
+	}
+
+	// chat log reads what the session said after the fact; the folded tool
+	// call shows once in its final state.
+	reply := strings.TrimSpace(stdout)
+	if out, stderr, code := f.cli(t, "chat", "log", id); code != 0 || strings.TrimSpace(out) != "agent: "+reply || strings.Contains(out, "tool ") {
+		t.Fatalf("chat log: %d %q %q; want the reply %q alone", code, out, stderr, reply)
+	}
+	out, _, code := f.cli(t, "chat", "log", id, "--last", "3", "--tools")
+	if code != 0 || strings.Count(out, "tool ") != 1 || !strings.Contains(out, "(completed)") || strings.Contains(out, "in_progress") {
+		t.Fatalf("chat log --last 3 --tools: %d %q", code, out)
+	}
+	out, _, code = f.cli(t, "chat", "log", id, "--last", "3", "--tools", "--json")
+	var logged contract.ChatFrame
+	if err := json.Unmarshal([]byte(out), &logged); err != nil || code != 0 || logged.Type != contract.ChatFrameEvents || len(logged.Items) == 0 {
+		t.Fatalf("chat log --json: %d %q: %v", code, out, err)
+	}
+	if !slices.ContainsFunc(logged.Items, func(ev contract.ChatEvent) bool {
+		return ev.Message != nil && ev.Message.Role == "agent" && ev.Message.Text == reply
+	}) {
+		t.Fatalf("chat log --json lacks the reply %q: %q", reply, out)
+	}
+	for _, last := range []string{"0", "-1", "1001", "x"} {
+		if _, _, code := f.cli(t, "chat", "log", id, "--last", last); code != contract.ExitUsage {
+			t.Fatalf("--last %s: exit %d", last, code)
+		}
+	}
+	if _, stderr, code := f.cli(t, "chat", "log", plain); code != contract.ExitError || !strings.Contains(stderr, "no chat view") {
+		t.Fatalf("chat log on a terminal session: %d %q", code, stderr)
+	}
+	if _, _, code := f.cli(t, "chat", "log", "zzzzzzzz"); code != contract.ExitError {
+		t.Fatalf("chat log on a missing session: %d", code)
 	}
 	if _, _, code := f.cli(t, "interrupt", id); code != 0 {
 		t.Fatalf("interrupt while idle: %d", code)
