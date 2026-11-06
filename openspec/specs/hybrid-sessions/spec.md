@@ -2,7 +2,9 @@
 
 ## Purpose
 混合会话让同一段 agent 对话在 ACP 聊天视图与原生 TUI 之间按需切换：webmux 会话 ID 不变，服务端保证同一时刻只有一端打开该 agent 会话，并在中断、失败、崩溃与空闲时给出确定的行为。
+
 ## Requirements
+
 ### Requirement: 混合会话的创建与起始端
 
 系统 SHALL 只在使用勾选了混合模式的启动配置创建会话时创建混合会话。不带配置的自定义命令和未勾选的配置 SHALL 创建普通会话，行为不变。
@@ -41,6 +43,10 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 
 会话信息 SHALL 包含 `hybrid` 对象，至少含 `side`、`phase`、`state`、`agent`、`agentTitle`、`agentIcon` 与 `agentSessionId`（尚未得知时为 `null`）。普通会话 SHALL NOT 含该对象。
 
+- `agentTitle` SHALL 是 agent 档案声明的显示名，非空；
+- `agentIcon` SHALL 是 agent 档案声明的图标键，取值属于启动配置的图标目录；
+- 两者在会话生命周期内 SHALL 保持不变，并在会话列表快照、列表事件与单个会话信息中一致。
+
 #### Scenario: 切换期间不存在两个进程
 
 - **WHEN** 会话从 `tui` 切到 `acp`，同时用进程表持续观察
@@ -50,6 +56,11 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 
 - **WHEN** 客户端读取普通会话的会话信息
 - **THEN** 负载中没有 `hybrid` 字段，其余字段与本变更前一致
+
+#### Scenario: 会话信息带出 agent 显示名与图标
+
+- **WHEN** 用户以 OpenCode 混合配置创建会话，客户端随后读取会话列表快照
+- **THEN** 该会话的 `hybrid` 对象含 `agent: "opencode"`、`agentTitle: "OpenCode"` 与一个属于启动配置图标目录的 `agentIcon`，单个会话信息中的取值与之相同
 
 ### Requirement: 从终端切到聊天
 
@@ -192,3 +203,59 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 - **WHEN** argv 带 `-m no-such-model`，agent 的 `model` 配置项不含该取值
 - **THEN** 会话照常打开，聊天视图提示 `-m no-such-model` 在聊天端不生效
 
+### Requirement: 首条消息临时标题
+
+从聊天开始、由 webmux 新建 agent 会话的混合会话，在用户未命名且尚未收到 agent 标题时，发送第一条消息 SHALL 立即以该消息文本作为聊天端临时标题。
+
+- 临时标题去除控制字符，把连续空白折叠为一个空格并去除首尾空白，超过 80 个字符时截断为前 79 个字符加“…”。
+- 文本为空（例如只有附件）时 SHALL NOT 设置临时标题。临时标题只设置一次。
+- 加载或恢复已有 agent 会话的混合会话 SHALL NOT 使用临时标题。
+- agent 上报标题后 SHALL 替换临时标题；agent 清除标题后 SHALL 回到目录名，不再恢复临时标题。
+
+#### Scenario: 新聊天会话的第一条消息
+
+- **WHEN** 用户新建从聊天开始的未命名混合会话，发送消息“帮我 修复\n登录页的重定向问题”
+- **THEN** 会话列表与聊天页标题立即显示“帮我 修复 登录页的重定向问题”，不等待 agent 回复
+
+#### Scenario: agent 标题替换临时标题
+
+- **WHEN** 临时标题已生效，第一轮结束时 agent 上报标题“修复登录重定向”
+- **THEN** 标题变为“修复登录重定向”，此后再发送消息不会改回临时标题
+
+#### Scenario: 用户命名不被覆盖
+
+- **WHEN** 用户以名称 `review` 新建从聊天开始的混合会话并发送第一条消息
+- **THEN** 会话标题始终为 `review`
+
+#### Scenario: 只有附件的第一条消息
+
+- **WHEN** 新聊天会话的第一条消息只有一张图片附件、没有文本
+- **THEN** 标题保持目录名；之后发送的带文本消息也不再设置临时标题
+
+#### Scenario: 从终端切到聊天后发送
+
+- **WHEN** 从终端开始的未命名会话切到聊天端，用户随后发送消息“继续”
+- **THEN** 不设置临时标题，标题保持目录名，直到 agent 上报标题
+
+### Requirement: 过滤活动回合中 agent 回显的用户消息片段
+
+系统在 `acp` 端发起 `session/prompt` 时，已经在 `turn.start` 事件之后立即向聊天时间线写入
+包含原始文本与附件元数据的用户消息。因此：
+
+- 在活动 `session/prompt` 回合进行期间（即从发出 `session/prompt` 到收到其最终响应或取消完成之间），
+  若 agent 发送 `sessionUpdate: "user_message_chunk"` 通知（例如 `agy acp` 在实时回合开头回显用户消息），
+  系统 SHALL 忽略该 `user_message_chunk` 通知，SHALL NOT 在时间线中生成第二条重复的用户消息。
+- 在非活动回合阶段（即执行 `session/load` 回放历史会话期间），系统 SHALL 照常将 agent 发送的
+  `user_message_chunk` 通知转换为时间线中的用户消息事件。
+
+#### Scenario: agy 在实时回合中回显 user_message_chunk
+
+- **WHEN** 用户在 `agy` 混合会话聊天端发送一条消息，`agy acp` 在处理 `session/prompt` 期间依次发送
+  `user_message_chunk` 与 `agent_message_chunk`
+- **THEN** 聊天时间线中该回合只包含一条用户消息与一条 agent 回复，不出现重复的用户消息气泡
+
+#### Scenario: session/load 历史回放保留 user_message_chunk
+
+- **WHEN** 会话从终端切到聊天并执行 `session/load`，`agy acp` 依次回放历史中的
+  `user_message_chunk`、`tool_call` 与 `agent_message_chunk`
+- **THEN** 聊天时间线完整还原历史中的用户消息、工具调用与 agent 回复

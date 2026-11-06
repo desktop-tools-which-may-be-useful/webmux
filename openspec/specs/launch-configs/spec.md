@@ -3,7 +3,9 @@
 ## Purpose
 
 服务器持久化的启动配置让同一 WebMux 实例上的用户以“名称 + 完整 argv + 环境变量”保存自己的启动方式，跨浏览器、跨设备共享，是新建会话页与 CLI（`webmux run --launch-config`）的稳定输入。启动配置只描述如何启动会话，不改变 PTY、终端连接、回放或会话清理的生命周期。
+
 ## Requirements
+
 ### Requirement: 启动配置数据模型与命令快照
 
 系统 SHALL 为每条启动配置保存服务端生成的 `id`、`name`、完整命令 `cmd`、环境变量 `env`、可选的 `icon` 与 `preview`、可选的布尔字段 `hybrid`、`createdAt` 与 `updatedAt`。`cmd` SHALL 是保存时的完整 argv；服务端 SHALL NOT 在启动时重新解析或重建命令。
@@ -37,15 +39,18 @@
 
 ### Requirement: 首次启动预置默认启动配置
 
-系统 SHALL NOT 提供内置预设：服务端 SHALL NOT 读取 TOML `[[presets]]` 与 `shell`，SHALL NOT 提供 `GET /api/presets`，创建会话请求 SHALL NOT 接受 `preset` 与 `args`。
+系统 SHALL NOT 提供内置预设：服务端 SHALL NOT 读取 TOML `[[presets]]` 与 `shell`，
+SHALL NOT 提供 `GET /api/presets`，创建会话请求 SHALL NOT 接受 `preset` 与 `args`。
 
-服务首次启动且 `<state_dir>/launch-configs.json` 不存在时，服务端 SHALL 写入 13 条普通启动配置：Shell、Claude Code、Codex CLI、Gemini CLI、Cursor CLI、GitHub Copilot CLI、Open Code、Qwen Code、Kimi Code CLI、CodeBuddy Code、omp、Qoder 与 QoderCN。
+服务首次启动且 `<state_dir>/launch-configs.json` 不存在时，服务端 SHALL 写入 11 条普通启动配置：
+Shell、Claude Code、Codex CLI、Antigravity CLI、Cursor CLI、GitHub Copilot CLI、Open Code、
+Qwen Code、Kimi Code CLI、CodeBuddy Code 与 omp。
 这些配置 SHALL 可像其他配置一样编辑或删除；文件已存在（包括删空后的空列表）时 SHALL NOT 补写或改写。
 
 #### Scenario: 首次启动写入默认配置
 
 - **WHEN** 服务首次启动且状态目录中没有 `launch-configs.json`
-- **THEN** 服务创建该文件并写入 13 条默认配置，列表可经 `GET /api/launch-configs` 读取
+- **THEN** 服务创建该文件并写入 11 条默认配置（含 Antigravity CLI），列表可经 `GET /api/launch-configs` 读取
 
 #### Scenario: 删空后不再补写
 
@@ -187,16 +192,16 @@
 
 ### Requirement: 新建会话页选择启动配置
 
-新建会话页 SHALL 通过“预先输入”与“手动填写”两个 Tab 区分命令来源，两者都只使用自定义命令；系统 SHALL NOT 提供内置预设。提交内容取决于所选来源：
+新建会话对话框 SHALL 通过单一命令选择器选择命令来源：列表包含已保存的启动配置与末尾的“自定义命令…”，二者都只使用自定义命令；系统 SHALL NOT 提供内置预设，SHALL NOT 再以“预先输入 / 手动填写”Tab 区分。提交内容取决于所选来源：
 
-- 预先输入：提交 SHALL 发送 `configId` 与本次选择的 `cwd` 或 `workspace`，可选发送 `name` 与 `startSide`，SHALL NOT 同时发送 `cmd` 或 `env`。
-- 手动填写：提交 SHALL 发送完整 `cmd` 及本次选择的 `cwd` 或 `workspace`，该命令不写入服务端。
+- 保存的启动配置：提交 SHALL 发送 `configId` 与本次选择的 `cwd` 或 `workspace`，可选发送 `name` 与 `startSide`，SHALL NOT 同时发送 `cmd` 或 `env`。
+- 自定义命令：提交 SHALL 发送完整 `cmd` 及本次选择的 `cwd` 或 `workspace`，该命令不写入服务端。
 
-页面 SHALL 只请求启动配置摘要，SHALL NOT 请求环境变量值。切换 Tab SHALL 保留已选配置与手动输入，但只提交当前来源。
+页面 SHALL 只请求启动配置摘要，SHALL NOT 请求环境变量值。在配置与自定义命令之间切换 SHALL 保留已选配置与已输入命令，但只提交当前来源。
 
-页面 SHALL 在当前浏览器以键 `lastLaunch`（`config:<ID>` 或 `custom`）记住上次选择、以 `customCommand` 记住手动命令，SHALL NOT 缓存配置内容。记住的配置已不存在时 SHALL NOT 选中它。
+页面 SHALL 在当前浏览器以键 `lastLaunch`（`config:<ID>` 或 `custom`）记住最近一次成功创建所用的启动方案、以 `customCommand` 记住自定义命令，SHALL NOT 缓存配置内容；这些键的格式 SHALL 保持兼容。记住的配置已不存在时 SHALL NOT 选中它。默认填入与失效处理的对话框行为见 `new-session-dialog` 规格。
 
-没有启动配置时，“预先输入”SHALL 显示空状态与前往 `/settings#launch-configs` 的链接；启动配置不可用时 SHALL 说明原因。启动配置的加载或失败 SHALL NOT 阻塞手动填写；加载期间启动配置选择 SHALL 不可用，避免发送空的 `configId`。
+没有启动配置时，命令选择器 SHALL 显示空状态与前往 `/settings#launch-configs` 的链接，并默认选中“自定义命令…”；启动配置不可用时 SHALL 说明原因。启动配置的加载或失败 SHALL NOT 阻塞自定义命令；加载期间保存的配置不可选，避免发送空的 `configId`。
 
 #### Scenario: 从配置启动
 
@@ -205,13 +210,13 @@
 
 #### Scenario: 手动命令照常启动
 
-- **WHEN** 用户在“手动填写”输入完整命令后提交
+- **WHEN** 用户在命令选择器选择“自定义命令…”并输入完整命令后提交
 - **THEN** 请求包含 `cmd` 与目标目录，不包含 `configId`，命令不写入服务端
 
 #### Scenario: 存储不可用时仍可启动
 
 - **WHEN** 启动配置接口返回 503
-- **THEN** “预先输入”显示不可用原因，“手动填写”仍可启动会话
+- **THEN** 命令选择器显示不可用原因，“自定义命令…”仍可选择并启动会话
 
 ### Requirement: 设备间共享与本地选择边界
 
@@ -236,32 +241,36 @@
 - 保存时为 `false` 的字段 SHALL 不写入文件。
 - `launch-configs.json` 的版本 SHALL 保持 2；不含该字段的已有文件 SHALL 照常读取，所有配置视为未勾选。
 
-`hybrid` 为 `true` 时，服务端 SHALL 按 `hybrid-agent-profiles` 校验 argv，校验不通过时 SHALL 返回 400 并给出原因，已有数据不变。
-校验 SHALL NOT 检查第三方连接器是否已安装。
+`hybrid` 为 `true` 时，服务端 SHALL 按 `hybrid-agent-profiles` 校验 argv，校验不通过时 SHALL 返回 400
+并给出原因，已有数据不变。校验 SHALL NOT 检查第三方连接器是否已安装。
 
-新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Qoder 与 QoderCN 配置 SHALL 为 `hybrid: true`，其 argv（含各自的自动批准参数）SHALL 通过 `hybrid-agent-profiles` 校验。修改已勾选配置的 argv 使其不再受支持时，保存 SHALL 返回 400，用户须先取消勾选。
+新安装预置的 Antigravity CLI（`agy`）、OpenCode、omp、Codex CLI 与 Claude Code 配置 SHALL 为
+`hybrid: true`，其 argv（含各自的自动批准参数）SHALL 通过 `hybrid-agent-profiles` 校验。
+修改已勾选配置的 argv 使其不再受支持时，保存 SHALL 返回 400，用户须先取消勾选。
 
 新安装预置的 agent 配置 SHALL 带上各自的自动批准参数，使工具调用无需逐次批准：
 
 - Claude Code：`--dangerously-skip-permissions`
 - Codex CLI：`--dangerously-bypass-approvals-and-sandbox`
-- Gemini CLI：`--yolo`
+- Antigravity CLI（`agy`）：`--dangerously-skip-permissions`
 - OpenCode：`--auto`
 - omp：`--auto-approve`
 
-Shell 配置 SHALL 不变。已存在的 `launch-configs.json` SHALL NOT 被改写。
+预置的 Antigravity CLI 配置图标 SHALL 为 `antigravity`；已有配置文件中保存的 `geminicli` 图标值
+SHALL 继续被接受并正常渲染。Shell 配置 SHALL 不变。已存在的 `launch-configs.json` SHALL NOT 被改写。
 
 #### Scenario: 新安装的预置配置
 
 - **WHEN** 服务首次启动且 `launch-configs.json` 不存在
-- **THEN** 预置的 omp 配置 argv 为 `["bash","-ic","exec -- \"$@\"","webmux","omp","--auto-approve"]`（服务端 `$SHELL` 为 Bash 时），`hybrid` 为 `true`，`hybridSupport` 为 `{supported: true, agent: "omp"}`；
-  OpenCode、Codex CLI、Claude Code、Qoder 与 QoderCN 配置同样为混合配置，Codex CLI 与 Claude Code 的 `hybridSupport` 带有各自的连接器信息；
-  Gemini CLI 配置带自动批准参数但 `hybrid` 为 `false`
+- **THEN** 预置的 Antigravity CLI 配置名称为 `"Antigravity CLI"`、图标为 `"antigravity"`、
+  argv 为 `["bash","-ic","exec -- \"$@\"","webmux","agy","--dangerously-skip-permissions"]`
+  （服务端 `$SHELL` 为 Bash 时）、`hybrid` 为 `true`、`hybridSupport` 为 `{supported: true, agent: "agy"}`；
+  OpenCode、omp、Codex CLI 与 Claude Code 配置同样为混合配置
 
 #### Scenario: 已有安装不改写
 
-- **WHEN** 升级前已存在 `launch-configs.json`
-- **THEN** 服务不修改其中任何配置，包括 `hybrid` 与命令参数
+- **WHEN** 升级前已存在 `launch-configs.json`（含旧的 `"icon": "geminicli"` 配置）
+- **THEN** 服务正常加载且不修改其中任何配置，包括名称、图标、`hybrid` 与命令参数
 
 #### Scenario: 勾选 omp 配置
 
@@ -368,4 +377,3 @@ SHALL 只来自档案，SHALL NOT 反映连接器是否已安装。
 
 - **WHEN** 服务环境的 `SHELL` 为 `/usr/bin/fish`
 - **THEN** `defaultShell` 为空字符串；用户勾选时编辑器回退到 Bash
-

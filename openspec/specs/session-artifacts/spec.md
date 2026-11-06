@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change add-session-artifacts-folder. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: 交互物临时文件夹的位置与权限
 
 系统 SHALL 为每个会话提供一个交互物临时文件夹，用于用户与会话内程序（CLI agent）交换文件。
@@ -124,48 +126,19 @@ TBD - created by archiving change add-session-artifacts-folder. Update Purpose a
 - **WHEN** 客户端请求 `code/context?root=home`
 - **THEN** 服务端返回 400
 
-### Requirement: 临时文件夹提示词模板
+### Requirement: 临时文件夹的 shell 访问
 
-服务端设置 `artifactPrompt` SHALL 保存提示词模板：`null` 表示使用内置模板，字符串表示用户自定义模板。
+会话临时文件夹 SHALL 可以从 shell 获取：`webmux dir SESSION` 调用确保接口并输出路径（见 `shell-session-control`）。
+`{{webmux}}` 简述 SHALL 包含本会话临时文件夹的路径，以及交付物保存规则（见 `agent-shell-guide`）。
 
-- 内置模板 SHALL 说明：文件夹路径 `{dir}`；用户上传的文件位于 `{dir}/uploads/`；agent 生成给用户的截图、报告、图表、导出数据等交付物应保存到 `{dir}`（可建子目录）而不是项目仓库；用户会在 WebMux 代码栏的“临时文件夹”中查看；完成后告知文件相对路径；文件夹会在会话删除后清理，不要存放需长期保留的内容。
-- 自定义模板 SHALL 去除首尾空白后非空、不超过 4096 个 UTF-16 code unit，且 SHALL 至少包含一次 `{dir}`；保存时 SHALL 把 CRLF/CR 统一为 LF 并移除末尾换行，服务端执行相同规范化与校验，不合法时返回 400。
-- 设置页快捷指令卡片 SHALL 提供“临时文件夹提示词”区域：多行等宽输入框显示当前模板（`null` 时显示内置模板）、“保存”与“恢复默认”按钮。“恢复默认”SHALL 提交 `null`；模板未修改或不合法时“保存”SHALL 禁用，并提示缺少 `{dir}`。设置不可用时 SHALL 禁用保存并保留输入。
-- 409 冲突重放 SHALL 以本次目标值（字符串或 `null`）整体覆盖该键。
+- shell 工具手册以 llms.txt 形式经 HTTP 提供（见 `agent-shell-guide`），SHALL NOT 写入实例临时根或任何会话的临时文件夹。
 
-#### Scenario: 缺少占位符
+#### Scenario: agent 获取交付位置
 
-- **WHEN** 用户把模板改为不含 `{dir}` 的文字
-- **THEN** “保存”禁用并提示需要包含 `{dir}`；直接 PATCH 该值时服务端返回 400
+- **WHEN** 会话内的 agent 执行 `webmux dir self`
+- **THEN** 输出与代码栏“临时文件夹”根相同的绝对路径，该目录已存在
 
-#### Scenario: 恢复默认
+#### Scenario: 临时根中没有手册
 
-- **WHEN** 用户在设置页点击“恢复默认”
-- **THEN** 服务端 `artifactPrompt` 变为 `null`，所有已打开客户端随后插入的提示词使用内置模板
-
-### Requirement: 从快捷指令菜单插入提示词
-
-选择 ⚡ 菜单固定项“插入临时文件夹提示词”时，客户端 SHALL：
-
-1. 在选择时绑定当前会话与输入目标（草稿或终端），之后的导航或模式切换 SHALL NOT 使结果写入其他会话。
-2. 调用确保接口取得文件夹路径。
-3. 把当前模板（`artifactPrompt` 或内置模板）中所有 `{dir}` 替换为该路径（原样插入，不加 shell 引号）。
-4. 草稿模式：插入当前会话草稿光标处，SHALL NOT 发送到 PTY。直接模式：经与快捷指令相同的粘贴通路作为一次粘贴发送，SHALL NOT 发送回车。
-
-确保接口失败时 SHALL 提示“临时文件夹不可用”及原因，SHALL NOT 插入任何内容。已锁定的 Ctrl/Alt 软键修饰键 SHALL 被清除且不作用于正文。
-
-#### Scenario: 直接模式插入
-
-- **WHEN** 草稿模式关闭，用户在运行 agent 的会话中选择“插入临时文件夹提示词”
-- **THEN** agent 输入框出现已替换为真实路径的提示词，未被提交
-
-#### Scenario: 草稿模式插入
-
-- **WHEN** 草稿模式开启，草稿已有文字，用户选择该固定项
-- **THEN** 提示词插入草稿光标处，终端未收到任何输入
-
-#### Scenario: 文件夹不可用
-
-- **WHEN** 确保接口返回 503
-- **THEN** 界面提示临时文件夹不可用，草稿与终端均未收到文字
-
+- **WHEN** 用户在会话中使用 `{{webmux}}` 后，查看代码栏的“临时文件夹”根和实例临时根
+- **THEN** 只有会话自己的文件，没有手册文件

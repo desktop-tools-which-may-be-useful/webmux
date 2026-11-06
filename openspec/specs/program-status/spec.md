@@ -8,21 +8,27 @@
 
 ### Requirement: 识别 OSC 7501 根记录
 
-系统 SHALL 在实时 PTY 输出上增量识别 `ESC ] 7501 ; <body> (BEL | ESC \)`。识别 SHALL 支持在任意字节处被拆分的读取块，SHALL NOT 修改、删除或延迟发送给订阅者和写入回放缓冲区的原始字节。
+系统 SHALL 在实时 PTY 输出上增量识别 `ESC ] 7501 ; <body> (BEL | ESC \)`。识别 SHALL 支持在任意字节处被拆分的读取块，
+SHALL NOT 修改、删除或延迟发送给订阅者和写入回放缓冲区的原始字节。
 
 `<body>` 按以下规则解析：
 
 - 以 `:` 分隔为若干 `key=value` 对，键与值两侧的空白 SHALL 被去除。
 - 键须匹配 `[a-z]+` 且不超过 16 字节。不合法的对 SHALL 被跳过，其余对照常处理。
 - 未知键 SHALL 被忽略；重复键以最后一次出现为准。
-- `state` 为必需键，取值 ∈ `idle`、`working`、`done`、`blocked`、`error`、`clear`。缺少 `state` 或取值不在此集合内时，SHALL 忽略整条上报。
-- `kind` 取值 ∈ `permission`、`question`、`auth`；其他取值视为缺省。`kind` 只在 `state=blocked` 时有意义；`state` 不是 `blocked` 时，`kind` SHALL 视为缺省，因此只差 `kind` 的非阻塞上报被视为相同记录。
-- 含合法 `id` 的上报属于子记录，SHALL NOT 改变根记录；`id` 不合法（任一段不匹配 `[A-Za-z0-9_.+-]{1,32}`、总长超过 128 字节或超过 8 级）时 SHALL 忽略整条上报。
+- `state` 为必需键，取值 ∈ `idle`、`working`、`done`、`blocked`、`error`、`clear`。
+  缺少 `state` 或取值不在此集合内时，SHALL 忽略整条上报。
+- `kind` 取值 ∈ `permission`、`question`、`auth`；其他取值视为缺省。`kind` 只在 `state=blocked` 时有意义；
+  `state` 不是 `blocked` 时，`kind` SHALL 视为缺省，因此只差 `kind` 的非阻塞上报被视为相同记录。
+- 含合法 `id` 的上报属于子记录，SHALL NOT 改变根记录；`id` 不合法（任一段不匹配 `[A-Za-z0-9_.+-]{1,64}`、
+  总长超过 128 字节或超过 8 级）时 SHALL 忽略整条上报。
 - 整条序列超过 4096 字节时 SHALL 整体忽略，且不影响后续序列的识别。
 
-除 `state` 与 `kind` 外，系统 SHALL NOT 解析、存储、写入日志或通过任何 API 下发上报中的其他值，`msg`、`title`、`progress` 都属于此类。
+除 `state` 与 `kind` 外，系统 SHALL NOT 解析、存储、写入日志或通过任何 API 下发上报中的其他值，
+`msg`、`title`、`progress` 都属于此类。
 
-唯一的例外是身份标识。系统 SHALL 可以按 `agent-session-identity` 的规则，在服务端内存中保留以下两个值，用于混合会话的身份跟踪与占用检测：
+唯一的例外是身份标识。系统 SHALL 可以按 `agent-session-identity` 的规则，在服务端内存中保留以下两个值，
+用于混合会话的身份跟踪与占用检测：
 
 - 根记录的 `app`；
 - 合法子记录 `id` 的第一段。
@@ -63,7 +69,15 @@
 #### Scenario: OpenCode 的会话 ID 只用于身份跟踪
 
 - **WHEN** 混合会话中的 OpenCode 输出 `ESC ] 7501 ; state=working:id=ses_abc ESC \`，此时根记录为 `idle`
-- **THEN** 根记录仍为 `idle`，混合会话的 `hybrid.agentSessionId` 变为 `ses_abc`；同样的输出出现在普通会话中时，任何负载都不出现 `ses_abc`
+- **THEN** 根记录仍为 `idle`，混合会话的 `hybrid.agentSessionId` 变为 `ses_abc`；
+  同样的输出出现在普通会话中时，任何负载都不出现 `ses_abc`
+
+#### Scenario: agy 的 36 字符 UUID 子记录 ID 用于身份跟踪
+
+- **WHEN** 混合会话中的 `agy`（已上报根记录 `state=idle:app=antigravity`）输出
+  `ESC ] 7501 ; state=working:id=89c9a933-60f6-46ad-977b-a8daf22f8e4d BEL`
+- **THEN** 根记录仍为 `idle`，混合会话的 `hybrid.agentSessionId` 变为
+  `89c9a933-60f6-46ad-977b-a8daf22f8e4d`；同样的输出出现在普通会话中时，任何负载都不出现该 UUID
 
 ### Requirement: 根记录的生命周期
 

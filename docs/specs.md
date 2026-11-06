@@ -21,6 +21,28 @@
 - [session-launch-environment](../openspec/specs/session-launch-environment/spec.md)：会话启动时的进程环境约定
 - [launch-configs](../openspec/specs/launch-configs/spec.md)：服务器持久化的启动配置（名称 + argv + 环境变量）
 - [session-artifacts](../openspec/specs/session-artifacts/spec.md)：会话产物目录
+- [terminal-keyboard-size-hold](../openspec/specs/terminal-keyboard-size-hold/spec.md)：触屏唤起软键盘时暂时保持 PTY 行列不变
+- [terminal-notice-overlay](../openspec/specs/terminal-notice-overlay/spec.md)：终端顶部状态提示悬浮显示，不触发 resize
+- [websocket-compression](../openspec/specs/websocket-compression/spec.md)：手机与平板默认启用、可按设备覆盖的 WebSocket 压缩
+
+## 应用外壳与导航
+
+- [app-shell](../openspec/specs/app-shell/spec.md)：首页、快速开始页与会话页共用的侧栏布局与模式切换
+- [chat-sidebar](../openspec/specs/chat-sidebar/spec.md)：聊天模式侧栏中的聊天历史
+- [workbench-navigation](../openspec/specs/workbench-navigation/spec.md)：工作台侧栏的“仓库 → worktree → 会话”导航树
+- [quick-start-chat](../openspec/specs/quick-start-chat/spec.md)：一次发送即在新 worktree 中启动聊天会话
+- [new-session-dialog](../openspec/specs/new-session-dialog/spec.md)：汇总式单页的新建会话对话框
+- [workspace-return-cache](../openspec/specs/workspace-return-cache/spec.md)：返回首页时先显示缓存列表再后台刷新
+
+## Shell 工具（`webmux` 命令）
+
+- [agent-shell-guide](../openspec/specs/agent-shell-guide/spec.md)：按 llms.txt 约定提供 shell 工具手册与 `{{webmux}}` 说明
+- [shell-cli-help](../openspec/specs/shell-cli-help/spec.md)：完整、可机器读取的命令帮助与 shell 补全
+- [shell-session-launch](../openspec/specs/shell-session-launch/spec.md)：从 shell 启动会话与 `chat new`
+- [shell-session-control](../openspec/specs/shell-session-control/spec.md)：从 shell 控制已有会话的输入、等待、输出与事件
+- [shell-chat-control](../openspec/specs/shell-chat-control/spec.md)：从 shell 驱动混合会话的聊天端
+- [shell-workspace-control](../openspec/specs/shell-workspace-control/spec.md)：从 shell 管理 worktree、仓库、启动配置与端口转发
+- [session-metadata](../openspec/specs/session-metadata/spec.md)：会话完整背景、创建者与标签
 
 ## Agent 状态与提醒
 
@@ -33,6 +55,7 @@
 
 - [hybrid-sessions](../openspec/specs/hybrid-sessions/spec.md)：同一段对话在聊天视图与原生 TUI 之间切换
 - [hybrid-agent-profiles](../openspec/specs/hybrid-agent-profiles/spec.md)：内置 agent 档案，负责识别、启动、恢复与中断
+- [hybrid-agent-specifics](../openspec/specs/hybrid-agent-specifics/spec.md)：Claude Code、Codex、Antigravity CLI 各自的环境、配置推导、命令与进程边界
 - [hybrid-session-recovery](../openspec/specs/hybrid-session-recovery/spec.md)：服务重启后恢复混合会话
 - [agent-session-identity](../openspec/specs/agent-session-identity/spec.md)：识别 TUI 端当前打开的 agent 会话
 - [acp-agent-connection](../openspec/specs/acp-agent-connection/spec.md)：作为 ACP 客户端与 agent 子进程交互的协议边界

@@ -3,12 +3,14 @@
 ## Purpose
 
 让同一 WebMux 实例上的主题、输出预览、快捷指令、代码阅读偏好与主页工作树选择脱离单个浏览器，统一保存在服务端并在所有已认证客户端之间同步；同时把 token、推送订阅、草稿与上次选择等必须留在设备的数据划出清晰边界，并在设置存储损坏、被占用或暂时不可达时保持终端与会话可用。
+
 ## Requirements
+
 ### Requirement: 配置分层与同步范围
 
 系统 SHALL 把用户偏好划分为三类，并 SHALL 只把第一类放进服务端设置文档与设置 API：
 
-- 跨客户端同步：`theme`、`preview`、`codeReader.lineNumbers`、`codeReader.diffOverflow`、`quickCommands`、`artifactPrompt`、`homeWorktrees`、`forceSoftKeys`。
+- 跨客户端同步：`theme`、`preview`、`codeReader.lineNumbers`、`codeReader.diffOverflow`、`quickCommands`、`homeWorktrees`、`forceSoftKeys`。
 - 仅当前设备：浏览器中保存的终端字号（`fontSize`，屏幕尺寸因设备而异）、token 输入、Web Push 订阅标识、草稿与暂存正文、`draftPersistence` 开关、`recentDirs`、`lastLaunch`、`customCommand`、`clientId`、`clientLive`。
 - 部署默认与全局策略：`listen`、`token`、`state_dir`、`allowed_origins`、`tunnel.*`、`default_cwd`、`scrollback_bytes`、`idle_after_seconds`、`prompt_patterns`、`agent_protocol`、`bell_attention`、`push.*`。
 
@@ -81,7 +83,7 @@
 
 - `revision` SHALL 为从 0 开始的单调递增整数，每次成功 PATCH 加 1。
 - `updatedAt` SHALL 为 UTC RFC 3339 时间，未写入过时为空字符串。
-- `values` SHALL 始终包含 `theme`、`preview`、`codeReader`、`quickCommands`、`artifactPrompt`、`homeWorktrees`、`forceSoftKeys`，未设置的键为 `null`。
+- `values` SHALL 始终包含 `theme`、`preview`、`codeReader`、`quickCommands`、`homeWorktrees`、`forceSoftKeys`，未设置的键为 `null`。
 
 设置值 SHALL 满足以下约束：
 
@@ -89,14 +91,14 @@
 - `preview`：`{lines, skip}`，`lines` 为 1–50 的整数，`skip` 为 0–50 的整数，或 `null`；
 - `codeReader`：`{lineNumbers, diffOverflow}`，`lineNumbers` 为 `"show"` 或 `"hide"`，`diffOverflow` 为 `"scroll"` 或 `"wrap"`，或 `null`；
 - `quickCommands`：0–50 条，每条 `id` 为 1–64 字符且列表内唯一，`name` 去首尾空白后不超过 40 字符，`command` 去首尾空白后非空且不超过 4096 字符，`enter` 为布尔，或 `null`；
-- `artifactPrompt`：去首尾空白后非空、不超过 4096 字符且至少包含一次 `{dir}` 的字符串，或 `null`（使用内置模板）；
 - `homeWorktrees`：对象，最多 200 个仓库，仓库 ID 为 1–128 字符，每个仓库最多 1000 个工作树 ID，每个 ID 为 1–128 字符，全部条目合计最多 2000 个，或 `null`；
 - `forceSoftKeys`：布尔或 `null`。
 
 - 所有字符串 SHALL 是有效 UTF-8；长度上限 SHALL 按浏览器 UTF-16 code unit 计数，以保证 Go 接受的值也通过客户端 schema。
-- 快捷指令与 `artifactPrompt` 保存时 SHALL 把 CRLF/CR 统一为 LF 并移除正文末尾换行；服务端 SHALL 执行相同规范化。
+- 快捷指令保存时 SHALL 把 CRLF/CR 统一为 LF 并移除正文末尾换行；服务端 SHALL 执行相同规范化。
 - PATCH 请求体 SHALL 不超过 2 MiB；设置文件 SHALL 不超过 4 MiB。
 - 任意值越界、类型错误或包含未知字段时 SHALL 返回 400，且 SHALL NOT 写入任何部分内容。
+- 已退役的 `artifactPrompt`（临时文件夹提示词模板，其说明已移入 `{{webmux}}`）SHALL 视为未知字段：PATCH 中出现时返回 400；旧 `settings.json` 中遗留的该键 SHALL 在读取时忽略，并在下一次写入时移除。
 
 #### Scenario: 默认快照
 
@@ -106,11 +108,11 @@
 #### Scenario: 快捷指令的未初始化与空列表
 
 - **WHEN** 服务端 `quickCommands` 为 `null`，用户随后在设置页删除全部预置指令并保存
-- **THEN** 第一次保存写入 `[]`，之后所有客户端显示空列表，不再自动补回 `/resume` 与 `/new`
+- **THEN** 第一次保存写入 `[]`，之后所有客户端显示空列表，不再自动补回任何预置指令
 
 #### Scenario: 越界与非法值
 
-- **WHEN** PATCH 同时包含合法主题与 51 条快捷指令，或包含 `theme: "blue"`、重复的快捷指令 ID、不含 `{dir}` 的 `artifactPrompt`
+- **WHEN** PATCH 同时包含合法主题与 51 条快捷指令，或包含 `theme: "blue"`、重复的快捷指令 ID、已退役的 `artifactPrompt`
 - **THEN** 服务端返回 400，修订号与所有设置保持原值，后续读取看不到部分更新
 
 #### Scenario: 请求体上限
@@ -225,7 +227,7 @@ PATCH 的状态码 SHALL 如下：
 #### Scenario: 首次使用就没有缓存
 
 - **WHEN** 新浏览器第一次打开页面时设置接口不可用
-- **THEN** 页面使用默认主题与 `/resume`、`/new` 预置指令，不因设置失败而阻塞登录后的终端
+- **THEN** 页面使用默认主题与“恢复会话”“新会话”“WebMux 工具”三条预置指令，不因设置失败而阻塞登录后的终端
 
 ### Requirement: 设置页与共享偏好入口
 
@@ -338,4 +340,3 @@ PATCH 的状态码 SHALL 如下：
 
 - **WHEN** 检查 `settings.json`
 - **THEN** 文件不包含浏览器 token、Web Push 订阅端点和草稿内容，权限为 0600
-
