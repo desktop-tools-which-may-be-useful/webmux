@@ -201,7 +201,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/go-coverage"
           status=0
-          go test -race -parallel=4 -covermode=atomic -coverprofile="$RUNNER_TEMP/go-coverage/raw.coverprofile" ./... || status=$?
+          go test -race -parallel=4 -covermode=atomic -coverpkg=./cmd/...,./internal/...,./web,./deploy -coverprofile="$RUNNER_TEMP/go-coverage/raw.coverprofile" ./... || status=$?
           if [ -f "$RUNNER_TEMP/go-coverage/raw.coverprofile" ]; then
             sh .github/scripts/go-coverage-summary.sh "$RUNNER_TEMP/go-coverage/raw.coverprofile" "$RUNNER_TEMP/go-coverage"
           fi

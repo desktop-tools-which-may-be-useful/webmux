@@ -27,7 +27,7 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
 - macOS temp paths sit behind `/var -> /private/var`. Compare against canonical paths: packages' `TestMain` canonicalizes `TMPDIR`, and E2E uses `realpath`.
 - Preserve behavioral coverage for authentication/Origin rejection, argv boundaries, replay continuity, exit ordering, cancellation, terminal input/rendering, and touch interactions.
 - Coverage is reported without a hard numeric threshold:
-  - Go race collects atomic statement coverage (excluding test-only guard/fixture packages).
+  - Go race collects cross-package atomic statement coverage (`-coverpkg`, excluding test-only guard/fixture packages).
   - Vitest merges V8 coverage across the Node unit and headless Chromium browser suites.
   - CI publishes Markdown summaries to `$GITHUB_STEP_SUMMARY` and uploads HTML/profile artifacts.
 - Chromium mobile emulation does not replace real-device iOS Safari/Android keyboard and native selection-menu checks.

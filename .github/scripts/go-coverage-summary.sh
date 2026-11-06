@@ -13,9 +13,24 @@ filtered_profile="$out_dir/go.coverprofile"
 html_report="$out_dir/go.html"
 summary_md="$out_dir/summary.md"
 
-# Exclude pure test-guard/fixture/benchmark packages from production metrics.
-grep -v -E '^github\.com/rainchan/webmux/(internal/archtest|internal/docguard|internal/agentprofile/agenttest|internal/acp/testdata/fakeagent|cmd/baseline)/' \
-  "$raw_profile" > "$filtered_profile"
+# Exclude pure test-guard/fixture/benchmark packages from production metrics
+# and merge duplicate block entries produced by cross-package -coverpkg runs.
+awk '
+NR == 1 { print; next }
+$1 !~ /^github\.com\/rainchan\/webmux\/(internal\/archtest|internal\/docguard|internal\/agentprofile\/agenttest|internal\/acp\/testdata\/fakeagent|cmd\/baseline)\// {
+  key = $1 " " $2
+  counts[key] += $3
+}
+END {
+  for (k in counts) {
+    print k, counts[k]
+  }
+}
+' "$raw_profile" | {
+  IFS= read -r header
+  printf '%s\n' "$header"
+  sort
+} > "$filtered_profile"
 
 go tool cover -html="$filtered_profile" -o "$html_report"
 total_pct="$(go tool cover -func="$filtered_profile" | awk '/^total:/ {print $3}')"

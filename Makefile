@@ -158,7 +158,7 @@ cover: cover-go cover-web
 
 cover-go: frontend
 	mkdir -p .cache/coverage
-	$(GO) test -race -parallel=$(GO_TEST_PARALLEL) -covermode=atomic -coverprofile=.cache/coverage/raw.coverprofile ./...
+	$(GO) test -race -parallel=$(GO_TEST_PARALLEL) -covermode=atomic -coverpkg=./cmd/...,./internal/...,./web,./deploy -coverprofile=.cache/coverage/raw.coverprofile ./...
 	sh .github/scripts/go-coverage-summary.sh .cache/coverage/raw.coverprofile .cache/coverage
 
 cover-web:
