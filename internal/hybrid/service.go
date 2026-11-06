@@ -69,11 +69,14 @@ type timing struct {
 	// connectorRecheck is how often a missing connector is looked for
 	// again while the terminal side runs.
 	connectorRecheck time.Duration
+	// bgPoll is how often a finished turn with an in_progress tool call
+	// checks the agent's process tree before latching done.
+	bgPoll time.Duration
 }
 
 var defaultTiming = timing{
 	interrupt: 10 * time.Second, probeDelay: time.Second, observe: 500 * time.Millisecond,
-	connectorRecheck: connectorRecheck,
+	connectorRecheck: connectorRecheck, bgPoll: bgPoll,
 }
 
 // Service owns the hybrid sessions of one server.

@@ -22,7 +22,7 @@ import (
 
 // fast shortens the service's waits; call it before creating sessions.
 func (h *harness) fast() {
-	h.svc.timing = timing{interrupt: 300 * time.Millisecond, probeDelay: 50 * time.Millisecond, observe: 20 * time.Millisecond, connectorRecheck: 100 * time.Millisecond}
+	h.svc.timing = timing{interrupt: 300 * time.Millisecond, probeDelay: 50 * time.Millisecond, observe: 20 * time.Millisecond, connectorRecheck: 100 * time.Millisecond, bgPoll: 30 * time.Millisecond}
 }
 
 func (h *harness) generation(id string) string {

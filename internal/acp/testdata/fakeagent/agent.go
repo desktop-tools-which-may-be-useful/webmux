@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -750,6 +751,18 @@ func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string)
 		if errors.As(err, &rpcErr) {
 			extra = fmt.Sprintf(" (fs error %d)", rpcErr.Code)
 		}
+	}
+	if strings.Contains(text, "/background-noprocess") {
+		// An in_progress tool call with no child process left behind.
+		a.update(sid, &acp.ToolCall{ToolCallID: "bg_np", Title: "wait remote", Kind: "fetch", Status: acp.ToolInProgress})
+	} else if strings.Contains(text, "/background") {
+		// Like agy: a command keeps running after the turn ends and its tool
+		// call stays in_progress.
+		cmd := exec.Command("sleep", "2")
+		if err := cmd.Start(); err == nil {
+			go func() { _ = cmd.Wait() }()
+		}
+		a.update(sid, &acp.ToolCall{ToolCallID: "bg_1", Title: "sleep 2", Kind: "execute", Status: acp.ToolInProgress})
 	}
 
 	title, inProgress, failed := "Read file", acp.ToolInProgress, acp.ToolFailed

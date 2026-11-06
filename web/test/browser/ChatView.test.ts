@@ -311,6 +311,61 @@ test("shows server-timed progress and keeps the final duration", async () => {
   }
 });
 
+test("an end_turn with a tool still running is not reported as completed", async () => {
+  const socket = await open();
+  socket.frame(snapshot(chatState({ turn: { running: true, turnId: "t1" } })));
+  socket.frame({
+    type: "events",
+    generation: "g1",
+    items: events({
+      kind: "tool.upsert",
+      tool: {
+        toolCallId: "bg-1",
+        kind: "execute",
+        title: "sleep 25",
+        status: "in_progress",
+      },
+    }),
+  });
+  socket.frame({
+    type: "state",
+    state: chatState({
+      turn: {
+        running: false,
+        unfinished: true,
+        turnId: "t1",
+        stopReason: "end_turn",
+        startedAt: "2026-01-01T11:58:55Z",
+        endedAt: "2026-01-01T12:01:00Z",
+      },
+    }),
+  });
+  await expect
+    .element(page.getByRole("status").filter({ hasText: /用时/ }))
+    .toHaveTextContent("本轮已结束，仍有任务未完成 · 用时 2 分 05 秒");
+
+  // Reconnecting after the tool event fell out of the cached log still shows
+  // the unfinished label from `turn.unfinished`.
+  socket.frame(
+    snapshot(
+      chatState({
+        turn: {
+          running: false,
+          unfinished: true,
+          turnId: "t1",
+          stopReason: "end_turn",
+          startedAt: "2026-01-01T11:58:55Z",
+          endedAt: "2026-01-01T12:01:00Z",
+        },
+      }),
+      { generation: "g2", reset: true, truncated: true },
+    ),
+  );
+  await expect
+    .element(page.getByRole("status").filter({ hasText: /用时/ }))
+    .toHaveTextContent("本轮已结束，仍有任务未完成 · 用时 2 分 05 秒");
+});
+
 test("a missing connector offers its install hint and the terminal; outdated parts each warn", async () => {
   const socket = await open();
   socket.frame(

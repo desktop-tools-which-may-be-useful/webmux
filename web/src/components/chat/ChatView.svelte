@@ -133,9 +133,24 @@
     return `${seconds} 秒`;
   }
 
+  // Some agents (agy) end the turn while a backgrounded command still runs and
+  // never report it finished over ACP; "已完成" would then be wrong. The server
+  // records `turn.unfinished` on the state so a truncated or reset timeline
+  // still keeps the label.
+  const turnHasOpenTools = $derived.by(() => {
+    if (chat?.turn.unfinished) return true;
+    for (let i = model.entries.length - 1; i >= 0; i--) {
+      const entry = model.entries[i];
+      if (entry?.type === "message" && entry.role === "user") return false;
+      if (entry?.type === "tool" && entry.status === "in_progress") return true;
+    }
+    return false;
+  });
   const turnCompletionLabel = $derived(
     chat?.turn.stopReason === "end_turn"
-      ? "已完成"
+      ? turnHasOpenTools
+        ? "本轮已结束，仍有任务未完成"
+        : "已完成"
       : chat?.turn.stopReason === "cancelled"
         ? "已中断"
         : "已结束",
@@ -265,7 +280,9 @@
             aria-hidden="true"
             data-turn-result={chat.turn.stopReason}
           >
-            {#if chat.turn.stopReason === "end_turn"}
+            {#if chat.turn.stopReason === "end_turn" && turnHasOpenTools}
+              <IconLoader2 class="size-3.5 text-info" aria-hidden="true" />
+            {:else if chat.turn.stopReason === "end_turn"}
               <IconCircleCheck
                 class="size-3.5 text-success"
                 aria-hidden="true"

@@ -113,6 +113,10 @@ type actor struct {
 	// outside a turn.
 	work     workTracker
 	workLine string
+	// bgBase is the agent's process tree when the turn began; bgCancel ends
+	// the watch for background work left after a turn.
+	bgBase   map[int]bool
+	bgCancel context.CancelFunc
 	// switching is the running switch, from its eligibility check on.
 	switching *switchOp
 	// opening: a reconnect is opening the agent session again; prompts
@@ -190,6 +194,7 @@ func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side S
 func (a *actor) run() {
 	defer close(a.quit)
 	defer a.stopTimers()
+	defer a.stopBackgroundWatch()
 	for !a.stopped {
 		(<-a.inbox)()
 		a.flush()
@@ -907,6 +912,7 @@ func (a *actor) send(text string, attachments []Attachment, queueItem string) (P
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &turn{id: result.TurnID, cancel: cancel, done: make(chan struct{})}
 	a.turn = t
+	a.snapshotProcesses()
 	a.work.endTurn()
 	startedAt := time.Now().UTC()
 	a.chat.Turn = Turn{Running: true, TurnID: t.id, StartedAt: &startedAt}
@@ -937,6 +943,9 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 		return
 	}
 	a.turn = nil
+	// Read before endTurn clears the tracker. An agent may end the turn while
+	// a backgrounded command still runs (agy), so the turn is not "done".
+	running := a.work.running()
 	a.work.endTurn()
 	t.cancel()
 	stop, text := stopReason(resp, err)
@@ -948,7 +957,8 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	a.svc.log.Info("hybrid turn ended", "id", a.id, "stopReason", stop, "code", code)
 	a.tr.breakMessage()
 	endedAt := time.Now().UTC()
-	a.chat.Turn = Turn{TurnID: t.id, StopReason: stop, StartedAt: a.chat.Turn.StartedAt, EndedAt: &endedAt}
+	unfinished := stop == acp.StopEndTurn && running
+	a.chat.Turn = Turn{Unfinished: unfinished, TurnID: t.id, StopReason: stop, StartedAt: a.chat.Turn.StartedAt, EndedAt: &endedAt}
 	normal := stop == acp.StopEndTurn || stop == acp.StopMaxTokens || stop == acp.StopMaxTurnRequests
 	switch {
 	case stop == StopAuthRequired:
@@ -962,7 +972,11 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	now := time.Now().UTC()
 	switch stop {
 	case acp.StopEndTurn:
-		a.attention = &session.Attention{Kind: attentionkind.Done, Source: session.SourceAgent, Since: now}
+		if running {
+			a.watchBackground()
+		} else {
+			a.attention = &session.Attention{Kind: attentionkind.Done, Source: session.SourceAgent, Since: now}
+		}
 	case acp.StopRefusal, StopError, StopAuthRequired:
 		a.attention = &session.Attention{Kind: attentionkind.Error, Source: session.SourceAgent, Since: now}
 	}
