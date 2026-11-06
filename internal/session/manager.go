@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"github.com/rainchan/webmux/internal/contract"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -44,6 +46,12 @@ type Options struct {
 	// Executable is the running server's executable, advertised to every
 	// session as WEBMUX_BIN; empty advertises nothing.
 	Executable string
+	// PreLaunch, when set, runs once for every session about to start a
+	// command, with the resolved launch directory, the argv and the session's
+	// explicit environment. It prepares the command's surroundings (for
+	// example an agent's folder-trust record) and must not block for long or
+	// fail the launch.
+	PreLaunch func(cwd string, argv []string, env map[string]string)
 }
 type Event struct {
 	Type     string
@@ -181,6 +189,9 @@ func (m *Manager) resolveCreate(in CreateInput) (string, error) {
 	}
 	if !stat.IsDir() {
 		return "", fmt.Errorf("%w: path is not a directory", ErrInvalid)
+	}
+	if m.options.PreLaunch != nil && len(in.Cmd) > 0 {
+		m.options.PreLaunch(cwd, slices.Clone(in.Cmd), maps.Clone(in.Env))
 	}
 	return cwd, nil
 }

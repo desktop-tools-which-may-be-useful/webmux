@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/rainchan/webmux/internal/agenttrust"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tailscale"
@@ -14,6 +15,10 @@ import (
 
 // SessionOptions converts the loaded configuration for session.NewManager.
 func SessionOptions(c config.Config) session.Options {
+	var preLaunch func(string, []string, map[string]string)
+	if c.AgentPretrust {
+		preLaunch = agenttrust.New().Prepare
+	}
 	return session.Options{
 		ScrollbackBytes: c.ScrollbackBytes,
 		DefaultCwd:      c.DefaultCwd,
@@ -24,6 +29,7 @@ func SessionOptions(c config.Config) session.Options {
 		DisableAgentProtocol: !c.AgentProtocol,
 		DisableBellAttention: !c.BellAttention,
 		DisableProgramStatus: !c.ProgramStatus,
+		PreLaunch:            preLaunch,
 	}
 }
 

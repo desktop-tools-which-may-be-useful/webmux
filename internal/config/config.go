@@ -27,6 +27,7 @@ type Config struct {
 	AgentProtocol    bool              `toml:"agent_protocol"`
 	BellAttention    bool              `toml:"bell_attention"`
 	ProgramStatus    bool              `toml:"program_status"`
+	AgentPretrust    bool              `toml:"agent_pretrust"`
 	AllowedOrigins   []string          `toml:"allowed_origins"`
 	Tunnel           TunnelConfig      `toml:"tunnel"`
 	Tailscale        TailscaleConfig   `toml:"tailscale"`
@@ -241,6 +242,7 @@ func Load(path string, required bool) (Config, error) {
 		AgentProtocol:    true,
 		BellAttention:    true,
 		ProgramStatus:    true,
+		AgentPretrust:    true,
 		PromptPatterns: []string{
 			`[$#%>❯›?:]\s*$`,
 			`(?i)\(y/n\)|\[y/n\]|yes.*no|press enter`,

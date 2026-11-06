@@ -85,3 +85,30 @@ func TestRenameRejectsInvalidNames(t *testing.T) {
 		t.Fatalf("rejected rename changed the title to %q", got)
 	}
 }
+
+func TestCreateRunsPreLaunchOnlyForValidLaunches(t *testing.T) {
+	cwd := t.TempDir()
+	type call struct {
+		cwd  string
+		argv []string
+		env  map[string]string
+	}
+	var calls []call
+	manager := NewManager(Options{DefaultCwd: cwd, PreLaunch: func(cwd string, argv []string, env map[string]string) {
+		calls = append(calls, call{cwd, argv, env})
+	}})
+	t.Cleanup(func() { manager.Shutdown(context.Background()) })
+
+	if _, err := manager.Create(CreateInput{Cwd: filepath.Join(cwd, "missing"), Cmd: []string{"/bin/sh"}}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("err = %v", err)
+	}
+	if len(calls) != 0 {
+		t.Fatalf("hook ran for an invalid directory: %+v", calls)
+	}
+	if _, err := manager.Create(CreateInput{Cmd: []string{"/bin/sh", "-c", "sleep 5"}, Env: map[string]string{"A": "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].cwd != cwd || calls[0].argv[0] != "/bin/sh" || calls[0].env["A"] != "b" {
+		t.Fatalf("calls = %+v", calls)
+	}
+}

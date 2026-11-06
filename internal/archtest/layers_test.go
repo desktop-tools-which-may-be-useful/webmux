@@ -22,6 +22,7 @@ var webmux = manifest{
 		"internal/workspace":         service,
 		"internal/settings":          service,
 		"internal/launch":            service,
+		"internal/agenttrust":        service,
 		"internal/push":              service,
 		"internal/codeview":          service,
 		"internal/files":             service,
@@ -96,10 +97,11 @@ var webmux = manifest{
 		"internal/hub.jsonFrame":      {arg: 1},
 	},
 	encoders: map[string]string{
-		"internal/push.payload":     "Web Push message body, read by the service worker",
-		"internal/push.testPayload": "Web Push test message body",
-		"internal/push.vapidHeader": "VAPID JWT header and claims sent to push services",
-		"internal/codeview.version": "content digest of a snapshot, never sent as JSON",
+		"internal/push.payload":          "Web Push message body, read by the service worker",
+		"internal/push.testPayload":      "Web Push test message body",
+		"internal/push.vapidHeader":      "VAPID JWT header and claims sent to push services",
+		"internal/codeview.version":      "content digest of a snapshot, never sent as JSON",
+		"internal/agenttrust.encodeJSON": "rewrites an agent's own config file (Claude, Copilot) to record folder trust, never sent to clients",
 	},
 	bodyReaders: map[string]string{
 		"internal/api.decode":                  "reads JSON bodies with a size limit and unknown fields rejected",

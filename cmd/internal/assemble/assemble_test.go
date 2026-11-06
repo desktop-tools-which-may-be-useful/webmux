@@ -116,3 +116,23 @@ func TestSavedLaunchConfigLoadsBashrcAndForwardsArguments(t *testing.T) {
 		t.Fatalf("saved command arguments missing or split: %q", out)
 	}
 }
+
+func TestAgentPretrustOption(t *testing.T) {
+	dir := t.TempDir()
+	for _, row := range []struct {
+		body string
+		want bool
+	}{{"", true}, {"agent_pretrust = false\n", false}} {
+		path := filepath.Join(dir, "c.toml")
+		if err := os.WriteFile(path, []byte(row.body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		c, err := config.Load(path, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := SessionOptions(c).PreLaunch != nil; got != row.want {
+			t.Fatalf("%q: PreLaunch set = %v, want %v", row.body, got, row.want)
+		}
+	}
+}
