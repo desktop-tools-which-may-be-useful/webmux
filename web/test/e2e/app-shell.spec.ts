@@ -166,15 +166,16 @@ test.describe("desktop sidebar", () => {
       chats.getByRole("button", { name: /^首页排序（/ }),
     ).toHaveCount(0);
 
-    // The workbench "+" opens the existing new-worktree dialog in place.
+    // The workbench repository menu opens the new-worktree dialog in place.
     await page.getByRole("button", { name: "工作台模式" }).click();
     await expect(page).toHaveURL(new RegExp(`/s/${agent}$`));
     await tree(page)
       .getByRole("treeitem", { name: /^tree-repo，/ })
       .hover();
     await tree(page)
-      .getByRole("button", { name: "在 tree-repo 新建工作树" })
+      .getByRole("button", { name: "仓库操作：tree-repo" })
       .click();
+    await page.getByRole("menuitem", { name: "新建工作树…" }).click();
     const create = page.getByRole("dialog");
     await expect(create).toBeVisible();
     await create.getByRole("button", { name: /^创建工作树/ }).click();

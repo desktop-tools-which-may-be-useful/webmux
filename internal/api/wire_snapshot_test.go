@@ -170,7 +170,7 @@ func wireSchema(name string) wireRules {
 		add("", "id", "sessionId")
 	case "repository-branches":
 		add("", "path", "defaultParent", "branches/*/worktreePaths/*")
-	case "worktree-create", "worktree-create-release":
+	case "worktree-create", "worktree-create-release", "worktree-create-batch":
 		worktreeFields("")
 	case "worktree-removal-preview":
 		add("", "id", "confirmationId")
@@ -178,6 +178,15 @@ func wireSchema(name string) wireRules {
 		worktreeFields("/worktree")
 		sessionFields("/sessions/*")
 		sessionFields("/archived/*")
+	case "worktree-batch-removal-preview":
+		add("", "id", "confirmationId")
+		add("", "time", "expiresAt")
+		worktreeFields("/items/*/worktree")
+		sessionFields("/items/*/sessions/*")
+		sessionFields("/items/*/archived/*")
+	case "worktree-batch-remove":
+		add("/results/*", "id", "worktreeId")
+		add("/results/*", "path", "path", "error")
 	case "code-context":
 		add("", "id", "contextId")
 		add("", "path", "rootPath")
@@ -1011,6 +1020,13 @@ func wireWorkspace(f *wireFixture) {
 	treeURL := base + "/worktrees/" + treeID
 	preview := f.call("worktree-removal-preview", "POST", treeURL+"/removal-preview", map[string]any{}, 200)
 	f.call("error-409-worktree-remove", "POST", treeURL+"/remove", map[string]any{"confirmationId": str(preview, "confirmationId"), "mode": "safe"}, 409)
+	linkedBatch := filepath.Join(filepath.Dir(f.root), "linked-batch")
+	f.norm.path(linkedBatch, "<linked-batch>")
+	batchTree := f.call("worktree-create-batch", "POST", base+"/worktrees", map[string]string{"path": linkedBatch, "mode": "new", "branch": "linked-batch", "base": "HEAD"}, 201)
+	batchTreeID := str(batchTree, "id")
+	batchPreview := f.call("worktree-batch-removal-preview", "POST", base+"/worktrees/batch-removal-preview", contract.BatchRemovalPreviewRequest{WorktreeIDs: []string{batchTreeID, treeID}}, 200)
+	f.call("error-400-worktree-batch-remove", "POST", base+"/worktrees/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: str(batchPreview, "confirmationId"), IncludeForce: true, CloseSessions: false}, 400)
+	f.call("worktree-batch-remove", "POST", base+"/worktrees/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: str(batchPreview, "confirmationId"), IncludeForce: false, CloseSessions: false}, 200)
 	f.call("repository-unregister", "DELETE", base, nil, 204)
 }
 

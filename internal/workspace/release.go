@@ -79,12 +79,19 @@ func recordIDs(list []hybrid.Record) []string {
 }
 
 // headCommit resolves tree's HEAD to a full commit OID, empty when it does
-// not resolve.
-func (s *Service) headCommit(ctx context.Context, tree Worktree) string {
+// not resolve. When a prunable linked worktree's directory is already gone,
+// it verifies the recorded HEAD commit in the repository's anchor path.
+func (s *Service) headCommit(ctx context.Context, r *repositoryState, tree Worktree) string {
+	cwd := tree.Path
+	rev := "HEAD^{commit}"
 	if !tree.Available {
-		return ""
+		if !tree.Prunable || tree.Head == nil || !isObjectID(*tree.Head) || r == nil {
+			return ""
+		}
+		cwd = r.entry.AnchorPath
+		rev = *tree.Head + "^{commit}"
 	}
-	out, err := s.git(ctx, tree.Path, "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}")
+	out, err := s.git(ctx, cwd, "rev-parse", "--verify", "--end-of-options", rev)
 	if err != nil {
 		return ""
 	}
@@ -120,10 +127,14 @@ func (s *Service) pinRecords(ctx context.Context, r *repositoryState, repository
 	return id, nil
 }
 
-// releaseBlockers are the removal blockers without ignored files, plus a
-// commit that must resolve and at least one archived record.
+// releaseBlockers are the removal blockers without ignored files, plus an
+// existing directory, a commit that must resolve, and at least one archived
+// record.
 func releaseBlockers(state removalState, commit string, records []hybrid.Record) []string {
 	out := state.messages()
+	if !state.tree.Available {
+		out = append(out, "工作树目录缺失或不可验证，不能释放空间")
+	}
 	if commit == "" {
 		out = append(out, "HEAD 无法解析为提交，不能保存释放点")
 	}
@@ -151,7 +162,7 @@ func (s *Service) PreviewRelease(ctx context.Context, repositoryID, worktreeID s
 	if err != nil {
 		return ReleasePreview{}, err
 	}
-	commit := s.headCommit(ctx, state.tree)
+	commit := s.headCommit(ctx, r, state.tree)
 	records := s.targetRecords(state.tree.Path)
 	preview := ReleasePreview{
 		Worktree: state.tree, Commit: commit, Archived: records, Ignored: []IgnoredEntry{},
@@ -284,7 +295,7 @@ func (s *Service) ReleaseWorktree(ctx context.Context, repositoryID, worktreeID 
 	if !ok {
 		return ReleaseResult{}, problemf(ErrConflict, "释放确认已失效，请重新预览")
 	}
-	defer c.state.identity.close()
+	defer c.closeHandles()
 	if s.hybrids == nil {
 		return ReleaseResult{}, problemf(ErrUnavailable, "混合会话服务不可用，不能释放")
 	}
@@ -315,7 +326,7 @@ func (s *Service) ReleaseWorktree(ctx context.Context, repositoryID, worktreeID 
 	if !sameTarget(c.state, current) || !sameSessions(c.state.sessions, current.sessions) {
 		return ReleaseResult{}, problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览")
 	}
-	commit := s.headCommit(ctx, current.tree)
+	commit := s.headCommit(ctx, r, current.tree)
 	records := s.targetRecords(path)
 	ids := recordIDs(records)
 	if commit != c.commit || !slices.Equal(ids, c.records) {

@@ -213,7 +213,6 @@
   import IconFolderOff from "~icons/tabler/folder-off";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLayoutDashboard from "~icons/tabler/layout-dashboard";
-  import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { store, stored } from "../api";
@@ -221,6 +220,7 @@
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
   import { underRowAction } from "../sidebar-row";
+  import SidebarRepositoryMenu from "./SidebarRepositoryMenu.svelte";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
   // The workbench-mode sidebar: repositories → worktrees → live sessions.
@@ -244,6 +244,7 @@
     onscope,
     onopen,
     onnewworktree,
+    onmanageworktrees,
     onrename,
     onclose,
     onresume,
@@ -270,6 +271,7 @@
     onscope: (scope: string, worktreeId?: string) => void;
     onopen: (session: SessionInfo) => void;
     onnewworktree: (repositoryId: string) => void;
+    onmanageworktrees: (repositoryId: string) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
     /** Resumes an archived record, rebuilding a released worktree first. */
@@ -410,7 +412,7 @@
 
 {#snippet counts(node: TreeNode, actioned: boolean)}
   <!-- Right-aligned, so counts end where session rows' status dots do; a
-       row's "+" takes their place on hover. -->
+       row's "⋯" menu takes their place on hover. -->
   {#if node.waiting}<span
       class={`w-12 shrink-0 truncate text-right text-xs text-warning ${actioned ? underRowAction : ""}`}
       title={`${node.waiting} 个会话在等待`}>{node.waiting} 等待</span
@@ -534,14 +536,12 @@
           )}{/if}
       </ListButton>
       {#if node.kind === "repository" && !node.reason && canCreate}
-        <ListButton
-          variant="file-tree-action"
-          aria-label={`在 ${node.label} 新建工作树`}
-          title={`在 ${node.label} 新建工作树`}
+        <SidebarRepositoryMenu
+          label={node.label}
           tabindex={tabStop === node.key ? 0 : -1}
-          onclick={() => onnewworktree(node.repositoryId ?? "")}
-          ><IconPlus aria-hidden="true" /></ListButton
-        >
+          onnewworktree={() => onnewworktree(node.repositoryId ?? "")}
+          onmanage={() => onmanageworktrees(node.repositoryId ?? "")}
+        />
       {:else if node.session}
         <SidebarSessionMenu
           label={node.label}

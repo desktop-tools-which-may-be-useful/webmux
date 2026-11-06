@@ -493,6 +493,7 @@ func (a *actor) switchedToACP(op *switchOp, t target, res openResult) {
 // (pending requests answered cancelled) and the connection detached, so
 // its end is no crash.
 func (a *actor) toTUI(op *switchOp) {
+	a.stopBackgroundWatch()
 	link := a.link
 	a.link = nil
 	a.chat.PromptCapabilities = PromptCapabilities{}

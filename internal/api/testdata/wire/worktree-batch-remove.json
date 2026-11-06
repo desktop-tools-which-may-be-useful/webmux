@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "body": {
+    "results": [
+      {
+        "branch": "linked-batch",
+        "path": "<linked-batch>",
+        "status": "removed",
+        "worktreeId": "<id#5>"
+      },
+      {
+        "branch": "linked",
+        "path": "<linked>",
+        "status": "skipped",
+        "worktreeId": "<id#3>"
+      }
+    ]
+  }
+}

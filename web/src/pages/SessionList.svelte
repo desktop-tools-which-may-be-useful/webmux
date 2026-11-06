@@ -143,6 +143,20 @@
       !repositories.some((repo) => repo.id === repositoryChoice)
     ) {
       shell.repositories.select("all");
+    } else if (
+      shell.repositories.worktree &&
+      selectedRepository !== "all" &&
+      selectedRepository !== "direct"
+    ) {
+      const repo = repositories.find((r) => r.id === selectedRepository);
+      if (
+        repo &&
+        repo.availability === "available" &&
+        !repo.error &&
+        !repo.worktrees.some((t) => t.id === shell.repositories.worktree)
+      ) {
+        shell.repositories.select(selectedRepository);
+      }
     }
   });
   function setCompact(value: boolean) {
@@ -457,6 +471,7 @@
                       repositoryId: repo.id,
                       worktreeId,
                     })}
+              onmanage={() => shell.manageWorktrees(repo)}
               onunregister={() => {
                 unregistering = repo;
                 unregisterOpen = true;

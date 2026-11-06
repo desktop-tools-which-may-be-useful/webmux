@@ -381,6 +381,7 @@ func (a *actor) linkLost(link *acpLink) {
 	if a.link != link || a.stopped {
 		return
 	}
+	a.stopBackgroundWatch()
 	a.link = nil
 	a.chat.PromptCapabilities = PromptCapabilities{}
 	a.dirty = true

@@ -302,6 +302,26 @@ func Preview(p workspace.Preview, archived func(hybrid.Record) Archived) contrac
 	}
 }
 
+// BatchPreview converts a batch removal preview.
+func BatchPreview(p workspace.BatchPreview, archived func(hybrid.Record) Archived) contract.BatchRemovalPreview {
+	return contract.BatchRemovalPreview{
+		ConfirmationID: p.ConfirmationID,
+		ExpiresAt:      p.ExpiresAt,
+		Items: each(p.Items, func(item workspace.BatchPreviewItem) contract.RemovalPreviewItem {
+			return contract.RemovalPreviewItem{
+				Worktree:     Worktree(item.Worktree),
+				Sessions:     Sessions(item.Sessions),
+				Archived:     each(item.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
+				Commit:       item.Commit,
+				Push:         PushCheck(item.Push),
+				Blockers:     required(item.Blockers),
+				Warnings:     required(item.Warnings),
+				ForceAllowed: item.ForceAllowed,
+			}
+		}),
+	}
+}
+
 // PushCheck converts a push check; its branches are never null.
 func PushCheck(c workspace.PushCheck) contract.PushCheck {
 	state := string(c.State)
@@ -345,6 +365,18 @@ func CreateWorktree(r contract.CreateWorktreeRequest) workspace.CreateRequest {
 
 func RemoveWorktree(r contract.RemoveWorktreeRequest) workspace.RemoveRequest {
 	return workspace.RemoveRequest(r)
+}
+
+func BatchRemoveWorktrees(r contract.BatchRemoveWorktreesRequest) workspace.BatchRemoveRequest {
+	return workspace.BatchRemoveRequest(r)
+}
+
+func BatchRemoveResult(r workspace.BatchRemoveResult) contract.BatchRemoveResult {
+	return contract.BatchRemoveResult{
+		Results: each(r.Results, func(v workspace.BatchRemoveItemResult) contract.BatchRemoveItemResult {
+			return contract.BatchRemoveItemResult(v)
+		}),
+	}
 }
 
 func previewSettings(p *launch.PreviewSettings) *contract.PreviewSettings {

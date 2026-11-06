@@ -17,6 +17,7 @@
     active,
     shown,
     ontoggle,
+    onmanage,
   }: {
     repositoryName: string;
     worktrees: readonly Worktree[];
@@ -26,6 +27,7 @@
     /** How many worktrees the home page lists. */
     shown: number;
     ontoggle: (worktreeId: string, pinned: boolean) => void;
+    onmanage?: () => void;
   } = $props();
   let open = $state(false);
   let search = $state("");
@@ -101,8 +103,20 @@
         {/each}
       </Command.List>
     </Command.Root>
-    <p class="border-t px-3 py-2 text-xs text-muted-foreground">
-      取消勾选只把它移出主页，不会删除 worktree。
-    </p>
+    <div
+      class="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground"
+    >
+      <span>取消勾选只把它移出主页，不会删除 worktree。</span>
+      {#if onmanage}
+        <Button
+          size="xs"
+          variant="ghost"
+          onclick={() => {
+            open = false;
+            onmanage();
+          }}>批量管理…</Button
+        >
+      {/if}
+    </div>
   </Popover.Content>
 </Popover.Root>

@@ -2,6 +2,7 @@
   import IconChevronDown from "~icons/tabler/chevron-down";
   import IconCopy from "~icons/tabler/copy";
   import IconInfoCircle from "~icons/tabler/info-circle";
+  import IconListCheck from "~icons/tabler/list-check";
   import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import * as Popover from "$lib/components/ui/popover";
@@ -41,6 +42,7 @@
     refreshing,
     now,
     onstart,
+    onmanage,
     onunregister,
     ontogglepin,
     onremove,
@@ -67,6 +69,7 @@
     now: number;
     // Without a worktree id the sheet creates a new worktree.
     onstart: (worktreeId?: string) => void;
+    onmanage?: () => void;
     onunregister: () => void;
     ontogglepin: (worktreeId: string, pinned: boolean) => void;
     onremove: (worktree: Worktree) => void;
@@ -166,7 +169,20 @@
         active={activeIds}
         shown={layout.shown.length}
         ontoggle={ontogglepin}
+        onmanage={repo.availability === "available" && gitReady
+          ? onmanage
+          : undefined}
       />
+      {#if onmanage}
+        <Button
+          size="sm"
+          variant="outline"
+          class="min-h-9 sm:min-h-8"
+          disabled={repo.availability !== "available" || !gitReady}
+          onclick={onmanage}
+          ><IconListCheck class="size-4" aria-hidden="true" />管理工作树</Button
+        >
+      {/if}
       <Button
         size="sm"
         variant="outline"

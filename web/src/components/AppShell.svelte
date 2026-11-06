@@ -81,6 +81,7 @@
   let renaming = $state<SessionInfo | null>(null);
   let closing = $state<SessionInfo | null>(null);
   let removingWorktree = $state<Worktree | null>(null);
+  let managingWorktrees = $state<Repository | null>(null);
   let releasingWorktree = $state<Worktree | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
@@ -129,6 +130,10 @@
     removeWorktree(worktree) {
       shellUi.drawerOpen = false;
       removingWorktree = worktree;
+    },
+    manageWorktrees(repository) {
+      shellUi.drawerOpen = false;
+      managingWorktrees = repository;
     },
     releaseWorktree(worktree) {
       shellUi.drawerOpen = false;
@@ -412,6 +417,30 @@
         worktree={target}
         onchange={refreshWorktrees}
         onclose={() => (removingWorktree = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+{#if managingWorktrees}
+  {@const target = managingWorktrees}
+  {@const currentRepo =
+    repositories.list.find((r) => r.id === target.id) ?? target}
+  <LazyDialog
+    load={() => import("./ManageWorktreesDialog.svelte")}
+    label="管理工作树"
+    onclose={() => (managingWorktrees = null)}
+  >
+    {#snippet children(page)}<page.default
+        repository={currentRepo}
+        sessions={sessions.sessions}
+        archived={archived.records}
+        home={homeWorktrees.value}
+        onremoved={(removedIds) => {
+          homeWorktrees.save(
+            setPinned(homeWorktrees.value, currentRepo, removedIds, false),
+          );
+        }}
+        onchange={refreshWorktrees}
+        onclose={() => (managingWorktrees = null)}
       />{/snippet}
   </LazyDialog>
 {/if}
