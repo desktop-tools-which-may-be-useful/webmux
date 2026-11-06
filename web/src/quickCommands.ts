@@ -43,6 +43,19 @@ export function renderWebmuxBrief(text: string, prompt: string) {
   return text.replaceAll(WEBMUX_PLACEHOLDER, prompt);
 }
 
+/** `text` with `insert` replacing the selection `start`..`end`, and the caret after it. */
+export function insertAtSelection(
+  text: string,
+  start: number,
+  end: number,
+  insert: string,
+) {
+  return {
+    text: text.slice(0, start) + insert + text.slice(end),
+    caret: start + insert.length,
+  };
+}
+
 /** Built-in reference `{{user}}`: where the first message goes in an init instruction. */
 export const USER_REFERENCE_NAME = "user";
 

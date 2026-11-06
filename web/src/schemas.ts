@@ -216,6 +216,9 @@ export const CreateSessionRequestSchema = z
     // Puts the repository's initialization instruction before it; needs
     // `workspace` or `newWorktree`.
     useInitInstruction: z.boolean().optional(),
+    // Fills `{{dir}}` and `{{webmux}}` in the prompt once the session
+    // exists; otherwise the prompt is sent as written.
+    expandPrompt: z.boolean().optional(),
     // Chat view only: files returned by POST /uploads, sent with the
     // prompt; agent option id to value (booleans "true"/"false"); and the
     // permission mode.

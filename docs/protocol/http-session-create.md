@@ -50,7 +50,7 @@ Web 端的新建会话对话框、快速开始页与 `webmux run` 都调用它�
 - 服务端不自行复制调用方的环境，`env` 也不出现在 `SessionInfo` 中。
 - Linux/macOS 的 `webmux run` 会把调用方环境（去掉终端身份等服务端自有变量）放进该字段发送。
 
-**可选字段**：`name`、`labels`（规则见 [父会话与标签](http-sessions.md#父会话与标签)）、`view`、`prompt`、`useInitInstruction`、`attachments`、`agentConfig`、`permissionMode`、`cols`、`rows`、`clientRequestId`。
+**可选字段**：`name`、`labels`（规则见 [父会话与标签](http-sessions.md#父会话与标签)）、`view`、`prompt`、`useInitInstruction`、`expandPrompt`、`attachments`、`agentConfig`、`permissionMode`、`cols`、`rows`、`clientRequestId`。
 
 `cols` 与 `rows` 是 PTY 的初始尺寸：两者都缺省或为 0 时为 80×24，否则必须同时给出且各为 1–1000，只给一个或越界时在预检 400，不创建任何东西。PTY 启动即是该尺寸，`SessionInfo` 与预览一致；
 混合会话的终端端同样使用它（聊天视图创建的会话切到终端时亦然）。之后第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整尺寸；脚本用 [`POST /api/sessions/{id}/resize`](http-sessions.md#调整终端尺寸) 改尺寸。
@@ -83,8 +83,16 @@ Web 端的新建会话对话框、快速开始页与 `webmux run` 都调用它�
 - 展开按单次扫描把 `{{名称}}` 替换为同名快捷指令的正文，插入的正文不再被扫描；服务端读取当前的 `quickCommands` 设置。快捷指令不能命名为 `user` 或 `webmux`。
 - 内置的 `{{webmux}}` 在会话创建后替换为该会话的 WebMux 工具说明（与 `POST /api/sessions/{id}/agent-guide` 的 `prompt` 相同），它在 `{{dir}}` 之后插入，其中的文字不再被当作变量。说明不可用时预检返回 503（`step: "precheck"`），不创建 worktree。
 - 引用了不存在或保留的快捷指令在预检返回 400（`step: "precheck"`），错误体列出缺少的名称，此时不创建 worktree。
-- 展开后文本里的 `{{dir}}` 在会话创建后替换为该会话临时文件夹的路径（必要时创建）；用户输入里的 `{{dir}}` 不替换。文件夹不可用时在 `prompt` 步骤失败。
+- 展开后文本里的 `{{dir}}` 在会话创建后替换为该会话临时文件夹的路径（必要时创建）；用户输入里的 `{{dir}}` 只在设置了 `expandPrompt` 时替换（见下）。文件夹不可用时在 `prompt` 步骤失败。
 - `prompt` 与指令合计超过上限时 400。
+
+`expandPrompt` 为 `true` 时，服务端在会话创建后、`prompt` 发出前，把用户输入里的 `{{dir}}` 换成该会话的临时文件夹路径（按需创建）、
+`{{webmux}}` 换成该会话的 WebMux 工具说明（与 [`POST /api/sessions/{id}/agent-guide`](http-sessions.md) 同源）。快速开始页的聊天与终端起点都设置它。
+
+- 先替换 `{{dir}}`、说明最后插入，单遍：说明里的文字不再被当作占位符；`{{user}}` 等其他名称原样保留。
+- 缺省或 `false` 时 `prompt` 一字不改（CLI `webmux run --prompt` 不设置它）；终端视图的首条消息同样遵循。
+- 用户输入含占位符而临时文件夹或说明不可用时，预检返回 503 且不创建任何东西；会话创建后的失败按 `step: "prompt"` 报告。
+- 与 `useInitInstruction` 同用时，先替换用户输入，再放入初始化指令的 `{{user}}`。
 
 ## 执行步骤、结果与失败
 

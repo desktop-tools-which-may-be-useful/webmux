@@ -354,6 +354,106 @@ func TestQuickStartInstructionUserVariable(t *testing.T) {
 	}
 }
 
+// ExpandPrompt fills the user's own {{dir}} and {{webmux}} once the session
+// exists: {{dir}} first, the brief last so its text is never read again;
+// other names stay as written, and without the flag nothing changes. The
+// repository instruction's own expansion is unaffected, and a retry with the
+// same request ID gets the first run's session and prompt.
+func TestQuickStartExpandPrompt(t *testing.T) {
+	h := newQuickHarness(t, "规则 {{dir}}\n{{user}}")
+	folders := artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: t.TempDir(), Manager: h.manager})
+	t.Cleanup(folders.Close)
+	h.s.UseArtifacts(folders)
+	h.s.UseBrief(func(id, dir string) string { return "BRIEF " + id + " {{dir}} {{user}}" })
+
+	const prompt = "放 {{dir}}\n{{webmux}}\n{{user}} {{规则}}"
+	off := h.input("quick-start-xoff", "wt/xoff")
+	off.Prompt = prompt
+	result, err := h.start(off)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.waitTurnEnd(result.Session.Info().ID)
+	if got := userTexts(h.events(result.Session.Info().ID)); len(got) != 1 || got[0] != prompt {
+		t.Fatalf("without ExpandPrompt %q, want the text as written", got)
+	}
+	if _, err := folders.Existing(result.Session.Info().ID); err == nil {
+		t.Fatal("a folder was created without ExpandPrompt")
+	}
+
+	on := h.input("quick-start-xon1", "wt/xon")
+	on.Prompt = prompt
+	on.ExpandPrompt = true
+	result, err = h.start(on)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := result.Session.Info().ID
+	dir, err := folders.Existing(id)
+	if err != nil {
+		t.Fatalf("folder for {{dir}} not created: %v", err)
+	}
+	h.waitTurnEnd(id)
+	want := "放 " + dir + "\nBRIEF " + id + " {{dir}} {{user}}\n{{user}} {{规则}}"
+	if got := userTexts(h.events(id)); len(got) != 1 || got[0] != want {
+		t.Fatalf("expanded prompt %q, want %q", got, want)
+	}
+	retry, err := h.start(on)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.Session.Info().ID != id {
+		t.Fatalf("retry made session %s, want %s", retry.Session.Info().ID, id)
+	}
+	if got := userTexts(h.events(id)); len(got) != 1 || got[0] != want {
+		t.Fatalf("after retry %q, want the first run's prompt once", got)
+	}
+
+	// With the instruction, the expanded text lands at {{user}} and is not
+	// scanned again.
+	both := h.input("quick-start-xboth", "wt/xboth")
+	both.Prompt = "{{webmux}}"
+	both.ExpandPrompt = true
+	both.UseInitInstruction = true
+	result, err = h.start(both)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id = result.Session.Info().ID
+	dir, err = folders.Existing(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.waitTurnEnd(id)
+	want = "规则 " + dir + "\nBRIEF " + id + " {{dir}} {{user}}"
+	if got := userTexts(h.events(id)); len(got) != 1 || got[0] != want {
+		t.Fatalf("instruction with expanded prompt %q, want %q", got, want)
+	}
+}
+
+// An expanding prompt that needs the artifacts folder or the brief stops
+// the quick start before anything is created when either is missing.
+func TestQuickStartExpandPromptUnavailable(t *testing.T) {
+	h := newQuickHarness(t, "")
+	before := h.worktrees()
+	for name, prompt := range map[string]string{"dir": "放 {{dir}}", "brief": "{{webmux}}"} {
+		in := h.input("quick-start-xun-"+name, "wt/xun-"+name)
+		in.Prompt = prompt
+		in.ExpandPrompt = true
+		_, err := h.start(in)
+		quickFailure(t, err, StepPrecheck, ErrUnavailable)
+	}
+	if h.worktrees() != before {
+		t.Fatal("a worktree was created for an unavailable placeholder")
+	}
+	plain := h.input("quick-start-xun-plain", "wt/xun-plain")
+	plain.Prompt = "没有占位符 {{规则}}"
+	plain.ExpandPrompt = true
+	if _, err := h.start(plain); err != nil {
+		t.Fatalf("a prompt without placeholders needs neither: %v", err)
+	}
+}
+
 // A reference to a quick command that does not exist stops the quick start
 // before anything is created.
 func TestQuickStartInstructionUnknownReference(t *testing.T) {

@@ -164,9 +164,13 @@ type CreateSessionRequest struct {
 	// Prompt is the user's first message, sent once the session is up: as
 	// the first chat prompt on the chat view, otherwise typed into the
 	// terminal with Enter. UseInitInstruction puts the repository's
-	// initialization instruction before it.
+	// initialization instruction before it. ExpandPrompt replaces the
+	// prompt's {{dir}} (the session's artifacts folder) and {{webmux}} (its
+	// WebMux brief) once the session exists; without it the prompt is sent
+	// as written.
 	Prompt             string `json:"prompt,omitempty"`
 	UseInitInstruction bool   `json:"useInitInstruction,omitempty"`
+	ExpandPrompt       bool   `json:"expandPrompt,omitempty"`
 	// Attachments are files returned by POST /api/uploads; only their path
 	// is read. They go with the first prompt.
 	Attachments []ChatAttachment `json:"attachments,omitempty"`

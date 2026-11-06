@@ -93,3 +93,10 @@
   输出 300 行的会话上 `screen` 只有 23 行，`--scrollback 200` 取得 223 行；`send` 之后 `resize` 成功，WebSocket 连接控制时 `resize` 以 1 结束（409），`--take` 成功。
 - 限制：控制端是真实浏览器或 `attach`（PTY）的路径只用 WebSocket 连接模拟，未在浏览器中运行；未在 macOS 上运行；在 WebMux 会话内运行测试时（环境中有 `WEBMUX_*`）`internal/session` 的 `TestProcessSessionFindsCreator` 与 `cmd/webmux` 的隧道测试会失败，
   取消这些变量后 `internal/session`、`workspace`、`cmd/webmux` 全部通过。
+
+本次局部核对（2026-11-06，快速开始页快捷指令）：快速开始页 `/new` 加入快捷指令菜单，`{{dir}}`、`{{webmux}}` 经请求字段 `expandPrompt` 由服务端在会话创建后替换。
+
+- 更新的故事：US-G02、US-G06、US-Q18、US-J12、US-S06；覆盖索引同步，故事数量不变。
+- 已运行：`go test -race` 覆盖 `internal/workspace`（新增 `TestQuickStartExpandPrompt*`）、`api`、`wire`、`agentguide`、`contract`、`sessioncmd`、`archtest`；
+  `web/test/browser/QuickStart.test.ts`；`pnpm --dir web check`、`lint`、`check:arch`；`make format-check docs-check`。
+- 限制：按约定完整测试交给 CI；本地未运行全量 vitest、Playwright E2E 与 Storybook。

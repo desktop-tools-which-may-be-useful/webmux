@@ -235,3 +235,33 @@ test("phone drawer: the chat history switches sessions and closes", async ({
   const header = page.locator(".terminal-header").first();
   expect((await header.boundingBox())!.height).toBeLessThanOrEqual(48);
 });
+
+test("the quick command menu inserts a preset as written and the server fills the placeholders", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  test.slow();
+  await repository(request, join(workDir, "qs-quick-repo"));
+  await hybridConfig(request, "Claude Code");
+
+  await page.goto("/new");
+  const input = page.getByRole("textbox", { name: "任务描述" });
+  await input.fill("读手册：");
+  await page.getByRole("button", { name: "快捷指令", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: /WebMux 工具/ })
+    .first()
+    .click();
+  // The page does not expand it: the placeholder is in the box, unsent.
+  await expect(input).toHaveValue("读手册：{{webmux}}");
+  await expect(page).toHaveURL(/\/new$/);
+  await input.press("End");
+  await input.pressSequentially(" 文件放 {{dir}}");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/s\/[a-z2-7]{8}$/, { timeout: 30_000 });
+  // The reply echoes the whole message over several paragraphs.
+  await expect(conversation(page)).toContainText("llms.txt");
+  await expect(conversation(page)).not.toContainText("{{");
+});

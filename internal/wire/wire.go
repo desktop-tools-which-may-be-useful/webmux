@@ -171,7 +171,7 @@ func ArchivedSession(r hybrid.Record, a Archived) contract.SessionInfo {
 func CreateInput(r contract.CreateSessionRequest) workspace.CreateInput {
 	in := workspace.CreateInput{
 		ClientRequestID: r.ClientRequestID, Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID,
-		Side: side(r.View), Prompt: r.Prompt, UseInitInstruction: r.UseInitInstruction,
+		Side: side(r.View), Prompt: r.Prompt, UseInitInstruction: r.UseInitInstruction, ExpandPrompt: r.ExpandPrompt,
 		AgentConfig: r.AgentConfig, PermissionMode: string(r.PermissionMode), Cols: r.Cols, Rows: r.Rows,
 	}
 	if r.Workspace != nil {

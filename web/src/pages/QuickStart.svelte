@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import IconAlertCircle from "~icons/tabler/alert-circle";
   import IconArrowUp from "~icons/tabler/arrow-up";
   import IconBook2 from "~icons/tabler/book-2";
@@ -14,7 +14,7 @@
   import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
   import { Textarea } from "$lib/components/ui/textarea";
-  import { api, store, stored, uploadQuickStartFile } from "../api";
+  import { api, navigate, store, stored, uploadQuickStartFile } from "../api";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import type { ConfigValue } from "../chat-api";
   import ChatAttachmentList from "../components/chat/ChatAttachmentList.svelte";
@@ -24,6 +24,7 @@
   import ChatSessionOptions from "../components/chat/ChatSessionOptions.svelte";
   import ChatUploadButton from "../components/chat/ChatUploadButton.svelte";
   import BranchCommandList from "../components/BranchCommandList.svelte";
+  import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import ConnectorInstallHint from "../components/ConnectorInstallHint.svelte";
   import FileDropZone from "../components/FileDropZone.svelte";
   import FileUploadProgress from "../components/FileUploadProgress.svelte";
@@ -38,13 +39,19 @@
     quickStartMemory,
     sendQuickStart,
   } from "../quickStart";
-  import { expandInitInstruction, usesArtifactDir } from "../quickCommands";
+  import {
+    expandInitInstruction,
+    insertAtSelection,
+    usesArtifactDir,
+    usesWebmuxBrief,
+  } from "../quickCommands";
   import { quickCommands } from "../quickCommands.svelte";
   import {
     BranchesSchema,
     LaunchOptionsRequestSchema,
     LaunchOptionsSchema,
     type ChatAttachment,
+    type QuickCommand,
     type ChatConfig as ChatOption,
     type ChatPermissionMode as PermissionMode,
     type CreateSessionFailure,
@@ -300,6 +307,9 @@
         view: startSide,
         prompt: text,
         useInitInstruction: !!repository.initInstruction && useInstruction,
+        // The server fills {{dir}} and {{webmux}} in the message once the
+        // session exists, as the quick command menu inserts them.
+        expandPrompt: true,
         // A terminal start takes no agent options, permission mode or files.
         ...(chat
           ? {
@@ -329,6 +339,19 @@
       sending = false;
       void shell.repositories.refresh();
     }
+  }
+  async function insertQuickCommand(cmd: QuickCommand) {
+    const result = insertAtSelection(
+      text,
+      input?.selectionStart ?? text.length,
+      input?.selectionEnd ?? text.length,
+      cmd.command,
+    );
+    text = result.text;
+    persistDraft();
+    await tick();
+    input?.focus();
+    input?.setSelectionRange(result.caret, result.caret);
   }
   function keydown(event: KeyboardEvent) {
     if (event.isComposing || event.key !== "Enter" || event.shiftKey) return;
@@ -607,6 +630,16 @@
             onkeydown={keydown}
             onpaste={(event) => uploads.filePaste(event)}
           />
+          {#if usesArtifactDir(text)}
+            <p class="px-1 pt-1 text-xs text-muted-foreground">
+              {"{{dir}}"} 会在会话创建后替换为它的临时文件夹路径。
+            </p>
+          {/if}
+          {#if usesWebmuxBrief(text)}
+            <p class="px-1 pt-1 text-xs text-muted-foreground">
+              {"{{webmux}}"} 会在会话创建后替换为 WebMux 工具说明。
+            </p>
+          {/if}
         </div>
         {#if uploads.progress}<FileUploadProgress
             progress={uploads.progress}
@@ -649,6 +682,19 @@
               </span>
             {/if}
           </div>
+          <QuickCommandMenu
+            commands={quickCommands.list}
+            target="chat"
+            unavailable=""
+            disabled={sending}
+            side="top"
+            run={insertQuickCommand}
+            manage={() => navigate("/settings#quick-commands")}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              input?.focus();
+            }}
+          />
           <Button
             size="icon-touch"
             aria-label="发送"

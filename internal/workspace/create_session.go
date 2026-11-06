@@ -57,7 +57,9 @@ type NewWorktree struct {
 // (Cwd may name a directory inside it) or NewWorktree; the command is
 // ConfigID or Cmd with Env. Side (tui or acp) applies only to a config with
 // hybrid mode; empty starts in the terminal. Prompt is the user's first
-// message and UseInitInstruction puts the repository's initialization
+// message; ExpandPrompt fills its {{dir}} and {{webmux}} once the session
+// exists, otherwise it is sent as written. UseInitInstruction puts the
+// repository's initialization
 // instruction before it: it is sent once the session is up, as the first
 // chat prompt on the chat side, otherwise typed into the terminal with
 // Enter. Attachments (files staged by an upload before the session existed),
@@ -79,6 +81,7 @@ type CreateInput struct {
 
 	Prompt             string
 	UseInitInstruction bool
+	ExpandPrompt       bool
 	Attachments        []string
 	AgentConfig        map[string]string
 	PermissionMode     string
@@ -219,8 +222,10 @@ type createPlan struct {
 	path    string
 	// text is the user's message; instruction is the expanded
 	// initialization instruction ("" for none), still holding {{dir}}.
+	// expand asks for text's own {{dir}} and {{webmux}} to be filled.
 	text        string
 	instruction string
+	expand      bool
 	attachments []string
 }
 
@@ -230,7 +235,7 @@ type createPlan struct {
 // message's size and attachments, and for a new worktree on the chat side
 // the hybrid store and the agent's connector.
 func (s *Service) createPlan(ctx context.Context, in CreateInput) (createPlan, error) {
-	plan := createPlan{text: strings.TrimSpace(in.Prompt)}
+	plan := createPlan{text: strings.TrimSpace(in.Prompt), expand: in.ExpandPrompt}
 	if in.NewWorktree != nil && (in.Cwd != "" || in.Workspace != nil) {
 		return plan, problemf(ErrInvalid, "cwd、workspace 与 newWorktree 只能选择一个")
 	}
@@ -267,6 +272,14 @@ func (s *Service) createPlan(ctx context.Context, in CreateInput) (createPlan, e
 	}
 	if len(in.Attachments) > 0 && s.artifacts == nil {
 		return plan, problemf(ErrUnavailable, "临时文件夹不可用")
+	}
+	if in.ExpandPrompt {
+		if strings.Contains(plan.text, artifactsDirPlaceholder) && s.artifacts == nil {
+			return plan, problemf(ErrUnavailable, "临时文件夹不可用")
+		}
+		if strings.Contains(plan.text, webmuxPlaceholder) && (s.artifacts == nil || s.brief == nil) {
+			return plan, problemf(ErrUnavailable, "WebMux 工具说明不可用")
+		}
 	}
 	for _, p := range in.Attachments {
 		clean, err := s.artifacts.StagedPath(p)
@@ -564,15 +577,46 @@ func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, r
 
 // composePrompt is the first prompt of session id: the expanded
 // instruction, whose {{dir}} becomes the session's artifacts folder, with the
-// user's text at its {{user}} or else after a blank line.
+// user's text at its {{user}} or else after a blank line. With ExpandPrompt
+// the user's text has its own {{dir}} and {{webmux}} filled first, so what
+// fillUser inserts is never read as a reference.
 func (s *Service) composePrompt(id string, plan createPlan) (string, error) {
+	userText := plan.text
+	if plan.expand {
+		var err error
+		if userText, err = s.fillSessionPlaceholders(id, userText); err != nil {
+			return "", err
+		}
+	}
 	instruction := plan.instruction
 	if instruction == "" {
-		return plan.text, nil
+		if len(userText) > hybrid.MaxPromptBytes {
+			return "", problemf(ErrInvalid, "展开后的消息超过 %d 字节", hybrid.MaxPromptBytes)
+		}
+		return userText, nil
 	}
 	// A start with only the instruction has no message to place.
 	noMessage := plan.text == ""
-	if strings.Contains(instruction, artifactsDirPlaceholder) {
+	instruction, err := s.fillSessionPlaceholders(id, instruction)
+	if err != nil {
+		return "", err
+	}
+	text := fillUser(instruction, userText)
+	if noMessage {
+		text = strings.TrimSpace(strings.ReplaceAll(instruction, userReference, ""))
+	}
+	if len(text) > hybrid.MaxPromptBytes {
+		return "", problemf(ErrInvalid, "消息与初始化指令合计超过 %d 字节", hybrid.MaxPromptBytes)
+	}
+	return text, nil
+}
+
+// fillSessionPlaceholders replaces {{dir}} in text with session id's
+// artifacts folder (created if missing) and {{webmux}} with its WebMux
+// brief. The brief goes in last, after {{dir}}: nothing in it is read as a
+// reference. Other {{name}} text stays.
+func (s *Service) fillSessionPlaceholders(id, text string) (string, error) {
+	if strings.Contains(text, artifactsDirPlaceholder) {
 		if s.artifacts == nil {
 			return "", problemf(ErrUnavailable, "临时文件夹不可用")
 		}
@@ -580,11 +624,9 @@ func (s *Service) composePrompt(id string, plan createPlan) (string, error) {
 		if err != nil {
 			return "", problemf(ErrUnavailable, "临时文件夹不可用：%v", err)
 		}
-		instruction = strings.ReplaceAll(instruction, artifactsDirPlaceholder, dir)
+		text = strings.ReplaceAll(text, artifactsDirPlaceholder, dir)
 	}
-	// The brief goes in last, after {{dir}}: nothing in it is read as a
-	// reference.
-	if strings.Contains(instruction, webmuxPlaceholder) {
+	if strings.Contains(text, webmuxPlaceholder) {
 		if s.artifacts == nil || s.brief == nil {
 			return "", problemf(ErrUnavailable, "WebMux 工具说明不可用")
 		}
@@ -592,14 +634,7 @@ func (s *Service) composePrompt(id string, plan createPlan) (string, error) {
 		if err != nil {
 			return "", problemf(ErrUnavailable, "WebMux 工具说明不可用：%v", err)
 		}
-		instruction = strings.ReplaceAll(instruction, webmuxPlaceholder, s.brief(id, dir))
-	}
-	text := fillUser(instruction, plan.text)
-	if noMessage {
-		text = strings.TrimSpace(strings.ReplaceAll(instruction, userReference, ""))
-	}
-	if len(text) > hybrid.MaxPromptBytes {
-		return "", problemf(ErrInvalid, "消息与初始化指令合计超过 %d 字节", hybrid.MaxPromptBytes)
+		text = strings.ReplaceAll(text, webmuxPlaceholder, s.brief(id, dir))
 	}
 	return text, nil
 }

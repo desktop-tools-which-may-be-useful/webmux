@@ -140,6 +140,7 @@ test("defaults skip what is unusable, and the first send goes in one request", a
     agentConfig: { effort: "high" },
     permissionMode: "auto",
     useInitInstruction: true,
+    expandPrompt: true,
   });
   expect(JSON.parse(localStorage.getItem("webmux.quickStart")!)).toEqual({
     repositoryId: "repo1",
@@ -266,6 +267,64 @@ test("unticking the init instruction applies to that send only", async () => {
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
   const sent = commands().find((c) => c.path === "/api/sessions");
   expect(sent?.body).toMatchObject({ useInitInstruction: false });
+});
+
+test("the quick command menu inserts at the caret as written, keeps the draft, and never sends", async () => {
+  respond(/^POST \/api\/sessions$/, created);
+  const { input } = await open();
+  await input.fill("前后");
+  const area = input.element() as HTMLTextAreaElement;
+  area.setSelectionRange(1, 1);
+  await page.getByRole("button", { name: "快捷指令" }).click();
+  await page.getByRole("menuitem", { name: /WebMux 工具/ }).click();
+  await expect.element(input).toHaveValue("前{{webmux}}后");
+  await expect.element(input).toHaveFocus();
+  expect(area.selectionStart).toBe("前{{webmux}}".length);
+  expect(commands().some((c) => c.path === "/api/sessions")).toBe(false);
+  // The placeholder note appears while the text holds one.
+  await expect
+    .poll(() => document.body.textContent)
+    .toContain("会在会话创建后替换为 WebMux 工具说明");
+  expect(JSON.parse(localStorage.getItem("webmux.quick-start-draft")!)).toEqual(
+    expect.objectContaining({ text: "前{{webmux}}后" }),
+  );
+
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  expect(
+    commands().find((c) => c.path === "/api/sessions")?.body,
+  ).toMatchObject({ prompt: "前{{webmux}}后", expandPrompt: true });
+});
+
+test("a quick command replaces the selection, and managing keeps the draft", async () => {
+  const { input } = await open();
+  await input.fill("甲乙丙");
+  (input.element() as HTMLTextAreaElement).setSelectionRange(1, 2);
+  await page.getByRole("button", { name: "快捷指令" }).click();
+  await page.getByRole("menuitem", { name: /恢复会话/ }).click();
+  await expect.element(input).toHaveValue("甲/resume丙");
+  // `enter` does not apply: the message is not sent.
+  expect(commands().some((c) => c.path === "/api/sessions")).toBe(false);
+
+  await page.getByRole("button", { name: "快捷指令" }).click();
+  await page.getByRole("menuitem", { name: /管理快捷指令/ }).click();
+  expect(location.pathname + location.hash).toBe("/settings#quick-commands");
+  expect(JSON.parse(localStorage.getItem("webmux.quick-start-draft")!)).toEqual(
+    expect.objectContaining({ text: "甲/resume丙" }),
+  );
+});
+
+test("the quick command menu is off while the session is being created", async () => {
+  const pending = Promise.withResolvers<Response>();
+  respond(/^POST \/api\/sessions$/, () => pending.promise);
+  const { input } = await open();
+  await input.fill("修复首页排序");
+  await userEvent.keyboard("{Enter}");
+  await expect
+    .element(page.getByRole("button", { name: "快捷指令" }))
+    .toBeDisabled();
+  pending.resolve(created());
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
 });
 
 test("the preview expands quick command references and flags unknown ones", async () => {

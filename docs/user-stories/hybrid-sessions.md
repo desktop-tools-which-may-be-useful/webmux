@@ -183,7 +183,12 @@
   - 与聊天输入框相同，可用“上传文件”按钮、粘贴或拖放把文件加为附件（显示为可移除的标签，带上传进度，数量与大小限制相同）：
     - 会话还不存在时经 `POST /api/uploads` 上传到服务端的暂存文件夹，发送后移入新会话的上传目录，随首条消息发送；
     - 首条消息之前的步骤失败时附件保留以便重发；首条消息发送失败时附件已归新会话，输入框不再保留；
-  - 发送只发出一次 `POST /api/sessions`（`newWorktree`、`configId`、`view: "chat"`、`prompt`、`attachments`、`agentConfig`、`permissionMode` 与 `clientRequestId`），快速开始没有独立接口：
+  - 输入框底部、发送按钮左侧有与聊天视图相同的“快捷指令”菜单（US-G02）：选择后正文原样插入光标处，不自动发送；正文里的 `{{dir}}`、`{{webmux}}` 不在浏览器展开；
+  - 发送只发出一次 `POST /api/sessions`（`newWorktree`、`configId`、`view: "chat"`、`prompt`、`expandPrompt: true`、`attachments`、`agentConfig`、`permissionMode` 与 `clientRequestId`），快速开始没有独立接口：
+    - `expandPrompt` 只由快速开始页设置：服务端在会话创建后替换首条消息里的 `{{dir}}`（会话临时文件夹路径）与 `{{webmux}}`（WebMux 工具说明）：
+      - 先 `{{dir}}`、说明最后插入，单遍，不展开其他名称；
+      - 临时文件夹或说明不可用时预检即以 503 拒绝，不创建 worktree；
+      - `webmux run --prompt` 与其他调用者不设置它，消息原文不变；终端视图首条消息同样适用；
     - 服务端依次创建 worktree（自动分支名，路径为默认父目录下的分支名末段）、以聊天视图启动混合会话、应用配置与权限模式，并把首条消息作为第一轮提示发出，浏览器断开不影响；
     - 同一请求 ID 在执行中及完成后 10 分钟内重复提交只返回同一结果；
   - 仓库设置了初始化指令时，输入框附近显示“使用初始化指令”勾选框：
