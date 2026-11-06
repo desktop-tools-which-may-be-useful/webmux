@@ -2,7 +2,7 @@
 
 ### Requirement: 真实终端身份与启动能力提示
 
-默认会话环境 SHALL 在进程启动前提供真实的 WebMux 终端身份，并保持默认兼容值：
+默认会话环境 SHALL 在进程启动前提供真实的 WebMux 终端身份；其默认值与清理规则沿用 `agent-attention` 的“PTY 环境规范化与协议变量注入”：
 
 - `TERM_PROGRAM=webmux`，`TERM_PROGRAM_VERSION` 为运行服务的版本。
 - `TERM=xterm-256color`，`COLORTERM=truecolor`。
@@ -24,4 +24,4 @@
 #### Scenario: 保留现有配置与包装
 
 - **WHEN** 升级后使用已经保存的 omp 或其他 agent 启动配置
-- **THEN** 不重写配置文件，保持 argv、加载 `.bashrc` 的显式包装及用户的环境变量选择
+- **THEN** 不重写配置文件，保持 argv、加载 Bash/Zsh 启动文件的显式包装及用户的环境变量选择

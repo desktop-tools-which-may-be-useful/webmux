@@ -45,7 +45,10 @@
   - IPv4 和 IPv6 去重；
   - 排除 WebMux 自身端口；
   - 停止监听后 3 秒内移除。
-- [ ] 3.2 macOS：用 `SYS_PROC_INFO` 实现扫描，不用 cgo。用固定字节的结构体解析测试（在 Linux 上也能运行）和 `GOOS=darwin go vet ./...` 验证；在 macOS 真机上运行真实监听测试，并在 PR 中记录结果。其他平台返回空结果，用 `GOOS=windows go vet` 验证。
+- [ ] 3.2 macOS：用 `SYS_PROC_INFO` 实现扫描，不用 cgo（`internal/session/listen_darwin.go`、`listen_xnu.go`）。
+  - 已验证：固定字节的结构体解析测试 `TestParseSocketFDInfo`（`listen_xnu_test.go`，在 Linux 上也能运行）；`GOOS=darwin go vet ./...`（CI 已执行）。
+  - 其他平台：`listen_other.go` 返回空结果。服务端只支持 Linux 与 macOS，`internal/session` 在其他 `GOOS` 下本就不能编译，因此不以 `GOOS=windows go vet` 作为验证。
+  - **待验收**：在 macOS 真机上运行真实监听测试 `TestSessionListeningPorts`（`listen_unix_test.go`）；仓库 CI 与当前环境均没有 macOS。
 - [x] 3.3 把 `listeningPorts` 接入 `Info`、`sameDisplay` 和 manager 每秒的快照周期（每 2 秒扫描一次，集合不变时跳过）。用 `cmd/internal/assemble` 填写 `ExcludePorts`。重新录制 wire 快照，并验证端口变化会触发 `updated` 事件。
 
 ## 4. 实时同步
@@ -93,7 +96,13 @@
 
   更新 `docs/user-stories.md` 的索引和计数，以及 `coverage.md`；在 `access-and-sessions.md` 中说明 US-A 认证边界的变化。用 `make docs-check` 验证。
 
-- [ ] 6.3 运行 `make check` 和 `make test`，全部通过。用真实的 Vite 6 项目，在本机和 Tailscale 主机名下各验证一次页面和 HMR，然后在 PR 中附上截图和验证记录。
+- [x] 6.3 运行 `make check` 和 `make test`，全部通过。用真实的 Vite 6 项目，在本机和 Tailscale 主机名下各验证一次页面和 HMR，并保留截图和验证记录。
+  - 2026-11-06 验收记录（隔离实例：临时 HOME 与 token，监听 `0.0.0.0:7795`；Vite 6.4.5，`--base /forward/5173/`）：
+    - 3 秒内检测到 `5173/node` 并出现端口提示；“转发并打开”后改为“保留前缀”。
+    - `http://127.0.0.1:7795/forward/5173/` 与 `http://rc-pc.java-acrux.ts.net:7795/forward/5173/` 均显示页面。
+    - 修改 `src/style.css` 后两处页面均经 HMR 更新且未整页刷新（Vite 日志 `hmr update /src/style.css`）。
+    - 直接在新标签打开转发地址时出现跨站确认页，确认后进入。
+  - 2026-11-06 `make check` 通过；`make test` 各阶段通过，唯一失败的浏览器用例 `CodeDocument` 横向滚动条与转发无关，单独运行与 CI 均通过。
 
 ## Workflow follow-up
 

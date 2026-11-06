@@ -4,13 +4,26 @@
 
 已核对的实现边界：
 
-- `internal/session/session.go` 在创建 PTY 前由 `env.go` 组装环境，当前默认 `TERM=xterm-256color`、`COLORTERM=truecolor`，过滤宿主终端身份；进程不等待浏览器附着。
-- `web/src/hooks/terminal-socket.svelte.ts` 通过浏览器图形层生成应答，历史回放期间抑制回复；hub/session 按既有控制权决定哪个连接可回写设备应答。
+- 会话环境（#168 已实现，规格见 `agent-attention` 的“PTY 环境规范化与协议变量注入”）：
+  - `internal/session/run.go` 在创建 PTY 前经 `env.go` 的 `sessionEnvWithVersion` 组装环境；混合会话的 ACP 辅助进程经 `sidecar.go` 走同一入口。
+  - 过滤宿主终端身份后设置 `TERM=xterm-256color`、`COLORTERM=truecolor`、`TERM_PROGRAM=webmux` 与服务版本的 `TERM_PROGRAM_VERSION`（`cmd/webmux` 注入 `TerminalVersion`），显式变量优先。
+  - 进程不等待浏览器附着。
+- 会话自身的 OSC 7501 探测应答（#143 已实现）：
+  - `osc.go` 在实时读取路径识别探测，`io.go` 的 `queueProbeReplyLocked` 在发布前入队（`maxPendingReplies = 4`）。
+  - `flushRepliesGated` 保证应答先于后续客户端输入；`run.go` 启动的 `replyLoop` 在无客户端时写入，并随运行结束。
+  - `internal/attach/probe.go` 在原生 attach 输出侧过滤 7501 探测。
+- DA1 与 Kitty 图形查询目前没有会话侧应答，无浏览器时无人应答：
+  - `reply_test.go` 中的 DA1 仅模拟浏览器在探测后送达的 DA1 应答；
+  - `TestRealSessionAnswersProbeWithoutClients` 也只读回 7501 应答。
+- 浏览器应答路径：
+  - 图形应答由 `web/src/hooks/terminal-socket.svelte.ts` 传给 `attachTerminalGraphics` 的回调以 0x06 帧发送，历史回放（`replaying`）期间抑制；
+  - DA1 等 xterm 内核应答经 `terminal-input.ts` 的来源标记、`terminal.svelte.ts` 和 `sendReply` 以 0x06 帧发送，该路径不检查 `replaying`；
+  - hub 按 `Session.Responds`（`control.go`）只把负责连接的 0x06 写入 PTY。
 - `web/src/kitty-graphics.ts` 识别图形协议并串行交给图形与 xterm 解析器，当前已有图形查询先于随后文本解析的顺序保证；它不能代替没有浏览器时的应答方。
 - #130 的隔离实测确认 omp 18.12.6 在强制变量下发出 PNG 传输和放置；没有证明未设置变量时的通用自动发现，也没有覆盖浏览器未就绪时的一次性探测。
 - Kitty 规范要求图形查询在后续 DA1 前应答，参见 https://sw.kovidgoyal.net/kitty/graphics-protocol/#querying-support-and-available-transmission-mediums 。
 
-现有 `terminal-control` 把所有自动应答交给负责客户端；本规划必须同步修改该要求，不能只在后端偷偷多写一份应答。`session-launch-environment` 的显式变量优先规则保持；其余旧预设相关规格差异不是本次修订范围。
+现有 `terminal-control` 除 OSC 7501 探测外，把所有自动应答（含 DA1）交给负责客户端；本规划必须同步修改该要求，不能只在后端偷偷多写一份应答。`session-launch-environment` 的显式变量优先规则保持；其余旧预设相关规格差异不是本次修订范围。
 
 ## Goals / Non-Goals
 
@@ -37,7 +50,7 @@
 
 ### 2. 启动身份只说明自己，不代替协议探测
 
-在现有会话环境组装中设置 `TERM_PROGRAM=webmux` 和服务版本，保持 xterm 兼容 TERM，显式变量仍优先。环境声明必须在 `exec` 前完成，不给已运行进程发送所谓启动广播。应用不认识该身份时可以进行标准查询或使用应用专用配置；不能假设增加这个变量就修复所有应用。
+沿用现有会话环境组装中已设置的 `TERM_PROGRAM=webmux` 和服务版本（#168），保持 xterm 兼容 TERM，显式变量仍优先。环境声明必须在 `exec` 前完成，不给已运行进程发送所谓启动广播。应用不认识该身份时可以进行标准查询或使用应用专用配置；不能假设增加这个变量就修复所有应用。
 
 不设置伪造 Kitty 窗口 ID 或默认 `TERM=xterm-kitty`，避免触发未实现的功能和本地传输猜测。
 

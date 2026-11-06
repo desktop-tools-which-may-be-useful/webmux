@@ -40,14 +40,15 @@
 
 - [x] 5.1 `Makefile` 支持开发版版本与带版本号的产物名（二进制、托盘、安装程序、deb/rpm 文件名用 `-dev.N`，包内版本由 nfpm 生成 `~dev.N`），`install.sh` 保持固定文件名并列入 `SHA256SUMS`；`deploy/windows/webmux.nsi` 的 `VIProductVersion`/`VIFileVersion` 只取 `-` 之前的数字部分。
   - 验证：本地以 `VERSION=0.10.3-dev.2` 运行发布构建，makensis 成功，产物名、deb/rpm 包内版本与 `SHA256SUMS` 符合 `release-distribution`。
-- [ ] 5.2 新增 `.github/workflows/dev-release.yml`：
+- [x] 5.2 新增 `.github/workflows/dev-release.yml`（#266 新增，#308 改为发布后删除不在本次清单中的文件）：
   - 只处理 `test.yml` 对本仓库 main 推送的成功运行；以完整历史检出 `workflow_run.head_sha`；`N` 为 0 时跳过。
   - build 之前：若自标签 `dev` 所指提交以来只改了文档（以该提交中的 `.github/scripts/classify-changes.sh` 判定），跳过；标签不存在或不是祖先时不跳过。
   - plan 与发布前若该提交已不是 main 最新提交，或版本不高于 Release `dev` 当前清单的版本，跳过。
   - build 先运行 `pnpm --dir web build` 与 `go test -race`，再构建产物；build 按 `dev-release` 分组可取消；publish 按 `dev-release-publish` 分组不取消，sign 不入组；隔离与正式版相同。
   - publish 按“上传带版本号的产物、替换 `install.sh` 与清单、移动标签、删除不在本次清单中的文件”的顺序操作 Release `dev`，标记为预发布且不设为 latest。
   - 验证：`actionlint` 通过；在测试仓库或 fork 中连续推送两次，Release `dev` 只剩最后一次构建的产物与 `install.sh`，`latest` 不变；手动重跑较早提交的运行时跳过发布；只改 Markdown 的推送不构建也不发布。
-- [ ] 5.3 `release.yml` 生成发布说明时以 `--notes-start-tag` 指定上一个 `v*` 标签。
+  - 实际运行记录：本仓库 main 上该工作流持续运行，Release `dev` 为预发布且不是 latest，只含当前一组 `0.12.2-dev.N` 带版本号产物、`install.sh`、`SHA256SUMS` 与 `SHA256SUMS.minisig`；只改 OpenSpec 文档的提交 `0ca063e0` 对应运行（42153787054）只执行 plan，build、sign、publish 均为 skipped。
+- [x] 5.3 `release.yml` 生成发布说明时以 `--notes-start-tag` 指定上一个 `v*` 标签（排除带 `-` 的预发布标签）。
   - 验证：`actionlint` 通过；在 fork 中存在 `dev` 预发布时打正式标签，发布说明从上一个 `v*` 标签开始。
 - [x] 5.4 `install.sh` 支持 `WEBMUX_CHANNEL=dev|stable`：开发版从 Release `dev` 的 `SHA256SUMS` 找出唯一匹配的带版本号二进制；`WEBMUX_VERSION` 接受 `X.Y.Z` 或当前开发版版本，通道与版本矛盾时报错。
   - 验证：在本地测试 Release 上安装开发版与指定当前开发版，`webmux version` 报告开发版版本；无效取值、已过期的开发版版本、通道与版本矛盾都报错且不改动文件。
@@ -63,8 +64,13 @@
 
 - [x] 7.1 `make check` 与 `make test-fast` 通过。
 - [ ] 7.2 端到端：以本地签名的测试 Release 在 systemd 容器中把 deb 从正式版切到开发版再切回，验证升级、不降级与正式版追上；在 Windows 上验证托盘切换通道后自更新到开发版。
+  - 2026-11-06 已完成部分（使用真实 GitHub Release，而非本地签名的测试 Release；Debian bookworm systemd 容器）：
+    - 安装 `webmux_0.12.1-1_amd64.deb`，`webmux update channel dev` 写入 `0644 root` 的 `/etc/webmux/update-channel`。
+    - `systemctl start webmux-update.service` 下载并校验 `webmux_0.12.2-dev.8-1_amd64.deb`，升级到 `0.12.2-dev.8`（包版本 `0.12.2~dev.8-1`）。
+    - 切回 `stable` 后检查与定时任务均不降级，提示“当前开发版 0.12.2-dev.8 高于最新正式版 0.12.1，正式版超过它后自动更新”。
+  - **待验收**：“正式版追上”需要高于当前开发版的正式版（或可替换下载源的测试 Release，`internal/update` 目前没有此入口）；Windows 托盘切换到 dev 通道后自更新到开发版。
 
 ## Workflow follow-up
 
-- 维护者生成 dev 签名密钥并配置 Actions 密钥 `WEBMUX_DEV_SIGNING_KEY`。
+- 维护者生成 dev 签名密钥并配置 Actions 密钥 `WEBMUX_DEV_SIGNING_KEY`（已完成：Release `dev` 带有 `SHA256SUMS.minisig`）。
 - 审查通过后归档本变更。

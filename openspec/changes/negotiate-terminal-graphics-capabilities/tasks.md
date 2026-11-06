@@ -5,16 +5,19 @@
 
 ## 2. Session Capability Authority
 
-- [ ] 2.1 为一次会话运行定义固定的直接 Kitty 基础能力与真实 WebMux 身份，保持显式环境覆盖、宿主身份过滤和现有启动配置文件不变。
-- [ ] 2.2 在会话实时输出旁实现仅识别图形查询和 DA1 的有界解析，保留原始输出和绝对 offset；64 KiB 查询上限不能影响普通大图片传输。
-- [ ] 2.3 对合法查询返回真实格式/介质支持结果，拒绝非法、超限和未实现介质；查询不分配图片像素，不创建放置、不移动光标。
-- [ ] 2.4 经单一有界 FIFO 和可取消 PTY 写入发送内部应答，保证图形应答先于后续 DA1、序列写入不交错、输出读取不等待 PTY 可写、会话退出后停止。
+- [x] 2.1 在启动前声明真实 WebMux 身份（`TERM_PROGRAM=webmux`、服务版本的 `TERM_PROGRAM_VERSION`，保持 xterm 兼容 `TERM`/`COLORTERM`），保持显式环境覆盖、宿主身份过滤和现有启动配置文件不变。
+  - 已由 #168 实现：`internal/session/env.go` 的 `sessionEnvWithVersion`，`cmd/webmux/main.go` 注入 `TerminalVersion`，`internal/contract/env.go` 列出服务端自有变量（含 `KITTY_` 前缀）。
+  - 证据：`internal/session/attention_test.go` 覆盖默认身份、服务版本、显式 `TERM=xterm-kitty`/`TERM_PROGRAM=kitty` 覆盖与宿主身份过滤。
+- [ ] 2.2 为一次会话运行定义固定的直接 Kitty 基础能力（直接传输 PNG、24 位 RGB、32 位 RGBA），不随浏览器附着、断线或接管变化。
+- [ ] 2.3 在会话实时输出旁实现仅识别图形查询和 DA1 的有界解析，保留原始输出和绝对 offset；64 KiB 查询上限不能影响普通大图片传输。
+- [ ] 2.4 对合法查询返回真实格式/介质支持结果，拒绝非法、超限和未实现介质；查询不分配图片像素，不创建放置、不移动光标。
+- [ ] 2.5 经单一有界 FIFO 和可取消 PTY 写入发送内部应答（复用 `internal/session/io.go` 中 #143 的 7501 应答队列与 `replyLoop`），保证图形应答先于后续 DA1、序列写入不交错、输出读取不等待 PTY 可写、会话退出后停止。
 
 ## 3. Client Ownership Cutover
 
 - [ ] 3.1 使用有类型的会话状态同步已接管查询范围，成套更新 contract、wire、hub、浏览器 schema 和所有消费者；不允许新旧权威静默同时生效。
 - [ ] 3.2 浏览器停止答复会话接管的 Kitty 查询与 DA1，保持图片绘制以及其余依赖当前视口的设备查询和控制端规则。
-- [ ] 3.3 原生 attach 在输出显示侧抑制已接管查询对本地终端的触发，offset 仍按原始字节计算；不在用户输入中猜测并删除设备应答。
+- [ ] 3.3 原生 attach 在输出显示侧抑制已接管查询对本地终端的触发（扩展 `internal/attach/probe.go` 现有的 7501 输出侧过滤），offset 仍按原始字节计算；不在用户输入中猜测并删除设备应答。
 - [ ] 3.4 验证浏览器、观察端和原生 attach 并发附着/接管时每个基础查询仅有一个应答；保留形似报告的用户按键、控制权、尺寸和关注提醒语义。
 
 ## 4. Replay and Resource Boundaries
@@ -32,5 +35,5 @@
 
 ## 6. Capability Documentation
 
-- [ ] 6.1 按真实实施结果更新 US-D12、US-D06、US-B08 及两个故事索引，清晰区分新能力与仍需应用专用设置的场景。
+- [ ] 6.1 按真实实施结果更新 US-D12、US-D06（`docs/user-stories/terminal.md`）、US-B08（`docs/user-stories/access-and-sessions.md`）及两个故事索引（`docs/user-stories.md`、`docs/user-stories/coverage.md`），清晰区分新能力与仍需应用专用设置的场景。
 - [ ] 6.2 在协议说明中记录单一应答方、启动/离线顺序和资源边界，在使用说明中保留原生终端与历史截断限制；发布验收证据后再将本规划标为已实施。

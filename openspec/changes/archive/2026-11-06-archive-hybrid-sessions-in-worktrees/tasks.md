@@ -22,10 +22,12 @@
 
 ## 4. 归档操作与返回首页
 
-- [x] 4.1 `CloseSessionDialog`、`TerminalHeader`、`SessionRow` 对运行中的混合会话显示“归档会话”与归档确认文案（非破坏性按钮），普通会话文案不变；组件测试分别验证两类会话的标题、说明与按钮
-- [x] 4.2 增加 `onarchived` 回调并接到 `Terminal.svelte` 的 `close`：单窗格导航到 `/?archived=<id>`，多窗格只移除窗格并聚焦相邻窗格；Vitest/浏览器测试覆盖两种布局与失败时停留原页显示错误
-- [x] 4.3 首页处理 `archived` 参数（D4）：等记录出现后展开仓库/工作树与已归档区、滚动到可见、以 outline 外观与“刚归档”文字徽标标出约 4 秒、`aria-live` 播报“已归档”、`replaceState` 去掉参数、5 秒未出现则静默放弃；首页卡片菜单归档时同样定位且不导航；浏览器测试验证
-- [x] 4.4 更新 `web/test/e2e/hybrid.spec.ts`：从工作树启动混合会话 → 会话页归档 → 回到首页且记录在该工作树“已归档”区高亮 → 恢复到终端后回到活动会话；用 `pnpm --dir web exec playwright test test/e2e/hybrid.spec.ts` 验证
+- [x] 4.1 `CloseSessionDialog`、`TerminalHeader`、`SessionRow`（以及 `SidebarSessionMenu`）对运行中的混合会话显示“停止会话并归档”，确认框标题「停止并归档“标题”？」、说明与非破坏性的“停止并归档”按钮，普通会话文案不变；组件测试分别验证两类会话的标题、说明与按钮（#296 初版为“归档会话”，#329 改为现名）
+- [x] 4.2 增加 `onarchived` 回调并接到 `pages/Terminal.svelte` 的 `close`：单窗格导航到当前模式首页（`shellUi.home`），多窗格只移除窗格并聚焦相邻窗格；Vitest/浏览器测试覆盖两种布局与失败时停留原页显示错误
+- [x] 4.3 首页归档后的处理（浏览器测试 `SessionListArchived`、`ArchivedSessions` 覆盖）：
+  - 最初实现的 `?archived=` 定位、“刚归档”徽标与播报已由 #303 移除；现行为是返回首页后已归档区保持折叠、数量更新，筛选驱动的展开不变。
+  - `ArchivedSessions` 的“删除记录”对可删除链接 worktree 打开 `RemoveWorktreeDialog`（#329）。
+- [x] 4.4 更新 `web/test/e2e/hybrid.spec.ts`：从工作树启动混合会话 → 会话页“停止会话并归档” → 回到首页且该工作树“已归档”区保持折叠、展开后可见记录 → 恢复到终端后回到活动会话；用 `pnpm --dir web exec playwright test test/e2e/hybrid.spec.ts` 验证
 
 ## 5. 文档与用户故事
 
@@ -37,4 +39,8 @@
 
 ## 6. 集成验证
 
-- [ ] 6.1 运行 `make check` 与 `make test`，并在隔离实例（非开发者现有服务）用演示数据手动走查桌面/手机、浅色/深色下的已归档区与归档后定位，截图用于 PR
+- [x] 6.1 运行 `make check` 与 `make test`，并在隔离实例（非开发者现有服务）用演示数据手动走查桌面/手机、浅色/深色下的已归档区与归档后定位，截图用于 PR
+  - #296 的 PR 已附桌面/手机 × 浅色/深色的前后对比截图。
+  - 2026-11-06 在当前 main 复验：`make check` 通过；`make test` 各阶段通过（Go race 全部包、Vitest 单元 658、浏览器 546/547、Storybook 452、E2E 335、性能 18）。
+  - 浏览器唯一失败 `CodeDocument` 横向滚动条用例与本变更无关：单独运行 2 次均通过，CI 在同一提交通过。
+  - 用 E2E 隔离后端与假 agent 走查：会话页“停止会话并归档”→ 返回会话总览，“已归档 3”保持折叠，展开后 3 条记录均有恢复操作；桌面与 Pixel 7、浅色与深色四种组合均已截图确认。

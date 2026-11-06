@@ -50,21 +50,15 @@
   - 不新建设计系统组件；行的弱化外观用 `Item` 现有 variant，缺少时为 `Item` 增加 variant，而不是 `class` 覆写。
 - `WorkspaceGroup` 增加 `archived` 属性并在会话列表下渲染；仅有已归档记录时，原“暂无会话”空状态改为不显示（避免“暂无会话”与“已归档 3”矛盾）。
 - `homeLayout(home, repo, sessions, archived)`：`archived` 是该仓库按工作树分组的已归档记录，有记录的工作树视为 `active`。调用方 `RepositoryGroup` 一起迁移；主页工作树选择框仍只按会话标记“有会话”。
-- 首页各分组沿用会话的 `visibleIds` 约定：`RepositoryGroup`、`DirectSessions` 接收全部已归档记录与筛选保留的 `visibleArchiveIds`，DOM 结构不随筛选改变；共享的 `now`、`filtering`、`highlight` 与恢复/删除回调合成一个 `ArchiveActions` 属性向下传递。
+- 首页各分组沿用会话的 `visibleIds` 约定：`RepositoryGroup`、`DirectSessions` 接收全部已归档记录与筛选保留的 `visibleArchiveIds`，DOM 结构不随筛选改变；共享的 `now`、`filtering` 与恢复/删除回调合成一个 `ArchiveActions` 属性向下传递。
 - 已中断条数在折叠标题中以 `Badge variant="warning"` 加文字“N 条已中断”呈现，不仅靠颜色。
 
-### D4 归档后的导航与定位
+### D4 归档后的导航
 
-- `CloseSessionDialog` 对混合会话（`session.hybrid` 存在且未退出）显示归档文案，按钮非破坏性（`Button` 默认 variant），成功后调用新回调 `onarchived(session)`。
-- `SessionTerminal` 把 `onarchived` 接到 `Terminal.svelte` 的 `close(sessionId)`：单窗格时 `navigate("/?archived=<id>")`，多窗格时只移除窗格。复用现有 `close`，只把单窗格分支的目标改为带参数的首页。
-- 首页读取 `archived` 查询参数，等 `recoverable` 列表刷新到包含该 ID 后：
-  1. 当前仓库视图不含该记录时切到“全部”（不改本机记忆的选择），展开所属仓库（沿用 `expansionOverrides`/`focusedExpanded`）与工作树的已归档区，`scrollIntoView({block: "nearest"})`；
-  2. 该行改用 `outline` 外观，并在标题旁显示文字徽标“刚归档”约 4 秒；不使用动画，无需 `prefers-reduced-motion` 降级，也不只靠颜色；
-  3. 通过 `aria-live="polite"` 区域播报「已归档“标题”」；
-  4. 读取参数后立即用 `history.replaceState` 去掉它，刷新不再重复定位。
-
-  记录在 5 秒内未出现（例如写入失败）时只去掉参数，不报错。
-- 在首页卡片菜单归档时不导航，只做同样的定位与播报。
+- `CloseSessionDialog` 对活动的混合会话（`session.hybrid.state === "active"` 且未退出）显示标题「停止并归档“标题”？」与归档文案，按钮“停止并归档”非破坏性（`Button` 默认 variant），成功后调用回调 `onarchived(session)`；失败时留在确认框内显示错误。
+- `SessionTerminal` 把 `onarchived` 接到 `pages/Terminal.svelte` 的 `close(sessionId)`：单窗格时 `navigate(shellUi.home)`（工作台模式 `/`，聊天模式 `/new`），多窗格时只移除窗格并聚焦相邻窗格；`AppShell` 同时刷新已归档记录列表。
+- 首页不再自动展开、滚动、高亮或播报刚归档的记录，已归档区保持原折叠状态。最初实现的 `?archived=<id>` 参数、“刚归档”徽标与 `aria-live` 播报已由 #303 移除。
+- 记录的“删除记录”经 `removableRecordWorktree`（`web/src/archived.ts`）判断：所属工作树为可用且未待清理的链接 worktree 时打开 `RemoveWorktreeDialog`，否则使用只删除记录的 `ConfirmDialog`（#329）。
 
 ### D5 筛选
 
@@ -74,7 +68,7 @@
 
 - [会话关联在 Git 解析完成前就被归档，快照为空] → D2 的 `cwd` 回退会把它放到正确工作树；仅子目录跨越多个注册仓库的极端情况可能落入直接会话。
 - [拥有已归档记录的工作树强制显示，可能使首页变长] → 已归档区默认折叠只占一行；用户删除记录即可让工作树回到主页选择规则。
-- [`?archived=` 参数被书签保存] → 首页处理后立即 `replaceState` 去掉。
+- [归档后不再自动定位，用户需自行展开已归档区] → 折叠区标题显示数量，变化可见；自动展开在多次归档时会让首页跳动，#303 因此移除。
 - [文案从“关闭”改为“归档”，E2E 与 Storybook 依赖旧文案] → 同一变更内更新选择器与用户故事。
 
 ## Migration Plan

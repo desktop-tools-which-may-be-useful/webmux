@@ -57,7 +57,7 @@ TBD - created by archiving change add-session-artifacts-folder. Update Purpose a
 
 #### Scenario: 混合会话关闭后恢复
 
-- **WHEN** 混合会话被关闭并出现在“可恢复”分组，随后服务重启，用户再恢复该会话
+- **WHEN** 混合会话被归档并出现在所属工作树的“已归档”区，随后服务重启，用户再恢复该会话
 - **THEN** 关闭与重启都不删除其临时文件夹，恢复后代码栏的临时文件夹仍显示原有文件
 
 #### Scenario: 重启清扫残留
