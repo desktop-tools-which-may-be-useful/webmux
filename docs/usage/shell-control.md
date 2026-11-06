@@ -139,7 +139,13 @@ webmux resume <ID> --view chat --detach
 webmux rm <ID> --forget --yes                    # 删除归档记录与临时文件夹
 ```
 
-- 从开启了聊天视图的启动配置创建的会话有终端与聊天两个视图，`webmux ls` 在状态列显示它当前的视图。
+- 从开启了聊天视图的启动配置创建的会话有终端与聊天两个视图，`webmux ls` 在状态列显示它当前的视图（终端、聊天、切换中）。
+  - `ls --json` 原样包含 `views`、`view`、`transition` 与 `agent`，不再含 `hybrid` 对象。
+- 启动配置用 `webmux launch-config add|edit --chat|--no-chat` 开启或关闭聊天视图（混合模式）；旧选项 `--hybrid` 已删除。
+- `run --launch-config <名称>` 引用这类配置时创建混合会话，默认从终端开始；本地终端可以照常输入，附着中的终端不提供切换按键。
+  - `--view chat` 从聊天开始（隐含 `--detach`）；
+  - `--set ID=VALUE`、`--permission ask|auto`、`--attach-file PATH` 只在 `--view chat` 时可用。
+- `send` 的 `--attach-file`、`--mode steer` 与 `--reply` 只用于聊天视图。
 - `chat` 只保留聊天视图专有的操作（`status`、`watch`、`log`、`answer`、`set`、`permission`、`queue`）。会话没有聊天视图时以 1 结束；
   需要聊天视图而会话在终端视图时以 1 结束，并提示 `webmux view <ID> chat`。
 - `chat log` 读取服务端仍保留的聊天历史后立即退出，只读、不取得控制。
@@ -148,8 +154,14 @@ webmux rm <ID> --forget --yes                    # 删除归档记录与临时�
   - `--json` 输出一个 `ChatFrame`（`type` 为 `events`，消息的分段已合并）；
   - 历史有长度上限，较早的消息可能已被丢弃（标准错误提示）；
   - 与 `send --reply` 不同，它不发送输入，也不等待回合。`chat watch --history` 的历史部分同样只显示每个工具调用的最终状态，实时帧不变。
-- `view` 等到切换结束；终端 TUI 忙时不强制就取消切换并以 1 结束。找不到 agent 会话时列出候选并接受重试。
-- 带聊天视图的会话结束后成为已归档（`closed` 或 `interrupted`），`ls` 默认不列出；`resume` 以原 ID 恢复，`rm` 对它以 1 结束并提示改用 `--forget`。
+- `view` 等到切换结束；终端 TUI 忙时 `--force` 强制切换，不强制就取消切换并以 1 结束。找不到 agent 会话时列出候选并接受重试。
+- `attach` 在会话处于聊天视图或切换中时拒绝附着，以退出码 1 结束。
+  - 附着期间被切到聊天视为被动分离：恢复终端、提示后以 0 结束；
+  - 切回终端后需重新 `attach`。
+- 带聊天视图的会话结束后成为已归档（`closed` 或 `interrupted`），`ls` 默认不列出。
+  - `ls --archived`（或 `--state closed|interrupted|all`、`--repo`）列出它们；
+  - `resume <ID> [--view chat|terminal]` 以原 ID 恢复；
+  - `rm` 对它以 1 结束并提示改用 `--forget`（`rm <ID> --forget --yes` 删除记录）。
 
 ## 仓库、worktree、启动配置与转发
 

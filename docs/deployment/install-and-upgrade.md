@@ -8,7 +8,7 @@
 - 一个可执行的 shell，以及打算使用的 CLI agent（Claude Code、Codex CLI 等）。
 - 可选：Git，用于仓库与 worktree 管理（需支持 `git worktree list --porcelain -z`）。
 
-运行端不需要 Node.js、Go、tmux 或数据库。例外：Codex CLI 与 Claude Code 的混合模式（聊天 ↔ 终端）分别需要第三方适配器 codex-acp、claude-agent-acp；它们运行在 Node 上，Claude 连接器要求 Node.js 22 或更高版本，见 [配置项](configuration.md#配置项)。
+运行端不需要 Node.js、Go、tmux 或数据库。例外：Codex CLI 与 Claude Code 的混合模式（聊天 ↔ 终端）分别需要第三方适配器 codex-acp、claude-agent-acp；它们运行在 Node 上，Claude 连接器要求 Node.js 22 或更高版本，见 [混合模式连接器](configuration.md#混合模式连接器)。
 
 ## 安装
 

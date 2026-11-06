@@ -77,7 +77,7 @@ HTTP 不是浏览器安全上下文，Clipboard API 不可用。WebMux 会回退
 - Windows 托盘与 WSL：[localhost 转发诊断](deployment/windows-wsl.md#localhost-转发诊断)、[Token 与剪贴板](deployment/windows-wsl.md#token-与剪贴板)。
 - 公网入口：[Cloudflare Tunnel 故障排查](cloudflare-tunnel.md#9-故障排查)、[Tailscale 手工移除与排错](tailscale.md#手工移除与排错)。
 - 手机推送收不到：[手机推送（Web Push）](deployment/pwa-and-push.md#手机推送web-push)。
-- 混合会话无法切换到聊天：[开启条件](hybrid-sessions.md#开启)、[注意事项](hybrid-sessions.md#注意事项)。
+- 混合会话无法切换到聊天：[切换按钮不可用的原因](hybrid-sessions.md#切换按钮不可用的原因)、[启动命令兼容要求](hybrid-sessions/agents.md#启动命令兼容要求)、[注意事项](hybrid-sessions.md#注意事项)。
 - agent 没有触发“需要你介入”提醒：[需要你介入的提醒](usage/attention.md)。
 
 ## 获取帮助

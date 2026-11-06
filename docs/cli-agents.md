@@ -76,7 +76,7 @@ Claude Code、Codex、GitHub Copilot CLI 和 Antigravity CLI 首次在某个目�
 
 十一款 CLI 都使用持久 PTY 终端：浏览器断线不会结束进程，可重新连接并回放缓冲；服务重启会结束会话。
 十一款中 Claude Code、Codex CLI、Antigravity CLI、OpenCode、Qoder 与 QoderCN 提供 WebMux 的混合会话支持，可在终端与聊天视图之间切换；原有 omp 也继续支持混合会话。
-Claude Code 与 Codex CLI 的聊天端需要另外安装第三方 ACP 连接器，见 [混合会话](hybrid-sessions.md#开启)。
+Claude Code 与 Codex CLI 的聊天端需要另外安装第三方 ACP 连接器，见 [混合会话支持的 agent 与连接器](hybrid-sessions/agents.md)。
 Qoder 与 QoderCN 使用内置 `--acp` 标志启动 ACP，无需额外连接器。
 其他五款使用终端视图，不能仅凭其提供 ACP 接口就视为已适配 WebMux 的切换和恢复行为。
 

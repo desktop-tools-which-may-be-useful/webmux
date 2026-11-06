@@ -36,13 +36,14 @@
   - [终端使用](usage/terminal.md)：回放与控制权、查找、分屏、复制粘贴、终端图形、文件上传与草稿模式。
   - [代码工作区](usage/code.md)：文件浏览、Git Diff、多格式预览、行号引用与独立窗口。
   - [从本机终端使用](usage/command-line.md)：`run` / `attach`、Windows 终端与后台启动。
-  - [仓库与 worktree](usage/worktrees.md)：仓库登记、上游基线刷新、工作树创建与安全删除。
+  - [仓库与 worktree](usage/worktrees.md)：仓库登记、新建工作树与起点选择、释放空间、删除与重建、推送检查。
   - [移动端使用](usage/mobile.md)：软键栏、虚拟键盘、触摸手势、锁定尺寸与全屏。
   - [需要你介入的提醒](usage/attention.md)：agent 状态识别、徽章与声音提醒、`OSC 7501` 协议及旧版钩子。
   - [端口转发预览](usage/port-forwarding.md)：把服务器上的开发服务器经 WebMux 转发到浏览器，终端端口提示与兼容选项。
   - [Shell 目录报告](usage/shell-directory.md)：可选的 OSC 7 目录报告与 bash / zsh 配置片段。
   - [用脚本和 agent 控制 WebMux](usage/shell-control.md)：连接正确实例、会话元数据、父会话与标签、命令帮助。
 - [混合会话](hybrid-sessions.md)：OpenCode / omp / Codex CLI / Claude Code / Antigravity CLI / Qoder / QoderCN 在聊天视图与终端间切换。
+  - [支持的 agent 与连接器](hybrid-sessions/agents.md)：已验证版本、启动命令兼容要求、会话识别与 codex-acp / claude-agent-acp 安装。
 - [CLI agent 接入](cli-agents.md)：预置的十一款 CLI agent 启动配置与提醒。
 
 ## 开发与架构
