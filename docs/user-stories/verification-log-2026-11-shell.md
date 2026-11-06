@@ -100,3 +100,10 @@
 - 已运行：`go test -race` 覆盖 `internal/workspace`（新增 `TestQuickStartExpandPrompt*`）、`api`、`wire`、`agentguide`、`contract`、`sessioncmd`、`archtest`；
   `web/test/browser/QuickStart.test.ts`；`pnpm --dir web check`、`lint`、`check:arch`；`make format-check docs-check`。
 - 限制：按约定完整测试交给 CI；本地未运行全量 vitest、Playwright E2E 与 Storybook。
+
+本次局部核对（2026-11-06，`webmux screen` 不再等待收稳）：回放后最多再等 1 秒，`--json` 增加 `stable`，不稳定时标准错误提示。
+
+- 更新的故事：US-S10；索引与故事数量不变。
+- 已运行：`go test -race ./internal/sessioncmd`（新增静默稳定、持续输出不稳定、会话退出稳定三个用例）；`make docs-check`；
+  隔离实例中对持续重绘的程序，旧二进制 `screen` 挂到外部 8 秒超时被杀，新二进制约 1 秒返回并提示，空闲 shell 的 `stable` 为 true。
+- 限制：`cmd/webmux` 的隧道用例在 WebMux 会话内运行失败，与本改动无关；完整测试交给 CI。

@@ -198,7 +198,9 @@ SHALL 订阅 `/ws/sessions`，在会话满足条件时退出。
 - CLI SHALL 以观察者身份连接终端 WebSocket，取得回放快照与控制者的网格尺寸（`ControlState` 的 `cols`、`rows`），
   在客户端用终端模拟器按该尺寸重放，得到当前可见画面后断开连接。SHALL NOT 夺取控制或改变尺寸。服务端 SHALL NOT 为此做终端模拟。
 - SHALL 输出纯文本：每行去掉行尾空白，末尾的空行省略。本变更不输出颜色与样式。
-- `--cursor` SHALL 在标准错误输出光标的行与列（从 1 开始）。`--json` SHALL 输出 `{cols, rows, cursor: {row, col}, altScreen, lines}`。
+- `--cursor` SHALL 在标准错误输出光标的行与列（从 1 开始）。`--json` SHALL 输出 `{cols, rows, cursor: {row, col}, altScreen, stable, lines}`。
+- 回放到达后，CLI SHALL 在 150 ms 无输出时即返回（`stable` 为 true；会话已退出同样视为稳定），否则最多再等 1 秒就按已收到的数据输出，
+  此时 `stable` 为 false，并在标准错误提示画面仍在变化；退出码 SHALL 仍为 0。
 - 回放被截断（`StreamPosition.truncated`）时，SHALL 在标准错误提示画面可能不完整。这种情况通常不影响全屏 TUI：它们会重绘整个画面。
 - 会话处于聊天端时 SHALL 以 1 结束，并提示使用 `webmux chat status`。
 - 终端模拟复用服务端预览已在使用的 `xterm-go/vt`，在 CLI 进程内运行；服务端 SHALL NOT 为此新增任何模拟。

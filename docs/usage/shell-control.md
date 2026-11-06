@@ -71,7 +71,7 @@ webmux interrupt <ID>                            # 取消聊天回合，或在�
 webmux resize <ID> 120x40 [--take]               # 脚本改终端尺寸；浏览器或 attach 控制时需要 --take
 webmux wait <ID> --until attention,idle --changed --timeout 30m
 webmux logs <ID> --strip --tail 50               # 最近 50 行纯文本
-webmux screen <ID> [--scrollback 200]            # 全屏 TUI 当前画面的文本；可带上方的滚动历史
+webmux screen <ID> [--scrollback 200]            # 全屏 TUI 当前画面的文本；可带上方的滚动历史；--json 的 stable 表示画面是否已静止
 webmux events --session <ID>                     # 会话事件，NDJSON
 webmux kill <ID>; webmux rm <ID>; webmux rename <ID> 新名称
 webmux api /api/launch-configs                   # 没有专用命令的接口，原样输出响应

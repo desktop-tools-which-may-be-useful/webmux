@@ -47,7 +47,7 @@
 
 - 列出：`webmux ls`，默认只列运行中的会话；已归档会话用 `--archived` 或 `--state`。单个会话的仓库、分支、启动配置与视图用 `webmux get`。
 - 等待：`webmux wait` 默认当前状态也算；`send` 的 `--wait` 先订阅再输入，只接受输入之后的变化。
-- 输出：按行输出的程序用 `webmux logs`；全屏 TUI（例如 agent 停在授权选择框）用 `webmux screen`，它在 CLI 本地渲染当前画面，要看已滚出画面的内容加 `--scrollback`（备用屏幕程序没有滚动历史）；会话列表事件用 `webmux events`。
+- 输出：按行输出的程序用 `webmux logs`；全屏 TUI（例如 agent 停在授权选择框）用 `webmux screen`，它在 CLI 本地渲染当前画面，要看已滚出画面的内容加 `--scrollback`（备用屏幕程序没有滚动历史）；对持续重绘的 TUI（转圈动画），`screen` 最多等 1 秒后按已收到的数据输出，并在标准错误提示画面不稳定，`--json` 的 `stable` 为 false，此时可重试，或改用 `logs` 与聊天视图；会话列表事件用 `webmux events`。
 - 终端尺寸：`webmux run` 的 `--cols` 与 `--rows` 在创建时设定；之后用 `webmux resize`。浏览器或 `attach` 控制终端时它以 1 结束，加 `--take` 才接管；`screen` 按控制端的当前尺寸渲染。
 - 提醒用户：`webmux notify` 让会话显示提醒，浏览器与订阅推送的设备收到通知；用户输入、打开会话或程序的下一次状态报告会清除它。
 - 结束：`webmux kill` 只结束进程，会话保留为已结束；`webmux rm` 移除会话，带聊天视图的会话保留归档。

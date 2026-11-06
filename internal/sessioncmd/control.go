@@ -802,6 +802,7 @@ type screenView struct {
 	Rows      int      `json:"rows"`
 	Cursor    position `json:"cursor"`
 	AltScreen bool     `json:"altScreen"`
+	Stable    bool     `json:"stable"`
 	Lines     []string `json:"lines"`
 }
 
@@ -820,13 +821,17 @@ var screenCommand = &Command{
 	Description: "Connects as an observer, replays the session into a terminal emulator inside this command at the controller's size, " +
 		"and prints the visible screen; the server does no terminal emulation. Use it to see a full-screen TUI's state, such as an " +
 		"agent waiting on a permission prompt. A truncated replay may leave the screen incomplete; full-screen programs usually redraw.\n\n" +
+		"The command does not wait forever for a quiet screen: it returns once the session has had no output for 150 ms, or after one second at the latest. " +
+		"A program that keeps redrawing (an animated spinner) yields a snapshot flagged unstable; use logs or the chat view for those.\n\n" +
 		"--scrollback N also prints up to N lines of scroll history above the screen. The history comes from the session's 2 MiB " +
 		"output buffer, replayed at the controller's current width, so it holds only what that buffer still has and is cut off the same way " +
 		"as a truncated replay. A program on the alternate screen (vim, less, most TUIs) has no scroll history: only the visible screen is printed.",
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
 	Output: "The visible lines without trailing blanks, preceded by the scroll history with --scrollback. With --json, " +
-		"{cols, rows, cursor: {row, col}, altScreen, lines}, where lines includes the history. --cursor writes the 1-based cursor position to standard error.",
+		"{cols, rows, cursor: {row, col}, altScreen, stable, lines}, where lines includes the history and stable tells whether the screen had settled. " +
+		"--cursor writes the 1-based cursor position to standard error. If output is still arriving one second after the replay, the snapshot is printed anyway, " +
+		"stable is false and a note goes to standard error; the exit status stays 0.",
 	Exit: exitsCommon(ExitItem{Code: 1, Text: "No such session, or it is on its chat view."}),
 	Examples: []Example{
 		{Command: "webmux screen abcd2345", Text: "See what an agent's terminal shows."},
@@ -875,8 +880,12 @@ var screenCommand = &Command{
 	},
 }
 
-// screenQuiet is how long screen waits for output after the replay.
+// screenQuiet is how long without output counts as a settled screen.
 const screenQuiet = 150 * time.Millisecond
+
+// screenSettleMax bounds how long screen keeps reading after the replay: a
+// TUI that animates never goes quiet, so the screen is printed as received.
+const screenSettleMax = time.Second
 
 func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id string, scrollback int) (screenView, error) {
 	query := url.Values{"label": {e.scriptLabel()}}
@@ -888,12 +897,21 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 	conn.SetReadLimit(64 << 20)
 	var pending [][]byte
 	cols, rows, truncated := 0, 0, false
-	gotSnapshot := false
+	gotSnapshot, stable := false, true
+	var settleBy time.Time
 	for {
 		readCtx := ctx
 		var cancel context.CancelFunc
+		capped := false
 		if gotSnapshot && cols > 0 {
-			readCtx, cancel = context.WithTimeout(ctx, screenQuiet)
+			wait := screenQuiet
+			if left := time.Until(settleBy); left <= 0 {
+				stable = false
+				break
+			} else if left < wait {
+				wait, capped = left, true
+			}
+			readCtx, cancel = context.WithTimeout(ctx, wait)
 		}
 		_, frame, err := conn.Read(readCtx)
 		if cancel != nil {
@@ -901,6 +919,7 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 		}
 		if err != nil {
 			if gotSnapshot && ctx.Err() == nil {
+				stable = !capped || !errors.Is(err, context.DeadlineExceeded)
 				break
 			}
 			switch websocket.CloseStatus(err) {
@@ -917,7 +936,9 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 		switch frame[0] {
 		case contract.FrameSnapshot:
 			pending = [][]byte{frame[1:]}
-			gotSnapshot = true
+			if !gotSnapshot {
+				gotSnapshot, settleBy = true, time.Now().Add(screenSettleMax)
+			}
 		case contract.FrameOutput:
 			pending = append(pending, frame[1:])
 		case contract.FramePosition:
@@ -931,8 +952,13 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 				cols, rows = int(info.Cols), int(info.Rows)
 			}
 		case contract.FrameExit:
-			gotSnapshot = true
+			if !gotSnapshot {
+				gotSnapshot, settleBy = true, time.Now().Add(screenSettleMax)
+			}
 		}
+	}
+	if !stable {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux screen: output was still arriving after %s; this is a snapshot of a screen that kept changing, not a settled one\n", screenSettleMax)
 	}
 	if truncated {
 		_, _ = fmt.Fprintln(e.Stderr, "webmux screen: the replay was truncated; the screen may be incomplete")
@@ -948,7 +974,7 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 	}
 	buffer := term.Buffer()
 	view := screenView{
-		Cols: cols, Rows: rows, AltScreen: buffer == term.Buffers().Alt(),
+		Cols: cols, Rows: rows, AltScreen: buffer == term.Buffers().Alt(), Stable: stable,
 		Cursor: position{Row: buffer.Y + 1, Col: buffer.X + 1},
 	}
 	// Without scrollback the screen is the last rows lines; with it the

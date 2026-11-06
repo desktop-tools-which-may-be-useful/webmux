@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/contract"
@@ -212,5 +213,128 @@ func TestRunSendsInitialSizeAndRequiresBothDimensions(t *testing.T) {
 	}
 	if len(f.bodies) != 2 {
 		t.Fatalf("usage errors sent %d requests", len(f.bodies)-2)
+	}
+}
+
+// animatedServer replays output, then either pushes FrameOutput every few
+// milliseconds (spin), or sends FrameExit and closes (exit).
+type animatedServer struct {
+	sizeServer
+	spin, exit bool
+}
+
+func (a *animatedServer) env(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/s/{id}", func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"webmux"}})
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.CloseNow() }()
+		ctx := r.Context()
+		_ = c.Write(ctx, websocket.MessageBinary, append([]byte{contract.FrameState}, `{"cols":40,"rows":5}`...))
+		_ = c.Write(ctx, websocket.MessageBinary, append([]byte{contract.FrameSnapshot}, a.output...))
+		if a.exit {
+			_ = c.Write(ctx, websocket.MessageBinary, []byte{contract.FrameExit})
+			return
+		}
+		wg.Add(1)
+		defer wg.Done()
+		if a.spin {
+			for i := 0; ; i++ {
+				select {
+				case <-stop:
+					return
+				case <-ctx.Done():
+					return
+				case <-time.After(20 * time.Millisecond):
+				}
+				if c.Write(ctx, websocket.MessageBinary, append([]byte{contract.FrameOutput}, fmt.Sprintf("\rtick %d", i)...)) != nil {
+					return
+				}
+			}
+		}
+		_, _, _ = c.Read(ctx)
+	})
+	dir, err := os.MkdirTemp("/tmp", "scm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(dir, "s.sock")
+	l, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: mux}
+	go func() { _ = srv.Serve(l) }()
+	t.Cleanup(func() {
+		close(stop)
+		_ = srv.Close()
+		wg.Wait()
+		_ = os.RemoveAll(dir)
+	})
+	var stdout, stderr bytes.Buffer
+	return Env{
+		Connect: func() (*localclient.Client, error) { return localclient.New(localclient.UnixDialer{Path: socket}), nil },
+		Stdout:  &stdout, Stderr: &stderr, NotRunningHint: "start it",
+	}, &stdout, &stderr
+}
+
+func runScreenJSON(t *testing.T, e Env, stdout *bytes.Buffer) (screenView, time.Duration) {
+	t.Helper()
+	start := time.Now()
+	if code := e.Run(context.Background(), screenCommand, []string{"abcdefgh", "--json"}); code != contract.ExitOK {
+		t.Fatalf("screen --json: exit %d", code)
+	}
+	took := time.Since(start)
+	var view screenView
+	if err := json.Unmarshal(stdout.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	return view, took
+}
+
+func TestScreenQuietSessionIsStableAndReturnsEarly(t *testing.T) {
+	e, stdout, stderr := (&animatedServer{sizeServer: sizeServer{output: "idle"}}).env(t)
+	view, took := runScreenJSON(t, e, stdout)
+	if !view.Stable || len(view.Lines) != 1 || view.Lines[0] != "idle" {
+		t.Fatalf("view %+v", view)
+	}
+	if took >= screenSettleMax {
+		t.Errorf("a quiet screen took %v, expected well under %v", took, screenSettleMax)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr %q", stderr)
+	}
+}
+
+func TestScreenKeepsChangingPrintsUnstableSnapshot(t *testing.T) {
+	e, stdout, stderr := (&animatedServer{sizeServer: sizeServer{output: "start\r\n"}, spin: true}).env(t)
+	view, took := runScreenJSON(t, e, stdout)
+	if view.Stable {
+		t.Errorf("a redrawing screen reported stable: %+v", view)
+	}
+	if took < screenSettleMax/2 || took > 5*screenSettleMax {
+		t.Errorf("returned after %v, expected about %v", took, screenSettleMax)
+	}
+	if len(view.Lines) != 2 || view.Lines[0] != "start" || !strings.HasPrefix(view.Lines[1], "tick ") {
+		t.Errorf("lines %q", view.Lines)
+	}
+	if !strings.Contains(stderr.String(), "output was still arriving") {
+		t.Errorf("stderr %q", stderr)
+	}
+}
+
+func TestScreenExitedSessionIsStable(t *testing.T) {
+	e, stdout, stderr := (&animatedServer{sizeServer: sizeServer{output: "bye"}, exit: true}).env(t)
+	view, took := runScreenJSON(t, e, stdout)
+	if !view.Stable || took >= screenSettleMax {
+		t.Errorf("exited session: stable=%v after %v", view.Stable, took)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr %q", stderr)
 	}
 }
