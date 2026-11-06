@@ -104,7 +104,7 @@
 | service install/--dry-run/--force/start/stop/restart/status/logs/uninstall                          | US-K05–US-K07                                       |
 | version/version --json/help、VPN/HTTPS 代理与升级                                                   | US-K09                                              |
 | 持久化文件、锁、写入入口与清单防漂移                                                                | US-L10                                              |
-| 本地开发、构建/安装、测试、格式/静态检查与 Go 规范门禁                                              | US-L01–US-L02                                       |
+| 本地开发、构建/安装、测试、覆盖率报告、格式/静态检查与 Go 规范门禁                                  | US-L01–US-L02                                       |
 | 文档与 spec 行数、单行长度、体积、目录树治理                                                        | US-L08                                              |
 | `AGENTS.md` 体积预算与规则下沉到 `docs/agent-rules/`                                                | US-L11                                              |
 | 文档可达性、相对链接与锚点、README 首页预算                                                         | US-L12                                              |

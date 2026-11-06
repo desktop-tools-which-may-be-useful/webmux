@@ -76,7 +76,7 @@ Run from the repository root.
 - `make docs-check`: run the documentation/spec size and tree-layout guard (`internal/docguard`).
 - `make persistence-check`: run the persistence inventory guard (`TestPersistence*` in `internal/archtest`).
 - `make go-lint`: run `golangci-lint` after verifying the pinned release.
-- `make test`, `make test-fast`, `make test-go`, `make test-unit`, `make test-browser`, `make test-e2e`, `make test-performance`: see [testing](testing.md).
+- `make test`, `make test-fast`, `make test-go`, `make test-unit`, `make test-browser`, `make test-e2e`, `make test-performance`, `make cover`, `make cover-go`, `make cover-web`: see [testing](testing.md).
 - `make tray`, `make installer`, `make linux-packages`: build the Windows tray, the NSIS installers and the deb/rpm packages (also run by `make release`).
 - `pnpm --dir web lint`: run Oxlint, including type-aware Promise rules, on frontend code.
 - `pnpm --dir web check:arch`: run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test).

@@ -107,3 +107,9 @@
 - 已运行：`go test -race ./internal/sessioncmd`（新增静默稳定、持续输出不稳定、会话退出稳定三个用例）；`make docs-check`；
   隔离实例中对持续重绘的程序，旧二进制 `screen` 挂到外部 8 秒超时被杀，新二进制约 1 秒返回并提示，空闲 shell 的 `stable` 为 true。
 - 限制：`cmd/webmux` 的隧道用例在 WebMux 会话内运行失败，与本改动无关；完整测试交给 CI。
+
+本次局部核对（2026-11-06，测试覆盖率报告）：引入 Go race 与前端 Vitest（Node 单元 + Chromium 浏览器）覆盖率采集、合并与 CI 摘要。
+
+- 更新的故事：US-L02；覆盖索引同步，故事数量不变。
+- 已运行：`make check`（含 `make docs-check`、`make persistence-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）、前端单元覆盖率采集与合并脚本。
+- 限制：全量 Go race 与浏览器套件覆盖率交由 CI 运行并产出报告。

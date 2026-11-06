@@ -197,8 +197,26 @@ jobs:
       # are still checked.
       - name: Vet the macOS build
         run: GOOS=darwin go vet -printf.funcs=problemf,invalidf,usagef,checkf ./...
-      - name: Run Go race tests
-        run: go test -race -parallel=4 ./...
+      - name: Run Go race tests with coverage
+        run: |
+          mkdir -p "$RUNNER_TEMP/go-coverage"
+          status=0
+          go test -race -parallel=4 -covermode=atomic -coverprofile="$RUNNER_TEMP/go-coverage/raw.coverprofile" ./... || status=$?
+          if [ -f "$RUNNER_TEMP/go-coverage/raw.coverprofile" ]; then
+            sh .github/scripts/go-coverage-summary.sh "$RUNNER_TEMP/go-coverage/raw.coverprofile" "$RUNNER_TEMP/go-coverage"
+          fi
+          exit "$status"
+      - name: Upload Go coverage report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: go-coverage
+          path: |
+            ${{ runner.temp }}/go-coverage/go.coverprofile
+            ${{ runner.temp }}/go-coverage/go.html
+            ${{ runner.temp }}/go-coverage/summary.md
+          if-no-files-found: ignore
+          retention-days: 14
       # No Windows runner: hosted runners lack a usable WSL 2, so the Windows
       # clients are cross-compiled and vetted here and verified by hand in WSL.
       - name: Cross-compile the Windows tray and console client
@@ -234,16 +252,21 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/playwright
-      - name: Run Vitest unit suite
-        run: pnpm --dir web test:unit
-      - name: Run Vitest browser suite
-        run: pnpm --dir web test:browser
-      - name: Preserve Vitest diagnostics
+      - name: Run Vitest unit suite with coverage
+        run: pnpm --dir web test:coverage:unit
+      - name: Run Vitest browser suite with coverage
+        run: pnpm --dir web test:coverage:browser
+      - name: Merge Vitest coverage and publish summary
+        if: always()
+        run: pnpm --dir web test:coverage:merge
+      - name: Preserve Vitest diagnostics and coverage
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: vitest-results
-          path: web/.vitest/attachments/
+          path: |
+            web/.vitest/attachments/
+            web/.vitest/coverage/merged/
           if-no-files-found: ignore
           retention-days: 14
 

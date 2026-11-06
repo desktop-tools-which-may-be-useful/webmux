@@ -6,14 +6,14 @@
 
 ## 常改的配置项
 
-| 键                   | 默认值           | 作用                                                         |
-| -------------------- | ---------------- | ------------------------------------------------------------ |
-| `listen`             | `127.0.0.1:7681` | 监听地址；局域网或 VPN 直连改为 `0.0.0.0:7681`               |
-| `token`              | 首次启动自动生成 | 访问用的共享 Token；规则见 [访问与安全](#访问与安全)         |
-| `allowed_origins`    | `[]`             | 经反向代理或自定义域名访问时，额外允许的完整 Origin          |
-| `scrollback_bytes`   | `2097152`        | 每会话保留的原始终端字节数                                   |
-| `idle_after_seconds` | `30`             | 多少秒没有等待特征就判定为空闲                               |
-| `default_cwd`        | `~`              | 新建会话的默认目录                                           |
+| 键                   | 默认值                   | 作用                                                 |
+| -------------------- | ------------------------ | ---------------------------------------------------- |
+| `listen`             | `127.0.0.1:7681`         | 监听地址；局域网或 VPN 直连改为 `0.0.0.0:7681`       |
+| `token`              | 首次启动自动生成         | 访问用的共享 Token；规则见 [访问与安全](#访问与安全) |
+| `allowed_origins`    | `[]`                     | 经反向代理或自定义域名访问时，额外允许的完整 Origin  |
+| `scrollback_bytes`   | `2097152`                | 每会话保留的原始终端字节数                           |
+| `idle_after_seconds` | `30`                     | 多少秒没有等待特征就判定为空闲                       |
+| `default_cwd`        | `~`                      | 新建会话的默认目录                                   |
 | `state_dir`          | `$XDG_STATE_HOME/webmux` | 服务端状态目录，见 [状态目录](#状态目录)             |
 
 - 配置只在启动时读取；修改后需重启服务。
@@ -57,25 +57,25 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 - 客户端子命令都接受 `--config`，按与服务相同的规则找到状态目录、运行时记录与本机套接字。
 - `webmux start` 在不改变前台默认语义的前提下后台启动，可用 `webmux stop` 停止。
 
-| 命令                                                      | 说明                                                                                                                         |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `webmux serve [--log-file PATH]`                          | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                 |
+| 命令                                                      | 说明                                                                                                                               |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `webmux serve [--log-file PATH]`                          | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                       |
 | `webmux start [--log-file PATH]`                          | 后台启动并按 `serve` 规则加载配置；默认日志为 `<state_dir>/webmux.log`；等待就绪后输出 PID、本机链接与日志路径；已运行时可重复执行 |
-| `webmux status [--json] [--reveal-token]`                 | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token      |
-| `webmux stop [--timeout 15s] [--force] [--json]`          | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号      |
-| `webmux bridge`                                           | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                      |
-| `webmux config path\|show\|validate\|check\|init\|listen` | 见下表                                                                                                                       |
-| `webmux version [--json]`                                 | 输出版本号；`--json` 另含控制契约版本                                                                                        |
-| `webmux help`                                             | 显示全部命令                                                                                                                 |
+| `webmux status [--json] [--reveal-token]`                 | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token            |
+| `webmux stop [--timeout 15s] [--force] [--json]`          | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号            |
+| `webmux bridge`                                           | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                            |
+| `webmux config path\|show\|validate\|check\|init\|listen` | 见下表                                                                                                                             |
+| `webmux version [--json]`                                 | 输出版本号；`--json` 另含控制契约版本                                                                                              |
+| `webmux help`                                             | 显示全部命令                                                                                                                       |
 
-| `config` 子命令 | 作用                                                                  |
-| --------------- | --------------------------------------------------------------------- |
-| `path`          | 定位配置文件                                                          |
-| `show`          | 查看生效配置（不含 Token）                                            |
-| `validate`      | 校验配置，错误含 TOML 行列号                                          |
-| `check`         | `config validate` 的别名                                              |
-| `init`          | 以模板和随机 Token 初始化；已存在需 `--force`，原文件保留为 `.bak`    |
-| `listen`        | 原子更新配置文件中的 `listen` 地址                                    |
+| `config` 子命令 | 作用                                                               |
+| --------------- | ------------------------------------------------------------------ |
+| `path`          | 定位配置文件                                                       |
+| `show`          | 查看生效配置（不含 Token）                                         |
+| `validate`      | 校验配置，错误含 TOML 行列号                                       |
+| `check`         | `config validate` 的别名                                           |
+| `init`          | 以模板和随机 Token 初始化；已存在需 `--force`，原文件保留为 `.bak` |
+| `listen`        | 原子更新配置文件中的 `listen` 地址                                 |
 
 JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制面-json-契约)。
 
@@ -83,13 +83,13 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 
 ### 访问与安全
 
-| 键                | 默认值           | 作用                                                   |
-| ----------------- | ---------------- | ------------------------------------------------------ |
-| `listen`          | `127.0.0.1:7681` | HTTP / WebSocket 监听地址；默认仅监听本机回环          |
-| `token`           | 空               | 共享 token；首次启动自动生成并持久化                   |
-| `allowed_origins` | `[]`             | 额外允许的完整 Origin，例如 `https://myhost.example`   |
+| 键                | 默认值           | 作用                                                                                              |
+| ----------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| `listen`          | `127.0.0.1:7681` | HTTP / WebSocket 监听地址；默认仅监听本机回环                                                     |
+| `token`           | 空               | 共享 token；首次启动自动生成并持久化                                                              |
+| `allowed_origins` | `[]`             | 额外允许的完整 Origin，例如 `https://myhost.example`                                              |
 | `tunnel`          | 未启用           | Cloudflare Tunnel，见 [公网访问（Cloudflare Tunnel）](remote-access.md#公网访问cloudflare-tunnel) |
-| `push`            | 启用             | 注意力 Web Push，见 [手机推送（Web Push）](pwa-and-push.md#手机推送web-push) |
+| `push`            | 启用             | 注意力 Web Push，见 [手机推送（Web Push）](pwa-and-push.md#手机推送web-push)                      |
 
 - `listen` 用于局域网或 VPN 直连时可设为 `0.0.0.0:7681`。
 - 已持久化的 `token` 可用 `webmux status --json --reveal-token` 查看。
@@ -103,28 +103,28 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 
 ### 会话与目录
 
-| 键                 | 默认值                   | 作用                                              |
-| ------------------ | ------------------------ | ------------------------------------------------- |
-| `scrollback_bytes` | `2097152`                | 每会话保留的原始终端字节数（不是行数）            |
-| `default_cwd`      | `~`                      | 新建会话的默认目录，支持 `~` 展开                 |
-| `state_dir`        | `$XDG_STATE_HOME/webmux` | 仓库清单、启动配置等服务端状态目录                |
+| 键                 | 默认值                   | 作用                                   |
+| ------------------ | ------------------------ | -------------------------------------- |
+| `scrollback_bytes` | `2097152`                | 每会话保留的原始终端字节数（不是行数） |
+| `default_cwd`      | `~`                      | 新建会话的默认目录，支持 `~` 展开      |
+| `state_dir`        | `$XDG_STATE_HOME/webmux` | 仓库清单、启动配置等服务端状态目录     |
 
 - 未设置 `$XDG_STATE_HOME` 时，`state_dir` 为 `~/.local/state/webmux`。
 
 ### 注意力识别
 
-| 键                   | 默认值                | 作用                                                                          |
-| -------------------- | --------------------- | ----------------------------------------------------------------------------- |
-| `idle_after_seconds` | `30`                  | 无等待特征时判定为空闲的秒数                                                  |
-| `prompt_patterns`    | 常见提示符 / 确认模式 | 判定“可能在等你”的 Go 正则列表                                                |
+| 键                   | 默认值                | 作用                                                                              |
+| -------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `idle_after_seconds` | `30`                  | 无等待特征时判定为空闲的秒数                                                      |
+| `prompt_patterns`    | 常见提示符 / 确认模式 | 判定“可能在等你”的 Go 正则列表                                                    |
 | `agent_protocol`     | `true`                | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件 |
-| `bell_attention`     | `true`                | 把终端响铃（输入 1 秒后）视为需要介入                                         |
-| `program_status`     | `true`                | 识别 `OSC 7501` 程序状态报告，并由服务端应答 `OSC 7501;?` 探测                 |
+| `bell_attention`     | `true`                | 把终端响铃（输入 1 秒后）视为需要介入                                             |
+| `program_status`     | `true`                | 识别 `OSC 7501` 程序状态报告，并由服务端应答 `OSC 7501;?` 探测                    |
 
 ### Agent 启动
 
-| 键               | 默认值 | 作用                                                                   |
-| ---------------- | ------ | ---------------------------------------------------------------------- |
+| 键               | 默认值 | 作用                                                                      |
+| ---------------- | ------ | ------------------------------------------------------------------------- |
 | `agent_pretrust` | `true` | 启动 agent 前把启动目录写入它自己的“信任此文件夹”记录，避免会话卡在对话框 |
 
 - 适用于 Claude Code、Codex、Copilot CLI、Antigravity CLI；见 [文件夹信任预写](../cli-agents.md#文件夹信任预写)。
@@ -184,13 +184,13 @@ which codex-acp claude-agent-acp  # 必须能在服务的 PATH 或“加载 shel
 
 完整文件、锁、所有者和故障行为见 [配置与持久化清单](../persistence.md)，由 `make persistence-check` 约束；下文仅说明部署边界。
 
-| 文件（位于 `state_dir`）                     | 内容                                           |
-| -------------------------------------------- | ---------------------------------------------- |
-| `repositories.json`                          | 仓库清单                                       |
-| `launch-configs.json`、`launch-configs.json.lock` | 启动配置及其锁                            |
-| `hybrid-sessions.json`（及其锁）             | 混合会话记录                                   |
-| `run/server.json`、`run/server.json.lock`    | 运行时记录及其锁                               |
-| `run/webmux.sock`                            | 本机套接字                                     |
+| 文件（位于 `state_dir`）                          | 内容             |
+| ------------------------------------------------- | ---------------- |
+| `repositories.json`                               | 仓库清单         |
+| `launch-configs.json`、`launch-configs.json.lock` | 启动配置及其锁   |
+| `hybrid-sessions.json`（及其锁）                  | 混合会话记录     |
+| `run/server.json`、`run/server.json.lock`         | 运行时记录及其锁 |
+| `run/webmux.sock`                                 | 本机套接字       |
 
 - 状态目录不保存会话、终端内容或 token。
 - 目录权限 0700、文件 0600，通过原子替换写入。
