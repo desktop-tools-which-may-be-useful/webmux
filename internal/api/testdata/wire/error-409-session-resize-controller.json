@@ -1,0 +1,6 @@
+{
+  "status": 409,
+  "body": {
+    "error": "connection does not control the terminal (a browser or attached client controls it; take control for the resize with take, or webmux resize --take)"
+  }
+}

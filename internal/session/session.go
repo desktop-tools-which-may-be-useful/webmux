@@ -2,7 +2,7 @@ package session
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -185,9 +185,22 @@ type startOptions struct {
 	env map[string]string
 	// configID is the saved launch config used at creation, if any.
 	configID string
+	// cols and rows are the initial terminal size; zero is DefaultCols by
+	// DefaultRows.
+	cols, rows uint16
+}
+
+// size is the initial terminal size with the defaults filled in.
+func (o startOptions) size() (cols, rows uint16) {
+	cols, rows = o.cols, o.rows
+	if cols == 0 || rows == 0 {
+		return DefaultCols, DefaultRows
+	}
+	return cols, rows
 }
 
 func newSession(id, cwd, name string, options startOptions) *Session {
+	cols, rows := options.size()
 	now := time.Now()
 	s := &Session{
 		info: Info{
@@ -197,8 +210,8 @@ func newSession(id, cwd, name string, options startOptions) *Session {
 			Cwd:              cwd,
 			CreatedAt:        now,
 			LastActiveAt:     now,
-			Cols:             80,
-			Rows:             24,
+			Cols:             cols,
+			Rows:             rows,
 			ConfigID:         options.configID,
 		},
 		userTitle:     name,
@@ -209,6 +222,9 @@ func newSession(id, cwd, name string, options startOptions) *Session {
 		options:       options,
 	}
 	s.signals = s.signalHandler()
+	if cols != DefaultCols || rows != DefaultRows {
+		s.info.Preview = s.preview.Resize(cols, rows)
+	}
 	if name != "" {
 		s.info.Title = name
 	}
@@ -217,7 +233,8 @@ func newSession(id, cwd, name string, options startOptions) *Session {
 
 // start creates an ordinary session: exactly one run, ending with it.
 func start(id, cwd, name string, argv []string, options startOptions) (*Session, error) {
-	r, generation, err := launchRun(id, cwd, argv, 80, 24, options)
+	cols, rows := options.size()
+	r, generation, err := launchRun(id, cwd, argv, cols, rows, options)
 	if err != nil {
 		return nil, err
 	}
@@ -464,21 +481,56 @@ func (s *Session) Detach(sub *Subscriber) {
 func (s *Session) Write(p []byte) error {
 	return s.WriteContext(context.Background(), p)
 }
-func (s *Session) Resize(cols, rows uint16) error {
-	if cols == 0 || rows == 0 || cols > 1000 || rows > 1000 {
-		return errors.New("invalid terminal size")
+
+// ScriptResize is a resize a script asks for over REST. Label names the
+// controller while Take holds control, as ServerInput.Label does.
+type ScriptResize struct {
+	Cols, Rows int
+	Take       bool
+	Label      string
+}
+
+// ResizeScript resizes the PTY for a script (POST /api/sessions/{id}/resize).
+// It is allowed while no client controls the terminal or the controller is
+// itself server-side input. A browser or attach controller refuses it with
+// ErrNotController unless in.Take is set: the script then takes control for
+// the resize and releases it, as SubmitServer does. The check and the resize
+// share one critical section, so a takeover cannot interleave between them.
+// ErrExited means the run ended; ErrNoRun that the shell has no terminal run.
+func (s *Session) ResizeScript(in ScriptResize) error {
+	if err := ValidateSize(in.Cols, in.Rows); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
+	cols, rows := uint16(in.Cols), uint16(in.Rows)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.resizeLocked(cols, rows)
+	if s.run == nil {
+		return ErrNoRun
+	}
+	if s.info.ExitCode != nil {
+		return ErrExited
+	}
+	if s.control == nil || s.controlSub == nil {
+		return s.resizeLocked(cols, rows)
+	}
+	if !in.Take {
+		return fmt.Errorf("%w (a browser or attached client controls it; take control for the resize with take, or webmux resize --take)", ErrNotController)
+	}
+	controller := &Controller{ClientID: serverClientPrefix + randomClientID(), Label: in.Label, Since: time.Now()}
+	s.control, s.controlSub = controller, nil
+	s.broadcastLocked(s.controlLocked())
+	err := s.resizeLocked(cols, rows)
+	s.control = nil
+	s.broadcastLocked(s.controlLocked())
+	return err
 }
 
 // ResizeFrom resizes the PTY only if the subscriber is the controlling
 // connection, checked in the same critical section as the resize so that a
 // takeover cannot interleave between them.
 func (s *Session) ResizeFrom(sub *Subscriber, cols, rows uint16) error {
-	if cols == 0 || rows == 0 || cols > 1000 || rows > 1000 {
-		return errors.New("invalid terminal size")
+	if err := ValidateSize(int(cols), int(rows)); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

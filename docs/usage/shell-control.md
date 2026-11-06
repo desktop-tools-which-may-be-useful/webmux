@@ -60,6 +60,7 @@ webmux launch-config options "Claude Code"         # 列出 run --set 可用的�
   没有 `--` 时出现的位置参数是用法错误，因此旧写法 `--new-worktree BRANCH` 不会被当作命令执行。
 - 聊天视图没有终端可附着，以聊天视图启动时总是后台运行；`--reply` 跟踪首条提示的回合并输出 agent 的最终回复。
 - 仓库有初始化指令时，`--init` 需要显式给出。
+- `--cols N --rows M` 给终端设定初始尺寸（须同时给出，各 1–1000，默认 80×24）：程序第一次输出就按它排版。第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整。
 
 ## 输入、中断与读取输出
 
@@ -67,9 +68,10 @@ webmux launch-config options "Claude Code"         # 列出 run --set 可用的�
 webmux send <ID> 'make test' --enter --wait idle --timeout 10m   # 输入并回车，等会话回到空闲
 webmux send <ID> "修复 lint 并汇报改动" --reply --timeout 20m     # 聊天视图：输出 agent 的最终回复
 webmux interrupt <ID>                            # 取消聊天回合，或在终端写入中断键
+webmux resize <ID> 120x40 [--take]               # 脚本改终端尺寸；浏览器或 attach 控制时需要 --take
 webmux wait <ID> --until attention,idle --changed --timeout 30m
 webmux logs <ID> --strip --tail 50               # 最近 50 行纯文本
-webmux screen <ID>                               # 全屏 TUI 当前画面的文本
+webmux screen <ID> [--scrollback 200]            # 全屏 TUI 当前画面的文本；可带上方的滚动历史
 webmux events --session <ID>                     # 会话事件，NDJSON
 webmux kill <ID>; webmux rm <ID>; webmux rename <ID> 新名称
 webmux api /api/launch-configs                   # 没有专用命令的接口，原样输出响应
@@ -79,6 +81,10 @@ webmux api /api/launch-configs                   # 没有专用命令的接口�
   在会话内还附上来源会话 ID），聊天视图上是提示（立即发送或排队）。选项属于另一种视图时服务端以 `wrong_view` 拒绝，什么也不写入。
 - `send --wait` 先订阅再输入，只接受之后的状态变化，对两种视图都适用；`--reply` 只用于聊天视图，在终端视图上以 1 结束并提示改用 `--wait`。
 - `logs --strip` 适合按行输出的程序；全屏 TUI 用 `screen`，画面在 CLI 本地渲染，服务端不做终端模拟。
+- `resize` 在没有控制端或控制端是脚本（`send` 取得的 `script` 控制权）时直接生效；浏览器或 `attach` 控制时以 1 结束（服务端 409），因为浏览器会把自己的网格重发，两边会来回抢；
+  `--take` 让脚本接管控制权、调整后释放。
+- `screen --scrollback N` 在画面之前输出最多 N 行滚动历史（0–100000，`--json` 的 `lines` 同样包含）。历史来自 2 MiB 回放缓冲区，按控制端当前宽度重排，更早的内容已被丢弃；
+  备用屏幕程序（vim、less、多数 TUI）没有滚动历史。
 
 ## 提醒用户
 

@@ -36,6 +36,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.delete)
 	serveIn(mux, "POST /api/sessions/{id}/input", http.StatusOK, sessionCommandFailure, s.input)
 	serveInDone(mux, "POST /api/sessions/{id}/interrupt", sessionCommandFailure, s.interrupt)
+	serveIn(mux, "POST /api/sessions/{id}/resize", http.StatusOK, sessionCommandFailure, s.resize)
 	// view moves a session with a chat view to its other view, or answers
 	// a change waiting for the user's choice. It answers once the change is
 	// over; a draft returned to the terminal goes to this requester only.
@@ -228,6 +229,19 @@ func (s *Server) input(r *http.Request, req contract.SessionInputRequest) (contr
 		result, err = s.Hybrid.TerminalInput(r.Context(), item, in)
 	}
 	return wire.SessionInputResult(result), err
+}
+
+// resize answers POST /api/sessions/{id}/resize: a script sets the PTY size
+// of a session's terminal run (see session.ResizeScript).
+func (s *Server) resize(r *http.Request, req contract.SessionResizeRequest) (contract.SessionInfo, error) {
+	item, err := s.Manager.Get(r.PathValue("id"))
+	if err != nil {
+		return contract.SessionInfo{}, err
+	}
+	if err := item.ResizeScript(wire.ScriptResize(req, s.inputLabel(r))); err != nil {
+		return contract.SessionInfo{}, err
+	}
+	return wire.Session(item.Info()), nil
 }
 
 func (s *Server) interrupt(r *http.Request, req contract.SessionCommandRequest) error {

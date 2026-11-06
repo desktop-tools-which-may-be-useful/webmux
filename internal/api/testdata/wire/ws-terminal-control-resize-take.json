@@ -1,0 +1,12 @@
+{
+  "body": {
+    "colorSchemeReports": false,
+    "cols": 90,
+    "controller": {
+      "clientId": "<clientId#2>",
+      "label": "script",
+      "since": "<time>"
+    },
+    "rows": 25
+  }
+}

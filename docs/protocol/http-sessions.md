@@ -15,6 +15,7 @@
 | DELETE | `/api/sessions/{id}?forget=1`    | 移除并删除归档记录与临时文件夹，204                                                              |
 | POST   | `/api/sessions/{id}/input`       | 按当前视图输入，见下文                                                                           |
 | POST   | `/api/sessions/{id}/interrupt`   | 按当前视图中断，204，见下文                                                                      |
+| POST   | `/api/sessions/{id}/resize`      | 脚本调整终端尺寸 `{cols, rows, take?}`，200 返回 `SessionInfo`，见“调整终端尺寸”                 |
 | POST   | `/api/sessions/{id}/view`        | 切换视图，见 [聊天视图与混合会话](http-hybrid.md#视图切换与恢复)                                 |
 | POST   | `/api/sessions/{id}/resume`      | 恢复已归档会话，见 [聊天视图与混合会话](http-hybrid.md#视图切换与恢复)                           |
 | GET    | `/api/sessions/{id}/buffer`      | 下载完整原始缓冲（`application/octet-stream`）                                                   |
@@ -65,6 +66,15 @@
 - `clientRequestId` 须为 `[A-Za-z0-9_-]{8,64}`，否则 400；同一 ID 的重复请求只生效一次。
 - `text` 为空且没有 `keys`、`attachments` 时 400。
 - 切换进行中 409 `switching`；会话已归档 409 `not_active`；不存在 404。
+
+### 调整终端尺寸
+
+`POST /api/sessions/{id}/resize {cols, rows, take?}` 让脚本设置会话终端运行的 PTY 尺寸，认证与 Origin 检查同其他会话接口，本机套接字上的会话内调用同样可用。`cols`、`rows` 各为 1–1000，否则 400。
+
+- 允许的情形：没有控制端，或控制端是脚本输入（`input` 取得的 `script` 控制权）。成功时 PTY、`SessionInfo` 与预览同时变为新尺寸，并向观察端广播 `0x06` 控制帧。
+- 控制端是浏览器或 `attach` 时 409，响应体只有 `{error}`：浏览器收到控制帧后会把自己的网格重发，脚本强行修改会来回抢。`take: true` 时脚本以 `script` 标签接管控制权，调整后释放，原控制端变为观察端。
+- 检查与调整在同一个临界区内完成，期间不会有另一个连接接管。
+- 会话不存在 404；会话已退出，或处于聊天视图（没有终端运行）409，响应体只有 `{error}`。
 
 ### 结束、移除与删除记录
 

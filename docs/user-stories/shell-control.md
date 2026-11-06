@@ -59,6 +59,8 @@
   - 输出与等待：`--json` 输出 `{session, link}`（新建 worktree 时另含 `worktree` 与 `configWarnings`），配置警告写到标准错误，`--wait STATE --timeout DUR` 等会话第一次进入该状态（超时 124），
     `--reply` 要求 `--view chat` 与 `--prompt` 并与 `--wait`、`--follow` 互斥，`--label` 设置标签，`--dry-run` 只打印请求且隐藏环境变量值、不上传附件；
   - 没有终端时自动分离，`--attach` 强制附着；
+  - `--cols N --rows M` 设定终端的初始尺寸，必须同时给出且各为 1–1000，否则在本地以 2 结束；省略时为 80×24；请求体的 `cols`、`rows` 贯通到 PTY，所以进程第一次输出就按该尺寸排版，
+    会话信息与预览尺寸一致，混合会话的终端端同样使用它；随后第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整，这是原有行为；
   - `--follow` 以观察者身份把输出写到标准输出（`--strip` 去除控制序列），以程序的退出码退出（信号为 128+N）；SIGINT/SIGTERM 只停止跟随（130/143），`--kill-on-interrupt` 先结束程序；连接中断以 1 退出并提示；
     `--follow` 与 `--detach`、`--attach`、`--view chat`、`--reply` 互斥。
 - **US-S08 一条命令完成快速开始**：作为编排者，我希望从 shell 把任务交给新 worktree 中的 agent 并取回结果，以便并行分派工作。
@@ -73,6 +75,7 @@
   - `webmux send SESSION [TEXT|-] [--enter] [--key NAME]...` 调用 `POST /api/sessions/{id}/input`，由服务端按当前视图分派，CLI 不再自己连接终端 WebSocket；
   - 终端视图：以带回执的提交写入文字，收到 `written` 才以 0 退出，`partial`、`failed`、`missing`（409 `input_failed`）以 1 退出；命名按键在文字之后发送，未知按键以 2 结束；
   - 发送像浏览器输入一样取得控制权，控制指示器显示 `script`，在会话内附上来源会话 ID；
+  - 脚本之后要改终端尺寸见 US-S19；
   - 聊天视图：文字作为提示发送（见 US-S14）；选项与当前视图不符（终端视图带 `--attach-file`/`--mode`，聊天视图带 `--key`）时服务端返回 409 `wrong_view`，CLI 以 1 结束且不写入任何内容；
   - 切换中（`switching`）或会话已归档（`not_active`）时以 1 结束并报告原因；
   - `webmux interrupt SESSION` 调用 `POST /api/sessions/{id}/interrupt`：终端视图写入档案中断键或 Ctrl-C，聊天视图取消进行中的回合，没有回合时以 0 退出；
@@ -81,7 +84,9 @@
   - 状态语义：`waiting` 表示需要用户介入（agent 的授权、提问、未读的完成或出错，或没有 agent 信号时的提示符启发式，所以停在提示符的 shell 是 `waiting`），`idle` 只表示长期无活动，不是“命令或回合已结束”的信号；等 shell 命令结束用 `--wait waiting,idle`，等 agent 一回合结束用 `--until attention`。
 - **US-S10 读取会话的输出与画面**：作为脚本或 agent，我希望读取会话输出，并看到全屏 TUI 当前显示的内容，以便判断下一步。
   - `webmux logs SESSION` 输出回放缓冲区原始字节，`--strip` 去除控制序列（CRLF、单独 CR、退格按行处理），`--tail N` 取最后 N 行（与 `--follow` 互斥），`--follow` 以观察者身份持续输出且不抢控制权；
-  - `webmux screen SESSION` 以观察者身份取回放，在 CLI 本地按会话网格渲染，输出可见画面的纯文本，`--json` 含尺寸、光标与是否备用屏幕；回放被截断时在标准错误提示；聊天视图以 1 结束；服务端不做终端模拟。
+  - `webmux screen SESSION` 以观察者身份取回放，在 CLI 本地按会话网格渲染，输出可见画面的纯文本，`--json` 含尺寸、光标与是否备用屏幕；回放被截断时在标准错误提示；聊天视图以 1 结束；服务端不做终端模拟；
+  - `--scrollback N`（0–100000，默认 0 即只输出可见画面）让回放模拟器保留 N 行滚动历史，输出把历史行放在画面之前，`--json` 的 `lines` 同样包含；历史来自 2 MiB 回放缓冲区，按控制端当前宽度重排，
+    缓冲区已丢弃的更早内容取不到，截断提示照旧；备用屏幕程序（vim、less、多数 TUI）没有滚动历史，只输出可见画面；不提供按其他尺寸回放的选项；`N` 越界以 2 结束。
 - **US-S11 通用 API、会话生命周期与事件**：作为脚本，我希望结束、移除、改名会话，订阅会话事件，并调用没有专用命令的接口。
   - `webmux kill`（结束进程，会话保留为已结束；带聊天视图的会话变为已关闭并归档）、`webmux rm`（移除，运行中的先结束，带聊天视图的会话保留归档）、`webmux rename SESSION [NAME]`（空名称交还给终端标题）；
   - `webmux rm SESSION --forget` 调用 `DELETE /api/sessions/{id}?forget=1`，同时删除归档记录与临时文件夹（运行中的带聊天视图会话先关闭）；终端上先确认，非交互时需要 `--yes`，否则以 2 结束；
@@ -132,6 +137,13 @@
   - 聊天视图（混合模式）开关：`add --chat` 先经 `POST /api/launch-configs/chat-support` 做支持检查，不支持时以 1 结束；`edit` 用 `--chat`/`--no-chat` 开关；`ls` 显示是否开启聊天视图；
     旧选项 `--hybrid`/`--no-hybrid` 按未知选项以 2 结束；
   - `forward ls|add|rm`：`add` 输出转发地址，`--session self` 关联当前会话，`--no-compat` 关闭兼容改写；转发关闭、端口非法或重复时给出原因并以 1 结束。
+- **US-S19 从脚本调整终端尺寸**：作为脚本或 agent，我希望在没有浏览器控制终端时改变会话的 PTY 尺寸，以便让程序按我需要的宽高排版并用 `screen` 读到完整画面。
+  - `POST /api/sessions/{id}/resize {cols, rows, take?}` 与其他会话接口一样要求认证并检查 Origin（本机套接字上的会话内调用同样可用），成功时 200 返回 `SessionInfo`，PTY、会话信息与预览同时变为新尺寸并向观察端广播控制帧；
+  - 当前没有控制端，或控制端是脚本输入（`send` 取得的 `script` 控制权）时直接允许；控制端是浏览器或 `attach` 时返回 409，因为浏览器收到控制帧后会把自己的网格重发，脚本强行修改会来回抢；
+    请求带 `take: true` 时脚本先接管控制权（控制指示器显示 `script`）再调整尺寸，随后释放；检查与调整在同一个临界区内完成；
+  - `cols`、`rows` 各为 1–1000，否则 400；会话不存在 404；会话已退出或处于聊天视图（没有终端运行）409；
+  - `webmux resize SESSION COLSxROWS [--take]` 调用该接口，成功时以 0 结束；格式错误或越界以 2 结束且不发请求；409、404 与其他失败以 1 结束并在标准错误给出原因；
+  - 之后第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整尺寸。
 
 ### 依据
 
@@ -145,3 +157,4 @@
 - [聊天命令](../../internal/sessioncmd/chat.go)、[聊天历史、设置与队列命令](../../internal/sessioncmd/chat_more.go)、[聊天接口](../../internal/api/chat.go)
 - [启动命令](../../internal/sessioncmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/sessioncmd/streams.go)、[仓库与主页显示](../../internal/sessioncmd/workspace.go)
 - [会话创建与初始化指令展开](../../internal/workspace/create_session.go)、[会话接口](../../internal/api/sessions.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)
+- [脚本调整尺寸](../../internal/session/session.go)、[尺寸校验与创建尺寸](../../internal/session/manager.go)、[尺寸请求类型](../../internal/contract/sessions.go)、[resize 命令与 screen 滚动历史](../../internal/sessioncmd/control.go)

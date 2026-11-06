@@ -50,7 +50,10 @@ Web 端的新建会话对话框、快速开始页与 `webmux run` 都调用它�
 - 服务端不自行复制调用方的环境，`env` 也不出现在 `SessionInfo` 中。
 - Linux/macOS 的 `webmux run` 会把调用方环境（去掉终端身份等服务端自有变量）放进该字段发送。
 
-**可选字段**：`name`、`labels`（规则见 [父会话与标签](http-sessions.md#父会话与标签)）、`view`、`prompt`、`useInitInstruction`、`attachments`、`agentConfig`、`permissionMode`、`clientRequestId`。
+**可选字段**：`name`、`labels`（规则见 [父会话与标签](http-sessions.md#父会话与标签)）、`view`、`prompt`、`useInitInstruction`、`attachments`、`agentConfig`、`permissionMode`、`cols`、`rows`、`clientRequestId`。
+
+`cols` 与 `rows` 是 PTY 的初始尺寸：两者都缺省或为 0 时为 80×24，否则必须同时给出且各为 1–1000，只给一个或越界时在预检 400，不创建任何东西。PTY 启动即是该尺寸，`SessionInfo` 与预览一致；
+混合会话的终端端同样使用它（聊天视图创建的会话切到终端时亦然）。之后第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整尺寸；脚本用 [`POST /api/sessions/{id}/resize`](http-sessions.md#调整终端尺寸) 改尺寸。
 
 ## 视图
 

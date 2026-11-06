@@ -77,6 +77,9 @@ type ControlState struct {
 	ColorSchemeReports bool                `json:"colorSchemeReports"`
 }
 
+// MaxTerminalDimension is the largest column or row count of a PTY grid.
+const MaxTerminalDimension = 1000
+
 // TerminalResize is the controller's grid.
 type TerminalResize struct {
 	Cols uint16 `json:"cols"`

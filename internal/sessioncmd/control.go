@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -327,6 +328,64 @@ var renameCommand = &Command{
 			return contract.ExitOK
 		}
 	},
+}
+
+var resizeCommand = &Command{
+	Name: "resize", Group: GroupSessions, Args: "SESSION COLSxROWS",
+	Summary: "Set the size of a session's terminal, in columns and rows.",
+	Description: "Resizes the PTY, so the program redraws for the new size. It works while no browser or attached terminal controls the " +
+		"session, or while a script does (webmux send makes this client the controller as \"script\"). A session that a browser or " +
+		"attached terminal controls refuses with exit 1, because that client sends its own window size back and the two would fight; " +
+		"--take takes control for the resize, then releases it. The first browser or attached terminal to take control afterwards " +
+		"resizes the session to its own window. The terminal's replay and webmux screen use the controller's size.",
+	Arguments: []Item{sessionArgument, {Name: "COLSxROWS", Text: "Columns and rows, each 1-1000, such as 120x40."}},
+	Env:       []Item{sessionIDEnv},
+	Exit:      exitsCommon(ExitItem{Code: 1, Text: "No such session, it has exited or is on its chat view (no terminal), or a browser or attached terminal controls it and --take was not given."}),
+	Examples: []Example{
+		{Command: "webmux resize abcd2345 120x40", Text: "Make a script-driven session's terminal 120 columns by 40 rows."},
+		{Command: "webmux resize abcd2345 200x50 --take", Text: "Resize a session even though a browser controls it."},
+	},
+	SeeAlso: []string{"webmux run", "webmux screen", "webmux send"},
+	Bind: func(fs *flag.FlagSet) Action {
+		take := fs.Bool("take", false, "take control from a browser or attached terminal for the resize, then release it")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 2 {
+				return e.Usagef("a session ID and COLSxROWS are required")
+			}
+			cols, rows, ok := parseGrid(args[1])
+			if !ok {
+				return e.Usagef("%q is not COLSxROWS with each 1-%d, such as 120x40", args[1], contract.MaxTerminalDimension)
+			}
+			id, code, ok := e.SessionID(args[0])
+			if !ok {
+				return code
+			}
+			client, code := e.connect()
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			request := contract.SessionResizeRequest{Cols: cols, Rows: rows, Take: *take}
+			if err := client.Do(ctx, http.MethodPost, "/api/sessions/"+url.PathEscape(id)+"/resize", request, nil); err != nil {
+				return e.sessionFail(err)
+			}
+			return contract.ExitOK
+		}
+	},
+}
+
+// parseGrid reads COLSxROWS, each 1-contract.MaxTerminalDimension.
+func parseGrid(s string) (cols, rows int, ok bool) {
+	c, r, found := strings.Cut(strings.ToLower(s), "x")
+	if !found {
+		return 0, 0, false
+	}
+	cols, errCols := strconv.Atoi(c)
+	rows, errRows := strconv.Atoi(r)
+	if errCols != nil || errRows != nil || cols < 1 || rows < 1 || cols > contract.MaxTerminalDimension || rows > contract.MaxTerminalDimension {
+		return 0, 0, false
+	}
+	return cols, rows, true
 }
 
 func keyNames() string {
@@ -751,24 +810,34 @@ type position struct {
 	Col int `json:"col"`
 }
 
+// maxScreenScrollback bounds --scrollback: the emulator allocates its
+// history up front.
+const maxScreenScrollback = 100000
+
 var screenCommand = &Command{
 	Name: "screen", Group: GroupSessions, Args: "SESSION",
 	Summary: "Print the text a terminal session shows right now, rendered on the client.",
 	Description: "Connects as an observer, replays the session into a terminal emulator inside this command at the controller's size, " +
 		"and prints the visible screen; the server does no terminal emulation. Use it to see a full-screen TUI's state, such as an " +
-		"agent waiting on a permission prompt. A truncated replay may leave the screen incomplete; full-screen programs usually redraw.",
+		"agent waiting on a permission prompt. A truncated replay may leave the screen incomplete; full-screen programs usually redraw.\n\n" +
+		"--scrollback N also prints up to N lines of scroll history above the screen. The history comes from the session's 2 MiB " +
+		"output buffer, replayed at the controller's current width, so it holds only what that buffer still has and is cut off the same way " +
+		"as a truncated replay. A program on the alternate screen (vim, less, most TUIs) has no scroll history: only the visible screen is printed.",
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
-	Output:    "The visible lines without trailing blanks. With --json, {cols, rows, cursor: {row, col}, altScreen, lines}. --cursor writes the 1-based cursor position to standard error.",
-	Exit:      exitsCommon(ExitItem{Code: 1, Text: "No such session, or it is on its chat view."}),
+	Output: "The visible lines without trailing blanks, preceded by the scroll history with --scrollback. With --json, " +
+		"{cols, rows, cursor: {row, col}, altScreen, lines}, where lines includes the history. --cursor writes the 1-based cursor position to standard error.",
+	Exit: exitsCommon(ExitItem{Code: 1, Text: "No such session, or it is on its chat view."}),
 	Examples: []Example{
 		{Command: "webmux screen abcd2345", Text: "See what an agent's terminal shows."},
 		{Command: "webmux screen abcd2345 --json | jq -r '.lines[-1]'", Text: "Read the last line of the screen."},
+		{Command: "webmux screen abcd2345 --scrollback 200", Text: "See the last 200 lines that scrolled off the screen, then the screen."},
 	},
 	SeeAlso: []string{"webmux logs", "webmux send", "webmux chat status"},
 	Bind: func(fs *flag.FlagSet) Action {
 		asJSON := fs.Bool("json", false, "print size, cursor, alternate-screen state and lines as JSON")
 		cursor := fs.Bool("cursor", false, "write the cursor position to standard error")
+		scrollback := fs.Int("scrollback", 0, "also print up to `N` lines of scroll history above the screen (0-100000; none on the alternate screen)")
 		return func(ctx context.Context, e Env, args []string) int {
 			if len(args) != 1 {
 				return e.Usagef("exactly one session ID is required")
@@ -777,12 +846,15 @@ var screenCommand = &Command{
 			if !ok {
 				return code
 			}
+			if *scrollback < 0 || *scrollback > maxScreenScrollback {
+				return e.Usagef("--scrollback must be 0-%d", maxScreenScrollback)
+			}
 			client, code := e.connect()
 			if client == nil {
 				return code
 			}
 			defer client.Close()
-			view, err := e.renderScreen(ctx, client, id)
+			view, err := e.renderScreen(ctx, client, id, *scrollback)
 			if err != nil {
 				return e.Fail(err)
 			}
@@ -806,7 +878,7 @@ var screenCommand = &Command{
 // screenQuiet is how long screen waits for output after the replay.
 const screenQuiet = 150 * time.Millisecond
 
-func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id string) (screenView, error) {
+func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id string, scrollback int) (screenView, error) {
 	query := url.Values{"label": {e.scriptLabel()}}
 	conn, err := client.DialWebSocket(ctx, "/ws/s/"+url.PathEscape(id)+"?"+query.Encode())
 	if err != nil {
@@ -869,7 +941,7 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 		cols, rows = 80, 24
 	}
 	options := vt.NewOptions()
-	options.Cols, options.Rows, options.Scrollback = cols, rows, 0
+	options.Cols, options.Rows, options.Scrollback = cols, rows, scrollback
 	term := vt.NewTerminal(options)
 	for _, chunk := range pending {
 		term.Write(chunk)
@@ -879,8 +951,14 @@ func (e Env) renderScreen(ctx context.Context, client *localclient.Client, id st
 		Cols: cols, Rows: rows, AltScreen: buffer == term.Buffers().Alt(),
 		Cursor: position{Row: buffer.Y + 1, Col: buffer.X + 1},
 	}
-	for y := 0; y < rows; y++ {
-		view.Lines = append(view.Lines, strings.TrimRight(buffer.TranslateBufferLineToString(buffer.YBase+y, true, 0, cols), " "))
+	// Without scrollback the screen is the last rows lines; with it the
+	// history above them comes first.
+	first := buffer.YBase
+	if scrollback > 0 {
+		first = 0
+	}
+	for y := first; y < buffer.YBase+rows; y++ {
+		view.Lines = append(view.Lines, strings.TrimRight(buffer.TranslateBufferLineToString(y, true, 0, cols), " "))
 	}
 	for len(view.Lines) > 0 && view.Lines[len(view.Lines)-1] == "" {
 		view.Lines = view.Lines[:len(view.Lines)-1]

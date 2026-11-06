@@ -172,7 +172,7 @@ func CreateInput(r contract.CreateSessionRequest) workspace.CreateInput {
 	in := workspace.CreateInput{
 		ClientRequestID: r.ClientRequestID, Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID,
 		Side: side(r.View), Prompt: r.Prompt, UseInitInstruction: r.UseInitInstruction,
-		AgentConfig: r.AgentConfig, PermissionMode: string(r.PermissionMode),
+		AgentConfig: r.AgentConfig, PermissionMode: string(r.PermissionMode), Cols: r.Cols, Rows: r.Rows,
 	}
 	if r.Workspace != nil {
 		ref := workspace.Reference(*r.Workspace)
@@ -214,6 +214,12 @@ func InputKeys(names []string) (keys [][]byte, ok bool) {
 		keys = append(keys, []byte(key))
 	}
 	return keys, true
+}
+
+// ScriptResize converts the body of POST /api/sessions/{id}/resize; label
+// names the controller while the request holds control.
+func ScriptResize(r contract.SessionResizeRequest, label string) session.ScriptResize {
+	return session.ScriptResize{Cols: r.Cols, Rows: r.Rows, Take: r.Take, Label: label}
 }
 
 // SessionInput converts the body of POST /api/sessions/{id}/input; label

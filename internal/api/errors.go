@@ -37,7 +37,8 @@ func sessionStatus(err error) int {
 	switch {
 	case errors.Is(err, session.ErrNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, session.ErrRunning), errors.Is(err, session.ErrExited):
+	case errors.Is(err, session.ErrRunning), errors.Is(err, session.ErrExited),
+		errors.Is(err, session.ErrNoRun), errors.Is(err, session.ErrNotController):
 		return http.StatusConflict
 	case errors.Is(err, session.ErrInvalid):
 		return http.StatusBadRequest
@@ -303,6 +304,7 @@ func sessionCommandFailure(w http.ResponseWriter, err error) {
 		failure(w, http.StatusBadRequest, bad.err)
 	case hybridFailure(w, err):
 	case errors.Is(err, session.ErrNotFound), errors.Is(err, session.ErrRunning), errors.Is(err, session.ErrExited),
+		errors.Is(err, session.ErrNoRun), errors.Is(err, session.ErrNotController),
 		errors.Is(err, session.ErrInvalid), errors.Is(err, session.ErrShuttingDown):
 		failure(w, sessionStatus(err), err)
 	case cancelled(err):

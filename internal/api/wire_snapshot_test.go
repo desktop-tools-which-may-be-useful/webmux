@@ -95,7 +95,7 @@ func wireSchema(name string) wireRules {
 		sessionFields("/session")
 		add("/session", "path", "cmd/*")
 		worktreeFields("/worktree")
-	case "session-get", "session-labels", "session-attention",
+	case "session-get", "session-labels", "session-attention", "session-resize", "session-resize-take",
 		"ws-terminal-state", "ws-terminal-state-exited", "session-get-hybrid", "session-get-hybrid-work", "ws-terminal-state-hybrid", "hybrid-resume":
 		sessionFields("")
 		add("", "path", "cmd/*")
@@ -134,11 +134,12 @@ func wireSchema(name string) wireRules {
 		add("", "time", "expiresAt")
 	case "ws-terminal-position-live", "ws-terminal-position-reset":
 		add("", "id", "generation")
-	case "ws-terminal-control-initial", "ws-terminal-control-observer", "ws-terminal-control-claimed", "ws-terminal-control-uncontrolled":
+	case "ws-terminal-control-initial", "ws-terminal-control-observer", "ws-terminal-control-claimed", "ws-terminal-control-uncontrolled",
+		"ws-terminal-control-resize-controller", "ws-terminal-control-resize-take":
 		add("/controller", "time", "since")
 		// Explicit client query parameters stay literal; the anonymous exited
 		// session's controller, when present, has a server-generated ID.
-		if name == "ws-terminal-control-uncontrolled" {
+		if name == "ws-terminal-control-uncontrolled" || name == "ws-terminal-control-resize-take" {
 			add("/controller", "id", "clientId")
 		}
 	case "config":
@@ -837,6 +838,20 @@ func wireSessions(f *wireFixture) {
 	f.call("error-400-session-input-key", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-3", Keys: []string{"f13"}}, 400)
 	f.call("error-409-session-view-no-chat", "POST", "/api/sessions/"+catID+"/view", contract.ViewChangeRequest{ClientRequestID: "wire-view-1", To: contract.ViewChat}, 409)
 	f.call("error-409-session-chat-no-chat", "PUT", "/api/sessions/"+catID+"/chat/permission-mode", contract.ChatPermissionModeRequest{ClientRequestID: "wire-mode-1", Mode: contract.ChatPermissionAuto}, 409)
+	resize := "/api/sessions/" + catID + "/resize"
+	f.call("session-resize", "POST", resize, contract.SessionResizeRequest{Cols: 100, Rows: 30}, 200)
+	f.call("error-400-session-resize", "POST", resize, contract.SessionResizeRequest{Cols: 0, Rows: 30}, 400)
+	f.call("error-404-session-resize", "POST", "/api/sessions/aaaaaaaa/resize", contract.SessionResizeRequest{Cols: 100, Rows: 30}, 404)
+	// A browser connection that controls the terminal refuses the script
+	// until it takes control.
+	browser := f.dial("/ws/s/" + catID + "?client=wire-resize&label=Browser")
+	f.frame(browser, "ws-terminal-control-resize-controller", 6, func(p map[string]any) bool { return p["controller"] != nil })
+	f.call("error-409-session-resize-controller", "POST", resize, contract.SessionResizeRequest{Cols: 90, Rows: 25}, 409)
+	f.call("session-resize-take", "POST", resize, contract.SessionResizeRequest{Cols: 90, Rows: 25, Take: true}, 200)
+	f.frame(browser, "ws-terminal-control-resize-take", 6, func(p map[string]any) bool {
+		controller, _ := p["controller"].(map[string]any)
+		return controller != nil && p["cols"] == float64(90)
+	})
 	f.call("session-interrupt", "POST", "/api/sessions/"+catID+"/interrupt", contract.SessionCommandRequest{ClientRequestID: "wire-interrupt-1"}, 204)
 	// Ctrl-C ends cat; take it out of the list the later snapshots record.
 	if catItem, err := f.manager.Get(catID); err == nil {

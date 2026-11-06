@@ -92,6 +92,42 @@ var (
 	ErrShuttingDown = errors.New("server is shutting down")
 )
 
+// Terminal grid limits: a new PTY is DefaultCols by DefaultRows, and every
+// resize and requested initial size is 1..MaxDimension on both axes.
+const (
+	DefaultCols  = 80
+	DefaultRows  = 24
+	MaxDimension = contract.MaxTerminalDimension
+)
+
+// ValidateSize accepts a terminal grid of 1..MaxDimension on both axes.
+func ValidateSize(cols, rows int) error {
+	if cols < 1 || rows < 1 || cols > MaxDimension || rows > MaxDimension {
+		return fmt.Errorf("terminal size must be 1..%d columns by 1..%d rows", MaxDimension, MaxDimension)
+	}
+	return nil
+}
+
+// ValidateInitialSize validates the optional initial size of a create: both
+// zero means the default, otherwise both must be set and in range.
+func ValidateInitialSize(cols, rows int) error {
+	if cols == 0 && rows == 0 {
+		return nil
+	}
+	if cols == 0 || rows == 0 {
+		return errors.New("cols and rows must be set together")
+	}
+	return ValidateSize(cols, rows)
+}
+
+// requestedSize is ValidateInitialSize as the PTY grid; zero means default.
+func requestedSize(cols, rows int) (uint16, uint16, error) {
+	if err := ValidateInitialSize(cols, rows); err != nil {
+		return 0, 0, fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	return uint16(cols), uint16(rows), nil
+}
+
 func NewManager(o Options) *Manager {
 	if o.ScrollbackBytes == 0 {
 		o.ScrollbackBytes = 2 * 1024 * 1024
@@ -129,6 +165,9 @@ type CreateInput struct {
 	Name     string
 	Env      map[string]string
 	ConfigID string
+	// Cols and Rows are the PTY's initial size, both zero for the default;
+	// setting only one is invalid.
+	Cols, Rows int
 }
 
 // Create starts a session. Env holds explicit variables added to the server's
@@ -175,6 +214,9 @@ func (m *Manager) resolveCreate(in CreateInput) (string, error) {
 	if err := ValidateEnv(in.Env); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
+	if _, _, err := requestedSize(in.Cols, in.Rows); err != nil {
+		return "", err
+	}
 	cwd := in.Cwd
 	if cwd == "" {
 		cwd = m.options.DefaultCwd
@@ -197,6 +239,7 @@ func (m *Manager) resolveCreate(in CreateInput) (string, error) {
 }
 
 func (m *Manager) startOptions(in CreateInput) startOptions {
+	cols, rows, _ := requestedSize(in.Cols, in.Rows)
 	return startOptions{
 		agentProtocol:   !m.options.DisableAgentProtocol,
 		bellAttention:   !m.options.DisableBellAttention,
@@ -206,6 +249,8 @@ func (m *Manager) startOptions(in CreateInput) startOptions {
 		configID:        in.ConfigID,
 		terminalVersion: m.options.TerminalVersion,
 		serverEnv:       m.serverEnv(),
+		cols:            cols,
+		rows:            rows,
 	}
 }
 

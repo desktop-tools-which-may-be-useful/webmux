@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "invalid session request: terminal size must be 1..1000 columns by 1..1000 rows"
+  }
+}

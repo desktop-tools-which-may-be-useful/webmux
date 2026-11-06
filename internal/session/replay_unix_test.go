@@ -177,7 +177,7 @@ func TestRepaintCoalescesAndRealResizeCancelsRestore(t *testing.T) {
 	if !coalesced {
 		t.Fatal("pending redraw request was not coalesced on the temporary grid")
 	}
-	if err := s.Resize(91, 31); err != nil {
+	if err := s.ResizeScript(ScriptResize{Cols: 91, Rows: 31}); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(200 * time.Millisecond)

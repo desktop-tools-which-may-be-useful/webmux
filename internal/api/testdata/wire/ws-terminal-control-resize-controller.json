@@ -1,0 +1,12 @@
+{
+  "body": {
+    "colorSchemeReports": false,
+    "cols": 100,
+    "controller": {
+      "clientId": "wire-resize",
+      "label": "Browser",
+      "since": "<time>"
+    },
+    "rows": 30
+  }
+}

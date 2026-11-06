@@ -63,7 +63,9 @@ type NewWorktree struct {
 // Enter. Attachments (files staged by an upload before the session existed),
 // AgentConfig (option ID to value: a select value, or "true"/"false" for a
 // boolean) and PermissionMode (ask, auto or empty for the default) belong to
-// the chat side only. A non-empty ClientRequestID dedupes retries.
+// the chat side only. A non-empty ClientRequestID dedupes retries. Cols and
+// Rows are the terminal's initial size (the TUI side of a hybrid session
+// too): both zero for the default, otherwise both set within 1..1000.
 type CreateInput struct {
 	ClientRequestID string
 	Cwd             string
@@ -80,6 +82,7 @@ type CreateInput struct {
 	Attachments        []string
 	AgentConfig        map[string]string
 	PermissionMode     string
+	Cols, Rows         int
 }
 
 // CreateResult is a created session. Worktree is the worktree the request
@@ -231,10 +234,14 @@ func (s *Service) createPlan(ctx context.Context, in CreateInput) (createPlan, e
 	if in.NewWorktree != nil && (in.Cwd != "" || in.Workspace != nil) {
 		return plan, problemf(ErrInvalid, "cwd、workspace 与 newWorktree 只能选择一个")
 	}
+	if err := session.ValidateInitialSize(in.Cols, in.Rows); err != nil {
+		return plan, problemf(ErrInvalid, "%v", err)
+	}
 	command, err := s.resolveCommand(in)
 	if err != nil {
 		return plan, err
 	}
+	command.cols, command.rows = in.Cols, in.Rows
 	plan.command = command
 	plan.side = hybrid.Side(in.Side)
 	if plan.side == "" {
@@ -404,6 +411,9 @@ type resolvedCommand struct {
 	env      map[string]string
 	configID string // empty for an explicit command
 	hybrid   bool
+	// cols and rows are the terminal's requested initial size, zero for the
+	// default.
+	cols, rows int
 }
 
 // resolveCommand applies a saved launch config and validates the explicit
@@ -505,12 +515,16 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 	if command.hybrid {
 		item, err = s.hybrids.Create(requestCtx, hybrid.CreateInput{
 			Cwd: path, Name: name, ConfigID: command.configID, Cmd: command.cmd, Env: command.env, StartSide: side,
+			Cols: command.cols, Rows: command.rows,
 		})
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		item, err = s.manager.Create(session.CreateInput{Cwd: path, Cmd: command.cmd, Name: name, Env: command.env, ConfigID: command.configID})
+		item, err = s.manager.Create(session.CreateInput{
+			Cwd: path, Cmd: command.cmd, Name: name, Env: command.env, ConfigID: command.configID,
+			Cols: command.cols, Rows: command.rows,
+		})
 		if err != nil {
 			return nil, sessionCreateError(err)
 		}

@@ -39,3 +39,18 @@ test("non-empty command or environment conflicts with configId", () => {
   ])
     expect(CreateSessionRequestSchema.safeParse(body).success).toBe(false);
 });
+
+test("the initial terminal size stays within the PTY's 1..1000 grid", () => {
+  const cmd = ["sh"];
+  expect(
+    CreateSessionRequestSchema.safeParse({ cmd, cols: 200, rows: 50 }).success,
+  ).toBe(true);
+  for (const size of [
+    { cols: 0, rows: 24 },
+    { cols: 1001, rows: 24 },
+    { cols: 80, rows: 1.5 },
+  ])
+    expect(CreateSessionRequestSchema.safeParse({ cmd, ...size }).success).toBe(
+      false,
+    );
+});

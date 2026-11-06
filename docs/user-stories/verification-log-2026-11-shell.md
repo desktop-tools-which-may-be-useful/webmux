@@ -83,3 +83,13 @@
 - 依据：两个变更的 `specs/` 与工作树中 `internal/contract`（`sessions.go`、`views.go`、`chat.go`、`launch.go`）及 `internal/api` 路由的对照阅读；只运行了 `make docs-check`。
 - 限制：实现仍在进行中，未运行 Go、前端或端到端测试，也未用真实服务进程冒烟；CLI 部分（`run --view`、`send --reply`、`interrupt`、`view`、`resume`、`ls --archived`、`rm --forget`、
   命令目录在运行时渲染）只按规格描述，待变更的验证任务完成后再核对。
+
+本次局部核对（2026-11-06，终端尺寸控制）：`run --cols/--rows`（创建时的初始尺寸）、`screen --scrollback`、`POST /api/sessions/{id}/resize` 与 `webmux resize`。
+
+- 更新的故事：US-S07、US-S09、US-S10、新增 US-S19；US-D06 只增加指向 US-S19 的说明。
+- 已运行：`go test -race` 覆盖 `internal/session`、`workspace`、`hybrid`、`api`（含 `TestWireSnapshots` 与新增的认证、Origin、400/404/409 用例）、`wire`、`sessioncmd`、`agentguide`、`archtest`；
+  `make check`（含 `make docs-check`、`format-check`、`golangci-lint` v2.15.0、`check:arch`）；`web/test/api.test.ts`。
+- 冒烟：用本分支构建的二进制起独立实例（独立状态目录与端口），`run --cols 200 --rows 50` 后 `ls --json` 与 `screen --json` 均为 200×50；
+  输出 300 行的会话上 `screen` 只有 23 行，`--scrollback 200` 取得 223 行；`send` 之后 `resize` 成功，WebSocket 连接控制时 `resize` 以 1 结束（409），`--take` 成功。
+- 限制：控制端是真实浏览器或 `attach`（PTY）的路径只用 WebSocket 连接模拟，未在浏览器中运行；未在 macOS 上运行；在 WebMux 会话内运行测试时（环境中有 `WEBMUX_*`）`internal/session` 的 `TestProcessSessionFindsCreator` 与 `cmd/webmux` 的隧道测试会失败，
+  取消这些变量后 `internal/session`、`workspace`、`cmd/webmux` 全部通过。

@@ -175,6 +175,12 @@ type CreateSessionRequest struct {
 	AgentConfig map[string]string `json:"agentConfig,omitempty"`
 	// PermissionMode is ask, auto or empty for the default.
 	PermissionMode ChatPermissionMode `json:"permissionMode,omitempty"`
+	// Cols and Rows are the PTY's initial size (the terminal side of a chat
+	// session too). Both absent or 0 is 80x24; otherwise both are required,
+	// each 1..1000. The first browser to control the session resizes it to
+	// its own window.
+	Cols int `json:"cols,omitempty"`
+	Rows int `json:"rows,omitempty"`
 }
 
 // NewWorktree asks POST /api/sessions to create a worktree first. Mode is
@@ -262,6 +268,18 @@ type SessionInputResult struct {
 // as POST /api/sessions/{id}/interrupt and the chat queue commands.
 type SessionCommandRequest struct {
 	ClientRequestID string `json:"clientRequestId"`
+}
+
+// SessionResizeRequest is the body of POST /api/sessions/{id}/resize, which
+// answers 200 with the SessionInfo. Cols and Rows are each 1..1000. A
+// terminal controlled by a browser or an attached client refuses with 409
+// unless Take is set: the script then takes control for the resize. A
+// terminal nobody controls, or that server-side input controls, resizes
+// without it.
+type SessionResizeRequest struct {
+	Cols int  `json:"cols"`
+	Rows int  `json:"rows"`
+	Take bool `json:"take,omitempty"`
 }
 
 // LabelsUpdate is the body of PATCH /api/sessions/{id}/labels: Set adds or

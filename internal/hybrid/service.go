@@ -193,6 +193,8 @@ type CreateInput struct {
 	Cmd       []string
 	Env       map[string]string
 	StartSide Side
+	// Cols and Rows are the initial terminal size, both zero for the default.
+	Cols, Rows int
 }
 
 // CheckCreate makes the checks of a Create of in before anything exists:
@@ -266,7 +268,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	// The shell shows the terminal command, with the options the profile
 	// injects (OpenCode's --standalone); the record keeps the config's argv.
 	shell, err := s.manager.CreateShell(session.ShellInput{
-		CreateInput: session.CreateInput{Cwd: cwd, Cmd: cmd.TUIArgv(), Name: in.Name, Env: in.Env, ConfigID: in.ConfigID},
+		CreateInput: session.CreateInput{Cwd: cwd, Cmd: cmd.TUIArgv(), Name: in.Name, Env: in.Env, ConfigID: in.ConfigID, Cols: in.Cols, Rows: in.Rows},
 		Overlay:     a.overlay(),
 	}, a)
 	if err != nil {

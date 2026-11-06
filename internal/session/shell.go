@@ -181,7 +181,8 @@ func (m *Manager) CreateShell(in ShellInput, d Driver) (*Session, error) {
 		s.overlay = in.Overlay.clone()
 	}
 	if len(in.Argv) > 0 {
-		r, generation, err := launchRun(id, cwd, in.Argv, 80, 24, options)
+		cols, rows := options.size()
+		r, generation, err := launchRun(id, cwd, in.Argv, cols, rows, options)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 		}

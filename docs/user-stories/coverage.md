@@ -31,8 +31,10 @@
 | `{{webmux}}` 说明接口、初始化指令与快捷指令中的 `{{webmux}}`、预设“WebMux 工具”                     | US-S06；US-G06；US-J12                              |
 | `run` 的位置、`--new-worktree` 与 `--view`                                                          | US-S07；US-M01                                      |
 | `run` 的 `--json/--wait/--reply/--dry-run/--label`、自动分离与 `--follow`                           | US-S07；US-M01                                      |
+| `run --cols/--rows` 的初始终端尺寸（请求字段 `cols`、`rows`）                                       | US-S07；US-D06                                      |
 | `run --new-worktree --view chat --prompt --reply` 分派任务与 `launch-config options`                | US-S08；US-Q18                                      |
-| 按视图分派的 `send` 与 `interrupt`、`wait`、`logs`、`screen` 与会话事件                             | US-S09–US-S11；US-D05                               |
+| 按视图分派的 `send` 与 `interrupt`、`wait`、`logs`、`screen`（含 `--scrollback`）与会话事件         | US-S09–US-S11；US-D05                               |
+| `resize` 命令与 `POST /api/sessions/{id}/resize`（脚本改终端尺寸，`--take` 接管控制权）             | US-S19；US-D06                                      |
 | `api`、`kill`、`rm`（含 `--forget`）、`rename` 与 shell 补全                                        | US-S11–US-S12                                       |
 | `notify` 提醒（来源 `cli`）与清除                                                                   | US-S13；US-C06、US-C12                              |
 | 聊天视图：`send --reply` 与插话、`chat status/watch/answer/set/permission/queue`                    | US-S14；US-Q01–US-Q19                               |

@@ -58,6 +58,8 @@ type runOptions struct {
 	asJSON, dryRun, reply, autoWaitRequests            bool
 	wait                                               string
 	timeout                                            time.Duration
+	// Initial terminal size; both or neither.
+	cols, rows int
 }
 
 // runCommand creates a session from a saved launch config or an explicit
@@ -87,6 +89,8 @@ var runCommand = &Command{
 		"pinned to the home page like the Web UI does. A launch config with the chat view can start on it (--view chat) with " +
 		"agent settings, a permission mode and attachments; --prompt is the first message on either view. Everything is " +
 		"created by one request; a failure names the step that failed and what was already created, and nothing is rolled back.\n\n" +
+		"--cols and --rows (both) give the terminal its initial size; the first browser or attached terminal that controls the session " +
+		"then resizes it to its own window (webmux resize changes it later).\n\n" +
 		"Without a terminal (an agent's tool call, a pipe) run detaches instead of failing; --attach insists on attaching. " +
 		"--follow streams the output to standard output without a terminal and exits with the program's exit status; " +
 		"Ctrl+C only stops following unless --kill-on-interrupt. --reply follows the first prompt's turn like webmux send --reply.",
@@ -108,6 +112,7 @@ var runCommand = &Command{
 	},
 	Examples: []Example{
 		{Command: "webmux run -- claude", Text: "Start Claude Code in the current directory and attach; Ctrl+] detaches."},
+		{Command: "webmux run --detach --cols 200 --rows 50 -- make test", Text: "Start a session whose terminal is 200 columns by 50 rows from its first output."},
 		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID and link."},
 		{Command: "webmux run --follow --strip -- go test ./...", Text: "Run tests in a persistent session, stream plain text and exit with their status."},
 		{Command: `webmux run --new-worktree --branch fix/lint --launch-config Codex --view chat --set model=gpt-5 --prompt "Fix all lint and summarize" --reply`, Text: "Start an agent on a new worktree's chat view and print its reply."},
@@ -139,6 +144,8 @@ var runCommand = &Command{
 		"detach":             {Conflicts: []string{"attach", "follow"}},
 		"attach":             {Conflicts: []string{"detach", "follow"}},
 		"wait":               {Conflicts: []string{"attach", "follow", "reply"}},
+		"cols":               {Requires: []string{"rows"}},
+		"rows":               {Requires: []string{"cols"}},
 	},
 	Bind: func(fs *flag.FlagSet) Action {
 		o := runOptions{env: envFlag{}, labels: labelFlag{}, set: labelFlag{}}
@@ -180,6 +187,8 @@ var runCommand = &Command{
 		fs.StringVar(&o.wait, "wait", "", "detach, then wait until the session is first in `STATE` (see webmux wait)")
 		fs.BoolVar(&o.reply, "reply", false, "chat view: follow the first prompt's turn and print the agent's final reply")
 		fs.BoolVar(&o.autoWaitRequests, "auto-wait-requests", false, "with --reply, keep waiting while a permission request or question is open")
+		fs.IntVar(&o.cols, "cols", 0, "initial terminal width in `N` columns (1-1000, with --rows; default 80)")
+		fs.IntVar(&o.rows, "rows", 0, "initial terminal height in `N` rows (1-1000, with --cols; default 24)")
 		fs.DurationVar(&o.timeout, "timeout", 0, "give up --wait or --reply after this `DURATION` (exit 124); 0 waits forever")
 		return func(ctx context.Context, e Env, argv []string) int { return e.run(ctx, o, argv) }
 	},
@@ -192,6 +201,8 @@ func Run(ctx context.Context, e Env, args []string) int { return e.Run(ctx, runC
 func (o *runOptions) validate(argv []string) error {
 	chat := o.view == string(contract.ViewChat)
 	switch {
+	case (o.cols != 0 || o.rows != 0) && (o.cols < 1 || o.rows < 1 || o.cols > contract.MaxTerminalDimension || o.rows > contract.MaxTerminalDimension):
+		return fmt.Errorf("--cols and --rows must be given together, each 1-%d", contract.MaxTerminalDimension)
 	case o.launchConfigSet && o.launchConfig == "":
 		return errors.New("--launch-config requires a non-empty saved config name")
 	case o.launchConfigSet && len(argv) > 0:
@@ -282,6 +293,7 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 		return contract.ExitUsage
 	}
 	request := contract.CreateSessionRequest{
+		Cols: o.cols, Rows: o.rows,
 		Cwd: dir, Name: o.name, Prompt: o.prompt, UseInitInstruction: o.init,
 		View: contract.SessionView(o.view), PermissionMode: contract.ChatPermissionMode(o.permission),
 	}

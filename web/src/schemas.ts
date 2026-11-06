@@ -222,6 +222,10 @@ export const CreateSessionRequestSchema = z
     attachments: z.array(ChatAttachmentSchema).optional(),
     agentConfig: z.record(z.string(), z.string()).optional(),
     permissionMode: ChatPermissionModeSchema.optional(),
+    // Initial terminal size; both or neither. The first browser to control
+    // the session resizes it to its own window.
+    cols: z.number().int().min(1).max(1000).optional(),
+    rows: z.number().int().min(1).max(1000).optional(),
   })
   .refine(
     (body) =>

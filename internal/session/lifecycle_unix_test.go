@@ -88,7 +88,7 @@ func TestCancelledPTYWriteDoesNotHoldInputGate(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if err = s.Resize(100, 40); err != nil {
+	if err = s.ResizeScript(ScriptResize{Cols: 100, Rows: 40}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
