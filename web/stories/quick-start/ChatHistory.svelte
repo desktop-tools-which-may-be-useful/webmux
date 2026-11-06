@@ -10,8 +10,8 @@
   import StatusText from "./StatusText.svelte";
   import { titleOf } from "./titles.svelte";
 
-  // Prototype of the chat-mode sidebar content: live chats flat by latest
-  // activity, with archived records folded below them. The current row uses
+  // Prototype of the chat-mode sidebar content: live chats flat in a stable
+  // order (newest created first), with archived records folded below them. The current row uses
   // the navigation variant's line marker; the implementation keys it on
   // aria-current (design.md §8). Live rows offer the existing rename dialog;
   // archived ones do not.

@@ -8,9 +8,14 @@
   } from "../schemas";
 
   /**
-   * Live sessions with a chat view and archived sessions, each sorted newest activity
-   * first. Terminal-only sessions are left out, and a live session wins over
-   * a record with its ID.
+   * Live sessions with a chat view and archived sessions in a stable order.
+   * Live chats run newest created first, ties by ID, as the workbench tree
+   * and the session list do: output, status changes and renames never move
+   * a row, and a new chat appears on top. Archived records run newest
+   * `archive.updatedAt` first, ties by ID; that time only moves when the
+   * user archives, resumes or edits the record, never from background
+   * activity. Terminal-only sessions are left out, and a live session wins
+   * over a record with its ID.
    */
   export function chatHistorySections(
     sessions: readonly SessionInfo[],
@@ -21,13 +26,18 @@
         (session) =>
           session.views.includes("chat") && session.state === "active",
       )
-      .sort((a, b) => Date.parse(b.lastActiveAt) - Date.parse(a.lastActiveAt));
+      .sort(
+        (a, b) =>
+          Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+          a.id.localeCompare(b.id),
+      );
     const ids = new Set(live.map((session) => session.id));
     const archived = records
       .filter((record) => !ids.has(record.id))
       .sort(
         (a, b) =>
-          Date.parse(b.archive.updatedAt) - Date.parse(a.archive.updatedAt),
+          Date.parse(b.archive.updatedAt) - Date.parse(a.archive.updatedAt) ||
+          a.id.localeCompare(b.id),
       );
     return { live, archived };
   }
@@ -45,7 +55,8 @@
   import RowStatus from "./RowStatus.svelte";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
-  // The chat-mode sidebar: live chats flat by latest activity, with archived
+  // The chat-mode sidebar: live chats flat in a stable order (newest created
+  // first, as the workbench tree), with archived
   // records folded below them. The current row carries aria-current and every
   // row ends in a status dot; the "⋯" menu offers a live chat's rename and
   // archive, and an archived one's resume, space release and record

@@ -19,14 +19,15 @@ afterEach(async () => {
 const list = () => page.getByRole("list", { name: "聊天历史" });
 const archivedList = () => page.getByRole("list", { name: "已归档聊天" });
 
-test("live chats show newest first and archived records fold below", async () => {
+test("live chats show newest created first and archived records fold below", async () => {
   const onopen = vi.fn();
   const onresume = vi.fn();
   const working = chat({
     id: "chataaaa",
     title: "工作中的聊天",
     status: "running",
-    lastActiveAt: "2026-10-28T03:00:00Z",
+    createdAt: "2026-10-28T03:00:00Z",
+    lastActiveAt: "2026-10-28T01:00:00Z",
   });
   render(ChatHistory, {
     sessions: [
@@ -35,7 +36,8 @@ test("live chats show newest first and archived records fold below", async () =>
         id: "chatbbbb",
         title: "等授权",
         status: "waiting",
-        lastActiveAt: "2026-10-28T02:00:00Z",
+        createdAt: "2026-10-28T02:00:00Z",
+        lastActiveAt: "2026-10-28T01:00:00Z",
         attention: {
           kind: "permission",
           source: "agent",
@@ -45,6 +47,7 @@ test("live chats show newest first and archived records fold below", async () =>
       chat({
         id: "chatcccc",
         title: "空闲的聊天",
+        createdAt: "2026-10-28T01:00:00Z",
         lastActiveAt: "2026-10-28T01:00:00Z",
       }),
       // Terminal sessions never show here.
@@ -92,6 +95,132 @@ test("live chats show newest first and archived records fold below", async () =>
   expect(onresume).toHaveBeenCalledWith(
     expect.objectContaining({ id: "archivea" }),
   );
+});
+
+const noop = {
+  configs: [launchConfig()],
+  repositories: [],
+  current: "",
+  onopen: vi.fn(),
+  onresume: vi.fn(),
+  onrename: vi.fn(),
+  onclose: vi.fn(),
+  onrelease: vi.fn(),
+  onremove: vi.fn(),
+};
+const liveLabels = () =>
+  list()
+    .getByRole("button", { name: /（/ })
+    .elements()
+    .map((row) => row.getAttribute("aria-label"));
+
+test("live rows keep their place when a later chat gets output, changes status or is renamed", async () => {
+  const first = chat({
+    id: "chataaaa",
+    title: "较新",
+    createdAt: "2026-10-28T03:00:00Z",
+  });
+  const second = chat({
+    id: "chatbbbb",
+    title: "居中",
+    createdAt: "2026-10-28T02:00:00Z",
+  });
+  const third = chat({
+    id: "chatcccc",
+    title: "较旧",
+    createdAt: "2026-10-28T01:00:00Z",
+  });
+  const view = await render(ChatHistory, {
+    ...noop,
+    sessions: [first, second, third],
+    records: [],
+  });
+  await expect
+    .element(list().getByRole("button", { name: /（/ }).first())
+    .toBeVisible();
+  const initial = ["较新（空闲）", "居中（空闲）", "较旧（空闲）"];
+  expect(liveLabels()).toEqual(initial);
+
+  // The oldest chat produces output and is the newest by activity.
+  await view.rerender({
+    sessions: [
+      first,
+      second,
+      { ...third, lastActiveAt: "2026-10-28T09:00:00Z" },
+    ],
+  });
+  expect(liveLabels()).toEqual(initial);
+
+  // A status change and a rename do not move the row either.
+  await view.rerender({
+    sessions: [
+      first,
+      second,
+      {
+        ...third,
+        title: "改名后的旧聊天",
+        status: "running",
+        lastActiveAt: "2026-10-28T09:30:00Z",
+      },
+    ],
+  });
+  await expect
+    .element(list().getByRole("button", { name: "改名后的旧聊天（工作中）" }))
+    .toBeVisible();
+  expect(liveLabels()).toEqual([
+    "较新（空闲）",
+    "居中（空闲）",
+    "改名后的旧聊天（工作中）",
+  ]);
+
+  // A chat created later appears at the top.
+  await view.rerender({
+    sessions: [
+      first,
+      second,
+      third,
+      chat({
+        id: "chatdddd",
+        title: "最新",
+        createdAt: "2026-10-28T04:00:00Z",
+      }),
+    ],
+  });
+  await expect
+    .element(list().getByRole("button", { name: "最新（空闲）" }))
+    .toBeVisible();
+  expect(liveLabels()[0]).toBe("最新（空闲）");
+});
+
+test("rows with equal creation or update time are ordered by ID", async () => {
+  const created = "2026-10-28T03:00:00Z";
+  render(ChatHistory, {
+    ...noop,
+    sessions: [
+      chat({ id: "chatbbbb", title: "乙", createdAt: created }),
+      chat({ id: "chataaaa", title: "甲", createdAt: created }),
+    ],
+    records: [
+      record({ id: "archiveb", title: "归档乙" }, { updatedAt: created }),
+      record({ id: "archivea", title: "归档甲" }, { updatedAt: created }),
+      record(
+        { id: "archivez", title: "归档较新" },
+        { updatedAt: "2026-10-28T04:00:00Z" },
+      ),
+    ],
+  });
+  await expect
+    .element(list().getByRole("button", { name: /（/ }).first())
+    .toBeVisible();
+  expect(liveLabels()).toEqual(["甲（空闲）", "乙（空闲）"]);
+  await page.getByRole("button", { name: /已归档/ }).click();
+  const rows = archivedList().getByRole("button", { name: /（/ });
+  await expect.element(rows.first()).toBeVisible();
+  expect(rows.elements().map((row) => row.getAttribute("aria-label"))).toEqual([
+    "归档较新（已结束）",
+    "归档甲（已结束）",
+    "归档乙（已结束）",
+  ]);
 });
 
 test("archived section opens automatically when viewing or resuming an archived record", async () => {
