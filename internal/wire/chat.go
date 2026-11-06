@@ -210,7 +210,7 @@ func chatRequest(r hybrid.Request) contract.ChatRequest {
 }
 
 func ChatPromptResult(r hybrid.PromptResult) contract.ChatPromptResult {
-	return contract.ChatPromptResult{Queued: r.Queued, ItemID: r.ItemID}
+	return contract.ChatPromptResult{Queued: r.Queued, ItemID: r.ItemID, TurnID: r.TurnID, PromptID: r.PromptID}
 }
 
 func ChatPromptInput(r contract.ChatPromptRequest) hybrid.PromptInput {

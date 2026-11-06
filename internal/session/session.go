@@ -144,8 +144,12 @@ type Session struct {
 	// status or a Warp cli-agent event, so the waiting heuristics no longer
 	// apply. replies holds session-written query replies that the next
 	// holder of the run's inputGate writes before its own input.
-	program       *programRecord
-	structured    bool
+	program    *programRecord
+	structured bool
+	// cliAttention is attention a script raised while a driver's overlay
+	// reports the shell (no run); it is owned by mu and replaces the
+	// overlay's attention until the driver reports a new state.
+	cliAttention  *Attention
 	programStatus bool
 	replies       [][]byte
 	// identity holds the current run's identity signals, owned by mu.
@@ -254,6 +258,10 @@ func (s *Session) infoLocked() Info {
 	}
 	if s.overlay != nil {
 		s.overlay.applyTo(&i, s.run == nil, s.userTitle == "")
+		if s.run == nil && s.cliAttention != nil && i.Status != StatusExited {
+			attention := *s.cliAttention
+			i.Attention, i.Status = &attention, StatusWaiting
+		}
 	}
 	return i
 }

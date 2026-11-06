@@ -37,7 +37,7 @@ func sessionStatus(err error) int {
 	switch {
 	case errors.Is(err, session.ErrNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, session.ErrRunning):
+	case errors.Is(err, session.ErrRunning), errors.Is(err, session.ErrExited):
 		return http.StatusConflict
 	case errors.Is(err, session.ErrInvalid):
 		return http.StatusBadRequest

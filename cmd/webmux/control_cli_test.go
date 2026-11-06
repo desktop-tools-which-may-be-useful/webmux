@@ -88,9 +88,44 @@ func TestSessionControlCommands(t *testing.T) {
 		t.Fatalf("nothing to send: %d", code)
 	}
 
+	// notify raises attention with a message; send and --clear clear it.
+	if _, _, code := f.cli(t, "notify", "--kind", "done", "built"); code != contract.ExitUsage {
+		t.Fatalf("notify outside a session without --session: %d", code)
+	}
+	if _, _, code := f.cli(t, "notify", "--session", echo, strings.Repeat("x", 201)); code != contract.ExitUsage {
+		t.Fatalf("notify with a long message: %d", code)
+	}
+	if _, _, code := f.cli(t, "notify", "--session", echo, "--clear", "x"); code != contract.ExitUsage {
+		t.Fatalf("notify --clear with a message: %d", code)
+	}
+	stdout, stderr, code := f.cli(t, "notify", "--session", echo, "--kind", "done", "--json", "release", "built")
+	var raised contract.SessionInfo
+	if err := json.Unmarshal([]byte(stdout), &raised); err != nil || code != 0 || raised.Attention == nil ||
+		raised.Attention.Source != contract.AttentionSourceCLI || raised.Attention.Message != "release built" {
+		t.Fatalf("notify: %d %q %q", code, stdout, stderr)
+	}
+	if out, _, code := f.cli(t, "wait", echo, "--until", "attention", "--timeout", "5s"); code != 0 {
+		t.Fatalf("wait --until attention: %d %q", code, out)
+	}
+	if _, _, code := f.cli(t, "send", echo, "--key", "right"); code != 0 {
+		t.Fatalf("send: %d", code)
+	}
+	if out, _, _ := f.cli(t, "get", echo, "--json"); strings.Contains(out, `"source": "cli"`) {
+		t.Fatalf("send left the attention latched: %q", out)
+	}
+	if _, _, code := f.cli(t, "notify", "--session", echo, "--kind", "question"); code != 0 {
+		t.Fatalf("notify question: %d", code)
+	}
+	if _, _, code := f.cli(t, "notify", "--session", echo, "--clear"); code != 0 {
+		t.Fatalf("notify --clear: %d", code)
+	}
+	if out, _, _ := f.cli(t, "get", echo, "--json"); strings.Contains(out, `"source": "cli"`) {
+		t.Fatalf("--clear left the attention latched: %q", out)
+	}
+
 	// send --wait sees the change its own input causes.
 	exiting := detachedID(t, f, "sh", "-c", "read x; exit 4")
-	stdout, stderr, code := f.cli(t, "send", exiting, "go", "--enter", "--wait", "exited", "--timeout", "10s", "--json")
+	stdout, stderr, code = f.cli(t, "send", exiting, "go", "--enter", "--wait", "exited", "--timeout", "10s", "--json")
 	var after contract.SessionInfo
 	if err := json.Unmarshal([]byte(stdout), &after); err != nil || code != 0 || after.ExitCode == nil || *after.ExitCode != 4 {
 		t.Fatalf("send --wait: %d %q %q", code, stdout, stderr)
@@ -182,6 +217,9 @@ func TestSessionControlCommands(t *testing.T) {
 		{[]string{"guide", "art"}, "artifacts\t"},
 		{[]string{"send", ""}, echo + "\t"},
 		{[]string{"wait", echo, "--until", "id"}, "idle\t"},
+		{[]string{"chat", "switch", echo, "--to", ""}, "terminal\t"},
+		{[]string{"chat", "queue", ""}, "send-now\t"},
+		{[]string{"chat", "ls", "--state", "in"}, "interrupted\t"},
 	} {
 		cmd := f.command([]string{"WEBMUX_SOCKET=" + f.record(t).Socket}, append([]string{"__complete"}, tc.words...)...)
 		out, _ := cmd.Output()

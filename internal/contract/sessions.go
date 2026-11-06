@@ -43,6 +43,9 @@ type AttentionSource string
 const (
 	AttentionSourceAgent    AttentionSource = "agent"
 	AttentionSourceTerminal AttentionSource = "terminal"
+	// AttentionSourceCLI is attention raised through POST
+	// /api/sessions/{id}/attention, normally by webmux notify.
+	AttentionSourceCLI AttentionSource = "cli"
 )
 
 // SessionInfo is one session in GET /api/sessions, POST /api/sessions,
@@ -92,6 +95,14 @@ type SessionAttention struct {
 	Kind   AttentionKind   `json:"kind"`
 	Source AttentionSource `json:"source"`
 	Since  time.Time       `json:"since"`
+	// Message is the text a cli source attached; other sources omit it.
+	Message string `json:"message,omitempty"`
+}
+
+// AttentionRequest is the body of POST /api/sessions/{id}/attention.
+type AttentionRequest struct {
+	Kind    AttentionKind `json:"kind"`
+	Message string        `json:"message,omitempty"`
 }
 
 // SessionReportedCwd is the directory a program reported through OSC 7.

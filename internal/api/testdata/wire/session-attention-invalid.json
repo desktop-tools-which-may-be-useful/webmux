@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "invalid session request: kind 须为 notify、done、error 或 question"
+  }
+}

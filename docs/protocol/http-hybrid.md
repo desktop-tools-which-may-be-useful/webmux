@@ -113,7 +113,7 @@ Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固�
 
 - 内容：`message.append`（按 `messageId` 追加，`role` 为 user/agent/thought）、`tool.upsert`（按 `toolCallId` 的字段补丁）。
 - 会话元数据：`plan.set`、`commands.set`、`config.set`、`usage.set`、`info.set`（`title` 同时写回会话标题，创建名称仍优先）、`compaction.upsert`。
-- 回合：`turn.start`、`turn.end`（`stopReason` 含 `cancelled`、`error`、`auth_required`）。
+- 回合：`turn.start`（`{turnId, promptId, queueItemId?}`，发送排队提示的回合带该提示的 `queueItemId`）、`turn.end`（`stopReason` 含 `cancelled`、`error`、`auth_required`）。
 - 请求：`request.open`、`request.close`。
 - 提示与标记：`notice`、`marker`（`loaded`、`switched`、`truncated`、`reconnected`）。
 
@@ -123,18 +123,24 @@ Claude Code 的 ACP 进程无参数执行 `claude-agent-acp`，`initialize` 固�
 
 所有改变状态的请求都带 `clientRequestId`（`[A-Za-z0-9_-]{8,64}`）。服务端按会话保留最近 256 条、30 分钟，重复请求返回首次结果，不再执行。
 
-| 方法   | 路径                                           | 说明                                                                                                                                                                                         |
-| ------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/sessions/{id}/chat/prompts`              | `{clientRequestId, text, mode, attachments?}`，`mode` 为 `auto`（空闲且未暂停时立即发送，否则排队）或 `steer`（插话）；`attachments` 为上传接口返回的 `{path}` 数组；200 `{queued, itemId?}` |
-| PATCH  | `/api/sessions/{id}/chat/queue/{qid}`          | `{clientRequestId, text?, move?: "up"}` 编辑或上移，204                                                                                                                                      |
-| DELETE | `/api/sessions/{id}/chat/queue/{qid}`          | `{clientRequestId}` 删除，204                                                                                                                                                                |
-| POST   | `/api/sessions/{id}/chat/queue/{qid}/send-now` | 取消当前回合后立即发送该条，204                                                                                                                                                              |
-| POST   | `/api/sessions/{id}/chat/queue/resume`         | 暂停后继续，从队首发送，204                                                                                                                                                                  |
-| POST   | `/api/sessions/{id}/chat/queue/clear`          | 清空队列，204                                                                                                                                                                                |
-| POST   | `/api/sessions/{id}/chat/cancel`               | 停止当前回合，204                                                                                                                                                                            |
-| POST   | `/api/sessions/{id}/chat/requests/{requestId}` | 权限：`{outcome: "selected", optionId}` 或 `cancelled`；表单：`accept` 带 `content`、`decline`、`cancel`；204                                                                                |
-| PUT    | `/api/sessions/{id}/chat/config/{configId}`    | 选择类 `{value}`、布尔类 `{enabled}`，经 `session/set_config_option` 生效并记录，204                                                                                                         |
-| PUT    | `/api/sessions/{id}/chat/permission-mode`      | `{clientRequestId, mode}`，`mode` 为 `ask` 或 `auto`（其他值 400）；两端均可设置，切换中返回 409 `switching`，204                                                                            |
+| 方法   | 路径                                           | 说明                                                                                                                                                                                                                     |
+| ------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/api/sessions/{id}/chat/prompts`              | `{clientRequestId, text, mode, attachments?}`，`mode` 为 `auto`（空闲且未暂停时立即发送，否则排队）或 `steer`（插话）；`attachments` 为上传接口返回的 `{path}` 数组；200 `{queued, itemId?, turnId?, promptId?}`，见下文 |
+| PATCH  | `/api/sessions/{id}/chat/queue/{qid}`          | `{clientRequestId, text?, move?: "up"}` 编辑或上移，204                                                                                                                                                                  |
+| DELETE | `/api/sessions/{id}/chat/queue/{qid}`          | `{clientRequestId}` 删除，204                                                                                                                                                                                            |
+| POST   | `/api/sessions/{id}/chat/queue/{qid}/send-now` | 取消当前回合后立即发送该条，204                                                                                                                                                                                          |
+| POST   | `/api/sessions/{id}/chat/queue/resume`         | 暂停后继续，从队首发送，204                                                                                                                                                                                              |
+| POST   | `/api/sessions/{id}/chat/queue/clear`          | 清空队列，204                                                                                                                                                                                                            |
+| POST   | `/api/sessions/{id}/chat/cancel`               | 停止当前回合，204                                                                                                                                                                                                        |
+| POST   | `/api/sessions/{id}/chat/requests/{requestId}` | 权限：`{outcome: "selected", optionId}` 或 `cancelled`；表单：`accept` 带 `content`、`decline`、`cancel`；204                                                                                                            |
+| PUT    | `/api/sessions/{id}/chat/config/{configId}`    | 选择类 `{value}`、布尔类 `{enabled}`，经 `session/set_config_option` 生效并记录，204                                                                                                                                     |
+| PUT    | `/api/sessions/{id}/chat/permission-mode`      | `{clientRequestId, mode}`，`mode` 为 `ask` 或 `auto`（其他值 400）；两端均可设置，切换中返回 409 `switching`，204                                                                                                        |
+
+发送结果 `{queued, itemId?, turnId?, promptId?}`：
+
+- 排队时给出 `itemId`，之后发送它的回合在 `turn.start` 中带同一个 `queueItemId`；
+- 立即发送时给出与 `turn.start` 相同的 `turnId` 与 `promptId`；
+- 插话两者都不给出。
 
 `text` 不超过 64 KiB；有附件时可以只发附件。ACP 自动重连期间提交的自动发送消息进入队列等待连接恢复。回合以 `cancelled`、错误、`refusal` 或 `auth_required` 结束时，非空队列暂停。
 

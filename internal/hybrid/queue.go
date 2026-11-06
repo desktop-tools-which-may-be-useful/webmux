@@ -121,7 +121,7 @@ func (a *actor) drain() {
 	if a.turn != nil || q.Paused || len(q.Items) == 0 || a.linked() != nil {
 		return
 	}
-	if _, err := a.send(q.Items[0].Text, q.Items[0].Attachments); err != nil {
+	if _, err := a.send(q.Items[0].Text, q.Items[0].Attachments, q.Items[0].ID); err != nil {
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: err.Error()}})
 		a.setQueue(q.Items, true)
 		return
@@ -138,7 +138,7 @@ func (a *actor) prompt(text string, attachments []Attachment) (PromptResult, err
 	a.clearAttention()
 	q := a.chat.Queue
 	if a.turn == nil && !q.Paused && len(q.Items) == 0 && a.link != nil {
-		return a.send(text, attachments)
+		return a.send(text, attachments, "")
 	}
 	if len(q.Items) >= maxQueueItems {
 		return PromptResult{}, fmt.Errorf("%w: 队列最多 %d 条", ErrInvalid, maxQueueItems)

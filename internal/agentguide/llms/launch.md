@@ -33,4 +33,5 @@ webmux chat new --agent omp --set model=smart --permission ask --attach design.p
 - `--wait` 等第一轮结束，输出 agent 的最终回复；回合中 agent 请求授权或提问时以 1 退出并在标准错误给出请求 ID，`--auto-wait-requests` 则继续等待用户在 Web 端回答。
 - 失败时按步骤（precheck、worktree、session、config、prompt）报告，已创建的 worktree 与会话保留。
 
-启动配置名称可以在 Web 端设置页的“启动配置”中查看。
+之后用 `webmux chat send`、`chat status`、`chat answer` 继续驱动它，见 [混合会话聊天](/llms/chat.md)。
+启动配置名称可以在 Web 端设置页或 `webmux api /api/launch-configs` 中查看。

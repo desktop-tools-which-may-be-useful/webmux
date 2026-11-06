@@ -292,3 +292,50 @@ test("raises a top-right toast by default while browsing and navigates to the se
   await expect(page).toHaveURL(new RegExp(`/s/${id}$`));
   await expect(region).toBeHidden();
 });
+
+test("shows a script's notify message in the toast and clears it on request", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  const created = await request.post("/api/sessions", {
+    data: {
+      cwd: workDir,
+      cmd: ["/bin/sh", "-c", "sleep 60"],
+      name: "E2E notify",
+    },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  // The first snapshot is the toast baseline: raise only after the page
+  // has seen the session.
+  const frames: string[] = [];
+  page.on("websocket", (socket) => {
+    if (new URL(socket.url()).pathname !== "/ws/sessions") return;
+    socket.on("framereceived", ({ payload }) => frames.push(String(payload)));
+  });
+  await page.goto("/new");
+  await expect
+    .poll(() => frames.some((frame) => frame.includes(`"${id}"`)))
+    .toBe(true);
+
+  const raised = await request.post(`/api/sessions/${id}/attention`, {
+    data: { kind: "done", message: "release 构建完成" },
+  });
+  expect(raised.status()).toBe(200);
+  expect((await raised.json()).attention).toMatchObject({
+    kind: "done",
+    source: "cli",
+    message: "release 构建完成",
+  });
+  const toast = page
+    .getByRole("region", { name: "会话通知" })
+    .locator(`[data-toast-session-id="${id}"]`);
+  await expect(toast).toContainText("本轮完成");
+  await expect(toast).toContainText("E2E notify");
+  await expect(toast).toContainText("release 构建完成");
+
+  const cleared = await request.delete(`/api/sessions/${id}/attention`);
+  expect(cleared.status()).toBe(204);
+  await expect(toast).toBeHidden();
+});

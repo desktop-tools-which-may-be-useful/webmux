@@ -36,14 +36,18 @@ const details: Record<AttentionKind, string> = {
 export const maxVisibleToasts = 3;
 export const defaultToastDurationMs = 8_000;
 
-export function cleanAttentionTitle(raw: string): string {
-  const cleaned = Array.from(raw)
+function stripControls(raw: string): string {
+  return Array.from(raw)
     .filter((ch) => {
       const code = ch.codePointAt(0) ?? 0;
       return code >= 0x20 && code !== 0x7f && (code < 0x80 || code > 0x9f);
     })
     .join("")
     .trim();
+}
+
+export function cleanAttentionTitle(raw: string): string {
+  const cleaned = stripControls(raw);
   if (!cleaned) return "WebMux";
   const chars = Array.from(cleaned);
   return chars.length > 80 ? `${chars.slice(0, 80).join("")}…` : cleaned;
@@ -64,7 +68,7 @@ export function buildAttentionToast(
     source: attention.source,
     since: attention.since,
     label: labels[attention.kind],
-    detail: details[attention.kind],
+    detail: stripControls(attention.message ?? "") || details[attention.kind],
     urgent: hasUrgentAttention({ attention }),
   };
 }

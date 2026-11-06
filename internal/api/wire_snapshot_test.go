@@ -90,7 +90,7 @@ func wireSchema(name string) wireRules {
 		add("/session", "path", "cmd/*")
 		add("", "id", "parentId", "children/*")
 		add("", "path", "artifactsDir")
-	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get", "session-labels",
+	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get", "session-labels", "session-attention",
 		"ws-terminal-state", "ws-terminal-state-exited", "session-get-hybrid", "session-get-hybrid-work", "ws-terminal-state-hybrid", "hybrid-resume":
 		sessionFields("")
 		add("", "path", "cmd/*")
@@ -800,6 +800,9 @@ func wireSessions(f *wireFixture) {
 	f.call("session-labels-invalid", "PATCH", "/api/sessions/"+runningID+"/labels", contract.LabelsUpdate{Set: map[string]string{"Task Name": "x"}}, 400)
 	f.call("session-details", "GET", "/api/sessions/"+runningID+"/details", nil, 200)
 	f.call("session-details-missing", "GET", "/api/sessions/aaaaaaaa/details", nil, 404)
+	f.call("session-attention", "POST", "/api/sessions/"+runningID+"/attention", contract.AttentionRequest{Kind: "done", Message: "release 构建完成"}, 200)
+	f.call("session-attention-invalid", "POST", "/api/sessions/"+runningID+"/attention", contract.AttentionRequest{Kind: "bell"}, 400)
+	f.call("session-attention-clear", "DELETE", "/api/sessions/"+runningID+"/attention", nil, 204)
 	f.call("session-agent-guide", "POST", "/api/sessions/"+runningID+"/agent-guide", nil, 200)
 	f.call("session-create-labels-invalid", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh"}, "labels": map[string]string{"-bad": "x"}}, 400)
 

@@ -7,6 +7,22 @@ webmux chat new --agent "Claude Code" --label run=42 --wait --timeout 30m "修�
 webmux ls --parent self --label run=42
 ```
 
+## 继续一个混合会话的对话
+
+```sh
+id=$(webmux ls --parent self --label run=42 --json | jq -r '.[0].id')
+if ! reply=$(webmux chat send "$id" "再补上测试" --wait --timeout 20m); then
+  webmux chat status "$id"                      # 停在授权或提问时看请求与选项
+  webmux chat answer "$id" <请求ID> --option allow_once
+fi
+```
+
+## 长任务结束时提醒用户
+
+```sh
+make release && webmux notify --kind done "release 构建完成" || webmux notify --kind error "release 构建失败"
+```
+
 ## 在持久会话里跑测试并拿到退出码
 
 ```sh

@@ -174,7 +174,7 @@ func sameAttention(a, b *Attention) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return a.Kind == b.Kind && a.Source == b.Source && a.Since.Equal(b.Since)
+	return a.Kind == b.Kind && a.Source == b.Source && a.Since.Equal(b.Since) && a.Message == b.Message
 }
 
 func sameReportedCwd(a, b *ReportedCwd) bool {

@@ -232,10 +232,12 @@ type Notice struct {
 	Text  string
 }
 
-// TurnStart opens a turn for prompt PromptID.
+// TurnStart opens a turn for prompt PromptID. QueueItemID is the queued
+// prompt the turn sends, empty for a prompt sent directly.
 type TurnStart struct {
-	TurnID   string
-	PromptID string
+	TurnID      string
+	PromptID    string
+	QueueItemID string
 }
 
 // TurnEnd closes a turn. StopReason is an ACP stop reason, error or

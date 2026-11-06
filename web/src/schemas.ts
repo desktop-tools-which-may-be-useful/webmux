@@ -18,8 +18,9 @@ export const WorkspaceLinkSchema = z.object({
 
 export const AttentionSchema = z.object({
   kind: z.enum(["question", "permission", "done", "error", "notify", "bell"]),
-  source: z.enum(["agent", "terminal"]),
+  source: z.enum(["agent", "terminal", "cli"]),
   since: z.iso.datetime({ offset: true }),
+  message: z.string().optional(),
 });
 export type Attention = z.infer<typeof AttentionSchema>;
 

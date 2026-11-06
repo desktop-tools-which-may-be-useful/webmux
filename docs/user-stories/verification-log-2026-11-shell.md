@@ -51,3 +51,17 @@
   - `cmd/webmux` 端到端测试（真实服务进程）覆盖上述命令，包括 `send --wait exited` 读到退出码、`wait --changed` 不被旧状态满足、`screen` 渲染全屏绘制、`events` 的首行快照、补全的动态会话 ID；
   - 在 bash 中加载生成的补全脚本并检查 `COMPREPLY`；`internal/sessioncmd` 的单元测试。
 - 限制：本机没有 zsh 与 fish，只在 bash 中运行了补全脚本；`screen` 不输出颜色；未在 macOS 上运行。
+
+本次局部核对（2026-11-05）：实现 `add-agent-shell-control` 的第五部分（提醒与聊天命令），新增 US-S13–US-S15，更新 US-C06、US-C12 与覆盖索引。
+
+- 范围：
+  - 服务端：`POST`/`DELETE /api/sessions/{id}/attention`，提醒来源 `cli` 与内存中的消息，推送正文与页面内弹窗说明行使用该消息；
+  - 聊天接口：发送结果新增 `turnId`、`promptId`，`turn.start` 新增 `queueItemId`，使脚本能跟踪自己提示的回合；
+  - CLI：`notify`、`chat send|watch|status|cancel|answer|switch|ls|resume|forget|set|permission|queue ...`，以及 `rm` 先结束运行中的会话。
+- 依据：
+  - `go test -race` 覆盖 `internal/session`（覆盖与清除、分层、输入清除、聊天端保留到 agent 新状态、已退出拒绝）、`internal/push`（消息正文与 `include_title`）、
+    `internal/hybrid`、`internal/api`（wire 快照新增 `session-attention*`，更新 `chat-prompt-sent`）；
+  - `cmd/webmux` 端到端测试（真实服务进程与假 ACP agent）：`notify` 与清除、`chat send --wait` 的回复、授权请求处的退出、排队与队列编辑、
+    排队提示被清空时 `--wait` 以 1 退出、`chat answer`、`chat set`、`chat watch --json` 跳过历史、终端与聊天之间的切换、`chat ls`、关闭后的 `chat resume` 与 `chat forget`；
+  - 前端单元测试 `attention-toast.test.ts` 与 wire 契约测试。
+- 限制：`chat switch` 等待选择的分支（终端 TUI 忙）只做了代码审查，没有构造忙碌的 TUI；未在 macOS 上运行。

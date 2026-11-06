@@ -21,6 +21,14 @@ func (s *Server) sessionMetaRoutes(mux *http.ServeMux) {
 		info, err := s.Manager.UpdateLabels(r.PathValue("id"), req.Set, req.Remove)
 		return wire.Session(info), err
 	})
+	serveIn(mux, "POST /api/sessions/{id}/attention", http.StatusOK, renameFailure, func(r *http.Request, req contract.AttentionRequest) (contract.SessionInfo, error) {
+		info, err := s.Manager.RaiseAttention(r.PathValue("id"), req.Kind, req.Message)
+		return wire.Session(info), err
+	})
+	serveDone(mux, "DELETE /api/sessions/{id}/attention", renameFailure, func(r *http.Request) error {
+		_, err := s.Manager.ClearAttention(r.PathValue("id"))
+		return err
+	})
 }
 
 // callerSession is the session whose process sent r over the local socket,

@@ -42,6 +42,9 @@ type Env struct {
 	// OpenConsole enters raw mode; it returns attach.ErrNotTerminal when
 	// standard input or output is not a terminal.
 	OpenConsole func() (Console, error)
+	// Interactive reports whether standard input is a terminal, so a
+	// destructive command may ask for confirmation; nil means it is not.
+	Interactive func() bool
 	// OpenBrowser opens a URL in the default browser.
 	OpenBrowser func(url string) error
 	// ResolveCwd maps --cwd (or "" for the current directory) to a path

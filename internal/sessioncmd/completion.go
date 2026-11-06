@@ -144,8 +144,16 @@ func (e Env) complete(ctx context.Context, words []string) []string {
 // optionValues lists candidates for an option's value.
 func (e Env) optionValues(ctx context.Context, name string) [][2]string {
 	switch name {
-	case "start-side":
+	case "start-side", "to", "side":
 		return [][2]string{{"terminal", ""}, {"chat", ""}}
+	case "mode":
+		return [][2]string{{"auto", "send now or queue"}, {"steer", "inject into the running turn"}}
+	case "state":
+		var out [][2]string
+		for _, s := range hybridStates {
+			out = append(out, [2]string{s, ""})
+		}
+		return out
 	case "permission":
 		return [][2]string{{"ask", ""}, {"auto", ""}}
 	case "until", "wait", "status":
@@ -187,6 +195,8 @@ func (e Env) argumentValues(ctx context.Context, c *Command) [][2]string {
 		return append([][2]string{{"self", "the current session"}}, e.sessionValues(ctx)...)
 	case strings.Contains(c.Args, "REPO"):
 		return e.repositoryValues(ctx)
+	case strings.HasPrefix(c.Args, "RECORD"):
+		return e.recordValues(ctx)
 	}
 	return nil
 }
@@ -224,6 +234,22 @@ func (e Env) sessionValues(ctx context.Context) [][2]string {
 	out := make([][2]string, 0, len(list))
 	for _, s := range list {
 		out = append(out, [2]string{s.ID, s.Title + " (" + string(s.Status) + ")"})
+	}
+	return out
+}
+
+func (e Env) recordValues(ctx context.Context) [][2]string {
+	var list []contract.HybridRecord
+	if !e.query(ctx, "/api/hybrid-sessions", &list) {
+		return nil
+	}
+	out := make([][2]string, 0, len(list))
+	for _, r := range list {
+		name := r.Name
+		if name == "" {
+			name = r.Title
+		}
+		out = append(out, [2]string{r.ID, string(r.State) + " " + r.Agent + " " + oneLine(name, 40)})
 	}
 	return out
 }

@@ -21,8 +21,11 @@ import (
 
 // Commands is the registry of the session commands both clients share.
 func Commands() Registry {
-	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand, chatGroup, chatNewCommand, launchConfigGroup, launchConfigOptionsCommand,
-		apiCommand, killCommand, rmCommand, renameCommand, sendCommand, waitCommand, logsCommand, screenCommand, eventsCommand, completionCommand, completeCommand}
+	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand, chatGroup, chatNewCommand, chatSendCommand, chatWatchCommand, chatStatusCommand, chatCancelCommand,
+		chatAnswerCommand, chatSwitchCommand, chatListCommand, chatResumeCommand, chatForgetCommand, chatSetCommand, chatPermissionCommand,
+		chatQueueGroup, chatQueueListCommand, chatQueueRemoveCommand, chatQueueEditCommand, chatQueueSendNowCommand, chatQueueClearCommand, chatQueueResumeCommand,
+		launchConfigGroup, launchConfigOptionsCommand,
+		apiCommand, killCommand, rmCommand, renameCommand, sendCommand, waitCommand, logsCommand, screenCommand, eventsCommand, notifyCommand, completionCommand, completeCommand}
 }
 
 var getCommand = &Command{

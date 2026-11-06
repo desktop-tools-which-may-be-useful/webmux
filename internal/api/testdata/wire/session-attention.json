@@ -1,0 +1,34 @@
+{
+  "status": 200,
+  "body": {
+    "attention": {
+      "kind": "done",
+      "message": "release 构建完成",
+      "since": "<time>",
+      "source": "cli"
+    },
+    "clients": 0,
+    "cmd": [
+      "/bin/sh",
+      "-c",
+      "sleep 60"
+    ],
+    "cols": 80,
+    "createdAt": "<time>",
+    "cwd": "<repo>",
+    "exitCode": null,
+    "generation": "<generation#2>",
+    "id": "<id#2>",
+    "labels": {
+      "run": "42"
+    },
+    "lastActiveAt": "<time>",
+    "listeningPorts": [],
+    "preview": "",
+    "reportedCwd": null,
+    "rows": 24,
+    "status": "waiting",
+    "title": "wire",
+    "workspace": null
+  }
+}

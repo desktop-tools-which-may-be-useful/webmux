@@ -1,6 +1,8 @@
 {
   "status": 200,
   "body": {
-    "queued": false
+    "promptId": "p1",
+    "queued": false,
+    "turnId": "t1"
   }
 }

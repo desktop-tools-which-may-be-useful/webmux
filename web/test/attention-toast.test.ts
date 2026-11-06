@@ -83,3 +83,28 @@ test("buildAttentionToast maps every attention kind to its label, actionable det
     });
   }
 });
+
+test("buildAttentionToast shows a script's message instead of the generic detail", () => {
+  const attention = {
+    kind: "done" as const,
+    source: "cli" as const,
+    since: "2026-11-05T10:00:00Z",
+    message: "  release\u0007 构建完成 ",
+  };
+  const toast = buildAttentionToast(
+    { id: "sessaaaa", title: "构建", attention },
+    attention,
+  );
+  expect(toast.label).toBe("本轮完成");
+  expect(toast.detail).toBe("release 构建完成");
+  expect(
+    buildAttentionToast(
+      {
+        id: "sessaaaa",
+        title: "构建",
+        attention: { ...attention, message: "\u0007" },
+      },
+      { ...attention, message: "\u0007" },
+    ).detail,
+  ).toBe("等待你的下一步");
+});

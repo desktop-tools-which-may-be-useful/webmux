@@ -47,6 +47,17 @@ webmux events --session <ID>             # 会话事件，每行一个 JSON
 
 `logs --strip` 只适合按行输出的程序；看全屏 TUI（例如 agent 停在授权选择框）用 `screen`。
 
+## 提醒用户
+
+```sh
+make release; webmux notify --kind done "release 构建完成"   # 会话显示提醒，浏览器弹出提示，订阅推送的设备收到通知
+webmux notify --kind question "请在终端里选择迁移方案"          # kind：notify（默认）、done、error、question
+webmux notify --clear --session <ID>                          # 清除提醒，效果与用户输入相同
+```
+
+- 默认作用于当前会话（`self`）；会话外需要 `--session`。消息最多 200 个字符，只保存在内存中。
+- 提醒覆盖当前锁存的提醒，之后按原有规则清除：用户输入或打开会话、程序的下一次状态报告、`--clear`。`send` 的输入同样会清除它。
+
 ## 结束与改名
 
 ```sh

@@ -300,7 +300,11 @@ export const ChatEventSchema = z.discriminatedUnion("kind", [
   z.object({
     ...eventBase,
     kind: z.literal("turn.start"),
-    turnStart: z.object({ turnId: z.string(), promptId: z.string() }),
+    turnStart: z.object({
+      turnId: z.string(),
+      promptId: z.string(),
+      queueItemId: z.string().optional(),
+    }),
   }),
   z.object({
     ...eventBase,
@@ -426,5 +430,7 @@ export type ChatFrame = z.infer<typeof ChatFrameSchema>;
 export const ChatPromptResultSchema = z.object({
   queued: z.boolean(),
   itemId: z.string().optional(),
+  turnId: z.string().optional(),
+  promptId: z.string().optional(),
 });
 export type ChatPromptResult = z.infer<typeof ChatPromptResultSchema>;

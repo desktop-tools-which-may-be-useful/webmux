@@ -60,6 +60,13 @@ type SessionHybrid struct {
 // other side". It is terminal: clients do not reconnect.
 const CloseMoved = 4409
 
+// Choices that answer a switch paused in HybridPhaseAwaitingChoice.
+const (
+	HybridChoiceWait   = "wait"
+	HybridChoiceForce  = "force"
+	HybridChoiceCancel = "cancel"
+)
+
 // HybridSwitchRequest is the body of POST /api/sessions/{id}/switch.
 // Choice answers an interrupt timeout ("wait", "force" or "cancel") instead
 // of starting a switch.

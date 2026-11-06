@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/term"
 
 	"github.com/rainchan/webmux/internal/attach"
 	"github.com/rainchan/webmux/internal/contract"
@@ -143,6 +144,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Stdout:         stdout,
 		Stderr:         stderr,
 		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
+		Interactive:    func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		OpenBrowser:    openBrowser,
 		ResolveCwd:     c.resolveCwd,
 		NotRunningHint: "start it from the WebMux tray or run `webmux serve` inside WSL",

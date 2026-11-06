@@ -31,13 +31,14 @@ type Topic struct {
 // this order.
 var Topics = []Topic{
 	{Name: "connect", Title: "连接与身份", Section: "基础", Summary: "找到 webmux 可执行文件与套接字，会话中的变量，会话内被禁止的操作与排错。"},
-	{Name: "sessions", Title: "会话", Section: "基础", Summary: "列出与详情、父会话与标签、输入与等待、输出与画面、结束与改名、附着与链接。"},
+	{Name: "sessions", Title: "会话", Section: "基础", Summary: "列出与详情、父会话与标签、输入与等待、输出与画面、提醒用户、结束与改名、附着与链接。"},
 	{Name: "launch", Title: "启动会话", Section: "基础", Summary: "用 run 启动、跟随或等待会话，在新 worktree 中启动；用 chat new 一次完成快速开始。"},
+	{Name: "chat", Title: "混合会话聊天", Section: "基础", Summary: "向 agent 发送提示并取回回复、回答授权与提问、切换端、队列、设置与恢复历史会话。"},
 	{Name: "artifacts", Title: "临时文件夹", Section: "基础", Summary: "交付文件放在哪里、上传文件在哪里，以及怎样告诉用户。"},
 	{Name: "commands", Title: "命令参考", Section: "参考", Summary: "每个命令的用法、选项与默认值，由命令表生成。"},
 	{Name: "exit-codes", Title: "退出码", Section: "参考", Summary: "退出码与输出约定。"},
 	{Name: "rules", Title: "操作守则", Section: "参考", Summary: "操作其他会话、Token 与外部内容的规则。"},
-	{Name: "recipes", Title: "常用流程", Optional: true, Summary: "分派任务给 agent、跑测试取退出码、后台任务、了解当前环境、交付文件、查看帮助的完整例子。"},
+	{Name: "recipes", Title: "常用流程", Optional: true, Summary: "分派任务给 agent、继续对话、跑测试取退出码、后台任务、提醒用户、了解当前环境、交付文件、查看帮助的完整例子。"},
 }
 
 // Instance is what the local socket adds to the guide and the brief. The

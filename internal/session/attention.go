@@ -15,6 +15,7 @@ type AttentionSource = contract.AttentionSource
 const (
 	SourceAgent    = contract.AttentionSourceAgent
 	SourceTerminal = contract.AttentionSourceTerminal
+	SourceCLI      = contract.AttentionSourceCLI
 )
 
 // bellQuietPeriod ignores bells that answer a keystroke, such as shell completion.
@@ -27,6 +28,8 @@ type Attention struct {
 	Kind   attentionkind.Kind
 	Source AttentionSource
 	Since  time.Time
+	// Message is the text a cli source attached; it lives only in memory.
+	Message string
 	// layer records which signal source raised it; it is merge policy only
 	// and never leaves the session package.
 	layer signalLayer
@@ -77,7 +80,7 @@ func (s *Session) raiseAttentionLocked(kind attentionkind.Kind, source Attention
 			return
 		}
 		if current.Kind == kind {
-			current.Source, current.layer = source, layer
+			current.Source, current.layer, current.Message = source, layer, ""
 			return
 		}
 	}
@@ -119,7 +122,7 @@ func (s *Session) programStatusLocked(state, kind string, now time.Time) {
 
 func (s *Session) setProgramAttentionLocked(kind attentionkind.Kind, now time.Time) {
 	if current := s.info.Attention; current != nil && current.Kind == kind {
-		current.Source, current.layer = SourceAgent, layerProgram
+		current.Source, current.layer, current.Message = SourceAgent, layerProgram, ""
 		return
 	}
 	s.info.Attention = &Attention{Kind: kind, Source: SourceAgent, Since: now, layer: layerProgram}
@@ -214,6 +217,7 @@ func (s *Session) userInputLocked(p []byte, now time.Time) {
 func (s *Session) recordInputLocked(now time.Time) {
 	s.lastInputAt = now
 	s.info.Attention = nil
+	s.cliAttention = nil
 }
 
 // terminalReplyOnly reports input made solely of sequences a terminal emits on

@@ -18,6 +18,8 @@ type Alert struct {
 	Source    session.AttentionSource
 	Since     time.Time
 	Title     string
+	// Message is the text a script attached through webmux notify.
+	Message string
 }
 
 // Notification text shared with the service worker fallback in
@@ -51,6 +53,17 @@ func urgency(kind attentionkind.Kind) string {
 }
 
 const maxTitle = 80
+
+// cleanMessage drops control characters from a script's message; the
+// session already limits its length.
+func cleanMessage(message string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, message))
+}
 
 // cleanTitle drops control characters and limits the title to maxTitle runes.
 func cleanTitle(title string) string {
@@ -101,6 +114,11 @@ func payload(a Alert, origin string, includeTitle bool) ([]byte, error) {
 	body, ok := kindBodies[a.Kind]
 	if !ok {
 		body = fallbackBody
+	}
+	// A script's message is session content like the title, so the same
+	// setting decides whether it leaves the server.
+	if message := cleanMessage(a.Message); includeTitle && message != "" {
+		body = message
 	}
 	return json.Marshal(notificationPayload{
 		WebPush: 8030,
@@ -191,7 +209,7 @@ func (t *Tracker) update(info *session.Info) (Alert, bool) {
 	if info.Attention == nil || known && previous == key || !t.kinds[key.kind] {
 		return Alert{}, false
 	}
-	return Alert{SessionID: info.ID, Kind: info.Attention.Kind, Source: info.Attention.Source, Since: info.Attention.Since, Title: info.Title}, true
+	return Alert{SessionID: info.ID, Kind: info.Attention.Kind, Source: info.Attention.Source, Since: info.Attention.Since, Title: info.Title, Message: info.Attention.Message}, true
 }
 
 func keyOf(info session.Info) attentionKey {

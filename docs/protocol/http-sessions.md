@@ -17,6 +17,8 @@
 | GET    | `/api/sessions/{id}/details`     | 会话详情 `SessionDetails`，见下文；不存在 404                                              |
 | PATCH  | `/api/sessions/{id}/labels`      | 修改标签 `{set, remove}`，返回 `SessionInfo`；非法标签 400，不修改任何标签                 |
 | POST   | `/api/sessions/{id}/agent-guide` | `{{webmux}}` 的说明 `AgentGuidePrompt`，见下文；会话不存在 404，临时文件夹或说明不可用 503 |
+| POST   | `/api/sessions/{id}/attention`   | 发出提醒 `{kind, message?}`，返回 `SessionInfo`，见下文；非法 400，已退出 409              |
+| DELETE | `/api/sessions/{id}/attention`   | 清除锁存的提醒（与用户输入效果相同），204                                                  |
 
 创建请求有两种互斥形式：
 
@@ -150,8 +152,9 @@ interface SessionInfo {
   // 程序主动报告的“需要介入”，存在时 status 为 "waiting"；不含任何终端正文。
   attention: {
     kind: "question" | "permission" | "done" | "error" | "notify" | "bell";
-    source: "agent" | "terminal"; // 结构化事件 / 普通通知或响铃
+    source: "agent" | "terminal" | "cli"; // 结构化事件 / 普通通知或响铃 / webmux notify
     since: string; // RFC 3339，种类变化时更新
+    message?: string; // 仅 cli 来源：脚本附带的文字，只保存在内存中
   } | null;
   // 程序通过 OSC 7 报告的目录；null 表示未报告或进程已退出。
   // 只作导航线索，不改变 cwd、workspace、读取边界或命令执行环境。
@@ -178,6 +181,18 @@ interface SessionInfo {
   listeningPorts: { port: number; process: string }[];
 }
 ```
+
+### 提醒
+
+`POST /api/sessions/{id}/attention` 让脚本（通常是 `webmux notify`）发出提醒：
+
+- `kind` 取 `notify`、`done`、`error`、`question`；`message` 可选，去掉首尾空白后最多 200 个字符且不含控制字符，否则 400。
+- 提醒来源记为 `cli`，覆盖当前锁存的提醒而不受来源分层限制；之后按原有规则清除：用户输入、程序的下一次状态报告，或 `DELETE`。
+- 混合会话在聊天端时，提醒保留到 agent 报告新的状态（新的提醒或开始新一轮）。
+- `message` 只保存在内存中，用作推送正文（受 `include_title` 控制）和提醒提示；服务重启后消失。
+- 已退出的会话 409，不存在 404。
+
+`DELETE /api/sessions/{id}/attention` 不论提醒来源都清除它，经 `/ws/sessions` 同步到所有设备；没有提醒时同样返回 204。
 
 ## 其他
 

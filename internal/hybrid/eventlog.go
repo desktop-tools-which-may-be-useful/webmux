@@ -299,6 +299,7 @@ func eventSize(e Event) int {
 	if t := e.TurnStart; t != nil {
 		s(t.TurnID)
 		s(t.PromptID)
+		s(t.QueueItemID)
 	}
 	if t := e.TurnEnd; t != nil {
 		s(t.TurnID)

@@ -58,7 +58,7 @@ func Session(i session.Info) contract.SessionInfo {
 		out.Workspace = &w
 	}
 	if i.Attention != nil {
-		out.Attention = &contract.SessionAttention{Kind: i.Attention.Kind, Source: i.Attention.Source, Since: i.Attention.Since}
+		out.Attention = &contract.SessionAttention{Kind: i.Attention.Kind, Source: i.Attention.Source, Since: i.Attention.Since, Message: i.Attention.Message}
 	}
 	if i.ReportedCwd != nil {
 		r := contract.SessionReportedCwd(*i.ReportedCwd)

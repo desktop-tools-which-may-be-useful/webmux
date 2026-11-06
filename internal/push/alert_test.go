@@ -180,6 +180,37 @@ func TestPayloadOmitsTerminalContent(t *testing.T) {
 	}
 }
 
+// A script's message becomes the body, under the same setting as the title.
+func TestPayloadUsesTheScriptMessage(t *testing.T) {
+	i := info("abcdefgh", attentionkind.Done, session.SourceCLI, time.Now())
+	i.Attention.Message = "release 构建完成"
+	tracker := NewTracker(config.DefaultPushKinds())
+	tracker.Observe(snapshot())
+	alerts := tracker.Observe(updated(i))
+	if len(alerts) != 1 {
+		t.Fatalf("alerts %v", alerts)
+	}
+	for _, include := range []bool{true, false} {
+		raw, err := payload(alerts[0], "https://term.example.com", include)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var n struct {
+			Notification notification `json:"notification"`
+		}
+		if json.Unmarshal(raw, &n) != nil {
+			t.Fatal(string(raw))
+		}
+		want := kindBodies[attentionkind.Done]
+		if include {
+			want = "release 构建完成"
+		}
+		if n.Notification.Body != want {
+			t.Errorf("include=%v: body %q, want %q", include, n.Notification.Body, want)
+		}
+	}
+}
+
 func TestKindBodiesAreActionable(t *testing.T) {
 	for _, kind := range []attentionkind.Kind{
 		attentionkind.Question,

@@ -79,6 +79,36 @@ webmux api /api/launch-configs                   # 没有专用命令的接口�
 - `logs --strip` 适合按行输出的程序；全屏 TUI 用 `screen`，画面在 CLI 本地渲染，服务端不做终端模拟。
 - `api` 只接受 `/api/` 与 `/local/v1/` 路径，请求体须为 JSON；WebSocket 路径请用 `events`、`logs`、`screen`。
 
+## 提醒用户
+
+```sh
+make release; webmux notify --kind done "release 构建完成"
+webmux notify --clear --session <ID>
+```
+
+- 会话显示提醒徽章，打开的浏览器弹出提示（消息作为说明行），订阅推送的设备收到以消息为正文的通知（`include_title = false` 时用固定正文）。
+- `--kind` 取 `notify`（默认）、`done`、`error`、`question`；消息最多 200 个字符，只保存在内存中，服务重启后消失。
+- 提醒来源记为 `cli`，覆盖当前提醒；之后按原有规则清除。`--clear` 与 `send` 的输入都和用户输入一样清除提醒。
+
+## 驱动混合会话聊天
+
+```sh
+webmux chat send <ID> "修复 lint 并汇报改动" --wait --timeout 20m   # 输出 agent 的最终回复
+webmux chat status <ID>                          # 回合、队列、待回答请求与选项、agent 设置
+webmux chat answer <ID> <请求ID> --option allow_once
+webmux chat watch <ID>                           # 持续输出聊天；--json 每行一个帧
+webmux chat switch <ID> --to terminal --force
+webmux chat set <ID> model=sonnet; webmux chat permission <ID> ask
+webmux chat queue ls <ID>                        # rm、edit、send-now、clear、resume
+webmux chat ls --archived; webmux chat resume <记录ID> --side chat --detach; webmux chat forget <记录ID> --yes
+```
+
+- 这些命令使用与 Web 端聊天视图相同的接口，结果同步到所有设备；目标不是混合会话、或需要聊天端却在终端端时以 1 结束。
+- `send --wait` 先订阅再发送，跟踪这条提示自己的回合：排队的提示等到被发送；`end_turn` 以 0 退出，其他结束原因以 1 退出。
+  遇到授权或提问时输出请求 ID 与选项并以 1 退出，`--auto-wait-requests` 继续等待；超时 124，不取消回合。
+- `switch` 等到切换结束；终端 TUI 忙时需要 `--force`，否则取消切换并以 1 退出。找不到 agent 会话时列出候选，用 `--agent-session` 重试。
+- `forget` 在终端上先询问，非交互时需要 `--yes`；进行中的记录不能删除。
+
 ## shell 补全
 
 ```sh

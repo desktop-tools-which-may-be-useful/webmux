@@ -2,13 +2,14 @@
 
 ## 0. PR 拆分
 
-按主题拆成五个 PR，依次合并，每个 PR 独立通过 CI 与评审，并更新对应的用户故事：
+按主题拆成六个 PR，依次合并，每个 PR 独立通过 CI 与评审，并更新对应的用户故事：
 
 1. 发现、元数据与帮助框架：第 1、2B 节与 7.1–7.3；
 2. llms.txt 与 `{{webmux}}`（含 UI 截图）：第 6 节；
 3. 启动命令：第 2A 节；
 4. 会话控制：第 2 节与补全（7.4）；
-5. 聊天、提醒与工作区：第 3、4、5 节。
+5. 提醒与聊天：第 3、4 节；
+6. 工作区：第 5 节。（原计划与第 5 个 PR 合并，因篇幅拆开。）
 
 第 8 节的文档与验证分散到各个 PR 中完成。
 
@@ -59,21 +60,21 @@
 
 ## 3. 提醒接口与 `notify`（P1）
 
-- [ ] 3.1 `internal/session` 支持外部提醒：来源 `cli`，覆盖当前锁存提醒，`message` 只保存在内存。
+- [x] 3.1 `internal/session` 支持外部提醒：来源 `cli`，覆盖当前锁存提醒，`message` 只保存在内存。
   `AttentionSource` 新增 `cli`，同步 contract、wire、`web/src/schemas.ts` 与提醒显示文案。
-- [ ] 3.2 `POST /api/sessions/{id}/attention`（`AttentionRequest`），在 `internal/api/errors.go` 中映射 400/404。
+- [x] 3.2 `POST /api/sessions/{id}/attention`（`AttentionRequest`），在 `internal/api/errors.go` 中映射 400/404。
   推送正文使用 `message`，重新录制 wire 快照。
-- [ ] 3.3 `webmux notify`：默认 `self`，本地校验 200 字符与 `kind`。
-- [ ] 3.4 `DELETE /api/sessions/{id}/attention` 与 `notify --clear`：效果与用户输入相同，并同步到所有设备；`send` 的输入同样清除提醒。
+- [x] 3.3 `webmux notify`：默认 `self`，本地校验 200 字符与 `kind`。
+- [x] 3.4 `DELETE /api/sessions/{id}/attention` 与 `notify --clear`：效果与用户输入相同，并同步到所有设备；`send` 的输入同样清除提醒。
 
 ## 4. 聊天命令（P1）
 
-- [ ] 4.1 `chat send`：上传附件、`clientRequestId`、排队结果；`--wait` 先连聊天 WebSocket，再按 `promptId` 跟踪回合，
+- [x] 4.1 `chat send`：上传附件、`clientRequestId`、排队结果；`--wait` 先连聊天 WebSocket，再按 `promptId` 跟踪回合，
   按 `stopReason` 决定退出码，遇到请求时退出（或 `--auto-wait-requests`），超时 124。用 `internal/hybrid` 的假 agent 做集成测试。
-- [ ] 4.2 `chat watch`（NDJSON 与文本两种形式）与 `chat status`。
-- [ ] 4.3 `chat cancel`、`chat answer`、`chat switch`（需要选择、`--force`、会话歧义与 `--agent-session`）。
-- [ ] 4.4 `chat ls`（`--state`、`--archived`、`--repo`）、`chat resume`（`--side`、`--agent-session`、`--without-env`）、`chat forget`（确认规则）。
-- [ ] 4.5 `chat set`、`chat permission`、`chat queue ls|rm|edit|send-now|clear|resume`。
+- [x] 4.2 `chat watch`（NDJSON 与文本两种形式）与 `chat status`。
+- [x] 4.3 `chat cancel`、`chat answer`、`chat switch`（需要选择、`--force`、会话歧义与 `--agent-session`）。
+- [x] 4.4 `chat ls`（`--state`、`--archived`、`--repo`）、`chat resume`（`--side`、`--agent-session`、`--without-env`）、`chat forget`（确认规则）。
+- [x] 4.5 `chat set`、`chat permission`、`chat queue ls|rm|edit|send-now|clear|resume`。
 
 ## 5. 工作区命令（P1）
 

@@ -72,6 +72,23 @@
 - **US-S12 shell 补全**：作为命令行使用者，我希望按 Tab 补全命令、选项与会话 ID，以便少记少打。
   - `webmux completion bash|zsh|fish` 输出补全脚本；隐藏的 `__complete` 给出命令、子命令、选项、枚举值，并向服务查询会话 ID（附标题）、启动配置、仓库、worktree 与手册主题；
   - 查询超过 1 秒或服务未运行时只给静态候选，不输出错误，也不输出 Token 或环境变量值；Windows 客户端不提供补全。
+- **US-S13 从脚本提醒用户**：作为在会话里跑长任务的脚本或 agent，我希望任务结束或需要决定时直接提醒用户，以便用户不必盯着终端。
+  - `webmux notify [--kind notify|done|error|question] [MESSAGE]` 默认作用于当前会话，会话外需 `--session`；消息最多 200 个字符、不含控制字符，超出时 CLI 以 2 拒绝；
+  - 提醒来源为 `cli`，覆盖当前锁存的提醒而不受来源分层限制；会话徽章、页面内弹窗与后台推送照常出现，消息作为弹窗说明行与推送正文，只保存在内存中；
+  - 之后按原有规则清除：用户输入、程序的下一次状态报告（混合会话聊天端为 agent 的新状态或新一轮）；`notify --clear` 与 `send` 的输入同样清除，并同步到所有设备；已退出的会话以 1 拒绝。
+- **US-S14 从脚本驱动混合会话聊天**：作为编排脚本，我希望向另一个 agent 发送提示、取回回复并代为处理它的请求，以便不打开浏览器也能完成多 agent 协作。
+  - `chat send` 立即发送或进入服务端队列，可附带上传的文件或以 `--mode steer` 插话；`--wait` 先订阅再发送，按 `promptId`（排队时按 `queueItemId`）跟踪这条提示自己的回合；
+  - `end_turn` 以 0 退出并输出最终回复（`--json` 为该回合事件），其他结束原因以 1 退出；遇到授权或提问时输出请求 ID 与选项并以 1 退出，
+    `--auto-wait-requests` 继续等待；排队的提示被删除时以 1 退出；超时 124 且不取消回合；
+  - `chat status` 列出所在端、回合、队列、权限模式、待回答请求（ID、选项、表单字段）与 agent 设置，`chat watch` 持续输出消息、工具调用、请求与回合（`--json` 为 NDJSON 帧，默认跳过历史）；
+  - `chat answer`（`--option`、`--content`、`--decline`、`--cancel`）、`chat cancel`、`chat set ID=VALUE`（校验设置与可选值，失败的项报告后以 1 结束）、
+    `chat permission ask|auto`、`chat queue ls|rm|edit|send-now|clear|resume` 使用与 Web 端相同的接口并同步到所有设备；
+  - 目标不是混合会话、或需要聊天端却在终端端时以 1 结束并给出 `chat switch` 提示；每次写操作带新的 `clientRequestId`。
+- **US-S15 从脚本切换端与恢复历史会话**：作为脚本，我希望在终端与聊天之间切换混合会话，并找回、恢复或清理已结束的 agent 会话。
+  - `chat switch --to chat|terminal` 等到切换结束；终端 TUI 忙时 `--force` 强制中断，否则取消切换并以 1 退出；服务端列出 agent 会话候选时用 `--agent-session` 重试；
+  - `chat ls` 按状态（`--state`、`--archived`）与仓库筛选混合会话记录，`chat resume` 按记录原来的端或 `--side` 恢复，终端端且有终端时附着、否则输出 ID 与链接，
+    启动配置已删除时需要 `--without-env`；
+  - `chat forget` 删除已结束或已中断的记录（agent 自己的历史保留），终端上先确认，非交互时需要 `--yes`，进行中的记录以 1 拒绝。
 
 ### 依据
 
@@ -80,5 +97,7 @@
 - [本机套接字定位](../../cmd/webmux/sessions.go)、[会话环境](../../internal/session/env.go)、[保留变量](../../internal/contract/env.go)
 - [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/sessioncmd/guide.go)
 - [会话控制命令](../../internal/sessioncmd/control.go)、[补全](../../internal/sessioncmd/completion.go)
+- [notify 命令](../../internal/sessioncmd/notify.go)、[脚本提醒](../../internal/session/notify.go)、[推送正文](../../internal/push/alert.go)
+- [聊天命令](../../internal/sessioncmd/chat.go)、[聊天历史、设置与队列命令](../../internal/sessioncmd/chat_more.go)、[聊天接口](../../internal/api/chat.go)
 - [启动命令](../../internal/sessioncmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/sessioncmd/streams.go)、[仓库与主页显示](../../internal/sessioncmd/workspace.go)
 - [初始化指令展开](../../internal/workspace/quickstart.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)

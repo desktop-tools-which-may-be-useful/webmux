@@ -343,7 +343,7 @@ func TestChatCommands(t *testing.T) {
 
 	sent := contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "hello"}
 	first := h.expectCommand("POST", base+"prompts", sent, 200)
-	if retry := h.expectCommand("POST", base+"prompts", sent, 200); !bytes.Equal(retry, first) || string(bytes.TrimSpace(first)) != `{"queued":false}` {
+	if retry := h.expectCommand("POST", base+"prompts", sent, 200); !bytes.Equal(retry, first) || string(bytes.TrimSpace(first)) != `{"queued":false,"turnId":"t1","promptId":"p1"}` {
 		t.Fatalf("prompt %s, retry %s", first, retry)
 	}
 	var queued contract.ChatPromptResult

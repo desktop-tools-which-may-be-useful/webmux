@@ -311,6 +311,7 @@ func (s *Session) dropSubscribersLocked(moved *string) {
 func (s *Session) resetRunStateLocked() {
 	s.info.ExitCode = nil
 	s.info.Attention = nil
+	s.cliAttention = nil
 	s.info.ReportedCwd = nil
 	s.info.Preview = ""
 	s.info.Title = filepath.Base(s.info.Cwd)
@@ -342,8 +343,13 @@ func (s *Session) SetOverlay(o *Overlay) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if o == nil {
-		s.overlay = nil
+		s.overlay, s.cliAttention = nil, nil
 		return
+	}
+	// A script's attention lasts until the driver reports a new state: other
+	// attention, a turn that started running, or a move to another side.
+	if s.cliAttention != nil && (o.Status == StatusRunning || attentionChanged(s.overlay, o) || s.overlay.side() != o.side()) {
+		s.cliAttention = nil
 	}
 	s.overlay = o.clone()
 }

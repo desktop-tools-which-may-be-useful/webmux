@@ -387,14 +387,34 @@ type turnResult struct {
 	Request *contract.ChatRequest `json:"request,omitempty"`
 }
 
-// turnWait tracks the first turn whose turn.start passes accept and
-// collects its events until turn.end, or until a request opens when
-// stopAtRequest.
-func (c *chatStream) turnWait(ctx context.Context, accept func(seq uint64) bool, stopAtRequest bool) (turnResult, error) {
+// turnWatch selects the turn turnWait tracks: the first whose turn.start
+// passes accept. current names a turn already running: when its turn.start
+// is not in the replayed history (the log dropped it), it is adopted once
+// the replay is over. gone, when set, ends the wait with its error once a
+// state frame shows the turn can no longer start (a queued prompt was
+// removed).
+type turnWatch struct {
+	current       string
+	accept        func(contract.ChatTurnStart) bool
+	gone          func(*contract.ChatState) error
+	stopAtRequest bool
+}
+
+// turnWait tracks one turn and collects its events until turn.end, or
+// until a request opens when stopAtRequest.
+func (c *chatStream) turnWait(ctx context.Context, w turnWatch) (turnResult, error) {
 	var result turnResult
 	turn := ""
+	accept := w.accept
+	if w.current != "" {
+		accept = func(t contract.ChatTurnStart) bool { return t.TurnID == w.current }
+	}
 	messages := map[string]*strings.Builder{}
 	var order []string
+	// Requests of the tracked turn still open; a replayed request that was
+	// already answered is closed again within the same history.
+	open := map[string]contract.ChatRequest{}
+	var opened []string
 	for {
 		frame, err := c.read(ctx)
 		if err != nil {
@@ -403,9 +423,14 @@ func (c *chatStream) turnWait(ctx context.Context, accept func(seq uint64) bool,
 			}
 			return result, err
 		}
+		if turn == "" && frame.State != nil && w.gone != nil {
+			if err := w.gone(frame.State); err != nil {
+				return result, err
+			}
+		}
 		for _, ev := range frame.Items {
 			if turn == "" {
-				if ev.Kind == contract.ChatEventTurnStart && ev.TurnStart != nil && accept(ev.Seq) {
+				if ev.Kind == contract.ChatEventTurnStart && ev.TurnStart != nil && accept(*ev.TurnStart) {
 					turn = ev.TurnStart.TurnID
 					result.Events = append(result.Events, ev)
 				}
@@ -424,10 +449,13 @@ func (c *chatStream) turnWait(ctx context.Context, accept func(seq uint64) bool,
 					b.WriteString(ev.Message.Text)
 				}
 			case contract.ChatEventRequest:
-				if stopAtRequest && ev.Request != nil {
-					result.Request = ev.Request
-					result.Reply = lastReply(messages, order)
-					return result, nil
+				if ev.Request != nil {
+					open[ev.Request.RequestID] = *ev.Request
+					opened = append(opened, ev.Request.RequestID)
+				}
+			case contract.ChatEventResolved:
+				if ev.Resolved != nil {
+					delete(open, ev.Resolved.RequestID)
 				}
 			case contract.ChatEventTurnEnd:
 				if ev.TurnEnd != nil && ev.TurnEnd.TurnID == turn {
@@ -437,6 +465,22 @@ func (c *chatStream) turnWait(ctx context.Context, accept func(seq uint64) bool,
 					return result, nil
 				}
 			}
+		}
+		// A request still open once the whole frame is read waits for an
+		// answer.
+		if w.stopAtRequest {
+			for _, id := range opened {
+				if request, ok := open[id]; ok {
+					result.Request = &request
+					result.Reply = lastReply(messages, order)
+					return result, nil
+				}
+			}
+		}
+		// The replay is the events frame right after the snapshot; a running
+		// turn whose start it no longer holds is followed from here.
+		if turn == "" && w.current != "" && frame.Type == contract.ChatFrameEvents {
+			turn = w.current
 		}
 	}
 }
@@ -457,8 +501,12 @@ func (e Env) reportTurn(result turnResult, asJSON bool) int {
 		_, _ = fmt.Fprintln(e.Stdout, result.Reply)
 	}
 	if result.Request != nil {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: the agent is waiting for an answer: request %s (%s) %s; answer it in the Web UI\n",
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: the agent is waiting for an answer: request %s (%s) %s\n",
 			result.Request.RequestID, result.Request.Kind, result.Request.Title)
+		for _, option := range result.Request.Options {
+			_, _ = fmt.Fprintf(e.Stderr, "webmux:   --option %s\t%s\n", option.OptionID, option.Name)
+		}
+		_, _ = fmt.Fprintln(e.Stderr, "webmux: answer with webmux chat answer SESSION", result.Request.RequestID, "(see webmux chat status), or in the Web UI")
 		return contract.ExitError
 	}
 	if result.StopReason != "end_turn" {

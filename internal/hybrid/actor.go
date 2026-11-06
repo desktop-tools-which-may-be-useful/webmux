@@ -886,7 +886,7 @@ func (a *actor) autoApprove(p *pending) string {
 // latched attention; authRequired stays until a turn ends normally. Images
 // without image capability and files without embeddedContext degrade to
 // paths and are reported as notices.
-func (a *actor) send(text string, attachments []Attachment) (PromptResult, error) {
+func (a *actor) send(text string, attachments []Attachment, queueItem string) (PromptResult, error) {
 	blocks, notes, err := promptBlocks(text, attachments, a.chat.PromptCapabilities, a.svc.uploadCheck(a.id))
 	if err != nil {
 		return PromptResult{}, err
@@ -908,7 +908,7 @@ func (a *actor) send(text string, attachments []Attachment) (PromptResult, error
 	a.chat.Turn = Turn{Running: true, TurnID: t.id, StartedAt: &startedAt}
 	a.dirty = true
 	a.clearAttention()
-	a.emit(Event{Kind: EventTurnStart, TurnStart: &TurnStart{TurnID: result.TurnID, PromptID: result.PromptID}}, a.tr.userMessage(text, attachments))
+	a.emit(Event{Kind: EventTurnStart, TurnStart: &TurnStart{TurnID: result.TurnID, PromptID: result.PromptID, QueueItemID: queueItem}}, a.tr.userMessage(text, attachments))
 	a.tr.breakMessage()
 	for _, note := range notes {
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeWarning, Text: note}})

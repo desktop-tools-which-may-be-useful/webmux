@@ -533,7 +533,7 @@ The guide is served by the running server at /llms.txt, /llms/<topic>.md and /ll
 
 Arguments:
 
-- `TOPIC`: One of: connect, sessions, launch, artifacts, commands, exit-codes, rules, recipes.
+- `TOPIC`: One of: connect, sessions, launch, chat, artifacts, commands, exit-codes, rules, recipes.
 
 Options:
 
@@ -583,6 +583,348 @@ Examples:
 - `webmux chat new --agent "Claude Code" "Add a POST /books endpoint"`: Start Claude Code on a new worktree of the current repository.
 - `webmux chat new --agent Codex --label task=lint --wait "Fix all lint and summarize the changes"`: Delegate a task and print the agent's reply when it is done.
 - `webmux chat new --repo app --agent omp --set model=smart --permission ask --attach design.png -`: Pick a model, ask before tools run, attach a file and read the task from standard input.
+
+## webmux chat send
+
+`webmux chat send [options] SESSION [TEXT|-]`
+
+Send a prompt to a hybrid session's agent; with --wait, print its reply.
+
+The prompt is sent at once when the agent is idle and otherwise joins the server-side queue every device shows (queued is true in the result). --attach uploads files into the session first and sends them with the prompt; when an upload fails nothing is sent. --mode steer injects the text into the running turn instead of queueing it.
+
+--wait connects to the chat stream before sending and follows the turn this prompt starts (for a queued prompt, the turn that later sends it; with steer, the running turn). It prints the agent's final message, or with --json the turn's events. A turn that ends with end_turn exits 0, any other stop reason 1. When the agent asks for a permission or an answer during the turn, the request is printed to standard error and the command exits 1, leaving the turn waiting; --auto-wait-requests keeps waiting until someone answers it. A timeout exits 124 and does not cancel the turn.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `TEXT`: The prompt; - reads standard input.
+
+Options:
+
+- `--attach PATH`: Upload the file at PATH and send it with the prompt. Repeatable.
+- `--auto-wait-requests`: With --wait, keep waiting while a request is open. Requires --wait.
+- `--json`: With --wait, print the turn's events as JSON.
+- `--mode MODE`: MODE: auto (send or queue) or steer (inject into the running turn) Default: auto.
+- `--timeout DURATION`: Give up --wait after this DURATION (exit 124); 0 waits forever. Requires --wait.
+- `--wait`: Follow the prompt's turn and print the reply.
+
+Examples:
+
+- `webmux chat send abcd2345 "fix the lint errors and summarize the change" --wait --timeout 20m`: Hand a task to another agent and capture its answer.
+- `webmux chat send abcd2345 'what does this show?' --attach screenshot.png`: Send a prompt with an image.
+- `git diff | webmux chat send abcd2345 - --wait --json`: Review standard input and keep the turn's events.
+
+## webmux chat watch
+
+`webmux chat watch [options] SESSION`
+
+Stream a hybrid session's chat: messages, tool calls, requests and turns.
+
+Watching follows the chat stream until interrupted or the session ends. Text output shows each user and agent message, tool call titles with their status, requests and turn boundaries; --json prints every server frame as one line of JSON (the ChatFrame of /ws/s/{id}/chat). Earlier history is skipped unless --history is given. Watching works on either side and changes nothing.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Options:
+
+- `--history`: Also print the history the server still holds.
+- `--json`: Print each frame as one line of JSON.
+
+Examples:
+
+- `webmux chat watch abcd2345`: Follow what an agent is doing.
+- `webmux chat watch abcd2345 --json | jq -c 'select(.type=="events") | .items[]'`: Process chat events in a script.
+
+## webmux chat status
+
+`webmux chat status [options] SESSION`
+
+Show a hybrid session's side, turn, queue, permission mode, pending requests and agent settings.
+
+Status reads the chat state once. Pending requests are listed with their IDs and options, which webmux chat answer takes; the agent settings list the IDs and values webmux chat set takes.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Options:
+
+- `--json`: Print the ChatState object.
+
+Examples:
+
+- `webmux chat status abcd2345`: See whether the agent is busy or waiting for an answer.
+- `webmux chat status self --json | jq '.requests[].requestId'`: List pending request IDs.
+
+## webmux chat cancel
+
+`webmux chat cancel [options] SESSION`
+
+Cancel the running turn of a hybrid session; nothing happens when the agent is idle.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Examples:
+
+- `webmux chat cancel abcd2345`: Stop the agent's current turn.
+- `webmux chat cancel abcd2345 && webmux chat send abcd2345 'start over with the smaller fix'`: Redirect the agent.
+
+## webmux chat answer
+
+`webmux chat answer [options] SESSION REQUEST`
+
+Answer an agent's pending permission request or question.
+
+A permission request takes --option with one of its option IDs, or --cancel. A form (a question) takes --content with a JSON object of field values, --decline or --cancel. Every device closes the request card at once. webmux chat status lists pending requests with their options and fields.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `REQUEST`: The request ID from chat status, chat watch or a stopped --wait.
+
+Options:
+
+- `--cancel`: Cancel the request. Conflicts with --option, --content, --decline.
+- `--content JSON`: Submit a form with this JSON object of field values. Conflicts with --option, --cancel, --decline.
+- `--decline`: Decline a form. Conflicts with --option, --cancel, --content.
+- `--option ID`: Select the permission option ID. Conflicts with --cancel, --content, --decline.
+
+Examples:
+
+- `webmux chat answer abcd2345 r3 --option allow_once`: Approve one tool call.
+- `webmux chat answer abcd2345 r4 --content '{"plan":"B"}'`: Answer a question form.
+- `webmux chat answer abcd2345 r3 --cancel`: Dismiss a request.
+
+## webmux chat switch
+
+`webmux chat switch [options] SESSION`
+
+Move a hybrid session to its chat or terminal side and wait until the switch is over.
+
+Switching resumes the same agent session on the other side. Terminal clients (webmux attach, browsers) are detached when the session moves to chat, and chat views close when it moves to the terminal. When the terminal UI does not become idle within its interrupt timeout, the switch needs a choice: --force interrupts it, and without --force the switch is cancelled and the command exits 1. When the agent's session cannot be identified, the candidates are listed; repeat with --agent-session.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Options:
+
+- `--agent-session ID`: Resume this agent session ID when the server lists candidates.
+- `--force`: Interrupt a busy terminal UI instead of cancelling the switch.
+- `--json`: Print the HybridSwitchResult.
+- `--to SIDE`: The target SIDE: chat or terminal (required)
+
+Examples:
+
+- `webmux chat switch abcd2345 --to chat && webmux chat send abcd2345 continue`: Move to chat, then prompt.
+- `webmux chat switch abcd2345 --to terminal --force`: Return to the terminal UI even if it is busy.
+
+## webmux chat ls
+
+`webmux chat ls [options]`
+
+List hybrid session records: running, closed and interrupted agent sessions that can be resumed.
+
+Every hybrid session keeps a record linking its WebMux session ID to the agent's own session, so it can be resumed after it was closed or the server restarted. Records never contain messages, queued text or environment values. --archived lists the closed and interrupted ones, the same as --state closed --state interrupted.
+
+Options:
+
+- `--archived`: Keep closed and interrupted records.
+- `--json`: Print the HybridRecord array.
+- `--repo REPO`: Keep records of the registered repository REPO (ID, path, or . for the current one)
+- `--state STATE`: Keep records in STATE: active, closed or interrupted. Repeatable.
+
+Examples:
+
+- `webmux chat ls --archived`: Find an agent session to resume.
+- `webmux chat ls --repo . --state active --json`: List the running agents of the current repository.
+
+## webmux chat resume
+
+`webmux chat resume [options] RECORD`
+
+Resume a closed or interrupted hybrid session under its old ID.
+
+The agent's own session is loaded again, on the side the record was on unless --side says otherwise. Like webmux run, a session resumed on its terminal side is attached when there is a terminal; otherwise, or with --detach, its ID and link are printed. When the launch config it was started from was deleted, resuming needs --without-env (the saved environment is gone). When the agent's session cannot be found, the candidates are listed; repeat with --agent-session.
+
+Arguments:
+
+- `RECORD`: A hybrid session record ID (the session ID it had), from webmux chat ls.
+
+Options:
+
+- `--agent-session ID`: Resume this agent session ID when the server lists candidates.
+- `--detach`: Print the session ID and link instead of attaching.
+- `--json`: Print {session, link} instead of attaching.
+- `--side SIDE`: Resume on SIDE: chat or terminal (default: the side it was on)
+- `--without-env`: Resume although its launch config (and environment) was deleted.
+
+Examples:
+
+- `webmux chat resume abcd2345 --side chat --detach`: Bring back yesterday's interrupted agent in chat.
+- `webmux chat resume abcd2345 --agent-session ses_42`: Resume a chosen agent session after a lookup failed.
+
+## webmux chat forget
+
+`webmux chat forget [options] RECORD`
+
+Delete a closed or interrupted hybrid session record; the agent keeps its own session.
+
+Forgetting removes the record, its exited session and its artifacts folder, so it can no longer be resumed from WebMux. The agent's session history stays with the agent. An active record is refused. On a terminal the command asks first; without a terminal it needs --yes.
+
+Arguments:
+
+- `RECORD`: A hybrid session record ID (the session ID it had), from webmux chat ls.
+
+Options:
+
+- `--yes`: Do not ask for confirmation.
+
+Examples:
+
+- `webmux chat forget abcd2345`: Delete a record after confirming.
+- `webmux chat ls --state closed --json | jq -r '.[].id' | xargs -n1 webmux chat forget --yes`: Delete all closed records.
+
+## webmux chat set
+
+`webmux chat set [options] SESSION ID=VALUE...`
+
+Change the agent's settings, such as its model or mode, on the chat side.
+
+Each ID is one of the agent's settings as webmux chat status lists them. A select setting takes one of its values; a boolean setting takes true or false. Settings are applied in order; when one fails it is reported, the command exits 1, and the ones already applied stay. Every device shows the change.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `ID=VALUE`: A setting and its new value.
+
+Examples:
+
+- `webmux chat set abcd2345 model=sonnet`: Switch the agent's model.
+- `webmux chat status abcd2345`: List the settings and their values first.
+
+## webmux chat permission
+
+`webmux chat permission [options] SESSION ask|auto`
+
+Choose whether the agent's permission requests wait for an answer (ask) or are approved by the server (auto).
+
+auto approves each permission request on the server with its first allow-once option (else allow-always); questions (forms) always wait for an answer. The mode applies to the chat side and every device shows it.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `MODE`: ask or auto.
+
+Examples:
+
+- `webmux chat permission abcd2345 ask`: Review every tool call before it runs.
+- `webmux chat permission self auto`: Let the current agent run tools without asking.
+
+## webmux chat queue ls
+
+`webmux chat queue ls [options] SESSION`
+
+List the queued prompts in the order they will be sent.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Options:
+
+- `--json`: Print the ChatQueue object.
+
+Examples:
+
+- `webmux chat queue ls abcd2345`: See what the agent will do next.
+- `webmux chat queue ls abcd2345 --json | jq -r '.items[].id'`: List queued prompt IDs.
+
+## webmux chat queue rm
+
+`webmux chat queue rm [options] SESSION ITEM`
+
+Remove a queued prompt.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `ITEM`: A queued prompt's ID from webmux chat queue ls.
+
+Examples:
+
+- `webmux chat queue rm abcd2345 q3`: Drop one queued prompt.
+- `webmux chat queue ls abcd2345 && webmux chat queue rm abcd2345 q1`: Look up an item, then drop it.
+
+## webmux chat queue edit
+
+`webmux chat queue edit [options] SESSION ITEM [TEXT|-]`
+
+Replace a queued prompt's text, or move it up one place with --up.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `ITEM`: A queued prompt's ID from webmux chat queue ls.
+- `TEXT`: The new text; - reads standard input.
+
+Options:
+
+- `--up`: Move the item up one place.
+
+Examples:
+
+- `webmux chat queue edit abcd2345 q3 "run the tests first"`: Reword a queued prompt.
+- `webmux chat queue edit abcd2345 q3 --up`: Send a prompt one place earlier.
+
+## webmux chat queue send-now
+
+`webmux chat queue send-now [options] SESSION ITEM`
+
+Send a queued prompt now, cancelling the running turn.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+- `ITEM`: A queued prompt's ID from webmux chat queue ls.
+
+Examples:
+
+- `webmux chat queue send-now abcd2345 q3`: Interrupt the agent with a queued prompt.
+- `webmux chat queue send-now self q1`: Promote the next prompt of the current session.
+
+## webmux chat queue clear
+
+`webmux chat queue clear [options] SESSION`
+
+Remove every queued prompt.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Examples:
+
+- `webmux chat queue clear abcd2345`: Empty the queue on every device.
+- `webmux chat queue clear abcd2345 && webmux chat cancel abcd2345`: Stop all pending and current work.
+
+## webmux chat queue resume
+
+`webmux chat queue resume [options] SESSION`
+
+Resume a paused queue, sending the next prompt when the agent is idle.
+
+Arguments:
+
+- `SESSION`: A hybrid session ID, or "self" for the current session.
+
+Examples:
+
+- `webmux chat queue resume abcd2345`: Continue after a failed send paused the queue.
+- `webmux chat queue ls abcd2345 && webmux chat queue resume abcd2345`: Check the queue, then send it again.
 
 ## webmux launch-config options
 
@@ -796,6 +1138,33 @@ Examples:
 
 - `webmux events | jq -c 'select(.type=="updated") | {id: .session.id, status: .session.status}'`: Print every status change.
 - `webmux events --session abcd2345`: Follow one session's events.
+
+## webmux notify
+
+`webmux notify [options] [MESSAGE...]`
+
+Raise attention on a session (badge, toast and push), or clear it with --clear.
+
+The session shows the attention like any other: a badge in the list, a toast in open browsers and a push notification on subscribed devices. It replaces whatever attention is latched, whatever raised it, and is then cleared by the usual rules: the user typing or opening it, the program's next status report, or notify --clear.
+
+MESSAGE words are joined with spaces. The message is kept only in memory and is shown as the toast detail and as the push body (unless push.include_title is false, which also hides it). --clear removes the attention whatever raised it, as user input does, on every device.
+
+Arguments:
+
+- `MESSAGE`: Optional text, at most 200 characters after trimming, no control characters.
+
+Options:
+
+- `--clear`: Clear the session's attention instead of raising it. Conflicts with --kind.
+- `--json`: Print the SessionInfo after the change.
+- `--kind KIND`: The attention KIND: notify, done, error, question. Default: notify. Conflicts with --clear.
+- `--session SESSION`: The SESSION to notify; self is the current session. Default: self.
+
+Examples:
+
+- `make release; webmux notify --kind done "release build finished"`: Tell the user a long task in this session is done.
+- `webmux notify --kind question "pick a migration plan in the terminal"`: Ask for the user's attention from an agent's tool.
+- `webmux notify --clear --session abcd2345`: Clear a child session's attention after handling it.
 
 ## webmux completion
 

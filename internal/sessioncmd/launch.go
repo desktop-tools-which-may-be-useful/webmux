@@ -902,7 +902,7 @@ func (e Env) waitFirstTurn(ctx context.Context, client *localclient.Client, id s
 	}
 	defer stream.close()
 	// The first prompt's turn is the first turn of the session.
-	result, err := stream.turnWait(ctx, func(uint64) bool { return true }, !o.autoWaitRequests)
+	result, err := stream.turnWait(ctx, turnWatch{accept: func(contract.ChatTurnStart) bool { return true }, stopAtRequest: !o.autoWaitRequests})
 	if err != nil {
 		return e.waitFailure(err)
 	}

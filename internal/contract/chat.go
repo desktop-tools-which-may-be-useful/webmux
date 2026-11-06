@@ -301,9 +301,12 @@ type ChatNotice struct {
 }
 
 // ChatTurnStart opens a turn for the prompt identified by PromptID.
+// QueueItemID names the queued prompt the turn sends; a prompt sent
+// directly omits it.
 type ChatTurnStart struct {
-	TurnID   string `json:"turnId"`
-	PromptID string `json:"promptId"`
+	TurnID      string `json:"turnId"`
+	PromptID    string `json:"promptId"`
+	QueueItemID string `json:"queueItemId,omitempty"`
 }
 
 // ChatTurnEnd closes a turn. StopReason is end_turn, max_tokens,
@@ -379,10 +382,15 @@ type ChatPromptRequest struct {
 	Attachments []ChatAttachment `json:"attachments,omitempty"`
 }
 
-// ChatPromptResult reports whether the prompt was sent or queued.
+// ChatPromptResult reports whether the prompt was sent or queued. A sent
+// prompt names its turn (TurnID, PromptID as in turn.start); a queued one
+// its queue item, which the turn that sends it names as queueItemId.
+// Steering names neither.
 type ChatPromptResult struct {
-	Queued bool   `json:"queued"`
-	ItemID string `json:"itemId,omitempty"`
+	Queued   bool   `json:"queued"`
+	ItemID   string `json:"itemId,omitempty"`
+	TurnID   string `json:"turnId,omitempty"`
+	PromptID string `json:"promptId,omitempty"`
 }
 
 // ChatQueueRequest is the body of the queue commands under

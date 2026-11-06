@@ -32,6 +32,9 @@
 | `chat new` 快速开始与 `launch-config options`                                                       | US-S08；US-Q18                                      |
 | `send`、`wait`、`logs`、`screen` 与会话事件                                                         | US-S09–US-S11；US-D05                               |
 | `api`、`kill`、`rm`、`rename` 与 shell 补全                                                         | US-S11–US-S12                                       |
+| `notify` 提醒（来源 `cli`）与清除                                                                   | US-S13；US-C06、US-C12                              |
+| 聊天命令：发送与等待、查看、回答、取消、设置、权限、队列                                            | US-S14；US-Q01–US-Q19                               |
+| 聊天命令：切换端、混合会话记录的列出、恢复与删除                                                    | US-S15                                              |
 | 聊天端选择、拖放或粘贴文件，上传进度、取消、待发送附件与图片小图预览                                | US-Q14；US-E04–US-E07                               |
 | 首页导航、紧凑/预览、详情、分组、按需表单、增量更新、排序、搜索、筛选与空状态                       | US-C01–US-C05                                       |
 | OSC 7501 程序状态、结构化 agent 信号、OSC 通知、BEL 与集成配置                                      | US-C05–US-C06；US-K04                               |

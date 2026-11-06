@@ -173,6 +173,8 @@ SHALL 订阅 `/ws/sessions`，在会话满足条件时退出。
 - 推送 SHALL 遵循现有推送规则。
 - 清除 SHALL 与用户输入清除提醒的效果相同：不论提醒来源，都清除锁存值与 CLI 消息，并经 `/ws/sessions` 同步。会话没有提醒时 SHALL 返回 204。
   `--clear` 与 `--kind`、`MESSAGE` SHALL 互斥。
+- 混合会话在聊天端时，CLI 提醒 SHALL 保留到 agent 报告新的状态（新的提醒或开始新一轮）。
+- 推送正文 SHALL 与会话标题一样受 `include_title` 控制：为 `false` 时使用固定正文。
 - `send` 写入的输入 SHALL 与用户输入一样清除提醒。
 
 #### Scenario: 长任务完成
