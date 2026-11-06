@@ -219,10 +219,11 @@ export const CreateSessionRequestSchema = z
     // Fills `{{dir}}` and `{{webmux}}` in the prompt once the session
     // exists; otherwise the prompt is sent as written.
     expandPrompt: z.boolean().optional(),
-    // Chat view only: files returned by POST /uploads, sent with the
-    // prompt; agent option id to value (booleans "true"/"false"); and the
-    // permission mode.
+    // Files returned by POST /uploads, sent with the prompt (on the
+    // terminal view their adopted server paths are appended).
     attachments: z.array(ChatAttachmentSchema).optional(),
+    // Chat view only: agent option id to value (booleans "true"/"false")
+    // and the permission mode.
     agentConfig: z.record(z.string(), z.string()).optional(),
     permissionMode: ChatPermissionModeSchema.optional(),
     // Initial terminal size; both or neither. The first browser to control
@@ -246,9 +247,8 @@ export const CreateSessionRequestSchema = z
   })
   .refine(
     (body) =>
-      body.view === "chat" ||
-      (!body.attachments?.length && !body.agentConfig && !body.permissionMode),
-    { message: "attachments、agentConfig 与 permissionMode 只用于聊天视图" },
+      body.view === "chat" || (!body.agentConfig && !body.permissionMode),
+    { message: "agentConfig 与 permissionMode 只用于聊天视图" },
   );
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
 export const PreviewSettingsSchema = z.object({

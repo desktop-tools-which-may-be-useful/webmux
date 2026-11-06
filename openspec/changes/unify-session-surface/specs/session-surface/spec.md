@@ -84,7 +84,7 @@
 - 可选：`name`、`labels`、`view`、`prompt`、`useInitInstruction`、`attachments`、`agentConfig`、`permissionMode`、`clientRequestId`。
 
 `view` 缺省为 `terminal`；`view` 为 `chat` 时 `configId` SHALL 指向开启了聊天视图的启动配置，否则 SHALL 返回 400。
-`attachments`、`agentConfig` 与 `permissionMode` SHALL 只在 `view` 为 `chat` 时接受；`attachments` SHALL 要求 `prompt` 非空。
+`agentConfig` 与 `permissionMode` SHALL 只在 `view` 为 `chat` 时接受；`attachments` SHALL 要求 `prompt` 非空（在终端视图将移入会话上传目录后的路径附在输入消息后）。
 `useInitInstruction` SHALL 要求位置为 `workspace` 或 `newWorktree`。
 
 系统 SHALL 按以下顺序执行，并在任一步失败时停止后续步骤：预检、新建 worktree（有 `newWorktree` 时）、创建会话、应用 `agentConfig` 与 `permissionMode`、发送 `prompt`。

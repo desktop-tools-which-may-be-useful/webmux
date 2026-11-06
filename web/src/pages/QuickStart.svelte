@@ -90,8 +90,8 @@
   const agent = $derived(pickDefault(agents, agentChoice, () => true));
 
   // Where the agent starts: its chat, or its terminal, which gets the message
-  // typed in. A terminal start has no agent options, permission mode or files.
-  // Stored as "tui" before views were named.
+  // typed in (with attachment paths appended). A terminal start has no agent
+  // options or permission mode. Stored as "tui" before views were named.
   let startSide = $state<SessionView>(
     stored("quickStartSide") === "tui" ||
       stored("quickStartSide") === "terminal"
@@ -288,7 +288,6 @@
   const locked = $derived(sending || (chat && probing));
   const canSend = $derived(
     !locked &&
-      (chat || !attachments.length) &&
       !uploads.progress &&
       !!repository &&
       !!agent &&
@@ -320,12 +319,12 @@
         // The server fills {{dir}} and {{webmux}} in the message once the
         // session exists, as the quick command menu inserts them.
         expandPrompt: true,
-        // A terminal start takes no agent options, permission mode or files.
+        ...(attachments.length ? { attachments } : {}),
+        // A terminal start takes no agent options or permission mode.
         ...(chat
           ? {
               agentConfig: configValues(options),
               permissionMode,
-              ...(attachments.length ? { attachments } : {}),
             }
           : {}),
       });
@@ -547,12 +546,6 @@
         </Popover.Root>
       </div>
 
-      {#if !chat && attachments.length}<p
-          role="alert"
-          class="px-1 text-sm text-destructive"
-        >
-          终端启动不支持附件，请移除附件或改为聊天启动。
-        </p>{/if}
       {#if uploadError}<p role="alert" class="px-1 text-sm text-destructive">
           {uploadError}
         </p>{/if}
@@ -659,7 +652,7 @@
           />{/if}
         <div class="flex items-center justify-end gap-2 px-2 pb-2">
           <div class="mr-auto flex min-w-0 items-center gap-1">
-            {#if chat}<ChatUploadButton {uploads} disabled={sending} />{/if}
+            <ChatUploadButton {uploads} disabled={sending} />
             {#if sending}
               <span
                 class="flex items-center gap-1.5 text-xs text-muted-foreground"

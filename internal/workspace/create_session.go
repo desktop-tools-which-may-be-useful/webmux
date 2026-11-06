@@ -62,10 +62,12 @@ type NewWorktree struct {
 // repository's initialization
 // instruction before it: it is sent once the session is up, as the first
 // chat prompt on the chat side, otherwise typed into the terminal with
-// Enter. Attachments (files staged by an upload before the session existed),
-// AgentConfig (option ID to value: a select value, or "true"/"false" for a
-// boolean) and PermissionMode (ask, auto or empty for the default) belong to
-// the chat side only. A non-empty ClientRequestID dedupes retries. Cols and
+// Enter. Attachments are files staged by an upload before the session
+// existed, moved into the session's uploads folder and sent with the first
+// chat prompt or appended as paths to the terminal message. AgentConfig
+// (option ID to value: a select value, or "true"/"false" for a boolean)
+// and PermissionMode (ask, auto or empty for the default) belong to the
+// chat side only. A non-empty ClientRequestID dedupes retries. Cols and
 // Rows are the terminal's initial size (the TUI side of a hybrid session
 // too): both zero for the default, otherwise both set within 1..1000.
 type CreateInput struct {
@@ -252,8 +254,8 @@ func (s *Service) createPlan(ctx context.Context, in CreateInput) (createPlan, e
 	if plan.side == "" {
 		plan.side = hybrid.SideTUI
 	}
-	if plan.side != hybrid.SideACP && (len(in.Attachments) > 0 || len(in.AgentConfig) > 0 || in.PermissionMode != "") {
-		return plan, problemf(ErrInvalid, "attachments、agentConfig 与 permissionMode 只适用于聊天视图")
+	if plan.side != hybrid.SideACP && (len(in.AgentConfig) > 0 || in.PermissionMode != "") {
+		return plan, problemf(ErrInvalid, "agentConfig 与 permissionMode 只适用于聊天视图")
 	}
 	if len(in.Attachments) > 0 && plan.text == "" {
 		return plan, problemf(ErrInvalid, "附件需要随消息发送，请输入消息")
@@ -548,18 +550,10 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 
 // sendFirstMessage sends the plan's first message to a session just
 // started: as the first chat prompt with its attachments, or typed into
-// the terminal with Enter once the program is quiet (in the background; it
-// ends with the session).
+// the terminal (with adopted attachment paths appended) followed by Enter
+// once the program is quiet (in the background; it ends with the session).
 func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, requestID string, plan createPlan) error {
 	id := item.Info().ID
-	if plan.side != hybrid.SideACP {
-		text, err := s.composePrompt(id, plan)
-		if err != nil {
-			return err
-		}
-		go func() { _ = item.SendWhenReady(context.Background(), text) }()
-		return nil
-	}
 	attachments, err := s.adoptUploads(id, plan.attachments)
 	if err != nil {
 		return err
@@ -567,6 +561,20 @@ func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, r
 	text, err := s.composePrompt(id, plan)
 	if err != nil {
 		return err
+	}
+	if plan.side != hybrid.SideACP {
+		if len(attachments) > 0 {
+			paths := make([]string, len(attachments))
+			for i, at := range attachments {
+				paths[i] = at.Path
+			}
+			if text != "" {
+				text += "\n\n"
+			}
+			text += "附件路径：\n" + strings.Join(paths, "\n")
+		}
+		go func() { _ = item.SendWhenReady(context.Background(), text) }()
+		return nil
 	}
 	if requestID == "" {
 		requestID = "first-" + id
