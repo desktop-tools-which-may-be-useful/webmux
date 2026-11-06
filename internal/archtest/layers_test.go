@@ -101,7 +101,7 @@ var webmux = manifest{
 		"internal/push.testPayload":      "Web Push test message body",
 		"internal/push.vapidHeader":      "VAPID JWT header and claims sent to push services",
 		"internal/codeview.version":      "content digest of a snapshot, never sent as JSON",
-		"internal/agenttrust.encodeJSON": "rewrites an agent's own config file (Claude, Copilot) to record folder trust, never sent to clients",
+		"internal/agenttrust.encodeJSON": "rewrites an agent's own config file (Claude, Copilot, Antigravity) to record folder trust, never sent to clients",
 	},
 	bodyReaders: map[string]string{
 		"internal/api.decode":                  "reads JSON bodies with a size limit and unknown fields rejected",

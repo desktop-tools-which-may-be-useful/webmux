@@ -2,10 +2,11 @@
 // agents before WebMux starts them in a directory.
 //
 // A permission-bypass flag such as --dangerously-skip-permissions does not
-// skip the folder-trust dialog of Claude Code, Codex or Copilot CLI, and a
-// session nobody is looking at waits on that dialog forever. Each agent
-// records an accepted dialog in its own config file, so the same record is
-// written ahead of the launch. This is the approach Orca takes.
+// skip the folder-trust dialog of Claude Code, Codex, Copilot CLI or
+// Antigravity CLI, and a session nobody is looking at waits on that dialog
+// forever. Each agent records an accepted dialog in its own config file, so
+// the same record is written ahead of the launch. This is the approach Orca
+// takes.
 //
 // Only a directory the user chose for a session is trusted. The home
 // directory, its ancestors and the filesystem root are refused because the
@@ -38,6 +39,7 @@ var agents = []agent{
 	{"claude", (*Trust).trustClaude},
 	{"codex", (*Trust).trustCodex},
 	{"copilot", (*Trust).trustCopilot},
+	{"agy", (*Trust).trustAgy},
 }
 
 // Trust writes trust records for agents launched in a directory.

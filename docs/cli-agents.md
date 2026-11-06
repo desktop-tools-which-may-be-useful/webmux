@@ -44,22 +44,23 @@ CLI 使用服务用户的权限、账号、环境和配置。WebMux 不代管模
 
 ## 文件夹信任预写
 
-Claude Code、Codex 和 GitHub Copilot CLI 首次在某个目录启动时会询问“是否信任此文件夹”，`--dangerously-skip-permissions` 一类参数不会跳过这个问题；无人看着的会话会一直停在对话框上。
-`agent_pretrust`（默认开启）让 WebMux 在新建会话、命令被识别为这三款 CLI 时，先把启动目录记入它们自己的配置，做法与 [Orca](https://www.onorca.dev/docs/agents/supported) 一致：
+Claude Code、Codex、GitHub Copilot CLI 和 Antigravity CLI 首次在某个目录启动时会询问“是否信任此文件夹”，`--dangerously-skip-permissions` 一类参数不会跳过这个问题；无人看着的会话会一直停在对话框上。
+`agent_pretrust`（默认开启）让 WebMux 在新建会话、命令被识别为这四款 CLI 时，先把启动目录记入它们自己的配置，做法与 [Orca](https://www.onorca.dev/docs/agents/supported) 一致：
 
-| CLI            | 写入位置（环境变量可改）                   | 写入内容                                           |
-| -------------- | ------------------------------------------ | -------------------------------------------------- |
-| Claude Code    | `~/.claude.json`（`CLAUDE_CONFIG_DIR`）    | `projects["<目录>"].hasTrustDialogAccepted = true` |
-| Codex          | `~/.codex/config.toml`（`CODEX_HOME`）     | `[projects."<目录>"]` 下 `trust_level = "trusted"` |
-| GitHub Copilot | `~/.copilot/config.json`（`COPILOT_HOME`） | 在 `trustedFolders` 数组追加目录                   |
+| CLI             | 写入位置（环境变量可改）                   | 写入内容                                           |
+| --------------- | ------------------------------------------ | -------------------------------------------------- |
+| Claude Code     | `~/.claude.json`（`CLAUDE_CONFIG_DIR`）    | `projects["<目录>"].hasTrustDialogAccepted = true` |
+| Codex           | `~/.codex/config.toml`（`CODEX_HOME`）     | `[projects."<目录>"]` 下 `trust_level = "trusted"` |
+| GitHub Copilot  | `~/.copilot/config.json`（`COPILOT_HOME`） | 在 `trustedFolders` 数组追加目录                   |
+| Antigravity CLI | `~/.gemini/antigravity-cli/settings.json`  | 在 `trustedWorkspaces` 数组追加目录                |
 
-- 环境变量先取会话自己的环境变量，再取服务进程的。目录先解析符号链接。
+- 环境变量先取会话自己的环境变量，再取服务进程的。目录先解析符号链接。Antigravity CLI 没有改变该位置的环境变量，只用主目录。
 - 只对启动目录写入。主目录、它的上级目录和文件系统根永不写入，因为这些 CLI 的信任范围包含其下所有子目录。
 - 已有文件保留其他内容与权限，用临时文件加改名替换；已经记录过则不写。Codex 追加一个新表，保留你的注释；你显式设为 `untrusted` 的目录不会被改写。
-- Claude Code 与 Copilot 的配置文件不存在时不创建，让 CLI 完成首次设置；Codex 只在 `~/.codex` 目录已存在时才创建 `config.toml`。无法解析（例如带注释的 JSON）时原样保留。
+- Claude Code、Copilot 与 Antigravity CLI 的配置文件不存在时不创建，让 CLI 完成首次设置；Codex 只在 `~/.codex` 目录已存在时才创建 `config.toml`。无法解析（例如带注释的 JSON）时原样保留。
 - 任何失败只写一条日志，不阻止会话启动，CLI 照常显示自己的对话框。设置 `agent_pretrust = false` 完全关闭。
 - 只对新建会话生效，已运行或恢复的会话不受影响。混合会话的聊天端经 ACP 启动，不依赖这个对话框。
-- 其他 CLI：Qwen Code 的文件夹信任默认关闭，OpenCode、omp、Kimi 没有这个对话框；Cursor CLI、Antigravity CLI、CodeBuddy 与 Qoder 的交互式信任记录格式尚未核实，暂未预写。Qoder 在未信任目录里会忽略 `--dangerously-skip-permissions`，需要先在该目录手动信任一次。
+- 其他 CLI：Qwen Code 的文件夹信任默认关闭，OpenCode、omp、Kimi 没有这个对话框；Cursor CLI、CodeBuddy 与 Qoder 的交互式信任记录格式尚未核实，暂未预写。Qoder 在未信任目录里会忽略 `--dangerously-skip-permissions`，需要先在该目录手动信任一次。
 
 ## 已有安装
 

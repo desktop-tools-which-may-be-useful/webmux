@@ -10,7 +10,7 @@
 | REST API、列表和终端 WebSocket                                                                      | US-A05；US-C02；US-D01–US-D06                       |
 | 统一上下文新建会话、十一款 CLI 启动配置、目录浏览与创建、名称和命令                                 | US-B01–US-B07                                       |
 | 设置页自定义启动配置与图标、启动配置 API 与按配置启动                                               | US-B01；US-B08                                      |
-| Claude Code / Codex / Copilot CLI 启动前预写文件夹信任记录与 `agent_pretrust` 开关                  | US-B09；US-K04                                      |
+| Claude Code / Codex / Copilot / Antigravity CLI 启动前预写文件夹信任记录与 `agent_pretrust` 开关    | US-B09；US-K04                                      |
 | 混合模式勾选（`chat`）、Claude Code 与 Antigravity CLI 默认混合、`chat-support` 判定、起始视图选择  | US-Q01–US-Q02；US-B01；US-B08                       |
 | 终端 ↔ 聊天切换、Claude 注册记录身份/候选/外部占用、中断等待、草稿退回与回滚                        | US-Q03–US-Q04                                       |
 | 聊天视图时间线、代码链接打开代码浏览器、权限与表单、权限模式、配置项、命令菜单及 Claude 配置重应用  | US-Q05–US-Q07                                       |

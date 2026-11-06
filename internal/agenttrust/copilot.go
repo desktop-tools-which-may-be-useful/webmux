@@ -38,25 +38,35 @@ func copilotTrusted(data []byte, dir string) (updated []byte, changed bool, err 
 			key = copilotLegacyFoldersKey
 		}
 	}
-	var folders []json.RawMessage
-	if raw := root[key]; len(raw) > 0 && string(raw) != "null" {
-		if err = json.Unmarshal(raw, &folders); err != nil {
-			return nil, false, fmt.Errorf("%s: %w", key, err)
-		}
-	}
-	for _, folder := range folders {
-		var existing string
-		if json.Unmarshal(folder, &existing) == nil && existing == dir {
-			return nil, false, nil
-		}
-	}
-	entry, err := encodeJSON(dir)
-	if err != nil {
-		return nil, false, err
-	}
-	if root[key], err = encodeJSON(append(folders, entry)); err != nil {
+	changed, err = appendPath(root, key, dir)
+	if err != nil || !changed {
 		return nil, false, err
 	}
 	updated, err = indentJSON(root)
 	return updated, err == nil, err
+}
+
+// appendPath adds dir to the JSON string array root[key], creating the array
+// when it is missing. changed is false when dir is already listed.
+func appendPath(root map[string]json.RawMessage, key, dir string) (changed bool, err error) {
+	var paths []json.RawMessage
+	if raw := root[key]; len(raw) > 0 && string(raw) != "null" {
+		if err = json.Unmarshal(raw, &paths); err != nil {
+			return false, fmt.Errorf("%s: %w", key, err)
+		}
+	}
+	for _, path := range paths {
+		var existing string
+		if json.Unmarshal(path, &existing) == nil && existing == dir {
+			return false, nil
+		}
+	}
+	entry, err := encodeJSON(dir)
+	if err != nil {
+		return false, err
+	}
+	if root[key], err = encodeJSON(append(paths, entry)); err != nil {
+		return false, err
+	}
+	return true, nil
 }

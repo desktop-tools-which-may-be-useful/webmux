@@ -59,7 +59,7 @@ flowchart LR
 | `internal/forward`                            | 端口转发：内存中的转发登记、上游可达性探测、一次性兑换码与转发凭据（网关在 `internal/api`）     |
 | `internal/workspace`                          | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
 | `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
-| `internal/agenttrust`                         | 启动 Claude / Codex / Copilot 前预写“信任此文件夹”记录（`agent_pretrust`）                      |
+| `internal/agenttrust`                         | 启动 Claude / Codex / Copilot / Antigravity 前预写“信任此文件夹”记录（`agent_pretrust`）        |
 | `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                      |
 | `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测       |
 | `internal/tailscalesettings`                  | Tailscale 网页设置持久化、独立文件锁、校验与故障关闭                                            |

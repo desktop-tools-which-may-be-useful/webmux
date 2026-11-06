@@ -40,7 +40,7 @@
 - 升级前停止全部旧进程并备份；新旧版本不得共用状态目录并发运行，改名后的锁无法与旧锁互斥。
 - Windows 托盘、日志、下载缓存、会话临时文件夹（含上传文件与快速开始的暂存上传）、代码树文件操作（写入用户工作区或临时文件夹）、`webmux repo settings --edit` 交给编辑器的临时文件与 baseline 结果属于独立生命周期，保持逐项登记的例外。
 - 外部 agent 的锁与 Claude 进程注册记录不属于 WebMux 存储；适配器只进行有界只读核对，不创建或修改这些文件，也不把路径、记录正文或进程事实写入 WebMux 状态。
-- 例外是 `agent_pretrust`（默认开启）：启动 Claude Code、Codex 或 Copilot CLI 会话前，`internal/agenttrust` 在该 agent 自己的配置文件里追加启动目录的“信任此文件夹”记录，见 [CLI agent 接入](cli-agents.md#文件夹信任预写)。
+- 例外是 `agent_pretrust`（默认开启）：启动 Claude Code、Codex、Copilot CLI 或 Antigravity CLI 会话前，`internal/agenttrust` 在该 agent 自己的配置文件里追加启动目录的“信任此文件夹”记录，见 [CLI agent 接入](cli-agents.md#文件夹信任预写)。
   - 写入走临时文件加改名，保留原权限与其他内容。
   - 不触碰 WebMux 状态目录。
   - 主目录、其上级目录和文件系统根永不写入。

@@ -372,6 +372,71 @@ func TestPrepareCopilotKeepsLegacyKeyOnlyWhenItIsTheOnlyOne(t *testing.T) {
 	}
 }
 
+func TestPrepareAgyAppendsTrustedWorkspaceThroughShellWrapper(t *testing.T) {
+	home := t.TempDir()
+	work := filepath.Join(home, "p")
+	dir := filepath.Join(home, ".gemini", "antigravity-cli")
+	for _, d := range []string{work, dir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	config := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(config, []byte(`{"model":"x","trustedWorkspaces":["/old"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trust := newTrust(home, nil)
+	argv := []string{"bash", "-ic", `exec -- "$@"`, "webmux", "agy", "--dangerously-skip-permissions"}
+	trust.Prepare(work, argv, nil)
+	trust.Prepare(work, argv, nil)
+
+	data, _ := os.ReadFile(config)
+	var doc struct {
+		Model      string   `json:"model"`
+		Workspaces []string `json:"trustedWorkspaces"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("invalid JSON %q: %v", data, err)
+	}
+	if doc.Model != "x" || len(doc.Workspaces) != 2 || doc.Workspaces[0] != "/old" || doc.Workspaces[1] != canonical(t, work) {
+		t.Fatalf("config = %s", data)
+	}
+	if info, _ := os.Stat(config); info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v", info.Mode())
+	}
+}
+
+func TestPrepareAgyLeavesMissingConfigAloneAndAddsListToExistingOne(t *testing.T) {
+	home := t.TempDir()
+	work := filepath.Join(home, "p")
+	if err := os.Mkdir(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	trust := newTrust(home, nil)
+	trust.Prepare(work, []string{"agy"}, nil)
+	if _, err := os.Stat(filepath.Join(home, ".gemini")); !os.IsNotExist(err) {
+		t.Fatalf("agy config created: %v", err)
+	}
+
+	dir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(config, []byte(`{"model":"x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trust.Prepare(work, []string{"agy"}, nil)
+	var doc map[string]any
+	data, _ := os.ReadFile(config)
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := doc["trustedWorkspaces"].([]any); len(list) != 1 || doc["model"] != "x" {
+		t.Fatalf("config = %s", data)
+	}
+}
+
 func TestPrepareWritesThroughSymlinkedConfig(t *testing.T) {
 	home := t.TempDir()
 	work := filepath.Join(home, "p")

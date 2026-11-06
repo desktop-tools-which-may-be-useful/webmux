@@ -138,12 +138,12 @@
   - 配置跨重启与设备共享，环境变量值默认遮挡；
   - 按配置 ID 启动，修改或删除配置不影响运行中会话的命令与环境，会话信息保留配置 ID 供首页解析预览；
   - 存储不可用时显示原因，临时命令仍可用。编辑器可勾选混合模式，可用性由服务端判定并显示原因，列表显示“混合”标记（US-Q01）。
-- **US-B09 启动 agent 时不卡在“信任此文件夹”**：作为使用者，我希望 Claude Code、Codex 和 GitHub Copilot CLI 在新目录启动时不停在信任对话框，以便无人看着的会话也能直接开始工作。
+- **US-B09 启动 agent 时不卡在“信任此文件夹”**：作为使用者，我希望 Claude Code、Codex、GitHub Copilot CLI 和 Antigravity CLI 在新目录启动时不停在信任对话框，以便无人看着的会话也能直接开始工作。
   验收要点：
-  - 默认开启 `agent_pretrust`；新建会话的命令被识别为这三款 CLI（直接执行、绝对路径或 Bash/Zsh 启动文件包装）时，先把启动目录记入该 CLI 自己的配置，再启动进程；
-  - 写入位置跟随会话的 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`COPILOT_HOME`，其次是服务进程的同名变量，最后是主目录下的默认位置；
+  - 默认开启 `agent_pretrust`；新建会话的命令被识别为这四款 CLI（直接执行、绝对路径或 Bash/Zsh 启动文件包装）时，先把启动目录记入该 CLI 自己的配置，再启动进程；
+  - 写入位置跟随会话的 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`COPILOT_HOME`，其次是服务进程的同名变量，最后是主目录下的默认位置；Antigravity CLI 固定写主目录下的 `~/.gemini/antigravity-cli/settings.json`（`trustedWorkspaces`）；
   - 已有配置的其他内容与权限保持不变；已经信任时不写；Codex 保留注释且不改写用户显式设为 `untrusted` 的目录；
-  - Claude Code 与 Copilot 的配置文件缺失、或无法解析时不创建、不改写；Codex 只在 `~/.codex` 已存在时创建 `config.toml`；
+  - Claude Code、Copilot 与 Antigravity CLI 的配置文件缺失、或无法解析时不创建、不改写；Codex 只在 `~/.codex` 已存在时创建 `config.toml`；
   - 主目录、其上级目录与文件系统根永不写入；目录先解析符号链接；
   - 任何失败只记录日志，会话照常启动；`agent_pretrust = false` 时不写任何文件；
   - 其他 CLI 与已运行会话不受影响，说明与限制见 [CLI agent 接入](../cli-agents.md#文件夹信任预写)。
