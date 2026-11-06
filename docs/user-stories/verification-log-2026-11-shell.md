@@ -107,3 +107,10 @@
 - 已运行：`go test -race ./internal/sessioncmd`（新增静默稳定、持续输出不稳定、会话退出稳定三个用例）；`make docs-check`；
   隔离实例中对持续重绘的程序，旧二进制 `screen` 挂到外部 8 秒超时被杀，新二进制约 1 秒返回并提示，空闲 shell 的 `stable` 为 true。
 - 限制：`cmd/webmux` 的隧道用例在 WebMux 会话内运行失败，与本改动无关；完整测试交给 CI。
+
+本次局部核对（2026-11-06，起始分支搜索与上游分支选择）：新建工作树“起始分支”与快速开始页“基准分支”支持搜索并选择本地或远程跟踪分支（`origin/*` 等），刷新上游同时拉取远程分支引用。
+
+- 更新的故事：US-J04、US-Q18；索引与故事数量不变。
+- 已运行：`go test -race ./internal/workspace ./internal/api`（新增远程跟踪分支刷新与降级用例）；
+  `web/test/browser/WorktreeCreateFields.test.ts`、`NewSessionDialog.test.ts`、`QuickStart.test.ts`；`make check`。
+- 限制：未在 macOS 上运行；完整 E2E 套件交给 CI。

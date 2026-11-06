@@ -171,7 +171,7 @@ async function closeBase() {
   await expect.element(options().first()).not.toBeInTheDocument();
 }
 const startBranchInput = () =>
-  page.getByRole("combobox", { name: "起始分支", exact: true });
+  page.getByRole("button", { name: "起始分支", exact: true });
 async function chooseStartBranch(name: string) {
   await startBranchInput().click();
   await page.getByRole("option", { name, exact: true }).click();
@@ -226,6 +226,71 @@ test("switching the start branch lists that branch's history", async () => {
   await openBase();
   await expect.element(options().first()).toMatchTextContent(/bbbbbbb/);
   await closeBase();
+});
+
+test("start branch picker searches and selects remote-tracking branches", async () => {
+  const remoteHead = "c".repeat(40);
+  const refreshedRemoteHead = "d".repeat(40);
+  serve(
+    200,
+    {
+      ...branches,
+      bases: [
+        ...branches.bases,
+        {
+          name: "refs/remotes/origin/HEAD",
+          head,
+          subject: "修复终端重连",
+        },
+        {
+          name: "refs/remotes/origin/feature/remote-task",
+          head: remoteHead,
+          subject: "远程功能提交",
+        },
+      ],
+    },
+    (branch) => {
+      if (branch === "origin/feature/remote-task") {
+        return Response.json({
+          branch,
+          base: refreshedRemoteHead,
+          baseSubject: "远程最新功能提交",
+          baseSource: "remote",
+          upstream: "origin/feature/remote-task",
+          upstreamHead: refreshedRemoteHead,
+          fetchWarning: "",
+        });
+      }
+      return Response.json(localRefresh(branches, branch));
+    },
+  );
+  await show();
+  await startBranchInput().click();
+  const search = page.getByRole("combobox", { name: "起始分支", exact: true });
+  await search.fill("remote-task");
+  await expect
+    .element(
+      page.getByRole("option", {
+        name: "origin/feature/remote-task",
+        exact: true,
+      }),
+    )
+    .toBeVisible();
+  await expect
+    .element(page.getByRole("option", { name: "main", exact: true }))
+    .not.toBeInTheDocument();
+  await page
+    .getByRole("option", { name: "origin/feature/remote-task", exact: true })
+    .click();
+  await expect
+    .element(startBranchInput())
+    .toMatchTextContent(/origin\/feature\/remote-task/);
+  await expect.element(reference()).toHaveTextContent(refreshedRemoteHead);
+  await expect
+    .element(page.getByRole("status", { name: "上游刷新状态" }))
+    .toMatchTextContent(
+      /远程最新 · origin\/feature\/remote-task · 远程最新功能提交/,
+    );
 });
 
 test("a detached default lists history from the main worktree commit", async () => {

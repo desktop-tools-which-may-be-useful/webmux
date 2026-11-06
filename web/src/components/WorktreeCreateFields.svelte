@@ -1,7 +1,7 @@
 <script lang="ts">
   import { errorMessage } from "../error";
   import { api } from "../api";
-  import { suggestWorktreeBranch } from "../branchName";
+  import { remoteBranchBases, suggestWorktreeBranch } from "../branchName";
   import {
     commitChoiceLabel,
     commitChoices,
@@ -61,6 +61,12 @@
   let baseEditVersion = 0;
   let refreshController: AbortController | null = null;
   let pathEdited = $state(false);
+  let startBranchPickerOpen = $state(false);
+  let startBranchSearch = $state("");
+  function setStartBranchPickerOpen(next: boolean) {
+    startBranchPickerOpen = next;
+    if (!next) startBranchSearch = "";
+  }
   let branchPickerOpen = $state(false);
   let branchSearch = $state("");
   // The desktop list stays mounted while closed; each opening starts unfiltered.
@@ -76,6 +82,14 @@
   let commitsController: AbortController | null = null;
   // Tips the history was read from; their rows carry these tags.
   let commitTips = $state<CommitTip[]>([]);
+  const remoteBranches = $derived(
+    data
+      ? remoteBranchBases(
+          data.bases,
+          data.branches.map((item) => item.name),
+        )
+      : [],
+  );
   const commitRows = $derived(
     commitChoices(commits, { tips: commitTips, base, baseSubject }),
   );
@@ -93,6 +107,8 @@
 
   // Tags for a branch's local tip and, after a fetch, its upstream tip.
   function branchTips(local: string, upstreamHead: string): CommitTip[] {
+    if (!local && upstreamHead)
+      return [{ hash: upstreamHead, tag: "远程最新" }];
     if (!upstreamHead) return [{ hash: local, tag: "本地最新" }];
     if (upstreamHead === local) return [{ hash: local, tag: "本地与远程最新" }];
     return [
@@ -190,17 +206,34 @@
         // A remote base descends from the local tip; a local base is the
         // freshly read tip. Either way the fetched upstream tip is listed, so
         // a diverged upstream stays selectable without becoming the default.
+        const localBranch = data?.branches.find(
+          (item) => item.name === branchName,
+        );
         const localHead =
-          value.baseSource === "local"
-            ? value.base
-            : data?.branches.find((item) => item.name === branchName)?.head ||
-              value.base;
+          value.baseSource === "local" ? value.base : (localBranch?.head ?? "");
         if (editVersion === baseEditVersion) {
           base = value.base;
           baseSource = value.baseSource;
           baseSubject = value.baseSubject;
         }
         loadCommits(branchTips(localHead, value.upstreamHead));
+        if (!value.fetchWarning) {
+          void api(
+            `/repositories/${repositoryID}/branches`,
+            BranchesSchema,
+            "GET",
+            undefined,
+            controller.signal,
+          )
+            .then((next) => {
+              if (
+                generation === refreshGeneration &&
+                repository.id === repositoryID
+              )
+                data = next;
+            })
+            .catch(() => {});
+        }
       })
       .catch((err: unknown) => {
         if (generation !== refreshGeneration) return;
@@ -222,6 +255,16 @@
     clearRefresh();
     const selected = data?.branches.find((item) => item.name === name);
     if (!selected) {
+      const remote = remoteBranches.find((item) => item.name === name);
+      if (remote) {
+        base = remote.head;
+        baseSource = "remote";
+        upstream = remote.name;
+        baseSubject = remote.subject;
+        loadCommits(branchTips("", remote.head));
+        refreshUpstream(name);
+        return;
+      }
       base = data?.defaultBase || "";
       baseSource = "";
       baseSubject = data?.defaultBaseSubject || "";
@@ -318,12 +361,14 @@
       if (next === "new" && mode !== "new") {
         mode = "new";
         setBranchPickerOpen(false);
+        setStartBranchPickerOpen(false);
         branchEdited = false;
         branch = "";
         fillSuggestedBranch();
         chooseStartBranch(startBranch);
       } else if (next === "existing" && mode !== "existing") {
         mode = "existing";
+        setStartBranchPickerOpen(false);
         clearRefresh();
         clearCommits();
         baseSource = "";
@@ -359,29 +404,43 @@
             />{refreshing ? "正在刷新" : "刷新上游"}</Button
           >
         </div>
-        <Select.Root
-          type="single"
-          value={startBranch}
+        <PickerField
+          id="worktree-start-branch"
+          bind:open={() => startBranchPickerOpen, setStartBranchPickerOpen}
           disabled={disabled || loading || !data}
-          onValueChange={chooseStartBranch}
         >
-          <Select.Trigger id="worktree-start-branch">
+          {#snippet trigger()}
             {#if startBranch}
-              <span class="truncate">{startBranch}</span>
-            {:else}
-              <span class="text-muted-foreground">选择本地分支</span>
-            {/if}
-          </Select.Trigger>
-          <Select.Content
-            class="max-h-[min(24rem,var(--bits-select-content-available-height))]"
-          >
-            {#each data?.branches || [] as item (item.name)}
-              <Select.Item value={item.name} label={item.name}
-                >{item.name}</Select.Item
+              <IconGitBranch
+                class="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span class="min-w-0 flex-1 truncate" title={startBranch}
+                >{startBranch}</span
               >
-            {/each}
-          </Select.Content>
-        </Select.Root>
+            {:else}
+              <span class="text-sm text-muted-foreground">
+                {loading ? "正在读取本地分支…" : "选择起始分支"}
+              </span>
+            {/if}
+          {/snippet}
+          <BranchCommandList
+            label="起始分支"
+            branches={(data?.branches ?? []).map((item) => ({
+              name: item.name,
+            }))}
+            remoteBranches={remoteBranches.map((item) => ({ name: item.name }))}
+            selected={startBranch}
+            {loading}
+            failed={!!error}
+            {disabled}
+            bind:search={startBranchSearch}
+            onselect={(name) => {
+              chooseStartBranch(name);
+              setStartBranchPickerOpen(false);
+            }}
+          />
+        </PickerField>
         {#if refreshing}
           <p
             role="status"

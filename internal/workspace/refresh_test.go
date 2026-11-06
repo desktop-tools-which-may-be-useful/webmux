@@ -57,6 +57,41 @@ func TestRefreshBranchBaseUsesConfiguredUpstream(t *testing.T) {
 	}
 }
 
+func TestRefreshBranchBaseFetchesRemoteTrackingBranch(t *testing.T) {
+	t.Parallel()
+	isolateGit(t)
+	s, r, root, remote := upstreamFixture(t)
+	other := filepath.Join(t.TempDir(), "other")
+	gitTest(t, root, "clone", remote, other)
+	gitTest(t, other, "checkout", "-b", "feature/remote-only")
+	putFile(t, filepath.Join(other, "remote-feature"), "remote feature\n")
+	gitTest(t, other, "add", "remote-feature")
+	gitTest(t, other, "commit", "-m", "remote feature commit")
+	gitTest(t, other, "push", "-u", "origin", "feature/remote-only")
+	remoteHead := gitTest(t, other, "rev-parse", "HEAD")
+
+	// Even before a local fetch has seen feature/remote-only, refreshing
+	// origin/feature/remote-only fetches origin and resolves the remote ref.
+	result, err := s.RefreshBranchBase(context.Background(), r.ID, "origin/feature/remote-only")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Branch != "origin/feature/remote-only" || result.Base != remoteHead || result.UpstreamHead != remoteHead || result.BaseSubject != "remote feature commit" || result.BaseSource != "remote" || result.Upstream != "origin/feature/remote-only" || result.FetchWarning != "" {
+		t.Fatalf("remote-tracking refresh: %+v", result)
+	}
+
+	// If the remote becomes unreachable later, refreshing the cached
+	// remote-tracking branch degrades to the cached ref with a warning.
+	gitTest(t, root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "missing.git"))
+	degraded, err := s.RefreshBranchBase(context.Background(), r.ID, "origin/feature/remote-only")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if degraded.Base != remoteHead || degraded.BaseSource != "remote" || degraded.Upstream != "origin/feature/remote-only" || !strings.Contains(degraded.FetchWarning, "失败") {
+		t.Fatalf("degraded remote-tracking refresh: %+v", degraded)
+	}
+}
+
 func TestRefreshBranchBaseRequiresConfiguredRemoteUpstream(t *testing.T) {
 	t.Parallel()
 	isolateGit(t)

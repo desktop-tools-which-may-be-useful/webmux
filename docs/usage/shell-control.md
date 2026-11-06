@@ -6,18 +6,18 @@
 
 ## 常见任务
 
-| 我想……                                   | 命令                                                                 |
-| ---------------------------------------- | -------------------------------------------------------------------- |
-| 让 agent 在新 worktree 里做事并拿到回复  | `webmux run --new-worktree --launch-config "Claude Code" --view chat --prompt "…" --reply` |
-| 在持久会话里跑命令，按命令退出码结束     | `webmux run --follow --strip -- go test ./...`                       |
-| 给已有会话发一句话并等它做完             | `webmux send <ID> "…" --reply`（聊天视图）或 `--enter --wait idle`（终端视图） |
-| 读 agent 最后的回复                      | `webmux chat log <ID>`                                               |
-| 看全屏 TUI 当前画面                      | `webmux screen <ID>`                                                 |
-| 等会话需要我或空闲                       | `webmux wait <ID> --until attention,idle --changed`                  |
-| 任务完成后提醒我                         | `webmux notify --kind done "构建完成"`                               |
-| 查看当前会话的仓库、分支与链接           | `webmux get`                                                         |
-| 找到本会话的临时文件夹                   | `webmux dir self`                                                    |
-| 读 WebMux 工具手册                       | `webmux guide`                                                       |
+| 我想……                                  | 命令                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 让 agent 在新 worktree 里做事并拿到回复 | `webmux run --new-worktree --launch-config "Claude Code" --view chat --prompt "…" --reply` |
+| 在持久会话里跑命令，按命令退出码结束    | `webmux run --follow --strip -- go test ./...`                                             |
+| 给已有会话发一句话并等它做完            | `webmux send <ID> "…" --reply`（聊天视图）或 `--enter --wait idle`（终端视图）             |
+| 读 agent 最后的回复                     | `webmux chat log <ID>`                                                                     |
+| 看全屏 TUI 当前画面                     | `webmux screen <ID>`                                                                       |
+| 等会话需要我或空闲                      | `webmux wait <ID> --until attention,idle --changed`                                        |
+| 任务完成后提醒我                        | `webmux notify --kind done "构建完成"`                                                     |
+| 查看当前会话的仓库、分支与链接          | `webmux get`                                                                               |
+| 找到本会话的临时文件夹                  | `webmux dir self`                                                                          |
+| 读 WebMux 工具手册                      | `webmux guide`                                                                             |
 
 下面按用途展开，每节先给命令，再说明规则与边界。
 
@@ -141,7 +141,7 @@ webmux rm <ID> --forget --yes                    # 删除归档记录与临时�
 
 - 从开启了聊天视图的启动配置创建的会话有终端与聊天两个视图，`webmux ls` 在状态列显示它当前的视图（终端、聊天、切换中）。
   - `ls --json` 原样包含 `views`、`view`、`transition` 与 `agent`，不再含 `hybrid` 对象。
-- 启动配置用 `webmux launch-config add|edit --chat|--no-chat` 开启或关闭聊天视图（混合模式）；旧选项 `--hybrid` 已删除。
+- 启动配置用 `webmux launch-config add` 或 `webmux launch-config edit` 的 `--chat` / `--no-chat` 开启或关闭聊天视图（混合模式）；旧选项 `--hybrid` 已删除。
 - `run --launch-config <名称>` 引用这类配置时创建混合会话，默认从终端开始；本地终端可以照常输入，附着中的终端不提供切换按键。
   - `--view chat` 从聊天开始（隐含 `--detach`）；
   - `--set ID=VALUE`、`--permission ask|auto`、`--attach-file PATH` 只在 `--view chat` 时可用。

@@ -146,3 +146,36 @@ export function suggestWorktreeBranch(
     input.avoid,
   );
 }
+
+const REMOTE_REF_PREFIX = "refs/remotes/";
+
+export interface RemoteBranchBase {
+  name: string;
+  head: string;
+  subject: string;
+}
+
+/**
+ * Extracts remote-tracking branches (`origin/main`, `origin/feature/x`, etc.)
+ * from `/api/repositories/{id}/branches` bases, skipping symbolic `/HEAD` refs
+ * and any short name that collides with an existing local branch name.
+ */
+export function remoteBranchBases(
+  bases: readonly RemoteBranchBase[],
+  localNames: Iterable<string> = [],
+): RemoteBranchBase[] {
+  const locals = new Set(localNames);
+  const result: RemoteBranchBase[] = [];
+  for (const base of bases) {
+    if (
+      !base.name.startsWith(REMOTE_REF_PREFIX) ||
+      base.name.endsWith("/HEAD")
+    ) {
+      continue;
+    }
+    const short = base.name.slice(REMOTE_REF_PREFIX.length);
+    if (!short || !short.includes("/") || locals.has(short)) continue;
+    result.push({ name: short, head: base.head, subject: base.subject });
+  }
+  return result;
+}
