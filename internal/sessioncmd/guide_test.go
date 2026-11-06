@@ -92,7 +92,7 @@ func TestGuideReadsTheServer(t *testing.T) {
 func TestGuideFallsBackToTheBuiltInCopy(t *testing.T) {
 	e, stdout, stderr := guideEnv(t, false, "")
 	guide := agentguide.New(Directory(Commands()))
-	if code := e.Run(context.Background(), guideCommand, nil); code != 0 || stdout.String() != guide.Index(nil) || !strings.Contains(stderr.String(), "built into this executable") {
+	if code := e.Run(context.Background(), guideCommand, nil); code != 0 || stdout.String() != guide.Index(nil, "") || !strings.Contains(stderr.String(), "built into this executable") {
 		t.Fatalf("fallback: %d %q %q", code, stdout.String()[:min(40, stdout.Len())], stderr)
 	}
 	// The offline commands topic is the directory of this CLI's table.

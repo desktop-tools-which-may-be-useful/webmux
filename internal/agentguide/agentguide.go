@@ -124,8 +124,9 @@ const when = "需要查看或控制 WebMux 会话、启动命令或 agent、等�
 	"单个命令的选项、输出与示例不在手册中：运行 `webmux <命令> --help` 或 `webmux help --json`。"
 
 // Index renders /llms.txt. A nil instance leaves out everything specific
-// to the running server, for the unauthenticated TCP listener.
-func (g Guide) Index(instance *Instance) string {
+// to the running server, for the unauthenticated TCP listener. session is
+// the session whose process asked, or "" when the caller is in none.
+func (g Guide) Index(instance *Instance, session string) string {
 	var b strings.Builder
 	b.WriteString("# WebMux\n\n> " + summary + "\n\n")
 	if instance != nil {
@@ -136,6 +137,9 @@ func (g Guide) Index(instance *Instance) string {
 		}
 		if socket := instance.Socket(); socket != "" {
 			fmt.Fprintf(&b, "- 套接字：`%s`\n", socket)
+		}
+		if session != "" {
+			fmt.Fprintf(&b, "- 本会话 ID：`%s`（环境变量 WEBMUX_SESSION_ID 丢失时用它代替 `self`）\n", session)
 		}
 		b.WriteString("\n")
 	}
@@ -156,9 +160,9 @@ func (g Guide) Index(instance *Instance) string {
 }
 
 // Full renders /llms-full.txt: the index, then every topic in order.
-func (g Guide) Full(instance *Instance) string {
+func (g Guide) Full(instance *Instance, session string) string {
 	var b strings.Builder
-	b.WriteString(g.Index(instance))
+	b.WriteString(g.Index(instance, session))
 	for _, t := range Topics {
 		if page, ok := g.Page(t.Name); ok {
 			b.WriteString("\n---\n\n" + page)

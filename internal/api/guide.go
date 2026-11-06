@@ -13,14 +13,15 @@ import (
 // brief. The guide pages lie outside /api/, so like the static app they
 // need no token on the TCP listener; there they carry nothing about the
 // running instance. The local socket adds its version, executable and
-// socket. The guide itself, with the command directory cmd/ rendered from
+// socket, and names the session the caller runs in, found from the peer
+// process. The guide itself, with the command directory cmd/ rendered from
 // the command table, is the instance's.
 func (s *Server) guideRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /llms.txt", func(w http.ResponseWriter, r *http.Request) {
-		guideText(w, "text/plain; charset=utf-8", s.guidePages().Index(s.guideInstance()))
+		guideText(w, "text/plain; charset=utf-8", s.guidePages().Index(s.guideInstance(), s.callerSession(r)))
 	})
 	mux.HandleFunc("GET /llms-full.txt", func(w http.ResponseWriter, r *http.Request) {
-		guideText(w, "text/plain; charset=utf-8", s.guidePages().Full(s.guideInstance()))
+		guideText(w, "text/plain; charset=utf-8", s.guidePages().Full(s.guideInstance(), s.callerSession(r)))
 	})
 	mux.HandleFunc("GET /llms/{page}", func(w http.ResponseWriter, r *http.Request) {
 		name, ok := strings.CutSuffix(r.PathValue("page"), ".md")

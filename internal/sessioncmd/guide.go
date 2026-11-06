@@ -102,12 +102,12 @@ func (e Env) guide(ctx context.Context, page string, args []string, full bool) i
 		guide := agentguide.New(Directory(e.registry()))
 		switch {
 		case full:
-			text = []byte(guide.Full(nil))
+			text = []byte(guide.Full(nil, ""))
 		case len(args) == 1:
 			body, _ := guide.Page(args[0])
 			text = []byte(body)
 		default:
-			text = []byte(guide.Index(nil))
+			text = []byte(guide.Index(nil, ""))
 		}
 	}
 	_, _ = e.Stdout.Write(text)

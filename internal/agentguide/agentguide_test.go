@@ -14,7 +14,7 @@ var link = regexp.MustCompile(`\]\((/llms[^)]*)\)`)
 var testGuide = New("# 命令目录\n\n- `webmux ls [options]`: List sessions.\n")
 
 func TestIndexFollowsLLMSTxt(t *testing.T) {
-	index := testGuide.Index(nil)
+	index := testGuide.Index(nil, "")
 	lines := strings.Split(index, "\n")
 	if lines[0] != "# WebMux" || !strings.HasPrefix(lines[2], "> ") {
 		t.Fatalf("index must start with an H1 and a blockquote summary:\n%s", index)
@@ -50,7 +50,7 @@ func TestEveryLinkResolvesAndEveryPageIsListed(t *testing.T) {
 			t.Errorf("page %s is not in the index", entry.Name())
 		}
 	}
-	for _, m := range link.FindAllStringSubmatch(testGuide.Full(nil), -1) {
+	for _, m := range link.FindAllStringSubmatch(testGuide.Full(nil, ""), -1) {
 		target := m[1]
 		if target == "/llms.txt" || target == "/llms-full.txt" {
 			continue
@@ -66,7 +66,7 @@ func TestEveryLinkResolvesAndEveryPageIsListed(t *testing.T) {
 func TestPublicGuideCarriesNoInstanceFacts(t *testing.T) {
 	instance := &Instance{Version: "9.9.9-secret", LocalURL: "http://10.1.2.3:7681", Bin: "/opt/private/webmux"}
 	instance.SetSocket("/run/user/1000/webmux.sock")
-	public := testGuide.Full(nil)
+	public := testGuide.Full(nil, "")
 	for _, leak := range []string{"9.9.9-secret", "10.1.2.3", "/opt/private", "/run/user", "本实例："} {
 		if strings.Contains(public, leak) {
 			t.Errorf("public guide contains %q", leak)
@@ -76,7 +76,7 @@ func TestPublicGuideCarriesNoInstanceFacts(t *testing.T) {
 	if regexp.MustCompile("(/usr|/opt|/home|~)[^ `]*/webmux([ `\n]|$)").MatchString(public) {
 		t.Error("public guide hard-codes an executable path")
 	}
-	local := testGuide.Index(instance)
+	local := testGuide.Index(instance, "")
 	for _, fact := range []string{"9.9.9-secret", "/opt/private/webmux", "/run/user/1000/webmux.sock"} {
 		if !strings.Contains(local, fact) {
 			t.Errorf("local index lacks %q", fact)
@@ -85,7 +85,7 @@ func TestPublicGuideCarriesNoInstanceFacts(t *testing.T) {
 }
 
 func TestGuideExplainsTheCommandPrefixAndTroubleshooting(t *testing.T) {
-	index := testGuide.Index(nil)
+	index := testGuide.Index(nil, "")
 	if !strings.Contains(index, `"$WEBMUX_BIN"`) || !strings.Contains(index, "--socket") {
 		t.Fatal("index lacks the command prefix")
 	}
@@ -129,7 +129,7 @@ func TestCommandsTopicIsTheInjectedDirectory(t *testing.T) {
 	if !ok || !strings.Contains(page, "`webmux ls [options]`") {
 		t.Fatalf("commands topic %q", page)
 	}
-	if !strings.Contains(testGuide.Full(nil), page) {
+	if !strings.Contains(testGuide.Full(nil, ""), page) {
 		t.Fatal("llms-full.txt lacks the command directory")
 	}
 	if page, ok := (Guide{}).Page(CommandsTopic); !ok || page != "" {
@@ -140,7 +140,7 @@ func TestCommandsTopicIsTheInjectedDirectory(t *testing.T) {
 // TestHandWrittenTopicsDoNotRepeatHelp keeps the help sections out of the
 // guide: options and examples live in --help.
 func TestHandWrittenTopicsDoNotRepeatHelp(t *testing.T) {
-	full := testGuide.Full(nil)
+	full := testGuide.Full(nil, "")
 	for _, section := range []string{"Options:", "Examples:", "Exit status:", "\nUsage: "} {
 		if strings.Contains(full, section) {
 			t.Errorf("llms-full.txt contains the help section %q", section)
@@ -156,8 +156,23 @@ func TestRecipesUseTheSessionVerbs(t *testing.T) {
 		}
 	}
 	for _, removed := range []string{"chat new", "chat send", "chat switch", "chat cancel", "chat resume", "chat forget", "chat ls", "--start-side", "--hybrid"} {
-		if strings.Contains(testGuide.Full(nil), removed) {
+		if strings.Contains(testGuide.Full(nil, ""), removed) {
 			t.Errorf("the guide still names %q", removed)
 		}
+	}
+}
+
+func TestLocalGuideNamesTheCallerSession(t *testing.T) {
+	instance := &Instance{Version: "1.0", LocalURL: "http://127.0.0.1:7681"}
+	for name, session := range map[string]string{"inside a session": "ab2cd3ef", "outside every session": ""} {
+		for _, text := range []string{testGuide.Index(instance, session), testGuide.Full(instance, session)} {
+			if got := strings.Contains(text, "- 本会话 ID：`ab2cd3ef`"); got != (session != "") {
+				t.Errorf("%s: names the session = %v", name, got)
+			}
+		}
+	}
+	// The session ID is an instance fact: the unauthenticated listener never sees it.
+	if strings.Contains(testGuide.Index(nil, "ab2cd3ef"), "ab2cd3ef") {
+		t.Error("guide without an instance names a session")
 	}
 }

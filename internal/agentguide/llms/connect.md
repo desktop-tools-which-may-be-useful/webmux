@@ -31,7 +31,7 @@ CLI 依次使用 `--socket PATH`、`--config PATH`、`WEBMUX_SOCKET`、默认配
 ## 排错
 
 1. 运行 `"$WEBMUX_BIN" version` 与 `"$WEBMUX_BIN" status`，确认可执行文件与服务都可用；
-2. 工具 shell 丢失了 `WEBMUX_*` 变量时，使用简述中的绝对路径，加 `--socket <套接字>`，并把 `self` 换成简述中的会话 ID；
+2. 工具 shell 丢失了 `WEBMUX_*` 变量时，使用简述或本实例信息（`/llms.txt` 的“本会话 ID”）中的绝对路径与会话 ID，加 `--socket <套接字>`，并把 `self` 换成该会话 ID；
 3. 没有可用的可执行文件时，直接调用本机 API：`curl -s --unix-socket <套接字> http://webmux/api/sessions`，手册本身也可以这样读取：`curl -s --unix-socket <套接字> http://webmux/llms.txt`；
 4. 处在禁止访问套接字或外部程序的沙箱中时，告诉用户无法控制 WebMux，不要反复重试；
 5. 命令提示“服务端版本过旧”时，改用 `"$WEBMUX_BIN"`。

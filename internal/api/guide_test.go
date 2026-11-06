@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -109,5 +110,40 @@ func TestAgentGuideBrief(t *testing.T) {
 	noGuide.ServeHTTP(w, httptest.NewRequest("POST", "/api/sessions/"+id+"/agent-guide", nil))
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("without a guide: %d", w.Code)
+	}
+}
+
+func TestGuideNamesTheCallerSession(t *testing.T) {
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
+	t.Cleanup(func() { m.Shutdown(context.Background()) })
+	id, pid := leaderPID(t, m)
+	guide := &agentguide.Instance{Version: "7.7.7", LocalURL: "http://127.0.0.1:7681"}
+	deps := testDeps(t, Deps{Manager: m, Guide: guide, Config: config.Config{Token: "login-secret", Listen: "127.0.0.1:7681"}})
+	local := NewLocal(deps, Local{Status: func() contract.StatusV1 { return contract.StatusV1{V: 1} }})
+	get := func(h http.Handler, path string, peer int) string {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Host = "127.0.0.1:7681"
+		if peer != 0 {
+			req = req.WithContext(context.WithValue(req.Context(), peerKey{}, peer))
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Body.String()
+	}
+	for _, path := range []string{"/llms.txt", "/llms-full.txt"} {
+		if body := get(local, path, pid); !strings.Contains(body, "本会话 ID：`"+id+"`") {
+			t.Errorf("%s from inside the session does not name %s", path, id)
+		}
+		// A caller outside every session, or one with no known PID, is named nothing.
+		if body := get(local, path, os.Getpid()); strings.Contains(body, "- 本会话 ID：") {
+			t.Errorf("%s from outside every session names a session", path)
+		}
+		if body := get(local, path, 0); strings.Contains(body, "- 本会话 ID：") {
+			t.Errorf("%s without a peer names a session", path)
+		}
+	}
+	// The TCP listener serves no instance facts, whoever asks.
+	if body := get(New(deps), "/llms.txt", pid); strings.Contains(body, id) {
+		t.Error("tcp guide names a session")
 	}
 }
