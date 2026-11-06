@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
-  import { formatBytes } from "../code-image";
   import { errorMessage } from "../error";
   import { previewRelease, releaseWorktree } from "../recoverable";
   import type { ReleasePreview, Worktree } from "../schemas";
@@ -14,7 +13,8 @@
   // Frees the disk space of a linked worktree whose sessions are archived:
   // the directory and its Git registration go, the branch, the archived
   // records and the commit stay so a resume can rebuild it later. The
-  // preview lists what would block it and the ignored files deleted with it.
+  // preview lists what would block it and the archived records that stay;
+  // ignored files are deleted with the directory and only warned about.
   let {
     worktree,
     onclose,
@@ -32,14 +32,6 @@
   const commit = $derived(
     (preview?.commit || worktree.head || "").slice(0, 12),
   );
-  // Sizes are lower bounds when the count ran out of time or failed.
-  const total = $derived.by(() => {
-    if (!preview) return "";
-    if (preview.ignoredBytes === undefined)
-      return preview.sizeComplete ? "" : "大小未知";
-    const size = formatBytes(preview.ignoredBytes);
-    return preview.sizeComplete ? `共 ${size}` : `至少 ${size}`;
-  });
   const hasIgnored = $derived(
     !!preview && (preview.ignored.length > 0 || preview.ignoredMore > 0),
   );
@@ -115,36 +107,10 @@
           push={preview.push}
         />{/if}
       {#if hasIgnored}
-        <div class="space-y-2 text-sm">
-          <p class="flex flex-wrap justify-between gap-x-3">
-            <span class="font-medium">随目录删除的忽略文件</span>
-            {#if total}<span class="text-muted-foreground">{total}</span>{/if}
-          </p>
-          <ul
-            class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1"
-            aria-label="随目录删除的忽略文件"
-          >
-            {#each preview.ignored as entry (entry.path)}
-              <li class="col-span-2 grid grid-cols-subgrid">
-                <span class="font-mono break-all">{entry.path}</span>
-                <span class="text-right text-muted-foreground"
-                  >{entry.bytes === undefined
-                    ? "未知"
-                    : formatBytes(entry.bytes)}</span
-                >
-              </li>
-            {/each}
-          </ul>
-          {#if preview.ignoredMore}<p class="text-muted-foreground">
-              另有 {preview.ignoredMore} 项未列出。
-            </p>{/if}
-        </div>
         <InlineNotice tone="warning">
           忽略文件（例如依赖、构建产物、.env）会随目录永久删除，重建工作树也无法找回，需要重新生成。
         </InlineNotice>
-      {:else}<p class="text-sm text-muted-foreground">
-          没有忽略文件需要删除。
-        </p>{/if}
+      {/if}
       <p class="text-xs text-muted-foreground">
         确认 5 分钟内有效；目标或会话变化后必须重新预览。
       </p>

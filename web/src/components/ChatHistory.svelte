@@ -42,7 +42,6 @@
   import { releasableRecordWorktree } from "../archived";
   import { rowStatus, rowStatusLabels } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
-  import ReleasedBadge from "./ReleasedBadge.svelte";
   import RowStatus from "./RowStatus.svelte";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
@@ -179,13 +178,12 @@
                 <span class="min-w-0 flex-1 truncate text-muted-foreground"
                   >{title}</span
                 >
-                {#if record.released}<ReleasedBadge
-                    released={record.released}
-                  />{/if}
                 {#if resuming === record.id}<span
                     class="shrink-0 text-xs font-normal text-muted-foreground"
                     >恢复中…</span
-                  >{:else}<RowStatus status="ended" />{/if}
+                  >{:else}<RowStatus
+                    status={record.released ? "released" : "ended"}
+                  />{/if}
               </ListButton>
               <SidebarSessionMenu
                 label={title}

@@ -456,10 +456,10 @@ test("the sidebar releases an archived chat's worktree after a preview and marks
     .toMatchTextContent(/恢复聊天\s*释放空间\s*删除记录/);
   await page.getByRole("menuitem", { name: "释放空间" }).click();
   const dialog = page.getByRole("dialog", { name: "释放空间" });
-  await expect.element(dialog).toMatchTextContent(/node_modules\/\s*3 MiB/);
-  await expect.element(dialog).toMatchTextContent(/\.env\s*未知/);
-  await expect.element(dialog).toMatchTextContent(/至少 3 MiB/);
-  await expect.element(dialog).toMatchTextContent(/另有 2 项未列出/);
+  // Deleted ignored files are warned about, not listed.
+  await expect.element(dialog).not.toMatchTextContent(/node_modules\//);
+  await expect.element(dialog).not.toMatchTextContent(/随目录删除的忽略文件/);
+  await expect.element(dialog).not.toMatchTextContent(/另有 2 项/);
   await expect.element(dialog).toMatchTextContent(/重建工作树也无法找回/);
   await expect
     .element(dialog)
@@ -475,9 +475,16 @@ test("the sidebar releases an archived chat's worktree after a preview and marks
     path: "/api/repositories/repo1/worktrees/wt1/release",
     body: { confirmationId: "conf1234" },
   });
-  const badge = archived.getByTitle(/^原路径 /);
-  await expect.element(badge).toBeVisible();
-  expect(badge.element().textContent).toContain("已释放空间");
+  const releasedRow = archived.getByRole("button", {
+    name: "分支聊天（已释放空间，已结束）",
+  });
+  expect(releasedRow.element().textContent).not.toContain("已释放空间");
+  expect(
+    releasedRow
+      .element()
+      .querySelector("[data-status]")
+      ?.getAttribute("data-status"),
+  ).toBe("released");
   // Released, the record offers no second release.
   await archived.getByRole("button", { name: "会话操作：分支聊天" }).click();
   await expect

@@ -196,17 +196,26 @@ test("archived rows offer releasing a linked worktree and mark released records"
   await page.getByRole("menuitem", { name: "释放空间" }).click();
   expect(onrelease).toHaveBeenCalledWith(linked);
 
-  // The released row says so, with its path and commit on hover, and still
-  // resumes through the caller, which confirms the rebuild first.
+  // The released row carries no text badge: the hollow triangle marks it,
+  // and its path and commit stay on the row's hover text. It still resumes
+  // through the caller, which confirms the rebuild first.
   const row = archivedList().getByRole("button", {
     name: "已释放的聊天（已释放空间，已结束）",
   });
-  const badge = row.getByTitle(
-    `原路径 /repos/webmux.worktrees/old · 提交 ${"d".repeat(12)}`,
-    { exact: true },
+  expect(row.element().textContent).not.toContain("已释放空间");
+  expect(row.element().getAttribute("title")).toContain(
+    `已释放空间：/repos/webmux.worktrees/old · ${"d".repeat(12)}`,
   );
-  await expect.element(badge).toBeVisible();
-  expect(badge.element().textContent).toContain("已释放空间");
+  expect(
+    row.element().querySelector("[data-status]")?.getAttribute("data-status"),
+  ).toBe("released");
+  expect(
+    archivedList()
+      .getByRole("button", { name: "主工作区聊天（已结束）" })
+      .element()
+      .querySelector("[data-status]")
+      ?.getAttribute("data-status"),
+  ).toBe("ended");
   await row.click();
   expect(onresume).toHaveBeenCalledWith(released);
 });

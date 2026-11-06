@@ -77,15 +77,17 @@ export function statusSummary(
   return `运行 ${active} · 等待 ${waiting} · 退出 ${exited}`;
 }
 
-// The four states a sidebar row shows (chat history and the workbench tree):
-// waiting for the user, working, idle, or ended (exited, or an archived
-// record). Rows always pair the colour with the label.
-export type RowStatus = "working" | "waiting" | "idle" | "ended";
+// The five states a sidebar row shows (chat history and the workbench tree):
+// waiting for the user, working, idle, ended (exited, or an archived
+// record), or released (an archived record whose worktree's space was
+// freed). Rows always pair the colour or shape with the label.
+export type RowStatus = "working" | "waiting" | "idle" | "ended" | "released";
 export const rowStatusLabels: Record<RowStatus, string> = {
   working: "工作中",
   waiting: "等待",
   idle: "空闲",
   ended: "已结束",
+  released: "已释放空间，已结束",
 };
 export function rowStatus(
   session: Pick<SessionInfo, "status" | "attention" | "agent">,
