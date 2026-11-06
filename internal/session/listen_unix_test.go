@@ -62,6 +62,71 @@ func TestSessionListeningPorts(t *testing.T) {
 	}
 }
 
+func TestShellSidecarListeningPorts(t *testing.T) {
+	if os.Getenv("WEBMUX_TEST_LISTEN_HELPER") == "1" {
+		runListenHelper(t)
+		return
+	}
+	t.Parallel()
+	excluded := freePort(t)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Options{DefaultCwd: t.TempDir(), ExcludePorts: []int{excluded}})
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	})
+	sub := m.Subscribe()
+	defer m.Unsubscribe(sub)
+	s, err := m.CreateShell(ShellInput{
+		CreateInput: CreateInput{
+			Cmd: []string{"omp"},
+			Env: map[string]string{"WEBMUX_TEST_LISTEN_HELPER": "1", "WEBMUX_TEST_EXCLUDED_PORT": strconv.Itoa(excluded)},
+		},
+		Overlay: &Overlay{Hybrid: &HybridInfo{Side: "acp", State: "active", Agent: "omp", AgentTitle: "omp"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := `"$@" >&2; printf 'HELPER_EXITED\n' >&2; exec sleep 60`
+	sidecar, err := s.StartSidecar([]string{"/bin/bash", "--noprofile", "--norc", "-c", script, "listen", executable, "-test.run=^TestShellSidecarListeningPorts$"}, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = sidecar.Stop(ctx)
+	})
+	port, helper := sidecarHelperListening(t, sidecar)
+	want := []ListeningPort{{Port: port, Process: filepath.Base(executable)}}
+	waitListeningPorts(t, sub, s.Info().ID, excluded, func(ports []ListeningPort) bool { return slices.Equal(ports, want) })
+	if err := syscall.Kill(helper, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	waitListeningPorts(t, sub, s.Info().ID, excluded, func(ports []ListeningPort) bool { return len(ports) == 0 })
+}
+
+func sidecarHelperListening(t *testing.T, c *Sidecar) (port, pid int) {
+	t.Helper()
+	pattern := regexp.MustCompile(`LISTENING (\d+) (\d+)`)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if match := pattern.FindSubmatch(c.Stderr()); match != nil {
+			port, _ = strconv.Atoi(string(match[1]))
+			pid, _ = strconv.Atoi(string(match[2]))
+			return port, pid
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("sidecar listener never started: %q", c.Stderr())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // runListenHelper listens on a free loopback port and on the excluded one,
 // reports them, and waits to be killed.
 func runListenHelper(t *testing.T) {

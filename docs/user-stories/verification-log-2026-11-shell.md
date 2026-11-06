@@ -114,3 +114,8 @@
 - 已运行：`go test -race ./internal/workspace ./internal/api`（新增远程跟踪分支刷新与降级用例）；
   `web/test/browser/WorktreeCreateFields.test.ts`、`NewSessionDialog.test.ts`、`QuickStart.test.ts`；`make check`。
 - 限制：未在 macOS 上运行；完整 E2E 套件交给 CI。
+
+本次局部核对（2026-11-06，聊天视图端口转发提示）：混合会话在聊天端时，`internal/session` 的端口扫描同时覆盖 ACP sidecar 进程树，前端会话页在聊天视图下连接 `/ws/sessions` 同步监听端口与转发列表并展示顶部端口提示，对应更新 US-R04 与覆盖索引，不新增故事。
+
+- 已运行：`go test -race ./internal/session -run "Test.*ListeningPorts"`（新增 `TestShellSidecarListeningPorts`）；`TerminalHybrid.test.ts` 与 `TerminalNotices.test.ts` Vitest 浏览器测试；`make check`；隔离演示环境下桌面（1280×720）与手机（390×844）明暗主题前后对比截图。
+- 限制：完整测试与 E2E 套件交由 CI 运行；未做真机核对。
