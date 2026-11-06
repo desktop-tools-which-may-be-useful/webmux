@@ -119,3 +119,11 @@
 
 - 已运行：`go test -race ./internal/session -run "Test.*ListeningPorts"`（新增 `TestShellSidecarListeningPorts`）；`TerminalHybrid.test.ts` 与 `TerminalNotices.test.ts` Vitest 浏览器测试；`make check`；隔离演示环境下桌面（1280×720）与手机（390×844）明暗主题前后对比截图。
 - 限制：完整测试与 E2E 套件交由 CI 运行；未做真机核对。
+
+本次局部核对（2026-11-06，快速开始终端启动支持附件）：快速开始终端启动支持附带上传文件，会话创建后移入上传目录并在首条消息末尾追加附件路径；更新 US-Q18，不新增故事或改变覆盖索引。
+
+- 已运行：
+  - `go test -race` 覆盖 `internal/workspace`（含 `TestQuickStartTerminalSide` 终端启动采纳附件并输入路径）、`internal/wire`、`internal/api`（`TestWireSnapshots`）；
+  - `make check`（生产构建、`svelte-check`、测试类型检查、Oxlint、`check:arch`、`docs-check`、`persistence-check`、`go vet`、`golangci-lint`）；
+  - `web/test/browser/QuickStart.test.ts` Vitest 浏览器用例。
+- 限制：完整套件与 E2E 交给 CI；未做真机核对。

@@ -240,7 +240,9 @@ const created = () =>
     { status: 201 },
   );
 
-test("starting in the terminal drops chat-only controls and is remembered", async () => {
+test("starting in the terminal drops chat-only controls, keeps attachments and is remembered", async () => {
+  StagingXHR.sent = [];
+  vi.stubGlobal("XMLHttpRequest", StagingXHR);
   respond(/^POST \/api\/sessions$/, created);
   const { input, toolbar } = await open();
   await expect
@@ -254,14 +256,32 @@ test("starting in the terminal drops chat-only controls and is remembered", asyn
   expect(
     toolbar.getByRole("button", { name: "思考：中" }).elements(),
   ).toHaveLength(0);
-  expect(
-    page.getByRole("button", { name: "上传文件" }).elements(),
-  ).toHaveLength(0);
+  await expect
+    .element(page.getByRole("button", { name: "上传文件" }))
+    .toBeVisible();
+  const picker = page
+    .getByLabelText("选择上传文件")
+    .element() as HTMLInputElement;
+  const transfer = new DataTransfer();
+  transfer.items.add(new File(["png"], "shot.png", { type: "image/png" }));
+  picker.files = transfer.files;
+  picker.dispatchEvent(new Event("change", { bubbles: true }));
+  await expect.poll(() => StagingXHR.sent.length).toBe(1);
+  const { xhr } = StagingXHR.sent[0]!;
+  xhr.status = 201;
+  xhr.response = { path: "/tmp/staging/shot.png" };
+  xhr.onload?.();
+  await expect
+    .element(page.getByRole("list", { name: "待发送附件" }))
+    .toHaveTextContent("shot.png");
   await input.fill("修复首页排序");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
   const sent = commands().find((c) => c.path === "/api/sessions");
-  expect(sent?.body).toMatchObject({ view: "terminal" });
+  expect(sent?.body).toMatchObject({
+    view: "terminal",
+    attachments: [{ path: "/tmp/staging/shot.png" }],
+  });
   expect(sent?.body).not.toHaveProperty("agentConfig");
   expect(sent?.body).not.toHaveProperty("permissionMode");
   expect(localStorage.getItem("webmux.quickStartSide")).toBe("terminal");
