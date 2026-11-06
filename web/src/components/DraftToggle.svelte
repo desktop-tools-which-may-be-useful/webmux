@@ -43,7 +43,5 @@
             : "开启草稿模式"}
   onclick={toggle}
   >草稿{#if !draft.enabled && draft.scratch.length}
-    ·{draft.scratch
-      .length}{:else if !draft.enabled && (draft.text || draft.updatedWhileHidden)}
-    ·{/if}</Button
+    ·{draft.scratch.length}{/if}</Button
 >
