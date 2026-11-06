@@ -274,9 +274,17 @@ func TestAttachedRunAnnouncesSessionAndNeedsTerminal(t *testing.T) {
 	if !strings.HasPrefix(stderr.String(), "webmux: session newsess1 · http://127.0.0.1:7681/s/newsess1 · Ctrl+] to detach\r\n") {
 		t.Fatalf("announcement %q", stderr.String())
 	}
+	// Without a terminal run detaches instead; --attach insists and fails
+	// before anything is created.
 	e.OpenConsole = func() (Console, error) { return nil, attach.ErrNotTerminal }
-	if code := Run(context.Background(), e, []string{"--", "claude"}); code != contract.ExitUsage || len(f.bodies) != 1 {
-		t.Fatalf("no terminal: exit %d, %d sessions created", code, len(f.bodies))
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(context.Background(), e, []string{"--", "claude"}); code != 0 || len(f.bodies) != 2 ||
+		stdout.String() != "newsess1\thttp://127.0.0.1:7681/s/newsess1\n" || !strings.Contains(stderr.String(), "detaching") {
+		t.Fatalf("no terminal: exit %d, %d sessions, stdout %q stderr %q", code, len(f.bodies), stdout, stderr)
+	}
+	if code := Run(context.Background(), e, []string{"--attach", "--", "claude"}); code != contract.ExitUsage || len(f.bodies) != 2 {
+		t.Fatalf("--attach without a terminal: exit %d, %d sessions created", code, len(f.bodies))
 	}
 }
 

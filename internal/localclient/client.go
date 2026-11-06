@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -75,6 +76,9 @@ func (c *Client) Close() { c.HTTP.CloseIdleConnections() }
 type APIError struct {
 	Status  int
 	Message string
+	// Body is the raw response body (up to 64 KiB), for endpoints whose
+	// failures carry more than a message.
+	Body []byte
 }
 
 func (e *APIError) Error() string {
@@ -108,9 +112,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		var failure contract.ErrorResponse
-		_ = json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&failure)
-		return &APIError{Status: resp.StatusCode, Message: failure.Error}
+		return apiError(resp)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -137,6 +139,50 @@ func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {
 		return nil, &APIError{Status: resp.StatusCode, Message: failure.Error}
 	}
 	return io.ReadAll(resp.Body)
+}
+
+// Upload posts one file as the multipart field "file", as the browser's
+// upload endpoints expect, and decodes the JSON response into out.
+func (c *Client) Upload(ctx context.Context, path, filename string, content io.Reader, out any) error {
+	body, writer := io.Pipe()
+	form := multipart.NewWriter(writer)
+	go func() {
+		part, err := form.CreateFormFile("file", filename)
+		if err == nil {
+			_, err = io.Copy(part, content)
+		}
+		if err == nil {
+			err = form.Close()
+		}
+		_ = writer.CloseWithError(err)
+	}()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, BaseURL+path, body)
+	if err != nil {
+		_ = body.Close()
+		return err
+	}
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return unwrapURLError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return apiError(resp)
+	}
+	if out == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// apiError reads a failed response into *APIError.
+func apiError(resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 65536))
+	var failure contract.ErrorResponse
+	_ = json.Unmarshal(body, &failure)
+	return &APIError{Status: resp.StatusCode, Message: failure.Error, Body: body}
 }
 
 // unwrapURLError drops the fake "http://webmux" URL from messages while

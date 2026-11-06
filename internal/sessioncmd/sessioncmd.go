@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -36,8 +35,10 @@ type Env struct {
 	// subcommand before parsing; Connect runs after parsing.
 	Flags   func(*flag.FlagSet)
 	Connect func() (*localclient.Client, error)
-	Stdout  io.Writer
-	Stderr  io.Writer
+	// Stdin is read by "-" arguments; nil means none.
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
 	// OpenConsole enters raw mode; it returns attach.ErrNotTerminal when
 	// standard input or output is not a terminal.
 	OpenConsole func() (Console, error)
@@ -109,171 +110,6 @@ func (f envFlag) Set(value string) error {
 	}
 	f[name] = v
 	return nil
-}
-
-// runCommand creates a session from a saved launch config or an explicit
-// command.
-//
-// A custom command inherits the caller's environment (Env.Environ) with
-// --env on top, so it runs as it would in the calling shell. A launch config
-// is named as in the Web UI (names are unique) and resolved to its ID through
-// the summary list, which carries environment names only. The server then
-// expands the ID, so the command and environment stay identical to the saved
-// copy and secret values never reach the client.
-var runCommand = &Command{
-	Name: "run", Group: GroupLaunch, Args: "[-- COMMAND [ARG]...]", Strict: true,
-	Summary: "Create a terminal session and attach to it, or print its ID with --detach.",
-	Description: "Without --launch-config, the arguments after -- are the session's argv exactly as given; nothing is expanded by a shell. " +
-		"A custom command inherits the caller's environment, minus terminal identity variables, with --env on top. " +
-		"With --launch-config, the server starts the saved Web UI launch config of that exact name, " +
-		"including its environment, which never reaches the client.",
-	Arguments: []Item{{Name: "COMMAND [ARG]...", Text: "The program and its arguments, after --."}},
-	Env: []Item{
-		{Name: "WEBMUX_SOCKET", Text: "Local API socket used when neither --socket nor --config is given."},
-	},
-	Output: "With --detach, one line: the session ID, a tab, and the local session link. Attached, the session's output; notices go to standard error.",
-	Exit: []ExitItem{
-		{Code: 0, Text: "Created (and detached, or the session ended after detaching)."},
-		{Code: 1, Text: "The server refused the session."},
-		{Code: 2, Text: "Usage error, unknown launch config, or no terminal to attach to."},
-		{Code: 3, Text: "WebMux is not running."},
-	},
-	Examples: []Example{
-		{Command: "webmux run -- claude", Text: "Start Claude Code in the current directory and attach; Ctrl+] detaches."},
-		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID and link."},
-		{Command: `webmux run --detach --launch-config "Claude Code"`, Text: "Start a saved Web UI launch config in the background."},
-	},
-	SeeAlso: []string{"webmux attach", "webmux ls", "webmux guide launch"},
-	Notes: map[string]Note{
-		"launch-config": {Conflicts: []string{"env"}},
-		"config-id":     {Conflicts: []string{"env"}},
-		"env":           {Repeatable: true, Conflicts: []string{"launch-config"}},
-	},
-	Bind: func(flags *flag.FlagSet) Action {
-		var launchConfig string
-		var launchConfigSet bool
-		setLaunchConfig := func(value string) error {
-			if launchConfigSet && launchConfig != value {
-				return errors.New("--launch-config and --config-id must name the same saved config")
-			}
-			launchConfig = value
-			launchConfigSet = true
-			return nil
-		}
-		flags.Func("launch-config", "use a saved Web UI launch config by `NAME` (instead of -- COMMAND)", setLaunchConfig)
-		flags.Func("config-id", "alias for --launch-config", setLaunchConfig)
-		name := flags.String("name", "", "session `NAME`")
-		cwd := flags.String("cwd", "", "working `DIR` on the server (default: the current directory)")
-		detach := flags.Bool("detach", false, "create the session and print its ID and link without attaching")
-		env := envFlag{}
-		flags.Var(env, "env", "set `NAME=VALUE` in the session, overriding the inherited environment")
-		return func(ctx context.Context, e Env, argv []string) int {
-			return e.run(ctx, runOptions{launchConfig: launchConfig, launchConfigSet: launchConfigSet, name: *name, cwd: *cwd, detach: *detach, env: env}, argv)
-		}
-	},
-}
-
-type runOptions struct {
-	launchConfig    string
-	launchConfigSet bool
-	name, cwd       string
-	detach          bool
-	env             envFlag
-}
-
-// Run implements `webmux run`.
-func Run(ctx context.Context, e Env, args []string) int { return e.Run(ctx, runCommand, args) }
-
-func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
-	if o.launchConfigSet && o.launchConfig == "" {
-		return e.Usagef("--launch-config requires a non-empty saved config name")
-	}
-	if o.launchConfigSet && len(argv) > 0 {
-		return e.Usagef("--launch-config cannot be combined with a command after --")
-	}
-	if o.launchConfigSet && len(o.env) > 0 {
-		return e.Usagef("--launch-config cannot be combined with --env")
-	}
-	if !o.launchConfigSet && (len(argv) == 0 || argv[0] == "") {
-		return e.Usagef("a command is required after --")
-	}
-	client, code := e.connect()
-	if client == nil {
-		return code
-	}
-	defer client.Close()
-	dir, err := e.ResolveCwd(ctx, o.cwd)
-	if err != nil {
-		_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
-		return contract.ExitUsage
-	}
-	request := contract.CreateSessionRequest{Cwd: dir, Name: o.name}
-	if o.launchConfigSet {
-		id, err := launchConfigID(ctx, client, o.launchConfig)
-		if err != nil {
-			if errors.Is(err, errUnknownLaunchConfig) {
-				_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
-				return contract.ExitUsage
-			}
-			return e.Fail(err)
-		}
-		request.ConfigID = &id
-	} else {
-		request.Cmd = argv
-		request.Env = e.sessionEnv(o.env)
-	}
-	// An attached run needs a terminal: check before creating anything.
-	var console Console
-	if !o.detach {
-		if console, code = e.openConsole(); console == nil {
-			return code
-		}
-	}
-	var created contract.SessionInfo
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", request, &created); err != nil {
-		if console != nil {
-			_ = console.Restore()
-		}
-		return e.Fail(err)
-	}
-	if o.detach {
-		link, err := link(ctx, client, created.ID)
-		if err != nil {
-			return e.Fail(err)
-		}
-		_, _ = fmt.Fprintf(e.Stdout, "%s\t%s\n", created.ID, link)
-		return contract.ExitOK
-	}
-	// Tell the user where to find the session (for example on a phone)
-	// before the session's output starts; stdout stays the session's. The
-	// terminal is already raw, so the line ends with CR LF.
-	if link, err := link(ctx, client, created.ID); err == nil {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · %s · Ctrl+] to detach\r\n", created.ID, link)
-	} else {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · Ctrl+] to detach\r\n", created.ID)
-	}
-	return e.attach(ctx, client, created.ID, false, console)
-}
-
-var errUnknownLaunchConfig = errors.New("no saved launch config named")
-
-// launchConfigID maps a launch config name to its ID.
-func launchConfigID(ctx context.Context, client *localclient.Client, name string) (string, error) {
-	var list []contract.LaunchConfigSummary
-	if err := client.Do(ctx, http.MethodGet, "/api/launch-configs", nil, &list); err != nil {
-		return "", err
-	}
-	names := make([]string, 0, len(list))
-	for _, c := range list {
-		if c.Name == name {
-			return c.ID, nil
-		}
-		names = append(names, strconv.Quote(c.Name))
-	}
-	if len(names) == 0 {
-		return "", fmt.Errorf("%w %q (no saved launch configs)", errUnknownLaunchConfig, name)
-	}
-	return "", fmt.Errorf("%w %q (saved: %s)", errUnknownLaunchConfig, name, strings.Join(names, ", "))
 }
 
 // Variables that describe the calling process rather than the session: the

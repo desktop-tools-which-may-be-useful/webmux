@@ -1,5 +1,19 @@
 # 常用流程
 
+## 把任务交给另一个 agent 并取回结果
+
+```sh
+webmux chat new --agent "Claude Code" --label run=42 --wait --timeout 30m "修复 lint 并汇报改动"
+webmux ls --parent self --label run=42
+```
+
+## 在持久会话里跑测试并拿到退出码
+
+```sh
+webmux run --follow --strip --name tests -- go test ./... > test.log
+echo "exit $?"
+```
+
 ## 在后台跑一个任务，事后清理
 
 ```sh

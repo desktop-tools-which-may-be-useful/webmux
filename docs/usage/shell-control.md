@@ -45,6 +45,22 @@ webmux ls --label run=42 --status exited --json   # 按标签和状态筛选
 
 标签键匹配 `[a-z0-9][a-z0-9._-]{0,62}`，值最多 256 个字符，每个会话最多 16 个。父会话和标签只保存在内存中，随会话结束而消失。
 
+## 启动会话
+
+```sh
+webmux run --detach --json --wait idle --timeout 60s --launch-config omp   # 等 agent 就绪
+webmux run --follow --strip -- go test ./...       # 在持久会话里跑命令，输出纯文本，以命令的退出码退出
+webmux run --new-worktree fix/lint --launch-config "Claude Code" --start-side chat --init --prompt "修复 lint"
+webmux chat new --agent Codex --wait "修复所有 lint 并汇报"   # 一条命令完成快速开始，等第一轮结束并输出回复
+webmux launch-config options "Claude Code"         # 列出 chat new --set 可用的配置项
+```
+
+- 没有终端时 `run` 自动后台运行；`--attach` 强制附着。
+- 当前目录所在的已登记 worktree 会自动关联；`--new-worktree` 新建的 worktree 像 Web 端一样加入主页显示（`--no-pin` 不加入）。
+- `--follow` 时 Ctrl+C 只停止跟随（130），会话继续运行；`--kill-on-interrupt` 先结束程序。
+- `--dry-run` 打印将要发送的请求，环境变量值显示为 `<inherited>` 或 `<explicit>`。
+- `chat new` 失败时按步骤报告，已创建的 worktree 与会话保留；`--wait` 遇到授权请求时以 1 退出，`--auto-wait-requests` 继续等待。
+
 ## WebMux 工具手册
 
 手册按 llms.txt 约定放在站点根路径，内容与运行中的服务版本一致：

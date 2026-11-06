@@ -139,6 +139,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	c := &client{target: target, stdout: stdout, stderr: stderr}
 	e := sessioncmd.Env{
 		Connect:        c.connect,
+		Stdin:          os.Stdin,
 		Stdout:         stdout,
 		Stderr:         stderr,
 		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },

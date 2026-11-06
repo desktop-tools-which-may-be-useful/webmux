@@ -32,3 +32,14 @@
   - `go test -race` 覆盖 `internal/agentguide`（索引结构、链接、公开内容无实例信息、简述）、`internal/api`（手册路由与 Host 检查、说明接口；wire 快照新增 `session-agent-guide`）、`internal/workspace`（说明插入顺序与预检）、`internal/sessioncmd`（guide 与 dir）、`cmd/webmux`（命令参考与命令表同步）；
   - 前端单元测试 `quickCommands.test.ts`，以及受影响的浏览器与 E2E 用例（预设菜单、快捷指令、临时文件夹）。
 - 限制：未在 macOS 与真机浏览器上核对；以前保存的“临时文件夹”预设不迁移。
+
+本次局部核对（2026-11-05）：实现 `add-agent-shell-control` 的第三部分（启动命令），新增 US-S07、US-S08，更新 US-M01 与覆盖索引。
+
+- 范围：`run` 的 worktree 位置、新建 worktree 与主页显示、混合起始端与首条消息、`--json`/`--wait`/`--dry-run`/`--label`、无终端自动分离与 `--attach`、`--follow`；`chat new` 与 `launch-config options`。
+- 依据：
+  - `cmd/webmux` 的端到端测试（真实服务进程）：
+    - `--follow --strip` 的输出与退出码、会话中的 `WEBMUX_SOCKET`/`WEBMUX_BIN`；
+    - `--wait exited` 与超时 124、自动分离、`--dry-run` 隐藏环境值、会话内创建的会话记录父会话；
+    - 在 worktree 中启动与主页显示、假 agent 上的 `chat new --wait` 与 `launch-config options`；
+  - `internal/sessioncmd` 单元测试：控制序列去除、状态解析、分支名生成，以及无终端时的自动分离。
+- 限制：`--follow` 不做断线续接；服务端本来按启动目录关联会话，因此没有提供关闭关联的选项；未在 macOS 上运行。

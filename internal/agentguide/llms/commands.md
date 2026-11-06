@@ -350,9 +350,13 @@ Examples:
 
 `webmux run [options] [-- COMMAND [ARG]...]`
 
-Create a terminal session and attach to it, or print its ID with --detach.
+Create a terminal session; attach to it, detach, or follow its output.
 
-Without --launch-config, the arguments after -- are the session's argv exactly as given; nothing is expanded by a shell. A custom command inherits the caller's environment, minus terminal identity variables, with --env on top. With --launch-config, the server starts the saved Web UI launch config of that exact name, including its environment, which never reaches the client.
+Without --launch-config, the arguments after -- are the session's argv exactly as given; nothing is expanded by a shell. A custom command inherits the caller's environment, minus terminal identity and WEBMUX_* variables, with --env on top. With --launch-config, the server starts the saved Web UI launch config of that exact name, including its environment, which never reaches the client.
+
+Location matches the Web UI's new session dialog: the current directory (associated with the registered worktree it lies in, as the server does for any session), an existing worktree (--worktree), or a new one (--new-worktree), which is pinned to the home page like the Web UI does.
+
+Without a terminal (an agent's tool call, a pipe) run detaches instead of failing; --attach insists on attaching. --follow streams the output to standard output without a terminal and exits with the program's exit status; Ctrl+C only stops following unless --kill-on-interrupt.
 
 Arguments:
 
@@ -360,18 +364,40 @@ Arguments:
 
 Options:
 
+- `--attach`: Attach even when that needs a terminal this process lacks (exit 2) Conflicts with --detach, --follow.
+- `--base REF`: Start the new branch at REF (default: the repository's default base) Requires --new-worktree.
 - `--config-id value`: Alias for --launch-config. Conflicts with --env.
 - `--cwd DIR`: Working DIR on the server (default: the current directory)
-- `--detach`: Create the session and print its ID and link without attaching.
+- `--detach`: Create the session and print its ID and link without attaching. Conflicts with --attach, --follow.
+- `--dry-run`: Print the request without creating anything; environment values are hidden.
 - `--env NAME=VALUE`: Set NAME=VALUE in the session, overriding the inherited environment. Repeatable. Conflicts with --launch-config.
+- `--existing-branch`: Check out an existing branch instead of creating it.
+- `--follow`: Stream the output to standard output and exit with the program's status. Conflicts with --detach, --attach.
+- `--init`: Put the repository's initialization instruction before the first message. Requires --launch-config.
+- `--json`: Print {session, link} as JSON when detached.
+- `--kill-on-interrupt`: With --follow, end the program on SIGINT or SIGTERM.
+- `--label KEY=VALUE`: Set label KEY=VALUE on the session. Repeatable.
 - `--launch-config NAME`: Use a saved Web UI launch config by NAME (instead of -- COMMAND) Conflicts with --env.
 - `--name NAME`: Session NAME.
+- `--new-worktree BRANCH`: Create a worktree for BRANCH and start in it. Conflicts with --worktree, --cwd.
+- `--no-pin`: Do not show the new worktree on the home page.
+- `--prompt TEXT`: First message TEXT (- reads standard input); typed with Enter on the terminal side.
+- `--refresh-base`: Fetch the base branch's upstream first and start from it.
+- `--repo string`: Repository of the new worktree: an ID, a path or . (default: the current directory's)
+- `--start-side SIDE`: Start a hybrid launch config on SIDE: terminal or chat (chat implies --detach)
+- `--strip`: With --follow, remove terminal control sequences.
+- `--timeout DURATION`: Give up --wait after this DURATION (exit 124); 0 waits forever.
+- `--wait STATE`: Detach, then wait until the session is first in STATE (see webmux wait) Conflicts with --attach, --follow.
+- `--worktree REPO:WORKTREE`: Start in a registered worktree, as REPO:WORKTREE or its path. Conflicts with --new-worktree.
+- `--worktree-path DIR`: Put the new worktree at DIR (default: <repository>.worktrees/<branch leaf>)
 
 Examples:
 
 - `webmux run -- claude`: Start Claude Code in the current directory and attach; Ctrl+] detaches.
 - `webmux run --detach --name tests --cwd ~/src/app -- make test`: Start a named session in another directory and print its ID and link.
-- `webmux run --detach --launch-config "Claude Code"`: Start a saved Web UI launch config in the background.
+- `webmux run --follow --strip -- go test ./...`: Run tests in a persistent session, stream plain text and exit with their status.
+- `webmux run --new-worktree fix/lint --base main --launch-config "Claude Code" --start-side chat --init --prompt "Fix lint" --json`: Create a worktree and start an agent there with a first task.
+- `webmux run --dry-run --label run=7 -- make build`: Show the request run would send, without creating anything.
 
 ## webmux attach
 
@@ -519,3 +545,63 @@ Examples:
 - `webmux guide`: Print the index of the guide.
 - `webmux guide artifacts`: Read where to put files for the user.
 - `webmux guide --full > ~/.claude/skills/webmux/reference.md`: Save the whole guide as a reference for a skill.
+
+## webmux chat new
+
+`webmux chat new [options] TEXT|-`
+
+Quick start from the shell: a new worktree, an agent on its chat side, its settings and the first message.
+
+The same as the Web UI's New chat (POST /api/quick-starts): one call creates a worktree with a generated branch, starts the agent of a hybrid launch config, applies --set options and the permission mode, and sends TEXT with the repository's initialization instruction. A failure reports the step that failed and what was already created; nothing is rolled back.
+
+--wait then waits for the first turn and prints the agent's final reply, like webmux chat send --wait.
+
+Arguments:
+
+- `TEXT`: The first message; - reads standard input. Required, also with --init.
+
+Options:
+
+- `--agent NAME`: Hybrid launch config NAME (default: the only one)
+- `--attach PATH`: Attach the file at PATH to the first message. Repeatable. Conflicts with --terminal.
+- `--auto-wait-requests`: With --wait, keep waiting while a permission request or form is open.
+- `--base REF`: Start the branch at REF (default: the repository's default base)
+- `--branch NAME`: New branch NAME (default: generated like the Web UI, wt/...)
+- `--init`: Send the repository's initialization instruction first (the default when it has one) Conflicts with --no-init.
+- `--json`: Print JSON.
+- `--label KEY=VALUE`: Set label KEY=VALUE on the new session. Repeatable.
+- `--no-init`: Do not send the initialization instruction. Conflicts with --init.
+- `--permission MODE`: Permission MODE: ask or auto. Conflicts with --terminal.
+- `--repo string`: Repository: an ID, a path or . (default: the current directory's)
+- `--set ID=VALUE`: Agent option ID=VALUE (see webmux launch-config options) Repeatable. Conflicts with --terminal.
+- `--terminal`: Start on the terminal side and type the message with Enter. Conflicts with --set, --permission, --attach, --wait.
+- `--timeout DURATION`: Give up --wait after this DURATION (exit 124); 0 waits forever.
+- `--wait`: Wait for the first turn and print the agent's final reply. Conflicts with --terminal.
+
+Examples:
+
+- `webmux chat new --agent "Claude Code" "Add a POST /books endpoint"`: Start Claude Code on a new worktree of the current repository.
+- `webmux chat new --agent Codex --label task=lint --wait "Fix all lint and summarize the changes"`: Delegate a task and print the agent's reply when it is done.
+- `webmux chat new --repo app --agent omp --set model=smart --permission ask --attach design.png -`: Pick a model, ask before tools run, attach a file and read the task from standard input.
+
+## webmux launch-config options
+
+`webmux launch-config options [options] NAME`
+
+List the options (model, mode, ...) the agent of a hybrid launch config offers.
+
+The agent reports its options from a throwaway session in a repository's main worktree (POST /api/quick-starts/options). Use the IDs and values with webmux chat new --set ID=VALUE.
+
+Arguments:
+
+- `NAME`: The exact name of a launch config with hybrid mode.
+
+Options:
+
+- `--json`: Print the ChatConfig array as JSON.
+- `--repo string`: Repository whose main worktree the agent runs in: an ID, a path or . (default: the current directory's)
+
+Examples:
+
+- `webmux launch-config options "Claude Code"`: Show the agent's options and their values.
+- `webmux launch-config options Codex --json | jq '.[] | select(.id=="model") | .options[].value'`: List the models to pass to chat new --set model=...

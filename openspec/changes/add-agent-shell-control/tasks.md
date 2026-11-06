@@ -40,13 +40,13 @@
 
 ## 2A. 启动命令（P0）
 
-- [ ] 2A.1 `run --worktree`、自动关联（`--no-workspace`）、`--new-worktree`（`--base`、`--existing-branch`、`--worktree-path`、`--repo`），
-  会话创建失败时保留 worktree。测试覆盖三者互斥与 `--cwd` 包含关系。
-- [ ] 2A.2 `run --start-side`、`--prompt`（含 `-`）、`--init`、`--label`、`--json`、`--wait`、`--dry-run`（环境值脱敏）。
-- [ ] 2A.3 `run` 在没有终端时自动分离，新增 `--attach` 强制附着。更新现有 `sessioncmd` 测试中依赖退出码 2 的用例。
-- [ ] 2A.4 `chat new`：仓库与 agent 推断、`--set`、`--permission`、`--init/--no-init` 默认值、`--terminal` 互斥、附件上传、按 `step` 报告失败、`--wait`。
-- [ ] 2A.5 `launch-config options`。
-- [ ] 2A.6 `run --follow`：观察者连接、`--strip`、按回放位置续接、以程序退出码退出（信号为 128+N）、SIGINT/SIGTERM 只分离（130/143）、
+- [x] 2A.1 `run --worktree`、自动关联、`--new-worktree`（`--base`、`--existing-branch`、`--worktree-path`、`--repo`），
+  会话创建失败时保留 worktree。测试覆盖互斥与 `--cwd` 包含关系。
+- [x] 2A.2 `run --start-side`、`--prompt`（含 `-`）、`--init`、`--label`、`--json`、`--wait`、`--dry-run`（环境值脱敏）。
+- [x] 2A.3 `run` 在没有终端时自动分离，新增 `--attach` 强制附着。更新现有 `sessioncmd` 测试中依赖退出码 2 的用例。
+- [x] 2A.4 `chat new`：仓库与 agent 推断、`--set`、`--permission`、`--init/--no-init` 默认值、`--terminal` 互斥、附件上传、按 `step` 报告失败、`--wait`。
+- [x] 2A.5 `launch-config options`。
+- [x] 2A.6 `run --follow`：观察者连接、`--strip`、断线时以 1 退出并提示、以程序退出码退出（信号为 128+N）、SIGINT/SIGTERM 只分离（130/143）、
   `--kill-on-interrupt`，与 `--detach`/`--attach`/`--start-side chat` 互斥。
 
 ## 2B. 会话元数据（P0）

@@ -41,6 +41,7 @@ func sessionEnv(stdout, stderr io.Writer) sessioncmd.Env {
 		Connect: func() (*localclient.Client, error) {
 			return connectLocal(socket, path, explicit, os.Getenv)
 		},
+		Stdin:          os.Stdin,
 		Stdout:         stdout,
 		Stderr:         stderr,
 		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },

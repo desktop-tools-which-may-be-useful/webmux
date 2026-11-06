@@ -40,10 +40,28 @@
   - 快捷指令正文中的 `{{webmux}}` 在选择时经该接口展开，失败时提示“WebMux 工具说明不可用”且不插入；
   - 设置页初始化指令的“可插入”提供内置的“WebMux 说明”按钮，快速开始预览说明 `{{webmux}}` 会在会话创建后替换；快捷指令名称仍不能是 `webmux`。
 
+- **US-S07 从 shell 启动、跟随或等待会话**：作为脚本或 agent，我希望 `run` 具备 Web 端新建会话对话框的全部位置选择，并能不经终端跟随输出或等待状态，以便把启动、等待和取结果写进脚本。
+  - 位置：
+    - 当前目录所在的已登记 worktree 自动关联；
+    - `--worktree REPO:WORKTREE|PATH` 选已有 worktree，`--cwd` 须在其中；
+    - `--new-worktree BRANCH`（`--base`、`--existing-branch`、`--worktree-path`、`--repo`、`--refresh-base`）先建 worktree 再启动，默认像 Web 端一样加入主页显示（`--no-pin` 不加入）；
+    - 会话创建失败时保留 worktree 并给出路径；
+  - 混合会话：`--start-side terminal|chat`、`--prompt TEXT|-`、`--init`（需要已登记 worktree）；
+  - 输出与等待：`--json` 输出 `{session, link}`，`--wait STATE --timeout DUR` 等会话第一次进入该状态（超时 124），`--label` 设置标签，`--dry-run` 只打印请求且隐藏环境变量值；
+  - 没有终端时自动分离，`--attach` 强制附着；
+  - `--follow` 以观察者身份把输出写到标准输出（`--strip` 去除控制序列），以程序的退出码退出（信号为 128+N）；SIGINT/SIGTERM 只停止跟随（130/143），`--kill-on-interrupt` 先结束程序；连接中断以 1 退出并提示。
+- **US-S08 一条命令完成快速开始**：作为编排者，我希望从 shell 把任务交给新 worktree 中的 agent 并取回结果，以便并行分派工作。
+  - `webmux chat new TEXT|-`（消息必填）调用快速开始接口：仓库默认是当前目录所属的已登记仓库，`--agent` 选混合启动配置（只有一条时可省略），分支名默认按 `wt/<日期>-<时间>` 生成并在冲突时重新生成，起始提交默认取仓库默认基点；
+  - `--set ID=VALUE`、`--permission ask|auto`、`--init/--no-init`（仓库有初始化指令时默认使用）、`--attach PATH`（先上传）、`--terminal`（与 `--set`、`--permission`、`--attach`、`--wait` 互斥）、`--label`；
+  - 失败按步骤报告并列出已创建的 worktree 与会话，不回滚；配置警告写到标准错误；
+  - `--wait` 跟踪第一轮，输出 agent 的最终回复（`--json` 为回合事件），`end_turn` 以 0 退出，其他结束原因或出现授权、表单请求以 1 退出，`--auto-wait-requests` 继续等待，超时 124；
+  - `webmux launch-config options NAME` 列出 agent 提供的配置项与可选值，供 `--set` 使用。
+
 ### 依据
 
 - [会话命令与命令表](../../internal/sessioncmd/command.go)、[帮助渲染](../../internal/sessioncmd/help.go)、[元数据命令](../../internal/sessioncmd/metadata.go)、[运维命令表](../../cmd/webmux/commands.go)
 - [会话详情与标签接口](../../internal/api/sessionmeta.go)、[父会话与标签](../../internal/session/relations.go)、[进程所属会话](../../internal/session/peer.go)
 - [本机套接字定位](../../cmd/webmux/sessions.go)、[会话环境](../../internal/session/env.go)、[保留变量](../../internal/contract/env.go)
 - [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/sessioncmd/guide.go)
+- [启动命令](../../internal/sessioncmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/sessioncmd/streams.go)、[仓库与主页显示](../../internal/sessioncmd/workspace.go)
 - [初始化指令展开](../../internal/workspace/quickstart.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)

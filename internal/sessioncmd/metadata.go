@@ -21,7 +21,7 @@ import (
 
 // Commands is the registry of the session commands both clients share.
 func Commands() Registry {
-	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand}
+	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand, chatGroup, chatNewCommand, launchConfigGroup, launchConfigOptionsCommand}
 }
 
 var getCommand = &Command{
