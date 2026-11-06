@@ -172,7 +172,7 @@ func TestCreateHybridSessionStoreUnavailable(t *testing.T) {
 	}
 }
 
-func TestCreateHybridSessionRecordLimit(t *testing.T) {
+func TestCreateHybridSessionRecordLimitEvictsOldest(t *testing.T) {
 	h := newHybridAPI(t, func(state string) {
 		const alphabet = "abcdefghijklmnopqrstuvwxyz234567"
 		records := make([]map[string]any, hybrid.MaxRecords)
@@ -192,14 +192,12 @@ func TestCreateHybridSessionRecordLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	var conflict contract.SessionConflict
-	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 409), &conflict); err != nil {
-		t.Fatal(err)
-	}
-	if conflict.Reason != "limit" || conflict.Error == "" {
-		t.Fatalf("conflict %+v", conflict)
-	}
-	// Removing an old record makes room again.
+	// A full store makes room by evicting the least recently updated
+	// archived record instead of refusing the session.
+	h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201)
+	// Ties in update time fall to the smallest ID, where digits sort first.
+	h.expectCommand("GET", "/api/sessions/lima2aaa", nil, 404)
+	// Removing an old record still makes room for another session.
 	h.expectCommand("DELETE", "/api/sessions/limaaaaa?forget=1", nil, 204)
 	h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp-again", true)), 201)
 }

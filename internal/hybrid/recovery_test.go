@@ -326,6 +326,41 @@ func TestResumeRefusals(t *testing.T) {
 	h.mustResume(id, ResumeInput{Env: in.Env})
 }
 
+// A full store drops its least recently updated archived record for a new
+// session and ends the shell and actor that record left behind.
+func TestRecordEvictionEndsLeftoverShell(t *testing.T) {
+	h := &harness{t: t, state: t.TempDir(), store: t.TempDir(), logs: &syncBuffer{}}
+	r := openRecords(h.state)
+	seeded := make([]Record, 0, MaxRecords-1)
+	future := time.Now().UTC().Add(24 * time.Hour)
+	for i := range MaxRecords - 1 {
+		rec := testRecord(limitID(i))
+		rec.State = StateClosed
+		// Newer than the session below, so eviction reaches it first.
+		rec.UpdatedAt = future
+		seeded = append(seeded, rec)
+	}
+	seedRecords(t, r, seeded)
+	r.close()
+	h.open(0)
+	terminal := h.create(h.input(omp.Name, SideTUI))
+	interrupted := terminal.Info().ID
+	if err := syscall.Kill(terminal.Identity().PID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "interrupted", func() bool { return h.record(interrupted).State == StateInterrupted })
+
+	if _, err := h.svc.Create(ctxT(t), h.input(omp.Name, SideTUI)); err != nil {
+		t.Fatalf("create at the limit: %v", err)
+	}
+	if _, err := h.svc.Record(interrupted); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("evicted record kept: %v", err)
+	}
+	if _, err := h.manager.Get(interrupted); err == nil {
+		t.Fatal("evicted record's shell kept")
+	}
+}
+
 // Records list newest first; removing one forgets it for good (and frees
 // its place under the limit) but leaves the agent's session alone.
 func TestRemoveRecord(t *testing.T) {
@@ -352,9 +387,6 @@ func TestRemoveRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "interrupted", func() bool { return h.record(interrupted).State == StateInterrupted })
-	if _, err := h.svc.Create(ctxT(t), h.input(omp.Name, SideTUI)); !errors.Is(err, ErrLimit) {
-		t.Fatalf("create at the limit: %v", err)
-	}
 
 	list := h.recoverable()
 	if len(list) != MaxRecords || list[0].ID != interrupted || list[1].ID != closed {

@@ -359,24 +359,40 @@ func TestCorruptStoreDisablesHybridOnly(t *testing.T) {
 	}
 }
 
-func TestRecordLimit(t *testing.T) {
+func TestRecordLimitEvictsOldestArchived(t *testing.T) {
 	h := &harness{t: t, state: t.TempDir(), store: t.TempDir(), logs: &syncBuffer{}}
 	r := openRecords(h.state)
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	seeded := make([]Record, 0, MaxRecords)
 	for i := range MaxRecords {
 		rec := testRecord(limitID(i))
 		rec.State = StateClosed
+		rec.UpdatedAt = base.Add(time.Duration(i) * time.Minute)
 		seeded = append(seeded, rec)
 	}
 	seedRecords(t, r, seeded)
 	r.close()
 	h.open(0)
-	_, err := h.svc.Create(context.Background(), h.input(omp.Name, SideTUI))
-	if !errors.Is(err, ErrLimit) {
-		t.Fatalf("create past the limit: %v", err)
+	var cleaned []Record
+	h.svc.OnEvicted(func(_ context.Context, rec Record) { cleaned = append(cleaned, rec) })
+	created, err := h.svc.Create(context.Background(), h.input(omp.Name, SideTUI))
+	if err != nil {
+		t.Fatalf("create at the limit: %v", err)
 	}
-	if len(h.manager.List()) != 0 {
-		t.Fatal("session started past the record limit")
+	if _, err := h.svc.Record(limitID(0)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("oldest archived record kept: %v", err)
+	}
+	if len(cleaned) != 1 || cleaned[0].ID != limitID(0) {
+		t.Fatalf("cleaned %+v, want %s", cleaned, limitID(0))
+	}
+	if _, err := h.svc.Record(created.Info().ID); err != nil {
+		t.Fatalf("new record missing: %v", err)
+	}
+	if all, err := h.svc.Records(false); err != nil || len(all) != MaxRecords {
+		t.Fatalf("records after eviction: %d, %v", len(all), err)
+	}
+	if !strings.Contains(h.logs.String(), "hybrid record evicted") {
+		t.Fatal("eviction not logged")
 	}
 }
 
