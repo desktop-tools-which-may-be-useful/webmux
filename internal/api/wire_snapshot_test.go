@@ -80,7 +80,12 @@ func wireSchema(name string) wireRules {
 	switch name {
 	case "settings-patch", "settings-reset", "ws-settings-update":
 		add("", "time", "updatedAt")
-	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get",
+	case "session-details":
+		sessionFields("/session")
+		add("/session", "path", "cmd/*")
+		add("", "id", "parentId", "children/*")
+		add("", "path", "artifactsDir")
+	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get", "session-labels",
 		"ws-terminal-state", "ws-terminal-state-exited", "session-get-hybrid", "session-get-hybrid-work", "ws-terminal-state-hybrid", "hybrid-resume":
 		sessionFields("")
 		add("", "path", "cmd/*")
@@ -784,6 +789,11 @@ func wireSessions(f *wireFixture) {
 	runningID := str(running, "id")
 	f.call("sessions-list", "GET", "/api/sessions", nil, 200)
 	f.call("session-get", "GET", "/api/sessions/"+runningID, nil, 200)
+	f.call("session-labels", "PATCH", "/api/sessions/"+runningID+"/labels", contract.LabelsUpdate{Set: map[string]string{"run": "42", "task": "lint"}, Remove: []string{"task"}}, 200)
+	f.call("session-labels-invalid", "PATCH", "/api/sessions/"+runningID+"/labels", contract.LabelsUpdate{Set: map[string]string{"Task Name": "x"}}, 400)
+	f.call("session-details", "GET", "/api/sessions/"+runningID+"/details", nil, 200)
+	f.call("session-details-missing", "GET", "/api/sessions/aaaaaaaa/details", nil, 404)
+	f.call("session-create-labels-invalid", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh"}, "labels": map[string]string{"-bad": "x"}}, 400)
 
 	// Live terminal frames: control, position, state, submissions.
 	live := f.dial("/ws/s/" + runningID + "?client=wire-client-1&label=Wire")

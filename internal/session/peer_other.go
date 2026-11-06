@@ -2,5 +2,7 @@
 
 package session
 
-func hasSessionMarker(int) bool                            { return false }
-func insideTree(processTable, int, int, map[int]bool) bool { return false }
+func sessionMarker(int) string { return "" }
+func treeOwner(processTable, int, int, map[int]string) (string, bool) {
+	return "", false
+}

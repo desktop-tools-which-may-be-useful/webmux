@@ -49,6 +49,7 @@
   },
   "logFile": "",
   "socket": "/home/u/.local/state/webmux/run/webmux.sock",
+  "bin": "/usr/bin/webmux", // 服务端正在运行的可执行文件，即会话中的 WEBMUX_BIN；仅经本机 API，旧版本省略
   "startedAt": "2026-01-01T00:00:00Z",
   "token": "...", // 仅 --reveal-token 且配置了 Token 时出现
   "tunnel": {

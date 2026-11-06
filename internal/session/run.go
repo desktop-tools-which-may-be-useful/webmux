@@ -51,7 +51,7 @@ func launchRun(id, cwd string, argv []string, cols, rows uint16, options startOp
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
-	cmd.Env = sessionEnvWithVersion(os.Environ(), id, options.agentProtocol, options.env, options.terminalVersion)
+	cmd.Env = sessionEnvWithVersion(os.Environ(), id, options.agentProtocol, options.env, options.terminalVersion, options.serverEnv)
 	f, err := startPTY(cmd, &pty.Winsize{Rows: rows, Cols: cols})
 	if err != nil {
 		return nil, "", err

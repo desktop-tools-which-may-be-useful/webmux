@@ -254,6 +254,13 @@ test("raises a top-right toast by default while browsing and navigates to the se
   request,
   workDir,
 }) => {
+  // The first session-list snapshot is the toast baseline; raise the
+  // question only once the page has seen the session without attention.
+  const frames: string[] = [];
+  page.on("websocket", (socket) => {
+    if (new URL(socket.url()).pathname !== "/ws/sessions") return;
+    socket.on("framereceived", ({ payload }) => frames.push(String(payload)));
+  });
   await page.goto("/new");
   const created = await request.post("/api/sessions", {
     data: {
@@ -264,6 +271,9 @@ test("raises a top-right toast by default while browsing and navigates to the se
   });
   expect(created.status()).toBe(201);
   const { id } = await created.json();
+  await expect
+    .poll(() => frames.some((frame) => frame.includes(`"${id}"`)))
+    .toBe(true);
 
   await writeFile(join(workDir, "ask-now"), "");
   const region = page.getByRole("region", { name: "会话通知" });

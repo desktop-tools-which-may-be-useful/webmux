@@ -31,16 +31,64 @@ import (
 
 var version = "dev"
 
-const usage = `usage: webmux [--distro NAME] [--webmux PATH] COMMAND [ARGS]
+const usage = "usage: webmux [--distro NAME] [--webmux PATH] COMMAND [ARGS]\nRun 'webmux help' for the list of commands.\n"
 
-commands:
-  run [--launch-config NAME] [--name N] [--cwd DIR] [--env K=V]... [--detach] -- COMMAND [ARG]...
-  attach [--observe] SESSION     (Ctrl+] detaches)
-  ls [--json]
-  open [--browser] SESSION
-  status [--json]
-  version
-`
+// windowsCommands are the commands only this client has; the session
+// commands come from sessioncmd.
+func windowsCommands() sessioncmd.Registry {
+	exits := []sessioncmd.ExitItem{{Code: 0, Text: "Done."}, {Code: 1, Text: "Failed."}, {Code: 3, Text: "WebMux in WSL is not running."}}
+	return sessioncmd.Registry{
+		{
+			Name: "status", Group: sessioncmd.GroupServer, Platform: "windows", NoGlobal: true,
+			Summary: "Show the status of WebMux inside WSL.",
+			Bind: func(fs *flag.FlagSet) sessioncmd.Action {
+				fs.Bool("json", false, "print the status contract v1 as JSON")
+				return nil
+			},
+			Output: "A human-readable summary, or the StatusV1 object with --json.", Exit: exits,
+			Examples: []sessioncmd.Example{
+				{Command: "webmux status", Text: "Show whether WebMux runs in WSL."},
+				{Command: "webmux --distro Ubuntu status --json", Text: "Check another distribution."},
+			},
+		},
+		{
+			Name: "version", Group: sessioncmd.GroupServer, Platform: "windows", NoGlobal: true,
+			Bind:    func(*flag.FlagSet) sessioncmd.Action { return nil },
+			Summary: "Print the version of this Windows client.", Output: "webmux-windows VERSION.", Exit: exits[:1],
+			Examples: []sessioncmd.Example{
+				{Command: "webmux version", Text: "Print the client version."},
+				{Command: "webmux status", Text: "Show the server version instead."},
+			},
+		},
+		{
+			Name: "help", Group: sessioncmd.GroupHelp, Platform: "windows", NoGlobal: true, Args: "[COMMAND...]",
+			Bind: func(fs *flag.FlagSet) sessioncmd.Action {
+				fs.Bool("json", false, "print the commands, options and examples as JSON")
+				return nil
+			},
+			Summary: "Show help for all commands or one command; --json prints the command tree.",
+			Output:  "Help text, or the HelpTree object with --json.",
+			Exit:    []sessioncmd.ExitItem{{Code: 0, Text: "Printed."}, {Code: 2, Text: "Unknown command."}},
+			Examples: []sessioncmd.Example{
+				{Command: "webmux help run", Text: "Show the help of webmux run."},
+				{Command: "webmux help --json", Text: "Print the command tree."},
+			},
+		},
+	}
+}
+
+// helpRequested reports a help flag before any "--".
+func helpRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "-h" || arg == "--help" || arg == "-help" {
+			return true
+		}
+	}
+	return false
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -48,18 +96,39 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	global := flag.NewFlagSet("webmux", flag.ContinueOnError)
-	global.SetOutput(stderr)
-	global.Usage = func() { _, _ = fmt.Fprint(stderr, usage) }
+	// The flag package calls Usage on -h and on every parse error; usage is
+	// printed explicitly below instead, so help leaves stderr empty and an
+	// error prints it once.
+	global.Usage = func() {}
 	distro := global.String("distro", "", "WSL distribution (default: WEBMUX_DISTRO, the tray setting, then WSL's default)")
 	webmux := global.String("webmux", "", "webmux inside WSL (default: WEBMUX_WSL_PATH, the tray setting, then ~/.local/bin/webmux)")
-	if err := global.Parse(args); err != nil {
+	registry := append(windowsCommands(), sessioncmd.Commands()...)
+	help := sessioncmd.Env{Stdout: stdout, Stderr: stderr, Platform: "windows", Version: version, Commands: registry,
+		HelpFooter: "Global options before COMMAND: --distro NAME selects the WSL distribution, --webmux PATH the webmux inside it."}
+	// Help before any command (webmux --help, -h, -help) is the overview on
+	// standard output, as on Linux and macOS.
+	global.SetOutput(io.Discard)
+	if err := global.Parse(args); errors.Is(err, flag.ErrHelp) {
+		return help.HelpCommand(registry, version, nil)
+	} else if err != nil {
+		_, _ = fmt.Fprintln(stderr, "webmux:", err)
+		_, _ = fmt.Fprint(stderr, usage)
 		return contract.ExitUsage
 	}
 	if global.NArg() == 0 {
-		global.Usage()
+		_, _ = fmt.Fprint(stderr, usage)
 		return contract.ExitUsage
 	}
 	command, rest := global.Arg(0), global.Args()[1:]
+	if command == "help" {
+		return help.HelpCommand(registry, version, rest)
+	}
+	// Shared commands handle help in their own parser; the Windows-only ones
+	// take it anywhere before "--".
+	if c, more := registry.Find(global.Args()); c != nil && c.Platform == "windows" && helpRequested(more) {
+		help.PrintHelp(c)
+		return contract.ExitOK
+	}
 	if command == "version" {
 		_, _ = fmt.Fprintln(stdout, "webmux-windows", version)
 		return contract.ExitOK
@@ -77,21 +146,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 		ResolveCwd:     c.resolveCwd,
 		NotRunningHint: "start it from the WebMux tray or run `webmux serve` inside WSL",
 		Label:          "Windows console",
+		Platform:       "windows",
+		Version:        version,
 	}
-	switch command {
-	case "run":
-		return sessioncmd.Run(ctx, e, rest)
-	case "attach":
-		return sessioncmd.Attach(ctx, e, rest)
-	case "ls":
-		return sessioncmd.List(ctx, e, rest)
-	case "open":
-		return sessioncmd.Open(ctx, e, rest)
-	case "status":
+	if command == "status" {
 		return c.status(ctx, rest)
 	}
+	if code, ok := e.Dispatch(ctx, sessioncmd.Commands(), global.Args()); ok {
+		return code
+	}
 	_, _ = fmt.Fprintf(stderr, "webmux: unknown command %q\n", command)
-	global.Usage()
+	_, _ = fmt.Fprint(stderr, usage)
 	return contract.ExitUsage
 }
 

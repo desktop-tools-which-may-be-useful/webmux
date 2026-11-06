@@ -37,6 +37,7 @@
   - [需要你介入的提醒](usage/attention.md)：agent 状态识别、徽章与声音提醒、`OSC 7501` 协议及旧版钩子。
   - [端口转发预览](usage/port-forwarding.md)：把服务器上的开发服务器经 WebMux 转发到浏览器，终端端口提示与兼容选项。
   - [Shell 目录报告](usage/shell-directory.md)：可选的 OSC 7 目录报告与 bash / zsh 配置片段。
+  - [用脚本和 agent 控制 WebMux](usage/shell-control.md)：连接正确实例、会话元数据、父会话与标签、命令帮助。
 - [混合会话](hybrid-sessions.md)：OpenCode / omp / Codex CLI / Claude Code / Antigravity CLI / Qoder / QoderCN 在聊天视图与终端间切换。
 - [CLI agent 接入](cli-agents.md)：预置的十一款 CLI agent 启动配置与提醒。
 

@@ -46,6 +46,7 @@
 | P    | Tailscale Serve / Funnel               | US-P01–US-P08 |
 | Q    | 混合会话（聊天 ↔ 终端）                | US-Q01–US-Q19 |
 | R    | 端口转发预览                           | US-R01–US-R04 |
+| S    | 脚本与 agent 控制                      | US-S01–US-S04 |
 
 ## 分组文档
 
@@ -62,6 +63,7 @@
 | [网络压缩用户故事](user-stories/terminal-network.md)             | H10–H11            |
 | [混合会话](user-stories/hybrid-sessions.md)                      | Q                  |
 | [端口转发预览](user-stories/port-forwarding.md)                  | R                  |
+| [脚本与 agent 控制](user-stories/shell-control.md)               | S                  |
 | [功能覆盖核对与后续维护](user-stories/coverage.md)               | 覆盖索引与维护约定 |
 
 ## 核对记录
@@ -73,3 +75,4 @@
 | [verification-log-2026-10-23-to-26](user-stories/verification-log-2026-10-23-to-26.md) | 2026-10-23 至 2026-10-26 |
 | [verification-log-2026-10-27-to-31](user-stories/verification-log-2026-10-27-to-31.md) | 2026-10-27 至 2026-10-31 |
 | [verification-log-2026-11](user-stories/verification-log-2026-11.md)                   | 2026-11-01 至 2026-11-05 |
+| [verification-log-2026-11-shell](user-stories/verification-log-2026-11-shell.md)       | 2026-11-05 起            |

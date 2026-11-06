@@ -8,10 +8,21 @@ import "os"
 // (the Linux subreaper adopts orphaned session descendants). macOS cannot
 // read other processes' environments, so only the process tree counts there.
 func (m *Manager) ContainsProcess(pid int) bool {
-	if hasSessionMarker(pid) {
-		return true
+	_, inside := m.ProcessSession(pid)
+	return inside
+}
+
+// ProcessSession reports which session pid runs in. id is empty when pid is
+// inside some session but its session cannot be named, such as an orphan the
+// server adopted, or when the marked session no longer exists.
+func (m *Manager) ProcessSession(pid int) (id string, inside bool) {
+	if marker := sessionMarker(pid); marker != "" {
+		if _, err := m.Get(marker); err == nil {
+			return marker, true
+		}
+		return "", true
 	}
-	leaders := make(map[int]bool)
+	leaders := make(map[int]string)
 	m.mu.Lock()
 	sessions := make([]*Session, 0, len(m.sessions))
 	for _, s := range m.sessions {
@@ -21,12 +32,12 @@ func (m *Manager) ContainsProcess(pid int) bool {
 	for _, s := range sessions {
 		s.mu.Lock()
 		if s.run != nil && s.run.cmd != nil && s.run.cmd.Process != nil {
-			leaders[s.run.cmd.Process.Pid] = true
+			leaders[s.run.cmd.Process.Pid] = s.info.ID
 		}
 		for sidecar := range s.sidecars {
-			leaders[sidecar.pid] = true
+			leaders[sidecar.pid] = s.info.ID
 		}
 		s.mu.Unlock()
 	}
-	return insideTree(processes(), pid, os.Getpid(), leaders)
+	return treeOwner(processes(), pid, os.Getpid(), leaders)
 }

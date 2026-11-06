@@ -45,7 +45,16 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.CodeLocationSchema, ["code-locate", "code-locate-pdf"]],
   [S.ConfigSchema, ["config"]],
   [S.DirectoriesSchema, ["fs-dirs-default", "fs-dirs-empty", "fs-dirs-prefix"]],
-  [S.ErrorSchema, ["settings-conflict"]],
+  [
+    S.ErrorSchema,
+    [
+      "settings-conflict",
+      "session-create-labels-invalid",
+      "session-details-missing",
+      "session-labels-invalid",
+    ],
+  ],
+  [S.SessionDetailsSchema, ["session-details"]],
   [S.NoContentSchema, ["fs-mkdir", "launch-delete", "push-unsubscribe"]],
   [S.HealthSchema, ["health"]],
   [
@@ -110,6 +119,7 @@ const groups: Array<[z.ZodType, string[]]> = [
       "session-create-workspace",
       "session-create",
       "session-get",
+      "session-labels",
       "session-get-hybrid",
       "session-get-hybrid-work",
       "ws-terminal-state-exited",

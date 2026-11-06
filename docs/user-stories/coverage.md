@@ -23,6 +23,9 @@
 | 混合会话异常、自动重连、Claude 现有认证复用与登录引导（US-Q11 已退役）                              | US-Q10；US-D09                                      |
 | 混合会话记录、工作树内已归档记录、恢复、Claude 配置重应用与删除记录                                 | US-Q12；US-D10；US-L10                              |
 | `run --launch-config`、`attach` 与 `ls` 对混合会话的行为                                            | US-Q13；US-M01；US-M03；US-M05                      |
+| 会话内连回所属实例：`WEBMUX_SOCKET`、`WEBMUX_BIN`、`--socket`、`self` 与版本过旧提示                | US-S01                                              |
+| 会话详情接口与 `webmux get`、父会话、会话标签与 `ls` 筛选                                           | US-S02–US-S03                                       |
+| 命令表、完整 `--help`、`help --json` 与用法错误约定                                                 | US-S04；US-M01–US-M07                               |
 | 聊天端选择、拖放或粘贴文件，上传进度、取消、待发送附件与图片小图预览                                | US-Q14；US-E04–US-E07                               |
 | 首页导航、紧凑/预览、详情、分组、按需表单、增量更新、排序、搜索、筛选与空状态                       | US-C01–US-C05                                       |
 | OSC 7501 程序状态、结构化 agent 信号、OSC 通知、BEL 与集成配置                                      | US-C05–US-C06；US-K04                               |

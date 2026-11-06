@@ -158,7 +158,7 @@ func TestDispatchRejectsUnknownSubcommand(t *testing.T) {
 	if code := dispatch([]string{"statsu"}, &stdout, &stderr); code != contract.ExitUsage {
 		t.Fatalf("exit %d", code)
 	}
-	if stdout.Len() != 0 || !strings.Contains(stderr.String(), `unknown subcommand "statsu"`) || !strings.Contains(stderr.String(), subcommands) {
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), `unknown command "statsu"`) || !strings.Contains(stderr.String(), "webmux help") {
 		t.Fatalf("stdout %q stderr %q", stdout.String(), stderr.String())
 	}
 	stdout.Reset()

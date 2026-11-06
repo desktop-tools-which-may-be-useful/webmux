@@ -216,7 +216,7 @@ webmux open <ID> [--browser]           # 输出（并打开）不含 Token 的�
 - `--` 之后的参数原样作为 argv，不经 shell 展开；`--cwd` 指定启动目录（默认当前目录，`~` 由服务端展开）。
 - 自定义命令的环境变量：
   - 默认继承**调用方 shell 的环境**（如 `PATH`、`VIRTUAL_ENV`、`SSH_AUTH_SOCK`、API key），在服务进程环境之上覆盖同名变量，`--env NAME=VALUE` 再覆盖继承值。
-  - `TERM`、`COLORTERM`、宿主终端身份变量、`WEBMUX_SESSION_ID`、`PWD`/`OLDPWD` 与不合法的变量名不继承，会话仍以 WebMux 终端身份和 `--cwd` 目录启动。
+  - `TERM`、`COLORTERM`、宿主终端身份变量、`WEBMUX_SESSION_ID`、`WEBMUX_SOCKET`、`WEBMUX_BIN`、`PWD`/`OLDPWD` 与不合法的变量名不继承，会话仍以 WebMux 终端身份和 `--cwd` 目录启动。
   - `--launch-config` 只使用配置中保存的环境，不继承调用方环境。
   - Windows 客户端（`webmux.exe`）也不把 Windows 环境复制到 WSL，只发送 `--env` 显式列出的变量。
 - `--launch-config <NAME>`（也可写作 `--config-id <NAME>`）使用 Web 端“启动配置”中保存的完整 argv 与环境变量：
@@ -234,6 +234,7 @@ webmux open <ID> [--browser]           # 输出（并打开）不含 Token 的�
   - 附着结束时关闭这些键盘、鼠标、焦点与粘贴上报模式，避免外层 shell 收到无法解析的按键编码。
 - 默认附着的 `run` 在接管终端前，向标准错误输出 `webmux: session <ID> · <本机链接> · Ctrl+] to detach`，便于把链接带到手机上；标准输出只属于会话。需要附着时标准输入输出必须是终端，否则以退出码 2 结束且不创建会话。
 - 典型流程：在原生终端 `webmux run -- claude` → `Ctrl+]` 分离 → 手机打开链接、输入即接管 → 回来后 `webmux attach <ID>` 接续，全程是同一个进程。
+- 脚本与 agent 的用法（`self`、`WEBMUX_SOCKET`/`WEBMUX_BIN`、`get`、标签、`help --json`）见 [用脚本和 agent 控制 WebMux](usage/shell-control.md)。
 
 ## 在 Windows 终端中使用
 

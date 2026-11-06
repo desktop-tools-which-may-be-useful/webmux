@@ -14,6 +14,8 @@
 | GET    | `/api/sessions/{id}/upload`    | 读取本会话已上传的单个文件（`?path=`），见下文                                     |
 | POST   | `/api/sessions/{id}/upload`    | 上传文件，见下文                                                                   |
 | POST   | `/api/sessions/{id}/artifacts` | 确保会话临时文件夹存在，200 `{path}`，见下文                                       |
+| GET    | `/api/sessions/{id}/details`   | 会话详情 `SessionDetails`，见下文；不存在 404                                      |
+| PATCH  | `/api/sessions/{id}/labels`    | 修改标签 `{set, remove}`，返回 `SessionInfo`；非法标签 400，不修改任何标签         |
 
 创建请求有两种互斥形式：
 
@@ -28,7 +30,7 @@
 
 显式命令可附加可选的 `env: {"NAME": "value"}`：只为该会话在服务环境之上追加或覆盖列出的变量。
 
-- 名称须匹配 `[A-Za-z_][A-Za-z0-9_]*`，值不含 NUL，`WEBMUX_SESSION_ID` 保留。
+- 名称须匹配 `[A-Za-z_][A-Za-z0-9_]*`，值不含 NUL；`WEBMUX_SESSION_ID`、`WEBMUX_SOCKET` 与 `WEBMUX_BIN` 保留（服务端为每个会话设置它们），出现时 400。
 - 服务端不自行复制调用方的环境，`env` 也不出现在 `SessionInfo` 中。
 - Linux/macOS 的 `webmux run` 会把调用方环境（去掉终端身份等服务端自有变量）放进该字段发送。
 
@@ -55,6 +57,44 @@
 - 记录文件 `hybrid-sessions.json` 不可用：503，错误信息含文件路径。
 - 记录已达 200 条：409 `{error, reason: "limit"}`。
 - agent 启动或建会话失败：502，错误信息附 agent 标准错误的末尾，仅返回给请求方，不写日志。
+
+**父会话与标签**：
+
+- 创建请求可附加 `labels: {"KEY": "value"}`。键须匹配 `[a-z0-9][a-z0-9._-]{0,62}`，值最多 256 个字符且不含控制字符，最多 16 个；非法时 400，且不创建会话。
+- 经本机套接字从某个会话内的进程创建时，服务端按对端进程记录 `parentId`（调用者所在会话）；请求体不能指定它，经 TCP 创建的会话没有。
+- `SessionInfo` 中二者为空时省略，变化经 `/ws/sessions` 的 `updated` 事件同步；只保存在内存中。
+- `PATCH /api/sessions/{id}/labels` 的 `set` 先合并、`remove` 再删除，整体生效；结果超过 16 个时 400。
+
+**会话详情**：`GET /api/sessions/{id}/details` 返回：
+
+```jsonc
+{
+  "session": { "id": "ab2cd3ef", "...": "SessionInfo" },
+  "link": "http://127.0.0.1:7681/s/ab2cd3ef", // 服务不知道本机链接时为 null
+  "repository": { "id": "…", "name": "app", "path": "/home/u/app" }, // 无工作区关联时为 null
+  "worktree": {
+    "id": "…",
+    "branch": "fix/lint",
+    "path": "/home/u/app.worktrees/fix-lint",
+    "main": false,
+  },
+  "launchConfig": {
+    "id": "k3m9q2x7",
+    "name": "Claude Code",
+    "icon": "claude",
+    "hybrid": true,
+  }, // 否则 null
+  "launchConfigMissing": true, // 仅当配置已被删除
+  "hybrid": { "...": "HybridRecord" }, // 普通会话为 null
+  "artifactsDir": null, // 临时文件夹已存在时为路径；接口不创建它
+  "forwards": [], // 来源为该会话的端口转发
+  "parentId": "p4rent22",
+  "labels": { "run": "42" },
+  "children": ["ch2ld345"], // parentId 为该会话的会话，按创建时间排序
+}
+```
+
+详情不含 Token、启动环境变量的值或其他会话的输出。
 
 **上传**：`multipart/form-data`，恰好一个文件字段 `file`。成功返回 201 `{"path": "<服务器绝对路径>"}`。
 

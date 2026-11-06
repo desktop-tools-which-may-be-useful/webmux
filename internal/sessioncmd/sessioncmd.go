@@ -13,6 +13,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,6 +54,19 @@ type Env struct {
 	NotRunningHint string
 	// Label names this client in the browser's control indicator.
 	Label string
+	// Getenv reads the caller's environment, for "self"; nil reads nothing.
+	Getenv func(string) string
+	// Platform is "unix" or "windows"; it hides the other client's commands.
+	Platform string
+	// Version is this client's version, shown by help --json and compared
+	// with the server's when an endpoint is missing.
+	Version string
+	// HelpFooter follows the command overview of `help`.
+	HelpFooter string
+	// Commands is the registry Dispatch runs, for help to list siblings.
+	Commands Registry
+	// current is the command being run, for its usage errors.
+	current *Command
 }
 
 // Fail prints err and returns its exit code: 3 when the server is not
@@ -66,27 +80,18 @@ func (e Env) Fail(err error) int {
 	return contract.ExitError
 }
 
-func (e Env) usagef(flags *flag.FlagSet, format string, args ...any) int {
-	_, _ = fmt.Fprintf(e.Stderr, "webmux %s: %s\n", flags.Name(), fmt.Sprintf(format, args...))
-	flags.Usage()
-	return contract.ExitUsage
-}
+// UsageError is a Connect failure caused by the command line, such as
+// conflicting connection options; it exits 2 like other usage errors.
+type UsageError string
 
-func (e Env) flags(name, synopsis string) *flag.FlagSet {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	flags.SetOutput(e.Stderr)
-	flags.Usage = func() {
-		_, _ = fmt.Fprintf(e.Stderr, "usage: webmux %s %s\n", name, synopsis)
-		flags.PrintDefaults()
-	}
-	if e.Flags != nil {
-		e.Flags(flags)
-	}
-	return flags
-}
+func (u UsageError) Error() string { return string(u) }
 
 func (e Env) connect() (*localclient.Client, int) {
 	client, err := e.Connect()
+	var usage UsageError
+	if errors.As(err, &usage) {
+		return nil, e.Usagef("%s", string(usage))
+	}
 	if err != nil {
 		return nil, e.Fail(err)
 	}
@@ -106,7 +111,8 @@ func (f envFlag) Set(value string) error {
 	return nil
 }
 
-// Run implements `run [--launch-config NAME] [--name] [--cwd] [--env K=V]... [--detach] -- argv...`.
+// runCommand creates a session from a saved launch config or an explicit
+// command.
 //
 // A custom command inherits the caller's environment (Env.Environ) with
 // --env on top, so it runs as it would in the calling shell. A launch config
@@ -114,54 +120,96 @@ func (f envFlag) Set(value string) error {
 // the summary list, which carries environment names only. The server then
 // expands the ID, so the command and environment stay identical to the saved
 // copy and secret values never reach the client.
-func Run(ctx context.Context, e Env, args []string) int {
-	flags := e.flags("run", "[--launch-config NAME] [--name NAME] [--cwd DIR] [--env NAME=VALUE]... [--detach] -- COMMAND [ARG]...")
-	var launchConfig string
-	var launchConfigSet bool
-	setLaunchConfig := func(value string) error {
-		if launchConfigSet && launchConfig != value {
-			return errors.New("--launch-config and --config-id must name the same saved config")
+var runCommand = &Command{
+	Name: "run", Group: GroupLaunch, Args: "[-- COMMAND [ARG]...]", Strict: true,
+	Summary: "Create a terminal session and attach to it, or print its ID with --detach.",
+	Description: "Without --launch-config, the arguments after -- are the session's argv exactly as given; nothing is expanded by a shell. " +
+		"A custom command inherits the caller's environment, minus terminal identity variables, with --env on top. " +
+		"With --launch-config, the server starts the saved Web UI launch config of that exact name, " +
+		"including its environment, which never reaches the client.",
+	Arguments: []Item{{Name: "COMMAND [ARG]...", Text: "The program and its arguments, after --."}},
+	Env: []Item{
+		{Name: "WEBMUX_SOCKET", Text: "Local API socket used when neither --socket nor --config is given."},
+	},
+	Output: "With --detach, one line: the session ID, a tab, and the local session link. Attached, the session's output; notices go to standard error.",
+	Exit: []ExitItem{
+		{Code: 0, Text: "Created (and detached, or the session ended after detaching)."},
+		{Code: 1, Text: "The server refused the session."},
+		{Code: 2, Text: "Usage error, unknown launch config, or no terminal to attach to."},
+		{Code: 3, Text: "WebMux is not running."},
+	},
+	Examples: []Example{
+		{Command: "webmux run -- claude", Text: "Start Claude Code in the current directory and attach; Ctrl+] detaches."},
+		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID and link."},
+		{Command: `webmux run --detach --launch-config "Claude Code"`, Text: "Start a saved Web UI launch config in the background."},
+	},
+	SeeAlso: []string{"webmux attach", "webmux ls"},
+	Notes: map[string]Note{
+		"launch-config": {Conflicts: []string{"env"}},
+		"config-id":     {Conflicts: []string{"env"}},
+		"env":           {Repeatable: true, Conflicts: []string{"launch-config"}},
+	},
+	Bind: func(flags *flag.FlagSet) Action {
+		var launchConfig string
+		var launchConfigSet bool
+		setLaunchConfig := func(value string) error {
+			if launchConfigSet && launchConfig != value {
+				return errors.New("--launch-config and --config-id must name the same saved config")
+			}
+			launchConfig = value
+			launchConfigSet = true
+			return nil
 		}
-		launchConfig = value
-		launchConfigSet = true
-		return nil
+		flags.Func("launch-config", "use a saved Web UI launch config by `NAME` (instead of -- COMMAND)", setLaunchConfig)
+		flags.Func("config-id", "alias for --launch-config", setLaunchConfig)
+		name := flags.String("name", "", "session `NAME`")
+		cwd := flags.String("cwd", "", "working `DIR` on the server (default: the current directory)")
+		detach := flags.Bool("detach", false, "create the session and print its ID and link without attaching")
+		env := envFlag{}
+		flags.Var(env, "env", "set `NAME=VALUE` in the session, overriding the inherited environment")
+		return func(ctx context.Context, e Env, argv []string) int {
+			return e.run(ctx, runOptions{launchConfig: launchConfig, launchConfigSet: launchConfigSet, name: *name, cwd: *cwd, detach: *detach, env: env}, argv)
+		}
+	},
+}
+
+type runOptions struct {
+	launchConfig    string
+	launchConfigSet bool
+	name, cwd       string
+	detach          bool
+	env             envFlag
+}
+
+// Run implements `webmux run`.
+func Run(ctx context.Context, e Env, args []string) int { return e.Run(ctx, runCommand, args) }
+
+func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
+	if o.launchConfigSet && o.launchConfig == "" {
+		return e.Usagef("--launch-config requires a non-empty saved config name")
 	}
-	flags.Func("launch-config", "use a saved Web UI launch config by name (instead of -- COMMAND)", setLaunchConfig)
-	flags.Func("config-id", "alias for --launch-config", setLaunchConfig)
-	name := flags.String("name", "", "session name")
-	cwd := flags.String("cwd", "", "working directory on the server (default: the current directory)")
-	detach := flags.Bool("detach", false, "create the session and print its ID and link without attaching")
-	env := envFlag{}
-	flags.Var(env, "env", "set NAME=VALUE in the session (repeatable), overriding the inherited environment")
-	if err := flags.Parse(args); err != nil {
-		return contract.ExitUsage
+	if o.launchConfigSet && len(argv) > 0 {
+		return e.Usagef("--launch-config cannot be combined with a command after --")
 	}
-	argv := flags.Args()
-	if launchConfigSet && launchConfig == "" {
-		return e.usagef(flags, "--launch-config requires a non-empty saved config name")
+	if o.launchConfigSet && len(o.env) > 0 {
+		return e.Usagef("--launch-config cannot be combined with --env")
 	}
-	if launchConfigSet && len(argv) > 0 {
-		return e.usagef(flags, "--launch-config cannot be combined with a command after --")
-	}
-	if launchConfigSet && len(env) > 0 {
-		return e.usagef(flags, "--launch-config cannot be combined with --env")
-	}
-	if !launchConfigSet && (len(argv) == 0 || argv[0] == "") {
-		return e.usagef(flags, "a command is required after --")
+	if !o.launchConfigSet && (len(argv) == 0 || argv[0] == "") {
+		return e.Usagef("a command is required after --")
 	}
 	client, code := e.connect()
 	if client == nil {
 		return code
 	}
 	defer client.Close()
-	dir, err := e.ResolveCwd(ctx, *cwd)
+	dir, err := e.ResolveCwd(ctx, o.cwd)
 	if err != nil {
 		_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
 		return contract.ExitUsage
 	}
-	request := contract.CreateSessionRequest{Cwd: dir, Name: *name}
-	if launchConfigSet {
-		id, err := launchConfigID(ctx, client, launchConfig)
+	request := contract.CreateSessionRequest{Cwd: dir, Name: o.name}
+	if o.launchConfigSet {
+		id, err := launchConfigID(ctx, client, o.launchConfig)
 		if err != nil {
 			if errors.Is(err, errUnknownLaunchConfig) {
 				_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
@@ -172,11 +220,11 @@ func Run(ctx context.Context, e Env, args []string) int {
 		request.ConfigID = &id
 	} else {
 		request.Cmd = argv
-		request.Env = e.sessionEnv(env)
+		request.Env = e.sessionEnv(o.env)
 	}
 	// An attached run needs a terminal: check before creating anything.
 	var console Console
-	if !*detach {
+	if !o.detach {
 		if console, code = e.openConsole(); console == nil {
 			return code
 		}
@@ -188,7 +236,7 @@ func Run(ctx context.Context, e Env, args []string) int {
 		}
 		return e.Fail(err)
 	}
-	if *detach {
+	if o.detach {
 		link, err := link(ctx, client, created.ID)
 		if err != nil {
 			return e.Fail(err)
@@ -255,27 +303,51 @@ func (e Env) sessionEnv(explicit envFlag) map[string]string {
 	return env
 }
 
-// Attach implements `attach <id> [--observe]`.
-func Attach(ctx context.Context, e Env, args []string) int {
-	flags := e.flags("attach", "[--observe] SESSION")
-	observe := flags.Bool("observe", false, "watch without taking control, sending input or resizing")
-	if err := flags.Parse(args); err != nil {
-		return contract.ExitUsage
-	}
-	if flags.NArg() != 1 {
-		return e.usagef(flags, "exactly one session ID is required")
-	}
-	client, code := e.connect()
-	if client == nil {
-		return code
-	}
-	defer client.Close()
-	console, code := e.openConsole()
-	if console == nil {
-		return code
-	}
-	return e.attach(ctx, client, flags.Arg(0), *observe, console)
+var attachCommand = &Command{
+	Name: "attach", Group: GroupSessions, Args: "SESSION",
+	Summary: "Attach this terminal to a session; Ctrl+] detaches and the session keeps running.",
+	Description: "The terminal takes control of the session's input and size unless --observe is given. " +
+		"A hybrid session on its chat side cannot be attached.",
+	Arguments: []Item{sessionArgument},
+	Env:       []Item{sessionIDEnv},
+	Output:    "The session's output on this terminal; notices go to standard error.",
+	Exit: []ExitItem{
+		{Code: 0, Text: "Detached, or the session moved to the chat view."},
+		{Code: 1, Text: "The session is on its chat side or the connection failed."},
+		{Code: 2, Text: "Usage error or no terminal."},
+		{Code: 3, Text: "WebMux is not running."},
+	},
+	Examples: []Example{
+		{Command: "webmux attach abcd2345", Text: "Take over session abcd2345 in this terminal."},
+		{Command: "webmux attach --observe abcd2345", Text: "Watch the session without sending input or resizing it."},
+	},
+	SeeAlso: []string{"webmux run", "webmux ls"},
+	Bind: func(flags *flag.FlagSet) Action {
+		observe := flags.Bool("observe", false, "watch without taking control, sending input or resizing")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 1 {
+				return e.Usagef("exactly one session ID is required")
+			}
+			id, code, ok := e.SessionID(args[0])
+			if !ok {
+				return code
+			}
+			client, code := e.connect()
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			console, code := e.openConsole()
+			if console == nil {
+				return code
+			}
+			return e.attach(ctx, client, id, *observe, console)
+		}
+	},
 }
+
+// Attach implements `webmux attach`.
+func Attach(ctx context.Context, e Env, args []string) int { return e.Run(ctx, attachCommand, args) }
 
 // openConsole enters raw mode; a missing terminal is a usage error.
 func (e Env) openConsole() (Console, int) {
@@ -311,16 +383,91 @@ func (e Env) attach(ctx context.Context, client *localclient.Client, id string, 
 	return result.ExitCode
 }
 
-// List implements `ls [--json]`.
-func List(ctx context.Context, e Env, args []string) int {
-	flags := e.flags("ls", "[--json]")
-	asJSON := flags.Bool("json", false, "print the server's session list as JSON")
-	if err := flags.Parse(args); err != nil {
-		return contract.ExitUsage
+var listCommand = &Command{
+	Name: "ls", Group: GroupSessions,
+	Summary: "List terminal sessions, optionally filtered by label, parent or status.",
+	Description: "Filters combine: a session is listed only when it matches all of them. " +
+		"--label KEY=VALUE matches a label value, --label KEY only requires the label to exist.",
+	Output: "A table of ID, name, status (with exit code and hybrid side), command and launch directory. " +
+		"With --json, the server's SessionInfo array, filtered when filters are given.",
+	Exit: []ExitItem{
+		{Code: 0, Text: "Listed."},
+		{Code: 2, Text: "Usage error."},
+		{Code: 3, Text: "WebMux is not running."},
+	},
+	Examples: []Example{
+		{Command: "webmux ls", Text: "Show every session."},
+		{Command: "webmux ls --parent self --json", Text: "List the sessions this session created, as JSON."},
+		{Command: "webmux ls --label run=42 --status exited", Text: "Show finished sessions of one scripted run."},
+	},
+	SeeAlso: []string{"webmux get", "webmux label"},
+	Notes: map[string]Note{
+		"label":  {Repeatable: true},
+		"status": {Repeatable: true},
+	},
+	Bind: func(flags *flag.FlagSet) Action {
+		asJSON := flags.Bool("json", false, "print the server's session list as JSON")
+		var labels, statuses listFlag
+		flags.Var(&labels, "label", "only sessions with label `KEY=VALUE`, or with label KEY")
+		parent := flags.String("parent", "", "only sessions created by `SESSION` (or self)")
+		flags.Var(&statuses, "status", "only sessions in `STATE`: running, waiting, idle or exited")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) > 0 {
+				return e.Usagef("unexpected argument %q", args[0])
+			}
+			for _, state := range statuses {
+				if !slices.Contains([]string{"running", "waiting", "idle", "exited"}, state) {
+					return e.Usagef("unknown status %q", state)
+				}
+			}
+			parentID := ""
+			if *parent != "" {
+				id, code, ok := e.SessionID(*parent)
+				if !ok {
+					return code
+				}
+				parentID = id
+			}
+			return e.list(ctx, listFilter{labels: labels, parent: parentID, statuses: statuses}, *asJSON)
+		}
+	},
+}
+
+// listFlag collects a repeatable string flag.
+type listFlag []string
+
+func (f *listFlag) String() string     { return strings.Join(*f, ",") }
+func (f *listFlag) Set(v string) error { *f = append(*f, v); return nil }
+
+type listFilter struct {
+	labels   []string
+	parent   string
+	statuses []string
+}
+
+func (f listFilter) empty() bool { return len(f.labels) == 0 && f.parent == "" && len(f.statuses) == 0 }
+
+func (f listFilter) match(s contract.SessionInfo) bool {
+	if f.parent != "" && s.ParentID != f.parent {
+		return false
 	}
-	if flags.NArg() > 0 {
-		return e.usagef(flags, "unexpected argument %q", flags.Arg(0))
+	if len(f.statuses) > 0 && !slices.Contains(f.statuses, string(s.Status)) {
+		return false
 	}
+	for _, label := range f.labels {
+		key, value, hasValue := strings.Cut(label, "=")
+		got, ok := s.Labels[key]
+		if !ok || (hasValue && got != value) {
+			return false
+		}
+	}
+	return true
+}
+
+// List implements `webmux ls`.
+func List(ctx context.Context, e Env, args []string) int { return e.Run(ctx, listCommand, args) }
+
+func (e Env) list(ctx context.Context, filter listFilter, asJSON bool) int {
 	client, code := e.connect()
 	if client == nil {
 		return code
@@ -330,13 +477,38 @@ func List(ctx context.Context, e Env, args []string) int {
 	if err := client.Do(ctx, http.MethodGet, "/api/sessions", nil, &raw); err != nil {
 		return e.Fail(err)
 	}
-	if *asJSON {
+	if asJSON && filter.empty() {
 		_, _ = fmt.Fprintf(e.Stdout, "%s\n", raw)
 		return contract.ExitOK
 	}
 	var list []contract.SessionInfo
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return e.Fail(err)
+	}
+	if !filter.empty() {
+		// Filtering re-encodes the array, so --json keeps every field the
+		// server sent only through the raw objects.
+		var objects []json.RawMessage
+		if err := json.Unmarshal(raw, &objects); err != nil {
+			return e.Fail(err)
+		}
+		keptRaw := make([]json.RawMessage, 0, len(list))
+		kept := make([]contract.SessionInfo, 0, len(list))
+		for i, s := range list {
+			if filter.match(s) {
+				kept = append(kept, s)
+				keptRaw = append(keptRaw, objects[i])
+			}
+		}
+		if asJSON {
+			data, err := json.Marshal(keptRaw)
+			if err != nil {
+				return e.Fail(err)
+			}
+			_, _ = fmt.Fprintf(e.Stdout, "%s\n", data)
+			return contract.ExitOK
+		}
+		list = kept
 	}
 	sort.SliceStable(list, func(i, j int) bool { return list[i].ID < list[j].ID })
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
@@ -367,37 +539,58 @@ func hybridSide(h *contract.SessionHybrid) string {
 	}
 }
 
-// Open implements `open <id> [--browser]`.
-func Open(ctx context.Context, e Env, args []string) int {
-	flags := e.flags("open", "[--browser] SESSION")
-	browser := flags.Bool("browser", false, "also open the link in the default browser")
-	if err := flags.Parse(args); err != nil {
-		return contract.ExitUsage
-	}
-	if flags.NArg() != 1 {
-		return e.usagef(flags, "exactly one session ID is required")
-	}
-	client, code := e.connect()
-	if client == nil {
-		return code
-	}
-	defer client.Close()
-	id := flags.Arg(0)
-	if err := client.Do(ctx, http.MethodGet, "/api/sessions/"+url.PathEscape(id), nil, nil); err != nil {
-		return e.Fail(err)
-	}
-	link, err := link(ctx, client, id)
-	if err != nil {
-		return e.Fail(err)
-	}
-	_, _ = fmt.Fprintln(e.Stdout, link)
-	if *browser {
-		if err := e.OpenBrowser(link); err != nil {
-			return e.Fail(fmt.Errorf("open browser: %w", err))
+var openCommand = &Command{
+	Name: "open", Group: GroupSessions, Args: "SESSION",
+	Summary:   "Print a session's local link, and open it in the browser with --browser.",
+	Arguments: []Item{sessionArgument},
+	Env:       []Item{sessionIDEnv},
+	Output:    "The token-free local session link.",
+	Exit: []ExitItem{
+		{Code: 0, Text: "Printed (and opened)."},
+		{Code: 1, Text: "No such session, or the browser could not be started."},
+		{Code: 2, Text: "Usage error."},
+		{Code: 3, Text: "WebMux is not running."},
+	},
+	Examples: []Example{
+		{Command: "webmux open abcd2345", Text: "Print the link of session abcd2345."},
+		{Command: "webmux open --browser self", Text: "Open the current session in the default browser."},
+	},
+	SeeAlso: []string{"webmux get", "webmux ls"},
+	Bind: func(flags *flag.FlagSet) Action {
+		browser := flags.Bool("browser", false, "also open the link in the default browser")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 1 {
+				return e.Usagef("exactly one session ID is required")
+			}
+			id, code, ok := e.SessionID(args[0])
+			if !ok {
+				return code
+			}
+			client, code := e.connect()
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			if err := client.Do(ctx, http.MethodGet, "/api/sessions/"+url.PathEscape(id), nil, nil); err != nil {
+				return e.Fail(err)
+			}
+			link, err := link(ctx, client, id)
+			if err != nil {
+				return e.Fail(err)
+			}
+			_, _ = fmt.Fprintln(e.Stdout, link)
+			if *browser {
+				if err := e.OpenBrowser(link); err != nil {
+					return e.Fail(fmt.Errorf("open browser: %w", err))
+				}
+			}
+			return contract.ExitOK
 		}
-	}
-	return contract.ExitOK
+	},
 }
+
+// Open implements `webmux open`.
+func Open(ctx context.Context, e Env, args []string) int { return e.Run(ctx, openCommand, args) }
 
 // link is the session's token-free local link.
 func link(ctx context.Context, client *localclient.Client, id string) (string, error) {

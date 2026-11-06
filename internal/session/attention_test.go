@@ -274,13 +274,13 @@ func TestSessionEnv(t *testing.T) {
 		"TERM":                 "xterm-kitty",
 		"TERM_PROGRAM":         "kitty",
 		"TERM_PROGRAM_VERSION": "0.40",
-	}, "1.2.3")
+	}, "1.2.3", nil)
 	if !slices.Contains(identity, "TERM=xterm-kitty") ||
 		!slices.Contains(identity, "TERM_PROGRAM=kitty") ||
 		!slices.Contains(identity, "TERM_PROGRAM_VERSION=0.40") {
 		t.Fatalf("explicit terminal identity was overwritten: %q", identity)
 	}
-	versioned := sessionEnvWithVersion(base, "abcdefgh", false, nil, "1.2.3")
+	versioned := sessionEnvWithVersion(base, "abcdefgh", false, nil, "1.2.3", nil)
 	if !slices.Contains(versioned, "TERM_PROGRAM=webmux") ||
 		!slices.Contains(versioned, "TERM_PROGRAM_VERSION=1.2.3") {
 		t.Fatalf("server version was not advertised: %q", versioned)

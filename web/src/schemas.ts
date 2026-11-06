@@ -110,8 +110,46 @@ export const SessionInfoSchema = z.object({
   // Ascending ports the session's processes listen on; always [] where the
   // server cannot detect them.
   listeningPorts: z.array(ListeningPortSchema),
+  // The session whose process created this one through the local API.
+  parentId: z
+    .string()
+    .regex(/^[a-z2-7]{8}$/)
+    .optional(),
+  // Caller-defined labels; omitted when empty.
+  labels: z.record(z.string(), z.string()).optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
+// GET /sessions/:id/details: metadata gathered by the server for scripts.
+export const SessionDetailsSchema = z.object({
+  session: SessionInfoSchema,
+  link: z.string().nullable(),
+  repository: z
+    .object({ id: z.string(), name: z.string(), path: z.string() })
+    .nullable(),
+  worktree: z
+    .object({
+      id: z.string(),
+      branch: z.string().nullable(),
+      path: z.string(),
+      main: z.boolean(),
+    })
+    .nullable(),
+  launchConfig: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      icon: z.string().optional(),
+      hybrid: z.boolean(),
+    })
+    .nullable(),
+  launchConfigMissing: z.boolean().optional(),
+  hybrid: HybridRecordSchema.nullable(),
+  artifactsDir: z.string().nullable(),
+  forwards: z.array(ForwardSchema),
+  parentId: z.string().optional(),
+  labels: z.record(z.string(), z.string()),
+  children: z.array(z.string()),
+});
 export const WorkspaceReferenceSchema = z.object({
   repositoryId: z.string(),
   worktreeId: z.string(),
@@ -132,6 +170,8 @@ export const CreateSessionRequestSchema = z
     // Puts the repository's initialization instruction before it; needs
     // `workspace`.
     useInitInstruction: z.boolean().optional(),
+    // Labels set on the new session.
+    labels: z.record(z.string(), z.string()).optional(),
   })
   .refine(
     (body) =>

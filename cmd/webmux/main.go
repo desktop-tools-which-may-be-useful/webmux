@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -44,55 +45,43 @@ import (
 
 var version = "dev"
 
+// serverExecutable is the running executable as os.Executable reports it,
+// or "" with a warning when it cannot be determined. On Linux it reads
+// /proc/self/exe, which already names the real file and drops the
+// " (deleted)" suffix an in-place upgrade leaves.
+var serverExecutable = sync.OnceValue(func() string {
+	path, err := os.Executable()
+	if err != nil {
+		slog.Warn("executable path unavailable; sessions get no WEBMUX_BIN", "error", err)
+		return ""
+	}
+	return path
+})
+
 func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const subcommands = "serve, start, version, status, stop, bridge, config, service, update, run, attach, ls, open, help"
-
-const cliHelp = `Usage: webmux [command] [options]
-
-Commands:
-  serve             Run the server in the foreground (default)
-  start             Run the server in the background; stop it with webmux stop
-  version           Print the version; --json adds the control contract
-  status            Show server health and access URLs
-  stop              Stop the server through its local control API
-  config            Initialize, locate, show or validate configuration
-  service install   Install and start a service for the current user
-  service uninstall Stop and remove the user service; keep configuration
-  service start     Start the installed user service
-  service stop      Stop the user service (ends all terminal sessions)
-  service restart   Restart the user service (ends all terminal sessions)
-  service status    Show the user service manager's status
-  service logs      Show recent logs; add --follow (-f) to stream
-  update check      Check for a newer signed release; --json for scripts
-  update apply      Install a newer deb/rpm release (root; used by webmux-update.timer)
-  update channel    Show the update channel, or set it to stable|dev (root)
-  run               Create a terminal session
-  attach            Attach to a terminal session
-  ls                List terminal sessions
-  open              Open WebMux in the browser
-  bridge            Bridge the local socket over standard input/output
-  help              Show this help
-
-Server options: --config PATH, --listen HOST:PORT, --token TOKEN,
-                --tunnel, --log-file PATH
-Service install options: --config PATH, --force, --dry-run
-
-Services: Linux uses systemd --user; macOS uses a launchd LaunchAgent. Do not
-use sudo for them. Only "update apply" and "update channel <stable|dev>" run as root.
-Run "webmux <command> --help" for command options.
-`
+// serverHelpFooter ends the top-level help. The Windows console client
+// looks for "-log-file" in `webmux -h` to tell a webmux with the local API
+// from an older one, so it must stay.
+const serverHelpFooter = "Without a command, webmux runs serve. Server options: --config PATH, --listen HOST:PORT, " +
+	"--token TOKEN, --tunnel, --log-file PATH. Services: Linux uses systemd --user and macOS a launchd LaunchAgent; " +
+	"do not use sudo for them. Only \"update apply\" and \"update channel <stable|dev>\" run as root."
 
 // dispatch routes by the first argument. No argument or a flag first keeps
 // the original server invocation used by existing service templates.
 func dispatch(args []string, stdout, stderr io.Writer) int {
+	registry := commandRegistry()
+	e := sessionEnv(stdout, stderr)
+	e.Commands = registry
+	e.HelpFooter = serverHelpFooter
 	if len(args) > 0 {
 		switch args[0] {
-		case "help", "--help", "-help", "-h":
-			_, _ = fmt.Fprint(stdout, cliHelp)
-			return contract.ExitOK
+		case "help":
+			return e.HelpCommand(registry, version, args[1:])
+		case "--help", "-help", "-h":
+			return e.HelpCommand(registry, version, nil)
 		case "--version":
 			_, _ = fmt.Fprintln(stdout, "webmux", version)
 			return contract.ExitOK
@@ -100,6 +89,17 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return runServe(args)
+	}
+	// The operations commands parse their own flags; help comes from the
+	// command table for all of them.
+	if c, rest := registry.Find(args); c != nil && isOps(c.Name) {
+		if c.Bind == nil && len(rest) == 0 {
+			return e.Run(context.Background(), c, nil)
+		}
+		if helpRequested(rest) && (c.Bind != nil || len(rest) == 1) {
+			e.PrintHelp(c)
+			return contract.ExitOK
+		}
 	}
 	switch args[0] {
 	case "serve":
@@ -114,8 +114,6 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 		return stopCommand(args[1:], stdout, stderr)
 	case "bridge":
 		return bridgeCommand(args[1:], os.Stdin, stdout, stderr)
-	case "run", "attach", "ls", "open":
-		return sessionCommand(args[0], args[1:], stdout, stderr)
 	case "config":
 		return configCommand(args[1:], stdout, stderr)
 	case "service":
@@ -123,8 +121,35 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 	case "update":
 		return updateCommand(args[1:], stdout, stderr)
 	}
-	_, _ = fmt.Fprintf(stderr, "webmux: unknown subcommand %q\navailable subcommands: %s\n", args[0], subcommands)
+	if code, ok := sessionCommand(args, stdout, stderr); ok {
+		return code
+	}
+	_, _ = fmt.Fprintf(stderr, "webmux: unknown command %q\nRun 'webmux help' for the list of commands.\n", args[0])
 	return contract.ExitUsage
+}
+
+// isOps reports whether command name belongs to the operations commands,
+// which keep their own parsers.
+func isOps(name string) bool {
+	first, _, _ := strings.Cut(name, " ")
+	switch first {
+	case "serve", "start", "version", "status", "stop", "bridge", "config", "service", "update", "help":
+		return true
+	}
+	return false
+}
+
+// helpRequested reports whether args ask for help before any "--".
+func helpRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "-h" || arg == "--help" || arg == "-help" {
+			return true
+		}
+	}
+	return false
 }
 
 // versionCommand never reads configuration or starts anything: the Windows
@@ -381,6 +406,8 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// Keep the child terminal identity tied to the running WebMux build. The
 	// session package still defaults to "dev" for embedders and tests.
 	sessionOptions.TerminalVersion = version
+	// Sessions find this very executable in WEBMUX_BIN, whatever PATH holds.
+	sessionOptions.Executable = serverExecutable()
 	// A configured port 0 is chosen when binding: exclude the bound port.
 	if addr, ok := listener.Addr().(*net.TCPAddr); ok && !slices.Contains(sessionOptions.ExcludePorts, addr.Port) {
 		sessionOptions.ExcludePorts = append(sessionOptions.ExcludePorts, addr.Port)
@@ -462,6 +489,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		// The executable's identity is recorded now; later status and
 		// configuration requests compare against it.
 		InstalledVersion: update.NewInstalledVersion(version).Pending,
+		LocalURL:         localOrigin(listener.Addr()),
 		Launcher:         runtime.Launcher(os.Getenv),
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels

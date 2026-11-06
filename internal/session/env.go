@@ -15,7 +15,7 @@ import (
 // running server; keeping this wrapper makes the environment helper useful to
 // package tests and embedders that do not carry build metadata.
 func sessionEnv(base []string, id string, agentProtocol bool, explicit map[string]string) []string {
-	return sessionEnvWithVersion(base, id, agentProtocol, explicit, "dev")
+	return sessionEnvWithVersion(base, id, agentProtocol, explicit, "dev", nil)
 }
 
 // sessionEnvWithVersion constructs the child process environment. WebMux is a
@@ -24,8 +24,8 @@ func sessionEnv(base []string, id string, agentProtocol bool, explicit map[strin
 // advertised. Explicit launch variables always win, including TERM and
 // TERM_PROGRAM, so an application-specific preset can opt into a deliberate
 // compatibility mode without being rewritten here.
-func sessionEnvWithVersion(base []string, id string, agentProtocol bool, explicit map[string]string, version string) []string {
-	env := make([]string, 0, len(base)+5+len(explicit))
+func sessionEnvWithVersion(base []string, id string, agentProtocol bool, explicit map[string]string, version string, serverEnv []string) []string {
+	env := make([]string, 0, len(base)+5+len(serverEnv)+len(explicit))
 	for _, entry := range base {
 		name, _, _ := strings.Cut(entry, "=")
 		if contract.ServerOwnedEnv(name) {
@@ -48,6 +48,8 @@ func sessionEnvWithVersion(base []string, id string, agentProtocol bool, explici
 			env = append(env, entry)
 		}
 	}
+	// WEBMUX_SOCKET and WEBMUX_BIN are reserved: a request cannot carry them.
+	env = append(env, serverEnv...)
 	if _, replaced := explicit["WARP_CLI_AGENT_PROTOCOL_VERSION"]; agentProtocol && !replaced {
 		env = append(env, "WARP_CLI_AGENT_PROTOCOL_VERSION=1")
 	}
@@ -64,8 +66,8 @@ func ValidateEnv(env map[string]string) error {
 		if !contract.ValidEnvName(name) {
 			return fmt.Errorf("invalid environment variable name %q", name)
 		}
-		if name == contract.SessionIDEnv {
-			return errors.New(contract.SessionIDEnv + " is reserved")
+		if contract.ReservedEnv(name) {
+			return errors.New(name + " is reserved")
 		}
 		if strings.ContainsRune(value, 0) {
 			return fmt.Errorf("environment variable %s contains a NUL byte", name)

@@ -72,6 +72,8 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 		slog.Warn("本机 API 不可用 (local API unavailable)", "error", err)
 	} else {
 		record.Socket = path
+		// Sessions created from now on find the socket in WEBMUX_SOCKET.
+		m.SetSocket(path)
 		rt.server = &http.Server{
 			Handler: api.NewLocal(deps, api.Local{
 				Configuration: func() contract.Configuration { return effectiveView(c, record, deps) },
@@ -99,6 +101,7 @@ func localStatus(record runtime.Record, c serverRun, deps api.Deps, tunnels *tun
 	s := client.FromRecord(record, client.NetInterfaces)
 	s.State = contract.StateRunning
 	s.LocalAPI = true
+	s.Bin = serverExecutable()
 	sessions := len(m.List())
 	s.Sessions = &sessions
 	s.Health = contract.Health{Status: contract.HealthOK}

@@ -1,0 +1,42 @@
+{
+  "status": 200,
+  "body": {
+    "artifactsDir": null,
+    "children": [],
+    "forwards": [],
+    "hybrid": null,
+    "labels": {
+      "run": "42"
+    },
+    "launchConfig": null,
+    "link": null,
+    "repository": null,
+    "session": {
+      "attention": null,
+      "clients": 0,
+      "cmd": [
+        "/bin/sh",
+        "-c",
+        "sleep 60"
+      ],
+      "cols": 80,
+      "createdAt": "<time>",
+      "cwd": "<repo>",
+      "exitCode": null,
+      "generation": "<generation#2>",
+      "id": "<id#2>",
+      "labels": {
+        "run": "42"
+      },
+      "lastActiveAt": "<time>",
+      "listeningPorts": [],
+      "preview": "",
+      "reportedCwd": null,
+      "rows": 24,
+      "status": "running",
+      "title": "wire",
+      "workspace": null
+    },
+    "worktree": null
+  }
+}

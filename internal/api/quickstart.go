@@ -36,6 +36,7 @@ func (s *Server) quickStartRoutes(mux *http.ServeMux) {
 			quickStartFailure(w, err)
 			return
 		}
+		s.Manager.SetParent(result.SessionID, s.callerSession(r))
 		reply(w, http.StatusCreated, wire.QuickStartResult(result))
 	})
 }

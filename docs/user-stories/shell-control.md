@@ -1,0 +1,35 @@
+# 脚本与 agent 控制
+
+本组描述用 `webmux` 命令行在脚本中、或由运行在会话里的 CLI agent 控制 WebMux 的能力。命令经本机套接字访问服务，不需要 Token；使用说明见 [用脚本和 agent 控制 WebMux](../usage/shell-control.md)。
+
+## S. 脚本与 agent 控制
+
+- **US-S01 会话内找到所属实例**：作为在会话里运行的脚本或 agent，我希望不依赖 `PATH` 或默认配置就能连回启动我的 WebMux，以便控制的总是同一个实例。
+  - 每个会话进程，包括混合会话聊天端的 ACP agent，都有 `WEBMUX_SESSION_ID`、`WEBMUX_SOCKET`（本机 API 套接字绝对路径）与 `WEBMUX_BIN`（服务端正在运行的可执行文件）；
+  - 三个变量属于服务端自有变量：创建请求或启动配置中出现时以 400 拒绝，`webmux run` 继承调用方环境时跳过；服务不修改会话的 `PATH`；
+  - CLI 按 `--socket`、`--config`、`WEBMUX_SOCKET`、默认配置的顺序定位服务，`--socket` 与 `--config` 互斥；指定的套接字连不上时以退出码 3 结束，不回退到其他实例；
+  - 接受会话 ID 的命令都接受 `self`；会话外使用 `self` 以退出码 2 结束；
+  - 旧版 CLI 调用服务端没有的新接口时提示“服务端版本过旧”，给出两边的版本并建议使用 `$WEBMUX_BIN`；
+  - 本机状态（`status --json`）包含 `bin`。
+- **US-S02 读取会话元数据**：作为脚本或 agent，我希望一次取得会话所在的仓库、分支、启动配置、混合状态、链接、父子会话与标签，以便判断自己的处境和要操作的对象。
+  - `GET /api/sessions/{id}/details` 返回 `SessionDetails`，不含 Token、启动环境变量值或其他会话的输出；临时文件夹只在已存在时报告，接口不创建它；
+  - `webmux get [SESSION]` 在会话内默认 `self`，会话外必须给出 ID；默认输出对齐的键值，`--json` 输出 `SessionDetails`；
+  - `--field PATH` 按点分路径输出单个值（字符串不带引号，对象与数组为 JSON），值为空或不存在时以 1 结束；`--json` 与 `--field` 互斥。
+- **US-S03 标记并找到自己创建的会话**：作为编排脚本，我希望知道哪些会话由我创建并能给会话打标签，以便事后筛选和清理。
+  - 经本机 API 从会话内创建的会话（`POST /api/sessions` 与 `POST /api/quick-starts`）自动记录 `parentId`；服务端按套接字对端进程判断，请求体无法指定，经 TCP 创建的会话没有父会话；
+  - 创建请求可带 `labels`，非法标签以 400 拒绝且不创建会话；`PATCH /api/sessions/{id}/labels` 以 `{set, remove}` 原子修改；
+  - 标签键匹配 `[a-z0-9][a-z0-9._-]{0,62}`，值最多 256 个字符且不含控制字符，每个会话最多 16 个；父会话与标签只在内存中，经 `/ws/sessions` 同步，Web 端暂不显示；
+  - `webmux label SESSION KEY=VALUE... KEY-...` 设置或删除标签；`webmux ls` 支持 `--label KEY=VALUE`、`--label KEY`、`--parent SESSION` 与 `--status STATE`，条件同时满足，`--json` 输出筛选后的原始对象。
+- **US-S04 完整的命令帮助**：作为第一次使用某个命令的人或 agent，我希望每个命令都有完整、可机读的帮助，以便不必猜测选项。
+  - 所有命令（包括运维命令）在一张命令表中声明；`--help` 包含用法、说明、参数、选项与默认值、环境变量、输出、退出码、至少两个示例和相关命令，英文，80 列换行；
+  - `-h`、`--help`、`webmux help <命令>` 写到标准输出并以 0 退出，不连接服务；用法错误以 2 退出并提示 `--help`；只给分组命令（如 `webmux config`）时把子命令列表写到标准错误并以 2 退出；
+  - `webmux help --json [命令]` 输出命令树（选项、默认值、互斥关系、退出码、示例）；
+  - 选项可以写在位置参数之后，`--` 之后的参数原样保留；`run` 在第一个位置参数处停止解析；
+  - 顶层帮助保留服务端选项一行，Windows 客户端据 `-log-file` 判断 WSL 内的版本；
+  - 测试保证每个可见命令有摘要和至少两个可解析的示例，每个选项有说明，运维命令的选项与实现一致。
+
+### 依据
+
+- [会话命令与命令表](../../internal/sessioncmd/command.go)、[帮助渲染](../../internal/sessioncmd/help.go)、[元数据命令](../../internal/sessioncmd/metadata.go)、[运维命令表](../../cmd/webmux/commands.go)
+- [会话详情与标签接口](../../internal/api/sessionmeta.go)、[父会话与标签](../../internal/session/relations.go)、[进程所属会话](../../internal/session/peer.go)
+- [本机套接字定位](../../cmd/webmux/sessions.go)、[会话环境](../../internal/session/env.go)、[保留变量](../../internal/contract/env.go)

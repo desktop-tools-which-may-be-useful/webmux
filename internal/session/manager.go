@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"github.com/rainchan/webmux/internal/contract"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,6 +41,9 @@ type Options struct {
 	// ExcludePorts are WebMux's own listening ports, never reported in
 	// Info.ListeningPorts.
 	ExcludePorts []int
+	// Executable is the running server's executable, advertised to every
+	// session as WEBMUX_BIN; empty advertises nothing.
+	Executable string
 }
 type Event struct {
 	Type     string
@@ -68,6 +72,8 @@ type Manager struct {
 	createMu sync.Mutex
 	// reserved reports IDs random generation must skip (SetIDReserver).
 	reserved func(id string) bool
+	// socket is the local API socket advertised as WEBMUX_SOCKET (SetSocket).
+	socket string
 }
 
 // Error kinds; the workspace maps them to request errors.
@@ -188,7 +194,33 @@ func (m *Manager) startOptions(in CreateInput) startOptions {
 		env:             in.Env,
 		configID:        in.ConfigID,
 		terminalVersion: m.options.TerminalVersion,
+		serverEnv:       m.serverEnv(),
 	}
+}
+
+// SetSocket records the local API socket that sessions created from now on
+// find in WEBMUX_SOCKET. The server calls it once the socket listens, before
+// it serves requests.
+func (m *Manager) SetSocket(path string) {
+	m.mu.Lock()
+	m.socket = path
+	m.mu.Unlock()
+}
+
+// serverEnv lists WEBMUX_SOCKET and WEBMUX_BIN for a new session, leaving out
+// a value the server does not know.
+func (m *Manager) serverEnv() []string {
+	m.mu.Lock()
+	socket := m.socket
+	m.mu.Unlock()
+	var env []string
+	if socket != "" {
+		env = append(env, contract.SocketEnv+"="+socket)
+	}
+	if m.options.Executable != "" {
+		env = append(env, contract.BinEnv+"="+m.options.Executable)
+	}
+	return env
 }
 
 // newID draws a random ID that is neither in use nor reserved. Callers hold

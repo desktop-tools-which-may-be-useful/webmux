@@ -16,6 +16,7 @@ import (
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/workspace"
+	"maps"
 )
 
 // each maps a required response array, normalizing nil to an empty slice.
@@ -50,6 +51,7 @@ func Session(i session.Info) contract.SessionInfo {
 		Cmd: required(i.Cmd), Status: i.Status, ExitCode: i.ExitCode, Preview: i.Preview,
 		CreatedAt: i.CreatedAt, LastActiveAt: i.LastActiveAt, Cols: i.Cols, Rows: i.Rows, Clients: i.Clients,
 		ConfigID: i.ConfigID, ListeningPorts: ListeningPorts(i.ListeningPorts),
+		ParentID: i.ParentID, Labels: maps.Clone(i.Labels),
 	}
 	if i.Workspace != nil {
 		w := contract.SessionWorkspace(*i.Workspace)

@@ -73,6 +73,11 @@ type SessionInfo struct {
 	// process tree listens on, ascending; empty where detection is
 	// unsupported.
 	ListeningPorts []ListeningPort `json:"listeningPorts"`
+	// ParentID is the session whose process created this one through the
+	// local API; sessions created elsewhere omit it.
+	ParentID string `json:"parentId,omitempty"`
+	// Labels are caller-defined key-value pairs; empty is omitted.
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // SessionWorkspace is the registered worktree a session was started in.
@@ -121,6 +126,62 @@ type CreateSessionRequest struct {
 	// initialization instruction before it; it needs Workspace.
 	Prompt             string `json:"prompt,omitempty"`
 	UseInitInstruction bool   `json:"useInitInstruction,omitempty"`
+	// Labels are set on the new session; invalid labels reject the request
+	// before anything starts.
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// LabelsUpdate is the body of PATCH /api/sessions/{id}/labels: Set adds or
+// replaces labels, then Remove deletes keys, as one change. It answers 200
+// with the SessionInfo.
+type LabelsUpdate struct {
+	Set    map[string]string `json:"set,omitempty"`
+	Remove []string          `json:"remove,omitempty"`
+}
+
+// SessionDetails is GET /api/sessions/{id}/details: the session's metadata
+// gathered from every service. It never carries the token, launch
+// environment values or another session's output.
+type SessionDetails struct {
+	Session             SessionInfo          `json:"session"`
+	Link                *string              `json:"link"`
+	Repository          *DetailsRepository   `json:"repository"`
+	Worktree            *DetailsWorktree     `json:"worktree"`
+	LaunchConfig        *DetailsLaunchConfig `json:"launchConfig"`
+	LaunchConfigMissing bool                 `json:"launchConfigMissing,omitempty"`
+	Hybrid              *HybridRecord        `json:"hybrid"`
+	// ArtifactsDir is the session's artifacts folder when it exists; the
+	// endpoint never creates it.
+	ArtifactsDir *string           `json:"artifactsDir"`
+	Forwards     []Forward         `json:"forwards"`
+	ParentID     string            `json:"parentId,omitempty"`
+	Labels       map[string]string `json:"labels"`
+	// Children are the sessions whose ParentID is this session, oldest
+	// first.
+	Children []string `json:"children"`
+}
+
+// DetailsRepository names the registered repository of a session.
+type DetailsRepository struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// DetailsWorktree names the registered worktree of a session.
+type DetailsWorktree struct {
+	ID     string  `json:"id"`
+	Branch *string `json:"branch"`
+	Path   string  `json:"path"`
+	Main   bool    `json:"main"`
+}
+
+// DetailsLaunchConfig names the saved launch config a session came from.
+type DetailsLaunchConfig struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Icon   string `json:"icon,omitempty"`
+	Hybrid bool   `json:"hybrid"`
 }
 
 // RenameSessionRequest is the body of PATCH /api/sessions/{id}. An empty

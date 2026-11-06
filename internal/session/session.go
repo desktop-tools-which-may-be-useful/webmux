@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"maps"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -66,6 +67,11 @@ type Info struct {
 	// ListeningPorts are the TCP ports the current run's process tree
 	// listens on, refreshed every 2 seconds (see ListeningPortsSupported).
 	ListeningPorts []ListeningPort
+	// ParentID is the session whose process created this one through the
+	// local API; empty otherwise. It lives in memory only.
+	ParentID string
+	// Labels are caller-defined key-value pairs, in memory only.
+	Labels map[string]string
 }
 
 // Message is one item queued for a terminal subscriber, in protocol order.
@@ -166,6 +172,9 @@ type startOptions struct {
 	bellAttention   bool
 	programStatus   bool
 	terminalVersion string
+	// serverEnv holds WEBMUX_SOCKET and WEBMUX_BIN entries ("NAME=value")
+	// added to every process of the session.
+	serverEnv []string
 	// capacity is the scrollback ring size of every run.
 	capacity int
 	// env is the caller's explicit launch environment.
@@ -226,6 +235,7 @@ func (s *Session) infoLocked() Info {
 	i.Clients = len(s.subs)
 	i.Cmd = append([]string(nil), i.Cmd...)
 	i.ListeningPorts = slices.Clone(i.ListeningPorts)
+	i.Labels = maps.Clone(i.Labels)
 	if i.Workspace != nil {
 		workspace := *i.Workspace
 		i.Workspace = &workspace

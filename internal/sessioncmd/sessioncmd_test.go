@@ -306,3 +306,13 @@ func TestAttachHybridSessionOnChatSide(t *testing.T) {
 		t.Fatalf("passive detach message %q", stderr.String())
 	}
 }
+
+func TestConnectUsageErrorExitsTwo(t *testing.T) {
+	var stderr bytes.Buffer
+	e := Env{Stderr: &stderr, Stdout: io.Discard, Connect: func() (*localclient.Client, error) {
+		return nil, UsageError("--socket and --config cannot be combined")
+	}}
+	if code := e.Run(context.Background(), listCommand, nil); code != contract.ExitUsage || !strings.Contains(stderr.String(), "cannot be combined") {
+		t.Fatalf("exit %d, stderr %q", code, stderr.String())
+	}
+}

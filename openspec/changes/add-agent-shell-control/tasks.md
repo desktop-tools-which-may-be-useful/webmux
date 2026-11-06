@@ -14,12 +14,12 @@
 
 ## 1. 发现与公共约定（P0）
 
-- [ ] 1.1 在 `sessionEnvWithVersion` 中注入 `WEBMUX_SOCKET` 与 `WEBMUX_BIN`，PTY 与辅助进程（ACP）共用；两者加入 `contract.ServerOwnedEnv`、
+- [x] 1.1 在 `sessionEnvWithVersion` 中注入 `WEBMUX_SOCKET` 与 `WEBMUX_BIN`，PTY 与辅助进程（ACP）共用；两者加入 `contract.ServerOwnedEnv`、
   会话 `env` 校验与启动配置校验。用 `go test -race ./internal/session ./internal/launch ./internal/contract` 覆盖注入、聊天端可见、400 拒绝、`run` 继承时跳过。
-- [ ] 1.2 `cmd/webmux` 在启动时取 `os.Executable()` 作为 `WEBMUX_BIN` 传给会话选项，出错时不注入并警告；状态契约新增 `bin`。
-- [ ] 1.2a `cmd/webmux/sessions.go` 与 Windows 客户端的 `Env.Connect` 按“`--socket` → `--config` → `WEBMUX_SOCKET` → 默认配置”定位，
+- [x] 1.2 `cmd/webmux` 在启动时取 `os.Executable()` 作为 `WEBMUX_BIN` 传给会话选项，出错时不注入并警告；状态契约新增 `bin`。
+- [x] 1.2a `cmd/webmux/sessions.go` 与 Windows 客户端的 `Env.Connect` 按“`--socket` → `--config` → `WEBMUX_SOCKET` → 默认配置”定位，
   指定的套接字失效时返回 `ErrNotRunning` 而不回退；新增接口 404 时报告版本过旧。测试覆盖四种来源、互斥与不回退。
-- [ ] 1.3 `sessioncmd` 增加 `self` 解析、`contract.ExitTimeout = 124`，以及共用的 `--json`/NDJSON 输出辅助函数。
+- [x] 1.3 `sessioncmd` 增加 `self` 解析、`contract.ExitTimeout = 124`，以及共用的 `--json`/NDJSON 输出辅助函数。
 - [ ] 1.4 新命令统一使用 `script` 连接标签，会话内调用时附加来源会话 ID。
 
 ## 2. 会话控制命令（P0）
@@ -51,12 +51,12 @@
 
 ## 2B. 会话元数据（P0）
 
-- [ ] 2B.1 `internal/session`：由对端 PID 找到所在会话 ID（Linux 读环境标记，macOS 查进程树）；`parentId` 与标签只保存在内存中。
+- [x] 2B.1 `internal/session`：由对端 PID 找到所在会话 ID（Linux 读环境标记，macOS 查进程树）；`parentId` 与标签只保存在内存中。
   `go test -race ./internal/session` 覆盖进程树查找与标签校验。
-- [ ] 2B.2 本机 API 的创建入口（`POST /api/sessions`、`POST /api/quick-starts`）记录 `parentId`，请求体无法指定；TCP 入口不记录。
-- [ ] 2B.3 `GET /api/sessions/{id}/details` 与 `PATCH /api/sessions/{id}/labels`；契约 `SessionDetails`、`LabelsUpdate`，
+- [x] 2B.2 本机 API 的创建入口（`POST /api/sessions`、`POST /api/quick-starts`）记录 `parentId`，请求体无法指定；TCP 入口不记录。
+- [x] 2B.3 `GET /api/sessions/{id}/details` 与 `PATCH /api/sessions/{id}/labels`；契约 `SessionDetails`、`LabelsUpdate`，
   `SessionInfo.parentId/labels`、`CreateSessionRequest.labels`；同步 wire 与 schemas，重新录制 wire 快照。
-- [ ] 2B.4 `webmux get`（会话内默认 `self`、`--field`）、`webmux label`、`ls --label/--parent/--status`。
+- [x] 2B.4 `webmux get`（会话内默认 `self`、`--field`）、`webmux label`、`ls --label/--parent/--status`。
 
 ## 3. 提醒接口与 `notify`（P1）
 
@@ -111,9 +111,9 @@
 
 ## 7. 帮助与补全
 
-- [ ] 7.1 在 `sessioncmd` 中实现命令表（选项、互斥与依赖、环境变量、输出、退出码、示例、相关主题），选项解析由它生成；
+- [x] 7.1 在 `sessioncmd` 中实现命令表（选项、互斥与依赖、环境变量、输出、退出码、示例、相关主题），选项解析由它生成；
   `cmd/webmux` 的运维命令（`serve`、`start`、`version`、`status`、`stop`、`config`、`service`、`update`、`bridge`）迁入同一张表。
-- [ ] 7.2 `--help` 渲染（9 节，英文，80 列）；`-h`、`--help`、`help <命令>` 写到标准输出并返回 0，不连接服务；
+- [x] 7.2 `--help` 渲染（9 节，英文，80 列）；`-h`、`--help`、`help <命令>` 写到标准输出并返回 0，不连接服务；
   用法错误返回 2 并提示 `--help`；分组命令缺子命令时把分组帮助写到标准错误。修正 `run`、`attach`、`ls`、`open` 的现有行为与测试。
 - [ ] 7.3 `help --json` 与一致性测试：每个选项有说明和默认值，每个命令至少两个示例且能被解析器接受；llms 命令参考由命令表生成。
 - [ ] 7.4 `completion bash|zsh|fish` 与隐藏的 `__complete`：静态候选、动态候选（会话、启动配置、仓库、worktree、记录、端口），

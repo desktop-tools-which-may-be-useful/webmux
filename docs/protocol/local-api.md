@@ -29,4 +29,10 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 - `enabled`：当前进程启用期望，包括命令行覆盖，不是持久磁盘值或运行就绪状态。旧服务缺失时客户端才按 starting/ready 推断开关。
 - `settingsAvailable`：为 `true` 时显式声明 Web 设置页/API 可用。托盘仅凭该能力提供 `/settings/tunnel` 入口，不能从版本号、`enabled` 或存在 `tunnel` 推断；缺失或 false 时仍可使用旧本机开关。
 
+会话与套接字：
+
+- 每个会话进程（包括混合会话聊天端的 ACP 进程）都有 `WEBMUX_SOCKET`（本套接字的绝对路径）与 `WEBMUX_BIN`（服务端正在运行的可执行文件），会话内的 CLI 因此不依赖 `PATH` 或默认配置就能连回本实例。
+- `GET /local/v1/status` 的 `bin` 字段给出同一个可执行文件路径；旧服务没有该字段。
+- 经本套接字创建会话时，服务端按对端进程判断调用者所在的会话并记为新会话的 `parentId`（见 [会话 API](http-sessions.md)）。
+
 `webmux bridge` 把一条套接字连接原样桥接到标准输入输出（HTTP/1.1 keep-alive 与 WebSocket 升级照常工作）；连接失败时不写标准输出，服务未运行退出码 3，其他错误 1。

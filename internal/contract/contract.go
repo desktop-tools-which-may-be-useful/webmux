@@ -107,8 +107,11 @@ type StatusV1 struct {
 	Config          ConfigRef `json:"config"`
 	LogFile         string    `json:"logFile"`
 	Socket          string    `json:"socket"`
-	StartedAt       string    `json:"startedAt,omitempty"`
-	Token           string    `json:"token,omitempty"`
+	// Bin is the running server's executable, the value of WEBMUX_BIN in
+	// its sessions; older servers omit it.
+	Bin       string `json:"bin,omitempty"`
+	StartedAt string `json:"startedAt,omitempty"`
+	Token     string `json:"token,omitempty"`
 	// Tunnel is present when the running server can start and stop its
 	// Cloudflare Tunnel at runtime; older servers omit it.
 	Tunnel *TunnelStatus `json:"tunnel,omitempty"`
@@ -254,4 +257,7 @@ const (
 	ExitError      = 1
 	ExitUsage      = 2
 	ExitNotRunning = 3
+	// ExitTimeout ends a command that waited longer than its --timeout; it
+	// matches GNU timeout(1).
+	ExitTimeout = 124
 )

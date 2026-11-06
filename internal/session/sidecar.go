@@ -88,7 +88,7 @@ func (s *Session) childEnv(defaults map[string]string) []string {
 		explicit = maps.Clone(defaults)
 		maps.Copy(explicit, s.options.env)
 	}
-	return sessionEnvWithVersion(os.Environ(), s.info.ID, s.options.agentProtocol, explicit, s.options.terminalVersion)
+	return sessionEnvWithVersion(os.Environ(), s.info.ID, s.options.agentProtocol, explicit, s.options.terminalVersion, s.options.serverEnv)
 }
 
 func startSidecar(cwd, path string, argv, env []string, protocolOnFD3 bool) (*Sidecar, error) {

@@ -69,6 +69,9 @@ type Deps struct {
 	// InstalledVersion returns the installed version awaiting a restart,
 	// or ""; nil never reports one.
 	InstalledVersion func() string
+	// LocalURL is the token-free local origin, such as
+	// http://127.0.0.1:7681; empty leaves session details without a link.
+	LocalURL string
 	// Launcher is the recorded launcher. It selects the restart method of a
 	// pending update; on the local API, systemd and launchd refuse an
 	// unforced shutdown.
@@ -138,6 +141,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/sessions/{id}/artifacts", s.ensureArtifacts)
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)
 	mux.HandleFunc("POST /api/fs/mkdir", s.mkdir)
+	s.sessionMetaRoutes(mux)
 	s.chatRoutes(mux)
 	s.workspaceRoutes(mux)
 	s.quickStartRoutes(mux)
@@ -323,12 +327,21 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+	// Labels are checked first so an invalid request starts nothing.
+	if err := s.Manager.ValidateLabels(req.Labels); err != nil {
+		failure(w, http.StatusBadRequest, err)
+		return
+	}
 	item, err := s.Workspace.CreateSession(r.Context(), wire.SessionInput(req))
 	if err != nil {
 		sessionFailure(w, err)
 		return
 	}
-	reply(w, 201, wire.Session(item.Info()))
+	info, err := s.adopt(r, item.Info().ID, req.Labels)
+	if err != nil {
+		info = item.Info()
+	}
+	reply(w, 201, wire.Session(info))
 }
 func (s *Server) find(w http.ResponseWriter, r *http.Request) *session.Session {
 	item, err := s.Manager.Get(r.PathValue("id"))

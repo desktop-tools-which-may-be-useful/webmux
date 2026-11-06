@@ -13,7 +13,9 @@
 `service`、`update`、`bridge`、`run`、`attach`、`ls`、`open`）和本变更新增的全部命令。
 
 - 每个选项 SHALL 声明：长名、可选短名、值类型、默认值、是否可重复、说明，以及互斥或依赖关系。
-- 命令的选项解析 SHALL 由命令表生成，表中没有的选项 SHALL 无法注册。
+- 会话类命令的选项只能经命令表声明（`Bind`），解析与帮助共用同一份声明。
+- 运维命令（`serve`、`config`、`service`、`update` 等）保留各自的解析器；它们的 `--help` 由分发层统一按命令表输出，测试 SHALL 比对每个运维命令实现接受的选项与命令表一致。
+- 除 `run` 等以其他程序 argv 结尾的命令外，选项 SHALL 可以写在位置参数之后；`--` 之后的参数 SHALL 原样作为位置参数。
 - `--help` 输出、`help --json`、shell 补全，以及 llms 中的命令参考，SHALL 全部由这张表生成或经测试比对，不维护第二份手写副本。
 - 共享命令放在 `internal/sessioncmd`，Linux/macOS CLI 与 Windows 控制台客户端 SHALL 得到相同的帮助。
   只属于某个平台的命令（例如 `service`）SHALL 只出现在该平台的帮助中。

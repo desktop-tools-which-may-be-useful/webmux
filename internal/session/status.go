@@ -1,6 +1,7 @@
 package session
 
 import (
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -133,7 +134,10 @@ func sameDisplay(a, b Info) bool {
 		sameWorkspace(a.Workspace, b.Workspace) && sameAttention(a.Attention, b.Attention) &&
 		sameReportedCwd(a.ReportedCwd, b.ReportedCwd) &&
 		a.Generation == b.Generation && sameHybrid(a.Hybrid, b.Hybrid) &&
-		slices.Equal(a.ListeningPorts, b.ListeningPorts)
+		slices.Equal(a.ListeningPorts, b.ListeningPorts) &&
+		// Labels and the parent change outside output; comparing them lets
+		// the next tick repair a stale snapshot published after a fresh one.
+		a.ParentID == b.ParentID && maps.Equal(a.Labels, b.Labels)
 }
 
 func sameHybrid(a, b *HybridInfo) bool {

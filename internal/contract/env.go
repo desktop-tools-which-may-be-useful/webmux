@@ -6,6 +6,21 @@ import "strings"
 // request cannot set it.
 const SessionIDEnv = "WEBMUX_SESSION_ID"
 
+// SocketEnv and BinEnv tell a session's programs how to reach the instance
+// that started them without PATH or configuration: the absolute path of the
+// local API socket and of the running server's own executable. A request
+// cannot set them.
+const (
+	SocketEnv = "WEBMUX_SOCKET"
+	BinEnv    = "WEBMUX_BIN"
+)
+
+// ReservedEnv reports whether a create request or launch config may not set
+// name: the server sets these for every session and clients depend on them.
+func ReservedEnv(name string) bool {
+	return name == SessionIDEnv || name == SocketEnv || name == BinEnv
+}
+
 // Identity variables of the terminal or multiplexer that started a process,
 // and the variables the server sets itself. Left in place they make programs
 // target that host (for example DCS-wrapping output for tmux) instead of the
@@ -17,7 +32,7 @@ var serverOwnedEnvNames = map[string]bool{
 	// Describes how the server was started, not the session's programs.
 	"WEBMUX_LAUNCHER": true,
 	// Set by the server for every session.
-	"TERM": true, "COLORTERM": true, SessionIDEnv: true,
+	"TERM": true, "COLORTERM": true, SessionIDEnv: true, SocketEnv: true, BinEnv: true,
 }
 
 var serverOwnedEnvPrefixes = []string{"WARP_", "ZELLIJ", "KITTY_", "ITERM_", "WEZTERM_", "GHOSTTY_"}
