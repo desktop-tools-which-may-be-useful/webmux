@@ -65,3 +65,14 @@
     排队提示被清空时 `--wait` 以 1 退出、`chat answer`、`chat set`、`chat watch --json` 跳过历史、终端与聊天之间的切换、`chat ls`、关闭后的 `chat resume` 与 `chat forget`；
   - 前端单元测试 `attention-toast.test.ts` 与 wire 契约测试。
 - 限制：`chat switch` 等待选择的分支（终端 TUI 忙）只做了代码审查，没有构造忙碌的 TUI；未在 macOS 上运行。
+
+本次局部核对（2026-11-05）：实现 `add-agent-shell-control` 的第六部分（工作区命令），新增 US-S16–US-S18，更新覆盖索引。
+
+- 范围：`worktree ls|show|create|rm|pin|unpin|home`、`repo ls|add|rm|show|refresh|branches|commits|base|settings`、
+  `launch-config ls|show|add|edit|rm|presets|restore`、`forward ls|add|rm`，以及它们的补全。
+- 依据：
+  - `cmd/webmux` 端到端测试（真实服务进程）：仓库登记幂等、初始化指令的设置与引用警告、上限与互斥、worktree 的创建与主页状态（pinned、hidden、sessions）、
+    `home --set`/`--reset`、`worktree show`、分支与提交、带会话时 `rm` 的阻止与 `--yes` 要求、`repo rm` 清理主页设置；
+    启动配置的增删改（隐藏变量值、只改给出的字段、改名、混合模式检查）、预设恢复与端口转发；
+  - `internal/sessioncmd` 单元测试：主页状态与 `web/src/homeWorktrees.ts` 规则对照、设置冲突后的重放与放弃。
+- 限制：`repo settings --edit` 需要真实终端与编辑器，只做了代码审查；`repo base` 在没有上游的仓库中没有覆盖取回成功的路径；未在 macOS 上运行。

@@ -17,6 +17,14 @@ if ! reply=$(webmux chat send "$id" "再补上测试" --wait --timeout 20m); the
 fi
 ```
 
+## 为并行任务准备 worktree 并共享开发服务器
+
+```sh
+dir=$(webmux worktree create . --branch exp/a --refresh-base)
+id=$(webmux run --detach --cwd "$dir" --label task=exp-a -- bash -lc 'npm ci && npm run dev' | cut -f1)
+webmux forward add 5173 --session "$id" --label exp-a
+```
+
 ## 长任务结束时提醒用户
 
 ```sh

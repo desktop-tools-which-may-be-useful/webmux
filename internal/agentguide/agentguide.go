@@ -34,6 +34,7 @@ var Topics = []Topic{
 	{Name: "sessions", Title: "会话", Section: "基础", Summary: "列出与详情、父会话与标签、输入与等待、输出与画面、提醒用户、结束与改名、附着与链接。"},
 	{Name: "launch", Title: "启动会话", Section: "基础", Summary: "用 run 启动、跟随或等待会话，在新 worktree 中启动；用 chat new 一次完成快速开始。"},
 	{Name: "chat", Title: "混合会话聊天", Section: "基础", Summary: "向 agent 发送提示并取回回复、回答授权与提问、切换端、队列、设置与恢复历史会话。"},
+	{Name: "workspace", Title: "仓库与工作区", Section: "基础", Summary: "worktree 的创建、删除与主页显示，仓库登记与初始化指令，启动配置的增删改，端口转发。"},
 	{Name: "artifacts", Title: "临时文件夹", Section: "基础", Summary: "交付文件放在哪里、上传文件在哪里，以及怎样告诉用户。"},
 	{Name: "commands", Title: "命令参考", Section: "参考", Summary: "每个命令的用法、选项与默认值，由命令表生成。"},
 	{Name: "exit-codes", Title: "退出码", Section: "参考", Summary: "退出码与输出约定。"},

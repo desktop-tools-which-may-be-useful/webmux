@@ -109,6 +109,27 @@ webmux chat ls --archived; webmux chat resume <记录ID> --side chat --detach; w
 - `switch` 等到切换结束；终端 TUI 忙时需要 `--force`，否则取消切换并以 1 退出。找不到 agent 会话时列出候选，用 `--agent-session` 重试。
 - `forget` 在终端上先询问，非交互时需要 `--yes`；进行中的记录不能删除。
 
+## 仓库、worktree、启动配置与转发
+
+```sh
+webmux worktree create . --branch fix/lint --base main   # 输出路径，并像 Web 端一样加入主页显示（--no-pin 不加入）
+webmux worktree ls . --hidden                    # HOME 列：pinned、sessions、hidden
+webmux worktree pin . exp/a; webmux worktree home . --reset
+webmux worktree rm . fix/lint --yes              # 先预览；有阻止原因时需要 --force
+webmux repo add; webmux repo branches .; webmux repo commits . --from main; webmux repo base . main
+printf '{{webmux}}\n\n{{user}}' | webmux repo settings . --init -
+webmux launch-config add "Dev" --icon terminal --env MODE=dev -- bash -lc 'npm run dev'
+webmux launch-config edit "Dev" --unset-env MODE; webmux launch-config show "Dev" --json
+webmux forward add 5173 --session self --label web
+```
+
+- `REPO` 是仓库 ID、仓库内路径或 `.`；worktree 用 ID、分支名或路径。找不到时以 2 结束并列出候选。
+- 主页显示的规则与 Web 端相同：从未设置的仓库只显示主工作区，有会话或归档记录的 worktree 总会显示。
+  写入只改该仓库的 `homeWorktrees` 条目，与其他设备冲突（409）时重新读取并重放，最多 3 次。
+- `worktree rm`、`repo rm`、`launch-config rm` 与 `chat forget` 一样：终端上先确认，非交互时需要 `--yes`。`repo rm` 不删除文件，并清理该仓库的主页显示设置。
+- 初始化指令最多 4000 个字符，超出时 CLI 以 2 拒绝；引用不存在的快捷指令只警告，仍会保存。`--edit` 用 `$VISUAL` 或 `$EDITOR` 编辑。
+- 启动配置的变量值默认显示为 `<hidden>`，`--reveal-env` 才输出；`edit` 读取后只改给出的字段再整体保存；`--hybrid` 先检查是否支持。
+
 ## shell 补全
 
 ```sh

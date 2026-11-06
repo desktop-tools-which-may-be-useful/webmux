@@ -78,15 +78,15 @@
 
 ## 5. 工作区命令（P1）
 
-- [ ] 5.1 `worktree ls|create|rm`：仓库参数解析（ID、路径、`.`），默认路径与快速开始一致，`rm` 先预览再确认，非交互时需要 `--yes`。
-- [ ] 5.2 `launch-config ls|show|add|edit|rm|presets|restore`：`show` 默认把值替换为 `<hidden>`，`--reveal-env` 才输出；
+- [x] 5.1 `worktree ls|create|rm`：仓库参数解析（ID、路径、`.`），默认路径与快速开始一致，`rm` 先预览再确认，非交互时需要 `--yes`。
+- [x] 5.2 `launch-config ls|show|add|edit|rm|presets|restore`：`show` 默认把值替换为 `<hidden>`，`--reveal-env` 才输出；
   `edit` 先读后合并再整体保存，未给出的字段保持原值；`--hybrid` 先做支持检查；诊断中不出现变量值。
-- [ ] 5.3 `repo ls|add|rm|show|refresh|branches|commits|base`：`add` 幂等，`rm` 只取消登记并清理主页显示设置，`base` 的取回警告写到标准错误。
-- [ ] 5.3a `repo settings`：显示全部设置与引用；`--init TEXT|-|@FILE`、`--clear-init`、`--edit`；超长本地拒绝；不存在的快捷指令引用只警告。
-- [ ] 5.3b 主页显示：`worktree ls` 的“主页”列与 `--home/--hidden`、`worktree show`、`worktree pin|unpin|home [--set|--reset]`；
+- [x] 5.3 `repo ls|add|rm|show|refresh|branches|commits|base`：`add` 幂等，`rm` 只取消登记并清理主页显示设置，`base` 的取回警告写到标准错误。
+- [x] 5.3a `repo settings`：显示全部设置与引用；`--init TEXT|-|@FILE`、`--clear-init`、`--edit`；超长本地拒绝；不存在的快捷指令引用只警告。
+- [x] 5.3b 主页显示：`worktree ls` 的“主页”列与 `--home/--hidden`、`worktree show`、`worktree pin|unpin|home [--set|--reset]`；
   只改本仓库条目的设置写入，409 时重读并重放（最多 3 次）；`worktree create` 与 `run --new-worktree` 默认加入（`--no-pin`），`--refresh-base`。
   与 `web/src/homeWorktrees.ts` 的规则（默认只含主工作区、有会话即显示、清理失效 ID）做对照测试。
-- [ ] 5.4 `forward ls|add|rm`：输出转发地址，`--session self`，`--no-compat`。
+- [x] 5.4 `forward ls|add|rm`：输出转发地址，`--session self`，`--no-compat`。
 
 ## 6. shell 工具手册与 `{{webmux}}`
 
@@ -121,6 +121,6 @@
 
 ## 8. 文档与验证
 
-- [ ] 8.1 新增用户故事分组（shell 与 agent 控制），覆盖 P0、P1、启动增强、会话元数据、帮助与补全、`{{webmux}}`；更新 US-Q13、`run` 相关故事，以及快捷指令、临时文件夹、初始化指令相关故事、索引和覆盖表。
-- [ ] 8.2 `docs/protocol/http-workspace.md` 删除 `{{webmux}}` 保留说明；协议文档登记三个新接口；使用文档新增“用脚本和 agent 控制 WebMux”页面并在 `docs/README.md` 注册。
-- [ ] 8.3 运行 `make check` 与 `make test-fast`。针对 `chat new --wait`、`send --wait`、`ls --parent`、`notify` 补一个隔离后端的 E2E，不连接开发者已有的服务。
+- [x] 8.1 新增用户故事分组（shell 与 agent 控制），覆盖 P0、P1、启动增强、会话元数据、帮助与补全、`{{webmux}}`；更新 US-Q13、`run` 相关故事，以及快捷指令、临时文件夹、初始化指令相关故事、索引和覆盖表。
+- [x] 8.2 `docs/protocol/http-workspace.md` 删除 `{{webmux}}` 保留说明；协议文档登记三个新接口；使用文档新增“用脚本和 agent 控制 WebMux”页面并在 `docs/README.md` 注册。
+- [x] 8.3 运行 `make check` 与 `make test-fast`。针对 `chat new --wait`、`send --wait`、`ls --parent`、`notify` 补一个隔离后端的 E2E，不连接开发者已有的服务。

@@ -89,6 +89,20 @@
   - `chat ls` 按状态（`--state`、`--archived`）与仓库筛选混合会话记录，`chat resume` 按记录原来的端或 `--side` 恢复，终端端且有终端时附着、否则输出 ID 与链接，
     启动配置已删除时需要 `--without-env`；
   - `chat forget` 删除已结束或已中断的记录（agent 自己的历史保留），终端上先确认，非交互时需要 `--yes`，进行中的记录以 1 拒绝。
+- **US-S16 从脚本管理 worktree 与主页显示**：作为编排脚本，我希望为并行任务创建、查看和删除 worktree，并决定它们是否出现在主页，以便 Web 端与脚本看到同一个工作区。
+  - `worktree ls|show|create|rm`：`REPO` 为 ID、路径或 `.`，worktree 为 ID、分支或路径，找不到时以 2 结束并列出候选；`create` 默认放在 `<仓库>.worktrees/<分支末段>`，
+    `--refresh-base` 先取回上游；`rm` 先在标准错误输出预览，有阻止原因时需要 `--force`，终端上要求输入路径确认，非交互时需要 `--yes`；
+  - 主页状态（`pinned`、`sessions`、`hidden`）与 Web 端规则一致：从未设置的仓库只显示主工作区，有会话或归档记录的 worktree 总会显示；
+  - `worktree create` 与 `run --new-worktree` 默认加入主页显示（`--no-pin`）；`worktree pin|unpin|home [--set|--reset]` 只改该仓库的 `homeWorktrees` 条目，
+    409 时重新读取并重放（最多 3 次），清理已不存在的 worktree，并同步到所有浏览器。
+- **US-S17 从脚本登记仓库与修改仓库设置**：作为在新克隆的仓库里工作的脚本，我希望登记仓库、查看分支与提交，并设置快速开始用的初始化指令。
+  - `repo ls|add|rm|show|refresh|branches|commits|base`：`add` 幂等，`rm` 只取消登记并清理主页显示设置，`commits --from` 接受分支、基点或完整提交 ID，`base` 的取回失败只警告；
+  - `repo settings` 对应仓库设置对话框：输出初始化指令、长度与引用；`--init TEXT|-|@FILE`、`--clear-init`、`--edit`；超过 4000 个字符在本地以 2 拒绝，
+    引用不存在的快捷指令时给出与设置页相同含义的警告并仍然保存。
+- **US-S18 从脚本管理启动配置与端口转发**：作为配置开发环境的脚本，我希望增删改启动配置并为开发服务器开转发。
+  - `launch-config ls|show|add|edit|rm|presets|restore`：`show` 默认把变量值显示为 `<hidden>`，`--reveal-env` 才输出；`add` 的命令原样保存不经 shell，
+    `--hybrid` 先做支持检查；`edit` 只改给出的字段，未提及的变量值保持不变；名称不存在时以 2 结束并列出已保存的名称；变量值不出现在输出或诊断中；
+  - `forward ls|add|rm`：`add` 输出转发地址，`--session self` 关联当前会话，`--no-compat` 关闭兼容改写；转发关闭、端口非法或重复时给出原因并以 1 结束。
 
 ### 依据
 
@@ -98,6 +112,7 @@
 - [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/sessioncmd/guide.go)
 - [会话控制命令](../../internal/sessioncmd/control.go)、[补全](../../internal/sessioncmd/completion.go)
 - [notify 命令](../../internal/sessioncmd/notify.go)、[脚本提醒](../../internal/session/notify.go)、[推送正文](../../internal/push/alert.go)
+- [worktree 与主页显示命令](../../internal/sessioncmd/worktree.go)、[仓库命令](../../internal/sessioncmd/repo.go)、[启动配置命令](../../internal/sessioncmd/launchconfig.go)、[转发命令](../../internal/sessioncmd/forward.go)
 - [聊天命令](../../internal/sessioncmd/chat.go)、[聊天历史、设置与队列命令](../../internal/sessioncmd/chat_more.go)、[聊天接口](../../internal/api/chat.go)
 - [启动命令](../../internal/sessioncmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/sessioncmd/streams.go)、[仓库与主页显示](../../internal/sessioncmd/workspace.go)
 - [初始化指令展开](../../internal/workspace/quickstart.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)

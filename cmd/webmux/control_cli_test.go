@@ -219,6 +219,8 @@ func TestSessionControlCommands(t *testing.T) {
 		{[]string{"wait", echo, "--until", "id"}, "idle\t"},
 		{[]string{"chat", "switch", echo, "--to", ""}, "terminal\t"},
 		{[]string{"chat", "queue", ""}, "send-now\t"},
+		{[]string{"worktree", ""}, "pin\t"},
+		{[]string{"repo", "s"}, "settings\t"},
 		{[]string{"chat", "ls", "--state", "in"}, "interrupted\t"},
 	} {
 		cmd := f.command([]string{"WEBMUX_SOCKET=" + f.record(t).Socket}, append([]string{"__complete"}, tc.words...)...)

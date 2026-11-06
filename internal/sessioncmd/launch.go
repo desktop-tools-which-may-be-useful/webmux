@@ -650,7 +650,7 @@ var chatGroup = &Command{
 
 var launchConfigGroup = &Command{
 	Name: "launch-config", Group: GroupLaunch,
-	Summary: "Inspect the saved Web UI launch configs.",
+	Summary: "List, show, add, edit and remove the saved Web UI launch configs.",
 }
 
 // chatNewOptions are the flags of webmux chat new.

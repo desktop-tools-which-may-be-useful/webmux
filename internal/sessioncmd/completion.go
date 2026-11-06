@@ -189,8 +189,18 @@ func (e Env) argumentValues(ctx context.Context, c *Command) [][2]string {
 		return topicValues()
 	case c.Name == "completion":
 		return [][2]string{{"bash", ""}, {"zsh", ""}, {"fish", ""}}
-	case c.Name == "launch-config options":
+	case strings.HasPrefix(c.Name, "launch-config ") && strings.HasPrefix(c.Args, "NAME"):
 		return e.launchConfigValues(ctx)
+	case c.Name == "forward rm":
+		var list []contract.Forward
+		if !e.query(ctx, "/api/forwards", &list) {
+			return nil
+		}
+		out := make([][2]string, 0, len(list))
+		for _, f := range list {
+			out = append(out, [2]string{fmt.Sprint(f.Port), f.Label})
+		}
+		return out
 	case strings.Contains(c.Args, "SESSION"):
 		return append([][2]string{{"self", "the current session"}}, e.sessionValues(ctx)...)
 	case strings.Contains(c.Args, "REPO"):

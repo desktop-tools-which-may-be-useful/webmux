@@ -533,7 +533,7 @@ The guide is served by the running server at /llms.txt, /llms/<topic>.md and /ll
 
 Arguments:
 
-- `TOPIC`: One of: connect, sessions, launch, chat, artifacts, commands, exit-codes, rules, recipes.
+- `TOPIC`: One of: connect, sessions, launch, chat, workspace, artifacts, commands, exit-codes, rules, recipes.
 
 Options:
 
@@ -926,6 +926,151 @@ Examples:
 - `webmux chat queue resume abcd2345`: Continue after a failed send paused the queue.
 - `webmux chat queue ls abcd2345 && webmux chat queue resume abcd2345`: Check the queue, then send it again.
 
+## webmux launch-config ls
+
+`webmux launch-config ls [options]`
+
+List the saved launch configs: name, icon, command, hybrid mode and environment variable names.
+
+Options:
+
+- `--json`: Print the LaunchConfigSummary array.
+
+Examples:
+
+- `webmux launch-config ls`: See which configs run --launch-config and chat new --agent accept.
+- `webmux launch-config ls --json | jq -r '.[] | select(.hybrid) | .name'`: List the hybrid agents.
+
+## webmux launch-config show
+
+`webmux launch-config show [options] NAME`
+
+Show one launch config; environment values stay hidden unless --reveal-env.
+
+Arguments:
+
+- `NAME`: The exact, case-sensitive name of a saved launch config.
+
+Options:
+
+- `--json`: Print the LaunchConfig.
+- `--reveal-env`: Print environment variable values.
+
+Examples:
+
+- `webmux launch-config show "Claude Code"`: See a config's command and variable names.
+- `webmux launch-config show "Claude Code" --json --reveal-env`: Copy a config with its values.
+
+## webmux launch-config add
+
+`webmux launch-config add [options] NAME -- ARGV...`
+
+Save a new launch config; it appears in every browser's launch picker.
+
+ARGV after -- is the command exactly as given; it is never expanded by a shell (write bash -lc '...' explicitly when you need one). Environment values travel only in the request body and are never printed. --hybrid asks the server first whether the command is a supported agent, and refuses with the reason if not.
+
+Arguments:
+
+- `NAME`: The exact, case-sensitive name of a saved launch config.
+- `ARGV`: The command and its arguments.
+
+Options:
+
+- `--env NAME=VALUE`: Set environment variable NAME=VALUE for sessions started from the config. Repeatable.
+- `--hybrid`: Enable hybrid mode (terminal and chat) for a supported agent.
+- `--icon ICON`: The launch picker ICON key (for example claudecode, codex, terminal)
+- `--json`: Print the LaunchConfig, values hidden.
+- `--preview-lines N`: Show N preview lines on the home page (1-50) instead of the global default.
+- `--preview-skip N`: Skip the last N lines of the preview (0-50)
+
+Examples:
+
+- `webmux launch-config add "Claude (sandbox)" --icon claudecode --hybrid --env CLAUDE_CONFIG_DIR=/w/.claude -- claude --dangerously-skip-permissions`: Add an agent config with hybrid mode.
+- `webmux launch-config add "Dev server" --icon terminal -- bash -lc 'npm run dev'`: Add a shell command config.
+
+## webmux launch-config edit
+
+`webmux launch-config edit [options] NAME [-- ARGV...]`
+
+Change some fields of a launch config; everything not given keeps its value.
+
+The config is read, the given fields are changed and the whole config is saved again, so environment values you do not mention are kept as they are. --env sets or replaces a variable, --unset-env removes one. ARGV after -- replaces the command. Turning on --hybrid checks support first.
+
+Arguments:
+
+- `NAME`: The exact, case-sensitive name of a saved launch config.
+- `ARGV`: A new command and its arguments.
+
+Options:
+
+- `--env NAME=VALUE`: Set environment variable NAME=VALUE for sessions started from the config. Repeatable.
+- `--hybrid`: Enable hybrid mode (terminal and chat) for a supported agent. Conflicts with --no-hybrid.
+- `--icon ICON`: The launch picker ICON key (for example claudecode, codex, terminal)
+- `--json`: Print the LaunchConfig, values hidden.
+- `--no-hybrid`: Turn hybrid mode off. Conflicts with --hybrid.
+- `--preview-lines N`: Show N preview lines on the home page (1-50) instead of the global default.
+- `--preview-skip N`: Skip the last N lines of the preview (0-50)
+- `--rename NEW`: Rename the config to NEW.
+- `--unset-env NAME`: Remove environment variable NAME. Repeatable.
+
+Examples:
+
+- `webmux launch-config edit "Claude (sandbox)" --unset-env CLAUDE_CONFIG_DIR`: Remove one variable and keep everything else.
+- `webmux launch-config edit omp --rename "omp (fast)" --no-hybrid -- omp --model fast`: Rename a config and change its command.
+
+## webmux launch-config rm
+
+`webmux launch-config rm [options] NAME`
+
+Delete a launch config; sessions already started from it keep running.
+
+Arguments:
+
+- `NAME`: The exact, case-sensitive name of a saved launch config.
+
+Options:
+
+- `--yes`: Do not ask for confirmation.
+
+Examples:
+
+- `webmux launch-config rm "Dev server"`: Delete a config after confirming.
+- `webmux launch-config rm "Dev server" --yes`: Delete it in a script.
+
+## webmux launch-config presets
+
+`webmux launch-config presets [options]`
+
+List the built-in launch presets that restore can bring back.
+
+Options:
+
+- `--json`: Print the LaunchPreset array.
+
+Examples:
+
+- `webmux launch-config presets`: See the built-in agent configs.
+- `webmux launch-config presets --json | jq -r '.[].name'`: List their names.
+
+## webmux launch-config restore
+
+`webmux launch-config restore [options] [PRESET]`
+
+Restore every missing built-in preset, or the one named PRESET.
+
+Arguments:
+
+- `PRESET`: A preset name from webmux launch-config presets.
+
+Options:
+
+- `--json`: Print the LaunchConfigSummary array.
+
+Examples:
+
+- `webmux launch-config restore`: Bring back every deleted preset.
+- `webmux launch-config restore "Claude Code"`: Restore one preset.
+
 ## webmux launch-config options
 
 `webmux launch-config options [options] NAME`
@@ -947,6 +1092,399 @@ Examples:
 
 - `webmux launch-config options "Claude Code"`: Show the agent's options and their values.
 - `webmux launch-config options Codex --json | jq '.[] | select(.id=="model") | .options[].value'`: List the models to pass to chat new --set model=...
+
+## webmux worktree ls
+
+`webmux worktree ls [options] [REPO]`
+
+List the worktrees of every registered repository, or of one, with their home page state.
+
+HOME is how the Web UI's home page treats the worktree: pinned (added to the home page), sessions (not added, but shown because it has sessions or archived chat records) or hidden. A repository nobody curated shows only its main worktree.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--hidden`: Only worktrees the home page hides. Conflicts with --home.
+- `--home`: Only worktrees the home page shows. Conflicts with --hidden.
+- `--json`: Print the Repository array with home states.
+
+Examples:
+
+- `webmux worktree ls .`: List the current repository's worktrees.
+- `webmux worktree ls --hidden --json | jq -r '.[].worktrees[].path'`: Find worktrees the home page does not show.
+
+## webmux worktree show
+
+`webmux worktree show [options] REPO WORKTREE`
+
+Show one worktree: every field, its home page state, its sessions and archived chat records.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+- `WORKTREE`: A worktree of REPO: its ID, branch or path.
+
+Options:
+
+- `--json`: Print {worktree, sessions, archived}.
+
+Examples:
+
+- `webmux worktree show . fix/lint`: Inspect the worktree of a branch.
+- `webmux worktree show . . --json`: Inspect the worktree the current directory is in.
+
+## webmux worktree create
+
+`webmux worktree create [options] REPO`
+
+Create a worktree for a new or existing branch and add it to the home page.
+
+--branch creates a new branch from --base (default: the repository's default base); --existing checks out a branch that exists. The worktree goes beside the repository in <name>.worktrees/<branch leaf>, as quick start does, unless --path says otherwise. Like the Web UI, the new worktree is added to the home page; --no-pin leaves it off, and a failure to add it is only a warning. --refresh-base fetches the base's upstream first and starts from the fetched commit; when fetching fails, a warning is printed and the local branch is used.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--base REF`: Start --branch from REF (default: the repository's default base) Requires --branch.
+- `--branch NAME`: Create the new branch NAME. Conflicts with --existing.
+- `--existing BRANCH`: Check out the existing BRANCH. Conflicts with --branch, --base, --refresh-base.
+- `--json`: Print the Worktree.
+- `--no-pin`: Do not add the worktree to the home page.
+- `--path DIR`: Put the worktree at DIR instead of <repo>.worktrees/<branch leaf>.
+- `--refresh-base`: Fetch the base's upstream first and start from it. Requires --branch.
+
+Examples:
+
+- `webmux worktree create . --branch fix/lint --base main`: Prepare a worktree for a parallel task.
+- `cd "$(webmux worktree create . --branch exp/a --refresh-base)"`: Start from the fetched upstream and enter it.
+- `webmux worktree create . --existing release/1.2 --no-pin`: Check out an existing branch without showing it on the home page.
+
+## webmux worktree rm
+
+`webmux worktree rm [options] REPO WORKTREE`
+
+Remove a worktree after previewing what it affects.
+
+The removal preview is printed to standard error first: the sessions in the worktree, the archived chat records that would be deleted, and what blocks a safe removal (uncommitted changes, running sessions, a lock). With blockers the command exits 1 unless --force, which closes the sessions and removes the worktree anyway. On a terminal it asks you to type the worktree path; without a terminal it needs --yes. The branch is kept.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+- `WORKTREE`: A worktree of REPO: its ID, branch or path.
+
+Options:
+
+- `--force`: Remove despite blockers, closing its sessions.
+- `--yes`: Do not ask for confirmation.
+
+Examples:
+
+- `webmux worktree rm . fix/lint`: Remove a finished worktree after confirming its path.
+- `webmux worktree rm . exp/a --force --yes`: Remove a worktree in a script even with changes or sessions.
+
+## webmux worktree pin
+
+`webmux worktree pin [options] REPO WORKTREE...`
+
+Add worktrees to the home page.
+
+Only this repository's entry of the homeWorktrees setting changes, and every open browser follows. A conflicting write from another client is read again and the change replayed, at most three times. A worktree with sessions or archived chat records stays on the home page whether or not it is added.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+- `WORKTREE`: A worktree of REPO: its ID, branch or path.
+
+Examples:
+
+- `webmux worktree pin . exp/a`: Show a worktree on every browser's home page.
+- `webmux worktree pin . exp/a exp/b`: Add several at once.
+
+## webmux worktree unpin
+
+`webmux worktree unpin [options] REPO WORKTREE...`
+
+Take worktrees off the home page.
+
+Only this repository's entry of the homeWorktrees setting changes, and every open browser follows. A conflicting write from another client is read again and the change replayed, at most three times. A worktree with sessions or archived chat records stays on the home page whether or not it is added.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+- `WORKTREE`: A worktree of REPO: its ID, branch or path.
+
+Examples:
+
+- `webmux worktree unpin . exp/a`: Hide a worktree you are done with (it stays while it has sessions).
+- `webmux worktree ls . --home --json | jq -r '.[].worktrees[] | select(.kind != "main") | .id' | xargs webmux worktree unpin .`: Leave only the main worktree.
+
+## webmux worktree home
+
+`webmux worktree home [options] REPO [WORKTREE...]`
+
+Show or replace which worktrees of a repository are added to the home page.
+
+Without options, the added worktrees are listed and marked as the default when nobody curated the repository (only the main worktree). --set replaces the list with the given worktrees; --reset deletes the repository's entry, so the home page shows its main worktree again, plus worktrees with sessions or archived records.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+- `WORKTREE`: With --set, the worktrees to add (ID, branch or path).
+
+Options:
+
+- `--json`: Print {repositoryId, default, worktrees}.
+- `--reset`: Delete the repository's entry (show the main worktree) Conflicts with --set.
+- `--set`: Replace the list with the WORKTREE arguments. Conflicts with --reset.
+
+Examples:
+
+- `webmux worktree home .`: See which worktrees the home page shows.
+- `webmux worktree home . --reset`: Go back to showing only the main worktree.
+
+## webmux repo ls
+
+`webmux repo ls [options]`
+
+List the registered repositories.
+
+Options:
+
+- `--json`: Print the Repository array.
+
+Examples:
+
+- `webmux repo ls`: See which repositories WebMux knows.
+- `webmux repo ls --json | jq -r '.[].anchorPath'`: List their paths.
+
+## webmux repo add
+
+`webmux repo add [options] [PATH]`
+
+Register a Git repository (default: the current directory); an already registered one is printed as is.
+
+Arguments:
+
+- `PATH`: A directory in the repository; the current directory when omitted.
+
+Options:
+
+- `--json`: Print the Repository.
+
+Examples:
+
+- `webmux repo add`: Register the repository you are in.
+- `git clone https://example.com/app.git && webmux repo add app`: Register a fresh clone.
+
+## webmux repo rm
+
+`webmux repo rm [options] REPO`
+
+Unregister a repository; nothing on disk is deleted.
+
+The repository disappears from every browser's workspace and its home page settings are cleared. Its worktrees, branches and files stay. On a terminal the command asks first; without a terminal it needs --yes.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--yes`: Do not ask for confirmation.
+
+Examples:
+
+- `webmux repo rm .`: Stop tracking the current repository.
+- `webmux repo rm abcd2345 --yes`: Unregister one in a script.
+
+## webmux repo show
+
+`webmux repo show [options] REPO`
+
+Show a repository: paths, availability, initialization instruction and worktrees with their home page state.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--json`: Print the Repository with home states.
+
+Examples:
+
+- `webmux repo show .`: Inspect the current repository.
+- `webmux repo show . --json | jq .initInstruction`: Read its initialization instruction.
+
+## webmux repo refresh
+
+`webmux repo refresh [options] REPO`
+
+Check a repository again and print its current worktrees, like the Web UI's refresh button.
+
+Use it after changing worktrees outside WebMux (git worktree add or remove), so every browser shows them.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--json`: Print the Repository with home states.
+
+Examples:
+
+- `git worktree add ../app-hotfix hotfix && webmux repo refresh .`: Pick up a worktree made with git.
+- `webmux repo refresh . --json | jq '.worktrees | length'`: Count the worktrees after checking.
+
+## webmux repo branches
+
+`webmux repo branches [options] REPO`
+
+List a repository's local branches, their commits and the worktrees that check them out.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--json`: Print the Branches object.
+
+Examples:
+
+- `webmux repo branches .`: See which branches are free for a new worktree.
+- `webmux repo branches . --json | jq -r .defaultBase`: Read the default base.
+
+## webmux repo commits
+
+`webmux repo commits [options] REPO`
+
+List recent commits, to pick a --base for a new worktree.
+
+--from names where the history starts: a local branch, a base the repository offers, or a full commit ID; at most two. Without it, the history of the default base is listed.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--from REF`: Start the history at REF (branch, base or full commit ID) Repeatable.
+- `--json`: Print the Commits object.
+
+Examples:
+
+- `webmux repo commits .`: See the latest commits of the default base.
+- `webmux repo commits . --from main --from feat/x --json`: Compare two branches' recent history.
+
+## webmux repo base
+
+`webmux repo base [options] REPO BRANCH`
+
+Fetch a branch's upstream and report the base a new worktree would start from.
+
+When the upstream is ahead, the base is the fetched commit; when the local branch is ahead or diverged, or fetching fails, it stays local. A fetch failure is a warning on standard error and does not change the exit status.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+- `BRANCH`: A local branch with an upstream, such as main.
+
+Options:
+
+- `--json`: Print the RefreshBranchBaseResponse.
+
+Examples:
+
+- `webmux repo base . main`: Check whether origin/main has news before branching.
+- `webmux worktree create . --branch fix/x --base "$(webmux repo base . main | cut -f1)"`: Branch from the fetched base.
+
+## webmux repo settings
+
+`webmux repo settings [options] REPO`
+
+Show or change a repository's settings (the Web UI's repository settings dialog).
+
+The only setting is the initialization instruction, which quick start (and webmux chat new) puts before the first message. Without options, the instruction is printed with its length, the limit and the references it uses. --init sets it from TEXT, - (standard input) or @FILE; text that is empty after trimming clears it, as --clear-init does. --edit opens it in $VISUAL or $EDITOR.
+
+The instruction may use {{webmux}} (the WebMux tool brief), {{dir}} (the session's artifacts folder), {{user}} (where the user's message goes) and {{name}} for a saved quick command. A reference to a quick command that does not exist is reported as a warning and saved anyway; quick start refuses it while it is missing.
+
+Arguments:
+
+- `REPO`: A registered repository: its ID, a path inside it, or . for the current directory's.
+
+Options:
+
+- `--clear-init`: Clear the initialization instruction. Conflicts with --init, --edit.
+- `--edit`: Edit the instruction in $VISUAL or $EDITOR. Conflicts with --init, --clear-init.
+- `--init TEXT`: Set the initialization instruction to TEXT, - for standard input, @FILE for a file. Conflicts with --clear-init, --edit.
+- `--json`: Print {initInstruction}.
+
+Examples:
+
+- `printf '{{webmux}}\n\n{{user}}' | webmux repo settings . --init -`: Give new agents the WebMux tool brief.
+- `webmux repo settings . --init @.webmux/init.md`: Set the instruction from a file.
+- `webmux repo settings .`: Show the instruction and what it references.
+
+## webmux forward ls
+
+`webmux forward ls [options]`
+
+List forwarded ports with their status, source session and address.
+
+Options:
+
+- `--json`: Print the Forward array.
+
+Examples:
+
+- `webmux forward ls`: See which dev servers are reachable from other devices.
+- `webmux forward ls --json | jq -r '.[] | select(.status=="listening") | .port'`: List the ports that answer.
+
+## webmux forward add
+
+`webmux forward add [options] PORT`
+
+Forward a loopback port and print its address.
+
+The port appears in every browser's forward list and is served at /forward/PORT/ behind the WebMux login. --session links it to the session that runs the server (self inside a session). The compatibility rewrites for dev servers (Host, Origin, forwarded headers, response URLs) are on by default; --no-compat turns them all off.
+
+Arguments:
+
+- `PORT`: A loopback TCP port, 1-65535.
+
+Options:
+
+- `--json`: Print the Forward.
+- `--label TEXT`: Show TEXT as the forward's name.
+- `--no-compat`: Turn off every dev server compatibility rewrite.
+- `--session SESSION`: Link the forward to SESSION (self for the current one)
+
+Examples:
+
+- `npm run dev & webmux forward add 5173 --session self --label web`: Share a Vite dev server started by an agent.
+- `webmux forward add 8080 --no-compat`: Forward a plain HTTP service without rewrites.
+
+## webmux forward rm
+
+`webmux forward rm [options] PORT`
+
+Stop forwarding a port; the server behind it keeps running.
+
+Arguments:
+
+- `PORT`: A loopback TCP port, 1-65535.
+
+Examples:
+
+- `webmux forward rm 5173`: Stop sharing a dev server.
+- `webmux forward ls --json | jq -r '.[].port' | xargs -n1 webmux forward rm`: Remove every forward.
 
 ## webmux api
 
