@@ -605,3 +605,212 @@ Examples:
 
 - `webmux launch-config options "Claude Code"`: Show the agent's options and their values.
 - `webmux launch-config options Codex --json | jq '.[] | select(.id=="model") | .options[].value'`: List the models to pass to chat new --set model=...
+
+## webmux api
+
+`webmux api [options] PATH`
+
+Send one request to the local API and print the response body unchanged.
+
+The escape hatch for endpoints without a dedicated command: any /api/ or /local/v1/ path, over the local socket, with no token. The method is GET, or POST when -d is given. The body must be JSON; multipart uploads are not supported. Restrictions on callers inside a session (stopping the server, reading the token, tunnel and Tailscale) still apply. WebSocket paths are refused: use webmux events, logs, screen or chat watch.
+
+Arguments:
+
+- `PATH`: An /api/ or /local/v1/ path, with an optional query string.
+
+Options:
+
+- `--X METHOD`: HTTP METHOD (default GET, or POST with -d)
+- `--d DATA`: JSON request body: literal DATA, @FILE, or - for standard input.
+
+Examples:
+
+- `webmux api /api/launch-configs`: List the saved launch configs as JSON.
+- `webmux api -X PATCH /api/sessions/abcd2345 -d '{"name":"review"}'`: Rename a session through the raw API.
+- `webmux api -X DELETE /api/launch-configs/k3m9q2x7`: Delete a launch config by ID.
+
+## webmux kill
+
+`webmux kill [options] SESSION`
+
+End a session's process; the session stays listed as exited.
+
+The process group gets SIGHUP, then SIGKILL if it does not exit. Use rm to also remove the session.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+
+Examples:
+
+- `webmux kill abcd2345`: Stop a runaway command.
+- `webmux ls --parent self --status running --json | jq -r '.[].id' | xargs -n1 webmux kill`: End every running session this session created.
+
+## webmux rm
+
+`webmux rm [options] SESSION`
+
+Remove a session; a running one is ended first.
+
+The session disappears from every client. Its artifacts folder is deleted unless a hybrid record can still resume it.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+
+Examples:
+
+- `webmux rm abcd2345`: Remove a session.
+- `webmux ls --label run=42 --json | jq -r '.[].id' | xargs -n1 webmux rm`: Clean up every session of one scripted run.
+
+## webmux rename
+
+`webmux rename [options] SESSION [NAME]`
+
+Name a session; an empty NAME hands the title back to the terminal or agent.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+- `NAME`: At most 512 bytes, no control characters.
+
+Examples:
+
+- `webmux rename self "lint fixes"`: Name the current session.
+- `webmux rename abcd2345`: Clear the name so the terminal title shows again.
+
+## webmux send
+
+`webmux send [options] SESSION [TEXT|-]`
+
+Type text and keys into a terminal session, confirmed by the server.
+
+TEXT goes in one acknowledged submission (the same path as the Web UI's draft send); with --enter, Enter is part of it. The command exits 0 only once the server reports the input written to the PTY. --key sends named keys after the text. Sending takes control of the terminal, as typing does in the browser; the control indicator names this client "script" and, inside a session, that session.
+
+--wait subscribes to the session list before sending and returns on the first change into STATE after the input, so a stale idle state cannot end the wait early. A hybrid session on its chat side takes webmux chat send instead.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+- `TEXT`: The text to type; - reads standard input.
+
+Options:
+
+- `--enter`: Press Enter after the text, in the same submission.
+- `--json`: With --wait, print the SessionInfo that matched.
+- `--key KEY`: Send the named KEY after the text: backspace, ctrl-c, ctrl-d, down, enter, esc, left, right, tab, up. Repeatable.
+- `--timeout DURATION`: Give up --wait after this DURATION (exit 124); 0 waits forever. Requires --wait.
+- `--wait STATE`: Wait for the first change into STATE after sending (see webmux wait)
+
+Examples:
+
+- `webmux send abcd2345 'make test' --enter --wait idle --timeout 10m`: Run a command in a shell session and wait until it is idle again.
+- `webmux send abcd2345 --key esc`: Interrupt an agent's turn.
+- `git diff | webmux send abcd2345 - --enter`: Paste standard input into an agent and submit it.
+
+## webmux wait
+
+`webmux wait [options] SESSION...`
+
+Wait until sessions reach a state: running, waiting, idle, exited or attention.
+
+Subscribes to the session list (/ws/sessions) and returns when every session (or with --any, one) is in one of the --until states; attention means the session has a latched attention signal. Without --changed the current state counts; with --changed only a change after subscribing does. --stable requires the condition to hold that long, which filters an agent's brief idle moments between tool calls.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+
+Options:
+
+- `--any`: Return when one session matches instead of all.
+- `--changed`: Ignore the state at subscription; wait for a change into the states.
+- `--json`: Print the matching SessionInfo.
+- `--stable DURATION`: Require the condition to hold for this DURATION.
+- `--timeout DURATION`: Give up after this DURATION (exit 124); 0 waits forever.
+- `--until STATES`: Comma-separated STATES to wait for (required)
+
+Examples:
+
+- `webmux wait abcd2345 --until attention,idle --changed --timeout 30m`: Wait until an agent needs you or finishes its turn.
+- `webmux wait abcd2345 --until exited --json | jq .exitCode`: Wait for a command and read its exit code.
+- `webmux wait a1 b2 c3 --until idle --stable 5s --any`: Return when the first of three agents has been idle for five seconds.
+
+## webmux logs
+
+`webmux logs [options] SESSION`
+
+Print a session's terminal output; --follow keeps streaming as an observer.
+
+Prints the session's retained output (GET /api/sessions/{id}/buffer) as raw bytes. --strip removes terminal control sequences and keeps line text, which suits line-oriented programs but not full-screen TUIs; use webmux screen for those. --follow connects as an observer, prints the replay and then new output, never taking control or resizing, until the session exits.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+
+Options:
+
+- `--follow`: Keep printing new output until the session exits. Conflicts with --tail.
+- `--strip`: Remove terminal control sequences.
+- `--tail N`: Print only the last N lines. Conflicts with --follow.
+
+Examples:
+
+- `webmux logs abcd2345 --strip --tail 50`: Show the last 50 lines as plain text.
+- `webmux logs self --follow --strip | grep --line-buffered ERROR`: Watch a session's output for errors.
+
+## webmux screen
+
+`webmux screen [options] SESSION`
+
+Print the text a terminal session shows right now, rendered on the client.
+
+Connects as an observer, replays the session into a terminal emulator inside this command at the controller's size, and prints the visible screen; the server does no terminal emulation. Use it to see a full-screen TUI's state, such as an agent waiting on a permission prompt. A truncated replay may leave the screen incomplete; full-screen programs usually redraw.
+
+Arguments:
+
+- `SESSION`: A session ID, or "self" for the session this command runs in ($WEBMUX_SESSION_ID).
+
+Options:
+
+- `--cursor`: Write the cursor position to standard error.
+- `--json`: Print size, cursor, alternate-screen state and lines as JSON.
+
+Examples:
+
+- `webmux screen abcd2345`: See what an agent's terminal shows.
+- `webmux screen abcd2345 --json | jq -r '.lines[-1]'`: Read the last line of the screen.
+
+## webmux events
+
+`webmux events [options]`
+
+Print session list events as NDJSON until interrupted.
+
+Each /ws/sessions event (snapshot, created, updated, removed, forwards) is written as one JSON line, unchanged. With --session, only events about those sessions are written and the snapshot keeps only them. After a lost connection the command reconnects and writes a new snapshot.
+
+Options:
+
+- `--session SESSION`: Only events about SESSION (or self) Repeatable.
+
+Examples:
+
+- `webmux events | jq -c 'select(.type=="updated") | {id: .session.id, status: .session.status}'`: Print every status change.
+- `webmux events --session abcd2345`: Follow one session's events.
+
+## webmux completion
+
+`webmux completion [options] bash|zsh|fish`
+
+Print a shell completion script for bash, zsh or fish.
+
+The script completes commands, options and enumerated values, and asks the running server for session IDs (with titles in zsh and fish), launch config names, repositories, worktrees and topics. Without a server, or when it does not answer within a second, only the static candidates are offered and nothing is printed as an error.
+
+Arguments:
+
+- `SHELL`: bash, zsh or fish.
+
+Examples:
+
+- `echo 'source <(webmux completion bash)' >> ~/.bashrc`: Enable completion in bash.
+- `webmux completion zsh > ~/.zfunc/_webmux`: Install zsh completion (with ~/.zfunc in fpath before compinit).
+- `webmux completion fish > ~/.config/fish/completions/webmux.fish`: Install fish completion.

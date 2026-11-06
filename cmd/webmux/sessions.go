@@ -106,5 +106,8 @@ func openBrowser(url string) error {
 func sessionCommand(args []string, stdout, stderr io.Writer) (int, bool) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	return sessionEnv(stdout, stderr).Dispatch(ctx, sessioncmd.Commands(), args)
+	e := sessionEnv(stdout, stderr)
+	// Help and completion see every command, the operations ones too.
+	e.Commands = commandRegistry()
+	return e.Dispatch(ctx, sessioncmd.Commands(), args)
 }

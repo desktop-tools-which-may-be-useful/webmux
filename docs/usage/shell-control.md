@@ -61,6 +61,34 @@ webmux launch-config options "Claude Code"         # 列出 chat new --set 可�
 - `--dry-run` 打印将要发送的请求，环境变量值显示为 `<inherited>` 或 `<explicit>`。
 - `chat new` 失败时按步骤报告，已创建的 worktree 与会话保留；`--wait` 遇到授权请求时以 1 退出，`--auto-wait-requests` 继续等待。
 
+## 输入、等待与读取输出
+
+```sh
+webmux send <ID> 'make test' --enter --wait idle --timeout 10m   # 输入并回车，等会话回到空闲
+webmux send <ID> --key esc                       # 发送按键
+webmux wait <ID> --until attention,idle --changed --timeout 30m
+webmux logs <ID> --strip --tail 50               # 最近 50 行纯文本；--follow 持续输出
+webmux screen <ID>                               # 全屏 TUI 当前画面的文本
+webmux events --session <ID>                     # 会话事件，NDJSON
+webmux kill <ID>; webmux rm <ID>; webmux rename <ID> 新名称
+webmux api /api/launch-configs                   # 没有专用命令的接口，原样输出响应
+```
+
+- `send` 在服务端确认输入写入 PTY 后才以 0 退出，并像浏览器输入一样取得控制权；控制指示器显示 `script`（在会话内还附上来源会话 ID）。
+- `send --wait` 先订阅再输入，只接受之后的状态变化；`wait --changed` 同理，`--stable` 要求状态保持一段时间。
+- `logs --strip` 适合按行输出的程序；全屏 TUI 用 `screen`，画面在 CLI 本地渲染，服务端不做终端模拟。
+- `api` 只接受 `/api/` 与 `/local/v1/` 路径，请求体须为 JSON；WebSocket 路径请用 `events`、`logs`、`screen`。
+
+## shell 补全
+
+```sh
+echo 'source <(webmux completion bash)' >> ~/.bashrc
+webmux completion zsh > ~/.zfunc/_webmux
+webmux completion fish > ~/.config/fish/completions/webmux.fish
+```
+
+补全命令、选项与枚举值，并向运行中的服务查询会话 ID、启动配置、仓库与 worktree；服务未运行或 1 秒内没有响应时只给出静态候选。
+
 ## WebMux 工具手册
 
 手册按 llms.txt 约定放在站点根路径，内容与运行中的服务版本一致：

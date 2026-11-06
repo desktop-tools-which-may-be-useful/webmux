@@ -124,7 +124,7 @@ SHALL 订阅 `/ws/sessions`，在会话满足条件时退出。
 
 - 默认 SHALL 输出 `GET /api/sessions/{id}/buffer` 的原始字节。
 - `--strip` SHALL 在客户端去除 CSI、OSC、DCS 与其他 ESC 序列，把 CRLF 规范为 LF，并按单独的 CR 丢弃同一行被覆盖的内容。帮助 SHALL 说明它对全屏 TUI 不可靠。
-- `--tail N` SHALL 只输出最后 N 行，按换行计数，与 `--strip` 同用时按去除后的文本计数。
+- `--tail N` SHALL 只输出最后 N 行，按换行计数，与 `--strip` 同用时按去除后的文本计数；它与 `--follow` 互斥。
 - `--follow` SHALL 以观察者身份连接终端 WebSocket：先输出回放，再持续输出新输出，SHALL NOT 夺取控制或改变尺寸。
   会话结束时 SHALL 在标准错误报告退出码并以 0 退出。
 - 输出 SHALL 不受标准输出是否为终端的影响。
@@ -192,15 +192,15 @@ SHALL 订阅 `/ws/sessions`，在会话满足条件时退出。
 
 ### Requirement: 读取当前屏幕
 
-`webmux screen SESSION [--ansi] [--cursor] [--json]` SHALL 输出会话终端当前画面的文本，供 agent 查看全屏 TUI 的状态。
+`webmux screen SESSION [--cursor] [--json]` SHALL 输出会话终端当前画面的文本，供 agent 查看全屏 TUI 的状态。
 
 - CLI SHALL 以观察者身份连接终端 WebSocket，取得回放快照与控制者的网格尺寸（`ControlState` 的 `cols`、`rows`），
   在客户端用终端模拟器按该尺寸重放，得到当前可见画面后断开连接。SHALL NOT 夺取控制或改变尺寸。服务端 SHALL NOT 为此做终端模拟。
-- 默认 SHALL 输出纯文本：每行去掉行尾空白，末尾的空行省略。`--ansi` SHALL 保留颜色与样式的 SGR 序列。
+- SHALL 输出纯文本：每行去掉行尾空白，末尾的空行省略。本变更不输出颜色与样式。
 - `--cursor` SHALL 在标准错误输出光标的行与列（从 1 开始）。`--json` SHALL 输出 `{cols, rows, cursor: {row, col}, altScreen, lines}`。
 - 回放被截断（`StreamPosition.truncated`）时，SHALL 在标准错误提示画面可能不完整。这种情况通常不影响全屏 TUI：它们会重绘整个画面。
 - 会话处于聊天端时 SHALL 以 1 结束，并提示使用 `webmux chat status`。
-- 终端模拟器 SHALL 只编进 CLI 一侧（`sessioncmd` 或它依赖的客户端包），SHALL NOT 被服务端包引用。架构测试 SHALL 保证这一点。
+- 终端模拟复用服务端预览已在使用的 `xterm-go/vt`，在 CLI 进程内运行；服务端 SHALL NOT 为此新增任何模拟。
 
 #### Scenario: 看到 TUI 的权限提示
 

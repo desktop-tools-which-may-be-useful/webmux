@@ -43,3 +43,11 @@
     - 在 worktree 中启动与主页显示、假 agent 上的 `chat new --wait` 与 `launch-config options`；
   - `internal/sessioncmd` 单元测试：控制序列去除、状态解析、分支名生成，以及无终端时的自动分离。
 - 限制：`--follow` 不做断线续接；服务端本来按启动目录关联会话，因此没有提供关闭关联的选项；未在 macOS 上运行。
+
+本次局部核对（2026-11-05）：实现 `add-agent-shell-control` 的第四部分（会话控制与补全），新增 US-S09–US-S12，更新覆盖索引。
+
+- 范围：`api`、`kill`、`rm`、`rename`、`send`（带回执的提交、命名按键、`--wait`）、`wait`、`logs`（`--strip`、`--tail`、`--follow`）、`screen`、`events` 与 shell 补全。
+- 依据：
+  - `cmd/webmux` 端到端测试（真实服务进程）覆盖上述命令，包括 `send --wait exited` 读到退出码、`wait --changed` 不被旧状态满足、`screen` 渲染全屏绘制、`events` 的首行快照、补全的动态会话 ID；
+  - 在 bash 中加载生成的补全脚本并检查 `COMPREPLY`；`internal/sessioncmd` 的单元测试。
+- 限制：本机没有 zsh 与 fish，只在 bash 中运行了补全脚本；`screen` 不输出颜色；未在 macOS 上运行。

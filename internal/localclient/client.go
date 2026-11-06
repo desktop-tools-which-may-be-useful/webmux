@@ -121,6 +121,29 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
+// Raw sends body (JSON when not nil) and returns the status and raw body of
+// any response; only transport failures are errors.
+func (c *Client) Raw(ctx context.Context, method, path string, body []byte) (int, []byte, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, BaseURL+path, reader)
+	if err != nil {
+		return 0, nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, nil, unwrapURLError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(resp.Body)
+	return resp.StatusCode, data, err
+}
+
 // Get sends a GET and returns the raw body of a 2xx response; other
 // statuses become *APIError.
 func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {

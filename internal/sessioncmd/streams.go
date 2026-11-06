@@ -108,6 +108,9 @@ type waitOptions struct {
 	stable time.Duration
 	// any returns when one session matches instead of all.
 	any bool
+	// primed means the subscription already read its snapshot: the
+	// current sessions are the baseline.
+	primed bool
 }
 
 // waitFor waits on an open subscription until opts hold, ctx ends (with
@@ -117,6 +120,16 @@ func (w *sessionWatch) waitFor(ctx context.Context, opts waitOptions) ([]contrac
 	seenSnapshot := false
 	var since time.Time
 	baseline := map[string]string{}
+	if opts.primed {
+		for _, id := range opts.ids {
+			s, ok := w.sessions[id]
+			if !ok {
+				return nil, fmt.Errorf("%w: %s", errSessionRemoved, id)
+			}
+			baseline[id] = stateKey(s)
+		}
+		seenSnapshot = true
+	}
 	for {
 		readCtx := ctx
 		var cancel context.CancelFunc

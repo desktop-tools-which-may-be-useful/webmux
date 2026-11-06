@@ -57,11 +57,28 @@
   - `--wait` 跟踪第一轮，输出 agent 的最终回复（`--json` 为回合事件），`end_turn` 以 0 退出，其他结束原因或出现授权、表单请求以 1 退出，`--auto-wait-requests` 继续等待，超时 124；
   - `webmux launch-config options NAME` 列出 agent 提供的配置项与可选值，供 `--set` 使用。
 
+- **US-S09 向会话输入并等待结果**：作为编排脚本，我希望向终端会话输入并可靠地等到它有反应，以便把交互程序串进流程。
+  - `webmux send SESSION [TEXT|-] [--enter] [--key NAME]...` 以带回执的提交写入文字，收到 `written` 才以 0 退出，`partial`、`failed`、`missing` 以 1 退出；命名按键在文字之后发送，未知按键以 2 结束；
+  - 发送像浏览器输入一样取得控制权，控制指示器显示 `script`，在会话内附上来源会话 ID；混合会话在聊天端时以 1 结束并提示 `chat send`；
+  - `send --wait STATE` 先订阅会话列表再输入，只接受输入之后的变化；
+  - `webmux wait SESSION... --until STATES [--changed] [--stable DUR] [--any] [--timeout DUR] [--json]`：`attention` 表示有锁存的提醒，超时 124，会话被移除或在未等待 `exited` 时结束以 1 退出。
+- **US-S10 读取会话的输出与画面**：作为脚本或 agent，我希望读取会话输出，并看到全屏 TUI 当前显示的内容，以便判断下一步。
+  - `webmux logs SESSION` 输出回放缓冲区原始字节，`--strip` 去除控制序列（CRLF、单独 CR、退格按行处理），`--tail N` 取最后 N 行（与 `--follow` 互斥），`--follow` 以观察者身份持续输出且不抢控制权；
+  - `webmux screen SESSION` 以观察者身份取回放，在 CLI 本地按会话网格渲染，输出可见画面的纯文本，`--json` 含尺寸、光标与是否备用屏幕；回放被截断时在标准错误提示；聊天端以 1 结束；服务端不做终端模拟。
+- **US-S11 通用 API、会话生命周期与事件**：作为脚本，我希望结束、移除、改名会话，订阅会话事件，并调用没有专用命令的接口。
+  - `webmux kill`（结束进程，会话保留为已结束）、`webmux rm`（移除，运行中的先结束）、`webmux rename SESSION [NAME]`（空名称交还给终端标题）；
+  - `webmux events [--session ID]...` 把 `/ws/sessions` 事件逐行输出为 JSON，可按会话筛选，断线后重连并输出新的快照；
+  - `webmux api [-X METHOD] PATH [-d DATA|@FILE|-]` 只接受 `/api/` 与 `/local/v1/` 路径并原样输出响应，`-d` 须为 JSON，非 2xx 以 1 退出，WebSocket 路径以 2 拒绝；会话内的现有限制照常生效。
+- **US-S12 shell 补全**：作为命令行使用者，我希望按 Tab 补全命令、选项与会话 ID，以便少记少打。
+  - `webmux completion bash|zsh|fish` 输出补全脚本；隐藏的 `__complete` 给出命令、子命令、选项、枚举值，并向服务查询会话 ID（附标题）、启动配置、仓库、worktree 与手册主题；
+  - 查询超过 1 秒或服务未运行时只给静态候选，不输出错误，也不输出 Token 或环境变量值；Windows 客户端不提供补全。
+
 ### 依据
 
 - [会话命令与命令表](../../internal/sessioncmd/command.go)、[帮助渲染](../../internal/sessioncmd/help.go)、[元数据命令](../../internal/sessioncmd/metadata.go)、[运维命令表](../../cmd/webmux/commands.go)
 - [会话详情与标签接口](../../internal/api/sessionmeta.go)、[父会话与标签](../../internal/session/relations.go)、[进程所属会话](../../internal/session/peer.go)
 - [本机套接字定位](../../cmd/webmux/sessions.go)、[会话环境](../../internal/session/env.go)、[保留变量](../../internal/contract/env.go)
 - [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/sessioncmd/guide.go)
+- [会话控制命令](../../internal/sessioncmd/control.go)、[补全](../../internal/sessioncmd/completion.go)
 - [启动命令](../../internal/sessioncmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/sessioncmd/streams.go)、[仓库与主页显示](../../internal/sessioncmd/workspace.go)
 - [初始化指令展开](../../internal/workspace/quickstart.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)

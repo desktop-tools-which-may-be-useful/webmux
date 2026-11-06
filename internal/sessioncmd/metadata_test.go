@@ -243,6 +243,9 @@ func TestHelpGoesToStdout(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	e := Env{Stdout: &stdout, Stderr: &stderr}
 	for _, c := range Commands() {
+		if c.Hidden {
+			continue
+		}
 		stdout.Reset()
 		stderr.Reset()
 		if code := e.Run(context.Background(), c, []string{"--help"}); code != 0 || !strings.HasPrefix(stdout.String(), "Usage: webmux "+c.Name) || stderr.Len() != 0 {

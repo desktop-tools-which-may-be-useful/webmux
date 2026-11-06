@@ -14,6 +14,22 @@ webmux run --follow --strip --name tests -- go test ./... > test.log
 echo "exit $?"
 ```
 
+## 驱动一个 shell 会话并读结果
+
+```sh
+id=$(webmux run --detach --name build -- bash | cut -f1)
+webmux send "$id" 'make build' --enter --wait idle --stable 3s --timeout 20m
+webmux logs "$id" --strip --tail 30
+```
+
+## 看子 agent 是否在等你
+
+```sh
+webmux wait "$id" --until attention --changed --timeout 30m
+webmux screen "$id"            # 看授权选择框里有哪些选项
+webmux send "$id" --key enter  # 选中默认选项
+```
+
 ## 在后台跑一个任务，事后清理
 
 ```sh

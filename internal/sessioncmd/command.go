@@ -83,6 +83,8 @@ type Command struct {
 	Strict bool
 	// NoGlobal leaves out the client flags (--config, --socket) of Env.
 	NoGlobal bool
+	// RawArgs passes every argument to the action unparsed.
+	RawArgs bool
 	// Bind declares the flags on fs and returns the action. A nil Bind
 	// marks a group that only lists its subcommands.
 	Bind func(fs *flag.FlagSet) Action
@@ -226,6 +228,10 @@ func (e Env) Run(ctx context.Context, c *Command, args []string) int {
 	if c.Bind == nil {
 		return e.groupHelp(c, args)
 	}
+	if c.RawArgs {
+		e.current = c
+		return c.Bind(flag.NewFlagSet(c.Name, flag.ContinueOnError))(ctx, e, args)
+	}
 	action, positional, code, ok := e.Parse(c, args)
 	if !ok {
 		return code
@@ -255,7 +261,9 @@ func isHelpFlag(arg string) bool {
 // Dispatch runs the command args name in registry r. It returns false when
 // no command matches, leaving the caller to report an unknown command.
 func (e Env) Dispatch(ctx context.Context, r Registry, args []string) (int, bool) {
-	e.Commands = r
+	if e.Commands == nil {
+		e.Commands = r
+	}
 	c, rest := r.Find(args)
 	if c == nil {
 		return 0, false

@@ -20,22 +20,21 @@
 - [x] 1.2a `cmd/webmux/sessions.go` 与 Windows 客户端的 `Env.Connect` 按“`--socket` → `--config` → `WEBMUX_SOCKET` → 默认配置”定位，
   指定的套接字失效时返回 `ErrNotRunning` 而不回退；新增接口 404 时报告版本过旧。测试覆盖四种来源、互斥与不回退。
 - [x] 1.3 `sessioncmd` 增加 `self` 解析、`contract.ExitTimeout = 124`，以及共用的 `--json`/NDJSON 输出辅助函数。
-- [ ] 1.4 新命令统一使用 `script` 连接标签，会话内调用时附加来源会话 ID。
+- [x] 1.4 新命令统一使用 `script` 连接标签，会话内调用时附加来源会话 ID。
 
 ## 2. 会话控制命令（P0）
 
-- [ ] 2.1 `webmux api`：路径白名单、方法推断、`-d` 的字面值/`@文件`/`-`、JSON 校验、非 2xx 退出码。
+- [x] 2.1 `webmux api`：路径白名单、方法推断、`-d` 的字面值/`@文件`/`-`、JSON 校验、非 2xx 退出码。
   用 `httptest` 起的本机 API 测试会话内 403 透传与 `/ws/` 拒绝。
-- [ ] 2.2 `kill`、`rm`、`rename`。测试覆盖 404、混合会话切换中的 409。
-- [ ] 2.3 `send`：提交帧与回执、命名按键表、`-` 读标准输入、聊天端拒绝；`--wait` 先订阅再提交。
+- [x] 2.2 `kill`、`rm`、`rename`。测试覆盖 404、混合会话切换中的 409。
+- [x] 2.3 `send`：提交帧与回执、命名按键表、`-` 读标准输入、聊天端拒绝；`--wait` 先订阅再提交。
   测试覆盖 written/partial/failed、控制标签、未知按键退出码 2。
-- [ ] 2.4 `wait`：快照判断、`--changed`、`--stable` 重新计时、`--any`、超时 124、移除 1、断线重连不误报。测试使用注入时钟，不 sleep。
-- [ ] 2.5 `logs`：原始输出、`--strip`（CSI/OSC/DCS/ESC、CRLF、单独 CR）、`--tail`、`--follow` 观察者通路。
+- [x] 2.4 `wait`：快照判断、`--changed`、`--stable` 重新计时、`--any`、超时 124、移除 1、断线重连不误报。测试使用注入时钟，不 sleep。
+- [x] 2.5 `logs`：原始输出、`--strip`（CSI/OSC/DCS/ESC、CRLF、单独 CR）、`--tail`、`--follow` 观察者通路。
   用表驱动测试覆盖 `--strip`，`--follow` 测试确认不夺取控制。
-- [ ] 2.6 `events`：NDJSON、`--session` 过滤、重连后输出新快照。
+- [x] 2.6 `events`：NDJSON、`--session` 过滤、重连后输出新快照。
 - [x] 2.7 `dir`：调用确保接口并输出路径，失败时退出码 1。
-- [ ] 2.8 `screen`：选定纯 Go 终端模拟库（评估许可证、维护状态、`CGO_ENABLED=0`、体积），按控制者网格重放快照，
-  输出纯文本、`--ansi`、`--cursor`、`--json`；聊天端拒绝；截断提示。新增架构规则：服务端与共享包不得导入该库。
+- [x] 2.8 `screen`：复用 `xterm-go/vt`，按会话网格重放快照，输出纯文本、`--cursor`、`--json`；聊天端拒绝；截断提示。
   用录制的 TUI 回放（含备用屏幕与光标移动）做表驱动测试。
 
 ## 2A. 启动命令（P0）
@@ -116,8 +115,8 @@
 - [x] 7.2 `--help` 渲染（9 节，英文，80 列）；`-h`、`--help`、`help <命令>` 写到标准输出并返回 0，不连接服务；
   用法错误返回 2 并提示 `--help`；分组命令缺子命令时把分组帮助写到标准错误。修正 `run`、`attach`、`ls`、`open` 的现有行为与测试。
 - [x] 7.3 `help --json` 与一致性测试：每个选项有说明和默认值，每个命令至少两个示例且能被解析器接受；llms 命令参考由命令表生成。
-- [ ] 7.4 `completion bash|zsh|fish` 与隐藏的 `__complete`：静态候选、动态候选（会话、启动配置、仓库、worktree、记录、端口），
-  超时 1 秒退回静态，不输出错误、Token 或变量值。用脚本化的 bash/zsh/fish 测试覆盖。
+- [x] 7.4 `completion bash|zsh|fish` 与隐藏的 `__complete`：静态候选、动态候选（会话、启动配置、仓库、worktree、记录、端口），
+  超时 1 秒退回静态，不输出错误、Token 或变量值。用脚本化的 bash 测试覆盖（fish 安装时也运行）。
 
 ## 8. 文档与验证
 

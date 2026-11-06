@@ -31,7 +31,7 @@ type Topic struct {
 // this order.
 var Topics = []Topic{
 	{Name: "connect", Title: "连接与身份", Section: "基础", Summary: "找到 webmux 可执行文件与套接字，会话中的变量，会话内被禁止的操作与排错。"},
-	{Name: "sessions", Title: "会话", Section: "基础", Summary: "列出、查看详情、父会话与标签、附着与链接。"},
+	{Name: "sessions", Title: "会话", Section: "基础", Summary: "列出与详情、父会话与标签、输入与等待、输出与画面、结束与改名、附着与链接。"},
 	{Name: "launch", Title: "启动会话", Section: "基础", Summary: "用 run 启动、跟随或等待会话，在新 worktree 中启动；用 chat new 一次完成快速开始。"},
 	{Name: "artifacts", Title: "临时文件夹", Section: "基础", Summary: "交付文件放在哪里、上传文件在哪里，以及怎样告诉用户。"},
 	{Name: "commands", Title: "命令参考", Section: "参考", Summary: "每个命令的用法、选项与默认值，由命令表生成。"},
