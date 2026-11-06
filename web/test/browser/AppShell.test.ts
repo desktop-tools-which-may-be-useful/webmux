@@ -529,6 +529,42 @@ test("a released archived chat rebuilds its worktree after confirmation before r
   ]);
 });
 
+test("a session on a worktree this page has not read re-reads the repositories once", async () => {
+  const fresh = worktree({
+    id: "wt9",
+    kind: "linked",
+    path: "/repos/webmux-new",
+    branch: "fresh-branch",
+  });
+  let reads = 0;
+  respond(/^GET \/api\/repositories$/, () => {
+    reads += 1;
+    return Response.json([
+      repository({ worktrees: reads > 1 ? [worktree(), fresh] : [worktree()] }),
+    ]);
+  });
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await expect.poll(() => reads).toBe(1);
+  await snapshot([
+    session({
+      id: "elsewher",
+      title: "别处创建",
+      workspace: {
+        repositoryId: "repo1",
+        worktreeId: "wt9",
+        worktreePath: fresh.path,
+      },
+    }),
+  ]);
+  await expect.poll(() => reads).toBe(2);
+  await expect
+    .element(sidebar().getByText("fresh-branch").first())
+    .toBeVisible();
+  expect(sidebar().getByText("已不可用工作区").elements()).toEqual([]);
+  // The worktree is known now, so the settled list asks for nothing more.
+  expect(reads).toBe(2);
+});
+
 test("shows a top-right toast when a session raises attention and navigates on click", async () => {
   render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await snapshot([

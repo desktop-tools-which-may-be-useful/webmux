@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack, type Snippet } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import IconLayoutSidebarLeftExpand from "~icons/tabler/layout-sidebar-left-expand";
   import IconMessagePlus from "~icons/tabler/message-plus";
   import IconPlus from "~icons/tabler/plus";
@@ -20,6 +21,7 @@
   } from "../newSessionDefaults";
   import type { Route } from "../route";
   import type { Repository, SessionInfo, Worktree } from "../schemas";
+  import { unknownWorkspaces } from "../session-list";
   import {
     openPage,
     setShell,
@@ -163,6 +165,22 @@
   $effect(() => {
     void page;
     untrack(() => (creating = null));
+  });
+
+  // A session started elsewhere names a worktree this page has not read yet.
+  // Read the repositories once per unknown worktree: if it is still missing
+  // afterwards (for example a released one), "已不可用工作区" is correct and
+  // asking again would only repeat the Git discovery.
+  const askedFor = new SvelteSet<string>();
+  $effect(() => {
+    if (!repositories.settled) return;
+    const unknown = unknownWorkspaces(
+      sessions.sessions,
+      repositories.list,
+    ).filter((key) => !askedFor.has(key));
+    if (!unknown.length) return;
+    for (const key of unknown) askedFor.add(key);
+    untrack(() => void repositories.refresh(true));
   });
 
   // The drawer takes focus when it opens and gives it back to the button

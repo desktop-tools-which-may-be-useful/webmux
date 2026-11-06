@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { SessionEventSchema, SessionInfo } from "./schemas";
+import type { Repository, SessionEventSchema, SessionInfo } from "./schemas";
 
 function compare(a: SessionInfo, b: SessionInfo) {
   return (
@@ -35,4 +35,28 @@ export function applySessionEvent(
   );
   next.splice(position === -1 ? next.length : position, 0, event.session);
   return next;
+}
+
+/**
+ * The repositories and worktrees that live sessions name but the repository
+ * list does not contain yet. A session started elsewhere (`webmux run
+ * --new-worktree`, another browser) creates its worktree after this page
+ * read the list, and `/ws/sessions` carries no workspace events, so the
+ * sidebar would show it under "已不可用工作区" until something refreshed.
+ */
+export function unknownWorkspaces(
+  sessions: readonly SessionInfo[],
+  repositories: readonly Repository[],
+): string[] {
+  const unknown = new Set<string>();
+  for (const { workspace } of sessions) {
+    if (!workspace) continue;
+    const repository = repositories.find(
+      (r) => r.id === workspace.repositoryId,
+    );
+    if (!repository) unknown.add(`r:${workspace.repositoryId}`);
+    else if (!repository.worktrees.some((t) => t.id === workspace.worktreeId))
+      unknown.add(`w:${workspace.worktreeId}`);
+  }
+  return [...unknown];
 }

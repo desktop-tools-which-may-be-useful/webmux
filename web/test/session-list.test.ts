@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { applySessionEvent } from "../src/session-list";
-import type { SessionInfo } from "../src/schemas";
+import { applySessionEvent, unknownWorkspaces } from "../src/session-list";
+import type { Repository, SessionInfo, Worktree } from "../src/schemas";
 
 function session(id: string, second = 0): SessionInfo {
   return {
@@ -115,4 +115,46 @@ test("removal is idempotent and keeps other session objects intact", () => {
   expect(result).toEqual([b]);
   expect(result[0]).toBe(b);
   expect(input).toEqual([a, b]);
+});
+
+function repository(id: string, worktreeIds: string[]): Repository {
+  return {
+    id,
+    name: id,
+    commonDir: `/work/${id}/.git`,
+    anchorPath: `/work/${id}`,
+    availability: "available",
+    error: "",
+    checkedAt: "2026-10-20T00:00:00Z",
+    initInstruction: "",
+    worktrees: worktreeIds.map(
+      (worktreeId) => ({ id: worktreeId }) as Worktree,
+    ),
+  };
+}
+
+function inWorkspace(id: string, repositoryId: string, worktreeId: string) {
+  return {
+    ...session(id),
+    workspace: { repositoryId, worktreeId, worktreePath: "/work" },
+  };
+}
+
+test("unknownWorkspaces names worktrees and repositories the list has not read yet", () => {
+  const repositories = [repository("r1", ["w1"])];
+  expect(
+    unknownWorkspaces(
+      [
+        inWorkspace("aaaaaaaa", "r1", "w1"),
+        inWorkspace("bbbbbbbb", "r1", "w2"),
+        inWorkspace("cccccccc", "r1", "w2"),
+        inWorkspace("dddddddd", "r2", "w3"),
+        session("eeeeeeee"),
+      ],
+      repositories,
+    ),
+  ).toEqual(["w:w2", "r:r2"]);
+  expect(
+    unknownWorkspaces([inWorkspace("aaaaaaaa", "r1", "w1")], repositories),
+  ).toEqual([]);
 });
