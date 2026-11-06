@@ -93,6 +93,37 @@ describe("chat reducer", () => {
     expect(resumePoint(m)).toEqual({ generation: "g1", seq: 3 });
   });
 
+  test("a merged run and the rest of a partly applied run give the same text", () => {
+    const message = (text: string) => ({
+      messageId: "a1",
+      role: "agent" as const,
+      text,
+    });
+    // A new device replays the log: sequences 1-3 arrive as one event.
+    let fresh = applyFrame(emptyChat(), snapshot("g1", { from: 1 }));
+    fresh = applyFrame(
+      fresh,
+      events([ev({ kind: "message.append", message: message("Done. ok") }, 3)]),
+    );
+    // A device that applied the first chunk is sent only the rest, under the
+    // sequence of the run's last chunk.
+    let partial = applyFrame(emptyChat(), snapshot("g1", { from: 1 }));
+    partial = applyFrame(
+      partial,
+      events([ev({ kind: "message.append", message: message("Do") }, 1)]),
+    );
+    partial = applyFrame(
+      partial,
+      events([ev({ kind: "message.append", message: message("ne. ok") }, 3)]),
+    );
+    for (const m of [fresh, partial]) {
+      expect(
+        m.entries.map((e) => (e.type === "message" ? e.text : e.type)),
+      ).toEqual(["Done. ok"]);
+      expect(resumePoint(m)).toEqual({ generation: "g1", seq: 3 });
+    }
+  });
+
   test("tool updates replace one row; content and status follow the latest patch", () => {
     let m = connect();
     m = applyFrame(

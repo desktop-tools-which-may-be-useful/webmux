@@ -85,6 +85,316 @@ func TestChatLogDropsOldestByBytes(t *testing.T) {
 	}
 }
 
+func chunk(id, role, text string) Event {
+	return Event{Kind: EventMessage, Message: &MessageChunk{MessageID: id, Role: role, Text: text}}
+}
+
+func marker() Event { return Event{Kind: EventMarker, Marker: &Marker{Kind: MarkerLoaded}} }
+
+// replayText applies events the way the web client does: a message's text
+// is the concatenation of its chunks, and an event at or below the applied
+// sequence is ignored. It returns the texts by message ID and the next
+// expected sequence.
+func replayText(events []Event, next uint64) (map[string]string, uint64) {
+	out := map[string]string{}
+	for _, e := range events {
+		if e.Seq < next {
+			continue
+		}
+		next = e.Seq + 1
+		if e.Message != nil {
+			out[e.Message.MessageID] += e.Message.Text
+		}
+	}
+	return out, next
+}
+
+func TestChatLogMergesFinishedChunks(t *testing.T) {
+	l := newChatLog(1<<20, ChatState{})
+	now := time.Now()
+	live, _ := l.subscribe(nil)
+	l.append(now, chunk("a", RoleAgent, "he"), chunk("a", RoleAgent, "llo "), chunk("a", RoleAgent, "wörld"))
+	// A run still streaming is stored chunk by chunk.
+	if s, _ := l.subscribe(nil); len(s.Events) != 3 {
+		t.Fatalf("open run merged: %d events", len(s.Events))
+	}
+	l.append(now, marker())
+	s, _ := l.subscribe(nil)
+	if len(s.Events) != 2 || s.Snapshot.From != 1 || s.Snapshot.Next != 5 {
+		t.Fatalf("merged log: %d events, %+v", len(s.Events), s.Snapshot)
+	}
+	m := s.Events[0]
+	if m.Seq != 3 || m.Message.Text != "hello wörld" || m.Message.MessageID != "a" || m.Message.Role != RoleAgent || !m.At.Equal(now) {
+		t.Fatalf("merged event %+v %+v", m, m.Message)
+	}
+	// The subscriber that was connected all along got every chunk live.
+	if len(live.Out) != 2 {
+		t.Fatalf("live frames: %d", len(live.Out))
+	}
+	if got, _ := replayText(s.Events, 1); got["a"] != "hello wörld" {
+		t.Fatalf("replayed text %q", got["a"])
+	}
+}
+
+func TestChatLogKeepsUnmergeableChunks(t *testing.T) {
+	l := newChatLog(1<<20, ChatState{})
+	withFile := chunk("c", RoleAgent, "x")
+	withFile.Message.Attachments = []Attachment{{Path: "/a"}}
+	l.append(time.Now(),
+		chunk("u", RoleUser, "one"), chunk("u", RoleUser, "two"),
+		chunk("a", RoleAgent, "x"), chunk("b", RoleAgent, "y"),
+		chunk("t", RoleThought, "p"), chunk("t", RoleAgent, "q"),
+		withFile, withFile, marker())
+	s, _ := l.subscribe(nil)
+	if len(s.Events) != 9 {
+		t.Fatalf("expected no merge, got %d events", len(s.Events))
+	}
+}
+
+func TestChatLogResumeInsideMergedRun(t *testing.T) {
+	l := newChatLog(1<<20, ChatState{})
+	l.append(time.Now(), chunk("a", RoleAgent, "ab"), chunk("a", RoleAgent, "é"), chunk("a", RoleAgent, "cd"), marker())
+	gen := l.generation
+	for _, row := range []struct {
+		seq  uint64
+		text string
+		n    int
+	}{{1, "abécd", 2}, {2, "écd", 2}, {3, "cd", 2}, {4, "", 1}, {5, "", 0}} {
+		s, err := l.subscribe(&ResumePoint{Generation: gen, Seq: row.seq})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Snapshot.Reset || len(s.Events) != row.n {
+			t.Fatalf("resume %d: reset %v, %d events", row.seq, s.Snapshot.Reset, len(s.Events))
+		}
+		if row.text != "" && (s.Events[0].Message.Text != row.text || s.Events[0].Seq != 3) {
+			t.Fatalf("resume %d: %q at %d", row.seq, s.Events[0].Message.Text, s.Events[0].Seq)
+		}
+	}
+	// A client that applied the first chunk ends up with the whole text.
+	prefix, next := replayText([]Event{{Seq: 1, Message: &MessageChunk{MessageID: "a", Text: "ab"}}}, 1)
+	s, _ := l.subscribe(&ResumePoint{Generation: gen, Seq: next})
+	rest, _ := replayText(s.Events, next)
+	if prefix["a"]+rest["a"] != "abécd" {
+		t.Fatalf("client text %q", prefix["a"]+rest["a"])
+	}
+	// The log still starts at the first chunk: an older resume point resets.
+	if s, _ := l.subscribe(&ResumePoint{Generation: gen, Seq: 0}); !s.Snapshot.Reset {
+		t.Fatal("resume before the log did not reset")
+	}
+}
+
+func TestChatLogDropsMergedEventAsAWhole(t *testing.T) {
+	l := newChatLog(1<<20, ChatState{})
+	l.append(time.Now(), chunk("a", RoleAgent, strings.Repeat("a", 100)), chunk("a", RoleAgent, strings.Repeat("a", 100)), marker())
+	merged := eventSize(chunk("a", RoleAgent, strings.Repeat("a", 200)))
+	l.capacity = merged + eventSize(marker()) - 1
+	l.append(time.Now(), marker())
+	s, _ := l.subscribe(nil)
+	if !s.Snapshot.Truncated || s.Snapshot.From != 3 || len(s.Events) != 2 {
+		t.Fatalf("after drop: %+v, %d events", s.Snapshot, len(s.Events))
+	}
+}
+
+func toolEvent(id, output string) Event {
+	title, status := "Read file", "completed"
+	return Event{Kind: EventTool, Tool: &Tool{ToolCallID: id, Title: &title, Status: &status,
+		Locations: []Location{{Path: "/a.go"}}, Content: []Content{{Type: "text", Text: output}}}}
+}
+
+func toolText(e Event) string { return e.Tool.Content[0].Text }
+
+func TestChatLogDegradesOldToolOutput(t *testing.T) {
+	big := strings.Repeat("x", 10<<10)
+	full := eventSize(toolEvent("t", big))
+	l := newChatLog(3*full, ChatState{})
+	old := toolEvent("old", big)
+	// Under budget nothing is shortened.
+	l.append(time.Now(), old, toolEvent("mid", big))
+	held, _ := l.subscribe(nil)
+	if s := held.Events; len(s) != 2 || len(toolText(s[0])) != len(big) || s[0].Tool.Content[0].Truncated {
+		t.Fatal("output shortened without pressure")
+	}
+	// Over budget the oldest outputs are shortened until the log fits.
+	l.append(time.Now(), toolEvent("new", big), toolEvent("last", big))
+	s, _ := l.subscribe(nil)
+	if s.Snapshot.Truncated || len(s.Events) != 4 {
+		t.Fatalf("events dropped before output was shortened: %+v, %d", s.Snapshot, len(s.Events))
+	}
+	first := s.Events[0]
+	if got := toolText(first); len(got) != degradedToolBytes || !first.Tool.Content[0].Truncated {
+		t.Fatalf("old output: %d bytes, truncated %v", len(got), first.Tool.Content[0].Truncated)
+	}
+	if *first.Tool.Title != "Read file" || *first.Tool.Status != "completed" || first.Tool.Locations[0].Path != "/a.go" || first.Seq != 1 || first.Tool.ToolCallID != "old" {
+		t.Fatalf("degraded event lost its identity: %+v", first.Tool)
+	}
+	if len(toolText(s.Events[3])) != len(big) {
+		t.Fatal("newest output was shortened")
+	}
+	// A subscriber that already holds the event keeps what it received.
+	if len(toolText(held.Events[0])) != len(big) || held.Events[0].Tool.Content[0].Truncated {
+		t.Fatal("stored event changed under a subscriber")
+	}
+}
+
+func TestChatLogDegradeKeepsUTF8AndDiffs(t *testing.T) {
+	old := strings.Repeat("é", degradedToolBytes) // two bytes each: the limit falls inside no rune
+	odd := strings.Repeat("a", degradedToolBytes-1) + "é"
+	diff := Event{Kind: EventTool, Tool: &Tool{ToolCallID: "d", Content: []Content{
+		{Type: "diff", Path: "a.go", OldText: &old, NewText: odd},
+		{Type: "text", Text: "short"},
+	}}}
+	short, ok := degradeTool(diff)
+	if !ok {
+		t.Fatal("long diff not shortened")
+	}
+	c := short.Tool.Content
+	if !utf8.ValidString(c[0].NewText) || len(c[0].NewText) != degradedToolBytes-1 || len(*c[0].OldText) != degradedToolBytes || !c[0].Truncated || c[0].Path != "a.go" {
+		t.Fatalf("diff %d %d %v", len(c[0].NewText), len(*c[0].OldText), c[0].Truncated)
+	}
+	if c[1].Truncated || c[1].Text != "short" {
+		t.Fatal("short block changed")
+	}
+	if len(*diff.Tool.Content[0].OldText) != 2*degradedToolBytes {
+		t.Fatal("input event modified")
+	}
+	if _, ok := degradeTool(short); ok {
+		t.Fatal("degrading twice changed the event again")
+	}
+}
+
+func TestChatLogOutputDoesNotCrowdOutConversation(t *testing.T) {
+	// A synthetic session: every turn is a prompt, a read with a large
+	// output, streamed reply chunks and a turn end. A log that only drops
+	// the oldest events keeps fewer turns than one that shortens old output
+	// and merges finished chunks.
+	const turns = 400
+	reply := strings.Repeat("The reply explains the change in a few short sentences. ", 4)
+	var raw []Event
+	for i := range turns {
+		raw = append(raw, Event{Kind: EventTurnStart, TurnStart: &TurnStart{TurnID: "t" + strings.Repeat("0", 8) + string(rune('a'+i%26))}})
+		raw = append(raw, toolEvent("call", strings.Repeat("line of file output\n", 400)))
+		for off := 0; off < len(reply); off += 12 {
+			raw = append(raw, chunk("m"+string(rune('a'+i%26)), RoleAgent, reply[off:min(off+12, len(reply))]))
+		}
+		raw = append(raw, Event{Kind: EventTurnEnd, TurnEnd: &TurnEnd{StopReason: "end_turn"}})
+	}
+	const capacity = 512 << 10
+	naive, total := 0, 0
+	for i := len(raw) - 1; i >= 0; i-- {
+		if total += eventSize(raw[i]); total > capacity {
+			break
+		}
+		if raw[i].Kind == EventTurnStart {
+			naive++
+		}
+	}
+	l := newChatLog(capacity, ChatState{})
+	for _, e := range raw {
+		l.append(time.Now(), e)
+	}
+	s, _ := l.subscribe(nil)
+	kept := 0
+	for _, e := range s.Events {
+		if e.Kind == EventTurnStart {
+			kept++
+		}
+	}
+	if kept < naive*3/2 {
+		t.Fatalf("log keeps %d turns, a drop-only log keeps %d", kept, naive)
+	}
+	if !s.Snapshot.Truncated || l.bytes > capacity {
+		t.Fatalf("log is not bounded: %d bytes, truncated %v", l.bytes, s.Snapshot.Truncated)
+	}
+	t.Logf("turns kept: %d, drop-only: %d", kept, naive)
+}
+
+func TestChatLogDegradeCursorSurvivesMerge(t *testing.T) {
+	// A long streamed run that crosses the protected part of the log
+	// collapses into one event. The scan position for shortening tool
+	// output must follow, or later tool output is evicted instead of shortened.
+	l := newChatLog(8000, ChatState{})
+	now := time.Now()
+	for range 50 {
+		l.append(now, chunk("a", RoleAgent, ""))
+	}
+	l.append(now, marker()) // seals the run
+	l.append(now, marker())
+	if l.degraded > len(l.events) {
+		t.Fatalf("scan position %d beyond %d events", l.degraded, len(l.events))
+	}
+	// Shortening the oldest output (about 1 KiB each) is enough to fit.
+	l.capacity = 9600
+	for _, id := range []string{"t1", "t2", "t3"} {
+		l.append(now, toolEvent(id, strings.Repeat("x", 3000)))
+	}
+	s, _ := l.subscribe(nil)
+	got := map[string]int{}
+	for _, e := range s.Events {
+		if e.Tool != nil {
+			got[e.Tool.ToolCallID] = len(toolText(e))
+		}
+	}
+	if got["t1"] != degradedToolBytes || got["t3"] != 3000 {
+		t.Fatalf("tool output lengths %v: the oldest should be shortened and the newest kept", got)
+	}
+}
+
+func TestChatLogShortensOversizedNewestOutputBeforeDroppingConversation(t *testing.T) {
+	// The protected window is by size: a newest event that alone exceeds it
+	// is outside it. Shortening that output keeps the older conversation.
+	l := newChatLog(5200, ChatState{})
+	now := time.Now()
+	for range 5 {
+		l.append(now, marker())
+	}
+	l.append(now, toolEvent("big", strings.Repeat("x", 6000)))
+	s, _ := l.subscribe(nil)
+	if s.Snapshot.Truncated || len(s.Events) != 6 {
+		t.Fatalf("conversation dropped: %+v, %d events", s.Snapshot, len(s.Events))
+	}
+	if got := toolText(s.Events[5]); len(got) != degradedToolBytes {
+		t.Fatalf("newest output %d bytes", len(got))
+	}
+}
+
+func TestChatLogConcurrentAppendAndSubscribe(t *testing.T) {
+	// Merging, shortening and dropping rewrite the log while subscribers
+	// read it; run with -race. Every subscriber must see a consistent text.
+	big := strings.Repeat("o", 6<<10)
+	l := newChatLog(64<<10, ChatState{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 300 {
+			id := string(rune('a' + i%26))
+			l.append(time.Now(), chunk(id, RoleAgent, "ab"), chunk(id, RoleAgent, "cd"), toolEvent("c", big), chunk(id, RoleThought, "x"), marker())
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		s, err := l.subscribe(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next := uint64(0)
+		for _, e := range s.Events {
+			if e.Seq < next {
+				t.Fatalf("sequences go backwards: %d after %d", e.Seq, next)
+			}
+			next = e.Seq + 1
+			if e.Message != nil && e.Message.Role == RoleAgent && len(e.Message.Text) != 2 && e.Message.Text != "abcd" {
+				t.Fatalf("message text %q", e.Message.Text)
+			}
+		}
+		s.Close()
+	}
+}
+
 func TestChatLogDropsSlowSubscriber(t *testing.T) {
 	l := newChatLog(1<<20, ChatState{})
 	sub, _ := l.subscribe(nil)
