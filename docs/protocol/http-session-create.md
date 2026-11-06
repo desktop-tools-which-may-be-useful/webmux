@@ -64,18 +64,19 @@ Web 端的新建会话对话框、快速开始页与 `webmux run` 都调用它�
 
 对普通配置或自定义命令提供 `view: "chat"` 返回 400。以聊天视图创建而档案的连接器未安装时返回 409 `connector_missing`，不创建会话。
 
-`attachments`、`agentConfig` 与 `permissionMode` 只在 `view` 为 `chat` 时接受，否则 400：
+`agentConfig` 与 `permissionMode` 只在 `view` 为 `chat` 时接受，否则 400：
 
-- `attachments`：`POST /api/uploads` 返回的 `{path}`，最多 8 个，只读取 `path`；要求 `prompt` 非空。不是暂存文件夹中的普通文件时在预检返回 400。会话创建后，文件移入该会话的上传目录，随首条提示按聊天附件规则发送。
 - `agentConfig`：配置项 ID 到值的映射（选择类为取值，布尔类为 `"true"`/`"false"`）。agent 不接受的值记入 `configWarnings`，并作为聊天提示写入时间线，不阻断发送。
 - `permissionMode`：`ask` 或 `auto`，缺省按服务端默认（见 [权限模式](http-hybrid.md#聊天视图的输入)）。
+
+`attachments` 为 `POST /api/uploads` 返回的 `{path}`，最多 8 个，只读取 `path`；要求 `prompt` 非空。不是暂存文件夹中的普通文件时在预检返回 400。会话创建后，文件移入该会话的上传目录：聊天视图随首条提示按聊天附件规则发送，终端视图在输入的首条消息后追加 `附件路径：` 与各文件在上传目录中的路径。
 
 ## 首条提示与初始化指令
 
 `prompt` 是用户的第一条消息，由服务端在会话启动后发送，浏览器在过程中断开不影响：
 
 - 聊天视图：作为第一条聊天提示，带上 `attachments`。
-- 终端视图（普通命令或混合会话的终端视图）：在程序有输出并安静 0.7 秒后（最长等 15 秒）输入并回车，多行文本在程序开启括号粘贴时按粘贴发送。
+- 终端视图（普通命令或混合会话的终端视图）：在程序有输出并安静 0.7 秒后（最长等 15 秒）输入并回车（带 `attachments` 时将移入会话上传目录后的路径附在末尾），多行文本在程序开启括号粘贴时按粘贴发送。
 
 `useInitInstruction` 为 `true` 时，把仓库的初始化指令放在用户输入前面；位置须为 `workspace` 或 `newWorktree`，否则 400。仓库没有初始化指令时只发送用户输入。
 

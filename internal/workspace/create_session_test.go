@@ -740,32 +740,54 @@ func TestCreateSessionFirstMessage(t *testing.T) {
 	}
 }
 
-// A terminal quick start creates the worktree and the agent's TUI, types the
-// message into it and rejects what only a chat can take.
+// A terminal quick start creates the worktree and the agent's TUI, adopts
+// staged attachments and appends their paths to the typed message, and
+// rejects chat-only options.
 func TestQuickStartTerminalSide(t *testing.T) {
 	h := newQuickHarness(t, "")
+	folders := artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: t.TempDir(), Manager: h.manager})
+	t.Cleanup(folders.Close)
+	h.s.UseArtifacts(folders)
+
 	bad := h.input("quick-start-tui0", "wt/tui-bad")
 	bad.Side = "tui"
-	bad.Attachments = []string{"/tmp/x"}
+	bad.AgentConfig = map[string]string{"model": "smart"}
 	if _, err := h.start(bad); err == nil || errorKind(err) != ErrInvalid {
-		t.Fatalf("attachments on a terminal start: %v", err)
+		t.Fatalf("agentConfig on a terminal start: %v", err)
 	}
+	staging, err := folders.EnsureStaging()
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged := filepath.Join(staging, "shot.png")
+	putFile(t, staged, "png")
+
 	in := h.input("quick-start-tui1", "wt/tui")
 	in.Side = "tui"
+	in.Attachments = []string{staged}
 	result, err := h.start(in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := h.manager.Get(result.Session.Info().ID)
+	id := result.Session.Info().ID
+	uploads, err := folders.EnsureUploads(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopted := filepath.Join(uploads, "shot.png")
+	if _, err := os.Stat(adopted); err != nil {
+		t.Fatalf("adopted attachment missing: %v", err)
+	}
+	item, err := h.manager.Get(id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(15 * time.Second)
-	for !strings.Contains(string(item.Buffer()), in.Prompt) && time.Now().Before(deadline) {
+	for (!strings.Contains(string(item.Buffer()), in.Prompt) || !strings.Contains(string(item.Buffer()), adopted)) && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
 	}
-	if !strings.Contains(string(item.Buffer()), in.Prompt) {
-		t.Fatalf("terminal never received %q: %q", in.Prompt, item.Buffer())
+	if !strings.Contains(string(item.Buffer()), in.Prompt) || !strings.Contains(string(item.Buffer()), adopted) {
+		t.Fatalf("terminal never received %q and %q: %q", in.Prompt, adopted, item.Buffer())
 	}
 	if len(result.ConfigWarnings) != 0 {
 		t.Fatalf("warnings %v", result.ConfigWarnings)
