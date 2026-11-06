@@ -79,6 +79,7 @@
     onremoved,
     onarchived,
     showForwards,
+    feedSession,
   }: {
     id: string;
     drafts: TerminalDrafts;
@@ -100,6 +101,8 @@
     onarchived: () => void;
     /** Opens the port-forwarding dialog from a port prompt. */
     showForwards: () => void;
+    /** The session as reported by the `/ws/sessions` feed, if connected. */
+    feedSession?: import("../schemas").SessionInfo;
   } = $props();
   const draft = untrack(() => drafts.get(id));
   let composer = $state<TerminalInputComposer>();
@@ -725,11 +728,17 @@
     onfind={showFind}
   >
     {#snippet terminalPane()}
-      <div class="relative h-full">
-        <!-- Notices float over this pane (not the code pane beside it): showing
-           or dismissing one must not resize the terminal, which would redraw
-           the PTY. z-30 keeps them above the find bar (z-20). -->
-        <div class="absolute inset-x-0 top-0 z-30 flex flex-col bg-background">
+      <div class="relative flex h-full flex-col">
+        <!-- Notices float over the terminal view (not the chat view or the code
+           pane beside it): showing or dismissing one must not resize the
+           terminal, which would redraw the PTY. On the chat view, notices stay
+           in the flex flow above the scrollable transcript so they never cover
+           messages or banners. z-30 keeps them above the find bar (z-20). -->
+        <div
+          class={hybrid.view === "chat"
+            ? "flex shrink-0 flex-col bg-background"
+            : "absolute inset-x-0 top-0 z-30 flex flex-col bg-background"}
+        >
           <TerminalNotices
             terminal={t}
             {uploads}
@@ -747,9 +756,11 @@
             dismiss={(key) => hybrid.dismiss(key)}
             recovery={hybrid.recoverable ? recovery : undefined}
             session={id}
-            listening={hybrid.view === "terminal"
-              ? hybrid.info?.listeningPorts
-              : undefined}
+            listening={hybrid.view === "chat"
+              ? (feedSession?.listeningPorts ?? hybrid.info?.listeningPorts)
+              : hybrid.view === "terminal"
+                ? hybrid.info?.listeningPorts
+                : undefined}
             {showForwards}
           />
           {#if hybrid.connector && hybrid.view === "terminal"}<div
@@ -764,7 +775,7 @@
         </div>
         <!-- A hybrid session's panes fade in as a switch lands on them. -->
         <div
-          class={["h-full", hybrid.known && paneEnter]}
+          class={["min-h-0 flex-1", hybrid.known && paneEnter]}
           hidden={!terminalShown()}
         >
           <TerminalViewport
@@ -802,7 +813,7 @@
           </TerminalViewport>
         </div>
         {#if hybrid.view === "chat"}
-          <div class={["h-full", paneEnter]}>
+          <div class={["min-h-0 flex-1", paneEnter]}>
             <ChatView
               bind:this={chatView}
               {sessionId}

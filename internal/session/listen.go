@@ -37,21 +37,25 @@ func listeningPorts(found []ListeningPort, exclude []int) []ListeningPort {
 	return ports
 }
 
-// scanPorts stores each session's listening ports. Sessions without a live
-// run have none. It reads the process table and descriptors, so callers
+// scanPorts stores each session's listening ports. Sessions without live
+// processes have none. It reads the process table and descriptors, so callers
 // must not hold the manager lock.
 func (m *Manager) scanPorts(scanner *portScanner, snapshot processSnapshot, list []*Session) {
-	roots := make(map[*Session]int, len(list))
-	pids := make([]int, 0, len(list))
+	roots := make(map[*Session][]int, len(list))
+	var pids []int
 	for _, s := range list {
-		if pid := s.runPID(); pid > 0 {
-			roots[s] = pid
-			pids = append(pids, pid)
+		if list := s.rootPIDs(); len(list) > 0 {
+			roots[s] = list
+			pids = append(pids, list...)
 		}
 	}
 	found := scanner.scan(snapshot, pids)
 	for _, s := range list {
-		ports := listeningPorts(found[roots[s]], m.options.ExcludePorts)
+		var raw []ListeningPort
+		for _, pid := range roots[s] {
+			raw = append(raw, found[pid]...)
+		}
+		ports := listeningPorts(raw, m.options.ExcludePorts)
 		s.mu.Lock()
 		s.info.ListeningPorts = ports
 		s.mu.Unlock()
