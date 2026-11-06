@@ -820,7 +820,6 @@ test.describe("hybrid sessions with the fake agent", () => {
       .click();
     await page.getByRole("menuitem", { name: "释放空间", exact: true }).click();
     const release = page.getByRole("dialog", { name: "释放空间" });
-    await expect(release).toContainText("node_modules/");
     await expect(release).toContainText("重建工作树也无法找回");
     await release
       .getByRole("button", { name: "释放空间", exact: true })

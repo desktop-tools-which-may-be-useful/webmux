@@ -45,7 +45,7 @@
 
 - [x] 5.1 `route.ts` 新增 `/new`，外壳内懒加载 `pages/QuickStart.svelte`；更新 `test/route.test.ts`
 - [x] 5.2 `ChatSelect` 增加显示当前值文字的用法，供仓库、基准分支、agent 选择复用，并登记到 `docs/frontend-architecture.md` 扩展表；`web/stories/DesignSystem.svelte` 增加示例
-- [x] 5.3 实现页面，按原型 `Workspace/Quick start` 的布局：
+- [x] 5.3 实现页面布局：
   - 输入卡片、初始化指令提示与 Popover，仓库/基准分支/agent/配置/权限一行。
   - 选择记忆存 `localStorage` 并用 Zod 校验；草稿存独立键 `webmux.quick-start-draft`（Zod 校验，发送成功后清除），不复用会话草稿存储。
   - 分支名用 `suggestWorktreeBranch` 生成，冲突时重新生成并换新请求 ID。
