@@ -6,18 +6,18 @@
 
 ## 常见任务
 
-| 我想……                                   | 命令                                                                 |
-| ---------------------------------------- | -------------------------------------------------------------------- |
-| 让 agent 在新 worktree 里做事并拿到回复  | `webmux run --new-worktree --launch-config "Claude Code" --view chat --prompt "…" --reply` |
-| 在持久会话里跑命令，按命令退出码结束     | `webmux run --follow --strip -- go test ./...`                       |
-| 给已有会话发一句话并等它做完             | `webmux send <ID> "…" --reply`（聊天视图）或 `--enter --wait idle`（终端视图） |
-| 读 agent 最后的回复                      | `webmux chat log <ID>`                                               |
-| 看全屏 TUI 当前画面                      | `webmux screen <ID>`                                                 |
-| 等会话需要我或空闲                       | `webmux wait <ID> --until attention,idle --changed`                  |
-| 任务完成后提醒我                         | `webmux notify --kind done "构建完成"`                               |
-| 查看当前会话的仓库、分支与链接           | `webmux get`                                                         |
-| 找到本会话的临时文件夹                   | `webmux dir self`                                                    |
-| 读 WebMux 工具手册                       | `webmux guide`                                                       |
+| 我想……                                  | 命令                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 让 agent 在新 worktree 里做事并拿到回复 | `webmux run --new-worktree --launch-config "Claude Code" --view chat --prompt "…" --reply` |
+| 在持久会话里跑命令，按命令退出码结束    | `webmux run --follow --strip -- go test ./...`                                             |
+| 给已有会话发一句话并等它做完            | `webmux send <ID> "…" --reply`（聊天视图）或 `--enter --wait idle`（终端视图）             |
+| 读 agent 最后的回复                     | `webmux chat log <ID>`                                                                     |
+| 看全屏 TUI 当前画面                     | `webmux screen <ID>`                                                                       |
+| 等会话需要我或空闲                      | `webmux wait <ID> --until attention,idle --changed`                                        |
+| 任务完成后提醒我                        | `webmux notify --kind done "构建完成"`                                                     |
+| 查看当前会话的仓库、分支与链接          | `webmux get`                                                                               |
+| 找到本会话的临时文件夹                  | `webmux dir self`                                                                          |
+| 读 WebMux 工具手册                      | `webmux guide`                                                                             |
 
 下面按用途展开，每节先给命令，再说明规则与边界。
 
