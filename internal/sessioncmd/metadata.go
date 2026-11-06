@@ -21,7 +21,7 @@ import (
 
 // Commands is the registry of the session commands both clients share.
 func Commands() Registry {
-	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand}
+	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand}
 }
 
 var getCommand = &Command{
@@ -45,7 +45,7 @@ var getCommand = &Command{
 		{Command: "branch=$(webmux get --field worktree.branch)", Text: "Read the current session's branch without jq."},
 		{Command: "webmux get abcd2345 --json", Text: "Print the full details of another session as JSON."},
 	},
-	SeeAlso: []string{"webmux ls", "webmux label"},
+	SeeAlso: []string{"webmux ls", "webmux label", "webmux guide sessions"},
 	Notes:   map[string]Note{"field": {Conflicts: []string{"json"}}, "json": {Conflicts: []string{"field"}}},
 	Bind: func(flags *flag.FlagSet) Action {
 		asJSON := flags.Bool("json", false, "print the SessionDetails object as JSON")

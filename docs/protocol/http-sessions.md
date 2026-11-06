@@ -2,20 +2,21 @@
 
 ## 会话
 
-| 方法   | 路径                           | 说明                                                                               |
-| ------ | ------------------------------ | ---------------------------------------------------------------------------------- |
-| GET    | `/api/sessions`                | 会话列表 `SessionInfo[]`，按 `lastActiveAt` 倒序                                   |
-| POST   | `/api/sessions`                | 创建会话，201 返回 `SessionInfo`                                                   |
-| GET    | `/api/sessions/{id}`           | 单个会话；不存在 404                                                               |
-| PATCH  | `/api/sessions/{id}`           | 设置用户标题 `{"name"}`，返回会话；空串恢复自动标题；含控制字符或超过 512 字节 400 |
-| DELETE | `/api/sessions/{id}`           | 关闭会话（SIGHUP → SIGKILL），204                                                  |
-| DELETE | `/api/sessions/{id}?remove=1`  | 移除已退出会话，204；仍在运行 409                                                  |
-| GET    | `/api/sessions/{id}/buffer`    | 下载完整原始缓冲（`application/octet-stream`）                                     |
-| GET    | `/api/sessions/{id}/upload`    | 读取本会话已上传的单个文件（`?path=`），见下文                                     |
-| POST   | `/api/sessions/{id}/upload`    | 上传文件，见下文                                                                   |
-| POST   | `/api/sessions/{id}/artifacts` | 确保会话临时文件夹存在，200 `{path}`，见下文                                       |
-| GET    | `/api/sessions/{id}/details`   | 会话详情 `SessionDetails`，见下文；不存在 404                                      |
-| PATCH  | `/api/sessions/{id}/labels`    | 修改标签 `{set, remove}`，返回 `SessionInfo`；非法标签 400，不修改任何标签         |
+| 方法   | 路径                             | 说明                                                                                       |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------ |
+| GET    | `/api/sessions`                  | 会话列表 `SessionInfo[]`，按 `lastActiveAt` 倒序                                           |
+| POST   | `/api/sessions`                  | 创建会话，201 返回 `SessionInfo`                                                           |
+| GET    | `/api/sessions/{id}`             | 单个会话；不存在 404                                                                       |
+| PATCH  | `/api/sessions/{id}`             | 设置用户标题 `{"name"}`，返回会话；空串恢复自动标题；含控制字符或超过 512 字节 400         |
+| DELETE | `/api/sessions/{id}`             | 关闭会话（SIGHUP → SIGKILL），204                                                          |
+| DELETE | `/api/sessions/{id}?remove=1`    | 移除已退出会话，204；仍在运行 409                                                          |
+| GET    | `/api/sessions/{id}/buffer`      | 下载完整原始缓冲（`application/octet-stream`）                                             |
+| GET    | `/api/sessions/{id}/upload`      | 读取本会话已上传的单个文件（`?path=`），见下文                                             |
+| POST   | `/api/sessions/{id}/upload`      | 上传文件，见下文                                                                           |
+| POST   | `/api/sessions/{id}/artifacts`   | 确保会话临时文件夹存在，200 `{path}`，见下文                                               |
+| GET    | `/api/sessions/{id}/details`     | 会话详情 `SessionDetails`，见下文；不存在 404                                              |
+| PATCH  | `/api/sessions/{id}/labels`      | 修改标签 `{set, remove}`，返回 `SessionInfo`；非法标签 400，不修改任何标签                 |
+| POST   | `/api/sessions/{id}/agent-guide` | `{{webmux}}` 的说明 `AgentGuidePrompt`，见下文；会话不存在 404，临时文件夹或说明不可用 503 |
 
 创建请求有两种互斥形式：
 
@@ -95,6 +96,22 @@
 ```
 
 详情不含 Token、启动环境变量的值或其他会话的输出。
+
+**WebMux 工具说明**：`POST /api/sessions/{id}/agent-guide` 确保会话临时文件夹存在，返回 `{prompt, guideUrl, dir, bin, socket}`：
+
+- `prompt` 是 `{{webmux}}` 展开后的文字：会话 ID、`bin` 与 `socket`（不在 `PATH` 时用绝对路径，环境变量丢失时加 `--socket`）、手册地址 `guideUrl`（本机链接加 `/llms.txt`）与 `webmux guide`、本会话临时文件夹 `dir` 与交付规则；路径原样插入，不含 Token。
+- `bin`、`socket` 未知时为 `null`，`prompt` 省略对应内容。
+
+**WebMux shell 工具手册**：按 llms.txt 约定在站点根路径提供，不在 `/api/` 下，因此 TCP 上与静态页面一样不需要 Token（仍检查 Host）：
+
+| 路径                  | 内容                                                             |
+| --------------------- | ---------------------------------------------------------------- |
+| `GET /llms.txt`       | 索引（`text/plain`）：H1、摘要、命令前缀说明、按组列出的主题链接 |
+| `GET /llms/<主题>.md` | 单个主题（`text/markdown`），未知主题 404                        |
+| `GET /llms-full.txt`  | 索引后依次拼接全部主题（`text/plain`）                           |
+
+- 内容嵌入在可执行文件中，只在内存中渲染，`Cache-Control: no-store`。
+- TCP 上不含版本、主机、路径或任何会话信息；本机套接字上在摘要后列出本实例的版本、可执行文件与套接字路径。
 
 **上传**：`multipart/form-data`，恰好一个文件字段 `file`。成功返回 201 `{"path": "<服务器绝对路径>"}`。
 

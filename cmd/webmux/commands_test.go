@@ -5,6 +5,8 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -246,11 +248,35 @@ func TestConnectLocalPrefersSocketThenConfigThenEnvironment(t *testing.T) {
 	}
 }
 
+// TestGuideCommandReference keeps /llms/commands.md generated from the
+// command table. Run with WEBMUX_UPDATE_GUIDE=1 to rewrite it.
+func TestGuideCommandReference(t *testing.T) {
+	e := sessionEnv(io.Discard, io.Discard)
+	registry := commandRegistry()
+	e.Commands = registry
+	want := e.Reference(registry)
+	path := "../../internal/agentguide/llms/commands.md"
+	if os.Getenv("WEBMUX_UPDATE_GUIDE") == "1" {
+		if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != want {
+		t.Fatal("internal/agentguide/llms/commands.md is stale; run WEBMUX_UPDATE_GUIDE=1 go test ./cmd/webmux -run TestGuideCommandReference")
+	}
+}
+
 // TestHelpReferencesResolve keeps every "See also" target and every webmux
 // command in an example pointing at a command this build has.
 func TestHelpReferencesResolve(t *testing.T) {
 	registry := commandRegistry()
-	mention := regexp.MustCompile(`(?:^|[\s(|;&"])webmux((?: [a-z][a-z0-9-]*)+)`)
+	// A mention starts a line or follows a space, an opening bracket, a pipe,
+	// a separator, a quote or a backtick (inline code in the guide pages).
+	mention := regexp.MustCompile(`(?m)(?:^|[\s(|;&"\x60])webmux((?: [a-z][a-z0-9-]*)+)`)
 	check := func(where, words string) {
 		args := strings.Fields(words)
 		c, rest := registry.Find(args)
@@ -274,6 +300,23 @@ func TestHelpReferencesResolve(t *testing.T) {
 			for _, m := range mention.FindAllStringSubmatch(ex.Command, -1) {
 				check(c.Name+" example", m[1])
 			}
+		}
+	}
+	// The hand-written guide pages name commands too.
+	pages, err := filepath.Glob("../../internal/agentguide/llms/*.md")
+	if err != nil || len(pages) < 2 {
+		t.Fatalf("guide pages: %v %v", pages, err)
+	}
+	for _, page := range pages {
+		if filepath.Base(page) == "commands.md" {
+			continue
+		}
+		data, err := os.ReadFile(page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range mention.FindAllStringSubmatch(string(data), -1) {
+			check(filepath.Base(page), m[1])
 		}
 	}
 }

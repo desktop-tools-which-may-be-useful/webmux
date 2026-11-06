@@ -28,8 +28,22 @@
   - 顶层帮助保留服务端选项一行，Windows 客户端据 `-log-file` 判断 WSL 内的版本；
   - 测试保证每个可见命令有摘要和至少两个可解析的示例，每个选项有说明，运维命令的选项与实现一致。
 
+- **US-S05 按需阅读 WebMux 工具手册**：作为 CLI agent，我希望从一个固定地址按需加载与当前服务版本一致的 shell 工具说明，以便只读需要的部分就能正确使用 `webmux`。
+  - 服务端按 llms.txt 约定提供 `/llms.txt`（H1、摘要、命令前缀说明与主题链接，含 `## Optional`）、`/llms/<主题>.md` 与 `/llms-full.txt`；内容只在内存中渲染，不写入临时文件夹或其他文件；
+  - 主题包括连接与身份（可执行文件与套接字的定位顺序、排错）、会话、启动、临时文件夹（原“临时文件夹”预设的全部说明）、命令参考、退出码、操作守则与常用流程；命令参考由命令表生成，测试保证与 `--help` 一致；
+  - TCP 上不需要 Token 但检查 Host，内容不含版本、主机、路径或会话信息，示例不写死安装路径；本机套接字上附加本实例的版本、可执行文件与套接字；
+  - `webmux guide [TOPIC] [--full]` 经本机套接字读取，服务未运行时输出内嵌副本并在标准错误说明；`--path` 输出服务端可执行文件与套接字路径；
+  - `webmux dir [SESSION]` 输出会话临时文件夹路径（按需创建），会话内默认 `self`。
+- **US-S06 在指令中插入 WebMux 工具说明**：作为使用者，我希望在快捷指令或仓库初始化指令中写 `{{webmux}}`，以便 agent 拿到本会话的手册地址、命令路径和交付文件位置。
+  - `POST /api/sessions/{id}/agent-guide` 确保临时文件夹存在并返回说明：会话 ID、`webmux` 可执行文件与套接字的绝对路径（环境变量丢失时的用法）、`/llms.txt` 地址与 `webmux guide`、本会话临时文件夹路径与“交付文件放这里而不是项目仓库”的规则；不含 Token；
+  - 初始化指令中的 `{{webmux}}` 不再被拒绝：会话创建后在 `{{dir}}` 之后插入说明，说明中的文字不再被当作变量；说明不可用时预检返回 503 且不创建 worktree；
+  - 快捷指令正文中的 `{{webmux}}` 在选择时经该接口展开，失败时提示“WebMux 工具说明不可用”且不插入；
+  - 设置页初始化指令的“可插入”提供内置的“WebMux 说明”按钮，快速开始预览说明 `{{webmux}}` 会在会话创建后替换；快捷指令名称仍不能是 `webmux`。
+
 ### 依据
 
 - [会话命令与命令表](../../internal/sessioncmd/command.go)、[帮助渲染](../../internal/sessioncmd/help.go)、[元数据命令](../../internal/sessioncmd/metadata.go)、[运维命令表](../../cmd/webmux/commands.go)
 - [会话详情与标签接口](../../internal/api/sessionmeta.go)、[父会话与标签](../../internal/session/relations.go)、[进程所属会话](../../internal/session/peer.go)
 - [本机套接字定位](../../cmd/webmux/sessions.go)、[会话环境](../../internal/session/env.go)、[保留变量](../../internal/contract/env.go)
+- [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/sessioncmd/guide.go)
+- [初始化指令展开](../../internal/workspace/quickstart.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)

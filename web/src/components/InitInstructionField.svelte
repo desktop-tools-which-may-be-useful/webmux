@@ -6,8 +6,8 @@
   import {
     DIR_REFERENCE_NAME,
     initInstructionReferences,
-    RESERVED_REFERENCE_NAME,
     USER_REFERENCE_NAME,
+    WEBMUX_REFERENCE_NAME,
   } from "../quickCommands";
   import { INIT_INSTRUCTION_MAX, type QuickCommand } from "../schemas";
   import InlineNotice from "./InlineNotice.svelte";
@@ -36,12 +36,9 @@
       (name) =>
         name !== USER_REFERENCE_NAME &&
         name !== DIR_REFERENCE_NAME &&
-        name !== RESERVED_REFERENCE_NAME &&
+        name !== WEBMUX_REFERENCE_NAME &&
         !names.includes(name),
     ),
-  );
-  const reserved = $derived(
-    initInstructionReferences(value).includes(RESERVED_REFERENCE_NAME),
   );
 
   // Inserts at the caret (replacing a selection), or at the end when the
@@ -62,7 +59,9 @@
   <p id={`${id}-help`} class="text-xs text-muted-foreground">
     这是一段模板：写 {"{{快捷指令名称}}"} 会插入该快捷指令的文本（只展开一层，不递归）；写
     <code>{"{{dir}}"}</code>
-    会换成新会话的临时文件夹路径，写 <code>{"{{user}}"}</code>
+    会换成新会话的临时文件夹路径，写 <code>{"{{webmux}}"}</code>
+    会换成 WebMux 工具说明（手册地址、命令路径与临时文件夹），写
+    <code>{"{{user}}"}</code>
     可指定你的第一条消息放在哪里，不写则接在指令后面空一行。只有快速开始时勾选“使用初始化指令”，才会随第一条消息发送。留空保存即清除。
   </p>
   <Textarea
@@ -90,6 +89,14 @@
         aria-label="插入用户输入"
         onclick={() => void insert(USER_REFERENCE_NAME)}>用户输入</Button
       >
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        title={"插入 {{webmux}}：WebMux 工具说明"}
+        aria-label="插入 WebMux 工具说明"
+        onclick={() => void insert(WEBMUX_REFERENCE_NAME)}>WebMux 说明</Button
+      >
       {#each names as name (name)}
         <Button
           type="button"
@@ -113,13 +120,6 @@
         找不到这些快捷指令：{unknown
           .map((name) => `{{${name}}}`)
           .join("、")}。仍可保存，但快速开始勾选使用时会被拒绝。
-      </p>
-    </InlineNotice>
-  {/if}
-  {#if reserved}
-    <InlineNotice tone="warning">
-      <p>
-        {"{{webmux}}"} 是保留变量，暂不可用。仍可保存，但快速开始勾选使用时会被拒绝。
       </p>
     </InlineNotice>
   {/if}

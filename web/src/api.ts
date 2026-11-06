@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AgentGuidePromptSchema,
   ArtifactsFolderSchema,
   ErrorSchema,
   ForwardRequestSchema,
@@ -244,6 +245,22 @@ export async function ensureArtifactsFolder(
       signal,
     )
   ).path;
+}
+// The session's WebMux brief that `{{webmux}}` expands to; it also creates
+// the artifacts folder the brief names.
+export async function agentGuidePrompt(
+  id: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  return (
+    await api(
+      `/sessions/${id}/agent-guide`,
+      AgentGuidePromptSchema,
+      "POST",
+      undefined,
+      signal,
+    )
+  ).prompt;
 }
 export function navigate(path: string) {
   history.pushState(null, "", path);

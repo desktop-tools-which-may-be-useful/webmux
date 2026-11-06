@@ -59,7 +59,7 @@ test("uploads land in the session folder the code panel browses", async ({
   ).toBeVisible();
 });
 
-test("the system preset pastes the folder prompt without Enter, and removal deletes the folder", async ({
+test("the system preset pastes the WebMux brief without Enter, and removal deletes the folder", async ({
   page,
   request,
   workDir,
@@ -67,7 +67,7 @@ test("the system preset pastes the folder prompt without Enter, and removal dele
   const id = await createShell(page, "Artifacts prompt", workDir);
   const received = await recordInput(page, workDir);
   await quick(page).click();
-  await page.getByRole("menuitem", { name: /^临时文件夹：/ }).click();
+  await page.getByRole("menuitem", { name: /^WebMux 工具：/ }).click();
   const folder = await (
     await request.post(`/api/sessions/${id}/artifacts`)
   ).json();
@@ -76,10 +76,11 @@ test("the system preset pastes the folder prompt without Enter, and removal dele
     .poll(async () => (await readFile(received, "utf8")).endsWith("\x1b[201~"))
     .toBe(true);
   const bytes = await readFile(received, "utf8");
-  expect(bytes.startsWith(`\x1b[200~本会话的临时文件夹：${folder.path}`)).toBe(
-    true,
-  );
-  expect(bytes).toContain(`${folder.path}/uploads/`);
+  expect(
+    bytes.startsWith(`\x1b[200~本会话运行在 WebMux 中（会话 ID：${id}）`),
+  ).toBe(true);
+  expect(bytes).toContain(`本会话的临时文件夹：${folder.path}`);
+  expect(bytes).toContain("/llms.txt");
   // Exactly one bracketed paste: nothing was submitted after it.
   expect(bytes.split("\x1b[200~")).toHaveLength(2);
 

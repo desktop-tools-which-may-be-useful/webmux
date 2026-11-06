@@ -9,15 +9,19 @@ import (
 // folder in an expanded instruction; it is replaced once the session exists.
 const artifactsDirPlaceholder = "{{" + artifactsDirName + "}}"
 
+// webmuxPlaceholder stands for the session's WebMux brief (the shell guide
+// address, executable, socket and artifacts folder); it is replaced once
+// the session exists.
+const webmuxPlaceholder = "{{" + webmuxReferenceName + "}}"
+
 // userReference is the built-in {{user}}: where the user's own message goes
-// in an expanded instruction. {{dir}} is the artifacts folder above.
-// {{webmux}} is reserved for a system template that does not exist yet. A
-// quick command cannot be named any of them.
+// in an expanded instruction. {{dir}} is the artifacts folder and
+// {{webmux}} the brief above. A quick command cannot be named any of them.
 const (
-	artifactsDirName      = "dir"
-	userReferenceName     = "user"
-	userReference         = "{{" + userReferenceName + "}}"
-	reservedReferenceName = "webmux"
+	artifactsDirName    = "dir"
+	userReferenceName   = "user"
+	userReference       = "{{" + userReferenceName + "}}"
+	webmuxReferenceName = "webmux"
 )
 
 // QuickCommand is a saved quick command: an initialization instruction
@@ -33,7 +37,7 @@ var instructionReference = regexp.MustCompile(`\{\{([^{}\n]+)\}\}`)
 
 // expandInstruction replaces each {{name}} of template with the text of the
 // quick command called name. Replacement is one pass: the inserted text is
-// not scanned again. {{user}} and {{dir}} stay in the text for the
+// not scanned again. {{user}}, {{dir}} and {{webmux}} stay in the text for the
 // caller to fill. The names no command has are returned in order of first
 // appearance and their references are left as written.
 func expandInstruction(template string, commands []QuickCommand) (string, []string) {
@@ -51,6 +55,9 @@ func expandInstruction(template string, commands []QuickCommand) (string, []stri
 		if name == artifactsDirName {
 			return artifactsDirPlaceholder
 		}
+		if name == webmuxReferenceName {
+			return webmuxPlaceholder
+		}
 		if replacement, ok := byName[name]; ok {
 			return replacement
 		}
@@ -61,16 +68,6 @@ func expandInstruction(template string, commands []QuickCommand) (string, []stri
 		return ref
 	})
 	return text, missing
-}
-
-// usesReservedReference reports whether template writes {{webmux}}.
-func usesReservedReference(template string) bool {
-	for _, m := range instructionReference.FindAllStringSubmatch(template, -1) {
-		if strings.TrimSpace(m[1]) == reservedReferenceName {
-			return true
-		}
-	}
-	return false
 }
 
 // fillUser puts the user's message where instruction has {{user}}. Without

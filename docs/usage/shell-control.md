@@ -45,6 +45,22 @@ webmux ls --label run=42 --status exited --json   # 按标签和状态筛选
 
 标签键匹配 `[a-z0-9][a-z0-9._-]{0,62}`，值最多 256 个字符，每个会话最多 16 个。父会话和标签只保存在内存中，随会话结束而消失。
 
+## WebMux 工具手册
+
+手册按 llms.txt 约定放在站点根路径，内容与运行中的服务版本一致：
+
+```sh
+webmux guide                     # 索引（/llms.txt），列出各主题
+webmux guide artifacts           # 单个主题（/llms/artifacts.md）
+webmux guide --full              # 全部主题（/llms-full.txt）
+webmux guide --path              # 服务端可执行文件与套接字路径
+curl -s http://127.0.0.1:7681/llms.txt   # 也可以直接读 HTTP 地址，不需要 Token
+```
+
+手册不写死安装路径：示例中的 `webmux` 指 `"$WEBMUX_BIN"`、指令中给出的绝对路径或 `PATH` 中的 `webmux`。经 TCP 读取的版本不含任何实例信息，经本机套接字读取时附带本实例的版本、可执行文件与套接字。
+
+在快捷指令或仓库初始化指令里写 `{{webmux}}`，会插入一段说明：会话 ID、命令与套接字路径、手册地址，以及本会话临时文件夹的路径和“交付文件放这里而不是项目仓库”的规则。系统预设“WebMux 工具”就是一条正文为 `{{webmux}}` 的快捷指令。`webmux dir self` 输出临时文件夹路径。
+
 ## 帮助与退出码
 
 - `webmux <命令> --help` 写到标准输出并以 0 退出，包括用法、参数、选项与默认值、环境变量、输出、退出码和示例。

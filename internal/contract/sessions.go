@@ -189,3 +189,14 @@ type DetailsLaunchConfig struct {
 type RenameSessionRequest struct {
 	Name string `json:"name"`
 }
+
+// AgentGuidePrompt is the 200 body of POST /api/sessions/{id}/agent-guide:
+// the brief {{webmux}} expands to for the session, and the facts in it.
+// Bin and Socket are null when the server does not know them.
+type AgentGuidePrompt struct {
+	Prompt   string  `json:"prompt"`
+	GuideURL string  `json:"guideUrl"`
+	Dir      string  `json:"dir"`
+	Bin      *string `json:"bin"`
+	Socket   *string `json:"socket"`
+}

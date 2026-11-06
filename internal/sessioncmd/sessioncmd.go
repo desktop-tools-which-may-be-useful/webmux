@@ -143,7 +143,7 @@ var runCommand = &Command{
 		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID and link."},
 		{Command: `webmux run --detach --launch-config "Claude Code"`, Text: "Start a saved Web UI launch config in the background."},
 	},
-	SeeAlso: []string{"webmux attach", "webmux ls"},
+	SeeAlso: []string{"webmux attach", "webmux ls", "webmux guide launch"},
 	Notes: map[string]Note{
 		"launch-config": {Conflicts: []string{"env"}},
 		"config-id":     {Conflicts: []string{"env"}},

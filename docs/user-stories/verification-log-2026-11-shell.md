@@ -20,3 +20,15 @@
 - 限制：
   - 本地 git 2.43 输出的提交时间格式使 `TestWireSnapshots` 的 `repository-commits` 快照在本机不一致，未修改该快照，以 CI 结果为准；
   - 未在 macOS 上运行；未在原生 Windows 终端中执行帮助命令；Web 端不显示父会话与标签。
+
+本次局部核对（2026-11-05）：实现 `add-agent-shell-control` 的第二部分（llms.txt 手册与 `{{webmux}}`），新增 US-S05、US-S06，更新 US-G06、US-J12 的初始化指令说明与覆盖索引。
+
+- 范围：
+  - 新增共享包 `internal/agentguide`：`/llms.txt`、`/llms/<主题>.md`、`/llms-full.txt` 只在内存中渲染，命令参考由命令表生成；TCP 上不含实例信息，本机套接字附加版本、可执行文件与套接字；
+  - `POST /api/sessions/{id}/agent-guide` 返回 `{{webmux}}` 说明；初始化指令先展开 `{{dir}}` 再插入说明，说明不可用时预检 503；
+  - CLI 新增 `webmux guide`（服务未运行时输出内嵌副本）与 `webmux dir`；
+  - 前端：快捷指令支持 `{{webmux}}`，预设“临时文件夹”换为“WebMux 工具”，初始化指令“可插入”新增按钮，快速开始预览说明 `{{webmux}}`，移除保留变量提示。
+- 依据：
+  - `go test -race` 覆盖 `internal/agentguide`（索引结构、链接、公开内容无实例信息、简述）、`internal/api`（手册路由与 Host 检查、说明接口；wire 快照新增 `session-agent-guide`）、`internal/workspace`（说明插入顺序与预检）、`internal/sessioncmd`（guide 与 dir）、`cmd/webmux`（命令参考与命令表同步）；
+  - 前端单元测试 `quickCommands.test.ts`，以及受影响的浏览器与 E2E 用例（预设菜单、快捷指令、临时文件夹）。
+- 限制：未在 macOS 与真机浏览器上核对；以前保存的“临时文件夹”预设不迁移。

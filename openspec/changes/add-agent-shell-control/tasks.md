@@ -33,7 +33,7 @@
 - [ ] 2.5 `logs`：原始输出、`--strip`（CSI/OSC/DCS/ESC、CRLF、单独 CR）、`--tail`、`--follow` 观察者通路。
   用表驱动测试覆盖 `--strip`，`--follow` 测试确认不夺取控制。
 - [ ] 2.6 `events`：NDJSON、`--session` 过滤、重连后输出新快照。
-- [ ] 2.7 `dir`：调用确保接口并输出路径，失败时退出码 1。
+- [x] 2.7 `dir`：调用确保接口并输出路径，失败时退出码 1。
 - [ ] 2.8 `screen`：选定纯 Go 终端模拟库（评估许可证、维护状态、`CGO_ENABLED=0`、体积），按控制者网格重放快照，
   输出纯文本、`--ansi`、`--cursor`、`--json`；聊天端拒绝；截断提示。新增架构规则：服务端与共享包不得导入该库。
   用录制的 TUI 回放（含备用屏幕与光标移动）做表驱动测试。
@@ -90,18 +90,18 @@
 
 ## 6. shell 工具手册与 `{{webmux}}`
 
-- [ ] 6.1 新建共享包 `internal/agentguide`（仅标准库）：用 `go:embed` 嵌入索引与各主题 Markdown，渲染 `/llms.txt`（可选版本行）、
+- [x] 6.1 新建共享包 `internal/agentguide`（仅标准库）：用 `go:embed` 嵌入索引与各主题 Markdown，渲染 `/llms.txt`（可选版本行）、
   主题、全文与简述。在 `internal/archtest/layers_test.go` 中登记为 Shared。临时文件夹说明从 `web/src/quickCommands.ts` 的预置正文移入 `artifacts` 主题。
-- [ ] 6.2 一致性测试：会话类子命令都在某个主题中出现；索引链接都能解析；每个主题都在索引中；TCP 内容不含版本、路径或主机名，
+- [x] 6.2 一致性测试：会话类子命令都在某个主题中出现；索引链接都能解析；每个主题都在索引中；TCP 内容不含版本、路径或主机名，
   示例只用 `webmux` 与 `$WEBMUX_BIN`；索引含“命令前缀”说明，`connect` 含排错步骤。
-- [ ] 6.3 `internal/api` 在 SPA 回退之前注册 `/llms.txt`、`/llms-full.txt`、`/llms/{topic}.md`：TCP 不要求 Token 但经过 Host 检查，
+- [x] 6.3 `internal/api` 在 SPA 回退之前注册 `/llms.txt`、`/llms-full.txt`、`/llms/{topic}.md`：TCP 不要求 Token 但经过 Host 检查，
   本机套接字附加版本行；未知主题 404。测试覆盖两个监听器与未认证访问。
-- [ ] 6.4 `artifacts.Service.Brief(id)` 与 `POST /api/sessions/{id}/agent-guide`（`AgentGuidePrompt{prompt, guideUrl, dir, bin, socket}`；`bin` 为空时省略对应行），
+- [x] 6.4 `agentguide.Instance.Brief` 与 `POST /api/sessions/{id}/agent-guide`（`AgentGuidePrompt{prompt, guideUrl, dir, bin, socket}`；`bin` 为空时省略对应行），
   同步 contract、wire、schemas，重新录制 wire 快照。确认临时根中不会出现手册文件。
-- [ ] 6.5 `internal/workspace`：移除对 `{{webmux}}` 的保留拒绝；`composePrompt` 先展开 `{{webmux}}` 再展开 `{{dir}}` 与 `{{user}}`；预检在临时文件夹不可用时报告不可用。
+- [x] 6.5 `internal/workspace`：移除对 `{{webmux}}` 的保留拒绝；`composePrompt` 先展开 `{{dir}}`，再插入 `{{webmux}}` 简述，最后放入 `{{user}}`；预检在临时文件夹不可用时报告不可用。
   更新 `instruction_test.go` 与 `quickstart_test.go`。
-- [ ] 6.6 `webmux guide [TOPIC] [--full] [--path]`，服务未运行时退回内嵌副本，未知主题以 2 结束。
-- [ ] 6.7 前端：
+- [x] 6.6 `webmux guide [TOPIC] [--full] [--path]`，服务未运行时退回内嵌副本，未知主题以 2 结束。
+- [x] 6.7 前端：
   - `quickCommands.ts` 把 `{{webmux}}` 当作内置变量；
   - `SessionTerminal` 与聊天草稿在插入前调用手册接口，失败时提示“WebMux 工具说明不可用”；
   - 预置列表改为恢复会话、新会话、WebMux 工具；
@@ -115,7 +115,7 @@
   `cmd/webmux` 的运维命令（`serve`、`start`、`version`、`status`、`stop`、`config`、`service`、`update`、`bridge`）迁入同一张表。
 - [x] 7.2 `--help` 渲染（9 节，英文，80 列）；`-h`、`--help`、`help <命令>` 写到标准输出并返回 0，不连接服务；
   用法错误返回 2 并提示 `--help`；分组命令缺子命令时把分组帮助写到标准错误。修正 `run`、`attach`、`ls`、`open` 的现有行为与测试。
-- [ ] 7.3 `help --json` 与一致性测试：每个选项有说明和默认值，每个命令至少两个示例且能被解析器接受；llms 命令参考由命令表生成。
+- [x] 7.3 `help --json` 与一致性测试：每个选项有说明和默认值，每个命令至少两个示例且能被解析器接受；llms 命令参考由命令表生成。
 - [ ] 7.4 `completion bash|zsh|fish` 与隐藏的 `__complete`：静态候选、动态候选（会话、启动配置、仓库、worktree、记录、端口），
   超时 1 秒退回静态，不输出错误、Token 或变量值。用脚本化的 bash/zsh/fish 测试覆盖。
 

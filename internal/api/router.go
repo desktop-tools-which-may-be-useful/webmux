@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/rainchan/webmux/internal/agentguide"
 	"io"
 	"log/slog"
 	"net/http"
@@ -69,6 +70,9 @@ type Deps struct {
 	// InstalledVersion returns the installed version awaiting a restart,
 	// or ""; nil never reports one.
 	InstalledVersion func() string
+	// Guide renders the shell guide and the {{webmux}} brief; nil answers
+	// 503 for the brief and serves the guide without instance facts.
+	Guide *agentguide.Instance
 	// LocalURL is the token-free local origin, such as
 	// http://127.0.0.1:7681; empty leaves session details without a link.
 	LocalURL string
@@ -142,6 +146,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)
 	mux.HandleFunc("POST /api/fs/mkdir", s.mkdir)
 	s.sessionMetaRoutes(mux)
+	s.guideRoutes(mux)
 	s.chatRoutes(mux)
 	s.workspaceRoutes(mux)
 	s.quickStartRoutes(mux)

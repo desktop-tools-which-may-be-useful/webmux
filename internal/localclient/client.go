@@ -119,6 +119,26 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
+// Get sends a GET and returns the raw body of a 2xx response; other
+// statuses become *APIError.
+func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, BaseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, unwrapURLError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		var failure contract.ErrorResponse
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&failure)
+		return nil, &APIError{Status: resp.StatusCode, Message: failure.Error}
+	}
+	return io.ReadAll(resp.Body)
+}
+
 // unwrapURLError drops the fake "http://webmux" URL from messages while
 // keeping ErrNotRunning reachable through errors.Is.
 func unwrapURLError(err error) error {

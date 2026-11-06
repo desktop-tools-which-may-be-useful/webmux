@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/rainchan/webmux/internal/agentguide"
 	"io"
 	"log/slog"
 	"mime"
@@ -80,6 +81,10 @@ func wireSchema(name string) wireRules {
 	switch name {
 	case "settings-patch", "settings-reset", "ws-settings-update":
 		add("", "time", "updatedAt")
+	case "session-agent-guide":
+		// The folder name holds the UID, a state directory hash and the
+		// session ID; the brief repeats it.
+		add("", "id", "dir", "prompt")
 	case "session-details":
 		sessionFields("/session")
 		add("/session", "path", "cmd/*")
@@ -504,7 +509,9 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 	hybrids := hybrid.New(hybrid.Options{StateDir: t.TempDir(), Manager: m, Uploads: folders.UploadPath})
 	forwards := forward.New(forward.Config{ExcludePorts: []int{7681}, Reachable: func(context.Context, int) bool { return false }})
 	t.Cleanup(forwards.Close)
-	deps := Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs, Hybrid: hybrids, Artifacts: folders, Forward: forwards, DefaultShell: agentprofile.ShellBash}
+	guide := &agentguide.Instance{Version: "wire", LocalURL: "http://127.0.0.1:7681", Bin: "/opt/webmux/bin/webmux"}
+	guide.SetSocket("/run/user/1000/webmux/webmux.sock")
+	deps := Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs, Hybrid: hybrids, Artifacts: folders, Forward: forwards, DefaultShell: agentprofile.ShellBash, Guide: guide}
 	deps.InstalledVersion, deps.Launcher = func() string { return "0.5.0" }, contract.LauncherSystemd
 	server := httptest.NewServer(New(testDeps(t, deps)))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -793,6 +800,7 @@ func wireSessions(f *wireFixture) {
 	f.call("session-labels-invalid", "PATCH", "/api/sessions/"+runningID+"/labels", contract.LabelsUpdate{Set: map[string]string{"Task Name": "x"}}, 400)
 	f.call("session-details", "GET", "/api/sessions/"+runningID+"/details", nil, 200)
 	f.call("session-details-missing", "GET", "/api/sessions/aaaaaaaa/details", nil, 404)
+	f.call("session-agent-guide", "POST", "/api/sessions/"+runningID+"/agent-guide", nil, 200)
 	f.call("session-create-labels-invalid", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh"}, "labels": map[string]string{"-bad": "x"}}, 400)
 
 	// Live terminal frames: control, position, state, submissions.

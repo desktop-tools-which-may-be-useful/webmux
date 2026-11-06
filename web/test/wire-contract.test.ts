@@ -55,6 +55,7 @@ const groups: Array<[z.ZodType, string[]]> = [
     ],
   ],
   [S.SessionDetailsSchema, ["session-details"]],
+  [S.AgentGuidePromptSchema, ["session-agent-guide"]],
   [S.NoContentSchema, ["fs-mkdir", "launch-delete", "push-unsubscribe"]],
   [S.HealthSchema, ["health"]],
   [

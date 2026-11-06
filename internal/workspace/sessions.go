@@ -253,6 +253,9 @@ func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.
 			if strings.Contains(instruction, artifactsDirPlaceholder) && s.artifacts == nil {
 				return nil, problemf(ErrUnavailable, "临时文件夹不可用")
 			}
+			if strings.Contains(instruction, webmuxPlaceholder) && (s.artifacts == nil || s.brief == nil) {
+				return nil, problemf(ErrUnavailable, "WebMux 工具说明不可用")
+			}
 		}
 		tree, err := findTree(snapshot, reference.WorktreeID)
 		if err != nil {

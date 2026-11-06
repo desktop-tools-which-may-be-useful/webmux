@@ -294,17 +294,40 @@ func TestQuickStartInstructionTemplate(t *testing.T) {
 	}
 }
 
-// {{webmux}} is reserved and not available yet: the quick start stops
-// before anything is created.
-func TestQuickStartInstructionReservedReference(t *testing.T) {
-	h := newQuickHarness(t, "背景：{{ webmux }}")
+// {{webmux}} becomes the new session's brief, written once the session
+// and its artifacts folder exist; without a brief writer the quick start
+// stops before anything is created.
+func TestQuickStartInstructionWebMuxBrief(t *testing.T) {
+	h := newQuickHarness(t, "{{ webmux }}\n\n{{user}}")
 	before := h.worktrees()
-	in := h.input("quick-start-rsv1", "wt/rsv")
+	in := h.input("quick-start-wmx1", "wt/wmx1")
 	in.UseInitInstruction = true
 	_, err := h.start(in)
-	failed := quickFailure(t, err, StepPrecheck, ErrInvalid)
-	if !strings.Contains(failed.Error(), "保留变量") || h.worktrees() != before {
-		t.Fatalf("reserved reference: %v", err)
+	failed := quickFailure(t, err, StepPrecheck, ErrUnavailable)
+	if !strings.Contains(failed.Error(), "WebMux 工具说明不可用") || h.worktrees() != before {
+		t.Fatalf("without a brief: %v", err)
+	}
+
+	folders := artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: t.TempDir(), Manager: h.manager})
+	t.Cleanup(folders.Close)
+	h.s.UseArtifacts(folders)
+	h.s.UseBrief(func(id, dir string) string { return "BRIEF " + id + " " + dir + " {{dir}}" })
+	in = h.input("quick-start-wmx2", "wt/wmx2")
+	in.Text = "修复 lint"
+	in.UseInitInstruction = true
+	result, err := h.start(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := folders.Existing(result.SessionID)
+	if err != nil {
+		t.Fatalf("artifacts folder not created for the brief: %v", err)
+	}
+	h.waitTurnEnd(result.SessionID)
+	// The brief is inserted after {{dir}}, so nothing in it is replaced.
+	want := "BRIEF " + result.SessionID + " " + dir + " {{dir}}\n\n修复 lint"
+	if got := userTexts(h.events(result.SessionID)); len(got) != 1 || got[0] != want {
+		t.Fatalf("first prompt %q, want %q", got, want)
 	}
 }
 

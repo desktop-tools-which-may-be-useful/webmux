@@ -7,23 +7,18 @@ export const QUICK_COMMAND_NAME_MAX = 40;
 export const DIR_REFERENCE_NAME = "dir";
 const DIR_PLACEHOLDER = `{{${DIR_REFERENCE_NAME}}}`;
 
-const ARTIFACT_PRESET_COMMAND = [
-  "本会话的临时文件夹：{{dir}}",
-  "- 我上传给你的文件在 {{dir}}/uploads/ 中。",
-  "- 你生成给我的截图、报告、图表、导出数据等交付物，请保存到 {{dir}}（可以建子目录），不要放进项目仓库。",
-  "- 我会在 WebMux 代码栏的“临时文件夹”中查看这些文件。",
-  "- 完成后告诉我文件相对于该文件夹的路径。",
-  "- 该文件夹会在会话删除后清理，不要存放需要长期保留的内容。",
-].join("\n");
+/** Built-in reference `{{webmux}}`: the session's WebMux brief (shell guide, executable, artifacts folder). */
+export const WEBMUX_REFERENCE_NAME = "webmux";
+const WEBMUX_PLACEHOLDER = `{{${WEBMUX_REFERENCE_NAME}}}`;
 
 /** System-provided quick commands; the defaults while no list is saved. */
 export const QUICK_COMMAND_PRESETS: readonly QuickCommand[] = [
   { id: "preset-resume", name: "恢复会话", command: "/resume", enter: true },
   { id: "preset-new", name: "新会话", command: "/new", enter: true },
   {
-    id: "preset-artifacts",
-    name: "临时文件夹",
-    command: ARTIFACT_PRESET_COMMAND,
+    id: "preset-webmux",
+    name: "WebMux 工具",
+    command: WEBMUX_PLACEHOLDER,
     enter: false,
   },
 ];
@@ -38,10 +33,18 @@ export function renderArtifactDir(text: string, dir: string) {
   return text.replaceAll(DIR_PLACEHOLDER, dir);
 }
 
+/** True when running the body needs the session's WebMux brief. */
+export function usesWebmuxBrief(text: string) {
+  return text.includes(WEBMUX_PLACEHOLDER);
+}
+
+/** Replaces every `{{webmux}}` with the server's brief verbatim. */
+export function renderWebmuxBrief(text: string, prompt: string) {
+  return text.replaceAll(WEBMUX_PLACEHOLDER, prompt);
+}
+
 /** Built-in reference `{{user}}`: where the first message goes in an init instruction. */
 export const USER_REFERENCE_NAME = "user";
-/** Reserved for a future system template; neither usable nor a valid name. */
-export const RESERVED_REFERENCE_NAME = "webmux";
 
 /**
  * The first problem with a quick command name among `others`, or "" when it
@@ -56,7 +59,7 @@ export function quickCommandNameError(name: string, others: readonly string[]) {
   if (
     trimmed === USER_REFERENCE_NAME ||
     trimmed === DIR_REFERENCE_NAME ||
-    trimmed === RESERVED_REFERENCE_NAME
+    trimmed === WEBMUX_REFERENCE_NAME
   )
     return `“${trimmed}”是初始化指令的保留变量，请换一个名称`;
   if (others.some((other) => other.trim() === trimmed))
@@ -90,8 +93,9 @@ export function initInstructionReferences(template: string) {
  * Single-pass expansion: each `{{name}}` becomes the matching command's text;
  * unmatched references stay literal and are returned in `missing`. The
  * built-in `{{user}}` stays in the text (the server puts the first message
- * there) and sets `hasUser`; the reserved `{{webmux}}` is returned in
- * `reserved` and stays literal.
+ * there) and sets `hasUser`. `{{webmux}}` stays in the text for the server
+ * to replace with the brief; `hasWebmux` is read from the expanded text, as
+ * the server does, so one inside a quick command's body counts too.
  */
 export function expandInitInstruction(
   template: string,
@@ -99,7 +103,6 @@ export function expandInitInstruction(
 ) {
   const missing = new Set<string>();
   let hasUser = false;
-  let reserved = false;
   const text = template.replace(REFERENCE, (whole, raw: string) => {
     const name = raw.trim();
     if (name === USER_REFERENCE_NAME) {
@@ -107,16 +110,18 @@ export function expandInitInstruction(
       return "{{user}}";
     }
     if (name === DIR_REFERENCE_NAME) return DIR_PLACEHOLDER;
-    if (name === RESERVED_REFERENCE_NAME) {
-      reserved = true;
-      return whole;
-    }
+    if (name === WEBMUX_REFERENCE_NAME) return WEBMUX_PLACEHOLDER;
     const found = commands.find((cmd) => cmd.name.trim() === name);
     if (found) return found.command;
     missing.add(name);
     return whole;
   });
-  return { text, missing: [...missing], hasUser, reserved };
+  return {
+    text,
+    missing: [...missing],
+    hasUser,
+    hasWebmux: usesWebmuxBrief(text),
+  };
 }
 
 /**

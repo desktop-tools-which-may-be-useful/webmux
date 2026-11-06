@@ -74,6 +74,9 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 		record.Socket = path
 		// Sessions created from now on find the socket in WEBMUX_SOCKET.
 		m.SetSocket(path)
+		if deps.Guide != nil {
+			deps.Guide.SetSocket(path)
+		}
 		rt.server = &http.Server{
 			Handler: api.NewLocal(deps, api.Local{
 				Configuration: func() contract.Configuration { return effectiveView(c, record, deps) },

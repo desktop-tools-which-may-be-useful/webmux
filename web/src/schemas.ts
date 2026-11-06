@@ -647,6 +647,14 @@ export const UploadSchema = z.object({ path: z.string().startsWith("/") });
 export const ArtifactsFolderSchema = z.object({
   path: z.string().startsWith("/"),
 });
+// POST /sessions/:id/agent-guide: the brief {{webmux}} expands to.
+export const AgentGuidePromptSchema = z.object({
+  prompt: z.string().min(1),
+  guideUrl: z.string(),
+  dir: z.string().min(1),
+  bin: z.string().nullable(),
+  socket: z.string().nullable(),
+});
 export const RecentDirsSchema = z
   .array(z.string())
   .transform((dirs) => dirs.slice(0, 10));

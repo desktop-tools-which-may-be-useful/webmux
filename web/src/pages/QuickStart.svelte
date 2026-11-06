@@ -577,11 +577,6 @@
                       )
                     : instructionPreview.text}
                 </p>
-                {#if instructionPreview.reserved}
-                  <p class="text-xs text-warning" role="status">
-                    {"{{webmux}}"} 是保留变量，暂不可用，发送时会被服务端拒绝。
-                  </p>
-                {/if}
                 {#if instructionPreview.missing.length}
                   <p class="text-xs text-warning" role="status">
                     找不到快捷指令：{instructionPreview.missing
@@ -597,6 +592,11 @@
                 {#if usesArtifactDir(instructionPreview.text)}
                   <p class="text-xs text-muted-foreground">
                     {"{{dir}}"} 会在会话创建后替换为它的临时文件夹路径。
+                  </p>
+                {/if}
+                {#if instructionPreview.hasWebmux}
+                  <p class="text-xs text-muted-foreground">
+                    {"{{webmux}}"} 会在会话创建后替换为 WebMux 工具说明：手册地址、命令路径与临时文件夹。
                   </p>
                 {/if}
                 <p class="text-xs text-muted-foreground">

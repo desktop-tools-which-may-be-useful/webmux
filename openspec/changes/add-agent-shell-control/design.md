@@ -144,7 +144,7 @@ Claude Code、Codex 正是这样，而它们恰恰是最常见的调用方。因
 - `{{dir}}` 仍然可用，用户可以继续写自己的临时文件夹说明。
 
 简述由 `POST /api/sessions/{id}/agent-guide` 生成：确保临时文件夹存在，再返回 `{prompt, guideUrl, dir}`。
-生成逻辑放在 `artifacts.Service.Brief(id)`，调用 `internal/agentguide` 的模板函数。快速开始和快捷指令都经它展开，服务端和浏览器的文字因此一致。
+简述由 `internal/agentguide` 的 `Instance.Brief` 生成：`cmd/webmux` 构造实例（版本、本机链接、可执行文件，套接字在监听后设置），注入 API（`Deps.Guide`）与工作区服务（`UseBrief`）。快速开始和快捷指令都经它展开，服务端和浏览器的文字因此一致。
 
 ### D11 安全
 

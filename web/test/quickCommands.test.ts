@@ -10,7 +10,9 @@ import {
   quickCommandNameError,
   quickCommandsNameError,
   renderArtifactDir,
+  renderWebmuxBrief,
   usesArtifactDir,
+  usesWebmuxBrief,
 } from "../src/quickCommands";
 import { QuickCommandsSchema, type QuickCommand } from "../src/schemas";
 
@@ -68,11 +70,12 @@ describe("parseQuickCommands", () => {
         enter: true,
       },
       { id: "preset-new", name: "新会话", command: "/new", enter: true },
-      expect.objectContaining({
-        id: "preset-artifacts",
-        name: "临时文件夹",
+      {
+        id: "preset-webmux",
+        name: "WebMux 工具",
+        command: "{{webmux}}",
         enter: false,
-      }),
+      },
     ]);
   });
 
@@ -115,14 +118,15 @@ describe("{{dir}}", () => {
     ).toBe("看 /tmp/a b/'s1'，上传在 /tmp/a b/'s1'/uploads/");
   });
 
-  test("the artifacts preset names the folder, uploads and cleanup", () => {
+  test("the WebMux preset is the brief alone", () => {
     const preset = QUICK_COMMAND_PRESETS.find(
-      (cmd) => cmd.id === "preset-artifacts",
+      (cmd) => cmd.id === "preset-webmux",
     );
-    const text = renderArtifactDir(preset?.command ?? "", "/tmp/x/s1");
-    expect(text).not.toContain("{{dir}}");
-    expect(text).toContain("/tmp/x/s1/uploads/");
-    expect(text).toContain("临时文件夹");
+    expect(usesWebmuxBrief(preset?.command ?? "")).toBe(true);
+    expect(renderWebmuxBrief(preset?.command ?? "", "说明 {{dir}}")).toBe(
+      "说明 {{dir}}",
+    );
+    expect(usesWebmuxBrief("git status")).toBe(false);
   });
 });
 
@@ -164,30 +168,36 @@ describe("init instruction references", () => {
       text: "先 git status {{dir}}；{{状态}}；{{无}}",
       missing: ["无"],
       hasUser: false,
-      reserved: false,
+      hasWebmux: false,
     });
   });
 
-  test("{{user}} is built in and {{webmux}} reserved; neither is a name", () => {
+  test("{{user}} and {{webmux}} are built in; neither is a name", () => {
     expect(expandInitInstruction("任务：{{ user }}", list)).toEqual({
       text: "任务：{{user}}",
       missing: [],
       hasUser: true,
-      reserved: false,
+      hasWebmux: false,
     });
-    expect(expandInitInstruction("{{webmux}}", list)).toEqual({
+    expect(expandInitInstruction("{{ webmux }}", list)).toEqual({
       text: "{{webmux}}",
       missing: [],
       hasUser: false,
-      reserved: true,
+      hasWebmux: true,
     });
+    // A {{webmux}} inside a referenced command's body counts as well.
+    expect(
+      expandInitInstruction("{{工具}}", [
+        { id: "t", name: "工具", command: "先读 {{webmux}}", enter: false },
+      ]).hasWebmux,
+    ).toBe(true);
     expect(quickCommandNameError("user", [])).not.toBe("");
     expect(quickCommandNameError("webmux", [])).not.toBe("");
     expect(expandInitInstruction("放 {{ dir }}", list)).toEqual({
       text: "放 {{dir}}",
       missing: [],
       hasUser: false,
-      reserved: false,
+      hasWebmux: false,
     });
     expect(quickCommandNameError("dir", [])).not.toBe("");
   });

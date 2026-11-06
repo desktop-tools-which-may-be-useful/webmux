@@ -32,7 +32,9 @@ var webmux = manifest{
 		"internal/tailscalesettings": service,
 
 		// Wire contracts and infrastructure every layer may use.
-		"internal/acp":          shared,
+		"internal/acp": shared,
+		// The shell guide served at /llms.txt and the {{webmux}} brief.
+		"internal/agentguide":   shared,
 		"internal/agentprofile": shared,
 		// Agent adapters and the registry that lists them.
 		"internal/agentprofile/agents":     shared,

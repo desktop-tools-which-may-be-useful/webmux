@@ -74,7 +74,7 @@ test("presets, settings round trip, direct sends and draft insertion", async ({
   expect(await commandNames(menu(page))).toEqual([
     "恢复会话：/resume（并回车）",
     "新会话：/new（并回车）",
-    "临时文件夹：本会话的临时文件夹：{{dir}} …",
+    "WebMux 工具：{{webmux}}",
   ]);
   await page.keyboard.press("Escape");
 
@@ -214,19 +214,19 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   expect(await labels()).toEqual([
     "编辑 恢复会话",
     "编辑 新会话",
-    "编辑 临时文件夹",
+    "编辑 WebMux 工具",
   ]);
   await expect(
     card(page).getByRole("button", { name: "上移 恢复会话" }),
   ).toBeDisabled();
   await expect(
-    card(page).getByRole("button", { name: "下移 临时文件夹" }),
+    card(page).getByRole("button", { name: "下移 WebMux 工具" }),
   ).toBeDisabled();
   await card(page).getByRole("button", { name: "上移 新会话" }).click();
   expect(await labels()).toEqual([
     "编辑 新会话",
     "编辑 恢复会话",
-    "编辑 临时文件夹",
+    "编辑 WebMux 工具",
   ]);
 
   const id = await createShell(page, "Reordered quick commands", workDir);
@@ -234,7 +234,7 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   expect(await commandNames(menu(page))).toEqual([
     "新会话：/new（并回车）",
     "恢复会话：/resume（并回车）",
-    "临时文件夹：本会话的临时文件夹：{{dir}} …",
+    "WebMux 工具：{{webmux}}",
   ]);
   await item(page, "管理快捷指令…").click();
   await expect(page).toHaveURL(
@@ -247,7 +247,7 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   await dialog.getByLabel("名称", { exact: true }).fill("换个名字");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  const reordered = ["编辑 新会话", "编辑 恢复会话", "编辑 临时文件夹"];
+  const reordered = ["编辑 新会话", "编辑 恢复会话", "编辑 WebMux 工具"];
   expect(await labels()).toEqual(reordered);
 
   await card(page).getByRole("button", { name: "删除 新会话" }).click();
@@ -255,7 +255,7 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   await expect(confirm).toContainText("新会话");
   await confirm.getByRole("button", { name: "取消", exact: true }).click();
   expect(await labels()).toEqual(reordered);
-  for (const name of ["新会话", "恢复会话", "临时文件夹"]) {
+  for (const name of ["新会话", "恢复会话", "WebMux 工具"]) {
     await card(page)
       .getByRole("button", { name: `删除 ${name}` })
       .click();

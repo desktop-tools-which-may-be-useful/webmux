@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/rainchan/webmux/internal/agentguide"
 	"io"
 	"log/slog"
 	"net"
@@ -449,7 +450,13 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		_, err := hybrids.Record(id)
 		return !errors.Is(err, hybrid.ErrNotFound)
 	})
+	// The shell guide and the {{webmux}} brief; the socket is added once the
+	// local API listens.
+	guide := &agentguide.Instance{Version: version, LocalURL: localOrigin(listener.Addr()), Bin: serverExecutable()}
 	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)
+	workspaces.UseBrief(func(id, dir string) string {
+		return guide.Brief(agentguide.BriefInput{SessionID: id, Dir: dir})
+	})
 	workspaces.UseHybrid(hybrids)
 	workspaces.UseArtifacts(folders)
 	// Initialization instructions reference the saved quick commands by name.
@@ -490,6 +497,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		// configuration requests compare against it.
 		InstalledVersion: update.NewInstalledVersion(version).Pending,
 		LocalURL:         localOrigin(listener.Addr()),
+		Guide:            guide,
 		Launcher:         runtime.Launcher(os.Getenv),
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels

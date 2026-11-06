@@ -4,13 +4,19 @@
   import { onMount, tick, untrack, type Snippet } from "svelte";
   import {
     apiBuffer,
+    agentGuidePrompt,
     ensureArtifactsFolder,
     navigate,
     store,
     stored,
     uploadFile,
   } from "../api";
-  import { renderArtifactDir, usesArtifactDir } from "../quickCommands";
+  import {
+    renderArtifactDir,
+    renderWebmuxBrief,
+    usesArtifactDir,
+    usesWebmuxBrief,
+  } from "../quickCommands";
   import { clipboardFiles, copyText as writeClipboard } from "../clipboard";
   import { useTerminal } from "../hooks/terminal.svelte";
   import { createKeyboardSizeHold } from "../hooks/keyboard-size-hold";
@@ -280,7 +286,9 @@
     unknown: "连接中断，快捷指令结果未知；重连后自动查询。",
   };
   // The operation binds this session's draft and target at selection. A body
-  // with `{{dir}}` first waits for the artifacts folder, then runs as written.
+  // with `{{dir}}` or `{{webmux}}` first waits for the artifacts folder or
+  // the WebMux brief, then runs as written; the brief goes in last, so
+  // nothing in it is replaced.
   async function runQuickCommand(cmd: QuickCommand) {
     t.resetModifiers();
     const chat = hybrid.view === "chat";
@@ -297,6 +305,18 @@
       }
       if (!mounted) return;
       text = renderArtifactDir(text, dir);
+    }
+    if (usesWebmuxBrief(text)) {
+      operation ??= beginInput();
+      let brief: string;
+      try {
+        brief = await agentGuidePrompt(id);
+      } catch (err) {
+        if (mounted) error = `WebMux 工具说明不可用：${errorMessage(err)}`;
+        return;
+      }
+      if (!mounted) return;
+      text = renderWebmuxBrief(text, brief);
     }
     if (!chat && cmd.enter && drafts.destination(draft) === "terminal") {
       // Text and Enter form one acknowledged submission.

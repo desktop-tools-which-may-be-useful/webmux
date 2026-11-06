@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "bin": "/opt/webmux/bin/webmux",
+    "dir": "<dir#1>",
+    "guideUrl": "http://127.0.0.1:7681/llms.txt",
+    "prompt": "<prompt#1>",
+    "socket": "/run/user/1000/webmux/webmux.sock"
+  }
+}

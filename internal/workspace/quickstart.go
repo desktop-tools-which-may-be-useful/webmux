@@ -211,6 +211,18 @@ func (s *Service) composePrompt(id string, plan quickStartPlan) (string, error) 
 		}
 		instruction = strings.ReplaceAll(instruction, artifactsDirPlaceholder, dir)
 	}
+	// The brief goes in last, after {{dir}}: nothing in it is read as a
+	// reference.
+	if strings.Contains(instruction, webmuxPlaceholder) {
+		if s.artifacts == nil || s.brief == nil {
+			return "", problemf(ErrUnavailable, "WebMux 工具说明不可用")
+		}
+		dir, err := s.artifacts.Ensure(id)
+		if err != nil {
+			return "", problemf(ErrUnavailable, "WebMux 工具说明不可用：%v", err)
+		}
+		instruction = strings.ReplaceAll(instruction, webmuxPlaceholder, s.brief(id, dir))
+	}
 	text := fillUser(instruction, plan.text)
 	if noMessage {
 		text = strings.TrimSpace(strings.ReplaceAll(instruction, userReference, ""))
@@ -296,6 +308,9 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 		if err != nil {
 			return quickStartPlan{}, err
 		}
+		if strings.Contains(instruction, webmuxPlaceholder) && (s.artifacts == nil || s.brief == nil) {
+			return quickStartPlan{}, problemf(ErrUnavailable, "WebMux 工具说明不可用")
+		}
 	}
 	size := len(in.Text)
 	if instruction != "" {
@@ -319,9 +334,6 @@ func (s *Service) quickStartPlan(ctx context.Context, in QuickStartInput) (quick
 func (s *Service) expandRepositoryInstruction(instruction string) (string, error) {
 	if instruction == "" {
 		return "", nil
-	}
-	if usesReservedReference(instruction) {
-		return "", problemf(ErrInvalid, "初始化指令里的 {{%s}} 是保留变量，暂不可用", reservedReferenceName)
 	}
 	var commands []QuickCommand
 	if s.commands != nil {

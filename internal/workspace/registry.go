@@ -61,7 +61,10 @@ type Service struct {
 	artifacts *artifacts.Service
 	// commands lists the saved quick commands an initialization instruction
 	// may reference; nil means none exist.
-	commands     func() []QuickCommand
+	commands func() []QuickCommand
+	// brief writes the {{webmux}} brief of a session; nil leaves an
+	// instruction that uses it unavailable.
+	brief        func(sessionID, dir string) string
 	defaultCwd   string
 	gitPath      string
 	fetchTimeout time.Duration
@@ -128,6 +131,10 @@ func (s *Service) UseArtifacts(a *artifacts.Service) { s.artifacts = a }
 // the saved quick commands that initialization instructions reference by
 // name.
 func (s *Service) UseQuickCommands(list func() []QuickCommand) { s.commands = list }
+
+// UseBrief installs, once at assembly before serving, the writer of the
+// brief {{webmux}} expands to for a session and its artifacts folder.
+func (s *Service) UseBrief(brief func(sessionID, dir string) string) { s.brief = brief }
 
 func (s *Service) load() error {
 	expanded, err := pathutil.Expand(s.stateDir)

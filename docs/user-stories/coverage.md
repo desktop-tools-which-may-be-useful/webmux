@@ -26,6 +26,8 @@
 | 会话内连回所属实例：`WEBMUX_SOCKET`、`WEBMUX_BIN`、`--socket`、`self` 与版本过旧提示                | US-S01                                              |
 | 会话详情接口与 `webmux get`、父会话、会话标签与 `ls` 筛选                                           | US-S02–US-S03                                       |
 | 命令表、完整 `--help`、`help --json` 与用法错误约定                                                 | US-S04；US-M01–US-M07                               |
+| llms.txt 形式的 WebMux 工具手册、`webmux guide` 与 `webmux dir`                                     | US-S05                                              |
+| `{{webmux}}` 说明接口、初始化指令与快捷指令中的 `{{webmux}}`、预设“WebMux 工具”                     | US-S06；US-G06；US-J12                              |
 | 聊天端选择、拖放或粘贴文件，上传进度、取消、待发送附件与图片小图预览                                | US-Q14；US-E04–US-E07                               |
 | 首页导航、紧凑/预览、详情、分组、按需表单、增量更新、排序、搜索、筛选与空状态                       | US-C01–US-C05                                       |
 | OSC 7501 程序状态、结构化 agent 信号、OSC 通知、BEL 与集成配置                                      | US-C05–US-C06；US-K04                               |

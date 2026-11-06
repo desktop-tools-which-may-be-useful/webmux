@@ -34,7 +34,7 @@ test("lists only missing presets and adds the chosen one", async () => {
   await expect
     .element(page.getByRole("menuitem", { name: "添加预设 恢复会话" }))
     .not.toBeInTheDocument();
-  await page.getByRole("menuitem", { name: "添加预设 临时文件夹" }).click();
+  await page.getByRole("menuitem", { name: "添加预设 WebMux 工具" }).click();
   expect(onadd).toHaveBeenCalledWith([QUICK_COMMAND_PRESETS[2]]);
 });
 

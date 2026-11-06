@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 )
@@ -393,4 +394,64 @@ func parentName(name string) string {
 		return name[:i]
 	}
 	return ""
+}
+
+// Reference renders the command reference page of the shell guide from
+// the command table: every visible command that runs, in table order.
+func (e Env) Reference(r Registry) string {
+	var b strings.Builder
+	b.WriteString("# 命令参考\n\n")
+	b.WriteString("本页由命令表生成，与 `webmux <命令> --help` 一致（帮助正文为英文）。退出码见 [退出码](/llms/exit-codes.md)。\n")
+	for _, c := range r.Visible("unix") {
+		if c.Bind == nil {
+			continue
+		}
+		fmt.Fprintf(&b, "\n## webmux %s\n\n`%s`\n\n%s\n", c.Name, c.Usage(), c.Summary)
+		if c.Description != "" {
+			b.WriteString("\n" + c.Description + "\n")
+		}
+		if len(c.Arguments) > 0 {
+			b.WriteString("\nArguments:\n\n")
+			for _, a := range c.Arguments {
+				fmt.Fprintf(&b, "- `%s`: %s\n", a.Name, a.Text)
+			}
+		}
+		var own []Option
+		for _, o := range e.Options(c) {
+			if !o.Global {
+				// The page is the same on every machine and public: a
+				// default under the home directory is written with ~.
+				o.Default = tildeHome(o.Default)
+				own = append(own, o)
+			}
+		}
+		if len(own) > 0 {
+			b.WriteString("\nOptions:\n\n")
+			for _, item := range optionItems(own) {
+				fmt.Fprintf(&b, "- `%s`: %s\n", item.Name, item.Text)
+			}
+		}
+		if len(c.Examples) > 0 {
+			b.WriteString("\nExamples:\n\n")
+			for _, x := range c.Examples {
+				fmt.Fprintf(&b, "- `%s`: %s\n", x.Command, x.Text)
+			}
+		}
+	}
+	return b.String()
+}
+
+// tildeHome writes a path under the user's home directory with ~.
+func tildeHome(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == "/" {
+		return path
+	}
+	if path == home {
+		return "~"
+	}
+	if rest, ok := strings.CutPrefix(path, home+"/"); ok {
+		return "~/" + rest
+	}
+	return path
 }
