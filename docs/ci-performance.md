@@ -39,7 +39,7 @@ E2E 的 worker 数从 2 调到 4，Storybook 从 2 调到 6，使用同一台机
 - Storybook 在 CI 只为首次重试记录 trace，与 E2E 一致；失败截图、报告和本地失败 trace 保留。Storybook 重试只用于诊断，flaky 仍使 CI 失败；速度比较也拒绝 flaky 结果。
 - CI 安装 Chromium 及其 headless shell，覆盖通知与常规浏览器用例。macOS 原生 Go race 与两个桌面 E2E 分片使用独立 runner，任一失败都令最终检查失败。E2E 通过显式 `WEBMUX_E2E_DIST` 复用刚生成的生产产物，默认仍从源码构建。`Test result` 要求已执行 job 成功，并接受变更裁剪跳过的 job。
 - E2E 运行时由独立的 `E2E runtime` job 统一构建，并通过同轮 artifact 分发给 Ubuntu 四个、macOS 两个分片；两个平台的 Go race 也依赖该 job 取得前端产物。
-  - 构建内容：当前提交的内嵌程序，以及按 `omp`、`opencode`、`codex`、`codex-acp`、`claude`、`claude-agent-acp` 命名的假 ACP agent（`.ci-runtime/<平台>/agents/`，由 `.github/scripts/package-e2e-runtime.mjs` 构建）；使用 tar 保留可执行权限。
+  - 构建内容：当前提交的内嵌程序，以及按 `omp`、`opencode`、`codex`、`codex-acp`、`claude`、`claude-agent-acp`、`agy` 命名的假 ACP agent（`.ci-runtime/<平台>/agents/`，由 `.github/scripts/package-e2e-runtime.mjs` 构建）；使用 tar 保留可执行权限。
   - 分片通过 `WEBMUX_E2E_BINARY` 使用该程序，从其旁边的 `agents/` 取得假 agent；不安装 Go、不恢复 Go 缓存，也不重复构建前端或后端。
   - 显式路径无效或缺少假 agent 时直接失败；本地未指定时仍从源码构建。
   - 分片的后端进程、HOME、目录、端口、假 agent 会话库和 PTY 仍各自独立。Node/pnpm 安装与浏览器系统依赖仍由每个 runner 准备。

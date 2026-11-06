@@ -9,7 +9,7 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. Read it when you nee
 - `internal/session/`: session lifecycle and concurrency.
   - Process tables and cleanup are platform-specific: `_linux.go` reads `/proc`, `_darwin.go` uses sysctl/`proc_pidinfo`, shared logic is in `_unix.go`.
 - `internal/hybrid/`: hybrid (TUI ↔ ACP chat) sessions, one actor per session, records in `hybrid-sessions.json`.
-  - `internal/acp/`: stdlib-only ACP v1 client. `internal/agentprofile/` (adapters `opencode`, `omp`, `codex`, `claudecode`): agent-neutral profiles and registry.
+  - `internal/acp/`: stdlib-only ACP v1 client. `internal/agentprofile/` (adapters `opencode`, `omp`, `codex`, `claudecode`, `agy`, `qoder`, `qodercn`; list in `agentprofile/agents`): agent-neutral profiles and registry.
 - `internal/api/`, `internal/hub/`, `internal/wire/`: controllers.
   - HTTP/security boundaries, status mapping (`api/errors.go`), streaming transport, and service↔wire conversion.
   - No direct filesystem, process, or service package-level calls.

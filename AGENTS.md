@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, including shells and CLI agents. Browser disconnection does not end a session; server restart does. The Go binary embeds the browser app. This is not a process sandbox, durable session store, or tmux wrapper: commands run as the service user. Keep deployments on loopback or a trusted VPN; never expose an unrestricted shell publicly.
+WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, including shells and CLI agents; supported agents also run as hybrid TUI/ACP-chat sessions. Browser disconnection does not end a session; server restart does. The Go binary embeds the browser app. This is not a process sandbox, durable session store, or tmux wrapper: commands run as the service user. Keep deployments on loopback or a trusted VPN; never expose an unrestricted shell publicly.
 
 **This file has a hard 10 KiB budget**, enforced by `internal/archtest` (`TestAgentsGuideSize`). Keep only rules needed on almost every change here; put the rest in `docs/agent-rules/` and link it. Index: [docs/agent-rules.md](docs/agent-rules.md).
 
@@ -11,7 +11,8 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
   - Controllers: `internal/api`, `hub`, `wire`. Services: `session`, `workspace`, `launch`, `push`, `codeview`, `files`, and others. Shared: `contract`, `config`, `runtime`, `statefile`, `fetch`, `pathutil`, `attentionkind`. Out-of-server clients: `client`, `attach`, `tray/...`, `tunnel`, `service`, and others.
   - Shared packages and clients never import services or controllers. Only `cmd/` imports `internal/api`.
 - `internal/session` owns PTYs, bounded byte scrollback, metadata, status detection, and process cleanup. `internal/api` owns REST routes, authentication, Origin checks, error-to-status mapping, and static serving. `internal/hub` bridges session subscriptions to WebSockets and encodes terminal JSON frames. `internal/files` owns directory completion, mkdir, and upload storage.
-- REST handles configuration, session operations, and filesystem requests. `/ws/sessions` delivers a snapshot followed by list events; `/ws/s/{id}` carries terminal frames. Raw PTY bytes reach xterm without server-side terminal emulation; OSC/title and preview parsing are side channels.
+- `internal/hybrid` runs hybrid sessions (one actor each) and normalizes ACP updates into chat events; `internal/acp` is a stdlib-only ACP v1 client; `internal/agentprofile` holds per-agent profiles ([architecture](docs/architecture.md#混合会话)).
+- REST handles configuration, session operations, and filesystem requests. `/ws/sessions` delivers a snapshot followed by list events; `/ws/s/{id}` carries terminal frames; `/ws/s/{id}/chat` carries chat events. Raw PTY bytes reach xterm without server-side terminal emulation; OSC/title and preview parsing are side channels.
 - Replay capture and live subscription registration share a lock: preserve gap-free reattachment. Bounded queues disconnect slow clients rather than blocking PTY readers. Each connection has one data writer; cancelling a connection must not kill the persistent session.
 - Backend payloads and `web/src/schemas.ts` form one contract. Every JSON body and frame is a type in `internal/contract`, converted from service types in `internal/wire`; services never encode client-visible JSON. When changing JSON fields, update schemas, contract types, hub/frontend frame handling and consumers together, then re-record `internal/api/testdata/wire` with `go test ./internal/api -run TestWireSnapshots -update`.
 
@@ -20,18 +21,18 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 Run from the repository root; the full list is in [conventions](docs/agent-rules/conventions.md#development-commands).
 
 - `make web`: install frontend dependencies, run Svelte/TypeScript checks, build `web/dist`.
-- `make build`: build the frontend, then the embedded Go binary `bin/webmux`. Rebuild the frontend before compiling Go (`web/embed.go` embeds `web/dist`).
-- `make check`: build the frontend, check test types and formatting, run the doc and persistence guards, Oxlint, the architecture guard, `go vet` and `golangci-lint` (needs golangci-lint v2.15.0).
+- `make build`: build the frontend, then the embedded Go binary `bin/webmux`. Rebuild the frontend first (`web/embed.go` embeds `web/dist`).
+- `make check`: build the frontend, check test types and formatting, run the doc, persistence and architecture guards, Oxlint, `go vet` and `golangci-lint` (v2.15.0).
 - `make format`: apply gofmt and Oxfmt.
 - `pnpm --dir web check:arch`: frontend architecture guard; run it before finishing frontend work.
 - `pnpm --dir web dev`: Vite at `http://127.0.0.1:5173`, proxying `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its TOML or browser writes are rejected.
-- `-config`, `-listen`, `-token` override startup settings; config defaults to `~/.config/webmux/config.toml`.
+- `-config`, `-listen`, `-token` override startup settings.
 
 ## Conventions
 
 - Go: follow [docs/go-style.md](docs/go-style.md) and add no lint warnings (`make go-lint`). Return contextual errors. Services report sentinel errors (for example `workspace.ErrConflict`); only `internal/api/errors.go` maps them to HTTP statuses.
 - Concurrency: protect state with existing locks and never hold them across blocking network or PTY operations. Shared output chunks stay immutable. Exit publication follows PTY drain and process cleanup. Preserve cancellation/deadlines for PTY writes and join spawned connection goroutines.
-- Execute commands as argv, not shell-expanded strings. Session creation takes either a saved launch `configId` or an explicit full `cmd`/`env`, never both. There are no built-in launch presets or implicit shell wrappers; loading `.bashrc` needs an explicit command such as `bash -ic 'exec opencode "$@"' opencode`.
+- Execute commands as argv, not shell-expanded strings. Session creation takes either a saved launch `configId` or an explicit full `cmd`/`env`, never both. A new install seeds editable launch configs (`internal/launch/presets.go`); nothing is wrapped implicitly: loading `.bashrc` needs an explicit command such as `bash -ic 'exec -- "$@"' webmux opencode`.
 - Security: preserve authentication and Origin checks on API/WebSocket paths. Never log terminal input/output or expose tokens through configuration responses.
 - Frontend: Svelte 5 runes per [docs/frontend-style.md](docs/frontend-style.md) (`$state` only for rendered state, `$derived` for computed values, `$effect` only for side effects with cleanup, typed `$props()`, `onclick` not `on:`). TypeScript is strict. Oxfmt: 80 columns, two spaces, semicolons, trailing commas.
 - Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. Reuse `api.ts` and `ws.ts`; do not add parallel request or reconnect conventions. PTY data stays binary. Failures use `APIError`; HTTP 401 triggers `webmux:auth`.

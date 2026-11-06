@@ -34,7 +34,8 @@ Windows 不是“顺带能用”的平台。
 
 ### 融入现有终端 agent 工作流
 
-- Claude Code、Codex、omp 等 agent 原样运行在真实 PTY 中，无需插件、适配器或改写其配置。
+- Claude Code、Codex、omp 等 agent 的终端端原样运行在真实 PTY 中，无需插件或改写其配置。
+- 聊天端（[混合会话](hybrid-sessions.md)）经 ACP 连接同一个 agent 会话；Codex 与 Claude Code 需要另外安装第三方 ACP 连接器，缺失时终端端照常使用。
 - 原始字节直通 xterm.js，TUI 渲染与原生终端一致。
 - 在习惯的终端里 `webmux run -- claude` 启动，`Ctrl+]` 分离后在手机上继续，回到电脑 `webmux attach <ID>` 接续，全程是同一个进程。
 

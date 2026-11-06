@@ -206,7 +206,7 @@ flowchart LR
 - **agent 适配器**：`internal/agentprofile` 是 agent 中立的核心，`hybrid` 只依赖其中的接口。
   - `Agent` 接口提供档案数据（命令写法、参数分类、恢复与 ACP 命令）、身份识别与中断键。
   - 只有部分 agent 具备的行为是可选小接口，`hybrid` 以类型断言使用：`Resumer`、`ConfigReapplier`、`Steerer`、`LockTracker`、`ForceSwitchNoter`。
-  - 每个 agent 是一个子包（`opencode`、`omp`、`codex`、`claudecode`），`agentprofile/agents` 用显式列表组成不可变注册表；`agentprofile/agenttest` 是每个适配器都运行的契约测试。
+  - 每个 agent 是一个子包（`opencode`、`omp`、`codex`、`claudecode`、`agy`、`qoder`、`qodercn`），`agentprofile/agents` 用显式列表组成不可变注册表；`agentprofile/agenttest` 是每个适配器都运行的契约测试。
   - 新增 agent 只需新增子包并在注册表登记（启动预设、图标与文档另行添加）；`internal/archtest` 守住 `acp`、`hybrid`、核心包与 `web/src` 不出现 agent 名称。
 - **生命周期**：从终端或聊天开始，协议见 [混合会话接口](protocol/http-hybrid.md)。
   - 切换失败自动回到原端；TUI 自行退出或回滚失败标记 `interrupted`。
