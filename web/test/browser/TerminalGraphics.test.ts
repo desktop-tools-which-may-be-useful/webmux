@@ -183,7 +183,7 @@ test("omp redraw and top-cropped placements survive partial text erasure", async
         ),
       )
       .toEqual(colors[step]);
-    expect(canvas.style.display).not.toBe("none");
+    await expect.poll(() => canvas.style.display).not.toBe("none");
     socket.receive(0, kittyTextRedraw(step));
     await expectDomText(`Kitty redraw step ${step}:`);
     expect(canvases()).toEqual([canvas]);

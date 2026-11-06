@@ -31,7 +31,7 @@ type sizeServer struct {
 	status int
 }
 
-func (s *sizeServer) handler() http.Handler {
+func (s *sizeServer) handler(stop <-chan struct{}) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/s/{id}", func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"webmux"}})
@@ -41,7 +41,10 @@ func (s *sizeServer) handler() http.Handler {
 		defer func() { _ = c.CloseNow() }()
 		_ = c.Write(r.Context(), websocket.MessageBinary, append([]byte{contract.FrameState}, `{"cols":40,"rows":5}`...))
 		_ = c.Write(r.Context(), websocket.MessageBinary, append([]byte{contract.FrameSnapshot}, s.output...))
-		_, _, _ = c.Read(r.Context())
+		select {
+		case <-stop:
+		case <-r.Context().Done():
+		}
 	})
 	mux.HandleFunc("POST /api/sessions/{id}/resize", func(w http.ResponseWriter, r *http.Request) {
 		var req contract.SessionResizeRequest
@@ -60,26 +63,54 @@ func (s *sizeServer) handler() http.Handler {
 	return mux
 }
 
-func (s *sizeServer) env(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
+func serveUnix(t *testing.T, stop chan struct{}, h http.Handler) (Env, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
+	var (
+		mu      sync.Mutex
+		closing bool
+		wg      sync.WaitGroup
+	)
 	dir, err := os.MkdirTemp("/tmp", "scm")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "s.sock")
 	l, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: s.handler()}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if closing {
+			mu.Unlock()
+			return
+		}
+		wg.Add(1)
+		mu.Unlock()
+		defer wg.Done()
+		h.ServeHTTP(w, r)
+	})}
 	go func() { _ = srv.Serve(l) }()
-	t.Cleanup(func() { _ = srv.Close() })
+	t.Cleanup(func() {
+		mu.Lock()
+		closing = true
+		mu.Unlock()
+		close(stop)
+		_ = srv.Close()
+		wg.Wait()
+		_ = os.RemoveAll(dir)
+	})
 	var stdout, stderr bytes.Buffer
 	return Env{
 		Connect: func() (*localclient.Client, error) { return localclient.New(localclient.UnixDialer{Path: socket}), nil },
 		Stdout:  &stdout, Stderr: &stderr, NotRunningHint: "start it",
 	}, &stdout, &stderr
+}
+
+func (s *sizeServer) env(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	stop := make(chan struct{})
+	return serveUnix(t, stop, s.handler(stop))
 }
 
 // thirty is thirty numbered lines: six times the screen of the test terminal.
@@ -226,7 +257,6 @@ type animatedServer struct {
 func (a *animatedServer) env(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	stop := make(chan struct{})
-	var wg sync.WaitGroup
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/s/{id}", func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"webmux"}})
@@ -241,8 +271,6 @@ func (a *animatedServer) env(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
 			_ = c.Write(ctx, websocket.MessageBinary, []byte{contract.FrameExit})
 			return
 		}
-		wg.Add(1)
-		defer wg.Done()
 		if a.spin {
 			for i := 0; ; i++ {
 				select {
@@ -257,30 +285,12 @@ func (a *animatedServer) env(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
 				}
 			}
 		}
-		_, _, _ = c.Read(ctx)
+		select {
+		case <-stop:
+		case <-ctx.Done():
+		}
 	})
-	dir, err := os.MkdirTemp("/tmp", "scm")
-	if err != nil {
-		t.Fatal(err)
-	}
-	socket := filepath.Join(dir, "s.sock")
-	l, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := &http.Server{Handler: mux}
-	go func() { _ = srv.Serve(l) }()
-	t.Cleanup(func() {
-		close(stop)
-		_ = srv.Close()
-		wg.Wait()
-		_ = os.RemoveAll(dir)
-	})
-	var stdout, stderr bytes.Buffer
-	return Env{
-		Connect: func() (*localclient.Client, error) { return localclient.New(localclient.UnixDialer{Path: socket}), nil },
-		Stdout:  &stdout, Stderr: &stderr, NotRunningHint: "start it",
-	}, &stdout, &stderr
+	return serveUnix(t, stop, mux)
 }
 
 func runScreenJSON(t *testing.T, e Env, stdout *bytes.Buffer) (screenView, time.Duration) {

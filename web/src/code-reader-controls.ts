@@ -289,7 +289,6 @@ export function bindHorizontalScrollbar(
     const nextObserved = new Set<Element>();
     if (bar) nextObserved.add(bar);
     let maxOverflow = 0;
-    let sourceLeft: number | undefined;
     for (const scroller of active) {
       if (!scrollers.has(scroller)) {
         scrollers.add(scroller);
@@ -299,8 +298,6 @@ export function bindHorizontalScrollbar(
       for (const child of scroller.children) nextObserved.add(child);
       const overflow = scroller.scrollWidth - scroller.clientWidth;
       if (overflow > maxOverflow) maxOverflow = overflow;
-      if (scroller.scrollLeft > 0 && sourceLeft === undefined)
-        sourceLeft = scroller.scrollLeft;
     }
     for (const old of observed) {
       if (!nextObserved.has(old)) {
@@ -324,7 +321,14 @@ export function bindHorizontalScrollbar(
         ? bar.clientWidth
         : (active[0]?.clientWidth ?? 0);
     const width = Math.ceil(baseWidth + maxOverflow);
-    const targetLeft = Math.min(sourceLeft ?? left, maxOverflow);
+    // In a single-scroller reader, scrollToColumn sets scroller.scrollLeft
+    // directly before its async scroll event; in split diff, any difference
+    // between scrollers means a scroll event is in flight and left will update.
+    const sourceLeft =
+      active.length === 1 && active[0]!.scrollLeft > 0
+        ? active[0]!.scrollLeft
+        : left;
+    const targetLeft = Math.min(sourceLeft, maxOverflow);
     onChange({ shown: true, width });
     applyLeft(targetLeft);
     requestAnimationFrame(() => {
