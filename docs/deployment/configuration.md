@@ -216,7 +216,7 @@ which codex-acp claude-agent-acp  # 必须能在服务的 PATH 或“加载 shel
 
 ### 混合会话记录
 
-- `hybrid-sessions.json` 只保存 webmux 会话与 agent 会话的对应关系、命令快照与状态，最多 200 条。
+- `hybrid-sessions.json` 只保存 webmux 会话与 agent 会话的对应关系、命令快照与状态，最多 200 条；记录已满时新建混合会话会先淘汰最近未更新的已关闭或已中断记录，运行中的记录不会被淘汰。
 - 它不含环境变量值、消息、排队内容或 token。
 - 文件损坏、锁冲突或不可读写时只禁用混合会话的创建与恢复，普通会话不受影响，原文件不被覆盖。
 - 启动配置的混合勾选在 `launch-configs.json` 中以 `hybrid` 键保存（HTTP API 中的字段名为 `chat`），只在勾选时写入，文件仍为版本 `2`。

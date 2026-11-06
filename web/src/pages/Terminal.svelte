@@ -138,11 +138,22 @@
   const listening = $derived(
     ids.some((sessionId) => !!info[sessionId]?.listeningPorts.length),
   );
-  // The session-list connection carries the forward list. Port prompts need
-  // it only while a pane's session listens on a port, and the dialog while
-  // it is open; otherwise this page leaves the list alone.
+  // The session-list connection carries the forward list and live session
+  // updates for panes on the chat view (whose terminal stream is detached).
+  // Otherwise this page opens it only while a pane listens on a port or the
+  // forwarding dialog is open.
+  const onChatSide = $derived(
+    ids.some(
+      (sessionId) =>
+        info[sessionId]?.views.includes("chat") &&
+        info[sessionId]?.view !== "terminal",
+    ),
+  );
+  const feedById = $derived(
+    new Map(feedSessions.map((session) => [session.id, session])),
+  );
   $effect(() => {
-    if (!listening && !forwarding) return;
+    if (!listening && !forwarding && !onChatSide) return;
     const socket = connectSessions(
       (event) => {
         feedSessions = applySessionEvent(feedSessions, event);
@@ -430,6 +441,7 @@
             onremoved={() => close(pane.sessionId)}
             onarchived={() => close(pane.sessionId)}
             showForwards={() => (forwarding = true)}
+            feedSession={feedById.get(pane.sessionId)}
             oninfo={(value, connection) => {
               info[value.id] = value;
               connections[value.id] = connection;

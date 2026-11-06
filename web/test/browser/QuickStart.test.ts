@@ -32,7 +32,18 @@ const branches = {
     { name: "release", head: "a".repeat(40), worktreePaths: [] },
     { name: "feature", head: "b".repeat(40), worktreePaths: [] },
   ],
-  bases: [],
+  bases: [
+    {
+      name: "refs/remotes/origin/HEAD",
+      head: "a".repeat(40),
+      subject: "init",
+    },
+    {
+      name: "refs/remotes/origin/upstream-fix",
+      head: "c".repeat(40),
+      subject: "upstream fix",
+    },
+  ],
   defaultBase: "a".repeat(40),
   defaultBaseSubject: "init",
   defaultBranch: "main",
@@ -372,7 +383,19 @@ test("the base branch is searched and picked by name", async () => {
   const { input, place } = await open();
   await place.getByRole("button", { name: "基准分支：main" }).click();
   const list = page.getByRole("listbox", { name: "本地分支列表" });
-  await expect.poll(() => list.getByRole("option").elements()).toHaveLength(3);
+  await expect.poll(() => list.getByRole("option").elements()).toHaveLength(4);
+  await page.getByRole("combobox", { name: "基准分支" }).fill("upstream");
+  await page
+    .getByRole("option", { name: "origin/upstream-fix", exact: true })
+    .click();
+  await expect
+    .element(
+      place.getByRole("button", { name: "基准分支：origin/upstream-fix" }),
+    )
+    .toBeVisible();
+  await place
+    .getByRole("button", { name: "基准分支：origin/upstream-fix" })
+    .click();
   await page.getByRole("combobox", { name: "基准分支" }).fill("feat");
   await page.getByRole("option", { name: "feature", exact: true }).click();
   await expect

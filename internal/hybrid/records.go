@@ -17,8 +17,9 @@ import (
 
 const (
 	recordsVersion = 1
-	// MaxRecords bounds hybrid-sessions.json; creating more is refused until
-	// the user removes old records.
+	// MaxRecords bounds hybrid-sessions.json. A new session drops the least
+	// recently updated archived record when the file is full; running
+	// records are never dropped.
 	MaxRecords = 200
 	// maxPreviousIDs keeps the most recent agent session IDs a session
 	// switched away from, for recovery candidates.
@@ -285,17 +286,68 @@ func (r *records) agentInUse(self, sid string) bool {
 	return false
 }
 
-// count is the number of records, for the limit check before a session
-// starts; add enforces the limit again.
-func (r *records) count() int {
+// accepts reports whether add can store one more record now: below
+// MaxRecords, or with an archived record it may drop to make room. skip
+// names records an eviction must leave alone, such as one being resumed;
+// nil skips none.
+func (r *records) accepts(skip func(string) bool) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return len(r.list)
+	return len(r.list) < MaxRecords || oldestArchived(r.list, skip) >= 0
+}
+
+// oldestArchived is the archived record to drop first: the least recently
+// updated one, ties by ID. Active and skipped records never qualify; -1
+// when every remaining record is active or skipped.
+func oldestArchived(list []Record, skip func(string) bool) int {
+	oldest := -1
+	for i, rec := range list {
+		if rec.State == StateActive || (skip != nil && skip(rec.ID)) {
+			continue
+		}
+		if oldest < 0 || rec.UpdatedAt.Before(list[oldest].UpdatedAt) ||
+			(rec.UpdatedAt.Equal(list[oldest].UpdatedAt) && rec.ID < list[oldest].ID) {
+			oldest = i
+		}
+	}
+	return oldest
 }
 
 // add stores a new record and writes it immediately; creation must fail
-// rather than run a session the store cannot track.
-func (r *records) add(rec Record) error {
+// rather than run a session the store cannot track. A full store drops its
+// least recently updated archived record in the same write and returns it,
+// so the caller can end what that record left behind. skip names records an
+// eviction must leave alone; nil skips none.
+func (r *records) add(rec Record, skip func(string) bool) (evicted *Record, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.unavailableLocked(); err != nil {
+		return nil, err
+	}
+	if r.index(rec.ID) >= 0 {
+		return nil, fmt.Errorf("%w: 记录 %s 已存在", ErrConflict, rec.ID)
+	}
+	next := slices.Clone(r.list)
+	if len(next) >= MaxRecords {
+		i := oldestArchived(next, skip)
+		if i < 0 {
+			return nil, ErrLimit
+		}
+		dropped := next[i].clone()
+		evicted = &dropped
+		next = slices.Delete(next, i, i+1)
+	}
+	next = append(next, rec.clone())
+	if err := r.commitLocked(next); err != nil {
+		return nil, err
+	}
+	r.list = next
+	return evicted, nil
+}
+
+// restore puts back a record add evicted when the session that made room
+// failed to start. The failed record is gone again, so the store has room.
+func (r *records) restore(rec Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.unavailableLocked(); err != nil {
@@ -307,7 +359,7 @@ func (r *records) add(rec Record) error {
 	if len(r.list) >= MaxRecords {
 		return ErrLimit
 	}
-	next := append(slices.Clip(r.list), rec.clone())
+	next := append(slices.Clone(r.list), rec.clone())
 	if err := r.commitLocked(next); err != nil {
 		return err
 	}

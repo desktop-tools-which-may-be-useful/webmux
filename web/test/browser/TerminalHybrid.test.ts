@@ -371,7 +371,7 @@ test("an agent title refreshes the chat side's header", async () => {
     .not.toBeInTheDocument();
 });
 
-test("port prompts follow the terminal side and stay off the chat view", async () => {
+test("port prompts appear on both the terminal and chat views", async () => {
   seedForwards([]);
   const streams = await onTerminalSide(tuiState());
   const { terminal } = streams;
@@ -380,10 +380,10 @@ test("port prompts follow the terminal side and stay off the chat view", async (
   const prompt = page.getByText("检测到端口 5173（node）正在监听");
   await expect.element(prompt).toBeVisible();
 
-  // Moved to the chat side: the session info read then still lists the port
-  // the stopped run held, and nothing re-reads it when the port changes.
+  // Moved to the chat side: the session-list connection supplies live port
+  // updates while the terminal stream is detached.
   respond(/^GET \/api\/sessions\/hybrid22$/, () =>
-    Response.json({ ...described(), listeningPorts: [port] }),
+    Response.json({ ...described(), listeningPorts: [] }),
   );
   move(streams, { transition: { to: "chat", phase: "stopping" } });
   streams.terminal.drop(4409);
@@ -391,7 +391,19 @@ test("port prompts follow the terminal side and stay off the chat view", async (
   await expect
     .element(page.getByRole("textbox", { name: "消息" }))
     .toBeVisible();
+  const listSocket = await socketAt("/ws/sessions", 1);
+  listSocket.frame({
+    type: "snapshot",
+    sessions: [{ ...described(), listeningPorts: [] }],
+    forwards: [],
+  } as never);
   await expect.element(prompt).not.toBeInTheDocument();
+
+  listSocket.frame({
+    type: "updated",
+    session: { ...described(), listeningPorts: [port] },
+  } as never);
+  await expect.element(prompt).toBeVisible();
 });
 
 test("a session moved by another device shows the chat view; switching back reattaches the terminal", async () => {

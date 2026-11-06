@@ -108,8 +108,20 @@
   隔离实例中对持续重绘的程序，旧二进制 `screen` 挂到外部 8 秒超时被杀，新二进制约 1 秒返回并提示，空闲 shell 的 `stable` 为 true。
 - 限制：`cmd/webmux` 的隧道用例在 WebMux 会话内运行失败，与本改动无关；完整测试交给 CI。
 
-本次局部核对（2026-11-06，测试覆盖率报告）：引入 Go race 与前端 Vitest（Node 单元 + Chromium 浏览器）覆盖率采集、合并与 CI 摘要。
+本次局部核对（2026-11-06，起始分支搜索与上游分支选择）：新建工作树“起始分支”与快速开始页“基准分支”支持搜索并选择本地或远程跟踪分支（`origin/*` 等），刷新上游同时拉取远程分支引用。
+
+- 更新的故事：US-J04、US-Q18；索引与故事数量不变。
+- 已运行：`go test -race ./internal/workspace ./internal/api`（新增远程跟踪分支刷新与降级用例）；
+  `web/test/browser/WorktreeCreateFields.test.ts`、`NewSessionDialog.test.ts`、`QuickStart.test.ts`；`make check`。
+- 限制：未在 macOS 上运行；完整 E2E 套件交给 CI。
+
+本次局部核对（2026-11-06，聊天视图端口转发提示）：混合会话在聊天端时，`internal/session` 的端口扫描同时覆盖 ACP sidecar 进程树，前端会话页在聊天视图下连接 `/ws/sessions` 同步监听端口与转发列表并展示顶部端口提示，对应更新 US-R04 与覆盖索引，不新增故事。
+
+- 已运行：`go test -race ./internal/session -run "Test.*ListeningPorts"`（新增 `TestShellSidecarListeningPorts`）；`TerminalHybrid.test.ts` 与 `TerminalNotices.test.ts` Vitest 浏览器测试；`make check`；隔离演示环境下桌面（1280×720）与手机（390×844）明暗主题前后对比截图。
+- 限制：完整测试与 E2E 套件交由 CI 运行；未做真机核对。
+
+本次局部核对（2026-11-06，测试覆盖率报告）：引入 Go race（`-coverpkg` 跨包插桩）与前端 Vitest（Node 单元 + Chromium 浏览器）覆盖率采集、合并与 CI 摘要，并补齐 `internal/agentprofile/codex`、`internal/tailscale` 及前端 `SplitSessionDialog`、`QuickCommandDialog`、`code-popout-frame`、`upload` 用例。
 
 - 更新的故事：US-L02；覆盖索引同步，故事数量不变。
-- 已运行：`make check`（含 `make docs-check`、`make persistence-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）、前端单元覆盖率采集与合并脚本。
-- 限制：全量 Go race 与浏览器套件覆盖率交由 CI 运行并产出报告。
+- 已运行：`make check`（含 `make docs-check`、`make persistence-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）、`go test -race ./internal/agentprofile/codex ./internal/tailscale`、新增 Vitest 浏览器用例与 CI 全量覆盖率采集。
+- 限制：未在 macOS 与真机浏览器上运行。

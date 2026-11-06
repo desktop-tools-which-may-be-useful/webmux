@@ -891,7 +891,7 @@ test("new worktree fields survive switching location away and back", async () =>
   await expect.element(branch).toHaveValue("feature/kept");
   await expect.element(path).toHaveValue("/elsewhere/kept");
   await expect
-    .element(page.getByRole("combobox", { name: "起始分支", exact: true }))
+    .element(page.getByRole("button", { name: "起始分支", exact: true }))
     .toMatchTextContent(/main/);
   await expect
     .element(page.getByRole("combobox", { name: "起始提交", exact: true }))

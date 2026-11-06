@@ -1,5 +1,7 @@
 package session
 
+import "slices"
+
 // Identity is what a session knows about the program in its current run:
 // bounded, printable identity fields from its terminal output and its PTY's
 // root process. It is agent-neutral; internal/agentprofile interprets it.
@@ -65,6 +67,24 @@ func (s *Session) runPID() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.runPIDLocked()
+}
+
+// rootPIDs lists the live process roots of the session, sorted ascending:
+// the current PTY run's root and any live sidecars.
+func (s *Session) rootPIDs() []int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var pids []int
+	if pid := s.runPIDLocked(); pid > 0 {
+		pids = append(pids, pid)
+	}
+	for sidecar := range s.sidecars {
+		if sidecar.ExitCode() < 0 {
+			pids = append(pids, sidecar.pid)
+		}
+	}
+	slices.Sort(pids)
+	return pids
 }
 
 // RunChildren returns the executable base names of the current run's root

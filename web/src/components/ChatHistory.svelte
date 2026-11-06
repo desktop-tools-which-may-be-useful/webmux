@@ -94,9 +94,14 @@
     /** Asks to delete an archived record. */
     onremove: (record: ArchivedSession) => void;
   } = $props();
+  // The archived list mounts a page at a time while the section is open: a
+  // long history then costs nothing behind a closed section and never builds
+  // every row at once.
+  const PAGE = 20;
   const { live, archived } = $derived(chatHistorySections(sessions, records));
   let archivedExpanded = $state(false);
   let archivedOverride = $state<boolean | undefined>();
+  let archivedLimit = $state(PAGE);
   const currentInArchived = $derived(
     archived.some((record) => record.id === current || record.id === resuming),
   );
@@ -107,6 +112,11 @@
   const archivedOpen = $derived(
     archivedOverride ?? (currentInArchived || archivedExpanded),
   );
+  $effect(() => {
+    if (!archivedOpen) archivedLimit = PAGE;
+  });
+  const archivedShown = $derived(archived.slice(0, archivedLimit));
+  const archivedRemaining = $derived(archived.length - archivedShown.length);
 </script>
 
 <h2 class="px-3 pt-1 pb-1 text-xs text-muted-foreground">最近</h2>
@@ -162,55 +172,71 @@
         {/snippet}
       </Collapsible.Trigger>
       <Collapsible.Content forceMount hidden={!archivedOpen} class="mt-0.5">
-        <ul class="space-y-0.5" aria-label="已归档聊天">
-          {#each archived as record (record.id)}
-            {@const title = record.title || record.agent.name}
-            {@const releasable = releasableRecordWorktree(record, repositories)}
-            {@const state = record.released ? "已释放空间，已结束" : "已结束"}
-            <li class="group/row relative">
-              <!-- The same end padding as live rows keeps every status in one
-                   column. -->
-              <ListButton
-                variant="navigation-action"
-                aria-current={record.id === current ? "page" : undefined}
-                aria-label={`${title}（${resuming === record.id ? "正在恢复" : state}）`}
-                title={record.released
-                  ? `${title}（${record.agent.name} · 已释放空间：${record.released.path} · ${record.released.commit.slice(0, 12)}，点击重建并恢复）`
-                  : `${title}（${record.agent.name} · 已结束，点击恢复）`}
-                aria-busy={resuming === record.id}
-                disabled={!!resuming}
-                onclick={() => onresume(record)}
-              >
-                <LaunchConfigIcon
-                  icon={configs.find((config) => config.id === record.configId)
-                    ?.icon ?? ""}
-                  size="sm"
-                />
-                <span class="min-w-0 flex-1 truncate text-muted-foreground"
-                  >{title}</span
+        {#if archivedOpen}
+          <ul class="space-y-0.5" aria-label="已归档聊天">
+            {#each archivedShown as record (record.id)}
+              {@const title = record.title || record.agent.name}
+              {@const releasable = releasableRecordWorktree(
+                record,
+                repositories,
+              )}
+              {@const state = record.released ? "已释放空间，已结束" : "已结束"}
+              <li class="group/row relative">
+                <!-- The same end padding as live rows keeps every status in
+                     one column. -->
+                <ListButton
+                  variant="navigation-action"
+                  aria-current={record.id === current ? "page" : undefined}
+                  aria-label={`${title}（${resuming === record.id ? "正在恢复" : state}）`}
+                  title={record.released
+                    ? `${title}（${record.agent.name} · 已释放空间：${record.released.path} · ${record.released.commit.slice(0, 12)}，点击重建并恢复）`
+                    : `${title}（${record.agent.name} · 已结束，点击恢复）`}
+                  aria-busy={resuming === record.id}
+                  disabled={!!resuming}
+                  onclick={() => onresume(record)}
                 >
-                {#if resuming === record.id}<span
-                    class="shrink-0 text-xs font-normal text-muted-foreground"
-                    >恢复中…</span
-                  >{:else}<RowStatus
-                    status={record.released ? "released" : "ended"}
-                  />{/if}
-              </ListButton>
-              <SidebarSessionMenu
-                label={title}
-                disabled={!!resuming}
-                target={{
-                  kind: "archived",
-                  onresume: () => onresume(record),
-                  onrelease: releasable
-                    ? () => onrelease(releasable)
-                    : undefined,
-                  onremove: () => onremove(record),
-                }}
-              />
-            </li>
-          {/each}
-        </ul>
+                  <LaunchConfigIcon
+                    icon={configs.find(
+                      (config) => config.id === record.configId,
+                    )?.icon ?? ""}
+                    size="sm"
+                  />
+                  <span class="min-w-0 flex-1 truncate text-muted-foreground"
+                    >{title}</span
+                  >
+                  {#if resuming === record.id}<span
+                      class="shrink-0 text-xs font-normal text-muted-foreground"
+                      >恢复中…</span
+                    >{:else}<RowStatus
+                      status={record.released ? "released" : "ended"}
+                    />{/if}
+                </ListButton>
+                <SidebarSessionMenu
+                  label={title}
+                  disabled={!!resuming}
+                  target={{
+                    kind: "archived",
+                    onresume: () => onresume(record),
+                    onrelease: releasable
+                      ? () => onrelease(releasable)
+                      : undefined,
+                    onremove: () => onremove(record),
+                  }}
+                />
+              </li>
+            {/each}
+          </ul>
+          {#if archivedRemaining > 0}
+            <Button
+              variant="link"
+              size="sm"
+              class="w-full justify-start"
+              onclick={() => (archivedLimit += PAGE)}
+            >
+              显示更多（还有 {archivedRemaining} 条）
+            </Button>
+          {/if}
+        {/if}
       </Collapsible.Content>
     </Collapsible.Root>
   {/if}

@@ -65,13 +65,13 @@ func TestRecordsPersistAndReserveIDs(t *testing.T) {
 		t.Fatal("empty store reserved an ID")
 	}
 	rec := testRecord("abcdefgh")
-	if err := r.add(rec); err != nil {
+	if _, err := r.add(rec, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !r.reserved("abcdefgh") || !strings.Contains(readFile(t, dir), `"abcdefgh"`) {
 		t.Fatal("added record not reserved or not written immediately")
 	}
-	if err := r.add(rec); !errors.Is(err, ErrConflict) {
+	if _, err := r.add(rec, nil); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate add: %v", err)
 	}
 	r.close()
@@ -100,7 +100,7 @@ func TestRecordsCorruptFileIsUnavailableAndKept(t *testing.T) {
 	if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), path) {
 		t.Fatalf("unavailable = %v", err)
 	}
-	if err := r.add(testRecord("abcdefgh")); !errors.Is(err, ErrUnavailable) {
+	if _, err := r.add(testRecord("abcdefgh"), nil); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("add on corrupt store: %v", err)
 	}
 	if b, _ := os.ReadFile(path); string(b) != `{"v":1,"records":[{"id":"bad"}` {
@@ -108,22 +108,132 @@ func TestRecordsCorruptFileIsUnavailableAndKept(t *testing.T) {
 	}
 }
 
-func TestRecordsLimit(t *testing.T) {
+func TestRecordsLimitDropsOldestArchived(t *testing.T) {
 	r := openTestRecords(t, t.TempDir())
-	seeded := make([]Record, 0, MaxRecords-1)
-	for i := range MaxRecords - 1 {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	seeded := make([]Record, 0, MaxRecords)
+	for i := range MaxRecords {
+		rec := testRecord(limitID(i))
+		rec.State = StateClosed
+		rec.UpdatedAt = base.Add(time.Duration(i) * time.Minute)
+		seeded = append(seeded, rec)
+	}
+	seedRecords(t, r, seeded)
+	evicted, err := r.add(testRecord("zzzzzzzz"), nil)
+	if err != nil {
+		t.Fatalf("add to a full store: %v", err)
+	}
+	if evicted == nil || evicted.ID != limitID(0) {
+		t.Fatalf("evicted %+v, want %s", evicted, limitID(0))
+	}
+	if got := len(r.all()); got != MaxRecords {
+		t.Fatalf("records after adding: %d", got)
+	}
+	if r.reserved(limitID(0)) || !r.reserved("zzzzzzzz") {
+		t.Fatal("oldest archived record kept or new record missing")
+	}
+}
+
+func TestRecordsRestorePutsAnEvictedRecordBack(t *testing.T) {
+	r := openTestRecords(t, t.TempDir())
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	seeded := make([]Record, 0, MaxRecords)
+	for i := range MaxRecords {
+		rec := testRecord(limitID(i))
+		rec.State = StateClosed
+		rec.UpdatedAt = base.Add(time.Duration(i) * time.Minute)
+		seeded = append(seeded, rec)
+	}
+	seedRecords(t, r, seeded)
+	evicted, err := r.add(testRecord("zzzzzzzz"), nil)
+	if err != nil || evicted == nil {
+		t.Fatalf("add: %+v, %v", evicted, err)
+	}
+	// A failed start removed its own record, so the store has room again.
+	if err := r.remove("zzzzzzzz"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.restore(*evicted); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if !r.reserved(evicted.ID) || len(r.all()) != MaxRecords {
+		t.Fatal("evicted record not restored")
+	}
+	if err := r.restore(*evicted); !errors.Is(err, ErrConflict) {
+		t.Fatalf("restoring twice: %v", err)
+	}
+}
+
+func TestRecordsLimitKeepsActiveRecords(t *testing.T) {
+	r := openTestRecords(t, t.TempDir())
+	seeded := make([]Record, 0, MaxRecords)
+	for i := range MaxRecords {
 		seeded = append(seeded, testRecord(limitID(i)))
 	}
 	seedRecords(t, r, seeded)
-	// The last free slot still goes through add.
-	if err := r.add(testRecord(limitID(MaxRecords - 1))); err != nil {
-		t.Fatalf("record %d: %v", MaxRecords, err)
+	if r.accepts(nil) {
+		t.Fatal("a store of only active records accepts another")
+	}
+	if _, err := r.add(testRecord("zzzzzzzz"), nil); !errors.Is(err, ErrLimit) {
+		t.Fatalf("add without an archived record: %v", err)
 	}
 	if got := len(r.all()); got != MaxRecords {
-		t.Fatalf("records after filling: %d", got)
+		t.Fatalf("records after a refused add: %d", got)
 	}
-	if err := r.add(testRecord("zzzzzzzz")); !errors.Is(err, ErrLimit) {
-		t.Fatalf("201st record: %v", err)
+}
+
+func TestRecordsLimitSkipsResumingRecords(t *testing.T) {
+	r := openTestRecords(t, t.TempDir())
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	seeded := make([]Record, 0, MaxRecords)
+	for i := range MaxRecords {
+		rec := testRecord(limitID(i))
+		rec.State = StateClosed
+		rec.UpdatedAt = base.Add(time.Duration(i) * time.Minute)
+		seeded = append(seeded, rec)
+	}
+	seedRecords(t, r, seeded)
+	// The oldest record is being resumed, so the next oldest goes instead.
+	skip := func(id string) bool { return id == limitID(0) }
+	if !r.accepts(skip) {
+		t.Fatal("a store with another archived record accepts nothing")
+	}
+	evicted, err := r.add(testRecord("zzzzzzzz"), skip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evicted == nil || evicted.ID != limitID(1) {
+		t.Fatalf("evicted %+v, want %s", evicted, limitID(1))
+	}
+	// Nothing else may be dropped once the remaining records are skipped.
+	if r.accepts(func(string) bool { return true }) {
+		t.Fatal("a store of skipped records accepts another")
+	}
+}
+
+func TestRecordsLimitPrefersLeastRecentlyUpdated(t *testing.T) {
+	r := openTestRecords(t, t.TempDir())
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	seeded := make([]Record, 0, MaxRecords)
+	for i := range MaxRecords {
+		rec := testRecord(limitID(i))
+		rec.State = StateClosed
+		rec.UpdatedAt = base.Add(time.Duration(MaxRecords-i) * time.Minute)
+		seeded = append(seeded, rec)
+	}
+	// An interrupted record updated long ago goes before otherwise older
+	// records; active records never qualify even when they look oldest.
+	seeded[3].State = StateInterrupted
+	seeded[3].UpdatedAt = base
+	seeded[7].State = StateActive
+	seeded[7].UpdatedAt = base.Add(-time.Hour)
+	seedRecords(t, r, seeded)
+	evicted, err := r.add(testRecord("zzzzzzzz"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evicted == nil || evicted.ID != limitID(3) {
+		t.Fatalf("evicted %+v, want %s", evicted, limitID(3))
 	}
 }
 
@@ -141,7 +251,7 @@ func TestSetAgentSessionIDKeepsBoundedHistory(t *testing.T) {
 func TestRecordsCoalesceRoutineUpdates(t *testing.T) {
 	dir := t.TempDir()
 	r := openRecords(dir)
-	if err := r.add(testRecord("abcdefgh")); err != nil {
+	if _, err := r.add(testRecord("abcdefgh"), nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.update("abcdefgh", false, func(rec *Record) { rec.Config["model"] = "haiku" }); err != nil {
@@ -198,7 +308,7 @@ func TestRecoverAfterRestart(t *testing.T) {
 	closed := testRecord("abcdefgj")
 	closed.State = StateClosed
 	for _, rec := range []Record{matching, stale, closed} {
-		if err := r.add(rec); err != nil {
+		if _, err := r.add(rec, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -262,7 +372,7 @@ func TestRecoverAfterRestartEndsUnconfirmedLeftovers(t *testing.T) {
 		if state == StateInterrupted {
 			rec.Activity, rec.InterruptedAt = "switching", &interruptedAt
 		}
-		if err := r.add(rec); err != nil {
+		if _, err := r.add(rec, nil); err != nil {
 			t.Fatal(err)
 		}
 		exits[id] = exited

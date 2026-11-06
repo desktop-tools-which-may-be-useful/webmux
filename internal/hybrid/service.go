@@ -97,6 +97,9 @@ type Service struct {
 	probes chan struct{}
 	// resumes dedupes resume requests by client request ID.
 	resumes dedupe
+	// onEvicted cleans up after an auto-evicted record: its artifacts folder
+	// and release ref. Nil keeps them.
+	onEvicted func(context.Context, Record)
 
 	mu     sync.Mutex
 	actors map[string]*actor
@@ -138,6 +141,11 @@ func New(o Options) *Service {
 
 // Unavailable reports why hybrid sessions cannot be created, or nil.
 func (s *Service) Unavailable() error { return s.records.unavailable() }
+
+// OnEvicted sets the cleanup of an auto-evicted record, called after its
+// actor and shell ended. The server removes the record's artifacts folder
+// and release ref there. Set it before serving.
+func (s *Service) OnEvicted(fn func(context.Context, Record)) { s.onEvicted = fn }
 
 // uploadCheck validates attachment paths against session id's uploads.
 func (s *Service) uploadCheck(id string) func(string) (string, error) {
@@ -243,7 +251,7 @@ func (s *Service) admit(in CreateInput) (agentprofile.Command, Side, string, err
 	if err != nil {
 		return agentprofile.Command{}, "", "", fmt.Errorf("%w: 目录: %v", ErrInvalid, err)
 	}
-	if s.records.count() >= MaxRecords {
+	if !s.records.accepts(s.recoveringNow) {
 		return agentprofile.Command{}, "", "", ErrLimit
 	}
 	s.mu.Lock()
@@ -290,7 +298,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 		State: StateActive, CreatedAt: now, UpdatedAt: now,
 	}
 	a.recordTitle = rec.Title
-	if err := s.records.add(rec); err != nil {
+	evicted, err := s.records.add(rec, s.recoveringNow)
+	if err != nil {
 		// The shell has no process yet: removal cannot be refused.
 		_ = s.manager.Remove(info.ID)
 		return nil, err
@@ -306,12 +315,35 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	// The start runs to completion even if ctx ends, so a cancelled request
 	// never leaves a half-started session behind.
 	if err := awaitStarted(a, started); err != nil {
+		if evicted != nil {
+			// The failed start removed its own record, so the dropped one
+			// goes back rather than being lost for nothing.
+			if err := s.records.restore(*evicted); err != nil {
+				s.log.Warn("hybrid evicted record restore failed", "id", evicted.ID, "error", err)
+			}
+		}
 		return nil, err
+	}
+	if evicted != nil {
+		s.log.Info("hybrid record evicted", "id", evicted.ID)
+		s.evict(ctx, evicted.ID)
+		if s.onEvicted != nil {
+			s.onEvicted(context.WithoutCancel(ctx), *evicted)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		s.log.Info("hybrid session created after its request ended", "id", a.id)
 	}
 	return shell, nil
+}
+
+// evict ends what an archived record dropped for a new session left behind:
+// its actor and its last-output shell. The record is already gone, so a
+// failure is logged and never blocks the new session.
+func (s *Service) evict(ctx context.Context, id string) {
+	if err := s.clear(context.WithoutCancel(ctx), id); err != nil {
+		s.log.Warn("hybrid evicted record cleanup failed", "id", id, "error", err)
+	}
 }
 
 // shellError keeps the session start error kinds as hybrid kinds; a
@@ -344,6 +376,14 @@ func (s *Service) actor(id string) (*actor, error) {
 		return nil, ErrNotFound
 	}
 	return a, nil
+}
+
+// recoveringNow reports whether id is being resumed or removed right now, so
+// auto-eviction must not drop it.
+func (s *Service) recoveringNow(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.recovering[id]
 }
 
 // Subscribe opens a gap-free view of session id's chat: a snapshot, the

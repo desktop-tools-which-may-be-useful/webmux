@@ -465,6 +465,16 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	})
 	workspaces.UseHybrid(hybrids)
 	workspaces.UseArtifacts(folders)
+	// An archived record auto-evicted for a new session takes its artifacts
+	// folder and private release ref with it, like forgetting it.
+	hybrids.OnEvicted(func(ctx context.Context, rec hybrid.Record) {
+		if rec.Released != nil {
+			if err := workspaces.DropRelease(ctx, *rec.Released); err != nil {
+				slog.Warn("released ref removal of an evicted record failed", "release", rec.Released.ID, "error", err)
+			}
+		}
+		folders.Remove(rec.ID)
+	})
 	// Initialization instructions reference the saved quick commands by name.
 	workspaces.UseQuickCommands(func() []workspace.QuickCommand {
 		snapshot, err := preferences.Snapshot()

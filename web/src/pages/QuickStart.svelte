@@ -16,6 +16,7 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import { api, navigate, store, stored, uploadQuickStartFile } from "../api";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
+  import { remoteBranchBases } from "../branchName";
   import type { ConfigValue } from "../chat-api";
   import ChatAttachmentList from "../components/chat/ChatAttachmentList.svelte";
   import ChatConfig from "../components/chat/ChatConfig.svelte";
@@ -220,7 +221,7 @@
   const branchData = $derived(
     branches?.id === repository?.id ? branches?.data : undefined,
   );
-  const baseBranches = $derived.by(() => {
+  const localBranches = $derived.by(() => {
     if (!branchData) return [];
     const local = branchData.branches.map(({ name, head }) => ({ name, head }));
     const main = branchData.defaultBranch ?? "HEAD";
@@ -228,6 +229,15 @@
       local.unshift({ name: main, head: branchData.defaultBase });
     return local;
   });
+  const remoteBranches = $derived(
+    branchData
+      ? remoteBranchBases(
+          branchData.bases,
+          localBranches.map((b) => b.name),
+        ).map(({ name, head }) => ({ name, head }))
+      : [],
+  );
+  const baseBranches = $derived([...localBranches, ...remoteBranches]);
   const baseName = $derived(
     baseChoice?.repositoryId === repository?.id &&
       baseBranches.some((b) => b.name === baseChoice?.name)
@@ -520,7 +530,8 @@
           <Popover.Content align="start" class="w-72 gap-0 overflow-hidden p-0">
             <BranchCommandList
               label="基准分支"
-              branches={baseBranches}
+              branches={localBranches}
+              {remoteBranches}
               selected={baseName}
               loading={!branchData && !branches?.error}
               failed={!!branches?.error}

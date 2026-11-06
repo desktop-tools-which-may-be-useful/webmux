@@ -223,6 +223,31 @@ test("rows with equal creation or update time are ordered by ID", async () => {
   ]);
 });
 
+test("archived rows mount only while expanded, a page at a time", async () => {
+  const newest = Date.parse("2026-10-28T12:00:00Z");
+  const records = Array.from({ length: 25 }, (_, index) =>
+    record(
+      { id: `archiv${String(index).padStart(2, "0")}`, title: `记录 ${index}` },
+      { updatedAt: new Date(newest - index * 60_000).toISOString() },
+    ),
+  );
+  render(ChatHistory, { ...noop, sessions: [], records });
+  // A closed section renders no rows at all, however long the history is.
+  expect(archivedList().elements()).toEqual([]);
+  await page.getByRole("button", { name: /已归档/ }).click();
+  const rows = archivedList().getByRole("button", { name: /（/ });
+  await expect.element(rows.first()).toBeVisible();
+  expect(rows.elements()).toHaveLength(20);
+  await page.getByRole("button", { name: "显示更多（还有 5 条）" }).click();
+  await expect
+    .element(archivedList().getByRole("button", { name: "记录 24（已结束）" }))
+    .toBeVisible();
+  expect(rows.elements()).toHaveLength(25);
+  // Folding again drops the rows instead of keeping them hidden.
+  await page.getByRole("button", { name: /已归档/ }).click();
+  expect(archivedList().elements()).toEqual([]);
+});
+
 test("archived section opens automatically when viewing or resuming an archived record", async () => {
   render(ChatHistory, {
     sessions: [],

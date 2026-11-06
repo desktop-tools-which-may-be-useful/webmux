@@ -141,7 +141,7 @@
 | 端口转发网关 `/forward/{port}/`、转发凭据 Cookie 与兑换、上游状态                                   | US-R01；US-A02                                      |
 | 转发兼容改写（Host、Origin、`X-Forwarded-*`、重定向与 Cookie）和路径前缀模式                        | US-R02                                              |
 | 首页端口转发按钮与对话框、转发管理 API、`/ws/sessions` 转发事件                                     | US-R03；US-A05                                      |
-| 会话监听端口检测（Linux/macOS）与终端页端口提示                                                     | US-R04；US-C02                                      |
+| 会话监听端口检测（Linux/macOS）与会话页（终端/聊天视图）端口提示                                    | US-R04；US-C02                                      |
 
 ## 后续维护
 
