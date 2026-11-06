@@ -131,6 +131,78 @@ type RemovalPreview struct {
 	ForceAllowed bool          `json:"forceAllowed"`
 }
 
+// HybridRelease records that a linked worktree directory was released while an
+// archived session record kept its git state.
+type HybridRelease struct {
+	ID           string    `json:"id"`
+	RepositoryID string    `json:"repositoryId"`
+	Path         string    `json:"path"`
+	Commit       string    `json:"commit"`
+	Branch       string    `json:"branch,omitempty"`
+	ReleasedAt   time.Time `json:"releasedAt"`
+}
+
+// RebuildPreviewRequest is the empty body of POST
+// /api/hybrid-sessions/{id}/rebuild-preview.
+type RebuildPreviewRequest struct{}
+
+// RebuildPreview describes how an archived record's released worktree would be
+// rebuilt.
+type RebuildPreview struct {
+	ReleaseID string   `json:"releaseId"`
+	Path      string   `json:"path"`
+	Commit    string   `json:"commit"`
+	Branch    string   `json:"branch"`
+	Mode      string   `json:"mode"`
+	Reason    string   `json:"reason,omitempty"`
+	Blockers  []string `json:"blockers"`
+}
+
+// RebuildRequest is the body of POST /api/hybrid-sessions/{id}/rebuild.
+type RebuildRequest struct {
+	ReleaseID string `json:"releaseId"`
+	Mode      string `json:"mode"`
+	Commit    string `json:"commit"`
+}
+
+// ReleasePreviewRequest is the empty body of a release preview.
+type ReleasePreviewRequest struct{}
+
+// ReleasePreview describes releasing a worktree's directory: the commit and
+// archived records it keeps, and the ignored files it deletes. Bytes and
+// IgnoredBytes are omitted when not counted; SizeComplete is false when the
+// count ran out of budget.
+type ReleasePreview struct {
+	ConfirmationID string         `json:"confirmationId"`
+	ExpiresAt      time.Time      `json:"expiresAt"`
+	Worktree       Worktree       `json:"worktree"`
+	Commit         string         `json:"commit"`
+	Archived       []SessionInfo  `json:"archived"`
+	Ignored        []IgnoredEntry `json:"ignored"`
+	IgnoredMore    int            `json:"ignoredMore"`
+	IgnoredBytes   *int64         `json:"ignoredBytes,omitempty"`
+	SizeComplete   bool           `json:"sizeComplete"`
+	Blockers       []string       `json:"blockers"`
+}
+
+// IgnoredEntry is a top-level ignored path relative to the worktree;
+// directories end with "/".
+type IgnoredEntry struct {
+	Path  string `json:"path"`
+	Bytes *int64 `json:"bytes,omitempty"`
+}
+
+// ReleaseWorktreeRequest confirms a previewed release.
+type ReleaseWorktreeRequest struct {
+	ConfirmationID string `json:"confirmationId"`
+}
+
+// ReleaseResult names the release and the records it marked.
+type ReleaseResult struct {
+	ReleaseID string   `json:"releaseId"`
+	RecordIDs []string `json:"recordIds"`
+}
+
 // RemoveWorktreeRequest confirms a previewed removal.
 type RemoveWorktreeRequest struct {
 	ConfirmationID string `json:"confirmationId"`

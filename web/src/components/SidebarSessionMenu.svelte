@@ -15,7 +15,13 @@
         onrename: (session: SessionInfo) => void;
         onclose: (session: SessionInfo) => void;
       }
-    | { kind: "archived"; onresume: () => void; onremove: () => void };
+    | {
+        kind: "archived";
+        onresume: () => void;
+        /** Offered only while the record's worktree can be released. */
+        onrelease?: () => void;
+        onremove: () => void;
+      };
   let {
     label,
     target,
@@ -72,6 +78,9 @@
         <DropdownMenu.Item onSelect={target.onresume}
           >恢复聊天</DropdownMenu.Item
         >
+        {#if target.onrelease}<DropdownMenu.Item onSelect={target.onrelease}
+            >释放空间</DropdownMenu.Item
+          >{/if}
         <DropdownMenu.Separator />
         <DropdownMenu.Item variant="destructive" onSelect={target.onremove}
           >删除记录</DropdownMenu.Item

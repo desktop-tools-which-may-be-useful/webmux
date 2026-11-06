@@ -1,0 +1,79 @@
+{
+  "status": 200,
+  "body": {
+    "archived": [
+      {
+        "agent": {
+          "icon": "pi",
+          "name": "omp",
+          "sessionId": "<sessionId#1>",
+          "title": "omp"
+        },
+        "archive": {
+          "configMissing": false,
+          "interruptedAt": null,
+          "previousAgentSessionIds": [],
+          "queuedCount": 0,
+          "updatedAt": "<time>"
+        },
+        "attention": null,
+        "clients": 0,
+        "cmd": [
+          "<fakeagent>/omp"
+        ],
+        "cols": 0,
+        "configId": "<id#4>",
+        "createdAt": "<time>",
+        "cwd": "<released>",
+        "exitCode": null,
+        "generation": "",
+        "id": "<id#5>",
+        "lastActiveAt": "<time>",
+        "listeningPorts": [],
+        "preview": "",
+        "reportedCwd": null,
+        "rows": 0,
+        "state": "closed",
+        "status": "exited",
+        "title": "agent",
+        "transition": null,
+        "view": "chat",
+        "views": [
+          "terminal",
+          "chat"
+        ],
+        "workspace": null
+      }
+    ],
+    "blockers": [],
+    "commit": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
+    "confirmationId": "<confirmationId#1>",
+    "expiresAt": "<time>",
+    "ignored": [
+      {
+        "bytes": 20,
+        "path": "node_modules/"
+      }
+    ],
+    "ignoredBytes": 20,
+    "ignoredMore": 0,
+    "sizeComplete": true,
+    "worktree": {
+      "available": true,
+      "branch": "released",
+      "detached": false,
+      "dirty": false,
+      "error": "",
+      "hasIgnored": true,
+      "hasUntracked": false,
+      "head": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
+      "id": "<id#3>",
+      "kind": "linked",
+      "lockReason": "",
+      "locked": false,
+      "path": "<released>",
+      "prunable": false,
+      "repositoryId": "<id#1>"
+    }
+  }
+}

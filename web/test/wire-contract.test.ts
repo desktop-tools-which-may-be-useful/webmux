@@ -137,6 +137,7 @@ const groups: Array<[z.ZodType, string[]]> = [
       "repository-register-again",
       "repository-register-instruction",
       "repository-register",
+      "repository-register-release",
       "repository-update-instruction",
       "repository-update",
       "repository-worktrees",
@@ -171,8 +172,14 @@ const groups: Array<[z.ZodType, string[]]> = [
     ["tunnel-enabled", "tunnel-get", "tunnel-reset", "tunnel-settings"],
   ],
   [S.UploadSchema, ["upload"]],
-  [S.WorktreeSchema, ["worktree-create"]],
+  [
+    S.WorktreeSchema,
+    ["worktree-create", "worktree-create-release", "hybrid-rebuild"],
+  ],
   [S.RemovalPreviewSchema, ["worktree-removal-preview"]],
+  [S.ReleasePreviewSchema, ["worktree-release-preview"]],
+  [S.ReleaseResultSchema, ["worktree-release"]],
+  [S.RebuildPreviewSchema, ["hybrid-rebuild-preview"]],
   [
     S.SessionEventSchema,
     [

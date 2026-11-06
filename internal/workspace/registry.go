@@ -46,6 +46,9 @@ type repositoryState struct {
 	gate        chan struct{}
 	flightMu    sync.Mutex
 	flight      *snapshotFlight
+	// swept is set once a sweep of orphan release refs ran; guarded by
+	// gate.
+	swept bool
 }
 type snapshotFlight struct {
 	done       chan struct{}

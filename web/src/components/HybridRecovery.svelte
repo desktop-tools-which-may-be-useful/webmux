@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { shellUi } from "../shell.svelte";
+  import { findShell, shellUi } from "../shell.svelte";
   import { Button } from "$lib/components/ui/button";
   import { navigate } from "../api";
   import { resumeSession } from "../recoverable";
@@ -18,6 +18,15 @@
   } = $props();
   let busy = $state(false);
   let error = $state("");
+  const shell = findShell();
+  // A rebuilt worktree changes the repository's worktrees and the records,
+  // whether or not the resume that follows succeeds; this page stays, so a
+  // failure shows here like any other.
+  function rebuilt(failure: string) {
+    if (failure) error = failure;
+    void shell?.repositories.refresh();
+    void shell?.archived.refresh();
+  }
 </script>
 
 <div
@@ -37,6 +46,7 @@
       {record}
       resume={resumeSession}
       onresumed={() => onresumed()}
+      onrebuilt={rebuilt}
       disabled={busy}
       onbusy={(active) => (busy = active)}
       onerror={(message) => (error = message)}

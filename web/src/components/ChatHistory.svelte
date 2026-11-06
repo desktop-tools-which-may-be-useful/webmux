@@ -2,7 +2,9 @@
   import type {
     ArchivedSession,
     LaunchConfigSummary,
+    Repository,
     SessionInfo,
+    Worktree,
   } from "../schemas";
 
   /**
@@ -37,31 +39,38 @@
   import { Button } from "$lib/components/ui/button";
   import * as Collapsible from "$lib/components/ui/collapsible";
   import { ListButton } from "$lib/components/ui/list-button";
+  import { releasableRecordWorktree } from "../archived";
   import { rowStatus, rowStatusLabels } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
+  import ReleasedBadge from "./ReleasedBadge.svelte";
   import RowStatus from "./RowStatus.svelte";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
   // The chat-mode sidebar: live chats flat by latest activity, with archived
   // records folded below them. The current row carries aria-current and every
   // row ends in a status dot; the "⋯" menu offers a live chat's rename and
-  // archive, and an archived one's resume and record deletion. Archived rows
-  // also resume when clicked.
+  // archive, and an archived one's resume, space release and record
+  // deletion. Archived rows also resume when clicked; a released one is
+  // marked so.
   let {
     sessions,
     records,
     configs,
+    repositories,
     current,
     resuming = "",
     onopen,
     onresume,
     onrename,
     onclose,
+    onrelease,
     onremove,
   }: {
     sessions: readonly SessionInfo[];
     records: readonly ArchivedSession[];
     configs: readonly LaunchConfigSummary[];
+    /** Resolve which archived records' worktrees can be released. */
+    repositories: readonly Repository[];
     /** The session page shown, or "" on a home page. */
     current: string;
     /** The record being resumed; its row shows the progress. */
@@ -70,6 +79,8 @@
     onresume: (record: ArchivedSession) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
+    /** Asks to release the disk space of an archived record's worktree. */
+    onrelease: (worktree: Worktree) => void;
     /** Asks to delete an archived record. */
     onremove: (record: ArchivedSession) => void;
   } = $props();
@@ -144,14 +155,18 @@
         <ul class="space-y-0.5" aria-label="已归档聊天">
           {#each archived as record (record.id)}
             {@const title = record.title || record.agent.name}
+            {@const releasable = releasableRecordWorktree(record, repositories)}
+            {@const state = record.released ? "已释放空间，已结束" : "已结束"}
             <li class="group/row relative">
               <!-- The same end padding as live rows keeps every status in one
                    column. -->
               <ListButton
                 variant="navigation-action"
                 aria-current={record.id === current ? "page" : undefined}
-                aria-label={`${title}（${resuming === record.id ? "正在恢复" : "已结束"}）`}
-                title={`${title}（${record.agent.name} · 已结束，点击恢复）`}
+                aria-label={`${title}（${resuming === record.id ? "正在恢复" : state}）`}
+                title={record.released
+                  ? `${title}（${record.agent.name} · 已释放空间：${record.released.path} · ${record.released.commit.slice(0, 12)}，点击重建并恢复）`
+                  : `${title}（${record.agent.name} · 已结束，点击恢复）`}
                 aria-busy={resuming === record.id}
                 disabled={!!resuming}
                 onclick={() => onresume(record)}
@@ -164,6 +179,9 @@
                 <span class="min-w-0 flex-1 truncate text-muted-foreground"
                   >{title}</span
                 >
+                {#if record.released}<ReleasedBadge
+                    released={record.released}
+                  />{/if}
                 {#if resuming === record.id}<span
                     class="shrink-0 text-xs font-normal text-muted-foreground"
                     >恢复中…</span
@@ -175,6 +193,9 @@
                 target={{
                   kind: "archived",
                   onresume: () => onresume(record),
+                  onrelease: releasable
+                    ? () => onrelease(releasable)
+                    : undefined,
                   onremove: () => onremove(record),
                 }}
               />

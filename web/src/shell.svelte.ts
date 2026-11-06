@@ -113,6 +113,8 @@ export interface Shell {
   close(session: SessionInfo): void;
   /** Opens the shared worktree removal confirmation dialog. */
   removeWorktree(worktree: Worktree): void;
+  /** Opens the shared release preview of an archived record's worktree. */
+  releaseWorktree(worktree: Worktree): void;
   /** Opens the port-forwarding dialog. */
   forward(): void;
   /** Opens the add-repository dialog. */

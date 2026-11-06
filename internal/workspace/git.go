@@ -219,6 +219,7 @@ func (s *Service) snapshot(ctx context.Context, r *repositoryState) (Repository,
 				flight.err = err
 			} else {
 				flight.repository = s.readRepository(readCtx, r)
+				s.sweepOnce(readCtx, r)
 				release(r)
 			}
 			r.flightMu.Lock()

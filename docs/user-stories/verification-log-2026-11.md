@@ -378,3 +378,14 @@
   - 同步更新 `docs/README.md`、`docs/overview.md`、`docs/hybrid-sessions.md`、`docs/faq.md`、`docs/website.md` 及 `docs/website/*.md`（修正十一款 CLI agent 与七款混合会话 agent 数量）、`CONTRIBUTING.md`（同步移除 macOS CI runner 后的实际流水线描述）。
 - 依据：`make format-check`、`make docs-check`（`go test -count=1 ./internal/docguard`）、`go test ./internal/archtest -run TestAgentsGuideSize`、`make check` 通过。
 - 限制：本次仅涉及文档与技能说明，未改动运行时代码，未运行完整 `make test` 或真机测试。
+
+本次局部核对（2026-11-06）：实现 OpenSpec 变更 `release-archived-worktree-space`（已归档工作树释放空间与恢复前重建），新增 US-J13，更新 US-Q12、US-Q19、US-C15 与覆盖索引。
+
+- 本地检查：`go build ./...`、`go vet`（hybrid、workspace、api、wire、contract）、`gofmt`、`svelte-check`、Oxlint、`check:arch`、格式检查与 `make docs-check`。
+- 快照：用 `go test ./internal/api -run TestWireSnapshots -update` 重新录制 wire 快照。
+- CI：Go race、Vitest 单元与浏览器、Storybook、性能与四个 E2E 分片在 PR #344 上通过。
+- 隔离演示服务（临时状态目录与 `/tmp/demo` 仓库，Claude Code 记录不启动 agent）上实际走通：
+  - 侧栏“释放空间”预览与释放：目录删除、分支保留、私有引用建立，记录标注“已释放空间”并归入“已不可用工作区”；
+  - `rebuild-preview`/`rebuild` 接口在原路径检出原分支，并清理私有引用；
+  - 截取了侧栏与首页的桌面、Pixel 7、明暗主题前后对比截图。
+- 限制：未在本机运行测试套件；未在演示中点击“重建并恢复”启动真实 agent；未做真机核对；未重新核验其余故事能力。

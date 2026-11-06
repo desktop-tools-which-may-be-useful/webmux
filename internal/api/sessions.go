@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"time"
@@ -328,8 +329,17 @@ func (s *Server) forget(ctx context.Context, id string) error {
 	if chat && s.Hybrid != nil {
 		ctx, cancel := context.WithTimeout(ctx, forgetTimeout)
 		defer cancel()
+		rec, recErr := s.Hybrid.Record(id)
 		if err := s.Hybrid.Forget(ctx, id); err != nil {
 			return err
+		}
+		// A released record was the last holder of its private ref unless
+		// another record shares the release; a failure is left to the
+		// workspace's sweep.
+		if recErr == nil && rec.Released != nil {
+			if err := s.Workspace.DropRelease(ctx, *rec.Released); err != nil {
+				slog.Warn("released ref removal failed", "release", rec.Released.ID, "error", err)
+			}
 		}
 	} else if err := s.Manager.Remove(id); err != nil {
 		return err

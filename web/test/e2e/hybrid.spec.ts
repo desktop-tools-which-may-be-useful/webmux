@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { APIRequestContext, Page } from "@playwright/test";
@@ -767,6 +767,87 @@ test.describe("hybrid sessions with the fake agent", () => {
     const resumed = await openSessionLink(page, "E2E archive");
     await expectSide(resumed, "terminal");
     await expectTerminalLine(resumed, "> keep-this");
+  });
+
+  test("releasing an archived chat's worktree keeps the record, and resuming rebuilds it first", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const root = join(workDir, "release-repo");
+    const tree = join(workDir, "release-repo-feature");
+    await mkdir(root);
+    await writeFile(join(root, ".gitignore"), "node_modules/\n");
+    const git = (...args: string[]) =>
+      expect(spawnSync("git", ["-C", root, ...args]).status).toBe(0);
+    git("init", "-b", "main");
+    git("add", ".gitignore");
+    git(
+      "-c",
+      "user.name=WebMux QA",
+      "-c",
+      "user.email=qa@example.invalid",
+      "commit",
+      "-m",
+      "initial",
+    );
+    git("worktree", "add", "-b", "feature-x", tree);
+    // Ignored files never block a release; they go with the directory.
+    await mkdir(join(tree, "node_modules", "left-pad"), { recursive: true });
+    await writeFile(
+      join(tree, "node_modules", "left-pad", "index.js"),
+      "module.exports = 1;\n",
+    );
+    const registered = await request.post("/api/repositories", {
+      data: { path: root },
+    });
+    expect(registered.status(), await registered.text()).toBe(201);
+    const id = await createHybrid(request, tree, "chat", {
+      name: "E2E release",
+    });
+    await openHybrid(page, id, "chat");
+    await chatTurn(page, "before-release");
+    const archived = await request.delete(`/api/sessions/${id}`);
+    expect(archived.status(), await archived.text()).toBe(204);
+
+    await page.goto("/");
+    const feature = page.getByRole("region", {
+      name: "feature-x 的已归档会话",
+    });
+    await feature.getByRole("button", { name: /已归档/ }).click();
+    await feature
+      .getByRole("button", { name: "更多操作 E2E release", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "释放空间", exact: true }).click();
+    const release = page.getByRole("dialog", { name: "释放空间" });
+    await expect(release).toContainText("node_modules/");
+    await expect(release).toContainText("重建工作树也无法找回");
+    await release
+      .getByRole("button", { name: "释放空间", exact: true })
+      .click();
+    await expect(release).toHaveCount(0);
+    await expect(access(tree)).rejects.toThrow();
+    git("rev-parse", "--verify", "refs/heads/feature-x");
+
+    // The record stays archived, now under the unavailable workspaces.
+    const gone = page.getByRole("region", {
+      name: "已不可用工作区 的已归档会话",
+    });
+    await gone.getByRole("button", { name: /已归档/ }).click();
+    const row = gone.locator(`[data-archived-id="${id}"]`);
+    await expect(row.getByText("已释放空间")).toBeVisible();
+
+    await row.getByRole("button", { name: "恢复到聊天", exact: true }).click();
+    const rebuild = page.getByRole("dialog", { name: "重建工作树后恢复" });
+    await expect(rebuild).toContainText("将在原路径检出分支 feature-x");
+    await rebuild
+      .getByRole("button", { name: "重建并恢复", exact: true })
+      .click();
+    await expect(row).toHaveCount(0);
+    await access(join(tree, ".gitignore"));
+    const resumed = await openSessionLink(page, "E2E release");
+    await expectSide(resumed, "chat");
+    await expect(conversation(resumed)).toContainText("echo: before-release");
   });
 
   test("after a backend restart both sides resume the recorded conversation", async ({

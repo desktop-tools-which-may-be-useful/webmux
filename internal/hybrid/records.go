@@ -51,6 +51,19 @@ type WorkspaceRef struct {
 	WorktreeID   string `json:"worktreeId"`
 }
 
+// Release says a record's worktree directory was deleted to free disk
+// space while its commit stays reachable through a private ref. ID is
+// shared by every record released together; Branch is empty for a
+// detached worktree.
+type Release struct {
+	ID           string    `json:"id"`
+	RepositoryID string    `json:"repositoryId"`
+	Path         string    `json:"path"`
+	Commit       string    `json:"commit"`
+	Branch       string    `json:"branch,omitempty"`
+	ReleasedAt   time.Time `json:"releasedAt"`
+}
+
 // Record links a WebMux session ID to an agent session. It never holds
 // environment values, messages, queued text or tokens.
 type Record struct {
@@ -90,6 +103,9 @@ type Record struct {
 	// Workspace is the session's latest repository association, nil when it
 	// had none; records written before it existed omit it.
 	Workspace *WorkspaceRef `json:"workspace,omitempty"`
+	// Released is set while the worktree directory is released; resume
+	// refuses until the worktree is rebuilt.
+	Released *Release `json:"released,omitempty"`
 }
 
 func (r Record) clone() Record {
@@ -114,6 +130,10 @@ func (r Record) clone() Record {
 	if r.Workspace != nil {
 		w := *r.Workspace
 		r.Workspace = &w
+	}
+	if r.Released != nil {
+		rel := *r.Released
+		r.Released = &rel
 	}
 	return r
 }
@@ -440,4 +460,63 @@ func (r *records) close() {
 	}
 	r.closed = true
 	r.store.Close()
+}
+
+// markReleased sets rel on every record in ids and writes the file at once.
+// Every record must exist and be closed or interrupted; otherwise nothing
+// changes.
+func (r *records) markReleased(ids []string, rel Release) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.unavailableLocked(); err != nil {
+		return err
+	}
+	next := slices.Clone(r.list)
+	for _, id := range ids {
+		i := r.index(id)
+		if i < 0 {
+			return fmt.Errorf("%w: 记录 %s", ErrNotFound, id)
+		}
+		if next[i].State == StateActive {
+			return fmt.Errorf("%w: 会话 %s 仍在运行", ErrConflict, id)
+		}
+		rec := next[i].clone()
+		at := rel
+		rec.Released = &at
+		next[i] = rec
+	}
+	if err := r.commitLocked(next); err != nil {
+		return err
+	}
+	r.list = next
+	return nil
+}
+
+// clearReleased removes the release mark releaseID from every record that
+// carries it, writes the file at once and returns their IDs.
+func (r *records) clearReleased(releaseID string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.unavailableLocked(); err != nil {
+		return nil, err
+	}
+	next := slices.Clone(r.list)
+	var ids []string
+	for i, rec := range next {
+		if rec.Released == nil || rec.Released.ID != releaseID {
+			continue
+		}
+		rec = rec.clone()
+		rec.Released = nil
+		next[i] = rec
+		ids = append(ids, rec.ID)
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if err := r.commitLocked(next); err != nil {
+		return nil, err
+	}
+	r.list = next
+	return ids, nil
 }

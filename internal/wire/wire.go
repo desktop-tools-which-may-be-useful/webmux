@@ -160,6 +160,10 @@ func ArchivedSession(r hybrid.Record, a Archived) contract.SessionInfo {
 		// in for it.
 		out.Workspace = &contract.SessionWorkspace{RepositoryID: r.Workspace.RepositoryID, WorktreeID: r.Workspace.WorktreeID, WorktreePath: r.Cwd}
 	}
+	if r.Released != nil {
+		rel := contract.HybridRelease(*r.Released)
+		out.Released = &rel
+	}
 	return out
 }
 
@@ -290,6 +294,34 @@ func Preview(p workspace.Preview, archived func(hybrid.Record) Archived) contrac
 		Sessions: Sessions(p.Sessions), Archived: each(p.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
 		Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
 	}
+}
+
+func ReleasePreview(p workspace.ReleasePreview, archived func(hybrid.Record) Archived) contract.ReleasePreview {
+	return contract.ReleasePreview{
+		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree), Commit: p.Commit,
+		Archived:    each(p.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
+		Ignored:     each(p.Ignored, func(e workspace.IgnoredEntry) contract.IgnoredEntry { return contract.IgnoredEntry(e) }),
+		IgnoredMore: p.IgnoredMore, IgnoredBytes: p.IgnoredBytes, SizeComplete: p.SizeComplete, Blockers: required(p.Blockers),
+	}
+}
+
+func ReleaseWorktree(r contract.ReleaseWorktreeRequest) workspace.ReleaseRequest {
+	return workspace.ReleaseRequest(r)
+}
+
+func ReleaseResult(r workspace.ReleaseResult) contract.ReleaseResult {
+	return contract.ReleaseResult{ReleaseID: r.ReleaseID, RecordIDs: required(r.RecordIDs)}
+}
+
+func RebuildPreview(p workspace.RebuildPreview) contract.RebuildPreview {
+	return contract.RebuildPreview{
+		ReleaseID: p.ReleaseID, Path: p.Path, Commit: p.Commit, Branch: p.Branch,
+		Mode: p.Mode, Reason: p.Reason, Blockers: required(p.Blockers),
+	}
+}
+
+func RebuildWorktree(r contract.RebuildRequest) workspace.RebuildRequest {
+	return workspace.RebuildRequest(r)
 }
 
 func CreateWorktree(r contract.CreateWorktreeRequest) workspace.CreateRequest {

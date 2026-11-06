@@ -64,6 +64,20 @@ export const ViewChangeResultSchema = z.object({
 });
 export type ViewChangeResult = z.infer<typeof ViewChangeResultSchema>;
 
+// The worktree a record's session ran in was released to free disk space:
+// its original path and the commit it was on, kept so the worktree can be
+// rebuilt there before the session resumes. `branch` is omitted when the
+// worktree was detached.
+export const HybridReleaseSchema = z.object({
+  id: z.string(),
+  repositoryId: z.string(),
+  path: z.string(),
+  commit: z.string(),
+  branch: z.string().optional(),
+  releasedAt: datetime,
+});
+export type HybridRelease = z.infer<typeof HybridReleaseSchema>;
+
 export const AgentCandidateSchema = z.object({
   agentSessionId: z.string(),
   title: z.string(),

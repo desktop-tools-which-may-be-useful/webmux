@@ -253,9 +253,17 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   - 最多 4000 个字符，超出时前端禁用提交，服务端拒绝并保留原指令；指令随仓库清单持久保存，服务重启后仍在，旧版清单缺字段视为没有指令；已保存的旧指令按纯文本继续可用；
   - 内置的 `{{dir}}` 换成新会话的临时文件夹路径，与 `{{user}}` 一样不能作为快捷指令名称；
   - 指令只作为快速开始首条消息的前缀（US-Q18）或新建会话对话框中“使用初始化指令”的内容（US-B01），不会被当作命令执行；`PATCH /api/repositories/{id}` 沿用认证与 Origin 校验。
+- **US-J13 释放已归档工作树的空间**：作为任务结束后仍想保留聊天的使用者，我希望删除已归档聊天所在的 worktree 来回收磁盘，并在之后恢复聊天时把它重建回来，以便不必在“占着空间”和“永久删除”之间二选一。
+  验收要点：
+  - 侧栏聊天历史与首页“已归档”区中，位于可用 linked worktree 的未释放记录的菜单提供“释放空间”，以工作树为单位作用于其中全部已归档记录；主工作区、直接目录、worktree 已不存在或已释放的记录不提供；
+  - 释放前预览列出阻止原因、将保留的已归档记录、保存的提交以及将删除的顶层忽略项与估算大小（超时显示“未知”或“至少”）；未提交修改、未跟踪文件、运行中会话、锁定、子模块或嵌套仓库阻止释放，忽略文件不阻止但不可通过重建找回，没有强制模式；
+  - 释放以非强制方式删除 worktree，保留分支，用私有引用 `refs/webmux/released/<id>` 保住提交，记录标注“已释放空间”并保存原路径、提交与分支，重启后仍在；确认后目标变化时拒绝并要求重新预览，删除失败时撤销标记与引用；
+  - 恢复已释放的记录（含侧栏点击）先二次确认重建：分支尖端仍为保存的提交且未被占用时检出该分支，否则以 detached 方式检出保存的提交并说明原因，原路径被占用或仓库不可用时不可确认；确认后先重建再恢复，取消不做改动；
+  - 重建后同一次释放下的记录都回到普通已归档状态并删除私有引用；未经重建直接调用恢复接口返回 409；删除已释放的记录只删除记录，最后一条被删时同时删除私有引用。
 
 依据：
 
+- [释放空间](../../internal/workspace/release.go)、[重建](../../internal/workspace/rebuild.go)、[释放确认](../../web/src/components/ReleaseWorktreeDialog.svelte)、[重建确认](../../web/src/components/RebuildWorktreeDialog.svelte)、[释放服务端测试](../../internal/workspace/release_test.go)
 - [工作区总览](../../web/src/components/WorkspaceGroup.svelte)、[主页选择](../../web/src/homeWorktrees.ts)、[分支与路径表单](../../web/src/components/WorktreeCreateFields.svelte)、[分支与提交信息](../../internal/workspace/git.go)、[删除确认](../../web/src/components/RemoveWorktreeDialog.svelte)
 - [仓库清单](../../internal/workspace/registry.go)、[创建](../../internal/workspace/create.go)、[删除](../../internal/workspace/remove.go)、[工作区 API](../../internal/api/workspace.go)
 - [仓库设置弹窗](../../web/src/components/RepositorySettingsDialog.svelte)、[指令输入框](../../web/src/components/InitInstructionField.svelte)、[添加仓库弹窗](../../web/src/components/AddRepositoryDialog.svelte)

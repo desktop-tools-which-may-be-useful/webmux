@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "body": {
+    "blockers": [],
+    "branch": "released",
+    "commit": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
+    "mode": "branch",
+    "path": "<released>",
+    "releaseId": "<releaseId#1>"
+  }
+}

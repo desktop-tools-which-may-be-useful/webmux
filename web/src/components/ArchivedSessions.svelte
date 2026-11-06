@@ -12,6 +12,7 @@
   import HybridRecordHints from "./HybridRecordHints.svelte";
   import HybridResumeActions from "./HybridResumeActions.svelte";
   import InlineNotice from "./InlineNotice.svelte";
+  import ReleasedBadge from "./ReleasedBadge.svelte";
   import { errorMessage } from "../error";
   import type { ArchiveActions } from "../archived";
   import type { ArchivedSession, Worktree } from "../schemas";
@@ -32,6 +33,10 @@
     title: string;
     records: ArchivedSession[];
     groupPath?: string;
+    /**
+     * The group's linked worktree when it can be removed or released; a
+     * released record never targets it, deleting only itself.
+     */
     worktree?: Worktree;
     archive: ArchiveActions;
   } = $props();
@@ -130,6 +135,7 @@
     >
       {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
       {#each shown as record (record.id)}
+        {@const target = record.released ? undefined : worktree}
         <Item.Root
           variant="muted"
           class="min-w-0 flex-col flex-nowrap items-stretch"
@@ -147,6 +153,9 @@
                 variant={record.state === "interrupted" ? "warning" : "outline"}
                 >{record.state === "closed" ? "已关闭" : "已中断"}</Badge
               >
+              {#if record.released}<ReleasedBadge
+                  released={record.released}
+                />{/if}
             </div>
             <Item.Description>
               <span class="flex flex-wrap gap-x-3 gap-y-1">
@@ -173,6 +182,7 @@
               {record}
               resume={archive.resume}
               onresumed={archive.onresumed}
+              onrebuilt={archive.onrebuilt}
               disabled={!!busy}
               onbusy={(active) => (busy = active ? record.id : "")}
               onerror={(message) => (error = message)}
@@ -192,11 +202,18 @@
                 {/snippet}
               </DropdownMenu.Trigger>
               <DropdownMenu.Content align="end">
+                {#if target && archive.release}
+                  {@const release = archive.release}
+                  <DropdownMenu.Item onSelect={() => release(target)}
+                    >释放空间</DropdownMenu.Item
+                  >
+                  <DropdownMenu.Separator />
+                {/if}
                 <DropdownMenu.Item
                   variant="destructive"
                   onSelect={() => {
-                    if (worktree && archive.removeWorktree) {
-                      archive.removeWorktree(worktree);
+                    if (target && archive.removeWorktree) {
+                      archive.removeWorktree(target);
                       return;
                     }
                     removing = record;

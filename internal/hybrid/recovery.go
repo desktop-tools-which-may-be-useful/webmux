@@ -255,6 +255,9 @@ func (s *Service) resume(id string, in ResumeInput) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rec.Released != nil {
+		return nil, fmt.Errorf("%w: 工作树已释放空间，请先重建工作树再恢复", ErrConflict)
+	}
 	side := in.Side
 	if side == "" {
 		side = rec.Side
@@ -453,6 +456,23 @@ func (a *actor) resumed(started chan<- error, res resumeResult) {
 	started <- nil
 	a.checkLink()
 	a.afterTransition()
+}
+
+// MarkReleased records that the worktree of closed or interrupted records
+// ids was released as rel, writing the file at once so a restart sees the
+// mark before the directory is deleted.
+func (s *Service) MarkReleased(_ context.Context, ids []string, rel Release) error {
+	if err := s.records.markReleased(ids, rel); err != nil {
+		return err
+	}
+	s.log.Info("hybrid records released", "release", rel.ID, "records", len(ids))
+	return nil
+}
+
+// ClearReleased removes release releaseID from every record carrying it
+// and returns their IDs; none is not an error.
+func (s *Service) ClearReleased(_ context.Context, releaseID string) ([]string, error) {
+	return s.records.clearReleased(releaseID)
 }
 
 // AgentLabel is the display title and icon of agent name, empty for an

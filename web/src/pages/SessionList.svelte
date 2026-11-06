@@ -215,6 +215,10 @@
       ),
     );
   }
+  // Why the resume after a worktree rebuild failed. The refresh that follows
+  // regroups the record and replaces its archived section, so the page
+  // keeps the explanation until a resume succeeds or another rebuild settles.
+  let rebuildFailure = $state("");
   const archive: ArchiveActions = $derived({
     now,
     filtering,
@@ -227,7 +231,15 @@
     removeWorktree: (tree) => {
       removing = tree;
     },
-    onresumed: () => void shell.archived.refresh(),
+    release: shell.releaseWorktree,
+    onresumed: () => {
+      rebuildFailure = "";
+      void shell.archived.refresh();
+    },
+    onrebuilt: (failure) => {
+      rebuildFailure = failure;
+      refreshWorktrees();
+    },
   });
   // Only an actively producing session follows the tab indicator; idle live
   // sessions are still "active" for the list summary but not for this marker.
@@ -387,6 +399,9 @@
           </InlineNotice>{/if}
         {#if error}<InlineNotice tone="danger" class="mb-4">
             {error}
+          </InlineNotice>{/if}
+        {#if rebuildFailure}<InlineNotice tone="danger" class="mb-4">
+            {rebuildFailure}
           </InlineNotice>{/if}
         {#if capabilityError}<InlineNotice tone="warning" class="mb-4">
             仓库管理部分不可用：{capabilityError}。仍可直接启动会话。

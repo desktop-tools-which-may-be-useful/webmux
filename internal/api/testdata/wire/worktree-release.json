@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "recordIds": [
+      "<id#5>"
+    ],
+    "releaseId": "<releaseId#1>"
+  }
+}

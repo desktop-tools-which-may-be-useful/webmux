@@ -13,6 +13,8 @@
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
+  import BlockerList from "./BlockerList.svelte";
+  import PreviewForm from "./PreviewForm.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   let {
     worktree,
@@ -98,40 +100,28 @@
   {onclose}
   {busy}
 >
-  <form
-    class="space-y-4"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void remove();
-    }}
-  >
-    <div class="rounded-lg border bg-muted/40 p-3 text-sm">
-      <p class="font-medium">
-        {worktree.branch ||
-          (worktree.detached
-            ? `detached · ${worktree.head?.slice(0, 12)}`
-            : "无分支")}
-      </p>
-      <p class="mt-1 font-mono break-all whitespace-pre-wrap">
-        {worktree.path}
-      </p>
-      {#if worktree.detached}<p class="mt-2 text-destructive">
-          detached 提交可能没有分支保护，请先在终端保留需要的提交。
-        </p>{:else}<p class="mt-2 text-muted-foreground">
-          分支保留；目录内未提交、未跟踪及忽略文件不会保留。
-        </p>{/if}
-    </div>
-    {#if busy}<p role="status" class="text-sm">正在处理，请勿重复提交…</p>{/if}
+  <PreviewForm {busy} {error} onsubmit={() => void remove()} {onclose}>
+    {#snippet summary()}
+      <div class="rounded-lg border bg-muted/40 p-3 text-sm">
+        <p class="font-medium">
+          {worktree.branch ||
+            (worktree.detached
+              ? `detached · ${worktree.head?.slice(0, 12)}`
+              : "无分支")}
+        </p>
+        <p class="mt-1 font-mono break-all whitespace-pre-wrap">
+          {worktree.path}
+        </p>
+        {#if worktree.detached}<p class="mt-2 text-destructive">
+            detached 提交可能没有分支保护，请先在终端保留需要的提交。
+          </p>{:else}<p class="mt-2 text-muted-foreground">
+            分支保留；目录内未提交、未跟踪及忽略文件不会保留。
+          </p>{/if}
+      </div>
+    {/snippet}
     {#if preview}
       {#if preview.blockers.length}
-        <div class="rounded-lg border border-destructive/30 p-3 text-sm">
-          <p class="font-medium">安全删除被阻止</p>
-          <ul class="mt-2 list-disc space-y-1 pl-5">
-            {#each preview.blockers as blocker (blocker)}<li class="break-all">
-                {blocker}
-              </li>{/each}
-          </ul>
-        </div>
+        <BlockerList title="安全删除被阻止" blockers={preview.blockers} />
       {:else}<p class="text-sm">
           当前工作树可安全删除：没有受保护的文件或活动会话。
         </p>{/if}
@@ -177,13 +167,7 @@
         </Label>
       {/if}
     {/if}
-    {#if error}<p role="alert" class="break-all text-sm text-destructive">
-        {error}
-      </p>{/if}
-    <div class="flex flex-wrap justify-end gap-2">
-      <Button type="button" variant="outline" disabled={busy} onclick={onclose}
-        >取消</Button
-      >
+    {#snippet actions()}
       {#if !preview}<Button type="button" disabled={busy} onclick={load}
           >重新读取预览</Button
         >
@@ -214,6 +198,6 @@
           }}>进入强制删除确认</Button
         >
       {/if}
-    </div>
-  </form>
+    {/snippet}
+  </PreviewForm>
 </ResponsiveDialog>

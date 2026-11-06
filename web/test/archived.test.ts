@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   placeArchived,
   recordWorktree,
+  releasableRecordWorktree,
   removableRecordWorktree,
   repositoryRecords,
 } from "../src/archived";
@@ -154,5 +155,51 @@ describe("placeArchived", () => {
         repos,
       ),
     ).toBeUndefined();
+  });
+
+  test("offers releasing only linked worktrees of records not yet released", () => {
+    const repos: Repository[] = [
+      {
+        ...repository,
+        worktrees: [
+          { ...tree("main", "/work/main"), kind: "main" },
+          tree("feature", "/work/feature"),
+          { ...tree("prunable", "/work/prunable"), prunable: true },
+          { ...tree("offline", "/work/offline"), available: false },
+        ],
+      },
+    ];
+    const at = (worktreeId: string, patch: Partial<ArchivedSession> = {}) =>
+      record(worktreeId, {
+        cwd: `/work/${worktreeId}`,
+        workspace: {
+          repositoryId: "r1",
+          worktreeId,
+          worktreePath: `/work/${worktreeId}`,
+        },
+        ...patch,
+      });
+    expect(releasableRecordWorktree(at("feature"), repos)?.id).toBe("feature");
+    // The main checkout, a prunable or unavailable directory, a worktree no
+    // longer in the Git list and a direct directory never offer it.
+    for (const id of ["main", "prunable", "offline", "gone"])
+      expect(releasableRecordWorktree(at(id), repos), id).toBeUndefined();
+    expect(
+      releasableRecordWorktree(record("direct", { cwd: "/tmp" }), repos),
+    ).toBeUndefined();
+    // A released record has nothing left to release, and deleting it only
+    // deletes the record, even when a worktree is back at its path.
+    const released = at("feature", {
+      released: {
+        id: "rel1",
+        repositoryId: "r1",
+        path: "/work/feature",
+        commit: "c".repeat(40),
+        branch: "feature",
+        releasedAt: "2026-10-28T00:00:00Z",
+      },
+    });
+    expect(releasableRecordWorktree(released, repos)).toBeUndefined();
+    expect(removableRecordWorktree(released, repos)).toBeUndefined();
   });
 });

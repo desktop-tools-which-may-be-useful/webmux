@@ -89,6 +89,9 @@ type SessionInfo struct {
 	Agent *SessionAgent `json:"agent"`
 	// Archive is set only on a closed or interrupted session.
 	Archive *SessionArchive `json:"archive,omitempty"`
+	// Released is set when the session's linked worktree directory was
+	// released while archived.
+	Released *HybridRelease `json:"released,omitempty"`
 	// ListeningPorts are the loopback or wildcard TCP ports the session's
 	// process tree listens on, ascending; empty where detection is
 	// unsupported.

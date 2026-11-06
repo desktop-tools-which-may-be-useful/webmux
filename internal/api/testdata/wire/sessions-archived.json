@@ -30,6 +30,14 @@
       "lastActiveAt": "<time>",
       "listeningPorts": [],
       "preview": "",
+      "released": {
+        "branch": "main",
+        "commit": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
+        "id": "wirerelease",
+        "path": "<repo>",
+        "releasedAt": "<time>",
+        "repositoryId": "repo0001"
+      },
       "reportedCwd": null,
       "rows": 0,
       "state": "closed",
