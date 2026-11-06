@@ -3,6 +3,8 @@ import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import {
   ArchivedSessionSchema,
+  BatchRemovalPreviewSchema,
+  BatchRemoveResultSchema,
   BranchesSchema,
   ChatFrameSchema,
   CodeChangesSchema,
@@ -40,6 +42,8 @@ const schemas = {
   repositories: RepositoriesSchema,
   branches: BranchesSchema,
   preview: RemovalPreviewSchema,
+  batchPreview: BatchRemovalPreviewSchema,
+  batchRemoveResult: BatchRemoveResultSchema,
   launch: z.array(LaunchConfigSummarySchema),
   launchConfig: LaunchConfigSchema,
   launchPresets: LaunchPresetsSchema,

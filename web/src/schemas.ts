@@ -676,9 +676,7 @@ export const PushCheckSchema = z.object({
 });
 export type PushCheck = z.infer<typeof PushCheckSchema>;
 
-export const RemovalPreviewSchema = z.object({
-  confirmationId: z.string(),
-  expiresAt: z.iso.datetime({ offset: true }),
+export const RemovalPreviewItemSchema = z.object({
   worktree: WorktreeSchema,
   sessions: z.array(SessionInfoSchema),
   // Closed and interrupted sessions in the worktree; a successful removal
@@ -693,6 +691,12 @@ export const RemovalPreviewSchema = z.object({
   warnings: z.array(z.string()),
   forceAllowed: z.boolean(),
 });
+export type RemovalPreviewItem = z.infer<typeof RemovalPreviewItemSchema>;
+
+export const RemovalPreviewSchema = RemovalPreviewItemSchema.extend({
+  confirmationId: z.string(),
+  expiresAt: z.iso.datetime({ offset: true }),
+});
 export type RemovalPreview = z.infer<typeof RemovalPreviewSchema>;
 export const EmptyRequestSchema = z.object({}).strict();
 export const RemoveWorktreeRequestSchema = z.object({
@@ -701,6 +705,43 @@ export const RemoveWorktreeRequestSchema = z.object({
   confirmPath: z.string().optional(),
   closeSessions: z.boolean().optional(),
 });
+export const MAX_BATCH_WORKTREES = 50;
+export const BatchRemovalPreviewRequestSchema = z
+  .object({
+    worktreeIds: z.array(z.string().min(1)).min(1).max(MAX_BATCH_WORKTREES),
+  })
+  .strict();
+export type BatchRemovalPreviewRequest = z.infer<
+  typeof BatchRemovalPreviewRequestSchema
+>;
+export const BatchRemovalPreviewSchema = z.object({
+  confirmationId: z.string(),
+  expiresAt: z.iso.datetime({ offset: true }),
+  items: z.array(RemovalPreviewItemSchema),
+});
+export type BatchRemovalPreview = z.infer<typeof BatchRemovalPreviewSchema>;
+export const BatchRemoveWorktreesRequestSchema = z
+  .object({
+    confirmationId: z.string().min(1),
+    includeForce: z.boolean(),
+    closeSessions: z.boolean(),
+  })
+  .strict();
+export type BatchRemoveWorktreesRequest = z.infer<
+  typeof BatchRemoveWorktreesRequestSchema
+>;
+export const BatchRemoveItemResultSchema = z.object({
+  worktreeId: z.string(),
+  path: z.string(),
+  branch: z.string().optional(),
+  status: z.enum(["removed", "skipped", "failed"]),
+  error: z.string().optional(),
+});
+export type BatchRemoveItemResult = z.infer<typeof BatchRemoveItemResultSchema>;
+export const BatchRemoveResultSchema = z.object({
+  results: z.array(BatchRemoveItemResultSchema),
+});
+export type BatchRemoveResult = z.infer<typeof BatchRemoveResultSchema>;
 // Releasing a linked worktree's disk space keeps its archived records and
 // the commit it was on. Ignored entries are top-level paths relative to the
 // worktree, directories ending in "/"; at most 50 are listed and

@@ -15,7 +15,9 @@ import (
 
 const readTimeout = 10 * time.Second
 const writeTimeout = 30 * time.Second
+const maxBatchWriteTimeout = 3 * time.Minute
 const confirmationLifetime = 5 * time.Minute
+const maxBatchWorktrees = 50
 
 // Error kinds. Each wraps a transport-neutral category; the controller maps
 // kinds to HTTP statuses.
@@ -159,6 +161,41 @@ type Preview struct {
 	Blockers     []string  `json:"blockers"`
 	Warnings     []string  `json:"warnings"`
 	ForceAllowed bool      `json:"forceAllowed"`
+}
+
+type BatchPreviewItem struct {
+	Worktree     Worktree        `json:"worktree"`
+	Sessions     []session.Info  `json:"sessions"`
+	Archived     []hybrid.Record `json:"archived"`
+	Commit       string          `json:"commit"`
+	Push         PushCheck       `json:"push"`
+	Blockers     []string        `json:"blockers"`
+	Warnings     []string        `json:"warnings"`
+	ForceAllowed bool            `json:"forceAllowed"`
+}
+
+type BatchPreview struct {
+	ConfirmationID string             `json:"confirmationId"`
+	ExpiresAt      time.Time          `json:"expiresAt"`
+	Items          []BatchPreviewItem `json:"items"`
+}
+
+type BatchRemoveRequest struct {
+	ConfirmationID string
+	IncludeForce   bool
+	CloseSessions  bool
+}
+
+type BatchRemoveItemResult struct {
+	WorktreeID string `json:"worktreeId"`
+	Path       string `json:"path"`
+	Branch     string `json:"branch,omitempty"`
+	Status     string `json:"status"`
+	Error      string `json:"error,omitempty"`
+}
+
+type BatchRemoveResult struct {
+	Results []BatchRemoveItemResult `json:"results"`
 }
 
 func randomID() (string, error) {

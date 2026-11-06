@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/rainchan/webmux/internal/hybrid"
@@ -15,12 +16,13 @@ import (
 )
 
 type identity struct {
-	root        os.FileInfo
-	admin       os.FileInfo
-	common      os.FileInfo
-	gitFile     os.FileInfo
-	adminPath   string
-	gitContents string
+	root            os.FileInfo
+	admin           os.FileInfo
+	common          os.FileInfo
+	gitFile         os.FileInfo
+	adminPath       string
+	gitContents     string
+	prunableMissing bool
 	// Holding the objects prevents inode reuse from making a removed/recreated
 	// checkout compare equal to an earlier confirmation.
 	handles []*os.File
@@ -82,9 +84,15 @@ func (st removalState) messages(skip ...blockerKind) []string {
 type purpose string
 
 const (
-	purposeRemove  purpose = "remove"
-	purposeRelease purpose = "release"
+	purposeRemove      purpose = "remove"
+	purposeRelease     purpose = "release"
+	purposeBatchRemove purpose = "batch-remove"
 )
+
+type batchTarget struct {
+	state  removalState
+	commit string
+}
 
 type confirmation struct {
 	purpose      purpose
@@ -92,12 +100,20 @@ type confirmation struct {
 	worktreeID   string
 	expires      time.Time
 	state        removalState
+	batch        []batchTarget
 	// records are the archived record IDs a release preview showed.
 	records []string
 	// commit is the commit the preview resolved, empty when HEAD does not
 	// resolve.
 	commit string
 	timer  *time.Timer
+}
+
+func (c *confirmation) closeHandles() {
+	c.state.identity.close()
+	for i := range c.batch {
+		c.batch[i].state.identity.close()
+	}
 }
 
 func (s *Service) identify(ctx context.Context, r *repositoryState, tree Worktree) (id identity, err error) {
@@ -155,7 +171,93 @@ func (s *Service) identify(ctx context.Context, r *repositoryState, tree Worktre
 	id.gitContents = string(contents)
 	return id, nil
 }
+func findWorktreeAdmin(commonDir, targetPath string) (string, string, error) {
+	worktreesDir := filepath.Join(commonDir, "worktrees")
+	entries, err := os.ReadDir(worktreesDir)
+	if err != nil {
+		return "", "", err
+	}
+	var matchedPath, matchedContents string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		candidateDir := filepath.Join(worktreesDir, entry.Name())
+		data, readErr := os.ReadFile(filepath.Join(candidateDir, "gitdir"))
+		if readErr != nil {
+			continue
+		}
+		raw := strings.TrimRight(string(data), "\r\n")
+		if raw == "" {
+			continue
+		}
+		if !filepath.IsAbs(raw) {
+			raw = filepath.Join(candidateDir, raw)
+		}
+		wtPath := filepath.Dir(filepath.Clean(raw))
+		if resolved, resolveErr := canonicalTarget(wtPath); resolveErr == nil {
+			wtPath = resolved
+		}
+		if wtPath != targetPath {
+			continue
+		}
+		adminPath, canonErr := canonical(candidateDir)
+		if canonErr != nil {
+			return "", "", canonErr
+		}
+		if !within(commonDir, adminPath) || adminPath == commonDir {
+			return "", "", errors.New("linked worktree 管理目录身份无效")
+		}
+		if matchedPath != "" {
+			return "", "", errors.New("存在多个匹配的 worktree 管理目录")
+		}
+		matchedPath = adminPath
+		matchedContents = string(data)
+	}
+	if matchedPath == "" {
+		return "", "", errors.New("未找到对应的 worktree 管理目录")
+	}
+	return matchedPath, matchedContents, nil
+}
+
+func (s *Service) identifyPrunable(r *repositoryState, tree Worktree) (id identity, err error) {
+	defer func() {
+		if err != nil {
+			id.close()
+		}
+	}()
+	if _, statErr := os.Lstat(tree.Path); !errors.Is(statErr, os.ErrNotExist) {
+		return id, fmt.Errorf("待清理工作树路径仍存在或不可验证: %v", statErr)
+	}
+	resolved, err := canonicalTarget(tree.Path)
+	if err != nil || resolved != tree.Path {
+		return id, fmt.Errorf("工作树规范路径身份已改变: %v", err)
+	}
+	id.common, err = id.hold(r.entry.CommonDir)
+	if err != nil {
+		return id, err
+	}
+	adminPath, gitdirContents, err := findWorktreeAdmin(r.entry.CommonDir, tree.Path)
+	if err != nil {
+		return id, err
+	}
+	id.adminPath = adminPath
+	id.admin, err = id.hold(adminPath)
+	if err != nil {
+		return id, err
+	}
+	id.gitContents = gitdirContents
+	id.prunableMissing = true
+	return id, nil
+}
+
 func sameIdentity(a, b identity) bool {
+	if a.prunableMissing || b.prunableMissing {
+		return a.prunableMissing && b.prunableMissing &&
+			a.admin != nil && b.admin != nil && a.common != nil && b.common != nil &&
+			os.SameFile(a.admin, b.admin) && os.SameFile(a.common, b.common) &&
+			a.adminPath == b.adminPath && a.gitContents == b.gitContents
+	}
 	return a.root != nil && b.root != nil && a.admin != nil && b.admin != nil && a.common != nil && b.common != nil && a.gitFile != nil && b.gitFile != nil &&
 		os.SameFile(a.root, b.root) && os.SameFile(a.admin, b.admin) && os.SameFile(a.common, b.common) && os.SameFile(a.gitFile, b.gitFile) && a.adminPath == b.adminPath && a.gitContents == b.gitContents
 }
@@ -172,14 +274,15 @@ func sameTarget(a, b removalState) bool {
 		a.tree.Locked == b.tree.Locked && a.tree.LockReason == b.tree.LockReason && a.tree.Prunable == b.tree.Prunable && a.tree.Available == b.tree.Available
 }
 func (s *Service) removalState(ctx context.Context, r *repositoryState, worktreeID string) (removalState, error) {
-	repository, err := s.current(ctx, r)
+	tree, err := s.currentTree(ctx, r, worktreeID)
 	if err != nil {
 		return removalState{}, err
 	}
-	tree, err := findTree(repository, worktreeID)
-	if err != nil {
-		return removalState{}, err
-	}
+	return s.removalStateFromTree(ctx, r, tree)
+}
+
+func (s *Service) removalStateFromTree(ctx context.Context, r *repositoryState, tree Worktree) (removalState, error) {
+	var err error
 	state := removalState{tree: tree, sessions: s.targetSessions(tree.Path), blockers: []blocker{}, supported: true}
 	block := func(message string) {
 		state.supported = false
@@ -188,25 +291,40 @@ func (s *Service) removalState(ctx context.Context, r *repositoryState, worktree
 	add := func(kind blockerKind, message string) {
 		state.blockers = append(state.blockers, blocker{kind: kind, message: message})
 	}
+	isMissingPrunable := false
+	if tree.Kind == "linked" && !tree.Locked && tree.Prunable && !tree.Available {
+		if _, statErr := os.Lstat(tree.Path); errors.Is(statErr, os.ErrNotExist) {
+			isMissingPrunable = true
+		}
+	}
 	if tree.Kind != "linked" {
 		block("主工作区和 bare 仓库不能在页面删除")
 	}
 	if tree.Locked {
 		block("工作树已锁定，请先在终端解锁: " + tree.LockReason)
 	}
-	if !tree.Available || tree.Prunable {
-		block("工作树目录缺失或不可验证，请在终端处理")
-	}
-	if tree.Dirty == nil || tree.Error != "" {
-		block("工作树状态未知，不能确认安全删除: " + tree.Error)
-	}
-	if state.supported {
-		state.identity, err = s.identify(ctx, r, tree)
-		if err != nil {
-			block("无法验证工作树身份: " + err.Error())
+	if isMissingPrunable {
+		if state.supported {
+			state.identity, err = s.identifyPrunable(r, tree)
+			if err != nil {
+				block("无法验证待清理工作树身份: " + err.Error())
+			}
 		}
-		if err := s.unsupportedContents(ctx, tree); err != nil {
-			block(err.Error())
+	} else {
+		if !tree.Available || tree.Prunable {
+			block("工作树目录缺失或不可验证，请在终端处理")
+		}
+		if tree.Dirty == nil || tree.Error != "" {
+			block("工作树状态未知，不能确认安全删除: " + tree.Error)
+		}
+		if state.supported {
+			state.identity, err = s.identify(ctx, r, tree)
+			if err != nil {
+				block("无法验证工作树身份: " + err.Error())
+			}
+			if err := s.unsupportedContents(ctx, tree); err != nil {
+				block(err.Error())
+			}
 		}
 	}
 	if !state.supported {
@@ -248,7 +366,7 @@ func (s *Service) PreviewRemoval(ctx context.Context, repositoryID, worktreeID s
 	if err != nil {
 		return Preview{}, err
 	}
-	commit := s.headCommit(ctx, state.tree)
+	commit := s.headCommit(ctx, r, state.tree)
 	records := s.targetRecords(state.tree.Path)
 	check := s.checkPushed(ctx, r, commit)
 	c := confirmation{purpose: purposeRemove, repositoryID: repositoryID, worktreeID: worktreeID, state: state, commit: commit}
@@ -263,11 +381,11 @@ func (s *Service) PreviewRemoval(ctx context.Context, repositoryID, worktreeID s
 }
 
 // confirm stores c under a new confirmation ID until it expires; it owns
-// c.state's identity handles from now on, also on failure.
+// c's identity handles from now on, also on failure.
 func (s *Service) confirm(c confirmation) (string, time.Time, error) {
 	id, err := randomID()
 	if err != nil {
-		c.state.identity.close()
+		c.closeHandles()
 		return "", time.Time{}, err
 	}
 	now := time.Now()
@@ -275,7 +393,7 @@ func (s *Service) confirm(c confirmation) (string, time.Time, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.requireRegistryLocked(); err != nil {
-		c.state.identity.close()
+		c.closeHandles()
 		return "", time.Time{}, err
 	}
 	s.coord.Lock()
@@ -283,7 +401,7 @@ func (s *Service) confirm(c confirmation) (string, time.Time, error) {
 	for key, old := range s.confirmations {
 		if !now.Before(old.expires) {
 			old.timer.Stop()
-			old.state.identity.close()
+			old.closeHandles()
 			delete(s.confirmations, key)
 		}
 	}
@@ -291,7 +409,7 @@ func (s *Service) confirm(c confirmation) (string, time.Time, error) {
 		s.coord.Lock()
 		if expired, exists := s.confirmations[id]; exists {
 			delete(s.confirmations, id)
-			expired.state.identity.close()
+			expired.closeHandles()
 		}
 		s.coord.Unlock()
 	})
@@ -301,7 +419,7 @@ func (s *Service) confirm(c confirmation) (string, time.Time, error) {
 
 // takeConfirmation removes confirmation id and returns it when it is
 // still valid for purpose p on the worktree. The caller closes the
-// returned state's identity.
+// returned confirmation's identity handles.
 func (s *Service) takeConfirmation(id string, p purpose, repositoryID, worktreeID string) (confirmation, bool) {
 	s.coord.Lock()
 	c, ok := s.confirmations[id]
@@ -314,7 +432,7 @@ func (s *Service) takeConfirmation(id string, p purpose, repositoryID, worktreeI
 	}
 	c.timer.Stop()
 	if !time.Now().Before(c.expires) || c.repositoryID != repositoryID || c.worktreeID != worktreeID {
-		c.state.identity.close()
+		c.closeHandles()
 		return confirmation{}, false
 	}
 	return c, true
@@ -412,7 +530,7 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 	if !ok {
 		return problemf(ErrConflict, "删除确认已失效，请重新预览")
 	}
-	defer confirmation.state.identity.close()
+	defer confirmation.closeHandles()
 	if req.Mode == "force" && (req.ConfirmPath != confirmation.state.tree.Path || !req.CloseSessions) {
 		return problemf(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
 	}
@@ -436,6 +554,12 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 		defer refreshCancel()
 		s.readRepository(refreshCtx, r)
 	}()
+	return s.executeLockedRemoval(ctx, r, repositoryID, confirmation.state, confirmation.commit, req.Mode)
+}
+
+func (s *Service) executeLockedRemoval(ctx context.Context, r *repositoryState, repositoryID string, confirmed removalState, confirmedCommit, mode string) error {
+	worktreeID := confirmed.tree.ID
+	path := confirmed.tree.Path
 	current, err := s.removalState(ctx, r, worktreeID)
 	if err != nil {
 		return err
@@ -444,17 +568,17 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 	if !current.supported {
 		return problemf(ErrConflict, "不支持删除此工作树: %v", current.messages())
 	}
-	if !sameTarget(confirmation.state, current) || !sameSessions(confirmation.state.sessions, current.sessions) {
+	if !sameTarget(confirmed, current) || !sameSessions(confirmed.sessions, current.sessions) {
 		return problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
 	}
-	if req.Mode == "safe" && len(current.blockers) != 0 {
+	if mode == "safe" && len(current.blockers) != 0 {
 		return problemf(ErrConflict, "安全删除被阻止: %v", current.messages())
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	closed := make(map[string]bool)
-	if req.Mode == "force" {
+	if mode == "force" {
 		active := make([]*session.Session, 0, len(current.sessions))
 		for _, info := range current.sessions {
 			if info.Status == session.StatusExited {
@@ -493,18 +617,23 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 			return problemf(ErrConflict, "仍有运行会话，工作树未删除")
 		}
 	}
-	if req.Mode == "safe" && len(final.blockers) != 0 {
+	if mode == "safe" && len(final.blockers) != 0 {
 		return problemf(ErrConflict, "安全删除被最新状态阻止: %v", final.messages())
 	}
 	// The commit the records will be pinned to is the one the user saw.
-	if s.headCommit(ctx, final.tree) != confirmation.commit {
+	if s.headCommit(ctx, r, final.tree) != confirmedCommit {
 		return problemf(ErrConflict, "提交已变化，工作树未删除，请重新预览；部分会话可能已关闭")
+	}
+	if final.identity.prunableMissing {
+		if _, statErr := os.Lstat(path); !errors.Is(statErr, os.ErrNotExist) {
+			return problemf(ErrConflict, "待清理工作树原路径已重新出现文件或目录，请重新预览")
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	argv := []string{"worktree", "remove"}
-	if req.Mode == "force" {
+	if mode == "force" {
 		argv = append(argv, "--force")
 	}
 	argv = append(argv, "--", path)
@@ -519,7 +648,7 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 			closedHybrids = append(closedHybrids, info.ID)
 		}
 	}
-	s.retainRecords(ctx, r, repositoryID, confirmation.state.tree, confirmation.commit, closedHybrids)
+	s.retainRecords(ctx, r, repositoryID, confirmed.tree, confirmedCommit, closedHybrids)
 	return nil
 }
 
@@ -528,7 +657,7 @@ func (s *Service) clearConfirmations() {
 	defer s.coord.Unlock()
 	for id, confirmation := range s.confirmations {
 		confirmation.timer.Stop()
-		confirmation.state.identity.close()
+		confirmation.closeHandles()
 		delete(s.confirmations, id)
 	}
 }

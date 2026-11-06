@@ -1,7 +1,7 @@
 <script lang="ts">
   import { errorMessage } from "../error";
   import { onMount } from "svelte";
-  import { api, sessionStatusText } from "../api";
+  import { api } from "../api";
   import {
     EmptyRequestSchema,
     NoContentSchema,
@@ -18,6 +18,7 @@
   import PreviewForm from "./PreviewForm.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import PushCheckNotice from "./PushCheckNotice.svelte";
+  import WorktreeSessionList from "./WorktreeSessionList.svelte";
   let {
     worktree,
     onclose,
@@ -139,7 +140,9 @@
       {#if preview.blockers.length}
         <BlockerList title="安全删除被阻止" blockers={preview.blockers} />
       {:else}<p class="text-sm">
-          当前工作树可安全删除：没有受保护的文件或活动会话。
+          {preview.worktree.prunable && !preview.worktree.available
+            ? "工作树目录已缺失，当前可安全清理该失效的 Git 登记。"
+            : "当前工作树可安全删除：没有受保护的文件或活动会话。"}
         </p>{/if}
       {#if preview.warnings.length}
         <InlineNotice tone="warning">
@@ -151,16 +154,10 @@
         </InlineNotice>
       {/if}
       {#if preview.sessions.length}
-        <div class="space-y-2 text-sm">
-          <p class="font-medium">关联会话（按启动目录识别）</p>
-          <ul class="space-y-1">
-            {#each preview.sessions as session (session.id)}<li
-                class="break-all"
-              >
-                {session.title} · {sessionStatusText(session)} · {session.cwd}
-              </li>{/each}
-          </ul>
-        </div>
+        <WorktreeSessionList
+          title="关联会话（按启动目录识别）"
+          sessions={preview.sessions}
+        />
       {/if}
       {#if preview.archived.length}
         <div class="space-y-2 text-sm">

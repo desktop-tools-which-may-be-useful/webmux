@@ -1,0 +1,20 @@
+{
+  "status": 201,
+  "body": {
+    "available": true,
+    "branch": "linked-batch",
+    "detached": false,
+    "dirty": false,
+    "error": "",
+    "hasIgnored": false,
+    "hasUntracked": false,
+    "head": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
+    "id": "<id#5>",
+    "kind": "linked",
+    "lockReason": "",
+    "locked": false,
+    "path": "<linked-batch>",
+    "prunable": false,
+    "repositoryId": "<id#1>"
+  }
+}

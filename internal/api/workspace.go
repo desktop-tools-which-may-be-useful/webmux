@@ -65,6 +65,14 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 	serveInDone(mux, "POST "+repo+"/worktrees/{worktreeId}/remove", workspaceFailure, func(r *http.Request, req contract.RemoveWorktreeRequest) error {
 		return s.Workspace.RemoveWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.RemoveWorktree(req))
 	})
+	serveIn(mux, "POST "+repo+"/worktrees/batch-removal-preview", http.StatusOK, workspaceFailure, func(r *http.Request, req contract.BatchRemovalPreviewRequest) (contract.BatchRemovalPreview, error) {
+		preview, err := s.Workspace.PreviewBatchRemoval(r.Context(), r.PathValue("id"), req.WorktreeIDs)
+		return wire.BatchPreview(preview, s.archived), err
+	})
+	serveIn(mux, "POST "+repo+"/worktrees/batch-remove", http.StatusOK, workspaceFailure, func(r *http.Request, req contract.BatchRemoveWorktreesRequest) (contract.BatchRemoveResult, error) {
+		result, err := s.Workspace.BatchRemoveWorktrees(r.Context(), r.PathValue("id"), wire.BatchRemoveWorktrees(req))
+		return wire.BatchRemoveResult(result), err
+	})
 	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/release-preview", http.StatusOK, sessionFailure, func(r *http.Request, _ contract.ReleasePreviewRequest) (contract.ReleasePreview, error) {
 		preview, err := s.Workspace.PreviewRelease(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"))
 		return wire.ReleasePreview(preview, s.archived), err

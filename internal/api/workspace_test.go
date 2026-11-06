@@ -362,3 +362,77 @@ func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWorkspaceBatchRemovalAPIAndAuthBoundaries(t *testing.T) {
+	handler, _, _, root := workspaceAPI(t)
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)
+	var repository contract.Repository
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	base := "/api/repositories/" + repository.ID
+	previewURL := base + "/worktrees/batch-removal-preview"
+	removeURL := base + "/worktrees/batch-remove"
+
+	for _, url := range []string{previewURL, removeURL} {
+		for _, status := range []int{401, 403} {
+			request := httptest.NewRequest("POST", url, strings.NewReader(`{}`))
+			if status == 403 {
+				request.Header.Set("Authorization", "Bearer secret")
+				request.Header.Set("Origin", "https://evil.example")
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != status {
+				t.Fatalf("batch auth boundary %s: got %d want %d", url, recorder.Code, status)
+			}
+		}
+	}
+
+	created := workspaceRequest(t, handler, "POST", base+"/worktrees", contract.CreateWorktreeRequest{
+		Path:   filepath.Join(t.TempDir(), "batch-api-clean"),
+		Mode:   "new",
+		Branch: "batch-api-clean",
+		Base:   "HEAD",
+	}, 201)
+	var clean contract.Worktree
+	if err := json.Unmarshal(created.Body.Bytes(), &clean); err != nil {
+		t.Fatal(err)
+	}
+
+	workspaceRequest(t, handler, "POST", previewURL, contract.BatchRemovalPreviewRequest{}, 400)
+	workspaceRequest(t, handler, "POST", previewURL, contract.BatchRemovalPreviewRequest{WorktreeIDs: []string{"wt_missing"}}, 404)
+
+	pre := workspaceRequest(t, handler, "POST", previewURL, contract.BatchRemovalPreviewRequest{
+		WorktreeIDs: []string{repository.Worktrees[0].ID, clean.ID},
+	}, 200)
+	var preview contract.BatchRemovalPreview
+	if err := json.Unmarshal(pre.Body.Bytes(), &preview); err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Items) != 2 || preview.ConfirmationID == "" {
+		t.Fatalf("batch preview JSON: %+v", preview)
+	}
+
+	workspaceRequest(t, handler, "POST", removeURL, contract.BatchRemoveWorktreesRequest{
+		ConfirmationID: preview.ConfirmationID,
+		IncludeForce:   true,
+		CloseSessions:  false,
+	}, 400)
+
+	removed := workspaceRequest(t, handler, "POST", removeURL, contract.BatchRemoveWorktreesRequest{
+		ConfirmationID: preview.ConfirmationID,
+		IncludeForce:   false,
+		CloseSessions:  false,
+	}, 200)
+	var result contract.BatchRemoveResult
+	if err := json.Unmarshal(removed.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 2 || result.Results[0].Status != "skipped" || result.Results[1].Status != "removed" {
+		t.Fatalf("batch remove JSON: %+v", result)
+	}
+	workspaceRequest(t, handler, "POST", removeURL, contract.BatchRemoveWorktreesRequest{
+		ConfirmationID: preview.ConfirmationID,
+	}, 409)
+}

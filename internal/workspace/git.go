@@ -303,32 +303,7 @@ func (s *Service) readRepository(ctx context.Context, r *repositoryState) Reposi
 				return
 			}
 			defer func() { <-limit }()
-			stat, statErr := os.Stat(tree.Path)
-			if statErr != nil || !stat.IsDir() {
-				tree.Error = fmt.Sprintf("工作树目录不可访问: %v", statErr)
-				return
-			}
-			if tree.Kind == "bare" {
-				tree.Available = true
-				return
-			}
-			actual, checkErr := s.common(ctx, tree.Path)
-			if checkErr != nil || actual != e.CommonDir {
-				tree.Error = fmt.Sprintf("无法验证工作树身份: %v", checkErr)
-				return
-			}
-			tree.Available = true
-			status, statusErr := s.git(ctx, tree.Path, "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=matching")
-			if statusErr != nil {
-				tree.Error = statusErr.Error()
-				return
-			}
-			dirty, untracked, ignored, parseErr := parseStatus(status)
-			if parseErr != nil {
-				tree.Error = parseErr.Error()
-				return
-			}
-			tree.Dirty, tree.HasUntracked, tree.HasIgnored = &dirty, untracked, ignored
+			s.populateWorktreeStatus(ctx, e.CommonDir, tree)
 		}(&trees[i])
 	}
 	wg.Wait()
@@ -343,6 +318,107 @@ func (s *Service) readRepository(ctx context.Context, r *repositoryState) Reposi
 	})
 	result.Availability, result.Worktrees = "available", trees
 	return result
+}
+
+func (s *Service) populateWorktreeStatus(ctx context.Context, commonDir string, tree *Worktree) {
+	stat, statErr := os.Stat(tree.Path)
+	if statErr != nil || !stat.IsDir() {
+		tree.Error = fmt.Sprintf("工作树目录不可访问: %v", statErr)
+		return
+	}
+	if tree.Kind == "bare" {
+		tree.Available = true
+		return
+	}
+	actual, checkErr := s.common(ctx, tree.Path)
+	if checkErr != nil || actual != commonDir {
+		tree.Error = fmt.Sprintf("无法验证工作树身份: %v", checkErr)
+		return
+	}
+	tree.Available = true
+	status, statusErr := s.git(ctx, tree.Path, "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=matching")
+	if statusErr != nil {
+		tree.Error = statusErr.Error()
+		return
+	}
+	dirty, untracked, ignored, parseErr := parseStatus(status)
+	if parseErr != nil {
+		tree.Error = parseErr.Error()
+		return
+	}
+	tree.Dirty, tree.HasUntracked, tree.HasIgnored = &dirty, untracked, ignored
+}
+
+func (s *Service) currentTree(ctx context.Context, r *repositoryState, id string) (Worktree, error) {
+	trees, err := s.currentTrees(ctx, r, []string{id})
+	if err != nil {
+		return Worktree{}, err
+	}
+	return trees[0], nil
+}
+
+func (s *Service) currentTrees(ctx context.Context, r *repositoryState, ids []string) ([]Worktree, error) {
+	if !s.registered(r) {
+		return nil, problemf(ErrNotFound, "仓库已移除")
+	}
+	e := r.entry
+	common, err := s.common(ctx, e.AnchorPath)
+	if err == nil && common != e.CommonDir {
+		err = errors.New("仓库 common directory 身份已改变，请移除并重新注册")
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, problemf(ErrUnavailable, "%s", err.Error())
+	}
+	data, err := s.git(ctx, e.AnchorPath, "worktree", "list", "--porcelain", "-z")
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, problemf(ErrUnavailable, "%s", err.Error())
+	}
+	trees, err := parseWorktrees(data, e.ID)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, problemf(ErrUnavailable, "%s", err.Error())
+	}
+	byID := make(map[string]Worktree, len(trees))
+	for _, tree := range trees {
+		byID[tree.ID] = tree
+	}
+	selected := make([]Worktree, len(ids))
+	for i, id := range ids {
+		tree, ok := byID[id]
+		if !ok {
+			return nil, problemf(ErrNotFound, "工作树不存在，请刷新")
+		}
+		selected[i] = tree
+	}
+	limit := s.worktreeGate
+	var wg sync.WaitGroup
+	for i := range selected {
+		wg.Add(1)
+		go func(tree *Worktree) {
+			defer wg.Done()
+			select {
+			case limit <- struct{}{}:
+			case <-ctx.Done():
+				tree.Error = ctx.Err().Error()
+				return
+			}
+			defer func() { <-limit }()
+			s.populateWorktreeStatus(ctx, e.CommonDir, tree)
+		}(&selected[i])
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return selected, nil
 }
 func (s *Service) current(ctx context.Context, r *repositoryState) (Repository, error) {
 	if !s.registered(r) {

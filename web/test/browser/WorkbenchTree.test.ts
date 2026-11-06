@@ -51,6 +51,7 @@ function renderTree(
     onscope: vi.fn(),
     onopen: vi.fn(),
     onnewworktree: vi.fn(),
+    onmanageworktrees: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
@@ -133,13 +134,13 @@ test("repositories hold the home page's worktrees and their sessions", async () 
     "make test（已结束）",
     "htop（空闲）",
   ]);
-  // The unavailable repository stays, marked, without worktrees or "+".
+  // The unavailable repository stays, marked, without worktrees or action menu.
   await expect.element(item("legacy-api（不可用）")).toBeVisible();
   expect(item("legacy-api（不可用）").element().getAttribute("title")).toBe(
     "legacy-api：路径不可用：/srv/legacy-api 不存在",
   );
   expect(
-    tree().getByRole("button", { name: "在 legacy-api 新建工作树" }).elements(),
+    tree().getByRole("button", { name: "仓库操作：legacy-api" }).elements(),
   ).toEqual([]);
 });
 
@@ -164,14 +165,20 @@ test("rows navigate: scopes, worktrees and sessions", async () => {
   expect(handlers.onopen).toHaveBeenCalledWith(live);
 });
 
-test("each available repository offers the new-worktree flow", async () => {
+test("each available repository offers new-worktree and manage-worktrees actions", async () => {
   const handlers = renderTree([]);
-  await tree().getByRole("button", { name: "在 webmux 新建工作树" }).click();
+  await tree().getByRole("button", { name: "仓库操作：webmux" }).click();
+  await page.getByRole("menuitem", { name: "新建工作树…" }).click();
   expect(handlers.onnewworktree).toHaveBeenCalledWith("repo1");
+
+  await tree().getByRole("button", { name: "仓库操作：webmux" }).click();
+  await page.getByRole("menuitem", { name: "管理工作树…" }).click();
+  expect(handlers.onmanageworktrees).toHaveBeenCalledWith("repo1");
+
   await cleanup();
   renderTree([], { canCreate: false });
   await expect.element(item("webmux")).toBeVisible();
-  expect(page.getByRole("button", { name: /新建工作树/ }).elements()).toEqual(
+  expect(page.getByRole("button", { name: /仓库操作：/ }).elements()).toEqual(
     [],
   );
 });
@@ -232,10 +239,10 @@ test("arrow keys move through the visible rows; the action is the next tab stop"
   await expect.element(item("main")).toHaveAttribute("aria-expanded", "false");
   await userEvent.keyboard("{ArrowLeft}");
   await expect.element(item("webmux")).toHaveFocus();
-  // One stop for the rows; the focused repository's "+" comes next.
+  // One stop for the rows; the focused repository's action menu comes next.
   await userEvent.tab();
   await expect
-    .element(tree().getByRole("button", { name: "在 webmux 新建工作树" }))
+    .element(tree().getByRole("button", { name: "仓库操作：webmux" }))
     .toHaveFocus();
 });
 
@@ -341,6 +348,7 @@ function renderArchived(props: { current?: string; resuming?: string } = {}) {
     onscope: vi.fn(),
     onopen: vi.fn(),
     onnewworktree: vi.fn(),
+    onmanageworktrees: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume,

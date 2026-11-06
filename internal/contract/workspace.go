@@ -230,3 +230,48 @@ type RemoveWorktreeRequest struct {
 	ConfirmPath    string `json:"confirmPath"`
 	CloseSessions  bool   `json:"closeSessions"`
 }
+
+// BatchRemovalPreviewRequest selects the worktrees of a repository to preview.
+type BatchRemovalPreviewRequest struct {
+	WorktreeIDs []string `json:"worktreeIds"`
+}
+
+// RemovalPreviewItem describes what removing one worktree in a batch affects.
+type RemovalPreviewItem struct {
+	Worktree     Worktree      `json:"worktree"`
+	Sessions     []SessionInfo `json:"sessions"`
+	Archived     []SessionInfo `json:"archived"`
+	Commit       string        `json:"commit"`
+	Push         PushCheck     `json:"push"`
+	Blockers     []string      `json:"blockers"`
+	Warnings     []string      `json:"warnings"`
+	ForceAllowed bool          `json:"forceAllowed"`
+}
+
+// BatchRemovalPreview describes what removing a batch of worktrees affects.
+type BatchRemovalPreview struct {
+	ConfirmationID string               `json:"confirmationId"`
+	ExpiresAt      time.Time            `json:"expiresAt"`
+	Items          []RemovalPreviewItem `json:"items"`
+}
+
+// BatchRemoveWorktreesRequest confirms a previewed batch removal.
+type BatchRemoveWorktreesRequest struct {
+	ConfirmationID string `json:"confirmationId"`
+	IncludeForce   bool   `json:"includeForce"`
+	CloseSessions  bool   `json:"closeSessions"`
+}
+
+// BatchRemoveItemResult reports the outcome for one worktree in a batch removal.
+type BatchRemoveItemResult struct {
+	WorktreeID string `json:"worktreeId"`
+	Path       string `json:"path"`
+	Branch     string `json:"branch,omitempty"`
+	Status     string `json:"status"`
+	Error      string `json:"error,omitempty"`
+}
+
+// BatchRemoveResult lists the per-worktree outcomes of a batch removal.
+type BatchRemoveResult struct {
+	Results []BatchRemoveItemResult `json:"results"`
+}

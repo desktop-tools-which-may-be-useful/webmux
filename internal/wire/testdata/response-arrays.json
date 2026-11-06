@@ -45,6 +45,45 @@
     },
     "listeningPorts": []
   },
+  "batchPreview": {
+    "confirmationId": "",
+    "expiresAt": "0001-01-01T00:00:00Z",
+    "items": [
+      {
+        "worktree": {
+          "id": "",
+          "repositoryId": "",
+          "path": "",
+          "kind": "linked",
+          "branch": null,
+          "head": null,
+          "detached": false,
+          "locked": false,
+          "lockReason": "",
+          "prunable": false,
+          "available": false,
+          "dirty": null,
+          "hasUntracked": false,
+          "hasIgnored": false,
+          "error": ""
+        },
+        "sessions": [],
+        "archived": [],
+        "commit": "",
+        "push": {
+          "state": "unknown",
+          "branches": [],
+          "more": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "forceAllowed": false
+      }
+    ]
+  },
+  "batchRemoveResult": {
+    "results": []
+  },
   "branches": {
     "branches": [
       {

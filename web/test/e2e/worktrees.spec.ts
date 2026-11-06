@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, writeFile, access, rename } from "node:fs/promises";
+import { mkdir, writeFile, access, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page, Locator } from "@playwright/test";
 import {
@@ -728,4 +728,56 @@ test("direct launch still offers explicit directory creation without registering
   expect(sessions).toHaveLength(1);
   expect(sessions[0]).toMatchObject({ cwd: path, workspace: null });
   expect(await (await request.get("/api/repositories")).json()).toEqual([]);
+});
+
+test("batch worktree management cleans unpinned and prunable worktrees while skipping blocked ones and keeping branches", async ({
+  page,
+  workDir,
+}) => {
+  const root = await repository(workDir, "batch-repo");
+  const cleanPath = join(workDir, "batch-clean");
+  const stalePath = join(workDir, "batch-stale");
+  const dirtyPath = join(workDir, "batch-dirty");
+  await git(root, "worktree", "add", "-b", "wt/batch-clean", cleanPath);
+  await git(root, "worktree", "add", "-b", "wt/batch-stale", stalePath);
+  await git(root, "worktree", "add", "-b", "wt/batch-dirty", dirtyPath);
+  await rm(stalePath, { recursive: true, force: true });
+  await writeFile(join(dirtyPath, "tracked.txt"), "uncommitted edit\n");
+
+  await page.goto("/");
+  await register(page, root);
+  const group = page.locator("[data-repository-id]");
+  await expect(group).toHaveCount(1);
+
+  await group.getByRole("button", { name: "管理工作树", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "管理工作树 · batch-repo" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("checkbox", { name: "main" })).toBeDisabled();
+  await expect(dialog).toContainText("Git 登记待清理");
+  await expect(dialog).toContainText("未添加到主页");
+
+  await dialog.getByRole("button", { name: "选中全部可安全清理（2）" }).click();
+  await dialog.getByRole("checkbox", { name: "wt/batch-dirty" }).click();
+  await dialog.getByRole("button", { name: "下一步：预览删除 (3)" }).click();
+
+  const previewDialog = page.getByRole("dialog", {
+    name: "确认批量清理 · batch-repo",
+  });
+  await expect(previewDialog).toContainText("可安全清理 2 个");
+  await expect(previewDialog).toContainText("有阻塞 1 个");
+  await previewDialog.getByRole("button", { name: "确认安全删除 (2)" }).click();
+  await expect(previewDialog).toBeHidden();
+
+  await expect(access(cleanPath)).rejects.toThrow();
+  await access(dirtyPath);
+  expect(
+    await git(root, "show-ref", "--verify", "refs/heads/wt/batch-clean"),
+  ).toContain("refs/heads/wt/batch-clean");
+  expect(
+    await git(root, "show-ref", "--verify", "refs/heads/wt/batch-stale"),
+  ).toContain("refs/heads/wt/batch-stale");
+  const porcelain = await git(root, "worktree", "list", "--porcelain");
+  expect(porcelain).not.toContain(cleanPath);
+  expect(porcelain).not.toContain(stalePath);
+  expect(porcelain).toContain(dirtyPath);
 });

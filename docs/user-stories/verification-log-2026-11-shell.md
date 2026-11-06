@@ -134,3 +134,17 @@
 - 已运行：`go test -race` 覆盖 `internal/hybrid`（`TestWorkRunningOnlyForInProgress`、`TestTurnWithBackgroundCommandIsDoneOnlyAfterItEnds`、`TestTurnWithOpenToolWithoutNewProcessBecomesDoneAfterQuietPolls`、`TestBackgroundWatchStoppedByNewTurnOrSwitch`）、`session`、`wire`、`api`、`archtest`；
   `web/test/wire-contract.test.ts`、`web/test/browser/ChatView.test.ts`（含重连/截断后凭 `turn.unfinished` 保持提示）；`make check`；隔离演示场景在 1280×720 与 390×844、浅色与深色主题下的前后对比截图。
 - 限制：使用 fake agent 替身模拟后台命令与无子进程场景，未连接真实 agy 跑完整端到端；非 Linux/macOS 平台 `ProcessTree` 返回空切片（退化为两次静默轮询后记 `done`），未在 macOS 或真机移动浏览器上核对。
+
+本次局部核对（2026-11-06，工作台工作树批量管理）：实现 OpenSpec 变更 `batch-worktree-management`，支持工作树批量预览与删除、未锁定缺失目录 `prunable` 登记清理及侧栏仓库操作菜单。
+
+- 更新的故事：新增 US-J14；更新 US-J03、US-J08、US-C01、US-C15、US-C17 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/sessions.md`、`docs/protocol/http-workspace.md`。
+- 已运行：
+  - `go test -race` 覆盖以下包：
+    - `internal/workspace`：新增 `batch_remove_test.go`，覆盖未锁定 `prunable` 安全清理与重建冲突拦截、归档提交保留、批量安全/强制删除、确认凭证隔离、确认后外部写入的部分失败隔离、路径并发预留；
+    - `internal/api`：新增 `TestWorkspaceBatchRemovalAPIAndAuthBoundaries` 并更新 wire 快照；
+    - `internal/wire`、`internal/archtest`；
+  - 前端单测 `pnpm --dir web test:unit`（含 `worktreeBatch.test.ts`、`wire-contract.test.ts`、`wireArrays.test.ts`）；
+  - 浏览器组件测试：`ManageWorktreesDialog.test.ts`、`WorkbenchTree.test.ts`、`WorktreeDialogs.test.ts`；
+  - Playwright E2E：`worktrees.spec.ts`（批量清理空闲与 `prunable` 工作树并跳过受阻项、保留分支）、`app-shell.spec.ts`（工作台侧栏仓库操作菜单）；
+  - `make check`（含 `make docs-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）。
+- 限制：未在 macOS 与真机移动浏览器上运行，全量 Playwright 分片与 Storybook 构建交给 CI。

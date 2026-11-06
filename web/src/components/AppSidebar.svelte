@@ -200,6 +200,12 @@
         onopen={openSession}
         onnewworktree={(repositoryId) =>
           shell.start({ kind: "new-worktree", repositoryId })}
+        onmanageworktrees={(repositoryId) => {
+          const repo = shell.repositories.list.find(
+            (r) => r.id === repositoryId,
+          );
+          if (repo) shell.manageWorktrees(repo);
+        }}
         onrename={shell.rename}
         onclose={shell.close}
         records={shell.archived.records}
