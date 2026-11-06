@@ -31,7 +31,7 @@
   验收要点：
   - 支持 `default_cwd`、`scrollback_bytes`、`idle_after_seconds`、`prompt_patterns`、`agent_protocol`、`bell_attention`、`program_status`、`agent_pretrust`，校验正则；
   - 启动命令完全通过自定义配置或显式 argv 提供，原 `shell`/`presets` 配置项不再提供内置命令，新安装首次启动在 `launch-configs.json` 写入常见 agent 预设；
-  - 提醒集成方式见 [使用指南](../usage.md#需要你介入的提醒)。
+  - 提醒集成方式见 [使用指南](../usage/attention.md)。
 - **US-K05 安装后台用户服务**：作为部署者，我希望以当前用户安装并启动后台服务，以便不需要一直开着前台终端。
   验收要点：
   - `service install` 使用 Linux systemd 用户服务或 macOS LaunchAgent，无需 sudo；

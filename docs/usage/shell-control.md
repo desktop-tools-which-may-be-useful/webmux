@@ -1,6 +1,25 @@
 # 用脚本和 agent 控制 WebMux
 
-`webmux` 命令行可以完成 Web 端的大部分操作，脚本和运行在 WebMux 会话里的 CLI agent 都能直接调用。本页先讲怎样连上正确的实例，再按用途介绍命令。单个命令的选项、默认值、输出与示例只写在它的 `--help` 中，本页不重复；`webmux help --json` 输出机器可读的命令树。
+`webmux` 命令行可以完成 Web 端的大部分操作：脚本和运行在 WebMux 会话里的 CLI agent 都能直接创建会话、输入、等待、读取输出和提醒你。
+
+先从下面的常见任务找到对应命令；单个命令的全部选项、默认值、输出与示例写在 `webmux <命令> --help` 中，本页不重复。`webmux help --json` 输出机器可读的命令树。
+
+## 常见任务
+
+| 我想……                                   | 命令                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| 让 agent 在新 worktree 里做事并拿到回复  | `webmux run --new-worktree --launch-config "Claude Code" --view chat --prompt "…" --reply` |
+| 在持久会话里跑命令，按命令退出码结束     | `webmux run --follow --strip -- go test ./...`                       |
+| 给已有会话发一句话并等它做完             | `webmux send <ID> "…" --reply`（聊天视图）或 `--enter --wait idle`（终端视图） |
+| 读 agent 最后的回复                      | `webmux chat log <ID>`                                               |
+| 看全屏 TUI 当前画面                      | `webmux screen <ID>`                                                 |
+| 等会话需要我或空闲                       | `webmux wait <ID> --until attention,idle --changed`                  |
+| 任务完成后提醒我                         | `webmux notify --kind done "构建完成"`                               |
+| 查看当前会话的仓库、分支与链接           | `webmux get`                                                         |
+| 找到本会话的临时文件夹                   | `webmux dir self`                                                    |
+| 读 WebMux 工具手册                       | `webmux guide`                                                       |
+
+下面按用途展开，每节先给命令，再说明规则与边界。
 
 ## 连接到正确的实例
 
@@ -54,13 +73,17 @@ webmux run --new-worktree --branch fix/lint --launch-config "Claude Code" --view
 webmux launch-config options "Claude Code"         # 列出 run --set 可用的配置项
 ```
 
-- `run` 是唯一的创建命令，与 Web 端新建会话对话框一样用一次请求完成：位置（当前目录、已有 worktree 或新建 worktree）、命令或启动配置、
-  起始视图、首条消息、agent 设置、权限模式与附件。失败时按步骤报告，已创建的 worktree 与会话保留。
+- `run` 是唯一的创建命令，与 Web 端新建会话对话框一样用一次请求完成。可以指定：
+  - 位置：当前目录、已有 worktree 或新建 worktree；
+  - 命令或启动配置、起始视图、首条消息、agent 设置、权限模式与附件。
+- 失败时按步骤报告，已创建的 worktree 与会话保留。
 - `--new-worktree` 是开关，分支名用 `--branch` 给出，省略时由服务端生成 `wt/<日期>-<时间>`；新 worktree 像 Web 端一样加入主页显示。
-  没有 `--` 时出现的位置参数是用法错误，因此旧写法 `--new-worktree BRANCH` 不会被当作命令执行。
+  - 没有 `--` 时出现的位置参数是用法错误，因此旧写法 `--new-worktree BRANCH` 不会被当作命令执行。
 - 聊天视图没有终端可附着，以聊天视图启动时总是后台运行；`--reply` 跟踪首条提示的回合并输出 agent 的最终回复。
 - 仓库有初始化指令时，`--init` 需要显式给出。
-- `--cols N --rows M` 给终端设定初始尺寸（须同时给出，各 1–1000，默认 80×24）：程序第一次输出就按它排版。第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整。
+- `--cols N --rows M` 给终端设定初始尺寸，程序第一次输出就按它排版。
+  - 两者须同时给出，各 1–1000，默认 80×24；
+  - 第一个取得控制权的浏览器或 `attach` 仍按自己的窗口调整。
 
 ## 输入、中断与读取输出
 
@@ -77,14 +100,18 @@ webmux kill <ID>; webmux rm <ID>; webmux rename <ID> 新名称
 webmux api /api/launch-configs                   # 没有专用命令的接口，原样输出响应
 ```
 
-- `send` 与 `interrupt` 只按会话 ID 操作，由服务端按会话当前视图分派：终端视图上是带回执的输入（取得控制权，控制指示器显示 `script`，
-  在会话内还附上来源会话 ID），聊天视图上是提示（立即发送或排队）。选项属于另一种视图时服务端以 `wrong_view` 拒绝，什么也不写入。
+- `send` 与 `interrupt` 只需要会话 ID，由服务端按会话当前视图分派：
+  - 终端视图：带回执的输入。它取得控制权（控制指示器显示 `script`），在会话内还附上来源会话 ID；
+  - 聊天视图：作为提示立即发送或排队；
+  - 选项属于另一种视图时服务端以 `wrong_view` 拒绝，什么也不写入。
 - `send --wait` 先订阅再输入，只接受之后的状态变化，对两种视图都适用；`--reply` 只用于聊天视图，在终端视图上以 1 结束并提示改用 `--wait`。
 - `logs --strip` 适合按行输出的程序；全屏 TUI 用 `screen`，画面在 CLI 本地渲染，服务端不做终端模拟。
-- `resize` 在没有控制端或控制端是脚本（`send` 取得的 `script` 控制权）时直接生效；浏览器或 `attach` 控制时以 1 结束（服务端 409），因为浏览器会把自己的网格重发，两边会来回抢；
-  `--take` 让脚本接管控制权、调整后释放。
-- `screen --scrollback N` 在画面之前输出最多 N 行滚动历史（0–100000，`--json` 的 `lines` 同样包含）。历史来自 2 MiB 回放缓冲区，按控制端当前宽度重排，更早的内容已被丢弃；
-  备用屏幕程序（vim、less、多数 TUI）没有滚动历史。
+- `resize` 在没有控制端、或控制端是脚本（`send` 取得的 `script` 控制权）时直接生效。
+  - 浏览器或 `attach` 控制时以 1 结束（服务端 409）：浏览器会把自己的网格重发，两边会来回抢；
+  - `--take` 让脚本接管控制权、调整后释放。
+- `screen --scrollback N` 在画面之前输出最多 N 行滚动历史（0–100000，`--json` 的 `lines` 同样包含）。
+  - 历史来自 2 MiB 回放缓冲区，按控制端当前宽度重排，更早的内容已被丢弃；
+  - 备用屏幕程序（vim、less、多数 TUI）没有滚动历史。
 
 ## 提醒用户
 
@@ -115,9 +142,12 @@ webmux rm <ID> --forget --yes                    # 删除归档记录与临时�
 - 从开启了聊天视图的启动配置创建的会话有终端与聊天两个视图，`webmux ls` 在状态列显示它当前的视图。
 - `chat` 只保留聊天视图专有的操作（`status`、`watch`、`log`、`answer`、`set`、`permission`、`queue`）。会话没有聊天视图时以 1 结束；
   需要聊天视图而会话在终端视图时以 1 结束，并提示 `webmux view <ID> chat`。
-- `chat log` 读取服务端仍保留的聊天历史后立即退出，只读、不取得控制：默认输出最后一条消息，`--last N`（1 到 1000，其他值以 2 结束）取最近 N 条用户与 agent 消息，
-  `--tools` 加上工具调用（同一个调用的进度帧折叠为一行：标题与最终状态），`--json` 输出一个 `ChatFrame`（`type` 为 `events`，消息的分段已合并）。历史有长度上限，较早的消息可能已被丢弃（标准错误提示）。
-  与 `send --reply` 不同，它不发送输入，也不等待回合；`chat watch --history` 的历史部分同样只显示每个工具调用的最终状态，实时帧不变。
+- `chat log` 读取服务端仍保留的聊天历史后立即退出，只读、不取得控制。
+  - 默认输出最后一条消息；`--last N`（1 到 1000，其他值以 2 结束）取最近 N 条用户与 agent 消息；
+  - `--tools` 加上工具调用，同一个调用的进度帧折叠为一行：标题与最终状态；
+  - `--json` 输出一个 `ChatFrame`（`type` 为 `events`，消息的分段已合并）；
+  - 历史有长度上限，较早的消息可能已被丢弃（标准错误提示）；
+  - 与 `send --reply` 不同，它不发送输入，也不等待回合。`chat watch --history` 的历史部分同样只显示每个工具调用的最终状态，实时帧不变。
 - `view` 等到切换结束；终端 TUI 忙时不强制就取消切换并以 1 结束。找不到 agent 会话时列出候选并接受重试。
 - 带聊天视图的会话结束后成为已归档（`closed` 或 `interrupted`），`ls` 默认不列出；`resume` 以原 ID 恢复，`rm` 对它以 1 结束并提示改用 `--forget`。
 
@@ -137,7 +167,7 @@ webmux forward add 5173 --session self --label web
 
 - `REPO` 是仓库 ID、仓库内路径或 `.`；worktree 用 ID、分支名或路径。找不到时以 2 结束并列出候选。
 - 主页显示的规则与 Web 端相同：从未设置的仓库只显示主工作区，有会话或已归档会话的 worktree 总会显示。
-  写入只改该仓库的 `homeWorktrees` 条目，与其他设备冲突（409）时重新读取并重放，最多 3 次。
+  - 写入只改该仓库的 `homeWorktrees` 条目，与其他设备冲突（409）时重新读取并重放，最多 3 次。
 - `worktree rm`、`repo rm`、`launch-config rm` 与 `rm --forget` 一样：终端上先确认，非交互时需要 `--yes`。`repo rm` 不删除文件，并清理该仓库的主页显示设置。
 - 初始化指令最多 4000 个字符，超出时 CLI 以 2 拒绝；引用不存在的快捷指令只警告，仍会保存。`--edit` 用 `$VISUAL` 或 `$EDITOR` 编辑。
 - 启动配置的变量值默认隐藏；`edit` 读取后只改给出的字段再整体保存；开启聊天视图（`--chat`）前先检查命令是否支持。

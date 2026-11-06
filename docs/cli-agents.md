@@ -81,4 +81,4 @@ Qoder 与 QoderCN 使用内置 `--acp` 标志启动 ACP，无需额外连接器�
 其他五款使用终端视图，不能仅凭其提供 ACP 接口就视为已适配 WebMux 的切换和恢复行为。
 
 运行、空闲与等待状态使用通用终端判断；具体的回答、授权与完成提醒取决于 CLI 发出的结构化事件、OSC 通知或 BEL。
-现有 Claude Code、Codex 和 omp 提醒配置见 [使用指南](usage.md#需要你介入的提醒)。
+现有 Claude Code、Codex 和 omp 提醒配置见 [使用指南](usage/attention.md)。

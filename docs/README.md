@@ -6,7 +6,7 @@
 
 1. **一分钟看懂定位与功能**：先读首页 [README](../README.md) 或 [项目介绍](overview.md)，了解持久终端、混合会话（聊天 ↔ 终端）与代码工作区。
 2. **安装并连通手机**：按 [安装与升级](deployment/install-and-upgrade.md) 启动服务，再用 [远程访问与 HTTPS](deployment/remote-access.md) 在手机上扫码或打开访问链接。
-3. **开始第一次对话**：阅读 [使用指南](usage.md) 的两步上手指南，用“快速开始”或“新建会话”启动你的第一个 CLI agent。
+3. **开始第一次对话**：阅读 [使用指南](usage.md) 的上手步骤，用“快速开始”或“新建会话”启动你的第一个 CLI agent。
 
 ## 了解 WebMux
 
@@ -30,8 +30,12 @@
 
 ## 日常使用
 
-- [使用指南](usage.md)：侧栏与快速开始、新建会话、后台启动、终端附着、草稿、代码工作区、仓库与 worktree、移动端。
-  - [终端使用](usage/terminal.md)：查找、分屏、复制粘贴、终端图形与文件上传。
+- [使用指南](usage.md)：上手步骤与“你想做什么”导航。
+  - [聊天模式](usage/chat.md)：快速开始、侧栏聊天、归档恢复与释放空间、仓库初始化指令。
+  - [会话与工作台](usage/sessions.md)：侧栏、会话列表与状态、新建会话、启动配置、设置与跨设备偏好。
+  - [终端使用](usage/terminal.md)：回放与控制权、查找、分屏、复制粘贴、终端图形、文件上传与草稿模式。
+  - [代码工作区](usage/code.md)：文件浏览、Git Diff、多格式预览、行号引用与独立窗口。
+  - [从本机终端使用](usage/command-line.md)：`run` / `attach`、Windows 终端与后台启动。
   - [仓库与 worktree](usage/worktrees.md)：仓库登记、上游基线刷新、工作树创建与安全删除。
   - [移动端使用](usage/mobile.md)：软键栏、虚拟键盘、触摸手势、锁定尺寸与全屏。
   - [需要你介入的提醒](usage/attention.md)：agent 状态识别、徽章与声音提醒、`OSC 7501` 协议及旧版钩子。

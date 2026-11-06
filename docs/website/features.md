@@ -78,7 +78,7 @@
 ### 13. 快捷键速查
 
 - 作用：`Ctrl+B` 前缀分屏操作、`Ctrl+]` 分离、软键栏按键一览，可打印。
-- 数据：[终端使用](../usage/terminal.md)、[从终端启动与附着](../usage.md#从终端启动与附着)。
+- 数据：[终端使用](../usage/terminal.md)、[从终端启动与附着](../usage/command-line.md)。
 
 ## P2：视反馈决定
 

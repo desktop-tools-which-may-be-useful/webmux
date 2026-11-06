@@ -113,8 +113,8 @@ WebMux 就是为这件事做的：一个约 15 MB 的单二进制，把终端会
 
 - **会话与终端**：持久会话、断线续接、tmux 风格分屏（`Ctrl+B`）、缓冲查找、草稿模式、文件上传、锁定终端尺寸、快捷键参考、Kitty 终端图形。详见 [使用指南](docs/usage.md)、[终端使用](docs/usage/terminal.md)。
 - **Agent 协作**：预置十一款 CLI agent 启动配置；“需要你介入”提醒；Claude Code / Codex / Antigravity CLI / OpenCode / omp / Qoder / QoderCN 在聊天与终端间切换，聊天端支持附件、权限请求作答与 Token 用量。详见 [CLI agent](docs/cli-agents.md)、[混合会话](docs/hybrid-sessions.md)。
-- **代码与仓库**：资源管理器（上传、下载、ZIP、重命名、移动、删除）、Git Diff、多格式预览（Markdown、HTML、表格、JSON、PDF、图片）、[会话临时文件夹](docs/usage/terminal.md#会话临时文件夹)、Git worktree。详见 [代码工作区](docs/usage.md#代码工作区)、[仓库与 worktree](docs/usage/worktrees.md)。
-- **多设备**：手机软键栏（可锁定 Shift）与聊天视图、PWA 与 Web Push、偏好跨设备同步、`webmux run` / `attach` 在本机终端接续。详见 [移动端](docs/usage.md#移动端)、[从终端启动与附着](docs/usage.md#从终端启动与附着)。
+- **代码与仓库**：资源管理器（上传、下载、ZIP、重命名、移动、删除）、Git Diff、多格式预览（Markdown、HTML、表格、JSON、PDF、图片）、[会话临时文件夹](docs/usage/terminal.md#会话临时文件夹)、Git worktree。详见 [代码工作区](docs/usage/code.md)、[仓库与 worktree](docs/usage/worktrees.md)。
+- **多设备**：手机软键栏（可锁定 Shift）与聊天视图、PWA 与 Web Push、偏好跨设备同步、`webmux run` / `attach` 在本机终端接续。详见 [移动端](docs/usage/mobile.md)、[从终端启动与附着](docs/usage/command-line.md)。
 - **部署与访问**：一键安装、deb / rpm 包、systemd / launchd 用户服务、Windows 安装程序与托盘、Tailscale 与 Cloudflare Tunnel 的 HTTPS 入口、经 WebMux 预览服务器上开发服务器的[端口转发](docs/usage/port-forwarding.md)。详见 [部署指南](docs/deployment.md)。
 
 ## 快速开始
@@ -137,7 +137,7 @@ webmux
 
 - 让服务常驻后台：`webmux start`，或安装为用户服务 `webmux service install`，见 [服务管理](docs/deployment/services.md)。
 - 从手机访问：开启 Tailscale Serve 或在局域网 / VPN 上监听并启用 token，见 [远程访问](docs/deployment/remote-access.md)。
-- 在常用终端里启动 agent：`webmux run -- claude`，`Ctrl+]` 分离后去手机上继续，见 [从终端启动与附着](docs/usage.md#从终端启动与附着)。
+- 在常用终端里启动 agent：`webmux run -- claude`，`Ctrl+]` 分离后去手机上继续，见 [从终端启动与附着](docs/usage/command-line.md)。
 
 其他安装方式：[deb / rpm 安装包](docs/deployment/install-and-upgrade.md#linux-安装包deb--rpm)、[手动下载](docs/deployment/install-and-upgrade.md#手动下载)、[Windows（WSL）托盘](docs/deployment/windows-wsl.md)、[从源码构建](CONTRIBUTING.md#从源码构建)。
 
