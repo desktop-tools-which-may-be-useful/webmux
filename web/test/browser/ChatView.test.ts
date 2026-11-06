@@ -982,3 +982,39 @@ test("submits multi-select array fields in a form elicitation", async () => {
     },
   ]);
 });
+
+test("pins the plan beside the transcript on wide panes and above the input otherwise", async () => {
+  const socket = await open();
+  const entries = Array.from({ length: 40 }, (_, i) => ({
+    content:
+      i === 0 ? "定位排序函数" : i === 1 ? "修改实现" : `验证步骤 ${i + 1}`,
+    priority: "medium" as const,
+    status:
+      i === 0
+        ? ("completed" as const)
+        : i === 1
+          ? ("in_progress" as const)
+          : ("pending" as const),
+  }));
+  socket.frame(snapshot(chatState({ plan: { entries } })));
+  const dock = page.getByRole("button", { name: /计划 1\/40/ });
+  await expect.element(dock).toBeVisible();
+  const panel = page.getByRole("region", { name: "计划", includeHidden: true });
+  await expect.element(panel).not.toBeVisible();
+
+  await page.viewport(1400, 500);
+  try {
+    await expect.element(panel).toBeVisible();
+    await expect.element(panel.getByText("修改实现")).toBeVisible();
+    await expect
+      .element(
+        page.getByRole("button", { name: /计划 1\/40/, includeHidden: true }),
+      )
+      .not.toBeVisible();
+    const list = panel.element().querySelector("ol")?.parentElement;
+    expect(list).not.toBeNull();
+    expect(list!.scrollHeight).toBeGreaterThan(list!.clientHeight);
+  } finally {
+    await page.viewport(1024, 768);
+  }
+});
