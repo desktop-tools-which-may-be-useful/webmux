@@ -194,12 +194,16 @@ func (w *sessionWatch) matching(opts waitOptions, baseline map[string]string) []
 	var out []contract.SessionInfo
 	for _, id := range opts.ids {
 		s, ok := w.sessions[id]
-		if !ok || !inState(s, opts.states) {
+		if !ok {
 			continue
 		}
-		// --changed: the state must differ from the one at subscription;
-		// once it has, the baseline no longer applies.
-		if opts.changed && baseline[id] == stateKey(s) {
+		// --changed: the state must differ from the one at subscription.
+		// Once any other state has been seen the baseline no longer applies,
+		// so a round trip (waiting, running, waiting) counts as a change.
+		if opts.changed && baseline[id] != "" && baseline[id] != stateKey(s) {
+			baseline[id] = ""
+		}
+		if !inState(s, opts.states) || opts.changed && baseline[id] == stateKey(s) {
 			continue
 		}
 		if opts.changed {

@@ -60,7 +60,7 @@
 - **US-S09 向会话输入并等待结果**：作为编排脚本，我希望向终端会话输入并可靠地等到它有反应，以便把交互程序串进流程。
   - `webmux send SESSION [TEXT|-] [--enter] [--key NAME]...` 以带回执的提交写入文字，收到 `written` 才以 0 退出，`partial`、`failed`、`missing` 以 1 退出；命名按键在文字之后发送，未知按键以 2 结束；
   - 发送像浏览器输入一样取得控制权，控制指示器显示 `script`，在会话内附上来源会话 ID；混合会话在聊天端时以 1 结束并提示 `chat send`；
-  - `send --wait STATE` 先订阅会话列表再输入，只接受输入之后的变化；STATE 可以是逗号分隔的多个状态；
+  - `send --wait STATE` 先订阅会话列表再输入，只接受输入之后的变化；STATE 可以是逗号分隔的多个状态；离开订阅时的状态后再回到它（如 waiting、running、waiting）也算变化；
   - `webmux wait SESSION... --until STATES [--changed] [--stable DUR] [--any] [--timeout DUR] [--json]`：`attention` 表示有锁存的提醒（agent 完成一回合后也会锁存），超时 124，会话被移除或在未等待 `exited` 时结束以 1 退出；
   - 状态语义：`waiting` 表示需要用户介入（agent 的授权、提问、未读的完成或出错，或没有 agent 信号时的提示符启发式，所以停在提示符的 shell 是 `waiting`），`idle` 只表示长期无活动，不是“命令或回合已结束”的信号；等 shell 命令结束用 `--wait waiting,idle`，等 agent 一回合结束用 `--until attention`。
 - **US-S10 读取会话的输出与画面**：作为脚本或 agent，我希望读取会话输出，并看到全屏 TUI 当前显示的内容，以便判断下一步。

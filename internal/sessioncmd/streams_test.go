@@ -46,6 +46,30 @@ func TestParseStates(t *testing.T) {
 	}
 }
 
+// A --changed wait must see a session return to its subscription state after
+// leaving it: a shell at its prompt is waiting, runs a command, and is
+// waiting again.
+func TestMatchingChangedAcceptsRoundTrip(t *testing.T) {
+	w := &sessionWatch{sessions: map[string]contract.SessionInfo{}}
+	opts := waitOptions{ids: []string{"a"}, states: []string{"waiting"}, changed: true}
+	baseline := map[string]string{"a": string(contract.SessionStatusWaiting)}
+	set := func(status contract.SessionStatus) {
+		w.sessions["a"] = contract.SessionInfo{ID: "a", Status: status}
+	}
+	set(contract.SessionStatusWaiting)
+	if len(w.matching(opts, baseline)) != 0 {
+		t.Fatal("the subscription state matched without a change")
+	}
+	set(contract.SessionStatusRunning)
+	if len(w.matching(opts, baseline)) != 0 {
+		t.Fatal("a state outside --until matched")
+	}
+	set(contract.SessionStatusWaiting)
+	if len(w.matching(opts, baseline)) != 1 {
+		t.Fatal("returning to the subscription state after a change did not match")
+	}
+}
+
 func TestSuggestBranchAvoidsTakenNames(t *testing.T) {
 	now := time.Date(2026, 11, 5, 18, 4, 5, 0, time.UTC)
 	taken := map[string]bool{"wt/20261105-180405": true, "wt/20261105-180405-2": true}
