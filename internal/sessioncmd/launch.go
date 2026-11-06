@@ -9,11 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -46,14 +46,16 @@ type runOptions struct {
 	env             envFlag
 	labels          labelFlag
 	// Location.
-	worktree, newWorktree, base, worktreePath, repo string
-	existingBranch, noPin, refreshBase              bool
-	// First message.
-	startSide, prompt string
-	init              bool
+	worktree, branch, base, worktreePath, repo      string
+	newWorktree, existingBranch, noPin, refreshBase bool
+	// View and first message.
+	view, prompt, permission string
+	init                     bool
+	set                      labelFlag
+	attachments              listFlag
 	// How to follow the session.
 	detach, attachMode, follow, strip, killOnInterrupt bool
-	asJSON, dryRun                                     bool
+	asJSON, dryRun, reply, autoWaitRequests            bool
 	wait                                               string
 	timeout                                            time.Duration
 }
@@ -68,55 +70,78 @@ type runOptions struct {
 // expands the ID, so the command and environment stay identical to the saved
 // copy and secret values never reach the client.
 var runCommand = &Command{
-	Name: "run", Group: GroupLaunch, Args: "[-- COMMAND [ARG]...]", Strict: true,
-	Summary: "Create a terminal session; attach to it, detach, or follow its output.",
+	Name: "run", Group: GroupLaunch, Args: "[-- COMMAND [ARG]...]", Strict: true, DashArgs: true,
+	StrayHint: func(fs *flag.FlagSet) string {
+		if f := fs.Lookup("new-worktree"); f != nil && f.Value.String() == "true" {
+			return "--new-worktree takes no value; name the branch with --branch"
+		}
+		return "the command goes after --"
+	},
+	Summary: "Create a session in a directory or worktree, on its terminal or chat view; attach, detach, follow or wait.",
 	Description: "Without --launch-config, the arguments after -- are the session's argv exactly as given; nothing is expanded by a shell. " +
 		"A custom command inherits the caller's environment, minus terminal identity and WEBMUX_* variables, with --env on top. " +
 		"With --launch-config, the server starts the saved Web UI launch config of that exact name, " +
 		"including its environment, which never reaches the client.\n\n" +
-		"Location matches the Web UI's new session dialog: the current directory (associated with the registered worktree it lies in, " +
-		"as the server does for any session), an existing worktree (--worktree), or a new one (--new-worktree), which is pinned to the home page like the Web UI does.\n\n" +
+		"Location matches the Web UI's new session dialog: the current directory (associated with the registered worktree it lies in), " +
+		"an existing worktree (--worktree), or a new one (--new-worktree, on a branch named by --branch or generated), which is " +
+		"pinned to the home page like the Web UI does. A launch config with the chat view can start on it (--view chat) with " +
+		"agent settings, a permission mode and attachments; --prompt is the first message on either view. Everything is " +
+		"created by one request; a failure names the step that failed and what was already created, and nothing is rolled back.\n\n" +
 		"Without a terminal (an agent's tool call, a pipe) run detaches instead of failing; --attach insists on attaching. " +
 		"--follow streams the output to standard output without a terminal and exits with the program's exit status; " +
-		"Ctrl+C only stops following unless --kill-on-interrupt.",
+		"Ctrl+C only stops following unless --kill-on-interrupt. --reply follows the first prompt's turn like webmux send --reply.",
 	Arguments: []Item{{Name: "COMMAND [ARG]...", Text: "The program and its arguments, after --."}},
 	Env: []Item{
 		{Name: "WEBMUX_SOCKET", Text: "Local API socket used when neither --socket nor --config is given."},
 	},
-	Output: "Detached: one line with the session ID, a tab and the local link, or with --json an object {session, link}. " +
-		"Attached or --follow: the session's output; notices go to standard error. --dry-run prints the request with environment values hidden.",
+	Output: "Detached: one line with the session ID, a tab and the local link, or with --json an object {session, link, " +
+		"configWarnings} plus worktree when one was created. Attached or --follow: the session's output; notices and config " +
+		"warnings go to standard error. --reply: the agent's final reply. --dry-run prints the request with environment values hidden.",
 	Exit: []ExitItem{
-		{Code: 0, Text: "Created (detached), detached after attaching, or --follow and the program exited 0."},
-		{Code: 1, Text: "The server refused the session or worktree, or following was lost."},
-		{Code: 2, Text: "Usage error, unknown launch config, or --attach without a terminal."},
+		{Code: 0, Text: "Created (detached), detached after attaching, --reply and the turn ended normally, or --follow and the program exited 0."},
+		{Code: 1, Text: "A step failed (the worktree, the session, its settings or the first prompt), an upload failed, " +
+			"following was lost, or with --reply the turn did not end with end_turn or waits for an answer."},
+		{Code: 2, Text: "Usage error, unknown launch config or repository, a launch config without the chat view for --view chat, or --attach without a terminal."},
 		{Code: 3, Text: "WebMux is not running."},
-		{Code: 124, Text: "--wait timed out."},
+		{Code: 124, Text: "--wait or --reply timed out."},
 		{Code: 130, Text: "--follow stopped by SIGINT; the session keeps running (143 for SIGTERM). Otherwise --follow exits with the program's own status, 128+N when signal N ended it."},
 	},
 	Examples: []Example{
 		{Command: "webmux run -- claude", Text: "Start Claude Code in the current directory and attach; Ctrl+] detaches."},
 		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID and link."},
 		{Command: "webmux run --follow --strip -- go test ./...", Text: "Run tests in a persistent session, stream plain text and exit with their status."},
-		{Command: `webmux run --new-worktree fix/lint --base main --launch-config "Claude Code" --start-side chat --init --prompt "Fix lint" --json`, Text: "Create a worktree and start an agent there with a first task."},
+		{Command: `webmux run --new-worktree --branch fix/lint --launch-config Codex --view chat --set model=gpt-5 --prompt "Fix all lint and summarize" --reply`, Text: "Start an agent on a new worktree's chat view and print its reply."},
 		{Command: "webmux run --dry-run --label run=7 -- make build", Text: "Show the request run would send, without creating anything."},
 	},
-	SeeAlso: []string{"webmux chat new", "webmux attach", "webmux ls", "webmux guide launch"},
+	SeeAlso: []string{"webmux attach", "webmux send", "webmux launch-config options", "webmux guide launch"},
 	Notes: map[string]Note{
-		"launch-config": {Conflicts: []string{"env"}},
-		"config-id":     {Conflicts: []string{"env"}},
-		"env":           {Repeatable: true, Conflicts: []string{"launch-config"}},
-		"label":         {Repeatable: true},
-		"worktree":      {Conflicts: []string{"new-worktree"}},
-		"new-worktree":  {Conflicts: []string{"worktree", "cwd"}},
-		"base":          {Requires: []string{"new-worktree"}},
-		"init":          {Requires: []string{"launch-config"}},
-		"follow":        {Conflicts: []string{"detach", "attach"}},
-		"detach":        {Conflicts: []string{"attach", "follow"}},
-		"attach":        {Conflicts: []string{"detach", "follow"}},
-		"wait":          {Conflicts: []string{"attach", "follow"}},
+		"launch-config":      {Conflicts: []string{"env"}},
+		"config-id":          {Conflicts: []string{"env"}},
+		"env":                {Repeatable: true, Conflicts: []string{"launch-config"}},
+		"label":              {Repeatable: true},
+		"worktree":           {Conflicts: []string{"new-worktree"}},
+		"new-worktree":       {Conflicts: []string{"worktree", "cwd"}},
+		"branch":             {Requires: []string{"new-worktree"}},
+		"base":               {Requires: []string{"new-worktree"}},
+		"existing-branch":    {Requires: []string{"new-worktree", "branch"}},
+		"worktree-path":      {Requires: []string{"new-worktree"}},
+		"repo":               {Requires: []string{"new-worktree"}},
+		"no-pin":             {Requires: []string{"new-worktree"}},
+		"refresh-base":       {Requires: []string{"new-worktree"}},
+		"view":               {Requires: []string{"launch-config"}},
+		"init":               {Requires: []string{"launch-config"}},
+		"set":                {Repeatable: true, Requires: []string{"view"}},
+		"permission":         {Requires: []string{"view"}},
+		"attach-file":        {Repeatable: true, Requires: []string{"view", "prompt"}},
+		"reply":              {Requires: []string{"view", "prompt"}, Conflicts: []string{"wait", "follow"}},
+		"auto-wait-requests": {Requires: []string{"reply"}},
+		"follow":             {Conflicts: []string{"detach", "attach", "reply"}},
+		"detach":             {Conflicts: []string{"attach", "follow"}},
+		"attach":             {Conflicts: []string{"detach", "follow"}},
+		"wait":               {Conflicts: []string{"attach", "follow", "reply"}},
 	},
 	Bind: func(fs *flag.FlagSet) Action {
-		o := runOptions{env: envFlag{}, labels: labelFlag{}}
+		o := runOptions{env: envFlag{}, labels: labelFlag{}, set: labelFlag{}}
 		setLaunchConfig := func(value string) error {
 			if o.launchConfigSet && o.launchConfig != value {
 				return errors.New("--launch-config and --config-id must name the same saved config")
@@ -131,25 +156,31 @@ var runCommand = &Command{
 		fs.Var(o.env, "env", "set `NAME=VALUE` in the session, overriding the inherited environment")
 		fs.Var(o.labels, "label", "set label `KEY=VALUE` on the session")
 		fs.StringVar(&o.worktree, "worktree", "", "start in a registered worktree, as `REPO:WORKTREE` or its path")
-		fs.StringVar(&o.newWorktree, "new-worktree", "", "create a worktree for `BRANCH` and start in it")
+		fs.BoolVar(&o.newWorktree, "new-worktree", false, "create a worktree and start at its root")
+		fs.StringVar(&o.branch, "branch", "", "the new worktree's branch `NAME` (default: generated, wt/<date>-<time>)")
 		fs.StringVar(&o.base, "base", "", "start the new branch at `REF` (default: the repository's default base)")
-		fs.BoolVar(&o.existingBranch, "existing-branch", false, "check out an existing branch instead of creating it")
+		fs.BoolVar(&o.existingBranch, "existing-branch", false, "check out the existing --branch instead of creating it")
 		fs.StringVar(&o.worktreePath, "worktree-path", "", "put the new worktree at `DIR` (default: <repository>.worktrees/<branch leaf>)")
 		fs.StringVar(&o.repo, "repo", "", "repository of the new worktree: an ID, a path or . (default: the current directory's)")
 		fs.BoolVar(&o.noPin, "no-pin", false, "do not show the new worktree on the home page")
 		fs.BoolVar(&o.refreshBase, "refresh-base", false, "fetch the base branch's upstream first and start from it")
-		fs.StringVar(&o.startSide, "start-side", "", "start a hybrid launch config on `SIDE`: terminal or chat (chat implies --detach)")
-		fs.StringVar(&o.prompt, "prompt", "", "first message `TEXT` (- reads standard input); typed with Enter on the terminal side")
+		fs.StringVar(&o.view, "view", "", "start on `VIEW`: terminal (the default) or chat, which needs a launch config with the chat view and implies --detach")
+		fs.StringVar(&o.prompt, "prompt", "", "first message `TEXT` (- reads standard input): the first chat prompt, or typed with Enter on the terminal view")
 		fs.BoolVar(&o.init, "init", false, "put the repository's initialization instruction before the first message")
+		fs.Var(o.set, "set", "chat view: set agent option `ID=VALUE` (see webmux launch-config options)")
+		fs.StringVar(&o.permission, "permission", "", "chat view: permission `MODE` ask or auto")
+		fs.Var(&o.attachments, "attach-file", "chat view: upload the file at `PATH` and send it with the first prompt")
 		fs.BoolVar(&o.detach, "detach", false, "create the session and print its ID and link without attaching")
 		fs.BoolVar(&o.attachMode, "attach", false, "attach even when that needs a terminal this process lacks (exit 2)")
 		fs.BoolVar(&o.follow, "follow", false, "stream the output to standard output and exit with the program's status")
 		fs.BoolVar(&o.strip, "strip", false, "with --follow, remove terminal control sequences")
 		fs.BoolVar(&o.killOnInterrupt, "kill-on-interrupt", false, "with --follow, end the program on SIGINT or SIGTERM")
-		fs.BoolVar(&o.asJSON, "json", false, "print {session, link} as JSON when detached")
+		fs.BoolVar(&o.asJSON, "json", false, "print {session, link, ...} as JSON when detached, or the turn with --reply")
 		fs.BoolVar(&o.dryRun, "dry-run", false, "print the request without creating anything; environment values are hidden")
 		fs.StringVar(&o.wait, "wait", "", "detach, then wait until the session is first in `STATE` (see webmux wait)")
-		fs.DurationVar(&o.timeout, "timeout", 0, "give up --wait after this `DURATION` (exit 124); 0 waits forever")
+		fs.BoolVar(&o.reply, "reply", false, "chat view: follow the first prompt's turn and print the agent's final reply")
+		fs.BoolVar(&o.autoWaitRequests, "auto-wait-requests", false, "with --reply, keep waiting while a permission request or question is open")
+		fs.DurationVar(&o.timeout, "timeout", 0, "give up --wait or --reply after this `DURATION` (exit 124); 0 waits forever")
 		return func(ctx context.Context, e Env, argv []string) int { return e.run(ctx, o, argv) }
 	},
 }
@@ -159,6 +190,7 @@ func Run(ctx context.Context, e Env, args []string) int { return e.Run(ctx, runC
 
 // validate checks the flag combinations that need no server.
 func (o *runOptions) validate(argv []string) error {
+	chat := o.view == string(contract.ViewChat)
 	switch {
 	case o.launchConfigSet && o.launchConfig == "":
 		return errors.New("--launch-config requires a non-empty saved config name")
@@ -168,28 +200,42 @@ func (o *runOptions) validate(argv []string) error {
 		return errors.New("--launch-config cannot be combined with --env")
 	case !o.launchConfigSet && (len(argv) == 0 || argv[0] == ""):
 		return errors.New("a command is required after --")
-	case o.worktree != "" && o.newWorktree != "":
+	case o.worktree != "" && o.newWorktree:
 		return errors.New("--worktree and --new-worktree cannot be combined")
-	case o.newWorktree == "" && (o.base != "" || o.existingBranch || o.worktreePath != "" || o.repo != "" || o.noPin || o.refreshBase):
-		return errors.New("--base, --existing-branch, --worktree-path, --repo, --no-pin and --refresh-base need --new-worktree")
-	case o.startSide != "" && o.startSide != "terminal" && o.startSide != "chat":
-		return fmt.Errorf("--start-side is terminal or chat, not %q", o.startSide)
-	case (o.startSide == "chat" || o.init) && !o.launchConfigSet:
-		return errors.New("--start-side chat and --init need --launch-config")
-	case o.newWorktree != "" && o.cwd != "":
+	case !o.newWorktree && (o.branch != "" || o.base != "" || o.existingBranch || o.worktreePath != "" || o.repo != "" || o.noPin || o.refreshBase):
+		return errors.New("--branch, --base, --existing-branch, --worktree-path, --repo, --no-pin and --refresh-base need --new-worktree")
+	case o.existingBranch && o.branch == "":
+		return errors.New("--existing-branch needs --branch")
+	case o.newWorktree && o.cwd != "":
 		return errors.New("--cwd cannot be combined with --new-worktree: the session starts at the new worktree's root (pick the repository with --repo)")
-	case o.startSide == "chat" && o.attachMode:
-		return errors.New("--start-side chat cannot be attached; it starts detached")
+	case o.view != "" && o.view != string(contract.ViewTerminal) && !chat:
+		return fmt.Errorf("--view is terminal or chat, not %q", o.view)
+	case (chat || o.init) && !o.launchConfigSet:
+		return errors.New("--view chat and --init need --launch-config")
+	case !chat && (len(o.set) > 0 || o.permission != "" || len(o.attachments) > 0 || o.reply):
+		return errors.New("--set, --permission, --attach-file and --reply need --view chat")
+	case o.permission != "" && o.permission != string(contract.ChatPermissionAsk) && o.permission != string(contract.ChatPermissionAuto):
+		return fmt.Errorf("--permission is ask or auto, not %q", o.permission)
+	case len(o.attachments) > 0 && o.prompt == "":
+		return errors.New("--attach-file needs --prompt: attachments go with the first prompt")
+	case o.reply && o.prompt == "":
+		return errors.New("--reply needs --prompt: it prints the reply to the first prompt")
+	case chat && o.attachMode:
+		return errors.New("--view chat cannot be attached; it starts detached")
 	case countTrue(o.detach, o.attachMode, o.follow) > 1:
 		return errors.New("--detach, --attach and --follow cannot be combined")
-	case o.follow && o.startSide == "chat":
-		return errors.New("--follow cannot be combined with --start-side chat")
+	case o.follow && (chat || o.reply):
+		return errors.New("--follow cannot be combined with --view chat or --reply")
 	case (o.strip || o.killOnInterrupt) && !o.follow:
 		return errors.New("--strip and --kill-on-interrupt need --follow")
+	case o.wait != "" && o.reply:
+		return errors.New("--wait and --reply cannot be combined")
 	case o.wait != "" && (o.attachMode || o.follow):
 		return errors.New("--wait works only when the session is detached")
-	case o.timeout != 0 && o.wait == "":
-		return errors.New("--timeout needs --wait")
+	case o.autoWaitRequests && !o.reply:
+		return errors.New("--auto-wait-requests needs --reply")
+	case o.timeout != 0 && o.wait == "" && !o.reply:
+		return errors.New("--timeout needs --wait or --reply")
 	}
 	if o.wait != "" {
 		if _, err := parseStates(o.wait); err != nil {
@@ -213,9 +259,9 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 	if err := o.validate(argv); err != nil {
 		return e.Usagef("%v", err)
 	}
-	// Waiting for a state needs the session detached, and a chat-side
-	// start has no terminal to attach to.
-	if o.wait != "" || o.startSide == "chat" {
+	// Waiting needs the session detached, and the chat view has no
+	// terminal to attach to.
+	if o.wait != "" || o.reply || o.view == string(contract.ViewChat) {
 		o.detach = true
 	}
 	if o.prompt == "-" {
@@ -235,15 +281,15 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 		_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
 		return contract.ExitUsage
 	}
-	request := contract.CreateSessionRequest{Cwd: dir, Name: o.name, Prompt: o.prompt, UseInitInstruction: o.init}
+	request := contract.CreateSessionRequest{
+		Cwd: dir, Name: o.name, Prompt: o.prompt, UseInitInstruction: o.init,
+		View: contract.SessionView(o.view), PermissionMode: contract.ChatPermissionMode(o.permission),
+	}
 	if len(o.labels) > 0 {
 		request.Labels = o.labels
 	}
-	switch o.startSide {
-	case "terminal":
-		request.StartSide = contract.HybridSideTUI
-	case "chat":
-		request.StartSide = contract.HybridSideACP
+	if len(o.set) > 0 {
+		request.AgentConfig = o.set
 	}
 	if o.launchConfigSet {
 		summary, err := launchConfigByName(ctx, client, o.launchConfig)
@@ -254,8 +300,8 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 			}
 			return e.Fail(err)
 		}
-		if o.startSide != "" && !summary.Hybrid {
-			return e.Usagef("--start-side needs a launch config with hybrid mode; %q has none", summary.Name)
+		if request.View == contract.ViewChat && !summary.Chat {
+			return e.Usagef("--view chat needs a launch config with the chat view; %q has none", summary.Name)
 		}
 		request.ConfigID = &summary.ID
 	} else {
@@ -263,11 +309,11 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 		request.Env = e.sessionEnv(o.env)
 	}
 	// Location: an existing worktree, the worktree the directory lies in,
-	// or a new one (created after --dry-run returns).
+	// or a new one the server creates first.
 	var repos []contract.Repository
 	var newRepo contract.Repository
 	repos, err = repositories(ctx, client)
-	if err != nil && (o.worktree != "" || o.newWorktree != "") {
+	if err != nil && (o.worktree != "" || o.newWorktree) {
 		return e.Fail(err)
 	}
 	switch {
@@ -282,10 +328,18 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 			return e.Usagef("--cwd %s is not inside worktree %s", o.cwd, tree.Path)
 		}
 		request.Workspace = &contract.WorkspaceReference{RepositoryID: repo.ID, WorktreeID: tree.ID}
-	case o.newWorktree != "":
+	case o.newWorktree:
 		newRepo, err = e.resolveRepository(ctx, repos, o.repo)
 		if err != nil {
 			return e.locationError(err)
+		}
+		request.Cwd = ""
+		request.NewWorktree = &contract.NewWorktree{RepositoryID: newRepo.ID, Mode: "new", Branch: o.branch, Base: o.base}
+		if o.existingBranch {
+			request.NewWorktree.Mode = "existing"
+		}
+		if o.worktreePath != "" {
+			request.NewWorktree.Path = e.worktreeDir(ctx, newRepo, o.branch, o.worktreePath)
 		}
 	default:
 		// The server associates the session with this worktree anyway;
@@ -296,11 +350,11 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 			}
 		}
 	}
-	if request.UseInitInstruction && request.Workspace == nil && o.newWorktree == "" {
+	if request.UseInitInstruction && request.Workspace == nil && request.NewWorktree == nil {
 		return e.Usagef("--init needs a registered worktree: run inside one, or use --worktree or --new-worktree")
 	}
 	if o.dryRun {
-		return e.printDryRun(ctx, request, o, newRepo)
+		return e.printDryRun(request, o)
 	}
 	// An attached run needs a terminal: check before creating anything.
 	var console Console
@@ -324,29 +378,55 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 			_ = console.Restore()
 		}
 	}
-	if o.newWorktree != "" {
-		tree, err := e.createWorktree(ctx, client, newRepo, o.newWorktree, o.base, o.worktreePath, o.existingBranch, o.refreshBase, !o.noPin)
+	if o.refreshBase && !o.existingBranch {
+		base, err := e.refreshBase(ctx, client, newRepo, o.base)
 		if err != nil {
 			restore()
 			return e.Fail(err)
 		}
-		request.Cwd = tree.Path
-		request.Workspace = &contract.WorkspaceReference{RepositoryID: newRepo.ID, WorktreeID: tree.ID}
-		o.worktreePath = tree.Path
+		request.NewWorktree.Base = base
 	}
-	var created contract.SessionInfo
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", request, &created); err != nil {
-		restore()
-		if o.newWorktree != "" {
-			_, _ = fmt.Fprintf(e.Stderr, "webmux run: the worktree %s was created and is kept\n", o.worktreePath)
+	for _, file := range o.attachments {
+		path, err := e.uploadFile(ctx, client, "/api/uploads", file)
+		if err != nil {
+			restore()
+			return e.Fail(fmt.Errorf("upload %s: %w; nothing was created", file, err))
 		}
-		return e.Fail(err)
+		request.Attachments = append(request.Attachments, contract.ChatAttachment{Path: path})
 	}
+	request.ClientRequestID = newRequestID()
+	var result contract.CreateSessionResult
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", request, &result); err != nil {
+		restore()
+		return e.createFailure(err)
+	}
+	// An attached terminal is raw already: lines end with CR LF.
+	eol := "\n"
+	if console != nil {
+		eol = "\r\n"
+	}
+	for _, warning := range result.ConfigWarnings {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux run: %s%s", warning, eol)
+	}
+	if result.Worktree != nil && !o.noPin {
+		repo := newRepo
+		repo.Worktrees = append(slices.Clone(newRepo.Worktrees), *result.Worktree)
+		if err := pinWorktrees(ctx, client, repo, []string{result.Worktree.ID}, true); err != nil {
+			_, _ = fmt.Fprintf(e.Stderr, "webmux: the worktree was created but could not be shown on the home page: %v%s", err, eol)
+		}
+	}
+	created := result.Session
 	switch {
 	case o.follow:
 		return e.followRun(ctx, client, created.ID, o)
+	case o.reply:
+		return e.replyRun(ctx, client, result, o)
 	case o.detach:
-		return e.detached(ctx, client, created, o)
+		extra := map[string]any{"configWarnings": nonNil(result.ConfigWarnings)}
+		if result.Worktree != nil {
+			extra["worktree"] = result.Worktree
+		}
+		return e.detached(ctx, client, created, o, extra)
 	}
 	// Tell the user where to find the session (for example on a phone)
 	// before the session's output starts; stdout stays the session's. The
@@ -357,6 +437,59 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · Ctrl+] to detach\r\n", created.ID)
 	}
 	return e.attach(ctx, client, created.ID, false, console)
+}
+
+// createFailure reports a failed POST /api/sessions by its step, with what
+// had been created; nothing is rolled back.
+func (e Env) createFailure(err error) int {
+	var apiErr *localclient.APIError
+	var failure contract.CreateSessionFailure
+	if !errors.As(err, &apiErr) || json.Unmarshal(apiErr.Body, &failure) != nil || failure.Step == "" {
+		return e.sessionFail(err)
+	}
+	reason := ""
+	if failure.Reason != "" {
+		reason = " (" + failure.Reason + ")"
+	}
+	_, _ = fmt.Fprintf(e.Stderr, "webmux run: the %s step failed: %s%s\n", failure.Step, failure.Error, reason)
+	if failure.Connector != nil {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux run: install %s: %s\n", failure.Connector.Title, failure.Connector.InstallCommand)
+	}
+	if failure.Worktree != nil {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux run: worktree %s was created and is kept\n", failure.Worktree.Path)
+	}
+	if failure.SessionID != "" {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux run: session %s was started\n", failure.SessionID)
+	}
+	return contract.ExitError
+}
+
+// replyRun follows the first prompt's turn of a session created on its
+// chat view and prints the reply.
+func (e Env) replyRun(ctx context.Context, client *localclient.Client, result contract.CreateSessionResult, o runOptions) int {
+	id := result.Session.ID
+	link, _ := link(ctx, client, id)
+	where := ""
+	if result.Worktree != nil {
+		where = " · " + result.Worktree.Path
+	}
+	_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s%s · %s\n", id, where, link)
+	if o.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, o.timeout)
+		defer cancel()
+	}
+	stream, err := openChat(ctx, client, id)
+	if err != nil {
+		return e.Fail(err)
+	}
+	defer stream.close()
+	// The first prompt's turn is the first turn of the session.
+	turn, err := stream.turnWait(ctx, turnWatch{accept: func(contract.ChatTurnStart) bool { return true }, stopAtRequest: !o.autoWaitRequests})
+	if err != nil {
+		return e.waitFailure(err)
+	}
+	return e.reportTurn(turn, o.asJSON)
 }
 
 func mustLocal(ctx context.Context, e Env, dir string) string {
@@ -386,7 +519,8 @@ func (e Env) readStdin() (string, error) {
 
 // printDryRun writes the request run would send. Environment values are
 // replaced: inherited ones by "<inherited>", explicit ones by "<explicit>".
-func (e Env) printDryRun(ctx context.Context, request contract.CreateSessionRequest, o runOptions, newRepo contract.Repository) int {
+// Attachments are the local files that would be uploaded first.
+func (e Env) printDryRun(request contract.CreateSessionRequest, o runOptions) int {
 	if request.Env != nil {
 		masked := make(map[string]string, len(request.Env))
 		for name := range request.Env {
@@ -397,18 +531,12 @@ func (e Env) printDryRun(ctx context.Context, request contract.CreateSessionRequ
 		}
 		request.Env = masked
 	}
+	for _, file := range o.attachments {
+		request.Attachments = append(request.Attachments, contract.ChatAttachment{Path: file})
+	}
 	out := map[string]any{"request": request}
-	if o.newWorktree != "" {
-		mode := "new"
-		if o.existingBranch {
-			mode = "existing"
-		}
-		worktreePath := e.worktreeDir(ctx, newRepo, o.newWorktree, o.worktreePath)
-		out["worktree"] = map[string]any{"repositoryId": newRepo.ID, "branch": o.newWorktree, "base": o.base, "path": worktreePath, "mode": mode, "pin": !o.noPin}
-		// The real request starts in the worktree created first.
-		request.Cwd = worktreePath
-		request.Workspace = &contract.WorkspaceReference{RepositoryID: newRepo.ID, WorktreeID: "<created first>"}
-		out["request"] = request
+	if request.NewWorktree != nil {
+		out["pin"] = !o.noPin
 	}
 	writeJSON(e.Stdout, out)
 	return contract.ExitOK
@@ -426,30 +554,42 @@ func (e Env) worktreeDir(ctx context.Context, repo contract.Repository, branch, 
 	return dir
 }
 
+// refreshBase fetches the upstream of base (default: the repository's
+// default branch) and returns the commit a new branch starts from; a
+// failed fetch is a warning and the local branch is used.
+func (e Env) refreshBase(ctx context.Context, client *localclient.Client, repo contract.Repository, base string) (string, error) {
+	repoPath := "/api/repositories/" + url.PathEscape(repo.ID)
+	ref := base
+	if ref == "" {
+		var branches contract.Branches
+		if err := client.Do(ctx, http.MethodGet, repoPath+"/branches", nil, &branches); err != nil {
+			return "", err
+		}
+		if branches.DefaultBranch != nil {
+			ref = *branches.DefaultBranch
+		}
+	}
+	var refreshed contract.RefreshBranchBaseResponse
+	if err := client.Do(ctx, http.MethodPost, repoPath+"/branches/refresh", contract.RefreshBranchBaseRequest{Branch: ref}, &refreshed); err != nil {
+		return "", err
+	}
+	if refreshed.FetchWarning != "" {
+		_, _ = fmt.Fprintln(e.Stderr, "webmux: fetching the base failed; using the local branch:", refreshed.FetchWarning)
+	}
+	return refreshed.Base, nil
+}
+
 // createWorktree creates a worktree like the Web UI's dialog and pins it
 // to the home page unless pin is false; a failed pin is only a warning.
 func (e Env) createWorktree(ctx context.Context, client *localclient.Client, repo contract.Repository, branch, base, dir string, existing, refresh, pin bool) (contract.Worktree, error) {
 	dir = e.worktreeDir(ctx, repo, branch, dir)
 	repoPath := "/api/repositories/" + url.PathEscape(repo.ID)
 	if refresh && !existing {
-		ref := base
-		if ref == "" {
-			var branches contract.Branches
-			if err := client.Do(ctx, http.MethodGet, repoPath+"/branches", nil, &branches); err != nil {
-				return contract.Worktree{}, err
-			}
-			if branches.DefaultBranch != nil {
-				ref = *branches.DefaultBranch
-			}
-		}
-		var refreshed contract.RefreshBranchBaseResponse
-		if err := client.Do(ctx, http.MethodPost, repoPath+"/branches/refresh", contract.RefreshBranchBaseRequest{Branch: ref}, &refreshed); err != nil {
+		refreshed, err := e.refreshBase(ctx, client, repo, base)
+		if err != nil {
 			return contract.Worktree{}, err
 		}
-		if refreshed.FetchWarning != "" {
-			_, _ = fmt.Fprintln(e.Stderr, "webmux: fetching the base failed; using the local branch:", refreshed.FetchWarning)
-		}
-		base = refreshed.Base
+		base = refreshed
 	}
 	mode := "new"
 	if existing {
@@ -479,8 +619,9 @@ func (e Env) createWorktree(ctx context.Context, client *localclient.Client, rep
 	return tree, nil
 }
 
-// detached prints a created session and waits for --wait.
-func (e Env) detached(ctx context.Context, client *localclient.Client, created contract.SessionInfo, o runOptions) int {
+// detached prints a created or resumed session and waits for --wait.
+// extra adds fields to the --json object.
+func (e Env) detached(ctx context.Context, client *localclient.Client, created contract.SessionInfo, o runOptions, extra map[string]any) int {
 	session := created
 	if o.wait != "" {
 		states, _ := parseStates(o.wait)
@@ -506,7 +647,9 @@ func (e Env) detached(ctx context.Context, client *localclient.Client, created c
 		return e.Fail(err)
 	}
 	if o.asJSON {
-		writeJSON(e.Stdout, map[string]any{"session": session, "link": link})
+		out := map[string]any{"session": session, "link": link}
+		maps.Copy(out, extra)
+		writeJSON(e.Stdout, out)
 	} else {
 		_, _ = fmt.Fprintf(e.Stdout, "%s\t%s\n", created.ID, link)
 	}
@@ -581,7 +724,7 @@ func (e Env) followRun(ctx context.Context, client *localclient.Client, id strin
 		return contract.ExitError
 	}
 	if result.Moved {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s moved to its chat side and keeps running; follow it with webmux chat watch %s\n", id, id)
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s moved to its chat view and keeps running; follow it with webmux chat watch %s\n", id, id)
 		return contract.ExitError
 	}
 	if result.Exited {
@@ -645,296 +788,12 @@ func launchConfigByName(ctx context.Context, client *localclient.Client, name st
 
 var chatGroup = &Command{
 	Name: "chat", Group: GroupChat,
-	Summary: "Start and drive hybrid sessions (chat with an agent over ACP).",
+	Summary: "Act on what only the chat view has: requests, agent settings, the permission mode and the queue.",
 }
 
 var launchConfigGroup = &Command{
 	Name: "launch-config", Group: GroupLaunch,
 	Summary: "List, show, add, edit and remove the saved Web UI launch configs.",
-}
-
-// chatNewOptions are the flags of webmux chat new.
-type chatNewOptions struct {
-	repo, agent, base, branch, permission string
-	terminal, init, noInit, wait, asJSON  bool
-	autoWaitRequests                      bool
-	set                                   labelFlag
-	attachments                           listFlag
-	labels                                labelFlag
-	timeout                               time.Duration
-}
-
-var chatNewCommand = &Command{
-	Name: "chat new", Group: GroupChat, Args: "TEXT|-",
-	Summary: "Quick start from the shell: a new worktree, an agent on its chat side, its settings and the first message.",
-	Description: "The same as the Web UI's New chat (POST /api/quick-starts): one call creates a worktree with a generated branch, " +
-		"starts the agent of a hybrid launch config, applies --set options and the permission mode, and sends TEXT with the " +
-		"repository's initialization instruction. A failure reports the step that failed and what was already created; nothing is rolled back.\n\n" +
-		"--wait then waits for the first turn and prints the agent's final reply, like webmux chat send --wait.",
-	Arguments: []Item{{Name: "TEXT", Text: "The first message; - reads standard input. Required, also with --init."}},
-	Env:       []Item{{Name: "WEBMUX_SOCKET", Text: "Local API socket used when neither --socket nor --config is given."}},
-	Output: "The session ID, worktree path and link, one per line; with --json the QuickStartResult plus link. " +
-		"With --wait, the agent's final reply (with --json, {stopReason, reply, events}). Config warnings go to standard error.",
-	Exit: []ExitItem{
-		{Code: 0, Text: "Started (and with --wait, the turn ended normally)."},
-		{Code: 1, Text: "A step failed, or with --wait the turn did not end with end_turn or the agent asked for an answer."},
-		{Code: 2, Text: "Usage error, unknown repository or agent."},
-		{Code: 3, Text: "WebMux is not running."},
-		{Code: 124, Text: "--wait timed out; the turn keeps running."},
-	},
-	Examples: []Example{
-		{Command: `webmux chat new --agent "Claude Code" "Add a POST /books endpoint"`, Text: "Start Claude Code on a new worktree of the current repository."},
-		{Command: `webmux chat new --agent Codex --label task=lint --wait "Fix all lint and summarize the changes"`, Text: "Delegate a task and print the agent's reply when it is done."},
-		{Command: "webmux chat new --repo app --agent omp --set model=smart --permission ask --attach design.png -", Text: "Pick a model, ask before tools run, attach a file and read the task from standard input."},
-	},
-	SeeAlso: []string{"webmux run", "webmux launch-config options", "webmux guide launch"},
-	Notes: map[string]Note{
-		"set":        {Repeatable: true, Conflicts: []string{"terminal"}},
-		"attach":     {Repeatable: true, Conflicts: []string{"terminal"}},
-		"permission": {Conflicts: []string{"terminal"}},
-		"wait":       {Conflicts: []string{"terminal"}},
-		"terminal":   {Conflicts: []string{"set", "permission", "attach", "wait"}},
-		"label":      {Repeatable: true},
-		"init":       {Conflicts: []string{"no-init"}},
-		"no-init":    {Conflicts: []string{"init"}},
-	},
-	Bind: func(fs *flag.FlagSet) Action {
-		o := chatNewOptions{set: labelFlag{}, labels: labelFlag{}}
-		fs.StringVar(&o.repo, "repo", "", "repository: an ID, a path or . (default: the current directory's)")
-		fs.StringVar(&o.agent, "agent", "", "hybrid launch config `NAME` (default: the only one)")
-		fs.StringVar(&o.base, "base", "", "start the branch at `REF` (default: the repository's default base)")
-		fs.StringVar(&o.branch, "branch", "", "new branch `NAME` (default: generated like the Web UI, wt/...)")
-		fs.BoolVar(&o.terminal, "terminal", false, "start on the terminal side and type the message with Enter")
-		fs.Var(o.set, "set", "agent option `ID=VALUE` (see webmux launch-config options)")
-		fs.StringVar(&o.permission, "permission", "", "permission `MODE`: ask or auto")
-		fs.BoolVar(&o.init, "init", false, "send the repository's initialization instruction first (the default when it has one)")
-		fs.BoolVar(&o.noInit, "no-init", false, "do not send the initialization instruction")
-		fs.Var(&o.attachments, "attach", "attach the file at `PATH` to the first message")
-		fs.Var(o.labels, "label", "set label `KEY=VALUE` on the new session")
-		fs.BoolVar(&o.wait, "wait", false, "wait for the first turn and print the agent's final reply")
-		fs.BoolVar(&o.autoWaitRequests, "auto-wait-requests", false, "with --wait, keep waiting while a permission request or form is open")
-		fs.DurationVar(&o.timeout, "timeout", 0, "give up --wait after this `DURATION` (exit 124); 0 waits forever")
-		fs.BoolVar(&o.asJSON, "json", false, "print JSON")
-		return func(ctx context.Context, e Env, args []string) int { return e.chatNew(ctx, o, args) }
-	},
-}
-
-func (e Env) chatNew(ctx context.Context, o chatNewOptions, args []string) int {
-	switch {
-	case len(args) > 1:
-		return e.Usagef("give the message as one argument (quote it), or - for standard input")
-	case o.init && o.noInit:
-		return e.Usagef("--init and --no-init cannot be combined")
-	case o.terminal && (len(o.set) > 0 || o.permission != "" || len(o.attachments) > 0 || o.wait):
-		return e.Usagef("--terminal cannot be combined with --set, --permission, --attach or --wait (a terminal start has no chat turn to wait for)")
-	case o.permission != "" && o.permission != "ask" && o.permission != "auto":
-		return e.Usagef("--permission is ask or auto, not %q", o.permission)
-	case o.timeout != 0 && !o.wait:
-		return e.Usagef("--timeout needs --wait")
-	}
-	text := ""
-	if len(args) == 1 {
-		text = args[0]
-		if text == "-" {
-			var err error
-			if text, err = e.readStdin(); err != nil {
-				return e.Fail(err)
-			}
-		}
-	}
-	client, code := e.connect()
-	if client == nil {
-		return code
-	}
-	defer client.Close()
-	repos, err := repositories(ctx, client)
-	if err != nil {
-		return e.Fail(err)
-	}
-	repo, err := e.resolveRepository(ctx, repos, o.repo)
-	if err != nil {
-		return e.locationError(err)
-	}
-	agent, err := hybridAgent(ctx, client, o.agent)
-	if err != nil {
-		if errors.Is(err, errUnknownLaunchConfig) {
-			return e.Usagef("%v", err)
-		}
-		return e.Fail(err)
-	}
-	useInit := repo.InitInstruction != "" && !o.noInit
-	if o.init && repo.InitInstruction == "" {
-		return e.Usagef("repository %s has no initialization instruction", repo.Name)
-	}
-	if text == "" {
-		return e.Usagef("a message is required (the initialization instruction goes before it)")
-	}
-	repoPath := "/api/repositories/" + url.PathEscape(repo.ID)
-	var branches contract.Branches
-	if err := client.Do(ctx, http.MethodGet, repoPath+"/branches", nil, &branches); err != nil {
-		return e.Fail(err)
-	}
-	base := o.base
-	if base == "" && branches.DefaultBase != nil {
-		base = *branches.DefaultBase
-	}
-	if base == "" {
-		return e.Usagef("repository %s has no default base; give --base", repo.Name)
-	}
-	var attachments []contract.ChatAttachment
-	for _, file := range o.attachments {
-		uploaded, err := e.uploadFile(ctx, client, "/api/quick-starts/uploads", file)
-		if err != nil {
-			return e.Fail(fmt.Errorf("upload %s: %w", file, err))
-		}
-		attachments = append(attachments, contract.ChatAttachment{Path: uploaded})
-	}
-	request := contract.QuickStartRequest{
-		RepositoryID: repo.ID, ConfigID: agent.ID, Base: base, Text: text,
-		Config: o.set, UseInitInstruction: useInit, Attachments: attachments,
-		PermissionMode: contract.ChatPermissionMode(o.permission),
-	}
-	if request.Config == nil {
-		request.Config = map[string]string{}
-	}
-	if request.PermissionMode == "" {
-		request.PermissionMode = contract.ChatPermissionAuto
-	}
-	if o.terminal {
-		request.StartSide = contract.HybridSideTUI
-	}
-	result, failure, err := e.quickStart(ctx, client, request, branches, repo, o.branch)
-	if err != nil {
-		return e.Fail(err)
-	}
-	if failure != nil {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux chat new: %s failed: %s\n", failure.Step, failure.Error)
-		if failure.Worktree != nil {
-			_, _ = fmt.Fprintf(e.Stderr, "webmux chat new: worktree %s was created and is kept\n", failure.Worktree.Path)
-		}
-		if failure.SessionID != "" {
-			_, _ = fmt.Fprintf(e.Stderr, "webmux chat new: session %s was started\n", failure.SessionID)
-		}
-		return contract.ExitError
-	}
-	for _, warning := range result.ConfigWarnings {
-		_, _ = fmt.Fprintln(e.Stderr, "webmux chat new:", warning)
-	}
-	if len(o.labels) > 0 {
-		if err := client.Do(ctx, http.MethodPatch, "/api/sessions/"+url.PathEscape(result.SessionID)+"/labels", contract.LabelsUpdate{Set: o.labels}, nil); err != nil {
-			_, _ = fmt.Fprintln(e.Stderr, "webmux chat new: labels not set:", err)
-		}
-	}
-	link, _ := link(ctx, client, result.SessionID)
-	if o.wait {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · %s · %s\n", result.SessionID, result.Worktree.Path, link)
-		return e.waitFirstTurn(ctx, client, result.SessionID, o)
-	}
-	if o.asJSON {
-		writeJSON(e.Stdout, map[string]any{"sessionId": result.SessionID, "worktree": result.Worktree, "configWarnings": result.ConfigWarnings, "link": link})
-		return contract.ExitOK
-	}
-	_, _ = fmt.Fprintf(e.Stdout, "%s\n%s\n%s\n", result.SessionID, result.Worktree.Path, link)
-	return contract.ExitOK
-}
-
-// quickStart sends the request, drawing a branch name when none was given
-// and drawing again, up to three times, when the name was taken meanwhile.
-func (e Env) quickStart(ctx context.Context, client *localclient.Client, request contract.QuickStartRequest, branches contract.Branches, repo contract.Repository, branch string) (contract.QuickStartResult, *contract.QuickStartFailure, error) {
-	taken := map[string]bool{}
-	for _, b := range branches.Branches {
-		taken[b.Name] = true
-	}
-	for _, t := range repo.Worktrees {
-		taken["wt/"+path.Base(t.Path)] = true
-	}
-	for attempt := 0; ; attempt++ {
-		request.Branch = branch
-		if branch == "" {
-			request.Branch = suggestBranch(taken, time.Now())
-		}
-		request.ClientRequestID = newRequestID()
-		var result contract.QuickStartResult
-		err := client.Do(ctx, http.MethodPost, "/api/quick-starts", request, &result)
-		if err == nil {
-			return result, nil, nil
-		}
-		var apiErr *localclient.APIError
-		if !errors.As(err, &apiErr) {
-			return result, nil, err
-		}
-		var failure contract.QuickStartFailure
-		if json.Unmarshal(apiErr.Body, &failure) != nil || failure.Step == "" {
-			return result, nil, err
-		}
-		if branch == "" && failure.Step == "worktree" && failure.Reason == "conflict" && attempt < 2 {
-			taken[request.Branch] = true
-			continue
-		}
-		return result, &failure, nil
-	}
-}
-
-// suggestBranch draws a free wt/<date>-<time> name, the form the Web UI
-// falls back to.
-func suggestBranch(taken map[string]bool, now time.Time) string {
-	stamp := now.Format("20060102-150405")
-	for suffix := 1; ; suffix++ {
-		name := "wt/" + stamp
-		if suffix > 1 {
-			name = fmt.Sprintf("wt/%s-%d", stamp, suffix)
-		}
-		if !taken[name] {
-			return name
-		}
-	}
-}
-
-func (e Env) waitFirstTurn(ctx context.Context, client *localclient.Client, id string, o chatNewOptions) int {
-	if o.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, o.timeout)
-		defer cancel()
-	}
-	stream, err := openChat(ctx, client, id)
-	if err != nil {
-		return e.Fail(err)
-	}
-	defer stream.close()
-	// The first prompt's turn is the first turn of the session.
-	result, err := stream.turnWait(ctx, turnWatch{accept: func(contract.ChatTurnStart) bool { return true }, stopAtRequest: !o.autoWaitRequests})
-	if err != nil {
-		return e.waitFailure(err)
-	}
-	return e.reportTurn(result, o.asJSON)
-}
-
-// hybridAgent picks the hybrid launch config named name, or the only one.
-func hybridAgent(ctx context.Context, client *localclient.Client, name string) (contract.LaunchConfigSummary, error) {
-	var list []contract.LaunchConfigSummary
-	if err := client.Do(ctx, http.MethodGet, "/api/launch-configs", nil, &list); err != nil {
-		return contract.LaunchConfigSummary{}, err
-	}
-	var hybrids []contract.LaunchConfigSummary
-	var names []string
-	for _, c := range list {
-		if c.Hybrid {
-			hybrids = append(hybrids, c)
-			names = append(names, fmt.Sprintf("%q", c.Name))
-		}
-	}
-	if name == "" {
-		if len(hybrids) == 1 {
-			return hybrids[0], nil
-		}
-		return contract.LaunchConfigSummary{}, fmt.Errorf("%w: give --agent (hybrid launch configs: %s)", errUnknownLaunchConfig, strings.Join(names, ", "))
-	}
-	for _, c := range hybrids {
-		if c.Name == name {
-			return c, nil
-		}
-	}
-	return contract.LaunchConfigSummary{}, fmt.Errorf("%w %q with hybrid mode (hybrid launch configs: %s)", errUnknownLaunchConfig, name, strings.Join(names, ", "))
 }
 
 // uploadFile uploads a local file to path and returns its server path.
@@ -953,22 +812,22 @@ func (e Env) uploadFile(ctx context.Context, client *localclient.Client, path, f
 
 var launchConfigOptionsCommand = &Command{
 	Name: "launch-config options", Group: GroupLaunch, Args: "NAME",
-	Summary: "List the options (model, mode, ...) the agent of a hybrid launch config offers.",
+	Summary: "List the options (model, mode, ...) the agent of a launch config with the chat view offers.",
 	Description: "The agent reports its options from a throwaway session in a repository's main worktree " +
-		"(POST /api/quick-starts/options). Use the IDs and values with webmux chat new --set ID=VALUE.",
-	Arguments: []Item{{Name: "NAME", Text: "The exact name of a launch config with hybrid mode."}},
+		"(POST /api/launch-configs/{id}/options). Use the IDs and values with webmux run --view chat --set ID=VALUE.",
+	Arguments: []Item{{Name: "NAME", Text: "The exact name of a launch config with the chat view."}},
 	Output:    "One option per line: ID, name, type, current value and choices. With --json, the ChatConfig array.",
 	Exit: []ExitItem{
 		{Code: 0, Text: "Listed."},
-		{Code: 1, Text: "The launch config has no hybrid mode, or the agent could not be asked."},
+		{Code: 1, Text: "The launch config has no chat view (no_chat_view), or the agent could not be asked."},
 		{Code: 2, Text: "Usage error, unknown launch config or repository."},
 		{Code: 3, Text: "WebMux is not running."},
 	},
 	Examples: []Example{
 		{Command: `webmux launch-config options "Claude Code"`, Text: "Show the agent's options and their values."},
-		{Command: `webmux launch-config options Codex --json | jq '.[] | select(.id=="model") | .options[].value'`, Text: "List the models to pass to chat new --set model=..."},
+		{Command: `webmux launch-config options Codex --json | jq '.[] | select(.id=="model") | .options[].value'`, Text: "List the models to pass to run --set model=..."},
 	},
-	SeeAlso: []string{"webmux chat new"},
+	SeeAlso: []string{"webmux run", "webmux chat set"},
 	Bind: func(fs *flag.FlagSet) Action {
 		repo := fs.String("repo", "", "repository whose main worktree the agent runs in: an ID, a path or . (default: the current directory's)")
 		asJSON := fs.Bool("json", false, "print the ChatConfig array as JSON")
@@ -988,8 +847,8 @@ var launchConfigOptionsCommand = &Command{
 				}
 				return e.Fail(err)
 			}
-			if !summary.Hybrid {
-				_, _ = fmt.Fprintf(e.Stderr, "webmux: launch config %q has no hybrid mode\n", summary.Name)
+			if !summary.Chat {
+				_, _ = fmt.Fprintf(e.Stderr, "webmux: launch config %q has no chat view (no_chat_view)\n", summary.Name)
 				return contract.ExitError
 			}
 			repos, err := repositories(ctx, client)
@@ -1001,9 +860,9 @@ var launchConfigOptionsCommand = &Command{
 				return e.locationError(err)
 			}
 			var options []contract.ChatConfig
-			req := contract.QuickStartOptionsRequest{RepositoryID: r.ID, ConfigID: summary.ID}
-			if err := client.Do(ctx, http.MethodPost, "/api/quick-starts/options", req, &options); err != nil {
-				return e.Fail(err)
+			req := contract.LaunchOptionsRequest{RepositoryID: r.ID}
+			if err := client.Do(ctx, http.MethodPost, "/api/launch-configs/"+url.PathEscape(summary.ID)+"/options", req, &options); err != nil {
+				return e.sessionFail(err)
 			}
 			if *asJSON {
 				writeJSON(e.Stdout, options)

@@ -1,30 +1,40 @@
 {
   "status": 201,
   "body": {
-    "attention": null,
-    "clients": 0,
-    "cmd": [
-      "/bin/sh",
-      "-c",
-      "sleep 60"
-    ],
-    "cols": 80,
-    "createdAt": "<time>",
-    "cwd": "<linked>",
-    "exitCode": null,
-    "generation": "<generation#1>",
-    "id": "<id#4>",
-    "lastActiveAt": "<time>",
-    "listeningPorts": [],
-    "preview": "",
-    "reportedCwd": null,
-    "rows": 24,
-    "status": "running",
-    "title": "linked",
-    "workspace": {
-      "repositoryId": "<id#1>",
-      "worktreeId": "<id#3>",
-      "worktreePath": "<linked>"
+    "configWarnings": [],
+    "session": {
+      "agent": null,
+      "attention": null,
+      "clients": 0,
+      "cmd": [
+        "/bin/sh",
+        "-c",
+        "sleep 60"
+      ],
+      "cols": 80,
+      "createdAt": "<time>",
+      "cwd": "<linked>",
+      "exitCode": null,
+      "generation": "<generation#1>",
+      "id": "<id#4>",
+      "lastActiveAt": "<time>",
+      "listeningPorts": [],
+      "preview": "",
+      "reportedCwd": null,
+      "rows": 24,
+      "state": "active",
+      "status": "running",
+      "title": "linked",
+      "transition": null,
+      "view": "terminal",
+      "views": [
+        "terminal"
+      ],
+      "workspace": {
+        "repositoryId": "<id#1>",
+        "worktreeId": "<id#3>",
+        "worktreePath": "<linked>"
+      }
     }
   }
 }

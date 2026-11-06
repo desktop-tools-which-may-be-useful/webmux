@@ -4,8 +4,11 @@ import {
   ChatAttachmentSchema,
   ChatConfigSchema,
   ChatPermissionModeSchema,
-  HybridRecordSchema,
-  SessionHybridSchema,
+  SessionAgentSchema,
+  SessionArchiveSchema,
+  SessionStateSchema,
+  SessionTransitionSchema,
+  SessionViewSchema,
 } from "./chatSchemas";
 
 export * from "./chatSchemas";
@@ -85,7 +88,8 @@ const GenerationSchema = z.string().regex(/^[0-9a-f]{16}$/);
 // Only fields explicitly marked nullable accept null. Commands remain nonempty.
 export const SessionInfoSchema = z.object({
   id: z.string().regex(/^[a-z2-7]{8}$/),
-  // Empty while a hybrid session has no terminal run (on its chat side).
+  // Empty while a session has no terminal run (on its chat view, or
+  // archived).
   generation: GenerationSchema.or(z.literal("")),
   title: z.string(),
   cwd: z.string(),
@@ -95,8 +99,9 @@ export const SessionInfoSchema = z.object({
   preview: z.string(),
   createdAt: z.iso.datetime({ offset: true }),
   lastActiveAt: z.iso.datetime({ offset: true }),
-  cols: z.number().int().min(1).max(1000),
-  rows: z.number().int().min(1).max(1000),
+  // 0 only on an archived session, which has no terminal.
+  cols: z.number().int().min(0).max(1000),
+  rows: z.number().int().min(0).max(1000),
   clients: z.number().int().nonnegative(),
   workspace: WorkspaceLinkSchema.nullable(),
   attention: AttentionSchema.nullable(),
@@ -106,8 +111,18 @@ export const SessionInfoSchema = z.object({
     .string()
     .regex(/^[a-z2-7]{8}$/)
     .optional(),
-  // Hybrid (chat ↔ terminal) sessions only; ordinary sessions omit it.
-  hybrid: SessionHybridSchema.optional(),
+  // active for every running session; closed and interrupted sessions are
+  // archived, with zero runtime fields.
+  state: SessionStateSchema,
+  // ["terminal"], or ["terminal", "chat"] for a session with a chat view.
+  views: z.array(SessionViewSchema).min(1),
+  // The last settled view; during a transition still the one it leaves.
+  view: SessionViewSchema,
+  transition: SessionTransitionSchema.nullable(),
+  // The agent behind the chat view; null without one.
+  agent: SessionAgentSchema.nullable(),
+  // Only on a closed or interrupted session.
+  archive: SessionArchiveSchema.optional(),
   // Ascending ports the session's processes listen on; always [] where the
   // server cannot detect them.
   listeningPorts: z.array(ListeningPortSchema),
@@ -120,6 +135,15 @@ export const SessionInfoSchema = z.object({
   labels: z.record(z.string(), z.string()).optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
+// A closed or interrupted session, as GET /sessions?state=archived lists
+// it: only sessions with a chat view are archived.
+export const ArchivedSessionSchema = SessionInfoSchema.extend({
+  state: z.enum(["closed", "interrupted"]),
+  agent: SessionAgentSchema,
+  archive: SessionArchiveSchema,
+});
+export type ArchivedSession = z.infer<typeof ArchivedSessionSchema>;
+export const ArchivedSessionsSchema = z.array(ArchivedSessionSchema);
 // GET /sessions/:id/details: metadata gathered by the server for scripts.
 export const SessionDetailsSchema = z.object({
   session: SessionInfoSchema,
@@ -140,11 +164,10 @@ export const SessionDetailsSchema = z.object({
       id: z.string(),
       name: z.string(),
       icon: z.string().optional(),
-      hybrid: z.boolean(),
+      chat: z.boolean(),
     })
     .nullable(),
   launchConfigMissing: z.boolean().optional(),
-  hybrid: HybridRecordSchema.nullable(),
   artifactsDir: z.string().nullable(),
   forwards: z.array(ForwardSchema),
   parentId: z.string().optional(),
@@ -155,24 +178,47 @@ export const WorkspaceReferenceSchema = z.object({
   repositoryId: z.string(),
   worktreeId: z.string(),
 });
+// POST /sessions asks for a new worktree first: a new branch from `base`
+// (an omitted branch is generated together with the path), or an existing
+// branch checked out.
+export const NewWorktreeSchema = z.object({
+  repositoryId: z.string().min(1),
+  mode: z.enum(["new", "existing"]),
+  branch: z.string().optional(),
+  base: z.string().optional(),
+  path: z.string().optional(),
+});
+export type NewWorktree = z.infer<typeof NewWorktreeSchema>;
+// POST /sessions, the only way to create a session. The location is one of
+// `cwd`, `workspace` and `newWorktree`; the command `configId` or
+// `cmd`/`env`.
 export const CreateSessionRequestSchema = z
   .object({
+    // Dedupes retries for ten minutes; omitted never dedupes.
+    clientRequestId: z.string().min(1).optional(),
     cwd: z.string().optional(),
-    cmd: z.array(z.string()).optional(),
-    name: z.string().optional(),
     workspace: WorkspaceReferenceSchema.optional(),
+    newWorktree: NewWorktreeSchema.optional(),
+    cmd: z.array(z.string()).optional(),
     env: z.record(z.string(), z.string()).optional(),
     configId: z.string().optional(),
-    // Only for a launch config with hybrid mode; the server answers 400
+    name: z.string().optional(),
+    // Labels set on the new session.
+    labels: z.record(z.string(), z.string()).optional(),
+    // Only for a launch config with the chat view; the server answers 400
     // otherwise.
-    startSide: z.enum(["tui", "acp"]).optional(),
+    view: SessionViewSchema.optional(),
     // The user's first message, sent once the session is up.
     prompt: z.string().optional(),
     // Puts the repository's initialization instruction before it; needs
-    // `workspace`.
+    // `workspace` or `newWorktree`.
     useInitInstruction: z.boolean().optional(),
-    // Labels set on the new session.
-    labels: z.record(z.string(), z.string()).optional(),
+    // Chat view only: files returned by POST /uploads, sent with the
+    // prompt; agent option id to value (booleans "true"/"false"); and the
+    // permission mode.
+    attachments: z.array(ChatAttachmentSchema).optional(),
+    agentConfig: z.record(z.string(), z.string()).optional(),
+    permissionMode: ChatPermissionModeSchema.optional(),
   })
   .refine(
     (body) =>
@@ -180,24 +226,32 @@ export const CreateSessionRequestSchema = z
       (!body.cmd?.length && Object.keys(body.env ?? {}).length === 0),
     { message: "configId 不能与 cmd 或 env 同时提供" },
   )
-  .refine((body) => !body.useInitInstruction || !!body.workspace, {
-    message: "useInitInstruction 需要 workspace",
+  .refine(
+    (body) =>
+      !body.useInitInstruction || !!body.workspace || !!body.newWorktree,
+    { message: "useInitInstruction 需要 workspace 或 newWorktree" },
+  )
+  .refine((body) => !body.view || !!body.configId, {
+    message: "view 只能与带聊天视图的 configId 一起提供",
   })
-  .refine((body) => !body.startSide || !!body.configId, {
-    message: "startSide 只能与混合模式的 configId 一起提供",
-  });
-
+  .refine(
+    (body) =>
+      body.view === "chat" ||
+      (!body.attachments?.length && !body.agentConfig && !body.permissionMode),
+    { message: "attachments、agentConfig 与 permissionMode 只用于聊天视图" },
+  );
+export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
 export const PreviewSettingsSchema = z.object({
   lines: z.number().int().min(1).max(50),
   skip: z.number().int().min(0).max(50),
 });
 export type PreviewSettings = z.infer<typeof PreviewSettingsSchema>;
 
-// Whether a command can run as a hybrid (chat ↔ terminal) session, computed
-// by the server from its built-in agent profiles; reason is a stable code.
-export const HybridSupportSchema = z.object({
+// Whether a command can have a chat view, computed by the server from its
+// built-in agent profiles; reason is a stable code.
+export const ChatSupportSchema = z.object({
   supported: z.boolean(),
-  // Display names of every agent hybrid mode supports.
+  // Display names of every agent the chat view supports.
   supportedAgents: z.array(z.string()),
   agent: z.string().optional(),
   reason: z
@@ -212,7 +266,7 @@ export const HybridSupportSchema = z.object({
     .optional(),
   connector: AgentConnectorSchema.optional(),
 });
-export type HybridSupport = z.infer<typeof HybridSupportSchema>;
+export type ChatSupport = z.infer<typeof ChatSupportSchema>;
 
 // Launch configs are server-stored launch commands. Summaries (list) carry only
 // env variable names; the full config with values is fetched per id for edits.
@@ -226,8 +280,8 @@ const launchConfigFields = {
     .optional(),
   cmd: z.array(z.string()).min(1),
   preview: PreviewSettingsSchema.nullable().optional(),
-  hybrid: z.boolean(),
-  hybridSupport: HybridSupportSchema,
+  chat: z.boolean(),
+  chatSupport: ChatSupportSchema,
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
 };
@@ -257,7 +311,7 @@ export const LaunchPresetSchema = z.object({
   icon: launchConfigFields.icon,
   cmd: launchConfigFields.cmd,
   envNames: z.array(z.string()),
-  hybrid: z.boolean(),
+  chat: z.boolean(),
 });
 export type LaunchPreset = z.infer<typeof LaunchPresetSchema>;
 export const LaunchPresetsSchema = z.array(LaunchPresetSchema);
@@ -299,8 +353,9 @@ export const ControlStateSchema = z.object({
       since: z.iso.datetime({ offset: true }),
     })
     .nullable(),
-  cols: SessionInfoSchema.shape.cols,
-  rows: SessionInfoSchema.shape.rows,
+  // A terminal is always at least one cell in each direction.
+  cols: z.number().int().min(1).max(1000),
+  rows: z.number().int().min(1).max(1000),
   // The program enabled DEC mode 2031 (color scheme change reports).
   colorSchemeReports: z.boolean(),
 });
@@ -520,42 +575,24 @@ export const RegisterRepositoryRequestSchema = z.object({
 export const UpdateRepositoryRequestSchema = z.object({
   initInstruction: z.string().max(INIT_INSTRUCTION_MAX),
 });
-// One send of the quick start page: a worktree from `base`, the chat side of
-// the hybrid launch config, its options and the first prompt.
-export const QuickStartRequestSchema = z.object({
-  clientRequestId: z.string().min(1),
+// The agent options a launch config's agent offers before any chat of it,
+// read through a throwaway session in the repository
+// (POST /launch-configs/:id/options).
+export const LaunchOptionsRequestSchema = z.object({
   repositoryId: z.string().min(1),
-  configId: z.string().regex(/^[a-z2-7]{8}$/),
-  base: z.string(),
-  branch: z.string().min(1),
-  text: z.string().trim().min(1),
-  // Option id to value; booleans are "true" or "false".
-  config: z.record(z.string(), z.string()),
-  permissionMode: ChatPermissionModeSchema,
-  // Files returned by POST /quick-starts/uploads; they go with the message.
-  attachments: z.array(ChatAttachmentSchema).optional(),
-  // Whether the repository's init instruction goes before the first message.
-  useInitInstruction: z.boolean(),
-  // "tui" types the message into the agent's terminal instead of a chat;
-  // it takes no options, permission mode or attachments.
-  startSide: z.enum(["tui", "acp"]).optional(),
 });
-export type QuickStartRequest = z.infer<typeof QuickStartRequestSchema>;
-export const QuickStartResultSchema = z.object({
-  sessionId: z.string().regex(/^[a-z2-7]{8}$/),
-  worktree: WorktreeSchema,
+export const LaunchOptionsSchema = z.array(ChatConfigSchema);
+// The 201 body of POST /sessions; `worktree` only when the request created
+// one, `configWarnings` the agent options the agent did not take.
+export const CreateSessionResultSchema = z.object({
+  session: SessionInfoSchema,
+  worktree: WorktreeSchema.optional(),
   configWarnings: z.array(z.string()),
 });
-// The agent options a launch config's agent offers before any chat of it,
-// read through a throwaway session in the repository.
-export const QuickStartOptionsRequestSchema = z.object({
-  repositoryId: z.string().min(1),
-  configId: z.string().regex(/^[a-z2-7]{8}$/),
-});
-export const QuickStartOptionsSchema = z.array(ChatConfigSchema);
-// The body of a failed quick start: the step that failed and what earlier
+export type CreateSessionResult = z.infer<typeof CreateSessionResultSchema>;
+// The body of a failed POST /sessions: the step that failed and what earlier
 // steps left behind, which is never removed automatically.
-export const QuickStartFailureSchema = z.object({
+export const CreateSessionFailureSchema = z.object({
   error: z.string(),
   step: z.enum(["precheck", "worktree", "session", "config", "prompt"]),
   reason: z.string().optional(),
@@ -564,7 +601,8 @@ export const QuickStartFailureSchema = z.object({
   worktree: WorktreeSchema.optional(),
   sessionId: z.string().optional(),
 });
-export type QuickStartFailure = z.infer<typeof QuickStartFailureSchema>;
+export type CreateSessionFailure = z.infer<typeof CreateSessionFailureSchema>;
+
 // Server-synchronized choice of worktrees shown on the home page, keyed by
 // repository ID. A repository without an entry was never curated.
 export const HomeWorktreesSchema = z.record(
@@ -622,9 +660,9 @@ export const RemovalPreviewSchema = z.object({
   expiresAt: z.iso.datetime({ offset: true }),
   worktree: WorktreeSchema,
   sessions: z.array(SessionInfoSchema),
-  // Closed and interrupted hybrid records in the worktree; a successful
-  // removal deletes them.
-  archived: z.array(HybridRecordSchema),
+  // Closed and interrupted sessions in the worktree; a successful removal
+  // deletes them.
+  archived: z.array(SessionInfoSchema),
   blockers: z.array(z.string()),
   forceAllowed: z.boolean(),
 });

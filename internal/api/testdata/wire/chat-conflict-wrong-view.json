@@ -1,0 +1,7 @@
+{
+  "status": 409,
+  "body": {
+    "error": "会话不在该视图: 附件与 mode 只适用于聊天视图",
+    "reason": "wrong_view"
+  }
+}

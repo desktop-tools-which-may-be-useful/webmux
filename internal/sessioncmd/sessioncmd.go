@@ -146,13 +146,14 @@ var attachCommand = &Command{
 	Name: "attach", Group: GroupSessions, Args: "SESSION",
 	Summary: "Attach this terminal to a session; Ctrl+] detaches and the session keeps running.",
 	Description: "The terminal takes control of the session's input and size unless --observe is given. " +
-		"A hybrid session on its chat side cannot be attached.",
+		"A session on its chat view cannot be attached; when it moves to the chat view while attached, the terminal " +
+		"is detached and the session keeps running.",
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
 	Output:    "The session's output on this terminal; notices go to standard error.",
 	Exit: []ExitItem{
 		{Code: 0, Text: "Detached, or the session moved to the chat view."},
-		{Code: 1, Text: "The session is on its chat side or the connection failed."},
+		{Code: 1, Text: "The session is on its chat view or the connection failed."},
 		{Code: 2, Text: "Usage error or no terminal."},
 		{Code: 3, Text: "WebMux is not running."},
 	},
@@ -160,7 +161,7 @@ var attachCommand = &Command{
 		{Command: "webmux attach abcd2345", Text: "Take over session abcd2345 in this terminal."},
 		{Command: "webmux attach --observe abcd2345", Text: "Watch the session without sending input or resizing it."},
 	},
-	SeeAlso: []string{"webmux run", "webmux ls"},
+	SeeAlso: []string{"webmux run", "webmux ls", "webmux view"},
 	Bind: func(flags *flag.FlagSet) Action {
 		observe := flags.Bool("observe", false, "watch without taking control, sending input or resizing")
 		return func(ctx context.Context, e Env, args []string) int {
@@ -215,49 +216,77 @@ func (e Env) attach(ctx context.Context, client *localclient.Client, id string, 
 		_, _ = fmt.Fprintf(e.Stderr, "\r\n[detached from %s; it keeps running]\n", id)
 		return contract.ExitOK
 	case result.Moved:
-		// Passive detach: the session lives on in the chat view.
-		_, _ = fmt.Fprintf(e.Stderr, "\r\n[已切换到聊天视图，可在 Web 端继续；切回终端后用 `webmux attach %s` 重新接入]\n", id)
+		// Passive detach: the session lives on in its other view.
+		if result.MovedTo == contract.ViewChat {
+			_, _ = fmt.Fprintf(e.Stderr, "\r\n[已切换到聊天视图，可在 Web 端或用 `webmux send %s` 继续；`webmux view %s terminal` 切回终端后再 `webmux attach %s`]\n", id, id, id)
+		} else {
+			_, _ = fmt.Fprintf(e.Stderr, "\r\n[会话离开了这个终端，仍在运行；用 `webmux attach %s` 重新接入]\n", id)
+		}
 		return contract.ExitOK
 	}
 	return result.ExitCode
 }
 
+// listStates are the values of ls --state.
+var listStates = []string{"active", "closed", "interrupted", "archived", "all"}
+
 var listCommand = &Command{
 	Name: "ls", Group: GroupSessions,
-	Summary: "List terminal sessions, optionally filtered by label, parent or status.",
-	Description: "Filters combine: a session is listed only when it matches all of them. " +
-		"--label KEY=VALUE matches a label value, --label KEY only requires the label to exist.",
-	Output: "A table of ID, name, status (with exit code and hybrid side), command and launch directory. " +
-		"With --json, the server's SessionInfo array, filtered when filters are given.",
+	Summary: "List sessions, optionally filtered by state, label, parent, status or repository.",
+	Description: "Without --state only active sessions are listed. A session with a chat view becomes closed or interrupted " +
+		"when it ends and stays listed under those states (--archived lists both) until it is forgotten; webmux resume " +
+		"brings it back. Filters combine: a session is listed only when it matches all of them. --label KEY=VALUE matches " +
+		"a label value, --label KEY only requires the label to exist.",
+	Output: "A table of ID, name, status (with exit code, or the state of an archived session, and the view of a session " +
+		"with a chat view), command and launch directory. With --json, the server's SessionInfo array, filtered when " +
+		"filters are given.",
 	Exit: []ExitItem{
 		{Code: 0, Text: "Listed."},
+		{Code: 1, Text: "--repo names no registered repository, or the server refused."},
 		{Code: 2, Text: "Usage error."},
 		{Code: 3, Text: "WebMux is not running."},
 	},
 	Examples: []Example{
-		{Command: "webmux ls", Text: "Show every session."},
+		{Command: "webmux ls", Text: "Show every active session."},
 		{Command: "webmux ls --parent self --json", Text: "List the sessions this session created, as JSON."},
 		{Command: "webmux ls --label run=42 --status exited", Text: "Show finished sessions of one scripted run."},
+		{Command: "webmux ls --archived --repo .", Text: "Find an agent session of this repository to resume."},
 	},
-	SeeAlso: []string{"webmux get", "webmux label"},
+	SeeAlso: []string{"webmux get", "webmux label", "webmux resume"},
 	Notes: map[string]Note{
-		"label":  {Repeatable: true},
-		"status": {Repeatable: true},
+		"label":    {Repeatable: true},
+		"status":   {Repeatable: true},
+		"state":    {Repeatable: true},
+		"archived": {Conflicts: []string{"state"}},
 	},
 	Bind: func(flags *flag.FlagSet) Action {
 		asJSON := flags.Bool("json", false, "print the server's session list as JSON")
-		var labels, statuses listFlag
+		var labels, statuses, states listFlag
 		flags.Var(&labels, "label", "only sessions with label `KEY=VALUE`, or with label KEY")
 		parent := flags.String("parent", "", "only sessions created by `SESSION` (or self)")
-		flags.Var(&statuses, "status", "only sessions in `STATE`: running, waiting, idle or exited")
+		flags.Var(&statuses, "status", "only sessions in `STATUS`: running, waiting, idle or exited")
+		flags.Var(&states, "state", "list sessions in `STATE`: active, closed, interrupted, archived or all (default: active)")
+		archived := flags.Bool("archived", false, "list the closed and interrupted sessions (--state archived)")
+		repo := flags.String("repo", "", "only sessions of the registered repository `REPO` (ID, path, or . for the current one)")
 		return func(ctx context.Context, e Env, args []string) int {
 			if len(args) > 0 {
 				return e.Usagef("unexpected argument %q", args[0])
 			}
-			for _, state := range statuses {
-				if !slices.Contains([]string{"running", "waiting", "idle", "exited"}, state) {
-					return e.Usagef("unknown status %q", state)
+			for _, status := range statuses {
+				if !slices.Contains([]string{"running", "waiting", "idle", "exited"}, status) {
+					return e.Usagef("unknown status %q", status)
 				}
+			}
+			for _, state := range states {
+				if !slices.Contains(listStates, state) {
+					return e.Usagef("unknown state %q (%s)", state, strings.Join(listStates, ", "))
+				}
+			}
+			if *archived {
+				if len(states) > 0 {
+					return e.Usagef("--archived and --state cannot be combined")
+				}
+				states = listFlag{"archived"}
 			}
 			parentID := ""
 			if *parent != "" {
@@ -267,7 +296,7 @@ var listCommand = &Command{
 				}
 				parentID = id
 			}
-			return e.list(ctx, listFilter{labels: labels, parent: parentID, statuses: statuses}, *asJSON)
+			return e.list(ctx, listFilter{labels: labels, parent: parentID, statuses: statuses, states: states, repo: *repo}, *asJSON)
 		}
 	},
 }
@@ -282,15 +311,25 @@ type listFilter struct {
 	labels   []string
 	parent   string
 	statuses []string
+	// states go to the server; repo is resolved into repository.
+	states     []string
+	repo       string
+	repository *contract.Repository
 }
 
-func (f listFilter) empty() bool { return len(f.labels) == 0 && f.parent == "" && len(f.statuses) == 0 }
+// local reports whether the filter drops sessions on the client.
+func (f listFilter) local() bool {
+	return len(f.labels) > 0 || f.parent != "" || len(f.statuses) > 0 || f.repository != nil
+}
 
 func (f listFilter) match(s contract.SessionInfo) bool {
 	if f.parent != "" && s.ParentID != f.parent {
 		return false
 	}
 	if len(f.statuses) > 0 && !slices.Contains(f.statuses, string(s.Status)) {
+		return false
+	}
+	if f.repository != nil && !inRepository(s, *f.repository) {
 		return false
 	}
 	for _, label := range f.labels {
@@ -303,6 +342,15 @@ func (f listFilter) match(s contract.SessionInfo) bool {
 	return true
 }
 
+// inRepository reports whether s belongs to repo: by its workspace, or for
+// a session without one, by a launch directory inside one of its worktrees.
+func inRepository(s contract.SessionInfo, repo contract.Repository) bool {
+	if s.Workspace != nil {
+		return s.Workspace.RepositoryID == repo.ID
+	}
+	return slices.ContainsFunc(repo.Worktrees, func(t contract.Worktree) bool { return within(t.Path, s.Cwd) })
+}
+
 // List implements `webmux ls`.
 func List(ctx context.Context, e Env, args []string) int { return e.Run(ctx, listCommand, args) }
 
@@ -312,11 +360,26 @@ func (e Env) list(ctx context.Context, filter listFilter, asJSON bool) int {
 		return code
 	}
 	defer client.Close()
+	if filter.repo != "" {
+		repos, err := repositories(ctx, client)
+		if err != nil {
+			return e.Fail(err)
+		}
+		r, err := e.resolveRepository(ctx, repos, filter.repo)
+		if err != nil {
+			return e.Fail(err)
+		}
+		filter.repository = &r
+	}
+	path := "/api/sessions"
+	if len(filter.states) > 0 {
+		path += "?" + url.Values{"state": filter.states}.Encode()
+	}
 	var raw json.RawMessage
-	if err := client.Do(ctx, http.MethodGet, "/api/sessions", nil, &raw); err != nil {
+	if err := client.Do(ctx, http.MethodGet, path, nil, &raw); err != nil {
 		return e.Fail(err)
 	}
-	if asJSON && filter.empty() {
+	if asJSON && !filter.local() {
 		_, _ = fmt.Fprintf(e.Stdout, "%s\n", raw)
 		return contract.ExitOK
 	}
@@ -324,7 +387,7 @@ func (e Env) list(ctx context.Context, filter listFilter, asJSON bool) int {
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return e.Fail(err)
 	}
-	if !filter.empty() {
+	if filter.local() {
 		// Filtering re-encodes the array, so --json keeps every field the
 		// server sent only through the raw objects.
 		var objects []json.RawMessage
@@ -349,16 +412,27 @@ func (e Env) list(ctx context.Context, filter listFilter, asJSON bool) int {
 		}
 		list = kept
 	}
-	sort.SliceStable(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+	// Active sessions by ID; archived ones keep the server's order, most
+	// recently updated first.
+	active := func(s contract.SessionInfo) bool { return s.State == "" || s.State == contract.SessionStateActive }
+	sort.SliceStable(list, func(i, j int) bool {
+		if active(list[i]) != active(list[j]) {
+			return active(list[i])
+		}
+		return active(list[i]) && list[i].ID < list[j].ID
+	})
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tNAME\tSTATUS\tCOMMAND\tCWD")
 	for _, s := range list {
 		status := string(s.Status)
-		if s.ExitCode != nil {
+		switch {
+		case !active(s):
+			status = string(s.State)
+		case s.ExitCode != nil:
 			status = fmt.Sprintf("%s (%d)", s.Status, *s.ExitCode)
 		}
-		if s.Hybrid != nil {
-			status += " · " + hybridSide(s.Hybrid)
+		if hasChatView(s) {
+			status += " · " + viewLabel(s)
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", s.ID, s.Title, status, strings.Join(s.Cmd, " "), s.Cwd)
 	}
@@ -366,12 +440,12 @@ func (e Env) list(ctx context.Context, filter listFilter, asJSON bool) int {
 	return contract.ExitOK
 }
 
-// hybridSide names where a hybrid session runs, for `ls`.
-func hybridSide(h *contract.SessionHybrid) string {
+// viewLabel names the view a session with a chat view is on, for ls.
+func viewLabel(s contract.SessionInfo) string {
 	switch {
-	case h.Side == contract.HybridSideSwitching || h.Phase != "":
+	case s.Transition != nil:
 		return "切换中"
-	case h.Side == contract.HybridSideACP:
+	case s.View == contract.ViewChat:
 		return "聊天"
 	default:
 		return "终端"

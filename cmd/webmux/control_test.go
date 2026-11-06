@@ -192,11 +192,11 @@ func TestServerLocalAPIStatusAndStop(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client := f.local(t)
-	var info contract.SessionInfo
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, &info); err != nil {
+	var created contract.CreateSessionResult
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, &created); err != nil {
 		t.Fatalf("create over socket without token: %v", err)
 	}
-	terminal(t, ctx, client, info.ID)
+	terminal(t, ctx, client, created.Session.ID)
 
 	stdout, stderr, code := f.run(t, "status", "--json")
 	status := decodeStatus(t, stdout)
@@ -526,10 +526,11 @@ func TestBridgeCarriesHTTPAndWebSocket(t *testing.T) {
 			t.Fatalf("status over bridge: %+v %v", status, err)
 		}
 	}
-	var info contract.SessionInfo
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, &info); err != nil {
+	var created contract.CreateSessionResult
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, &created); err != nil {
 		t.Fatal(err)
 	}
+	info := created.Session
 	dialer.mu.Lock()
 	requests := len(dialer.conns)
 	dialer.mu.Unlock()

@@ -62,7 +62,7 @@ test("repository scope limits the home list, composes with filters and survives 
       },
     });
     expect(response.status()).toBe(201);
-    sessions.push(await response.json());
+    sessions.push((await response.json()).session);
   }
   const direct = await request.post("/api/sessions", {
     data: {

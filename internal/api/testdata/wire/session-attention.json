@@ -1,6 +1,7 @@
 {
   "status": 200,
   "body": {
+    "agent": null,
     "attention": {
       "kind": "done",
       "message": "release 构建完成",
@@ -27,8 +28,14 @@
     "preview": "",
     "reportedCwd": null,
     "rows": 24,
+    "state": "active",
     "status": "waiting",
     "title": "wire",
+    "transition": null,
+    "view": "terminal",
+    "views": [
+      "terminal"
+    ],
     "workspace": null
   }
 }

@@ -1,6 +1,7 @@
 {
   "status": 400,
   "body": {
-    "error": "unexpected EOF"
+    "error": "unexpected EOF",
+    "step": "precheck"
   }
 }

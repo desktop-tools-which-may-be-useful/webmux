@@ -1,6 +1,7 @@
 {
   "status": 400,
   "body": {
-    "error": "configId cannot be combined with cmd or env"
+    "error": "configId cannot be combined with cmd or env",
+    "step": "precheck"
   }
 }

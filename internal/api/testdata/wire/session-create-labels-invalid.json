@@ -1,6 +1,7 @@
 {
   "status": 400,
   "body": {
-    "error": "invalid session request: 标签名 \"-bad\" 须匹配 [a-z0-9][a-z0-9._-]{0,62}"
+    "error": "invalid session request: 标签名 \"-bad\" 须匹配 [a-z0-9][a-z0-9._-]{0,62}",
+    "step": "precheck"
   }
 }

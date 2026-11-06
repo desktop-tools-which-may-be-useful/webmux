@@ -17,6 +17,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/forward"
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/wire"
 )
@@ -125,27 +126,32 @@ func write(ctx context.Context, c *websocket.Conn, kind websocket.MessageType, p
 	return c.Write(deadline, kind, p)
 }
 
-// movedReason is the 4409 close reason; it names the side the session is on.
+// movedReason is the 4409 close reason; it names the view the session is
+// on or moving to (terminal or chat).
 func movedReason(side string) string {
 	if side == "" {
 		return "session moved"
 	}
-	return "session moved: " + side
+	return "session moved: " + string(wire.View(side))
 }
 
+// sideOf is where a hybrid session is or, during a switch, moves to.
 func sideOf(info session.Info) string {
 	if info.Hybrid == nil {
 		return ""
+	}
+	if info.Hybrid.To != "" {
+		return info.Hybrid.To
 	}
 	return info.Hybrid.Side
 }
 
 // Attach owns the only data writer. Its reader is cancelled and joined on all exits.
-// A hybrid session attaches only on its terminal side: in the chat or
-// switching it refuses with 4409, even while a run still exists.
+// A hybrid session attaches only on its terminal view: in the chat or
+// during a view change it refuses with 4409, even while a run still exists.
 func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o session.AttachOptions, deflateReplay bool) {
-	if h := s.Info().Hybrid; h != nil && h.Side != string(contract.HybridSideTUI) {
-		_ = c.Close(contract.CloseMoved, movedReason(h.Side))
+	if h := s.Info().Hybrid; h != nil && (h.Side != string(hybrid.SideTUI) || h.To != "") {
+		_ = c.Close(contract.CloseMoved, movedReason(sideOf(s.Info())))
 		return
 	}
 	sub, err := s.AttachClient(o)
@@ -458,7 +464,8 @@ func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c 
 		return true
 	}
 	// Subscribe queued the snapshot first; it must precede forwards events.
-	snapshot := wire.SessionEvent(<-sub.Out)
+	var view activeView
+	snapshot := wire.SessionEvent(view.filter(<-sub.Out))
 	snapshot.Forwards = forwardList(forwards)
 	if !send(snapshot) {
 		return
@@ -471,7 +478,8 @@ func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c 
 			_ = c.Close(4408, "slow client")
 			return
 		case event := <-sub.Out:
-			if !send(wire.SessionEvent(event)) {
+			event, ok := view.event(event)
+			if ok && !send(wire.SessionEvent(event)) {
 				return
 			}
 		case <-changes:
@@ -480,6 +488,61 @@ func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c 
 			}
 		}
 	}
+}
+
+// activeView keeps the session list a connection sees to active sessions:
+// a hybrid shell that was closed or interrupted leaves it with a removed
+// event, and comes back with a created event if it becomes active again.
+type activeView struct {
+	hidden map[string]bool
+}
+
+// filter drops the inactive sessions of a snapshot and remembers them.
+func (v *activeView) filter(e session.Event) session.Event {
+	v.hidden = map[string]bool{}
+	sessions := make([]session.Info, 0, len(e.Sessions))
+	for _, info := range e.Sessions {
+		if wire.Active(info) {
+			sessions = append(sessions, info)
+		} else {
+			v.hidden[info.ID] = true
+		}
+	}
+	e.Sessions = sessions
+	return e
+}
+
+// event translates one list event for the connection; ok is false when it
+// concerns a session the connection does not see.
+func (v *activeView) event(e session.Event) (session.Event, bool) {
+	switch e.Type {
+	case "snapshot":
+		return v.filter(e), true
+	case "removed":
+		if v.hidden[e.ID] {
+			delete(v.hidden, e.ID)
+			return e, false
+		}
+		return e, true
+	}
+	if e.Session == nil {
+		return e, true
+	}
+	id := e.Session.ID
+	switch {
+	case !wire.Active(*e.Session) && v.hidden[id]:
+		return e, false
+	case !wire.Active(*e.Session):
+		v.hidden[id] = true
+		if e.Type == "created" {
+			return e, false
+		}
+		return session.Event{Type: "removed", ID: id}, true
+	case v.hidden[id]:
+		delete(v.hidden, id)
+		e.Type = "created"
+	}
+	return e, true
 }
 
 func forwardList(forwards *forward.Service) []contract.Forward {

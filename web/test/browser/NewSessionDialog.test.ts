@@ -12,8 +12,8 @@ const config = {
   cmd: ["claude", "--resume"],
   envNames: ["API_KEY", "BASE_URL"],
   chatOptions: [],
-  hybrid: false,
-  hybridSupport: {
+  chat: false,
+  chatSupport: {
     supported: false,
     supportedAgents: [],
     reason: "unknown_agent",
@@ -28,7 +28,7 @@ const otherConfig = {
   cmd: ["opencode", "--continue", "a b"],
   envNames: [],
   chatOptions: [],
-  hybridSupport: { supported: true, supportedAgents: [], agent: "opencode" },
+  chatSupport: { supported: true, supportedAgents: [], agent: "opencode" },
 };
 const mainTree: Worktree = {
   id: "main",
@@ -89,6 +89,11 @@ const session: SessionInfo = {
   status: "running",
   exitCode: null,
   listeningPorts: [],
+  state: "active",
+  views: ["terminal"],
+  view: "terminal",
+  transition: null,
+  agent: null,
   preview: "",
   createdAt: "2026-10-23T00:00:00Z",
   lastActiveAt: "2026-10-23T00:00:00Z",
@@ -103,7 +108,7 @@ const session: SessionInfo = {
 let created: unknown[] = [];
 let worktrees: unknown[] = [];
 let removed: unknown[] = [];
-// The 409 body a create starting on the chat side answers, when set.
+// The 409 body a create starting on the chat view answers, when set.
 let acpConflict: unknown = null;
 // Session creations answered with this 400 error, when set.
 let sessionFailures = 0;
@@ -121,15 +126,27 @@ beforeEach(() => {
     vi.fn<typeof fetch>(async (input, init) => {
       const path = new URL(String(input), location.href).pathname;
       if (path === "/api/sessions" && init?.method === "POST") {
-        const body = JSON.parse(String(init.body)) as { startSide?: string };
+        const body = JSON.parse(String(init.body)) as {
+          view?: string;
+          newWorktree?: unknown;
+        };
         created.push(body);
-        if (acpConflict && body.startSide === "acp")
+        // A new worktree is made first and is reported by every answer.
+        if (body.newWorktree) worktrees.push(body.newWorktree);
+        const tree = body.newWorktree ? { worktree: createdTree } : {};
+        if (acpConflict && body.view === "chat")
           return Response.json(acpConflict, { status: 409 });
         if (sessionFailures > 0) {
           sessionFailures -= 1;
-          return Response.json({ error: "启动失败" }, { status: 400 });
+          return Response.json(
+            { error: "启动失败", step: "session", ...tree },
+            { status: 400 },
+          );
         }
-        return Response.json(session, { status: 201 });
+        return Response.json(
+          { session, ...tree, configWarnings: [] },
+          { status: 201 },
+        );
       }
       if (
         path === "/api/repositories/repo-1/worktrees/created/removal-preview"
@@ -304,7 +321,7 @@ test("a hybrid config offers and remembers where the session starts", async () =
     id: "hybrid22",
     name: "omp 混合",
     cmd: ["omp"],
-    hybrid: true,
+    chat: true,
   };
   open({ status: "ready", configs: [config, hybridConfig] });
   const sides = page.getByRole("radiogroup", { name: "起始端", exact: true });
@@ -321,15 +338,15 @@ test("a hybrid config offers and remembers where the session starts", async () =
     cwd: "/work",
     configId: "hybrid22",
     name: "",
-    startSide: "acp",
+    view: "chat",
   });
   await vi.waitFor(() =>
-    expect(localStorage.getItem("webmux.hybridStartSide")).toBe("acp"),
+    expect(localStorage.getItem("webmux.hybridStartSide")).toBe("chat"),
   );
 });
 
 test("the last launch choice and start side are filled in on the next open", async () => {
-  const hybridConfig = { ...otherConfig, hybrid: true };
+  const hybridConfig = { ...otherConfig, chat: true };
   localStorage.setItem("webmux.lastLaunch", `config:${hybridConfig.id}`);
   localStorage.setItem("webmux.hybridStartSide", "acp");
   open({ status: "ready", configs: [config, hybridConfig] });
@@ -343,13 +360,13 @@ test("the last launch choice and start side are filled in on the next open", asy
     cwd: "/work",
     configId: hybridConfig.id,
     name: "",
-    startSide: "acp",
+    view: "chat",
   });
 });
 
 test("each hybrid agent remembers its own start side", async () => {
-  const first = { ...otherConfig, hybrid: true };
-  const second = { ...config, id: "hybrid33", name: "omp 混合", hybrid: true };
+  const first = { ...otherConfig, chat: true };
+  const second = { ...config, id: "hybrid33", name: "omp 混合", chat: true };
   localStorage.setItem("webmux.hybridStartSide", "tui");
   localStorage.setItem(`webmux.hybridStartSide:${first.id}`, "acp");
   localStorage.setItem("webmux.lastLaunch", `config:${first.id}`);
@@ -374,8 +391,8 @@ test("a missing chat connector keeps the dialog and can start on the terminal", 
     id: "codex222",
     name: "Codex 混合",
     cmd: ["codex"],
-    hybrid: true,
-    hybridSupport: {
+    chat: true,
+    chatSupport: {
       supported: true,
       supportedAgents: [],
       agent: "codex",
@@ -413,7 +430,7 @@ test("a missing chat connector keeps the dialog and can start on the terminal", 
     cwd: "/work",
     configId: "codex222",
     name: "修复排序",
-    startSide: "tui",
+    view: "terminal",
   });
 });
 
@@ -832,10 +849,11 @@ test("a new worktree created before a failed start is reused on retry", async ()
   await expect.element(page.getByRole("alert")).toHaveTextContent("启动失败");
   expect(worktrees).toEqual([
     {
-      path: "/repos/project.worktrees/fresh",
+      repositoryId: "repo-1",
       mode: "new",
       branch: "feature/fresh",
       base: "a".repeat(40),
+      path: "/repos/project.worktrees/fresh",
     },
   ]);
   await expect.element(locationField()).toMatchTextContent(/feature\/fresh/);
@@ -882,10 +900,11 @@ test("new worktree fields survive switching location away and back", async () =>
   await vi.waitFor(() => expect(created).toHaveLength(1));
   expect(worktrees).toEqual([
     {
-      path: "/elsewhere/kept",
+      repositoryId: "repo-1",
       mode: "new",
       branch: "feature/kept",
       base: "a".repeat(40),
+      path: "/elsewhere/kept",
     },
   ]);
 });
@@ -961,7 +980,9 @@ test.each(["double-click", "enter"] as const)(
     }
     await vi.waitFor(() => expect(created).toHaveLength(1));
     expect(created).toHaveLength(1);
-    response.resolve(Response.json(session, { status: 201 }));
+    response.resolve(
+      Response.json({ session, configWarnings: [] }, { status: 201 }),
+    );
     await vi.waitFor(() => expect(location.pathname).toBe("/s/sessio23"));
   },
 );

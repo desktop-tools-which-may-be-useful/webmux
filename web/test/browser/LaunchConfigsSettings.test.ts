@@ -11,8 +11,8 @@ const config = {
   cmd: ["claude", "--resume", "a b"],
   envNames: ["API_KEY"],
   chatOptions: [],
-  hybrid: false,
-  hybridSupport: {
+  chat: false,
+  chatSupport: {
     supported: false,
     supportedAgents: [],
     reason: "unknown_agent",
@@ -143,8 +143,8 @@ test("hybrid configs are marked in settings", async () => {
             ...config,
             name: "omp",
             cmd: ["omp"],
-            hybrid: true,
-            hybridSupport: {
+            chat: true,
+            chatSupport: {
               supported: true,
               supportedAgents: [],
               agent: "omp",
@@ -203,7 +203,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       cmd: ["/bin/bash", "-l", "-i"],
       envNames: [],
       chatOptions: [],
-      hybrid: false,
+      chat: false,
     },
     {
       name: "Claude Code",
@@ -211,7 +211,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       cmd: ["claude", "--dangerously-skip-permissions"],
       envNames: [],
       chatOptions: [],
-      hybrid: true,
+      chat: true,
     },
     {
       name: "omp",
@@ -219,7 +219,7 @@ test("preset menu marks existing configs and restores one or all missing presets
       cmd: ["omp", "--auto-approve"],
       envNames: ["PI_FORCE_IMAGE_PROTOCOL"],
       chatOptions: [],
-      hybrid: true,
+      chat: true,
     },
   ];
   let configs = [
@@ -267,7 +267,7 @@ test("preset menu marks existing configs and restores one or all missing presets
             cmd: p.cmd,
             envNames: p.envNames,
             chatOptions: [],
-            hybrid: p.hybrid,
+            chat: p.chat,
           })),
         ];
         return Response.json(configs);

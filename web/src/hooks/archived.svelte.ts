@@ -1,10 +1,10 @@
 import { APIError } from "../api";
 import { loadRecoverable } from "../recoverable";
-import type { HybridRecord } from "../schemas";
+import type { ArchivedSession } from "../schemas";
 
-/** Closed and interrupted hybrid sessions the shell's pages share. */
+/** Closed and interrupted sessions the shell's pages share. */
 export interface Archived {
-  readonly records: readonly HybridRecord[];
+  readonly records: readonly ArchivedSession[];
   /**
    * Reloads the records. Resolves to their IDs, or null when they could not
    * be read; a later call supersedes an earlier one still in flight.
@@ -13,7 +13,7 @@ export interface Archived {
 }
 
 export function createArchived(): Archived {
-  let records = $state.raw<HybridRecord[]>([]);
+  let records = $state.raw<ArchivedSession[]>([]);
   let request = 0;
   return {
     get records() {

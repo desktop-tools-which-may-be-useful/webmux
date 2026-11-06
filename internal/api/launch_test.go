@@ -203,7 +203,7 @@ func TestLaunchConfigPresets(t *testing.T) {
 	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/presets", `{"name":"omp"}`, 200), &afterOne); err != nil {
 		t.Fatal(err)
 	}
-	if len(afterOne) != 2 || afterOne[0].Name != "Shell" || afterOne[1].Name != "omp" || !afterOne[1].Hybrid || !reflect.DeepEqual(afterOne[1].EnvNames, []string{"PI_FORCE_IMAGE_PROTOCOL"}) {
+	if len(afterOne) != 2 || afterOne[0].Name != "Shell" || afterOne[1].Name != "omp" || !afterOne[1].Chat || !reflect.DeepEqual(afterOne[1].EnvNames, []string{"PI_FORCE_IMAGE_PROTOCOL"}) {
 		t.Fatalf("after restore omp = %+v", afterOne)
 	}
 	h.expect("POST", "/api/launch-configs/presets", `{"name":"Shell"}`, 409)
@@ -222,47 +222,47 @@ func TestLaunchConfigPresets(t *testing.T) {
 func TestLaunchConfigHybrid(t *testing.T) {
 	h := newLaunchHarness(t, openLaunchStore(t))
 	var created struct {
-		ID            string                 `json:"id"`
-		Hybrid        bool                   `json:"hybrid"`
-		HybridSupport contract.HybridSupport `json:"hybridSupport"`
+		ID          string               `json:"id"`
+		Chat        bool                 `json:"chat"`
+		ChatSupport contract.ChatSupport `json:"chatSupport"`
 	}
 	titles := agents.Default().Titles()
-	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs", `{"name":"omp","cmd":["omp"],"hybrid":true}`, 201), &created); err != nil {
+	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs", `{"name":"omp","cmd":["omp"],"chat":true}`, 201), &created); err != nil {
 		t.Fatal(err)
 	}
-	if !created.Hybrid || !reflect.DeepEqual(created.HybridSupport, contract.HybridSupport{Supported: true, Agent: "omp", SupportedAgents: titles}) {
+	if !created.Chat || !reflect.DeepEqual(created.ChatSupport, contract.ChatSupport{Supported: true, Agent: "omp", SupportedAgents: titles}) {
 		t.Fatalf("created %+v", created)
 	}
-	h.expect("POST", "/api/launch-configs", `{"name":"Gemini","cmd":["gemini"],"hybrid":true}`, 400)
-	h.expect("PUT", "/api/launch-configs/"+created.ID, `{"name":"omp","cmd":["omp","-p","x"],"hybrid":true}`, 400)
-	h.expect("PUT", "/api/launch-configs/"+created.ID, `{"name":"omp","cmd":["omp"],"hybrid":true,"hybridSupport":{"supported":true}}`, 400)
+	h.expect("POST", "/api/launch-configs", `{"name":"Gemini","cmd":["gemini"],"chat":true}`, 400)
+	h.expect("PUT", "/api/launch-configs/"+created.ID, `{"name":"omp","cmd":["omp","-p","x"],"chat":true}`, 400)
+	h.expect("PUT", "/api/launch-configs/"+created.ID, `{"name":"omp","cmd":["omp"],"chat":true,"chatSupport":{"supported":true}}`, 400)
 	if got, _ := h.store.Get(created.ID); !got.Hybrid || len(got.Cmd) != 1 {
 		t.Fatalf("rejected updates changed the config: %+v", got)
 	}
 
 	for _, row := range []struct {
 		body string
-		want contract.HybridSupport
+		want contract.ChatSupport
 	}{
-		{`{"cmd":["opencode"]}`, contract.HybridSupport{Supported: true, Agent: "opencode", SupportedAgents: titles}},
-		{`{"cmd":["agy","--dangerously-skip-permissions"]}`, contract.HybridSupport{Supported: true, Agent: "agy", SupportedAgents: titles}},
-		{`{"cmd":["opencode","/home/u/proj"]}`, contract.HybridSupport{Reason: "directory_arg", SupportedAgents: titles}},
-		{`{"cmd":["/bin/bash","-l"]}`, contract.HybridSupport{Reason: "unknown_agent", SupportedAgents: titles}},
-		{`{"cmd":[]}`, contract.HybridSupport{Reason: "unknown_agent", SupportedAgents: titles}},
+		{`{"cmd":["opencode"]}`, contract.ChatSupport{Supported: true, Agent: "opencode", SupportedAgents: titles}},
+		{`{"cmd":["agy","--dangerously-skip-permissions"]}`, contract.ChatSupport{Supported: true, Agent: "agy", SupportedAgents: titles}},
+		{`{"cmd":["opencode","/home/u/proj"]}`, contract.ChatSupport{Reason: "directory_arg", SupportedAgents: titles}},
+		{`{"cmd":["/bin/bash","-l"]}`, contract.ChatSupport{Reason: "unknown_agent", SupportedAgents: titles}},
+		{`{"cmd":[]}`, contract.ChatSupport{Reason: "unknown_agent", SupportedAgents: titles}},
 	} {
-		var got contract.HybridSupport
-		if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/hybrid-support", row.body, 200), &got); err != nil || !reflect.DeepEqual(got, row.want) {
+		var got contract.ChatSupport
+		if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/chat-support", row.body, 200), &got); err != nil || !reflect.DeepEqual(got, row.want) {
 			t.Fatalf("hybrid-support %s = %+v, %v", row.body, got, err)
 		}
 	}
-	var claude contract.HybridSupport
-	raw := h.expect("POST", "/api/launch-configs/hybrid-support", `{"cmd":["claude"]}`, 200)
+	var claude contract.ChatSupport
+	raw := h.expect("POST", "/api/launch-configs/chat-support", `{"cmd":["claude"]}`, 200)
 	if err := json.Unmarshal(raw, &claude); err != nil || !claude.Supported || claude.Agent != "claudecode" ||
 		claude.Connector == nil || claude.Connector.Executable != "claude-agent-acp" ||
 		claude.Connector.InstallCommand != "npm install -g @agentclientprotocol/claude-agent-acp" {
 		t.Fatalf("Claude hybrid support = %+v, %v", claude, err)
 	}
-	h.expect("POST", "/api/launch-configs/hybrid-support", `{"cmd":["omp"],"x":1}`, 400)
+	h.expect("POST", "/api/launch-configs/chat-support", `{"cmd":["omp"],"x":1}`, 400)
 	if list, _ := h.store.List(); len(list) != 1 {
 		t.Fatalf("support query created a config: %+v", list)
 	}
@@ -280,7 +280,7 @@ func TestLaunchConfigAuthAndOrigin(t *testing.T) {
 		{"POST", "/api/launch-configs/presets", `{}`, "", "", 401},
 		{"POST", "/api/launch-configs/presets", `{}`, "Bearer secret", "https://evil.example", 403},
 		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "", "", 401},
-		{"POST", "/api/launch-configs/hybrid-support", `{"cmd":["omp"]}`, "", "", 401},
+		{"POST", "/api/launch-configs/chat-support", `{"cmd":["omp"]}`, "", "", 401},
 		{"POST", "/api/launch-configs", `{"name":"x","cmd":["x"]}`, "Bearer secret", "https://evil.example", 403},
 		{"GET", "/api/launch-configs", "", "Bearer secret", "https://evil.example", 403},
 		{"GET", "/api/launch-configs", "", "Bearer secret", "http://webmux.example", 200},
@@ -393,14 +393,14 @@ func TestSessionFromLaunchConfig(t *testing.T) {
 	cfg := h.create(string(body))
 	var info contract.SessionInfo
 	raw := h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`","cwd":"`+h.cwd+`","env":{},"cmd":[],"name":"From config"}`, 201)
-	if err := json.Unmarshal(raw, &info); err != nil {
+	if err := json.Unmarshal(sessionOf(t, raw), &info); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(info.Cmd, cfg.Cmd) || info.Title != "From config" || info.Cwd != h.cwd {
 		t.Fatalf("session info %+v", info)
 	}
 	var fields map[string]any
-	if err := json.Unmarshal(raw, &fields); err != nil {
+	if err := json.Unmarshal(sessionOf(t, raw), &fields); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := fields["env"]; ok {
@@ -423,7 +423,7 @@ func TestSessionFromLaunchConfigOutlivesConfig(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"name": "reader", "cmd": []string{"/bin/sh", "-c", `read line; printf 'got=%s:%s' "$line" "$FOO"`}, "env": map[string]string{"FOO": "kept"}})
 	cfg := h.create(string(body))
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`"}`, 201), &info); err != nil {
+	if err := json.Unmarshal(sessionOf(h.t, h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`"}`, 201)), &info); err != nil {
 		t.Fatal(err)
 	}
 	h.expect("DELETE", "/api/launch-configs/"+cfg.ID, "", 204)
@@ -473,7 +473,7 @@ func TestSessionConfigIDValidation(t *testing.T) {
 	// Direct commands retain their explicit environment.
 	h.expect("POST", "/api/sessions", `{"cmd":["/bin/echo","fixed"]}`, 201)
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect("POST", "/api/sessions", `{"cmd":["/bin/sh","-c","printf '<%s>' \"$BAR\""],"env":{"BAR":"direct"}}`, 201), &info); err != nil {
+	if err := json.Unmarshal(sessionOf(h.t, h.expect("POST", "/api/sessions", `{"cmd":["/bin/sh","-c","printf '<%s>' \"$BAR\""],"env":{"BAR":"direct"}}`, 201)), &info); err != nil {
 		t.Fatal(err)
 	}
 	item, err := h.manager.Get(info.ID)

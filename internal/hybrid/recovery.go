@@ -90,18 +90,18 @@ func (s *Service) Record(id string) (Record, error) {
 
 // Recoverable returns record id when it can be resumed or removed: closed
 // or interrupted. An active session fails with ErrSwitching during a
-// switch and ErrConflict otherwise.
+// switch and ErrNotArchived otherwise.
 func (s *Service) Recoverable(id string) (Record, error) {
 	rec, err := s.Record(id)
 	if err != nil || rec.State != StateActive {
 		return rec, err
 	}
 	if shell, err := s.manager.Get(id); err == nil {
-		if h := shell.Info().Hybrid; h != nil && h.Side == string(SideSwitching) {
+		if h := shell.Info().Hybrid; h != nil && h.To != "" {
 			return Record{}, ErrSwitching
 		}
 	}
-	return Record{}, fmt.Errorf("%w: 会话仍在运行，请先关闭", ErrConflict)
+	return Record{}, ErrNotArchived
 }
 
 // claim marks record id as being resumed or removed; another resume or
@@ -143,6 +143,41 @@ func (s *Service) RemoveRecord(ctx context.Context, id string) error {
 	}
 	s.log.Info("hybrid record removed", "id", id)
 	return nil
+}
+
+// forgetPoll is how often Forget checks that a session it closed has
+// recorded the close.
+const forgetPoll = 50 * time.Millisecond
+
+// Forget deletes session id's record like RemoveRecord, closing an active
+// session first and waiting, within ctx, until the close is recorded.
+func (s *Service) Forget(ctx context.Context, id string) error {
+	rec, err := s.Record(id)
+	if err != nil {
+		return err
+	}
+	if a, err := s.actor(id); err == nil && rec.State == StateActive {
+		if err := a.Close(); err != nil {
+			return err
+		}
+		tick := time.NewTicker(forgetPoll)
+		defer tick.Stop()
+		for {
+			rec, err := s.Record(id)
+			if err != nil {
+				return err
+			}
+			if rec.State != StateActive {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-tick.C:
+			}
+		}
+	}
+	return s.RemoveRecord(ctx, id)
 }
 
 // clear ends what is left of an interrupted session before its record is
@@ -418,4 +453,14 @@ func (a *actor) resumed(started chan<- error, res resumeResult) {
 	started <- nil
 	a.checkLink()
 	a.afterTransition()
+}
+
+// AgentLabel is the display title and icon of agent name, empty for an
+// agent this build does not know.
+func (s *Service) AgentLabel(name string) (title, icon string) {
+	if a, ok := s.agents.Lookup(name); ok {
+		p := a.Profile()
+		return p.Title, p.Icon
+	}
+	return "", ""
 }

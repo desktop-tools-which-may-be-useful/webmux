@@ -106,8 +106,15 @@ func (f *fixture) request(method, path string, body any, want int) []byte {
 	return data
 }
 func decode[T any](data []byte) T { var v T; must(json.Unmarshal(data, &v)); return v }
+
+// created is the session of a POST /api/sessions 201 body.
+func created(data []byte) session.Info {
+	return decode[struct {
+		Session session.Info `json:"session"`
+	}](data).Session
+}
 func (f *fixture) create(script string) string {
-	v := decode[session.Info](f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/bash", "--noprofile", "--norc", "-c", script}}, 201))
+	v := created(f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/bash", "--noprofile", "--norc", "-c", script}}, 201))
 	return v.ID
 }
 func (f *fixture) info(id string) session.Info {

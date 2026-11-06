@@ -74,8 +74,21 @@ type SessionInfo struct {
 	// ConfigID is the saved launch config used at creation, if any. It is
 	// omitted for sessions started from an explicit command.
 	ConfigID string `json:"configId,omitempty"`
-	// Hybrid describes a hybrid session; ordinary sessions omit it.
-	Hybrid *SessionHybrid `json:"hybrid,omitempty"`
+	// State is active for every running session; closed and interrupted
+	// sessions are archived, with zero runtime fields.
+	State SessionState `json:"state"`
+	// Views are the views the session supports: ["terminal"], or
+	// ["terminal","chat"] for a session with a chat view.
+	Views []SessionView `json:"views"`
+	// View is the last settled view; during a transition it is still the
+	// view the session comes from.
+	View SessionView `json:"view"`
+	// Transition is the view change in progress, null otherwise.
+	Transition *SessionTransition `json:"transition"`
+	// Agent is the agent behind the chat view, null without one.
+	Agent *SessionAgent `json:"agent"`
+	// Archive is set only on a closed or interrupted session.
+	Archive *SessionArchive `json:"archive,omitempty"`
 	// ListeningPorts are the loopback or wildcard TCP ports the session's
 	// process tree listens on, ascending; empty where detection is
 	// unsupported.
@@ -123,27 +136,129 @@ type WorkspaceReference struct {
 	WorktreeID   string `json:"worktreeId"`
 }
 
-// CreateSessionRequest is the body of POST /api/sessions. ConfigID excludes
-// Cmd and Env. StartSide (tui or acp, default tui) is only valid with a
-// config that has hybrid mode. omitempty only shapes what Go clients send;
-// the server treats an absent field like its zero value.
+// CreateSessionRequest is the body of POST /api/sessions, the only way to
+// create a session. The location is one of Cwd, Workspace and NewWorktree;
+// the command is ConfigID or Cmd with Env. View (terminal or chat, default
+// terminal) chat needs a config with the chat view; Attachments, AgentConfig
+// and PermissionMode are only valid with View chat, and Attachments need a
+// Prompt. UseInitInstruction needs Workspace or NewWorktree. omitempty only
+// shapes what Go clients send; the server treats an absent field like its
+// zero value.
 type CreateSessionRequest struct {
-	Cwd       string              `json:"cwd"`
-	Cmd       []string            `json:"cmd,omitempty"`
-	Name      string              `json:"name,omitempty"`
-	Workspace *WorkspaceReference `json:"workspace,omitempty"`
-	Env       map[string]string   `json:"env,omitempty"`
-	ConfigID  *string             `json:"configId,omitempty"`
-	StartSide HybridSide          `json:"startSide,omitempty"`
-	// Prompt is the user's first message, sent once the session is up: as
-	// the first chat prompt on the chat side, otherwise typed into the
-	// terminal with Enter. UseInitInstruction puts the repository's
-	// initialization instruction before it; it needs Workspace.
-	Prompt             string `json:"prompt,omitempty"`
-	UseInitInstruction bool   `json:"useInitInstruction,omitempty"`
+	// ClientRequestID dedupes retries for ten minutes; empty never dedupes.
+	ClientRequestID string              `json:"clientRequestId,omitempty"`
+	Cwd             string              `json:"cwd,omitempty"`
+	Workspace       *WorkspaceReference `json:"workspace,omitempty"`
+	NewWorktree     *NewWorktree        `json:"newWorktree,omitempty"`
+	Cmd             []string            `json:"cmd,omitempty"`
+	Env             map[string]string   `json:"env,omitempty"`
+	ConfigID        *string             `json:"configId,omitempty"`
+	Name            string              `json:"name,omitempty"`
 	// Labels are set on the new session; invalid labels reject the request
 	// before anything starts.
 	Labels map[string]string `json:"labels,omitempty"`
+	View   SessionView       `json:"view,omitempty"`
+	// Prompt is the user's first message, sent once the session is up: as
+	// the first chat prompt on the chat view, otherwise typed into the
+	// terminal with Enter. UseInitInstruction puts the repository's
+	// initialization instruction before it.
+	Prompt             string `json:"prompt,omitempty"`
+	UseInitInstruction bool   `json:"useInitInstruction,omitempty"`
+	// Attachments are files returned by POST /api/uploads; only their path
+	// is read. They go with the first prompt.
+	Attachments []ChatAttachment `json:"attachments,omitempty"`
+	// AgentConfig maps agent option IDs to values: the select value, or
+	// "true"/"false" for a boolean.
+	AgentConfig map[string]string `json:"agentConfig,omitempty"`
+	// PermissionMode is ask, auto or empty for the default.
+	PermissionMode ChatPermissionMode `json:"permissionMode,omitempty"`
+}
+
+// NewWorktree asks POST /api/sessions to create a worktree first. Mode is
+// new (a new Branch from Base; an empty Branch is generated together with
+// the path) or existing (check out the existing Branch). An empty Path
+// derives the directory from the branch.
+type NewWorktree struct {
+	RepositoryID string `json:"repositoryId"`
+	Mode         string `json:"mode"`
+	Branch       string `json:"branch,omitempty"`
+	Base         string `json:"base,omitempty"`
+	Path         string `json:"path,omitempty"`
+}
+
+// CreateSessionResult is the 201 body of POST /api/sessions. Worktree is
+// set only when the request created one; ConfigWarnings name each
+// AgentConfig item the agent did not take.
+type CreateSessionResult struct {
+	Session        SessionInfo `json:"session"`
+	Worktree       *Worktree   `json:"worktree,omitempty"`
+	ConfigWarnings []string    `json:"configWarnings"`
+}
+
+// Create steps, as CreateSessionFailure.Step.
+const (
+	CreateStepPrecheck = "precheck"
+	CreateStepWorktree = "worktree"
+	CreateStepSession  = "session"
+	CreateStepConfig   = "config"
+	CreateStepPrompt   = "prompt"
+)
+
+// CreateSessionFailure is the body of every failed POST /api/sessions. Step
+// is precheck (nothing was created), worktree, session, config or prompt.
+// Reason, Eligibility and Connector are those of a SessionConflict; Reason
+// is conflict for a branch or path that already exists. Worktree and
+// SessionID name what had been created; nothing is rolled back.
+type CreateSessionFailure struct {
+	Error       string          `json:"error"`
+	Step        string          `json:"step"`
+	Reason      string          `json:"reason,omitempty"`
+	Eligibility string          `json:"eligibility,omitempty"`
+	Connector   *AgentConnector `json:"connector,omitempty"`
+	Worktree    *Worktree       `json:"worktree,omitempty"`
+	SessionID   string          `json:"sessionId,omitempty"`
+}
+
+// InputKeys are the named keys of SessionInputRequest.Keys and the bytes
+// the terminal view writes for them.
+var InputKeys = map[string]string{
+	"backspace": "\x7f", "ctrl-c": "\x03", "ctrl-d": "\x04", "down": "\x1b[B", "enter": "\r",
+	"esc": "\x1b", "left": "\x1b[D", "right": "\x1b[C", "tab": "\t", "up": "\x1b[A",
+}
+
+// SessionInputRequest is the body of POST /api/sessions/{id}/input. On the
+// terminal view Text (with Enter when Submit) is one acknowledged
+// submission, then each of Keys follows; Attachments and Mode are the chat
+// view's and fail there with wrong_view. On the chat view Text and
+// Attachments are a prompt and Mode is auto (send now or queue) or steer
+// (inject into the running turn); Submit is ignored and Keys fail with
+// wrong_view.
+type SessionInputRequest struct {
+	ClientRequestID string           `json:"clientRequestId"`
+	Text            string           `json:"text"`
+	Submit          bool             `json:"submit,omitempty"`
+	Keys            []string         `json:"keys,omitempty"`
+	Attachments     []ChatAttachment `json:"attachments,omitempty"`
+	Mode            string           `json:"mode,omitempty"`
+}
+
+// SessionInputResult is the 200 body of POST /api/sessions/{id}/input. On
+// the chat view a sent prompt names its turn (TurnID, PromptID as in
+// turn.start) and a queued one its queue item, which the turn that sends it
+// names as queueItemId; steering names neither. The terminal view sets View
+// only.
+type SessionInputResult struct {
+	View     SessionView `json:"view"`
+	Queued   *bool       `json:"queued,omitempty"`
+	ItemID   string      `json:"itemId,omitempty"`
+	TurnID   string      `json:"turnId,omitempty"`
+	PromptID string      `json:"promptId,omitempty"`
+}
+
+// SessionCommandRequest is the body of commands without parameters, such
+// as POST /api/sessions/{id}/interrupt and the chat queue commands.
+type SessionCommandRequest struct {
+	ClientRequestID string `json:"clientRequestId"`
 }
 
 // LabelsUpdate is the body of PATCH /api/sessions/{id}/labels: Set adds or
@@ -164,7 +279,6 @@ type SessionDetails struct {
 	Worktree            *DetailsWorktree     `json:"worktree"`
 	LaunchConfig        *DetailsLaunchConfig `json:"launchConfig"`
 	LaunchConfigMissing bool                 `json:"launchConfigMissing,omitempty"`
-	Hybrid              *HybridRecord        `json:"hybrid"`
 	// ArtifactsDir is the session's artifacts folder when it exists; the
 	// endpoint never creates it.
 	ArtifactsDir *string           `json:"artifactsDir"`
@@ -193,10 +307,10 @@ type DetailsWorktree struct {
 
 // DetailsLaunchConfig names the saved launch config a session came from.
 type DetailsLaunchConfig struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Icon   string `json:"icon,omitempty"`
-	Hybrid bool   `json:"hybrid"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
+	Chat bool   `json:"chat"`
 }
 
 // RenameSessionRequest is the body of PATCH /api/sessions/{id}. An empty

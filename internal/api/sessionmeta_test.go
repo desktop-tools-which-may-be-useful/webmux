@@ -52,10 +52,7 @@ func TestLocalCreateRecordsParentAndLabels(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
 	}
-	var created contract.SessionInfo
-	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
-		t.Fatal(err)
-	}
+	created := createdInfo(t, w.Body.Bytes())
 	if created.ParentID != parent || created.Labels["run"] != "7" {
 		t.Fatalf("created %+v, want parent %s", created, parent)
 	}

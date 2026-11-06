@@ -61,8 +61,8 @@ func wireSchema(name string) wireRules {
 		}
 	}
 	sessionFields := func(prefix string) {
-		add(prefix, "id", "id", "generation", "configId", "workspace/repositoryId", "workspace/worktreeId")
-		add(prefix, "time", "createdAt", "lastActiveAt", "attention/since", "reportedCwd/since")
+		add(prefix, "id", "id", "generation", "configId", "workspace/repositoryId", "workspace/worktreeId", "agent/sessionId", "archive/previousAgentSessionIds/*")
+		add(prefix, "time", "createdAt", "lastActiveAt", "attention/since", "reportedCwd/since", "archive/updatedAt", "archive/interruptedAt")
 		add(prefix, "path", "cwd", "reportedCwd/path", "workspace/worktreePath")
 	}
 	worktreeFields := func(prefix string) {
@@ -90,14 +90,18 @@ func wireSchema(name string) wireRules {
 		add("/session", "path", "cmd/*")
 		add("", "id", "parentId", "children/*")
 		add("", "path", "artifactsDir")
-	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get", "session-labels", "session-attention",
+	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-create-cat",
+		"session-create-new-worktree", "session-create-new-worktree-retry":
+		sessionFields("/session")
+		add("/session", "path", "cmd/*")
+		worktreeFields("/worktree")
+	case "session-get", "session-labels", "session-attention",
 		"ws-terminal-state", "ws-terminal-state-exited", "session-get-hybrid", "session-get-hybrid-work", "ws-terminal-state-hybrid", "hybrid-resume":
 		sessionFields("")
 		add("", "path", "cmd/*")
-	case "hybrid-records":
-		add("/*", "id", "id", "configId", "agentSessionId", "previousIds/*")
-		add("/*", "time", "createdAt", "updatedAt", "interruptedAt")
-		add("/*", "path", "cwd", "cmd/*")
+	case "sessions-archived":
+		sessionFields("/*")
+		add("/*", "path", "cmd/*")
 	case "sessions-list", "sessions-list-empty":
 		sessionFields("/*")
 	case "ws-sessions-created", "ws-sessions-updated":
@@ -147,9 +151,9 @@ func wireSchema(name string) wireRules {
 		repositoryFields("")
 	case "repositories", "repositories-empty":
 		repositoryFields("/*")
-	case "quick-start", "quick-start-retry":
-		add("", "id", "sessionId")
+	case "error-409-session-create-worktree":
 		worktreeFields("/worktree")
+		add("", "id", "sessionId")
 	case "repository-branches":
 		add("", "path", "defaultParent", "branches/*/worktreePaths/*")
 	case "worktree-create":
@@ -159,6 +163,7 @@ func wireSchema(name string) wireRules {
 		add("", "time", "expiresAt")
 		worktreeFields("/worktree")
 		sessionFields("/sessions/*")
+		sessionFields("/archived/*")
 	case "code-context":
 		add("", "id", "contextId")
 		add("", "path", "rootPath")
@@ -669,6 +674,11 @@ func wireUploadBody(t *testing.T, name string, data []byte) func(*wireRequest) {
 	}
 }
 
+// field is one member of a JSON object v.
+func field(v any, key string) any {
+	return v.(map[string]any)[key]
+}
+
 func str(v any, key string) string {
 	s, _ := v.(map[string]any)[key].(string)
 	return s
@@ -709,31 +719,40 @@ func wireQuickStart(f *wireFixture) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	req := contract.QuickStartRequest{
-		ClientRequestID: "wire-quick-1", RepositoryID: str(repository, "id"), ConfigID: saved.ID, Base: "HEAD",
-		Branch: "wt/brisk-otter", Text: "修复首页排序", Config: map[string]string{"model": "smart", "effort": "high"},
+	configID := saved.ID
+	req := contract.CreateSessionRequest{
+		ClientRequestID: "wire-quick-1", ConfigID: &configID, View: contract.ViewChat,
+		NewWorktree: &contract.NewWorktree{RepositoryID: str(repository, "id"), Mode: "new", Base: "HEAD", Branch: "wt/brisk-otter"},
+		Prompt:      "修复首页排序", AgentConfig: map[string]string{"model": "smart", "effort": "high"},
 		PermissionMode: contract.ChatPermissionAsk, UseInitInstruction: true,
 	}
-	f.call("quick-start-options", "POST", "/api/quick-starts/options", contract.QuickStartOptionsRequest{RepositoryID: str(repository, "id"), ConfigID: saved.ID}, 200)
-	f.call("quick-start", "POST", "/api/quick-starts", req, 201)
-	f.call("quick-start-retry", "POST", "/api/quick-starts", req, 201)
+	f.call("launch-config-options", "POST", "/api/launch-configs/"+saved.ID+"/options", contract.LaunchOptionsRequest{RepositoryID: str(repository, "id")}, 200)
+	f.call("session-create-new-worktree", "POST", "/api/sessions", req, 201)
+	f.call("session-create-new-worktree-retry", "POST", "/api/sessions", req, 201)
 	conflict := req
 	conflict.ClientRequestID = "wire-quick-2"
-	f.call("error-409-quick-start-worktree", "POST", "/api/quick-starts", conflict, 409)
+	f.call("error-409-session-create-worktree", "POST", "/api/sessions", conflict, 409)
 	plain, err := f.launches.Create(launch.Input{Name: "plain", Cmd: []string{"/bin/sh"}})
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	notHybrid := req
-	notHybrid.ClientRequestID, notHybrid.ConfigID, notHybrid.Branch = "wire-quick-3", plain.ID, "wt/plain"
-	f.call("error-400-quick-start-not-hybrid", "POST", "/api/quick-starts", notHybrid, 400)
+	f.call("error-409-launch-config-options-no-chat", "POST", "/api/launch-configs/"+plain.ID+"/options", contract.LaunchOptionsRequest{RepositoryID: str(repository, "id")}, 409)
+	plainID := plain.ID
+	notChat := req
+	notChat.ClientRequestID, notChat.ConfigID = "wire-quick-3", &plainID
+	notChat.NewWorktree = &contract.NewWorktree{RepositoryID: str(repository, "id"), Mode: "new", Base: "HEAD", Branch: "wt/plain"}
+	f.call("error-400-session-create-not-chat", "POST", "/api/sessions", notChat, 400)
+	terminalOnly := contract.CreateSessionRequest{Cmd: []string{"/bin/sh"}, PermissionMode: contract.ChatPermissionAuto}
+	f.call("error-400-session-create-chat-field", "POST", "/api/sessions", terminalOnly, 400)
 	codexConfig, err := f.launches.Create(launch.Input{Name: "codex", Cmd: []string{fakeAgentPath(f.t, codex.Name)}, Env: map[string]string{"PATH": "/nonexistent"}, Hybrid: true})
 	if err != nil {
 		f.t.Fatal(err)
 	}
+	codexID := codexConfig.ID
 	missing := req
-	missing.ClientRequestID, missing.ConfigID, missing.Branch = "wire-quick-4", codexConfig.ID, "wt/codex"
-	f.call("error-409-quick-start-connector-missing", "POST", "/api/quick-starts", missing, 409)
+	missing.ClientRequestID, missing.ConfigID = "wire-quick-4", &codexID
+	missing.NewWorktree = &contract.NewWorktree{RepositoryID: str(repository, "id"), Mode: "new", Base: "HEAD", Branch: "wt/codex"}
+	f.call("error-409-session-create-connector-missing", "POST", "/api/sessions", missing, 409)
 	f.call("launch-list-chat-options", "GET", "/api/launch-configs", nil, 200)
 }
 
@@ -767,7 +786,7 @@ func wireSessions(f *wireFixture) {
 	// state; a shell that exits immediately can publish the exit before the
 	// handler reads Info.
 	exited := f.call("session-create-exiting", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "read _; exit 3"}, "name": "exiting"}, 201)
-	exitedID := str(exited, "id")
+	exitedID := str(field(exited, "session"), "id")
 	f.event(list, "ws-sessions-created", func(e map[string]any) bool { return e["type"] == "created" })
 	item, err := f.manager.Get(exitedID)
 	if err != nil {
@@ -793,9 +812,30 @@ func wireSessions(f *wireFixture) {
 
 	f.call("sessions-list-empty", "GET", "/api/sessions", nil, 200)
 	running := f.call("session-create", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "sleep 60"}, "name": "wire", "env": map[string]string{"WIRE": "1"}}, 201)
-	runningID := str(running, "id")
+	runningID := str(field(running, "session"), "id")
 	f.call("sessions-list", "GET", "/api/sessions", nil, 200)
+	f.call("error-400-sessions-list-state", "GET", "/api/sessions?state=recoverable", nil, 400)
 	f.call("session-get", "GET", "/api/sessions/"+runningID, nil, 200)
+	cat := f.call("session-create-cat", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/cat"}, "name": "cat"}, 201)
+	catID := str(field(cat, "session"), "id")
+	f.call("session-input", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-1", Text: "echo hi", Submit: true, Keys: []string{"up"}}, 200)
+	f.call("error-409-session-input-wrong-view", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-2", Text: "x", Mode: "steer"}, 409)
+	f.call("error-400-session-input-key", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-3", Keys: []string{"f13"}}, 400)
+	f.call("error-409-session-view-no-chat", "POST", "/api/sessions/"+catID+"/view", contract.ViewChangeRequest{ClientRequestID: "wire-view-1", To: contract.ViewChat}, 409)
+	f.call("error-409-session-chat-no-chat", "PUT", "/api/sessions/"+catID+"/chat/permission-mode", contract.ChatPermissionModeRequest{ClientRequestID: "wire-mode-1", Mode: contract.ChatPermissionAuto}, 409)
+	f.call("session-interrupt", "POST", "/api/sessions/"+catID+"/interrupt", contract.SessionCommandRequest{ClientRequestID: "wire-interrupt-1"}, 204)
+	// Ctrl-C ends cat; take it out of the list the later snapshots record.
+	if catItem, err := f.manager.Get(catID); err == nil {
+		select {
+		case <-catItem.Done():
+		case <-f.ctx.Done():
+			f.t.Fatal("cat did not exit on Ctrl-C")
+		}
+	}
+	if err := f.manager.Remove(catID); err != nil {
+		f.t.Fatal(err)
+	}
+	f.call("error-409-session-resume-not-archived", "POST", "/api/sessions/"+runningID+"/resume", contract.ResumeRequest{ClientRequestID: "wire-resume-0"}, 409)
 	f.call("session-labels", "PATCH", "/api/sessions/"+runningID+"/labels", contract.LabelsUpdate{Set: map[string]string{"run": "42", "task": "lint"}, Remove: []string{"task"}}, 200)
 	f.call("session-labels-invalid", "PATCH", "/api/sessions/"+runningID+"/labels", contract.LabelsUpdate{Set: map[string]string{"Task Name": "x"}}, 400)
 	f.call("session-details", "GET", "/api/sessions/"+runningID+"/details", nil, 200)
@@ -821,7 +861,7 @@ func wireSessions(f *wireFixture) {
 	f.frame(live, "ws-terminal-submission-missing", 5, nil)
 	f.send(live, 3, submitFrame("stale-generation", "0000000000000000", "x", "\r"))
 	f.frame(live, "ws-terminal-submission-failed", 5, nil)
-	generation := str(running, "generation")
+	generation := str(field(running, "session"), "generation")
 	f.send(live, 3, submitFrame("wire-submission", generation, "x", "\r"))
 	f.frame(live, "ws-terminal-submission-received", 5, func(p map[string]any) bool { return p["state"] == "received" })
 	f.frame(live, "ws-terminal-submission-written", 5, func(p map[string]any) bool { return p["state"] == "written" })
@@ -1104,12 +1144,12 @@ func wireChat(f *wireFixture) {
 		f.t.Fatal(err)
 	}
 	base := "/api/sessions/" + id + "/chat/"
-	f.call("chat-prompt-sent", "POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: "wire-prompt-1", Text: "hello"}, 200)
+	f.call("chat-prompt-sent", "POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: "wire-prompt-1", Text: "hello"}, 200)
 	f.event(conn, "ws-chat-events", func(e map[string]any) bool {
 		items, _ := e["items"].([]any)
 		return e["type"] == contract.ChatFrameEvents && len(items) > 0 && str(items[0], "kind") == contract.ChatEventTurnStart
 	})
-	f.call("chat-prompt-queued", "POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: "wire-prompt-2", Text: "later"}, 200)
+	f.call("chat-prompt-queued", "POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: "wire-prompt-2", Text: "later"}, 200)
 	f.event(conn, "ws-chat-state", func(e map[string]any) bool {
 		state, _ := e["state"].(map[string]any)
 		requests, _ := state["requests"].([]any)
@@ -1131,7 +1171,7 @@ func wireChat(f *wireFixture) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	f.call("chat-conflict-wrong-side", "POST", "/api/sessions/"+terminal.Info().ID+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: "wire-prompt-3", Text: "hi"}, 409)
+	f.call("chat-conflict-wrong-view", "POST", "/api/sessions/"+terminal.Info().ID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-prompt-3", Text: "hi", Mode: "steer"}, 409)
 	// omp reports its session at start but saves it with the first
 	// message: the switch is refused as not listed.
 	deadline := time.Now().Add(chatTimeout)
@@ -1141,9 +1181,9 @@ func wireChat(f *wireFixture) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	f.call("hybrid-conflict-not-eligible", "POST", "/api/sessions/"+terminal.Info().ID+"/switch", contract.HybridSwitchRequest{ClientRequestID: "wire-switch-1", To: contract.HybridSideACP}, 409)
+	f.call("hybrid-conflict-not-eligible", "POST", "/api/sessions/"+terminal.Info().ID+"/view", contract.ViewChangeRequest{ClientRequestID: "wire-switch-1", To: contract.ViewChat}, 409)
 	chat := fakeChat(f.t, f.hybrids, f.root, omp.Name)
-	f.call("hybrid-switch", "POST", "/api/sessions/"+chat+"/switch", contract.HybridSwitchRequest{ClientRequestID: "wire-switch-2", To: contract.HybridSideTUI}, 200)
+	f.call("hybrid-view", "POST", "/api/sessions/"+chat+"/view", contract.ViewChangeRequest{ClientRequestID: "wire-switch-2", To: contract.ViewTerminal}, 200)
 
 	// Codex's chat side needs the codex-acp connector, which this PATH
 	// lacks: the session is refused before anything starts.
@@ -1151,8 +1191,8 @@ func wireChat(f *wireFixture) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	f.call("hybrid-conflict-connector-missing", "POST", "/api/sessions", map[string]any{"configId": codex.ID, "cwd": f.root, "startSide": "acp"}, 409)
-	f.call("launch-hybrid-support", "POST", "/api/launch-configs/hybrid-support", contract.HybridSupportRequest{Cmd: []string{"codex"}}, 200)
+	f.call("hybrid-conflict-connector-missing", "POST", "/api/sessions", map[string]any{"configId": codex.ID, "cwd": f.root, "view": "chat"}, 409)
+	f.call("launch-hybrid-support", "POST", "/api/launch-configs/chat-support", contract.ChatSupportRequest{Cmd: []string{"codex"}}, 200)
 }
 
 // wireHybridRecords pins the record list, the resume conflicts (a deleted
@@ -1193,7 +1233,7 @@ func wireHybridRecords(f *wireFixture) {
 		}
 	}
 	closeShell()
-	f.call("hybrid-records", "GET", "/api/hybrid-sessions?state=recoverable", nil, 200)
+	f.call("sessions-archived", "GET", "/api/sessions?state=archived", nil, 200)
 
 	// The agent lost the session; another one in the directory is offered.
 	if err := os.Remove(filepath.Join(store, "sessions", sid+".json")); err != nil {
@@ -1204,8 +1244,8 @@ func wireHybridRecords(f *wireFixture) {
 		f.t.Fatal(err)
 	}
 	path := "/api/sessions/" + id + "/resume"
-	f.call("hybrid-resume-session-missing", "POST", path, contract.HybridResumeRequest{ClientRequestID: "wire-resume-1", Side: contract.HybridSideACP}, 409)
-	f.call("hybrid-resume", "POST", path, contract.HybridResumeRequest{ClientRequestID: "wire-resume-2", Side: contract.HybridSideACP, AgentSessionID: "wirecandidate"}, 200)
+	f.call("hybrid-resume-session-missing", "POST", path, contract.ResumeRequest{ClientRequestID: "wire-resume-1", View: contract.ViewChat}, 409)
+	f.call("hybrid-resume", "POST", path, contract.ResumeRequest{ClientRequestID: "wire-resume-2", View: contract.ViewChat, AgentSessionID: "wirecandidate"}, 200)
 	if item, err = f.manager.Get(id); err != nil {
 		f.t.Fatal(err)
 	}
@@ -1213,8 +1253,8 @@ func wireHybridRecords(f *wireFixture) {
 	if err := f.launches.Delete(saved.ID); err != nil {
 		f.t.Fatal(err)
 	}
-	f.call("hybrid-resume-config-missing", "POST", path, contract.HybridResumeRequest{ClientRequestID: "wire-resume-3", Side: contract.HybridSideTUI}, 409)
-	f.call("hybrid-record-delete", "DELETE", "/api/hybrid-sessions/"+id, nil, 204)
+	f.call("hybrid-resume-config-missing", "POST", path, contract.ResumeRequest{ClientRequestID: "wire-resume-3", View: contract.ViewTerminal}, 409)
+	f.call("session-forget", "DELETE", "/api/sessions/"+id+"?forget=1", nil, 204)
 }
 
 // closed reads until the server closes conn and records the close code and

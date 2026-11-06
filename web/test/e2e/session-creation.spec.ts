@@ -125,7 +125,7 @@ test("full split creation uses saved configs and keeps the launch subdirectory a
   const response = await request.post("/api/sessions", {
     data: { cwd, cmd: ["/bin/sh", "-i"], name: "Original" },
   });
-  const original = await response.json();
+  const original = (await response.json()).session;
   expect(original.workspace.repositoryId).toBe(repo.id);
   const configResponse = await request.post("/api/launch-configs", {
     data: {
@@ -190,7 +190,7 @@ test("split creation retains a new worktree across repository changes after comm
   const response = await request.post("/api/sessions", {
     data: { cwd: repo.anchorPath, cmd: ["/bin/sh", "-i"], name: "Original" },
   });
-  const original = await response.json();
+  const original = (await response.json()).session;
   await page.goto(`/s/${original.id}`);
   await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "新建会话…", exact: true }).click();

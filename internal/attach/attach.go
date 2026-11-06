@@ -16,6 +16,7 @@ import (
 	"math"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,9 +72,46 @@ const (
 // ErrNotFound means the session does not exist.
 var ErrNotFound = errors.New("session not found")
 
-// ErrMoved means a hybrid session is on its chat side (or switching), so
-// its terminal cannot be attached.
-var ErrMoved = errors.New("会话在聊天视图，请在 Web 端操作，或切回终端后重新附着")
+// ErrMoved means the session is on its chat view (or changing views), so
+// its terminal cannot be attached. Run wraps it in a *MovedError naming
+// the view.
+var ErrMoved = errors.New("会话不在终端视图")
+
+// MovedError is a refused attachment: the server closed with 4409 before
+// the replay. To is the view named in the close reason, empty when the
+// reason names none.
+type MovedError struct {
+	To contract.SessionView
+}
+
+func (e *MovedError) Error() string {
+	if e.To == contract.ViewChat {
+		return "会话在聊天视图，请用 webmux view SESSION terminal 切回终端后重新附着，或在 Web 端操作"
+	}
+	return "会话正在切换视图，请稍后重新附着"
+}
+
+func (e *MovedError) Unwrap() error { return ErrMoved }
+
+// movedPrefix starts the close reason of a 4409; the view follows it.
+const movedPrefix = "session moved: "
+
+// movedTo is the view a 4409 close reason names: terminal or chat.
+func movedTo(err error) contract.SessionView {
+	var closeErr websocket.CloseError
+	if !errors.As(err, &closeErr) {
+		return ""
+	}
+	view, ok := strings.CutPrefix(closeErr.Reason, movedPrefix)
+	if !ok {
+		return ""
+	}
+	switch v := contract.SessionView(strings.TrimSpace(view)); v {
+	case contract.ViewTerminal, contract.ViewChat:
+		return v
+	}
+	return ""
+}
 
 // Terminal is a native terminal in raw mode.
 type Terminal interface {
@@ -98,9 +136,11 @@ type Options struct {
 type Result struct {
 	// Detached reports the detach key; the session keeps running.
 	Detached bool
-	// Moved reports that a hybrid session switched to its chat side while
-	// attached: a passive detach, the session keeps running.
-	Moved bool
+	// Moved reports that the session changed to its chat view while
+	// attached (close code 4409): a passive detach, the session keeps
+	// running. MovedTo is the view the close reason names.
+	Moved   bool
+	MovedTo contract.SessionView
 	// Exited reports that the session's process ended with ExitCode.
 	Exited   bool
 	ExitCode int
@@ -553,9 +593,9 @@ func (a *attachment) pumpOutput(ctx context.Context) readResult {
 				return readResult{err: ErrNotFound}
 			case closeMoved:
 				if attached {
-					return readResult{result: Result{Moved: true}}
+					return readResult{result: Result{Moved: true, MovedTo: movedTo(err)}}
 				}
-				return readResult{err: ErrMoved}
+				return readResult{err: &MovedError{To: movedTo(err)}}
 			case closeSlow:
 				return readResult{err: errors.New("connection lost: the terminal could not keep up with the session output")}
 			}

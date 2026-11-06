@@ -1,6 +1,7 @@
 {
   "body": {
     "session": {
+      "agent": null,
       "attention": null,
       "clients": 0,
       "cmd": [
@@ -19,8 +20,14 @@
       "preview": "",
       "reportedCwd": null,
       "rows": 24,
+      "state": "active",
       "status": "exited",
       "title": "exiting",
+      "transition": null,
+      "view": "terminal",
+      "views": [
+        "terminal"
+      ],
       "workspace": null
     },
     "type": "updated"

@@ -104,24 +104,25 @@ func TestCreateHybridSession(t *testing.T) {
 	h := newHybridAPI(t, nil)
 	id := h.config("omp", true)
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q,"startSide":"tui"}`, id), 201), &info); err != nil {
+	if err := json.Unmarshal(sessionOf(h.t, h.expect(fmt.Sprintf(`{"configId":%q,"view":"terminal"}`, id), 201)), &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.Hybrid == nil || info.Hybrid.Side != contract.HybridSideTUI || info.Hybrid.State != contract.HybridStateActive || info.Hybrid.Agent != "omp" || info.ConfigID != id {
-		t.Fatalf("created %+v hybrid %+v", info, info.Hybrid)
+	if info.Agent == nil || info.View != contract.ViewTerminal || info.State != contract.SessionStateActive || info.Agent.Name != "omp" || info.ConfigID != id ||
+		len(info.Views) != 2 || info.Transition != nil {
+		t.Fatalf("created %+v agent %+v", info, info.Agent)
 	}
 	file, err := os.ReadFile(filepath.Join(h.state, "hybrid-sessions.json"))
 	if err != nil || !strings.Contains(string(file), info.ID) || strings.Contains(string(file), "secret-value") {
 		t.Fatalf("record file %s: %v", file, err)
 	}
-	// Ordinary configs are unchanged: no hybrid object.
+	// Ordinary configs have the terminal view only.
 	plain := h.config("plain", false)
 	var ordinary map[string]any
-	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q}`, plain), 201), &ordinary); err != nil {
+	if err := json.Unmarshal(sessionOf(h.t, h.expect(fmt.Sprintf(`{"configId":%q}`, plain), 201)), &ordinary); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := ordinary["hybrid"]; ok {
-		t.Fatalf("ordinary session has hybrid: %v", ordinary)
+	if _, ok := ordinary["hybrid"]; ok || ordinary["agent"] != nil || fmt.Sprint(ordinary["views"]) != "[terminal]" {
+		t.Fatalf("ordinary session %v", ordinary)
 	}
 }
 
@@ -129,9 +130,10 @@ func TestCreateSessionStartSideNeedsHybridConfig(t *testing.T) {
 	h := newHybridAPI(t, nil)
 	plain := h.config("plain", false)
 	for _, body := range []string{
-		fmt.Sprintf(`{"configId":%q,"startSide":"acp"}`, plain),
-		`{"cmd":["sh"],"startSide":"tui"}`,
-		fmt.Sprintf(`{"configId":%q,"startSide":"chat"}`, h.config("omp", true)),
+		fmt.Sprintf(`{"configId":%q,"view":"chat"}`, plain),
+		`{"cmd":["sh"],"view":"chat"}`,
+		fmt.Sprintf(`{"configId":%q,"startSide":"acp"}`, h.config("omp-old", true)),
+		fmt.Sprintf(`{"configId":%q,"view":"other"}`, h.config("omp", true)),
 	} {
 		h.expect(body, 400)
 	}
@@ -156,10 +158,10 @@ func TestCreateHybridSessionStoreUnavailable(t *testing.T) {
 		method, path string
 		body         any
 	}{
-		{"GET", "/api/hybrid-sessions?state=recoverable", nil},
-		{"GET", "/api/hybrid-sessions/abcdefgh", nil},
-		{"DELETE", "/api/hybrid-sessions/abcdefgh", nil},
-		{"POST", "/api/sessions/abcdefgh/resume", contract.HybridResumeRequest{ClientRequestID: chatRID(), Side: contract.HybridSideTUI}},
+		{"GET", "/api/sessions?state=archived", nil},
+		{"GET", "/api/sessions/abcdefgh", nil},
+		{"DELETE", "/api/sessions/abcdefgh?forget=1", nil},
+		{"POST", "/api/sessions/abcdefgh/resume", contract.ResumeRequest{ClientRequestID: chatRID(), View: contract.ViewTerminal}},
 	} {
 		if body := h.expectCommand(req.method, req.path, req.body, 503); !strings.Contains(string(body), "hybrid-sessions.json") {
 			t.Fatalf("%s %s: 503 body lacks the store path: %s", req.method, req.path, body)
@@ -190,7 +192,7 @@ func TestCreateHybridSessionRecordLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	var conflict contract.HybridConflict
+	var conflict contract.SessionConflict
 	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 409), &conflict); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +200,7 @@ func TestCreateHybridSessionRecordLimit(t *testing.T) {
 		t.Fatalf("conflict %+v", conflict)
 	}
 	// Removing an old record makes room again.
-	h.expectCommand("DELETE", "/api/hybrid-sessions/limaaaaa", nil, 204)
+	h.expectCommand("DELETE", "/api/sessions/limaaaaa?forget=1", nil, 204)
 	h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp-again", true)), 201)
 }
 
@@ -220,12 +222,12 @@ func TestForceRemoveWorktreeForgetsHybridSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	configID := h.config("omp", true)
-	outside := h.createSide(configID, contract.HybridSideTUI)
+	outside := h.createSide(configID, contract.ViewTerminal)
 	h.closeSession(outside)
 	start := func() string {
 		var info contract.SessionInfo
-		ref := fmt.Sprintf(`{"configId":%q,"startSide":"tui","workspace":{"repositoryId":%q,"worktreeId":%q}}`, configID, repository.ID, tree.ID)
-		if err := json.Unmarshal(h.expect(ref, 201), &info); err != nil {
+		ref := fmt.Sprintf(`{"configId":%q,"view":"terminal","workspace":{"repositoryId":%q,"worktreeId":%q}}`, configID, repository.ID, tree.ID)
+		if err := json.Unmarshal(sessionOf(h.t, h.expect(ref, 201)), &info); err != nil {
 			t.Fatal(err)
 		}
 		return info.ID

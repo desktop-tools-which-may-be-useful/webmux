@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -189,17 +190,18 @@ func TestRunInWorktrees(t *testing.T) {
 		t.Fatalf("auto association: %d %q %q", code, stdout, stderr)
 	}
 	// A new worktree is created, used and pinned to the home page.
-	stdout, stderr, code = f.cli(t, "run", "--detach", "--json", "--new-worktree", "feat/cli", "--repo", repo, "--", "sleep", "30")
+	stdout, stderr, code = f.cli(t, "run", "--detach", "--json", "--new-worktree", "--branch", "feat/cli", "--repo", repo, "--", "sleep", "30")
 	if code != 0 {
 		t.Fatalf("--new-worktree: %d %q %q", code, stdout, stderr)
 	}
 	var created struct {
-		Session contract.SessionInfo `json:"session"`
+		Session  contract.SessionInfo `json:"session"`
+		Worktree *contract.Worktree   `json:"worktree"`
 	}
 	_ = json.Unmarshal([]byte(stdout), &created)
 	want := filepath.Join(filepath.Dir(repo), "app.worktrees", "cli")
-	if created.Session.Cwd != want || created.Session.Workspace == nil {
-		t.Fatalf("session %+v, want cwd %s", created.Session, want)
+	if created.Session.Cwd != want || created.Session.Workspace == nil || created.Worktree == nil || created.Worktree.Path != want {
+		t.Fatalf("session %+v worktree %+v, want cwd %s", created.Session, created.Worktree, want)
 	}
 	var settings contract.SettingsSnapshot
 	if err := client.Do(ctx, http.MethodGet, "/api/settings", nil, &settings); err != nil {
@@ -217,29 +219,54 @@ func TestRunInWorktrees(t *testing.T) {
 	if _, _, code = f.cli(t, "run", "--detach", "--worktree", want, "--cwd", f.dir, "--", "true"); code != contract.ExitUsage {
 		t.Fatalf("--cwd outside the worktree: %d", code)
 	}
-	if _, _, code = f.cli(t, "run", "--detach", "--worktree", want, "--new-worktree", "x", "--", "true"); code != contract.ExitUsage {
+	if _, _, code = f.cli(t, "run", "--detach", "--worktree", want, "--new-worktree", "--", "true"); code != contract.ExitUsage {
 		t.Fatalf("--worktree with --new-worktree: %d", code)
 	}
-	if _, _, code = f.cli(t, "run", "--detach", "--new-worktree", "x", "--repo", repo, "--cwd", repo, "--", "true"); code != contract.ExitUsage {
+	if _, _, code = f.cli(t, "run", "--detach", "--new-worktree", "--repo", repo, "--cwd", repo, "--", "true"); code != contract.ExitUsage {
 		t.Fatalf("--cwd with --new-worktree: %d", code)
 	}
-	if _, _, code = f.cli(t, "run", "--attach", "--start-side", "chat", "--launch-config", "x", "--"); code != contract.ExitUsage {
-		t.Fatalf("--attach with --start-side chat: %d", code)
+	// The old --new-worktree BRANCH is refused, not run as a command.
+	if _, stderr, code = f.cli(t, "run", "--detach", "--new-worktree", "fix/old", "--repo", repo, "--", "true"); code != contract.ExitUsage || !strings.Contains(stderr, "--branch") {
+		t.Fatalf("--new-worktree BRANCH: %d %q", code, stderr)
 	}
-	// The dry run shows the cwd and workspace the real request carries.
-	stdout, _, code = f.cli(t, "run", "--dry-run", "--new-worktree", "feat/dry", "--repo", repo, "--", "true")
-	if code != 0 || !strings.Contains(stdout, `"cwd": "`+filepath.Join(filepath.Dir(repo), "app.worktrees", "dry")+`"`) || !strings.Contains(stdout, "<created first>") {
+	// An existing branch is a worktree-step conflict; nothing else is made.
+	before := len(sessions(t, f))
+	if _, stderr, code = f.cli(t, "run", "--detach", "--new-worktree", "--branch", "feat/cli", "--repo", repo, "--", "true"); code != contract.ExitError || !strings.Contains(stderr, "worktree step") {
+		t.Fatalf("existing branch: %d %q", code, stderr)
+	}
+	if after := len(sessions(t, f)); after != before {
+		t.Fatalf("a failed worktree step started a session: %d -> %d", before, after)
+	}
+	// Without --branch the server names it wt/<date>-<time>.
+	stdout, stderr, code = f.cli(t, "run", "--detach", "--json", "--new-worktree", "--no-pin", "--repo", repo, "--", "sleep", "30")
+	created.Worktree = nil
+	if err := json.Unmarshal([]byte(stdout), &created); code != 0 || err != nil || created.Worktree == nil ||
+		created.Worktree.Branch == nil || !strings.HasPrefix(*created.Worktree.Branch, "wt/") {
+		t.Fatalf("generated branch: %d %q %q", code, stdout, stderr)
+	}
+	if err := client.Do(ctx, http.MethodGet, "/api/settings", nil, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if got := settings.Values.HomeWorktrees[created.Session.Workspace.RepositoryID]; len(got) != 2 {
+		t.Fatalf("--no-pin pinned the worktree: %v", got)
+	}
+	// The dry run shows the request without creating anything.
+	stdout, _, code = f.cli(t, "run", "--dry-run", "--new-worktree", "--branch", "feat/dry", "--repo", repo, "--", "true")
+	if code != 0 || !strings.Contains(stdout, `"branch": "feat/dry"`) || !strings.Contains(stdout, `"mode": "new"`) {
 		t.Fatalf("--dry-run --new-worktree: %d %q", code, stdout)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(repo), "app.worktrees", "dry")); !os.IsNotExist(err) {
+		t.Fatalf("--dry-run created the worktree: %v", err)
 	}
 	// A given --worktree-path is resolved as the real creation resolves it.
 	messy := filepath.Dir(repo) + "/x/../dry2/"
-	stdout, _, code = f.cli(t, "run", "--dry-run", "--new-worktree", "feat/dry2", "--worktree-path", messy, "--repo", repo, "--", "true")
-	if code != 0 || !strings.Contains(stdout, `"cwd": "`+filepath.Join(filepath.Dir(repo), "dry2")+`"`) {
+	stdout, _, code = f.cli(t, "run", "--dry-run", "--new-worktree", "--branch", "feat/dry2", "--worktree-path", messy, "--repo", repo, "--", "true")
+	if code != 0 || !strings.Contains(stdout, `"path": "`+filepath.Join(filepath.Dir(repo), "dry2")+`"`) {
 		t.Fatalf("--dry-run --worktree-path: %d %q", code, stdout)
 	}
 }
 
-func TestChatNewStartsAnAgentAndWaits(t *testing.T) {
+func TestRunStartsAnAgentOnItsChatViewAndReplies(t *testing.T) {
 	t.Parallel()
 	agent := fakeAgent(t)
 	f := newFixture(t, "")
@@ -251,7 +278,7 @@ func TestChatNewStartsAnAgentAndWaits(t *testing.T) {
 	if err := client.Do(ctx, http.MethodPost, "/api/repositories", contract.RegisterRepositoryRequest{Path: repo}, nil); err != nil {
 		t.Fatal(err)
 	}
-	config := contract.LaunchConfigInput{Name: "Fake", Cmd: []string{agent}, Env: map[string]string{"FAKEAGENT_STORE": t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms"}, Hybrid: true}
+	config := contract.LaunchConfigInput{Name: "Fake", Cmd: []string{agent}, Env: map[string]string{"FAKEAGENT_STORE": t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms"}, Chat: true}
 	if err := client.Do(ctx, http.MethodPost, "/api/launch-configs", config, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -259,24 +286,37 @@ func TestChatNewStartsAnAgentAndWaits(t *testing.T) {
 	if code != 0 || !json.Valid([]byte(stdout)) {
 		t.Fatalf("options: %d %q %q", code, stdout, stderr)
 	}
-	stdout, stderr, code = f.cli(t, "chat", "new", "--repo", repo, "--agent", "Fake", "--label", "task=t", "--wait", "--timeout", "40s", "hello agent")
+	attachment := filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(attachment, []byte("see this"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code = f.cli(t, "run", "--new-worktree", "--repo", repo, "--launch-config", "Fake", "--view", "chat",
+		"--label", "task=t", "--attach-file", attachment, "--prompt", "hello agent", "--reply", "--timeout", "40s")
 	if code != 0 || strings.TrimSpace(stdout) == "" {
-		t.Fatalf("chat new --wait: %d %q %q", code, stdout, stderr)
+		t.Fatalf("run --view chat --reply: %d %q %q", code, stdout, stderr)
 	}
 	stdout, _, _ = f.cli(t, "ls", "--label", "task=t", "--json")
-	if !strings.Contains(stdout, `"hybrid"`) {
-		t.Fatalf("the new session is not hybrid: %q", stdout)
+	var list []contract.SessionInfo
+	if err := json.Unmarshal([]byte(stdout), &list); err != nil || len(list) != 1 || list[0].View != contract.ViewChat ||
+		!slices.Contains(list[0].Views, contract.ViewChat) || list[0].Workspace == nil || strings.Contains(stdout, `"hybrid"`) {
+		t.Fatalf("the new session is not on its chat view in a worktree: %q", stdout)
 	}
-	// A terminal start has no chat turn to wait for; a message is required.
-	if _, _, code := f.cli(t, "chat", "new", "--repo", repo, "--agent", "Fake", "--terminal", "--wait", "x"); code != contract.ExitUsage {
-		t.Fatalf("--terminal --wait: %d", code)
+	// --reply needs the chat view and a first prompt; terminal-only
+	// configs cannot start on chat.
+	if _, _, code := f.cli(t, "run", "--launch-config", "Fake", "--view", "chat", "--reply"); code != contract.ExitUsage {
+		t.Fatalf("--reply without --prompt: %d", code)
 	}
-	if _, stderr, code := f.cli(t, "chat", "new", "--repo", repo, "--agent", "Fake"); code != contract.ExitUsage || !strings.Contains(stderr, "message is required") {
-		t.Fatalf("no message: %d %q", code, stderr)
+	if err := client.Do(ctx, http.MethodPost, "/api/launch-configs", contract.LaunchConfigInput{Name: "Plain", Cmd: []string{"sleep", "30"}}, nil); err != nil {
+		t.Fatal(err)
 	}
-	// Unknown agent names list the hybrid configs.
-	_, stderr, code = f.cli(t, "chat", "new", "--repo", repo, "--agent", "nope", "x")
-	if code != contract.ExitUsage || !strings.Contains(stderr, `"Fake"`) {
-		t.Fatalf("unknown agent: %d %q", code, stderr)
+	if _, stderr, code := f.cli(t, "run", "--launch-config", "Plain", "--view", "chat"); code != contract.ExitUsage || !strings.Contains(stderr, "chat view") {
+		t.Fatalf("--view chat on a terminal config: %d %q", code, stderr)
+	}
+	if _, stderr, code := f.cli(t, "launch-config", "options", "Plain", "--repo", repo); code != contract.ExitError || !strings.Contains(stderr, "no chat view") {
+		t.Fatalf("options of a terminal config: %d %q", code, stderr)
+	}
+	// The removed quick start command is unknown.
+	if _, _, code := f.cli(t, "chat", "new", "--agent", "Fake", "x"); code != contract.ExitUsage {
+		t.Fatalf("chat new: %d", code)
 	}
 }

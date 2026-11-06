@@ -4,8 +4,6 @@
     "generation": "<generation#2>",
     "next": 3,
     "state": {
-      "agent": "omp",
-      "agentSessionId": "<agentSessionId#1>",
       "authRequired": false,
       "commands": [
         {
@@ -78,7 +76,6 @@
       },
       "recovery": null,
       "requests": [],
-      "side": "acp",
       "steering": true,
       "turn": {
         "running": false

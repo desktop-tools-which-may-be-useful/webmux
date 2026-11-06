@@ -363,7 +363,7 @@ func (c *chatStream) read(ctx context.Context) (contract.ChatFrame, error) {
 	_, data, err := c.conn.Read(ctx)
 	if err != nil {
 		if websocket.CloseStatus(err) == 4404 {
-			return contract.ChatFrame{}, errors.New("the session is not a hybrid session or no longer exists")
+			return contract.ChatFrame{}, errors.New("the session has no chat view or no longer exists")
 		}
 		return contract.ChatFrame{}, err
 	}

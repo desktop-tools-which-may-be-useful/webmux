@@ -54,7 +54,7 @@ test("configure, switch and stop tunnels without ending the PTY session", async 
     },
   });
   expect(created.status()).toBe(201);
-  const session = await created.json();
+  const session = (await created.json()).session;
   await page.goto(server.baseURL + `/settings#token=${token}`);
   await page.getByRole("link", { name: "管理公网访问", exact: true }).click();
   await expect(page.getByText("已就绪", { exact: true })).toBeVisible();

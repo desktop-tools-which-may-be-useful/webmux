@@ -1,0 +1,51 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "agent": {
+        "icon": "pi",
+        "name": "omp",
+        "sessionId": "<sessionId#1>",
+        "title": "omp"
+      },
+      "archive": {
+        "configMissing": false,
+        "interruptedAt": null,
+        "previousAgentSessionIds": [],
+        "queuedCount": 0,
+        "updatedAt": "<time>"
+      },
+      "attention": null,
+      "clients": 0,
+      "cmd": [
+        "<fakeagent>/omp"
+      ],
+      "cols": 0,
+      "configId": "<id#1>",
+      "createdAt": "<time>",
+      "cwd": "<repo>",
+      "exitCode": null,
+      "generation": "",
+      "id": "<id#2>",
+      "lastActiveAt": "<time>",
+      "listeningPorts": [],
+      "preview": "",
+      "reportedCwd": null,
+      "rows": 0,
+      "state": "closed",
+      "status": "exited",
+      "title": "agent",
+      "transition": null,
+      "view": "chat",
+      "views": [
+        "terminal",
+        "chat"
+      ],
+      "workspace": {
+        "repositoryId": "<repositoryId#1>",
+        "worktreeId": "<worktreeId#1>",
+        "worktreePath": "<repo>"
+      }
+    }
+  ]
+}

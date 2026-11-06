@@ -135,7 +135,7 @@ func (e Env) complete(ctx context.Context, words []string) []string {
 			}
 		}
 	}
-	for _, v := range e.argumentValues(ctx, c) {
+	for _, v := range e.argumentValues(ctx, c, rest) {
 		add(v[0], v[1])
 	}
 	return out
@@ -144,13 +144,13 @@ func (e Env) complete(ctx context.Context, words []string) []string {
 // optionValues lists candidates for an option's value.
 func (e Env) optionValues(ctx context.Context, name string) [][2]string {
 	switch name {
-	case "start-side", "to", "side":
+	case "view":
 		return [][2]string{{"terminal", ""}, {"chat", ""}}
 	case "mode":
 		return [][2]string{{"auto", "send now or queue"}, {"steer", "inject into the running turn"}}
 	case "state":
 		var out [][2]string
-		for _, s := range hybridStates {
+		for _, s := range listStates {
 			out = append(out, [2]string{s, ""})
 		}
 		return out
@@ -170,7 +170,7 @@ func (e Env) optionValues(ctx context.Context, name string) [][2]string {
 		return out
 	case "kind":
 		return [][2]string{{"notify", ""}, {"done", ""}, {"error", ""}, {"question", ""}}
-	case "launch-config", "config-id", "agent":
+	case "launch-config", "config-id":
 		return e.launchConfigValues(ctx)
 	case "repo":
 		return e.repositoryValues(ctx)
@@ -182,9 +182,14 @@ func (e Env) optionValues(ctx context.Context, name string) [][2]string {
 	return nil
 }
 
-// argumentValues lists candidates for a command's positional argument.
-func (e Env) argumentValues(ctx context.Context, c *Command) [][2]string {
+// argumentValues lists candidates for a command's positional argument;
+// rest are the words already typed after the command.
+func (e Env) argumentValues(ctx context.Context, c *Command, rest []string) [][2]string {
 	switch {
+	case c.Name == "view" && positionals(rest) == 1:
+		return [][2]string{{"terminal", ""}, {"chat", ""}}
+	case c.Name == "resume" || c.Name == "rm" && slices.Contains(rest, "--forget"):
+		return e.archivedValues(ctx)
 	case c.Name == "guide":
 		return topicValues()
 	case c.Name == "completion":
@@ -205,8 +210,6 @@ func (e Env) argumentValues(ctx context.Context, c *Command) [][2]string {
 		return append([][2]string{{"self", "the current session"}}, e.sessionValues(ctx)...)
 	case strings.Contains(c.Args, "REPO"):
 		return e.repositoryValues(ctx)
-	case strings.HasPrefix(c.Args, "RECORD"):
-		return e.recordValues(ctx)
 	}
 	return nil
 }
@@ -248,18 +251,28 @@ func (e Env) sessionValues(ctx context.Context) [][2]string {
 	return out
 }
 
-func (e Env) recordValues(ctx context.Context) [][2]string {
-	var list []contract.HybridRecord
-	if !e.query(ctx, "/api/hybrid-sessions", &list) {
+// positionals counts the words of rest that are not options; an option's
+// value counts too, which is good enough for completion.
+func positionals(rest []string) int {
+	n := 0
+	for _, w := range rest {
+		if !strings.HasPrefix(w, "-") {
+			n++
+		}
+	}
+	return n
+}
+
+// archivedValues lists the closed and interrupted sessions, for resume and
+// rm --forget.
+func (e Env) archivedValues(ctx context.Context) [][2]string {
+	var list []contract.SessionInfo
+	if !e.query(ctx, "/api/sessions?state=archived", &list) {
 		return nil
 	}
 	out := make([][2]string, 0, len(list))
-	for _, r := range list {
-		name := r.Name
-		if name == "" {
-			name = r.Title
-		}
-		out = append(out, [2]string{r.ID, string(r.State) + " " + r.Agent + " " + oneLine(name, 40)})
+	for _, s := range list {
+		out = append(out, [2]string{s.ID, string(s.State) + " " + oneLine(sessionName(s), 40)})
 	}
 	return out
 }

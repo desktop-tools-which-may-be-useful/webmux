@@ -19,7 +19,8 @@ import (
 func TestGuideRoutes(t *testing.T) {
 	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 	t.Cleanup(func() { m.Shutdown(context.Background()) })
-	guide := &agentguide.Instance{Version: "7.7.7", LocalURL: "http://127.0.0.1:7681", Bin: "/opt/webmux/bin/webmux"}
+	directory := "# 命令目录\n\n- `webmux ls [options]`: List sessions.\n"
+	guide := &agentguide.Instance{Guide: agentguide.New(directory), Version: "7.7.7", LocalURL: "http://127.0.0.1:7681", Bin: "/opt/webmux/bin/webmux"}
 	guide.SetSocket("/run/user/1000/webmux/webmux.sock")
 	deps := testDeps(t, Deps{Manager: m, Guide: guide, Config: config.Config{Token: "login-secret", Listen: "127.0.0.1:7681"}})
 	tcp := New(deps)
@@ -43,6 +44,10 @@ func TestGuideRoutes(t *testing.T) {
 	if w.Code != 200 || w.Header().Get("Content-Type") != "text/markdown; charset=utf-8" {
 		t.Fatalf("topic: %d %v", w.Code, w.Header())
 	}
+	// The commands topic is the directory cmd/ rendered and injected.
+	if w := get(tcp, "/llms/commands.md"); w.Code != 200 || w.Body.String() != directory {
+		t.Fatalf("commands topic: %d %q", w.Code, w.Body.String())
+	}
 	for _, missing := range []string{"/llms/token.md", "/llms/connect"} {
 		if w := get(tcp, missing); w.Code != http.StatusNotFound {
 			t.Errorf("%s: %d", missing, w.Code)
@@ -53,7 +58,8 @@ func TestGuideRoutes(t *testing.T) {
 		t.Errorf("unclean path served: %q", w.Body.String())
 	}
 	w = get(tcp, "/llms-full.txt")
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "# 操作守则") || strings.Contains(w.Body.String(), "/opt/webmux") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "# 操作守则") || strings.Contains(w.Body.String(), "/opt/webmux") ||
+		!strings.Contains(w.Body.String(), directory) || strings.Contains(w.Body.String(), "Options:") {
 		t.Fatalf("tcp full: %d", w.Code)
 	}
 	// The Host check still applies.

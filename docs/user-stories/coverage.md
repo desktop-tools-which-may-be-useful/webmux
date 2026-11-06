@@ -11,7 +11,7 @@
 | 统一上下文新建会话、十一款 CLI 启动配置、目录浏览与创建、名称和命令                                 | US-B01–US-B07                                       |
 | 设置页自定义启动配置与图标、启动配置 API 与按配置启动                                               | US-B01；US-B08                                      |
 | Claude Code / Codex / Copilot CLI 启动前预写文件夹信任记录与 `agent_pretrust` 开关                  | US-B09；US-K04                                      |
-| 混合模式勾选、Claude Code 与 Antigravity CLI 默认混合、hybrid-support 判定、起始端选择              | US-Q01–US-Q02；US-B01；US-B08                       |
+| 混合模式勾选（`chat`）、Claude Code 与 Antigravity CLI 默认混合、`chat-support` 判定、起始视图选择  | US-Q01–US-Q02；US-B01；US-B08                       |
 | 终端 ↔ 聊天切换、Claude 注册记录身份/候选/外部占用、中断等待、草稿退回与回滚                        | US-Q03–US-Q04                                       |
 | 聊天视图时间线、代码链接打开代码浏览器、权限与表单、权限模式、配置项、命令菜单及 Claude 配置重应用  | US-Q05–US-Q07                                       |
 | 聊天端服务端队列、去重与 omp/Codex/Claude 插话                                                      | US-Q08                                              |
@@ -23,19 +23,20 @@
 | 聊天历史：运行中与已归档聊天、状态、切换与恢复                                                      | US-Q19；US-Q12                                      |
 | 混合会话异常、自动重连、Claude 现有认证复用与登录引导（US-Q11 已退役）                              | US-Q10；US-D09                                      |
 | 混合会话记录、工作树内已归档记录、恢复、Claude 配置重应用与删除记录                                 | US-Q12；US-D10；US-L10                              |
-| `run --launch-config`、`attach` 与 `ls` 对混合会话的行为                                            | US-Q13；US-M01；US-M03；US-M05                      |
+| `run --launch-config`、`attach` 与 `ls` 对混合会话的行为（视图字段与 4409 取值）                    | US-Q13；US-M01；US-M03；US-M05                      |
 | 会话内连回所属实例：`WEBMUX_SOCKET`、`WEBMUX_BIN`、`--socket`、`self` 与版本过旧提示                | US-S01                                              |
 | 会话详情接口与 `webmux get`、父会话、会话标签与 `ls` 筛选                                           | US-S02–US-S03                                       |
 | 命令表、完整 `--help`、`help --json` 与用法错误约定                                                 | US-S04；US-M01–US-M07                               |
 | llms.txt 形式的 WebMux 工具手册、`webmux guide` 与 `webmux dir`                                     | US-S05                                              |
 | `{{webmux}}` 说明接口、初始化指令与快捷指令中的 `{{webmux}}`、预设“WebMux 工具”                     | US-S06；US-G06；US-J12                              |
-| `run` 的位置、混合起始端、`--json/--wait/--dry-run/--label`、自动分离与 `--follow`                  | US-S07；US-M01                                      |
-| `chat new` 快速开始与 `launch-config options`                                                       | US-S08；US-Q18                                      |
-| `send`、`wait`、`logs`、`screen` 与会话事件                                                         | US-S09–US-S11；US-D05                               |
-| `api`、`kill`、`rm`、`rename` 与 shell 补全                                                         | US-S11–US-S12                                       |
+| `run` 的位置、`--new-worktree` 与 `--view`                                                          | US-S07；US-M01                                      |
+| `run` 的 `--json/--wait/--reply/--dry-run/--label`、自动分离与 `--follow`                           | US-S07；US-M01                                      |
+| `run --new-worktree --view chat --prompt --reply` 分派任务与 `launch-config options`                | US-S08；US-Q18                                      |
+| 按视图分派的 `send` 与 `interrupt`、`wait`、`logs`、`screen` 与会话事件                             | US-S09–US-S11；US-D05                               |
+| `api`、`kill`、`rm`（含 `--forget`）、`rename` 与 shell 补全                                        | US-S11–US-S12                                       |
 | `notify` 提醒（来源 `cli`）与清除                                                                   | US-S13；US-C06、US-C12                              |
-| 聊天命令：发送与等待、查看、回答、取消、设置、权限、队列                                            | US-S14；US-Q01–US-Q19                               |
-| 聊天命令：切换端、混合会话记录的列出、恢复与删除                                                    | US-S15                                              |
+| 聊天视图：`send --reply` 与插话、`chat status/watch/answer/set/permission/queue`                    | US-S14；US-Q01–US-Q19                               |
+| `view` 切换视图、`ls --archived` 列出、`resume` 恢复与 `rm --forget` 删除记录                       | US-S15                                              |
 | `worktree` 命令与主页显示（`homeWorktrees`）                                                        | US-S16；US-J01–US-J12                               |
 | `repo` 命令与仓库设置（初始化指令）                                                                 | US-S17；US-J12                                      |
 | `launch-config` 增删改与 `forward` 命令                                                             | US-S18；US-R01–US-R04                               |

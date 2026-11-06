@@ -33,13 +33,13 @@ func TestResponseArrayFixture(t *testing.T) {
 		"repository":    Repository(workspace.Repository{Availability: "unavailable"}),
 		"repositories":  Repositories(nil),
 		"branches":      Branches(workspace.Branches{Branches: []workspace.Branch{{Name: "main"}}}),
-		"preview":       Preview(workspace.Preview{Worktree: workspace.Worktree{Kind: "main"}}, func(string) bool { return false }),
+		"preview":       Preview(workspace.Preview{Worktree: workspace.Worktree{Kind: "main"}}, func(hybrid.Record) Archived { return Archived{} }),
 		"launch":        LaunchSummaries([]launch.Summary{{ID: "abcdefgh", Name: "Shell", Cmd: []string{"sh"}}}, nil),
 		"launchConfig":  LaunchConfig(launch.Config{ID: "abcdefgh", Name: "Shell", Cmd: []string{"sh"}}),
 		"launchPresets": LaunchPresets([]launch.Preset{{Name: "Shell", Cmd: []string{"sh"}}}),
 		"check":         CodeCheck(codeview.Check{Changes: "unchanged"}),
 		"launches":      LaunchSummaries(nil, nil),
-		"quickStart":    QuickStartResult(workspace.QuickStartResult{}),
+		"createResult":  CreateResult(workspace.CreateResult{}, session.Info{ID: "abcdefgh", Cmd: []string{"sh"}, Status: session.StatusRunning}),
 		"push":          PushTestReport(push.TestReport{}),
 		"listing":       CodeListing(codeview.Listing{}),
 		"changes":       CodeChanges(codeview.Changes{}),
@@ -50,11 +50,11 @@ func TestResponseArrayFixture(t *testing.T) {
 			{Seq: 2, Kind: hybrid.EventConfig, At: chatTime, Config: []hybrid.ConfigOption{{ID: "model", Name: "Model", Type: "select"}}},
 			{Seq: 3, Kind: hybrid.EventRequest, At: chatTime, Request: &hybrid.Request{RequestID: "r1", Kind: hybrid.RequestForm, Form: &hybrid.Form{Message: "?"}}},
 		}),
-		"hybridRecords": HybridRecords([]hybrid.Record{{
+		"archivedSession": ArchivedSession(hybrid.Record{
 			ID: "abcdefgh", Name: "omp", Title: "session title", ConfigID: "abcdefgh", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"},
 			Side: hybrid.SideTUI, State: hybrid.StateClosed, CreatedAt: chatTime, UpdatedAt: chatTime,
 			Workspace: &hybrid.WorkspaceRef{RepositoryID: "repo0001", WorktreeID: "tree0001"},
-		}}, func(string) bool { return false }),
+		}, Archived{AgentTitle: "Oh My Pi", AgentIcon: "pi"}),
 	}
 	got, err := json.MarshalIndent(values, "", "  ")
 	if err != nil {

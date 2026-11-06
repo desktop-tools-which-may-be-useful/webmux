@@ -32,11 +32,14 @@ type Driver interface {
 	RunExited(code int)
 }
 
-// HybridInfo is the driver's description of a hybrid shell. Work is the
-// driver's one-line summary of what the agent is doing (a running turn's
-// current tool call or plan step); it is empty outside a turn.
+// HybridInfo is the driver's description of a hybrid shell. Side is the
+// last settled side; To is the side a switch in progress moves to, empty
+// outside a switch. Work is the driver's one-line summary of what the agent
+// is doing (a running turn's current tool call or plan step); it is empty
+// outside a turn.
 type HybridInfo struct {
 	Side           string
+	To             string
 	Phase          string
 	State          string
 	Agent          string
@@ -101,9 +104,14 @@ func (o *Overlay) applyTo(i *Info, noRun, unnamed bool) {
 	}
 }
 
+// side is where the shell is or, during a switch, where it moves to: the
+// side a moved terminal client is told about.
 func (o *Overlay) side() string {
 	if o == nil || o.Hybrid == nil {
 		return ""
+	}
+	if o.Hybrid.To != "" {
+		return o.Hybrid.To
 	}
 	return o.Hybrid.Side
 }

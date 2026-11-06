@@ -2,17 +2,9 @@
   "status": 200,
   "body": [
     {
+      "chat": false,
       "chatOptions": [],
-      "cmd": [
-        "claude",
-        "--resume"
-      ],
-      "createdAt": "<time>",
-      "envNames": [
-        "API_KEY"
-      ],
-      "hybrid": false,
-      "hybridSupport": {
+      "chatSupport": {
         "reason": "session_arg",
         "supported": false,
         "supportedAgents": [
@@ -25,22 +17,23 @@
           "Antigravity CLI"
         ]
       },
+      "cmd": [
+        "claude",
+        "--resume"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "API_KEY"
+      ],
       "id": "<id#1>",
       "name": "Claude",
       "preview": null,
       "updatedAt": "<time>"
     },
     {
+      "chat": false,
       "chatOptions": [],
-      "cmd": [
-        "/bin/sh",
-        "-c",
-        "sleep 60"
-      ],
-      "createdAt": "<time>",
-      "envNames": [],
-      "hybrid": false,
-      "hybridSupport": {
+      "chatSupport": {
         "reason": "unknown_agent",
         "supported": false,
         "supportedAgents": [
@@ -53,6 +46,13 @@
           "Antigravity CLI"
         ]
       },
+      "cmd": [
+        "/bin/sh",
+        "-c",
+        "sleep 60"
+      ],
+      "createdAt": "<time>",
+      "envNames": [],
       "id": "<id#2>",
       "name": "Shell",
       "preview": null,

@@ -99,10 +99,11 @@ func TestSavedLaunchConfigLoadsBashrcAndForwardsArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := service.CreateSession(context.Background(), workspace.SessionInput{Cwd: home, ConfigID: &saved.ID})
+	created, err := service.Create(context.Background(), workspace.CreateInput{Cwd: home, ConfigID: &saved.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
+	s := created.Session
 	select {
 	case <-s.Done():
 	case <-time.After(5 * time.Second):

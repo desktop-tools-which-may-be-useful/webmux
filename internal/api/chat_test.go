@@ -124,7 +124,7 @@ func (h *hybridAPI) expectCommand(method, path string, body any, status int) []b
 // expectConflict expects a 409 HybridConflict with reason.
 func (h *hybridAPI) expectConflict(method, path string, body any, reason string) {
 	h.t.Helper()
-	var conflict contract.HybridConflict
+	var conflict contract.SessionConflict
 	if err := json.Unmarshal(h.expectCommand(method, path, body, http.StatusConflict), &conflict); err != nil {
 		h.t.Fatal(err)
 	}
@@ -244,27 +244,29 @@ func TestChatSocketAuthOriginAndMissingSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, missing := range []string{"zzzzzzzz", ordinary.Info().ID} {
-		conn, _, err := dialChat(t, server, "/ws/s/"+missing+"/chat", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if code := closeStatus(t, conn); code != 4404 {
-			t.Fatalf("chat socket of %s closed with %d", missing, code)
-		}
+	conn, _, err := dialChat(t, server, "/ws/s/zzzzzzzz/chat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := closeStatus(t, conn); code != 4404 {
+		t.Fatalf("chat socket of a missing session closed with %d", code)
+	}
+	// An ordinary session has no chat view: refused before the upgrade.
+	if _, res, err := dialChat(t, server, "/ws/s/"+ordinary.Info().ID+"/chat", nil); err == nil || res == nil || res.StatusCode != http.StatusConflict {
+		t.Fatalf("ordinary session chat socket: %v %+v", err, res)
 	}
 
 	// A session on the terminal side still has its chat channel.
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201), &info); err != nil {
+	if err := json.Unmarshal(sessionOf(t, h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201)), &info); err != nil {
 		t.Fatal(err)
 	}
-	conn, _, err := dialChat(t, server, "/ws/s/"+info.ID+"/chat", nil)
+	conn, _, err = dialChat(t, server, "/ws/s/"+info.ID+"/chat", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot := readChat(t, conn)
-	if snapshot.Type != contract.ChatFrameSnapshot || snapshot.State == nil || snapshot.State.Side != contract.HybridSideTUI || snapshot.Generation == "" {
+	if snapshot.Type != contract.ChatFrameSnapshot || snapshot.State == nil || snapshot.Generation == "" {
 		t.Fatalf("terminal-side snapshot %+v", snapshot)
 	}
 	if events := readChat(t, conn); events.Type != contract.ChatFrameEvents {
@@ -297,7 +299,7 @@ func TestChatSocketResumeSendsOnlyTail(t *testing.T) {
 			}
 			_ = first.Close(websocket.StatusNormalClosure, "")
 
-			h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "while away"}, 200)
+			h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "while away"}, 200)
 			watch.until("turn end", func(o *observer) bool { return o.count(hybrid.EventTurnEnd) == 1 })
 
 			again, _, err := dialChat(t, server, fmt.Sprintf("%s?generation=%s&seq=%d", path, snapshot.Generation, last), nil)
@@ -336,21 +338,21 @@ func TestChatCommands(t *testing.T) {
 	watch := observe(t, h.hybrids, id)
 	base := "/api/sessions/" + id + "/chat/"
 
-	h.expectCommand("POST", base+"prompts", map[string]any{"text": "hi"}, 400)
-	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: " \n "}, 400)
-	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: strings.Repeat("é", hybrid.MaxPromptBytes/2+1)}, 400)
-	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "hi", Mode: "shout"}, 400)
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", map[string]any{"text": "hi"}, 400)
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: " \n "}, 400)
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: strings.Repeat("é", hybrid.MaxPromptBytes/2+1)}, 400)
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "hi", Mode: "shout"}, 400)
 
-	sent := contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "hello"}
-	first := h.expectCommand("POST", base+"prompts", sent, 200)
-	if retry := h.expectCommand("POST", base+"prompts", sent, 200); !bytes.Equal(retry, first) || string(bytes.TrimSpace(first)) != `{"queued":false,"turnId":"t1","promptId":"p1"}` {
+	sent := contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "hello"}
+	first := h.expectCommand("POST", "/api/sessions/"+id+"/input", sent, 200)
+	if retry := h.expectCommand("POST", "/api/sessions/"+id+"/input", sent, 200); !bytes.Equal(retry, first) || string(bytes.TrimSpace(first)) != `{"view":"chat","queued":false,"turnId":"t1","promptId":"p1"}` {
 		t.Fatalf("prompt %s, retry %s", first, retry)
 	}
-	var queued contract.ChatPromptResult
-	if err := json.Unmarshal(h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "later", Mode: "auto"}, 200), &queued); err != nil {
+	var queued contract.SessionInputResult
+	if err := json.Unmarshal(h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "later", Mode: "auto"}, 200), &queued); err != nil {
 		t.Fatal(err)
 	}
-	if !queued.Queued || queued.ItemID == "" {
+	if queued.Queued == nil || !*queued.Queued || queued.ItemID == "" {
 		t.Fatalf("busy prompt %+v", queued)
 	}
 	item := base + "queue/" + queued.ItemID
@@ -363,7 +365,7 @@ func TestChatCommands(t *testing.T) {
 	h.expectCommand("POST", base+"queue/q99/send-now", contract.ChatQueueRequest{ClientRequestID: chatRID()}, 404)
 
 	// omp steers the running turn.
-	if body := h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "nudge", Mode: "steer"}, 200); string(bytes.TrimSpace(body)) != `{"queued":false}` {
+	if body := h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "nudge", Mode: "steer"}, 200); string(bytes.TrimSpace(body)) != `{"view":"chat","queued":false}` {
 		t.Fatalf("steer %s", body)
 	}
 	smart, bogus := "smart", "bogus"
@@ -389,10 +391,11 @@ func TestChatCommands(t *testing.T) {
 	h.expectCommand("POST", request, map[string]any{"clientRequestId": chatRID(), "outcome": "accept", "content": map[string]any{"x": map[string]any{}}}, 400)
 	watch.until("turn end", func(o *observer) bool { return o.count(hybrid.EventTurnEnd) == 1 })
 
-	for _, path := range []string{"cancel", "queue/resume", "queue/clear"} {
-		h.expectCommand("POST", base+path, contract.ChatCommandRequest{ClientRequestID: chatRID()}, 204)
+	h.expectCommand("POST", "/api/sessions/"+id+"/interrupt", contract.SessionCommandRequest{ClientRequestID: chatRID()}, 204)
+	for _, path := range []string{"queue/resume", "queue/clear"} {
+		h.expectCommand("POST", base+path, contract.ChatQueueRequest{ClientRequestID: chatRID()}, 204)
 	}
-	h.expectCommand("POST", "/api/sessions/zzzzzzzz/chat/cancel", contract.ChatCommandRequest{ClientRequestID: chatRID()}, 404)
+	h.expectCommand("POST", "/api/sessions/zzzzzzzz/interrupt", contract.SessionCommandRequest{ClientRequestID: chatRID()}, 404)
 }
 
 func TestChatPermissionMode(t *testing.T) {
@@ -409,7 +412,7 @@ func TestChatPermissionMode(t *testing.T) {
 	h.expectCommand("PUT", path, auto, 204)
 	h.expectCommand("PUT", path, auto, 204)
 	watch.until("auto mode", func(o *observer) bool { return o.state.PermissionMode == hybrid.PermissionAuto })
-	h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "hello"}, 200)
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "hello"}, 200)
 	watch.until("turn end", func(o *observer) bool { return o.count(hybrid.EventTurnEnd) == 1 })
 	if n := watch.count(hybrid.EventRequest); n != 0 {
 		t.Fatalf("auto mode opened %d requests", n)
@@ -420,15 +423,25 @@ func TestChatPermissionMode(t *testing.T) {
 func TestChatCommandConflicts(t *testing.T) {
 	h := newHybridAPI(t, nil)
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201), &info); err != nil {
+	if err := json.Unmarshal(sessionOf(t, h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201)), &info); err != nil {
 		t.Fatal(err)
 	}
-	h.expectConflict("POST", "/api/sessions/"+info.ID+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "hi"}, "wrong_side")
-	h.expectConflict("POST", "/api/sessions/"+info.ID+"/chat/cancel", contract.ChatCommandRequest{ClientRequestID: chatRID()}, "wrong_side")
+	// On the terminal view, the chat's options are refused and nothing is
+	// written; plain text and the interrupt go to the terminal.
+	h.expectConflict("POST", "/api/sessions/"+info.ID+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "hi", Mode: "steer"}, "wrong_view")
+	h.expectConflict("POST", "/api/sessions/"+info.ID+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "hi", Attachments: []contract.ChatAttachment{{Path: "/tmp/x"}}}, "wrong_view")
+	h.expectCommand("POST", "/api/sessions/"+info.ID+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "hi"}, 200)
+	h.expectCommand("POST", "/api/sessions/"+info.ID+"/interrupt", contract.SessionCommandRequest{ClientRequestID: chatRID()}, 204)
+	plain, err := h.manager.Create(session.CreateInput{Cwd: h.cwd, Cmd: []string{"sh", "-c", "sleep 60"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.expectConflict("PUT", "/api/sessions/"+plain.Info().ID+"/chat/permission-mode", contract.ChatPermissionModeRequest{ClientRequestID: chatRID(), Mode: contract.ChatPermissionAuto}, "no_chat_view")
+	h.expectConflict("POST", "/api/sessions/"+plain.Info().ID+"/view", contract.ViewChangeRequest{ClientRequestID: chatRID(), To: contract.ViewChat}, "no_chat_view")
 
 	id := fakeChat(t, h.hybrids, h.cwd, opencode.Name, "FAKEAGENT_PERMISSION=1")
-	h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
-	h.expectConflict("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "nudge", Mode: "steer"}, "steering_unavailable")
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
+	h.expectConflict("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "nudge", Mode: "steer"}, "steering_unavailable")
 
 	// Every reason the chat commands report keeps its status and body.
 	for _, row := range []struct {
@@ -439,7 +452,7 @@ func TestChatCommandConflicts(t *testing.T) {
 		{hybrid.ErrSwitching, 409, "switching"},
 		{fmt.Errorf("%w: x", hybrid.ErrAnswered), 409, "answered"},
 		{hybrid.ErrSent, 409, "sent"},
-		{hybrid.ErrWrongSide, 409, "wrong_side"},
+		{hybrid.ErrWrongSide, 409, "wrong_view"},
 		{hybrid.ErrSteeringUnavailable, 409, "steering_unavailable"},
 		{hybrid.ErrLimit, 409, "limit"},
 		{hybrid.ErrConflict, 409, ""},
@@ -448,8 +461,8 @@ func TestChatCommandConflicts(t *testing.T) {
 		{context.Canceled, 504, ""},
 	} {
 		w := httptest.NewRecorder()
-		chatFailure(w, row.err)
-		var body contract.HybridConflict
+		sessionCommandFailure(w, row.err)
+		var body contract.SessionConflict
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
@@ -465,31 +478,30 @@ func TestChatCommandConflicts(t *testing.T) {
 func TestHybridSwitch(t *testing.T) {
 	h := newHybridAPI(t, nil)
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201), &info); err != nil {
+	if err := json.Unmarshal(sessionOf(t, h.expect(fmt.Sprintf(`{"configId":%q}`, h.config("omp", true)), 201)), &info); err != nil {
 		t.Fatal(err)
 	}
-	path := "/api/sessions/" + info.ID + "/switch"
-	var conflict contract.HybridConflict
-	if err := json.Unmarshal(h.expectCommand("POST", path, contract.HybridSwitchRequest{ClientRequestID: chatRID(), To: contract.HybridSideACP}, 409), &conflict); err != nil {
+	path := "/api/sessions/" + info.ID + "/view"
+	var conflict contract.SessionConflict
+	if err := json.Unmarshal(h.expectCommand("POST", path, contract.ViewChangeRequest{ClientRequestID: chatRID(), To: contract.ViewChat}, 409), &conflict); err != nil {
 		t.Fatal(err)
 	}
 	if conflict.Reason != "not_eligible" || conflict.Eligibility != hybrid.ReasonUnknownAgent {
 		t.Fatalf("conflict %+v", conflict)
 	}
-	h.expectCommand("POST", path, contract.HybridSwitchRequest{ClientRequestID: chatRID(), To: "chat"}, 400)
-	h.expectCommand("POST", path, contract.HybridSwitchRequest{ClientRequestID: chatRID(), Choice: "later"}, 400)
-	h.expectCommand("POST", path, contract.HybridSwitchRequest{ClientRequestID: chatRID(), Choice: "force"}, 409)
-	h.expectCommand("POST", "/api/sessions/zzzzzzzz/switch", contract.HybridSwitchRequest{ClientRequestID: chatRID(), To: contract.HybridSideTUI}, 404)
+	h.expectCommand("POST", path, contract.ViewChangeRequest{ClientRequestID: chatRID(), To: "acp"}, 400)
+	h.expectCommand("POST", path, contract.ViewChangeRequest{ClientRequestID: chatRID(), Choice: "later"}, 400)
+	h.expectCommand("POST", path, contract.ViewChangeRequest{ClientRequestID: chatRID(), Choice: "force"}, 409)
+	h.expectCommand("POST", "/api/sessions/zzzzzzzz/view", contract.ViewChangeRequest{ClientRequestID: chatRID(), To: contract.ViewTerminal}, 404)
 
 	id := fakeChat(t, h.hybrids, h.cwd, omp.Name, "FAKEAGENT_TURN_DELAY=400ms")
-	base := "/api/sessions/" + id + "/chat/"
-	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
-	h.expectCommand("POST", base+"prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: "later"}, 200)
-	var result contract.HybridSwitchResult
-	if err := json.Unmarshal(h.expectCommand("POST", "/api/sessions/"+id+"/switch", contract.HybridSwitchRequest{ClientRequestID: chatRID(), To: contract.HybridSideTUI}, 200), &result); err != nil {
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
+	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "later"}, 200)
+	var result contract.ViewChangeResult
+	if err := json.Unmarshal(h.expectCommand("POST", "/api/sessions/"+id+"/view", contract.ViewChangeRequest{ClientRequestID: chatRID(), To: contract.ViewTerminal}, 200), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Side != contract.HybridSideTUI || result.Draft != "later" || result.Dropped == nil || result.Unsupported == nil {
+	if result.View != contract.ViewTerminal || result.Draft != "later" || result.Dropped == nil || result.Unsupported == nil {
 		t.Fatalf("switch result %+v", result)
 	}
 	h.expectCommand("DELETE", "/api/sessions/"+id, nil, 204)
@@ -540,7 +552,7 @@ func TestChatSocketSlowClient(t *testing.T) {
 	// frames: far more than the subscriber queue once writes stall.
 	text := strings.Repeat("x", hybrid.MaxPromptBytes-1)
 	for range 30 {
-		h.expectCommand("POST", "/api/sessions/"+id+"/chat/prompts", contract.ChatPromptRequest{ClientRequestID: chatRID(), Text: text}, 200)
+		h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: text}, 200)
 	}
 	watch := observe(t, h.hybrids, id)
 	watch.until("all turns", func(o *observer) bool { return len(o.state.Queue.Items) == 0 && !o.state.Turn.Running })

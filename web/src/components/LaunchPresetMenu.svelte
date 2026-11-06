@@ -51,7 +51,7 @@
       <span class="flex min-w-0 flex-1 flex-col gap-0.5">
         <span class="flex min-w-0 items-center gap-1.5">
           <span class="truncate font-medium">{preset.name}</span>
-          {#if preset.hybrid}<Badge variant="secondary">混合</Badge>{/if}
+          {#if preset.chat}<Badge variant="secondary">混合</Badge>{/if}
           {#if preset.envNames.length}<Badge variant="secondary"
               >{preset.envNames.length} 个环境变量</Badge
             >{/if}

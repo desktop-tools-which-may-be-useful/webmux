@@ -88,7 +88,7 @@ export const rowStatusLabels: Record<RowStatus, string> = {
   ended: "已结束",
 };
 export function rowStatus(
-  session: Pick<SessionInfo, "status" | "attention" | "hybrid">,
+  session: Pick<SessionInfo, "status" | "attention" | "agent">,
 ): RowStatus {
   if (session.status === "exited") return "ended";
   const kind = session.attention?.kind;
@@ -98,6 +98,6 @@ export function rowStatus(
     session.status === "waiting"
   )
     return "waiting";
-  if (session.hybrid?.work || session.status === "running") return "working";
+  if (session.agent?.work || session.status === "running") return "working";
   return "idle";
 }

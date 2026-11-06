@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -23,13 +24,16 @@ import (
 	"github.com/coder/websocket"
 )
 
-const sessionsJSON = `[{"id":"abcdefgh","title":"review","status":"running","cmd":["codex"],"cwd":"/w","exitCode":null},` +
-	`{"id":"hybrid22","title":"chat","status":"idle","cmd":["omp"],"cwd":"/w","exitCode":null,"hybrid":{"side":"acp","state":"active","agent":"omp","agentSessionId":"01a"}},` +
-	`{"id":"hybrid33","title":"moving","status":"running","cmd":["omp"],"cwd":"/w","exitCode":null,"hybrid":{"side":"switching","phase":"stopping","state":"active","agent":"omp","agentSessionId":null}}]`
+const sessionsJSON = `[{"id":"abcdefgh","title":"review","status":"running","cmd":["codex"],"cwd":"/w","exitCode":null,"state":"active","views":["terminal"],"view":"terminal","transition":null,"agent":null},` +
+	`{"id":"hybrid22","title":"chat","status":"idle","cmd":["omp"],"cwd":"/w","exitCode":null,"state":"active","views":["terminal","chat"],"view":"chat","transition":null,"agent":{"name":"omp","title":"omp","icon":"pi","sessionId":"01a"}},` +
+	`{"id":"hybrid33","title":"moving","status":"running","cmd":["omp"],"cwd":"/w","exitCode":null,"state":"active","views":["terminal","chat"],"view":"chat","transition":{"to":"terminal","phase":"stopping"},"agent":{"name":"omp","title":"omp","icon":"pi","sessionId":null}}]`
+
+const archivedJSON = `[{"id":"old00001","title":"yesterday","status":"exited","cmd":["omp"],"cwd":"/w","exitCode":null,"state":"interrupted","views":["terminal","chat"],"view":"chat","transition":null,"agent":{"name":"omp","title":"omp","icon":"pi","sessionId":"01b"}}]`
 
 type fakeServer struct {
 	mu        sync.Mutex
 	bodies    []map[string]any
+	queries   []string
 	rejectEnv bool
 }
 
@@ -38,6 +42,13 @@ func (f *fakeServer) handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		// The request ID is fresh per run; tests compare the rest.
+		if id, _ := body["clientRequestId"].(string); len(id) < 8 {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":"no clientRequestId","step":"precheck"}`)
+			return
+		}
+		delete(body, "clientRequestId")
 		f.mu.Lock()
 		f.bodies = append(f.bodies, body)
 		reject := f.rejectEnv
@@ -48,11 +59,23 @@ func (f *fakeServer) handler() http.Handler {
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
-		_, _ = io.WriteString(w, `{"id":"newsess1","status":"running"}`)
+		_, _ = io.WriteString(w, `{"session":{"id":"newsess1","status":"running"},"configWarnings":["model: unknown value"]}`)
 	})
-	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, sessionsJSON) })
+	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.queries = append(f.queries, r.URL.RawQuery)
+		f.mu.Unlock()
+		if states := r.URL.Query()["state"]; len(states) > 0 && !slices.Contains(states, "active") {
+			_, _ = io.WriteString(w, archivedJSON)
+			return
+		}
+		_, _ = io.WriteString(w, sessionsJSON)
+	})
 	mux.HandleFunc("GET /api/launch-configs", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `[{"id":"cfgrevw1","name":"review","cmd":["claude"]},{"id":"cfgomp01","name":"omp","cmd":["omp"]}]`)
+		_, _ = io.WriteString(w, `[{"id":"cfgrevw1","name":"review","cmd":["claude"]},{"id":"cfgomp01","name":"omp","cmd":["omp"]},{"id":"cfgagnt1","name":"agent","cmd":["codex"],"chat":true}]`)
+	})
+	mux.HandleFunc("GET /api/repositories", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `[{"id":"repo0001","name":"app","anchorPath":"/w/app","worktrees":[{"id":"main","path":"/w/app","kind":"main"}]}]`)
 	})
 	mux.HandleFunc("GET /api/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if r.PathValue("id") != "abcdefgh" {
@@ -77,7 +100,7 @@ func (f *fakeServer) handler() http.Handler {
 		if id == "movedawy" {
 			_ = c.Write(r.Context(), websocket.MessageBinary, []byte{0})
 		}
-		_ = c.Close(contract.CloseMoved, "session moved: acp")
+		_ = c.Close(contract.CloseMoved, "session moved: chat")
 	})
 	mux.HandleFunc("GET "+contract.PathStatus, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(contract.StatusV1{V: 1, URLs: contract.URLs{Local: "http://127.0.0.1:7681"}})
@@ -134,6 +157,80 @@ func TestRunSendsArgvCwdEnvAndDetaches(t *testing.T) {
 	}
 }
 
+// TestRunRejectsOldAndInvalidCombinations covers what run refuses before
+// any request: a word before --, the removed --start-side, and the chat
+// view's options without --view chat.
+func TestRunRejectsOldAndInvalidCombinations(t *testing.T) {
+	f := &fakeServer{}
+	e, _, stderr, _ := env(t, f)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--detach", "make", "test"}, "after --"},
+		{[]string{"--detach", "--new-worktree", "fix/lint", "--", "true"}, "--branch"},
+		{[]string{"--detach", "--start-side", "chat", "--launch-config", "omp"}, "start-side"},
+		{[]string{"--detach", "--launch-config", "omp", "--permission", "auto"}, "--view chat"},
+		{[]string{"--detach", "--launch-config", "omp", "--set", "model=x"}, "--view chat"},
+		{[]string{"--launch-config", "omp", "--view", "chat", "--prompt", "hi", "--reply", "--wait", "idle"}, "cannot be combined"},
+		{[]string{"--launch-config", "omp", "--view", "chat", "--reply"}, "--prompt"},
+		{[]string{"--launch-config", "omp", "--view", "chat", "--attach-file", "x.png"}, "--prompt"},
+		{[]string{"--attach", "--launch-config", "omp", "--view", "chat"}, "cannot be attached"},
+		{[]string{"--view", "chat", "--", "omp"}, "--launch-config"},
+		{[]string{"--detach", "--branch", "x", "--", "true"}, "--new-worktree"},
+		{[]string{"--detach", "--new-worktree", "--existing-branch", "--", "true"}, "--branch"},
+	} {
+		stderr.Reset()
+		if code := Run(context.Background(), e, tc.args); code != contract.ExitUsage || !strings.Contains(stderr.String(), tc.want) {
+			t.Errorf("%v: exit %d, stderr %q, want %q", tc.args, code, stderr.String(), tc.want)
+		}
+	}
+	if len(f.bodies) != 0 {
+		t.Fatalf("refused runs sent %d requests", len(f.bodies))
+	}
+}
+
+// TestRunNewWorktreeOnTheChatView puts the location, view, settings and
+// first prompt into one create request.
+func TestRunNewWorktreeOnTheChatView(t *testing.T) {
+	f := &fakeServer{}
+	e, stdout, stderr, _ := env(t, f)
+	args := []string{"--new-worktree", "--repo", "repo0001", "--launch-config", "agent", "--view", "chat", "--prompt", "go", "--set", "model=fast", "--permission", "ask"}
+	if code := Run(context.Background(), e, append([]string{"--dry-run", "--branch", "feat/x", "--base", "main"}, args...)); code != 0 {
+		t.Fatalf("dry run: %d %q", code, stderr)
+	}
+	var dry struct {
+		Request map[string]any `json:"request"`
+		Pin     bool           `json:"pin"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &dry); err != nil || !dry.Pin {
+		t.Fatalf("dry run output %q: %v", stdout, err)
+	}
+	want := map[string]any{
+		"newWorktree": map[string]any{"repositoryId": "repo0001", "mode": "new", "branch": "feat/x", "base": "main"},
+		"configId":    "cfgagnt1", "view": "chat", "prompt": "go", "agentConfig": map[string]any{"model": "fast"}, "permissionMode": "ask",
+	}
+	if !reflect.DeepEqual(dry.Request, want) {
+		t.Fatalf("dry run request %#v, want %#v", dry.Request, want)
+	}
+	if len(f.bodies) != 0 {
+		t.Fatal("--dry-run created a session")
+	}
+	// The chat view implies --detach; the server picks the branch name.
+	stdout.Reset()
+	if code := Run(context.Background(), e, append([]string{"--no-pin"}, args...)); code != 0 || stdout.String() != "newsess1\thttp://127.0.0.1:7681/s/newsess1\n" {
+		t.Fatalf("run: %d %q %q", code, stdout, stderr)
+	}
+	if got := f.bodies[0]["newWorktree"]; !reflect.DeepEqual(got, map[string]any{"repositoryId": "repo0001", "mode": "new"}) {
+		t.Fatalf("newWorktree %#v", got)
+	}
+	// A config without the chat view cannot start on it.
+	stderr.Reset()
+	if code := Run(context.Background(), e, []string{"--launch-config", "omp", "--view", "chat"}); code != contract.ExitUsage || !strings.Contains(stderr.String(), "chat view") {
+		t.Fatalf("--view chat on omp: %d %q", code, stderr)
+	}
+}
+
 func TestRunInheritsCallerEnvironment(t *testing.T) {
 	f := &fakeServer{}
 	e, _, stderr, _ := env(t, f)
@@ -166,7 +263,7 @@ func TestRunUsesSavedWebLaunchConfig(t *testing.T) {
 	f := &fakeServer{}
 	e, stdout, stderr, _ := env(t, f)
 	code := Run(context.Background(), e, []string{"--detach", "--launch-config", "review", "--name", "review", "--cwd", "app"})
-	if code != 0 || stdout.String() != "newsess1\thttp://127.0.0.1:7681/s/newsess1\n" {
+	if code != 0 || stdout.String() != "newsess1\thttp://127.0.0.1:7681/s/newsess1\n" || !strings.Contains(stderr.String(), "model: unknown value") {
 		t.Fatalf("saved launch config %d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	want := map[string]any{"configId": "cfgrevw1", "cwd": "/mnt/c/work/app", "name": "review"}
@@ -220,7 +317,8 @@ func TestRunReportsUnsupportedEnvAndStoppedServer(t *testing.T) {
 }
 
 func TestListAndOpen(t *testing.T) {
-	e, stdout, _, opened := env(t, &fakeServer{})
+	f := &fakeServer{}
+	e, stdout, _, opened := env(t, f)
 	if code := List(context.Background(), e, []string{"--json"}); code != 0 || strings.TrimSpace(stdout.String()) != sessionsJSON {
 		t.Fatalf("ls --json %d %q", code, stdout.String())
 	}
@@ -228,7 +326,8 @@ func TestListAndOpen(t *testing.T) {
 	if code := List(context.Background(), e, nil); code != 0 {
 		t.Fatalf("ls %d %q", code, stdout.String())
 	}
-	// Hybrid sessions name the side they are on; ordinary rows stay unchanged.
+	// Sessions with a chat view name the view they are on; ordinary rows
+	// stay unchanged.
 	rows := map[string]string{}
 	for _, line := range strings.Split(stdout.String(), "\n") {
 		if id, rest, ok := strings.Cut(line, "  "); ok {
@@ -242,6 +341,26 @@ func TestListAndOpen(t *testing.T) {
 	} {
 		if rows[id] != want {
 			t.Fatalf("ls row %s = %q, want %q", id, rows[id], want)
+		}
+	}
+	// --archived asks the server; archived rows show their state.
+	stdout.Reset()
+	if code := List(context.Background(), e, []string{"--archived"}); code != 0 || !strings.Contains(stdout.String(), "interrupted · 聊天") {
+		t.Fatalf("ls --archived %d %q", code, stdout.String())
+	}
+	if q := f.queries[len(f.queries)-1]; q != "state=archived" {
+		t.Fatalf("ls --archived query %q", q)
+	}
+	stdout.Reset()
+	if code := List(context.Background(), e, []string{"--state", "closed", "--state", "interrupted", "--json"}); code != 0 || strings.TrimSpace(stdout.String()) != archivedJSON {
+		t.Fatalf("ls --state --json %d %q", code, stdout.String())
+	}
+	if q := f.queries[len(f.queries)-1]; q != "state=closed&state=interrupted" {
+		t.Fatalf("ls --state query %q", q)
+	}
+	for _, args := range [][]string{{"--state", "gone"}, {"--archived", "--state", "all"}} {
+		if code := List(context.Background(), e, args); code != contract.ExitUsage {
+			t.Errorf("ls %v: exit %d", args, code)
 		}
 	}
 	stdout.Reset()
@@ -271,7 +390,7 @@ func TestAttachedRunAnnouncesSessionAndNeedsTerminal(t *testing.T) {
 	if code != 1 || stdout.Len() != 0 || !console.restored {
 		t.Fatalf("attached run %d stdout %q restored %v", code, stdout.String(), console.restored)
 	}
-	if !strings.HasPrefix(stderr.String(), "webmux: session newsess1 · http://127.0.0.1:7681/s/newsess1 · Ctrl+] to detach\r\n") {
+	if !strings.Contains(stderr.String(), "webmux run: model: unknown value\r\nwebmux: session newsess1 · http://127.0.0.1:7681/s/newsess1 · Ctrl+] to detach\r\n") {
 		t.Fatalf("announcement %q", stderr.String())
 	}
 	// Without a terminal run detaches instead; --attach insists and fails

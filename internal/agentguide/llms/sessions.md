@@ -1,19 +1,17 @@
 # 会话
 
-会话是服务端持有的 PTY 与进程。浏览器断开不会结束会话，服务重启会结束所有会话。
+会话是服务端持有的 PTY 与进程。浏览器断开不会结束会话，服务重启会结束所有会话。每个命令的选项、输出与示例用 `webmux <命令> --help` 查看；本页只说明概念和怎样选命令。
 
-## 列出与查看
+## 状态
 
-```sh
-webmux ls                                   # 表格：ID、名称、状态、命令、目录
-webmux ls --json                            # SessionInfo 数组
-webmux ls --parent self --status exited     # 我创建且已结束的会话
-webmux get                                  # 在会话内查看当前会话的详情
-webmux get <ID> --json                      # SessionDetails：仓库、分支、启动配置、混合状态、链接、父子会话、标签
-webmux get --field worktree.branch          # 只输出一个字段，不需要 jq
-```
+会话有两层状态。
 
-状态取值：
+生命周期 `state`：
+
+- `active`：运行中的会话，普通会话始终是它。
+- `closed`、`interrupted`：带聊天视图的会话结束（或服务重启）后成为“已归档”，只剩归档记录；可以恢复，也可以删除记录。普通会话结束后不归档。
+
+运行状态 `status`（只对 `active` 有意义）：
 
 - `running`：最近 2 秒内有输出，或 agent 报告正在工作。
 - `waiting`：需要用户介入。包括 agent 的授权请求或提问、未读的完成或出错；没有 agent 信号时，末行像提示符或进程在等终端输入也算，因此停在提示符的 shell 是 `waiting`。
@@ -22,61 +20,38 @@ webmux get --field worktree.branch          # 只输出一个字段，不需要 
 
 `attention` 字段表示会话需要用户介入（问题、授权、完成、出错、通知）；agent 完成一回合后会锁存 `done` 关注，用户输入后才清除。
 
-## 父会话与标签
+## 视图
 
-- 从会话内经本机 API 创建的会话自动记录 `parentId`（调用者所在的会话），请求无法伪造。
-- 标签用于标记和筛选：`webmux label <ID> task=lint run=42`，`KEY-` 删除；`webmux ls --label run=42`。
-- 标签键匹配 `[a-z0-9][a-z0-9._-]{0,62}`，值最多 256 个字符，每个会话最多 16 个；父会话与标签只在内存中。
+每个会话都有终端视图；从开启了聊天视图的启动配置创建的会话还有聊天视图（ACP），同一个 agent 会话可以在两者之间移动。
+会话信息中的 `views` 列出它有哪些视图，`view` 是当前视图，`transition` 不为空表示正在切换，`agent` 是聊天视图背后的 agent。
 
-## 输入与等待
+下面的命令只按会话 ID 操作，由服务端按当前视图分派，不需要先判断会话种类：
 
-```sh
-webmux send <ID> 'make test' --enter --wait waiting,idle --timeout 10m   # 输入并回车，等 shell 回到提示符（提示符读作 waiting）
-webmux send <ID> --key esc                                       # 发送按键：enter esc tab ctrl-c ctrl-d up down left right backspace
-git diff | webmux send <ID> - --enter                            # 从标准输入读取文字
-webmux wait <ID> --until attention --changed --timeout 30m       # 等 agent 需要介入或本轮结束
-webmux wait <ID> --until exited --json | jq .exitCode
-```
+| 意图 | 命令 | 终端视图 | 聊天视图 |
+| ---- | ---- | -------- | -------- |
+| 输入 | `webmux send` | 打字（带回执），可加按键 | 发送提示（立即发送或排队），可带附件 |
+| 取回回复 | `webmux send` 加 `--reply` | 不适用，以 1 结束；改用 `--wait` | 跟踪本次输入开启的回合，输出最终回复 |
+| 中断 | `webmux interrupt` | 写入 agent 的中断键或 Ctrl-C | 取消进行中的回合 |
+| 切换视图 | `webmux view` | 切到聊天 | 切回终端 |
 
-- `send` 只在服务端确认输入已写入 PTY 后才以 0 退出；它会像在浏览器里打字一样取得终端控制权。
-- `send --wait` 先订阅再输入，只接受输入之后的状态变化；单独的 `wait` 默认当前状态也算，`--changed` 才只看之后的变化，`--stable 5s` 要求条件持续一段时间，过滤短暂的状态切换。
-- 混合会话在聊天端时不能 `send`，请用 `webmux chat send`。
+选项属于另一种视图时（例如在聊天视图上发送按键），服务端以 `wrong_view` 拒绝，什么也不写入；会话没有聊天视图时为 `no_chat_view`。
+聊天视图专有的操作（回答请求、agent 设置、权限模式、队列）见 [聊天视图](/llms/chat.md)。
 
-## 输出与画面
+## self 与父会话
 
-```sh
-webmux logs <ID> --strip --tail 50       # 最近 50 行纯文本
-webmux logs <ID> --follow --strip        # 以观察者身份持续输出，不抢控制权
-webmux screen <ID>                       # 全屏 TUI 当前显示的画面文本（在 CLI 本地渲染）
-webmux screen <ID> --json                # {cols, rows, cursor, altScreen, lines}
-webmux events --session <ID>             # 会话事件，每行一个 JSON
-```
+- 命令中的 `self` 指当前会话（`WEBMUX_SESSION_ID`），只在会话内可用。
+- 从会话内经本机 API 创建的会话自动记录 `parentId`（调用者所在的会话），请求无法伪造；用 `webmux ls` 的 `--parent self` 找到自己创建的会话。
+- 标签用于标记和筛选（`webmux label`）。标签键匹配 `[a-z0-9][a-z0-9._-]{0,62}`，值最多 256 个字符，每个会话最多 16 个；父会话与标签只在内存中。
 
-`logs --strip` 只适合按行输出的程序；看全屏 TUI（例如 agent 停在授权选择框）用 `screen`。
+## 选择命令
 
-## 提醒用户
+- 列出：`webmux ls`，默认只列运行中的会话；已归档会话用 `--archived` 或 `--state`。单个会话的仓库、分支、启动配置与视图用 `webmux get`。
+- 等待：`webmux wait` 默认当前状态也算；`send` 的 `--wait` 先订阅再输入，只接受输入之后的变化。
+- 输出：按行输出的程序用 `webmux logs`；全屏 TUI（例如 agent 停在授权选择框）用 `webmux screen`，它在 CLI 本地渲染当前画面；会话列表事件用 `webmux events`。
+- 提醒用户：`webmux notify` 让会话显示提醒，浏览器与订阅推送的设备收到通知；用户输入、打开会话或程序的下一次状态报告会清除它。
+- 结束：`webmux kill` 只结束进程，会话保留为已结束；`webmux rm` 移除会话，带聊天视图的会话保留归档。
+- 恢复与删除记录：已归档会话用 `webmux resume` 以原 ID 恢复，用 `webmux rm` 加 `--forget` 删除归档与临时文件夹（agent 自己的会话历史保留）。
+- 附着：`webmux attach` 在真实终端中接管会话（`Ctrl+]` 分离）；会话切到聊天视图时附着会被动分离。`webmux open` 输出本机链接。
+- 没有专用命令的接口：`webmux api` 原样输出响应。
 
-```sh
-make release; webmux notify --kind done "release 构建完成"   # 会话显示提醒，浏览器弹出提示，订阅推送的设备收到通知
-webmux notify --kind question "请在终端里选择迁移方案"          # kind：notify（默认）、done、error、question
-webmux notify --clear --session <ID>                          # 清除提醒，效果与用户输入相同
-```
-
-- 默认作用于当前会话（`self`）；会话外需要 `--session`。消息最多 200 个字符，只保存在内存中。
-- 提醒覆盖当前锁存的提醒，之后按原有规则清除：用户输入或打开会话、程序的下一次状态报告、`--clear`。`send` 的输入同样会清除它。
-
-## 结束与改名
-
-```sh
-webmux rename self "lint fixes"
-webmux kill <ID>                         # 结束进程，会话保留为已结束
-webmux rm <ID>                           # 移除会话（运行中的先结束）
-webmux api /api/launch-configs           # 没有专用命令的接口：原样输出响应
-```
-
-## 附着与链接
-
-- `webmux attach <ID>` 在当前终端接管会话，`Ctrl+]` 分离；`--observe` 只观察。需要真实终端。
-- `webmux open <ID>` 输出不含 Token 的本机链接，`--browser` 用浏览器打开。
-
-完整选项见 [命令参考](/llms/commands.md) 或 `webmux <命令> --help`。
+完整命令列表见 [命令目录](/llms/commands.md)。

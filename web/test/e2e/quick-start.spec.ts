@@ -44,7 +44,7 @@ async function repository(
 
 async function hybridConfig(request: APIRequestContext, name: string) {
   const response = await request.post("/api/launch-configs", {
-    data: { name, icon: "claudecode", cmd: ["claude"], env: {}, hybrid: true },
+    data: { name, icon: "claudecode", cmd: ["claude"], env: {}, chat: true },
   });
   expect(response.status(), await response.text()).toBe(201);
 }
@@ -61,12 +61,12 @@ async function sidebar(page: Page) {
 
 const conversation = (page: Page) =>
   page.getByRole("list", { name: "对话", exact: true });
-const sideTab = (page: Page, side: "acp" | "tui") =>
+const sideTab = (page: Page, view: "chat" | "terminal") =>
   page
     .getByRole("tablist", { name: "会话视图", exact: true })
     .getByRole(
       "tab",
-      side === "acp" ? { name: /^聊天/ } : { name: "终端", exact: true },
+      view === "chat" ? { name: /^聊天/ } : { name: "终端", exact: true },
     );
 
 test("one send creates a worktree and starts the chat; the result is an ordinary hybrid session", async ({
@@ -125,7 +125,7 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   ).json();
   expect(listed.worktrees).toHaveLength(2);
   const session = await (await request.get(`/api/sessions/${id}`)).json();
-  expect(session.hybrid.side).toBe("acp");
+  expect(session.view).toBe("chat");
   expect(session.workspace.worktreeId).not.toBe(listed.worktrees[0].id);
   // The chat shows where it runs above the input, read-only.
   const where = page.getByRole("group", { name: "会话位置" });
@@ -139,14 +139,17 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   if (phone(page)) await page.keyboard.press("Escape");
 
   // Switching sides works as for any hybrid session.
-  await sideTab(page, "tui").click();
-  await expect(sideTab(page, "tui")).toHaveAttribute("aria-selected", "true");
+  await sideTab(page, "terminal").click();
+  await expect(sideTab(page, "terminal")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expectTerminalLine(page, "> 先读 AGENTS.md");
-  await expect(sideTab(page, "acp")).toHaveAccessibleName("聊天", {
+  await expect(sideTab(page, "chat")).toHaveAccessibleName("聊天", {
     timeout: 20_000,
   });
-  await sideTab(page, "acp").click();
-  await expect(sideTab(page, "acp")).toHaveAttribute("aria-selected", "true");
+  await sideTab(page, "chat").click();
+  await expect(sideTab(page, "chat")).toHaveAttribute("aria-selected", "true");
   await expect(conversation(page)).toContainText("echo: 先读 AGENTS.md");
 
   // Archived, it stays in the chat history and resumes from there.
@@ -212,10 +215,10 @@ test("phone drawer: the chat history switches sessions and closes", async ({
   const ids: string[] = [];
   for (const name of ["第一个聊天", "第二个聊天"]) {
     const response = await request.post("/api/sessions", {
-      data: { cwd: workDir, configId: configs[0].id, startSide: "acp", name },
+      data: { cwd: workDir, configId: configs[0].id, view: "chat", name },
     });
     expect(response.status(), await response.text()).toBe(201);
-    ids.push((await response.json()).id);
+    ids.push((await response.json()).session.id);
   }
   await page.goto(`/s/${ids[0]}`);
   const open = page.getByRole("button", { name: "打开侧栏" });

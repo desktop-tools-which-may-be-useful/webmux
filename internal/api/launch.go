@@ -25,10 +25,16 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 		list, err := s.Launch.RestorePresets(req.Name)
 		return wire.LaunchSummaries(list, s.chatOptions), err
 	})
-	// Read-only: the settings page asks whether an edited command can use
-	// hybrid mode, so the browser never mirrors the profile rules.
-	serveIn(mux, "POST "+base+"/hybrid-support", http.StatusOK, launchFailure, func(_ *http.Request, req contract.HybridSupportRequest) (contract.HybridSupport, error) {
-		return wire.HybridSupport(agents.Default().Check(req.Cmd)), nil
+	// Read-only: the settings page asks whether an edited command can have
+	// the chat view, so the browser never mirrors the profile rules.
+	serveIn(mux, "POST "+base+"/chat-support", http.StatusOK, launchFailure, func(_ *http.Request, req contract.ChatSupportRequest) (contract.ChatSupport, error) {
+		return wire.ChatSupport(agents.Default().Check(req.Cmd)), nil
+	})
+	// options asks the config's agent which options it offers, before any
+	// chat of it exists.
+	serveIn(mux, "POST "+base+"/{id}/options", http.StatusOK, sessionFailure, func(r *http.Request, req contract.LaunchOptionsRequest) ([]contract.ChatConfig, error) {
+		options, err := s.Workspace.LaunchOptions(r.Context(), r.PathValue("id"), req.RepositoryID)
+		return wire.ChatConfigs(options), err
 	})
 	serve(mux, "GET "+base+"/{id}", http.StatusOK, launchFailure, func(r *http.Request) (contract.LaunchConfig, error) {
 		item, err := s.Launch.Get(r.PathValue("id"))

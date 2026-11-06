@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"slices"
 	"strings"
 )
@@ -98,8 +97,14 @@ func (e Env) registry() Registry {
 	if e.Commands != nil {
 		return e.Commands
 	}
-	return Commands()
+	return allCommands()
 }
+
+// allCommands is Commands, reached through a variable: commands that render
+// the table (guide) would otherwise make an initialization cycle.
+var allCommands func() Registry
+
+func init() { allCommands = Commands }
 
 // PrintHelp writes c's help to standard output.
 func (e Env) PrintHelp(c *Command) {
@@ -396,62 +401,32 @@ func parentName(name string) string {
 	return ""
 }
 
-// Reference renders the command reference page of the shell guide from
-// the command table: every visible command that runs, in table order.
-func (e Env) Reference(r Registry) string {
+// Directory renders the command directory of the shell guide
+// (/llms/commands.md) from the command table: every visible command that
+// runs, one line each with its usage and summary, by group as webmux help
+// lists them. Options, output and examples stay in --help.
+func Directory(r Registry) string {
 	var b strings.Builder
-	b.WriteString("# 命令参考\n\n")
-	b.WriteString("本页由命令表生成，与 `webmux <命令> --help` 一致（帮助正文为英文）。退出码见 [退出码](/llms/exit-codes.md)。\n")
-	for _, c := range r.Visible("unix") {
-		if c.Bind == nil {
+	b.WriteString("# 命令目录\n\n")
+	b.WriteString("每个命令一行：用法与一句话摘要，与 `webmux help` 的概览同源（英文）。" +
+		"选项、默认值、输出、退出码与示例用 `webmux <命令> --help` 查看，整棵命令树用 `webmux help --json`；" +
+		"不要猜测选项。退出码约定见 [退出码](/llms/exit-codes.md)。\n")
+	visible := r.Visible("unix")
+	for _, group := range Groups {
+		var cmds []*Command
+		for _, c := range visible {
+			if c.Group == group && c.Bind != nil {
+				cmds = append(cmds, c)
+			}
+		}
+		if len(cmds) == 0 {
 			continue
 		}
-		fmt.Fprintf(&b, "\n## webmux %s\n\n`%s`\n\n%s\n", c.Name, c.Usage(), c.Summary)
-		if c.Description != "" {
-			b.WriteString("\n" + c.Description + "\n")
-		}
-		if len(c.Arguments) > 0 {
-			b.WriteString("\nArguments:\n\n")
-			for _, a := range c.Arguments {
-				fmt.Fprintf(&b, "- `%s`: %s\n", a.Name, a.Text)
-			}
-		}
-		var own []Option
-		for _, o := range e.Options(c) {
-			if !o.Global {
-				// The page is the same on every machine and public: a
-				// default under the home directory is written with ~.
-				o.Default = tildeHome(o.Default)
-				own = append(own, o)
-			}
-		}
-		if len(own) > 0 {
-			b.WriteString("\nOptions:\n\n")
-			for _, item := range optionItems(own) {
-				fmt.Fprintf(&b, "- `%s`: %s\n", item.Name, item.Text)
-			}
-		}
-		if len(c.Examples) > 0 {
-			b.WriteString("\nExamples:\n\n")
-			for _, x := range c.Examples {
-				fmt.Fprintf(&b, "- `%s`: %s\n", x.Command, x.Text)
-			}
+		slices.SortStableFunc(cmds, func(a, b *Command) int { return strings.Compare(a.Name, b.Name) })
+		b.WriteString("\n## " + group + "\n\n")
+		for _, c := range cmds {
+			fmt.Fprintf(&b, "- `%s`: %s\n", c.Usage(), c.Summary)
 		}
 	}
 	return b.String()
-}
-
-// tildeHome writes a path under the user's home directory with ~.
-func tildeHome(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" || home == "/" {
-		return path
-	}
-	if path == home {
-		return "~"
-	}
-	if rest, ok := strings.CutPrefix(path, home+"/"); ok {
-		return "~/" + rest
-	}
-	return path
 }

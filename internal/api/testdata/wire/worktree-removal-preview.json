@@ -10,6 +10,7 @@
     "forceAllowed": true,
     "sessions": [
       {
+        "agent": null,
         "attention": null,
         "clients": 0,
         "cmd": [
@@ -28,8 +29,14 @@
         "preview": "",
         "reportedCwd": null,
         "rows": 24,
+        "state": "active",
         "status": "running",
         "title": "linked",
+        "transition": null,
+        "view": "terminal",
+        "views": [
+          "terminal"
+        ],
         "workspace": {
           "repositoryId": "<id#1>",
           "worktreeId": "<id#3>",

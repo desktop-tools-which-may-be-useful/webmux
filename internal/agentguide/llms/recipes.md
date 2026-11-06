@@ -1,20 +1,46 @@
 # 常用流程
 
-## 把任务交给另一个 agent 并取回结果
+跨多个命令的完整例子。单个命令的选项见 `webmux <命令> --help`。
+
+## 在新 worktree 中启动 agent 并取回结果
 
 ```sh
-webmux chat new --agent "Claude Code" --label run=42 --wait --timeout 30m "修复 lint 并汇报改动"
+webmux launch-config options Codex --json | jq -r '.[] | select(.id=="model") | .options[].value'
+webmux run --new-worktree --view chat --launch-config Codex --set model=gpt-5 --label run=42 \
+  --prompt "修复所有 lint 并汇报改动" --reply --timeout 30m
 webmux ls --parent self --label run=42
 ```
 
-## 继续一个混合会话的对话
+## 继续对话，处理授权请求
 
 ```sh
 id=$(webmux ls --parent self --label run=42 --json | jq -r '.[0].id')
-if ! reply=$(webmux chat send "$id" "再补上测试" --wait --timeout 20m); then
+if ! reply=$(webmux send "$id" "再补上测试" --reply --timeout 20m); then
   webmux chat status "$id"                      # 停在授权或提问时看请求与选项
   webmux chat answer "$id" <请求ID> --option allow_once
 fi
+```
+
+## 中断并改变方向
+
+```sh
+webmux interrupt "$id"
+webmux send "$id" "改用较小的修复" --reply
+```
+
+## 在终端与聊天之间切换
+
+```sh
+webmux view "$id" chat && webmux send "$id" "继续"
+webmux view "$id" terminal --force && webmux attach "$id"
+```
+
+## 恢复并清理已归档的 agent 会话
+
+```sh
+webmux ls --archived --repo .
+webmux resume <ID> --view chat --detach
+webmux rm <ID> --forget --yes
 ```
 
 ## 为并行任务准备 worktree 并共享开发服务器
@@ -42,11 +68,12 @@ echo "exit $?"
 
 ```sh
 id=$(webmux run --detach --name build -- bash | cut -f1)
-webmux send "$id" 'make build' --enter --wait waiting,idle --stable 3s --timeout 20m
+webmux send "$id" 'make build' --enter --wait waiting,idle --timeout 20m
+webmux interrupt "$id"           # 卡住时按 Ctrl-C
 webmux logs "$id" --strip --tail 30
 ```
 
-## 看子 agent 是否在等你
+## 看终端里的 agent 是否在等你
 
 ```sh
 webmux wait "$id" --until attention --changed --timeout 30m
@@ -54,20 +81,16 @@ webmux screen "$id"            # 看授权选择框里有哪些选项
 webmux send "$id" --key enter  # 选中默认选项
 ```
 
-## 在后台跑一个任务，事后清理
+## 找到并清理自己创建的会话
 
 ```sh
-id=$(webmux run --detach --name tests -- make test | cut -f1)
-webmux label "$id" run=nightly
-# ……之后
-webmux ls --label run=nightly --status exited --json
-webmux get "$id" --field session.exitCode
+webmux ls --parent self --json | jq -r '.[] | select(.status=="exited") | .id' | xargs -n1 webmux rm
 ```
 
 ## 了解自己所在的环境
 
 ```sh
-webmux get                       # 仓库、分支、启动配置、链接
+webmux get                       # 仓库、分支、启动配置、视图、链接
 webmux get --field worktree.path
 ```
 

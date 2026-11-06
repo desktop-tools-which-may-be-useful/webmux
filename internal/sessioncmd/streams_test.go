@@ -5,7 +5,6 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestStripper(t *testing.T) {
@@ -67,14 +66,6 @@ func TestMatchingChangedAcceptsRoundTrip(t *testing.T) {
 	set(contract.SessionStatusWaiting)
 	if len(w.matching(opts, baseline)) != 1 {
 		t.Fatal("returning to the subscription state after a change did not match")
-	}
-}
-
-func TestSuggestBranchAvoidsTakenNames(t *testing.T) {
-	now := time.Date(2026, 11, 5, 18, 4, 5, 0, time.UTC)
-	taken := map[string]bool{"wt/20261105-180405": true, "wt/20261105-180405-2": true}
-	if got := suggestBranch(taken, now); got != "wt/20261105-180405-3" {
-		t.Fatalf("got %s", got)
 	}
 }
 

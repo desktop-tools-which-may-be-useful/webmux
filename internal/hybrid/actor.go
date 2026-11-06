@@ -311,8 +311,12 @@ func (a *actor) flush() {
 // supplies the session status, attention and preview: attention makes the
 // session waiting, a running turn running, anything else idle.
 func (a *actor) overlay() *session.Overlay {
+	side, to := a.side, Side("")
+	if a.side == SideSwitching && a.switching != nil {
+		side, to = a.switching.from, a.switching.to
+	}
 	info := &session.HybridInfo{
-		Side: string(a.side), Phase: string(a.chat.Phase),
+		Side: string(side), To: string(to), Phase: string(a.chat.Phase),
 		State: string(a.state), Agent: a.cmd.Profile.Name,
 		AgentTitle: a.cmd.Profile.Title, AgentIcon: a.cmd.Profile.Icon,
 	}

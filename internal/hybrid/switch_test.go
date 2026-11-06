@@ -369,13 +369,13 @@ func TestSwitchAwaitingChoice(t *testing.T) {
 
 	done := startSwitch(h, id, SideACP)
 	h.waitPhase(id, PhaseAwaitingChoice)
-	if info := s.Info(); info.Hybrid.Side != string(SideSwitching) || info.Hybrid.Phase != string(PhaseAwaitingChoice) {
+	if info := s.Info(); info.Hybrid.Side != string(SideTUI) || info.Hybrid.To != string(SideACP) || info.Hybrid.Phase != string(PhaseAwaitingChoice) {
 		t.Fatalf("overlay while awaiting %+v", info.Hybrid)
 	}
 	if _, err := s.Attach(); err != nil {
 		t.Fatalf("run gone while awaiting: %v", err)
 	}
-	if r := h.choose(id, ChoiceWait); r.Side != SideSwitching {
+	if r := h.choose(id, ChoiceWait); r.Side != SideACP {
 		t.Fatalf("wait %+v", r)
 	}
 	if p := h.chatState(id).Phase; p != PhaseInterrupting && p != PhaseAwaitingChoice {
@@ -550,7 +550,7 @@ func TestSwitchConflicts(t *testing.T) {
 	if err := h.manager.Close(id); !errors.Is(err, ErrSwitching) {
 		t.Fatalf("close while switching: %v", err)
 	}
-	if s.Info().Hybrid.Side != string(SideSwitching) {
+	if h := s.Info().Hybrid; h.Side != string(SideTUI) || h.To != string(SideACP) {
 		t.Fatalf("side while switching %+v", s.Info().Hybrid)
 	}
 	if _, err := s.Attach(); err == nil {

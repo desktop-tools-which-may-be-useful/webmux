@@ -182,8 +182,11 @@ func TestLaunchConfigAndForwardCommands(t *testing.T) {
 	if _, _, code := f.cli(t, "launch-config", "add", "Dev", "--", "true"); code != contract.ExitError {
 		t.Fatalf("duplicate name: %d", code)
 	}
-	if _, stderr, code := f.cli(t, "launch-config", "add", "Shell", "--hybrid", "--", "bash"); code != contract.ExitError || !strings.Contains(stderr, "hybrid") {
-		t.Fatalf("unsupported hybrid: %d %q", code, stderr)
+	if _, stderr, code := f.cli(t, "launch-config", "add", "Shell", "--chat", "--", "bash"); code != contract.ExitError || !strings.Contains(stderr, "chat view") {
+		t.Fatalf("unsupported chat view: %d %q", code, stderr)
+	}
+	if _, _, code := f.cli(t, "launch-config", "add", "Shell", "--hybrid", "--", "bash"); code != contract.ExitUsage {
+		t.Fatalf("--hybrid is an unknown option: %d", code)
 	}
 	show := func(args ...string) contract.LaunchConfig {
 		t.Helper()

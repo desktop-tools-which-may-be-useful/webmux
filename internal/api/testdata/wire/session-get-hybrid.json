@@ -1,6 +1,12 @@
 {
   "status": 200,
   "body": {
+    "agent": {
+      "icon": "pi",
+      "name": "omp",
+      "sessionId": null,
+      "title": "omp"
+    },
     "attention": null,
     "clients": 0,
     "cmd": [
@@ -11,22 +17,21 @@
     "cwd": "<repo>",
     "exitCode": null,
     "generation": "<generation#1>",
-    "hybrid": {
-      "agent": "omp",
-      "agentIcon": "pi",
-      "agentSessionId": null,
-      "agentTitle": "omp",
-      "side": "tui",
-      "state": "active"
-    },
     "id": "<id#1>",
     "lastActiveAt": "<time>",
     "listeningPorts": [],
     "preview": "",
     "reportedCwd": null,
     "rows": 24,
+    "state": "active",
     "status": "running",
     "title": "hybrid",
+    "transition": null,
+    "view": "terminal",
+    "views": [
+      "terminal",
+      "chat"
+    ],
     "workspace": null
   }
 }

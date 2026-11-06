@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -122,7 +123,7 @@ func sessionAction(name, summary, description, method, query string, examples []
 	return &Command{
 		Name: name, Group: GroupSessions, Args: "SESSION", Summary: summary, Description: description,
 		Arguments: []Item{sessionArgument}, Env: []Item{sessionIDEnv},
-		Exit:     exitsCommon(ExitItem{Code: 1, Text: "No such session, or the server refused (for example a hybrid session that is switching)."}),
+		Exit:     exitsCommon(ExitItem{Code: 1, Text: "No such session, or the server refused (for example while it changes views)."}),
 		Examples: examples, SeeAlso: []string{"webmux ls", "webmux get"},
 		Bind: func(fs *flag.FlagSet) Action {
 			return func(ctx context.Context, e Env, args []string) int {
@@ -138,12 +139,8 @@ func sessionAction(name, summary, description, method, query string, examples []
 					return code
 				}
 				defer client.Close()
-				err := client.Do(ctx, method, "/api/sessions/"+url.PathEscape(id)+query, nil, nil)
-				if query == removeQuery && isStatus(err, http.StatusConflict) {
-					err = endAndRemove(ctx, client, id)
-				}
-				if err != nil {
-					return e.Fail(err)
+				if err := client.Do(ctx, method, "/api/sessions/"+url.PathEscape(id)+query, nil, nil); err != nil {
+					return e.sessionFail(err)
 				}
 				return contract.ExitOK
 			}
@@ -158,14 +155,109 @@ var killCommand = sessionAction("kill", "End a session's process; the session st
 		{Command: "webmux ls --parent self --status running --json | jq -r '.[].id' | xargs -n1 webmux kill", Text: "End every running session this session created."},
 	})
 
-var rmCommand = sessionAction("rm", "Remove a session; a running one is ended first.",
-	"The session disappears from every client. Its artifacts folder is deleted unless a hybrid record can still resume it.",
-	http.MethodDelete, removeQuery, []Example{
+const (
+	removeQuery = "?remove=1"
+	forgetQuery = "?forget=1"
+)
+
+var rmCommand = &Command{
+	Name: "rm", Group: GroupSessions, Args: "SESSION",
+	Summary: "Remove a session; a running one is ended first. --forget also deletes its archive.",
+	Description: "The session disappears from every client. A session with a chat view keeps its archive, so it can be " +
+		"resumed (webmux resume) and is listed by webmux ls --archived; its artifacts folder stays with it. --forget deletes " +
+		"the archive and the artifacts folder too; the agent keeps its own session history. An archived session can only " +
+		"be forgotten. On a terminal --forget asks first; without one it needs --yes.",
+	Arguments: []Item{sessionArgument},
+	Env:       []Item{sessionIDEnv},
+	Exit: exitsCommon(
+		ExitItem{Code: 1, Text: "No such session, it is archived and --forget was not given, or the server refused (for example while it changes views)."},
+		ExitItem{Code: 2, Text: "Also: --forget with no terminal to ask and no --yes."},
+	),
+	Examples: []Example{
 		{Command: "webmux rm abcd2345", Text: "Remove a session."},
 		{Command: "webmux ls --label run=42 --json | jq -r '.[].id' | xargs -n1 webmux rm", Text: "Clean up every session of one scripted run."},
-	})
+		{Command: "webmux ls --archived --json | jq -r '.[].id' | xargs -n1 webmux rm --forget --yes", Text: "Delete every archived session."},
+	},
+	SeeAlso: []string{"webmux kill", "webmux resume", "webmux ls"},
+	Notes:   map[string]Note{"yes": {Requires: []string{"forget"}}},
+	Bind: func(fs *flag.FlagSet) Action {
+		forget := fs.Bool("forget", false, "also delete the archive and the artifacts folder")
+		yes := fs.Bool("yes", false, "with --forget, do not ask for confirmation")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 1 {
+				return e.Usagef("exactly one session ID is required")
+			}
+			if *yes && !*forget {
+				return e.Usagef("--yes needs --forget")
+			}
+			id, code, ok := e.SessionID(args[0])
+			if !ok {
+				return code
+			}
+			client, code := e.connect()
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			var info contract.SessionInfo
+			if err := client.Do(ctx, http.MethodGet, "/api/sessions/"+url.PathEscape(id), nil, &info); err != nil {
+				return e.sessionFail(err)
+			}
+			archived := info.State != "" && info.State != contract.SessionStateActive
+			if !*forget {
+				if archived {
+					_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s is %s; delete its archive with webmux rm %s --forget\n", id, info.State, id)
+					return contract.ExitError
+				}
+				return e.removeSession(ctx, client, id, removeQuery)
+			}
+			if !*yes {
+				question := fmt.Sprintf("Forget %s session %s (%s)? Its archive and artifacts folder are deleted.", sessionState(info), id, oneLine(sessionName(info), 40))
+				if code, ok := e.confirm(question); !ok {
+					return code
+				}
+			}
+			return e.removeSession(ctx, client, id, forgetQuery)
+		}
+	},
+}
 
-const removeQuery = "?remove=1"
+// sessionState is the lifecycle state of s, or its status while active.
+func sessionState(s contract.SessionInfo) string {
+	if s.State != "" && s.State != contract.SessionStateActive {
+		return string(s.State)
+	}
+	return string(s.Status)
+}
+
+// sessionName is what identifies s to a person: its title, else its agent
+// or command.
+func sessionName(s contract.SessionInfo) string {
+	switch {
+	case s.Title != "":
+		return s.Title
+	case s.Agent != nil && s.Agent.Title != "":
+		return s.Agent.Title
+	case s.Agent != nil:
+		return s.Agent.Name
+	}
+	return strings.Join(s.Cmd, " ")
+}
+
+// removeSession removes or forgets session id with query; a session whose
+// process still runs is ended first.
+func (e Env) removeSession(ctx context.Context, client *localclient.Client, id, query string) int {
+	err := client.Do(ctx, http.MethodDelete, "/api/sessions/"+url.PathEscape(id)+query, nil, nil)
+	if isStatus(err, http.StatusConflict) {
+		if _, isConflict := sessionConflict(err); !isConflict {
+			err = endAndRemove(ctx, client, id, query)
+		}
+	}
+	if err != nil {
+		return e.sessionFail(err)
+	}
+	return contract.ExitOK
+}
 
 // rmEndTimeout bounds how long rm waits for a running session to exit.
 const rmEndTimeout = 15 * time.Second
@@ -175,8 +267,9 @@ func isStatus(err error, status int) bool {
 	return errors.As(err, &apiErr) && apiErr.Status == status
 }
 
-// endAndRemove ends a running session, waits for it to exit, and removes it.
-func endAndRemove(ctx context.Context, client *localclient.Client, id string) error {
+// endAndRemove ends a running session, waits for it to exit, and removes
+// (or forgets) it with query.
+func endAndRemove(ctx context.Context, client *localclient.Client, id, query string) error {
 	ctx, cancel := context.WithTimeout(ctx, rmEndTimeout)
 	defer cancel()
 	watch, err := watchSessions(ctx, client)
@@ -189,12 +282,14 @@ func endAndRemove(ctx context.Context, client *localclient.Client, id string) er
 		return err
 	}
 	if _, err := watch.waitFor(ctx, waitOptions{ids: []string{id}, states: []string{"exited"}}); err != nil {
-		if errors.Is(err, errSessionRemoved) {
+		if !errors.Is(err, errSessionRemoved) {
+			return fmt.Errorf("the session did not exit: %w", err)
+		}
+		if query == removeQuery {
 			return nil
 		}
-		return fmt.Errorf("the session did not exit: %w", err)
 	}
-	return client.Do(ctx, http.MethodDelete, path+removeQuery, nil, nil)
+	return client.Do(ctx, http.MethodDelete, path+query, nil, nil)
 }
 
 var renameCommand = &Command{
@@ -234,80 +329,95 @@ var renameCommand = &Command{
 	},
 }
 
-// namedKeys are the keys --key sends.
-var namedKeys = map[string]string{
-	"enter": "\r", "esc": "\x1b", "tab": "\t", "ctrl-c": "\x03", "ctrl-d": "\x04",
-	"up": "\x1b[A", "down": "\x1b[B", "right": "\x1b[C", "left": "\x1b[D", "backspace": "\x7f",
-}
-
 func keyNames() string {
-	names := make([]string, 0, len(namedKeys))
-	for name := range namedKeys {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	return strings.Join(names, ", ")
+	return strings.Join(slices.Sorted(maps.Keys(contract.InputKeys)), ", ")
 }
 
 type sendOptions struct {
-	enter   bool
-	keys    listFlag
-	wait    string
-	timeout time.Duration
+	enter            bool
+	keys             listFlag
+	attachments      listFlag
+	mode             string
+	wait             string
+	reply            bool
+	autoWaitRequests bool
+	timeout          time.Duration
+	asJSON           bool
 }
 
 var sendCommand = &Command{
 	Name: "send", Group: GroupSessions, Args: "SESSION [TEXT|-]",
-	Summary: "Type text and keys into a terminal session, confirmed by the server.",
-	Description: "TEXT goes in one acknowledged submission (the same path as the Web UI's draft send); with --enter, Enter is part of it. " +
-		"The command exits 0 only once the server reports the input written to the PTY. --key sends named keys after the text. " +
-		"Sending takes control of the terminal, as typing does in the browser; the control indicator names this client \"script\" " +
-		"and, inside a session, that session.\n\n" +
-		"--wait subscribes to the session list before sending and returns on the first change into STATE after the input, so a " +
-		"stale state cannot end the wait early. STATE is one or more comma-separated session states (see webmux wait). A hybrid " +
-		"session on its chat side takes webmux chat send instead.",
-	Arguments: []Item{sessionArgument, {Name: "TEXT", Text: "The text to type; - reads standard input."}},
+	Summary: "Send input to a session: typed into its terminal, or a prompt on its chat view.",
+	Description: "The server sends the input to the session's current view. On the terminal view TEXT is one acknowledged " +
+		"submission (with Enter when --enter is given) and each --key follows; the command exits 0 once the server reports " +
+		"everything written. Typing takes control of the terminal; the control indicator names this client \"script\" and, " +
+		"inside a session, that session. On the chat view TEXT is a prompt, sent at once or queued while a turn runs; " +
+		"--attach-file uploads files into the session and sends them with it, and --mode steer injects it into the running " +
+		"turn. Options of the other view are refused (wrong_view) and nothing is sent.\n\n" +
+		"--wait STATE returns on the first change into STATE after the input (see webmux wait). --reply, for the chat view " +
+		"only, follows the turn this input starts and prints the agent's final reply; a stop for a permission request or " +
+		"question exits 1 unless --auto-wait-requests.",
+	Arguments: []Item{sessionArgument, {Name: "TEXT", Text: "The text to send; - reads standard input."}},
 	Env:       []Item{sessionIDEnv},
-	Output:    "Nothing; with --wait --json, the SessionInfo that matched.",
+	Output: "Nothing; with --json, the SessionInputResult (view, queued, itemId, turnId, promptId). With --wait --json, the " +
+		"SessionInfo that matched. With --reply, the reply text, or with --json {stopReason, error, reply, events, request}.",
 	Exit: exitsCommon(
-		ExitItem{Code: 1, Text: "No such session, the input was not (fully) written, or the session is on its chat side."},
-		ExitItem{Code: 124, Text: "--wait timed out."},
+		ExitItem{Code: 1, Text: "No such session, it is not active or is changing views, an option belongs to the other view, " +
+			"the input was not (fully) written, an upload failed, or with --reply the turn did not end with end_turn or waits for an answer."},
+		ExitItem{Code: 124, Text: "--wait or --reply timed out; a turn goes on."},
 	),
 	Examples: []Example{
-		{Command: "webmux send abcd2345 'make test' --enter --wait waiting,idle --timeout 10m", Text: "Run a command in a shell session and wait until its prompt is back (an idle shell prompt reads as waiting, and idle only follows long silence)."},
-		{Command: "webmux send abcd2345 --key esc", Text: "Interrupt an agent's turn."},
-		{Command: "git diff | webmux send abcd2345 - --enter", Text: "Paste standard input into an agent and submit it."},
+		{Command: "webmux send abcd2345 'make test' --enter --wait waiting,idle --timeout 10m", Text: "Run a command in a shell session and wait until its prompt is back (an idle shell prompt reads as waiting)."},
+		{Command: `webmux send abcd2345 "fix the lint errors and summarize the change" --reply --timeout 20m`, Text: "Hand a task to an agent on its chat view and print its answer."},
+		{Command: "git diff | webmux send abcd2345 - --enter", Text: "Paste standard input into a terminal agent and submit it."},
+		{Command: "webmux send abcd2345 'what does this show?' --attach-file screenshot.png", Text: "Send a prompt with an image."},
 	},
-	SeeAlso: []string{"webmux wait", "webmux screen", "webmux chat send"},
-	Notes:   map[string]Note{"key": {Repeatable: true}, "timeout": {Requires: []string{"wait"}}},
+	SeeAlso: []string{"webmux interrupt", "webmux wait", "webmux screen", "webmux view", "webmux guide sessions"},
+	Notes: map[string]Note{
+		"key": {Repeatable: true}, "attach-file": {Repeatable: true},
+		"wait":               {Conflicts: []string{"reply"}},
+		"reply":              {Conflicts: []string{"wait"}},
+		"auto-wait-requests": {Requires: []string{"reply"}},
+	},
 	Bind: func(fs *flag.FlagSet) Action {
 		var o sendOptions
-		fs.BoolVar(&o.enter, "enter", false, "press Enter after the text, in the same submission")
-		fs.Var(&o.keys, "key", "send the named `KEY` after the text: "+keyNames())
+		fs.BoolVar(&o.enter, "enter", false, "terminal view: press Enter after the text, in the same submission")
+		fs.Var(&o.keys, "key", "terminal view: send the named `KEY` after the text: "+keyNames())
+		fs.Var(&o.attachments, "attach-file", "chat view: upload the file at `PATH` and send it with the prompt")
+		fs.StringVar(&o.mode, "mode", "", "chat view: `MODE` auto (send now or queue, the default) or steer (inject into the running turn)")
 		fs.StringVar(&o.wait, "wait", "", "wait for the first change into `STATE` after sending (see webmux wait)")
-		fs.DurationVar(&o.timeout, "timeout", 0, "give up --wait after this `DURATION` (exit 124); 0 waits forever")
-		asJSON := fs.Bool("json", false, "with --wait, print the SessionInfo that matched")
-		return func(ctx context.Context, e Env, args []string) int { return e.send(ctx, o, *asJSON, args) }
+		fs.BoolVar(&o.reply, "reply", false, "chat view: follow the turn this input starts and print the agent's final reply")
+		fs.BoolVar(&o.autoWaitRequests, "auto-wait-requests", false, "with --reply, keep waiting while a permission request or question is open")
+		fs.DurationVar(&o.timeout, "timeout", 0, "give up --wait or --reply after this `DURATION` (exit 124); 0 waits forever")
+		fs.BoolVar(&o.asJSON, "json", false, "print the result as JSON")
+		return func(ctx context.Context, e Env, args []string) int { return e.send(ctx, o, args) }
 	},
 }
 
-func (e Env) send(ctx context.Context, o sendOptions, asJSON bool, args []string) int {
+func (e Env) send(ctx context.Context, o sendOptions, args []string) int {
 	if len(args) < 1 || len(args) > 2 {
 		return e.Usagef("a session ID and at most one TEXT are required (quote text with spaces)")
 	}
 	for _, key := range o.keys {
-		if _, ok := namedKeys[key]; !ok {
+		if _, ok := contract.InputKeys[key]; !ok {
 			return e.Usagef("unknown key %q (keys: %s)", key, keyNames())
 		}
 	}
 	var states []string
-	if o.wait != "" {
+	switch {
+	case o.wait != "" && o.reply:
+		return e.Usagef("--wait and --reply cannot be combined")
+	case o.mode != "" && o.mode != "auto" && o.mode != "steer":
+		return e.Usagef("--mode is auto or steer")
+	case o.autoWaitRequests && !o.reply:
+		return e.Usagef("--auto-wait-requests needs --reply")
+	case o.timeout != 0 && o.wait == "" && !o.reply:
+		return e.Usagef("--timeout needs --wait or --reply")
+	case o.wait != "":
 		var err error
 		if states, err = parseStates(o.wait); err != nil {
 			return e.Usagef("%v", err)
 		}
-	} else if o.timeout != 0 {
-		return e.Usagef("--timeout needs --wait")
 	}
 	id, code, ok := e.SessionID(args[0])
 	if !ok {
@@ -323,30 +433,53 @@ func (e Env) send(ctx context.Context, o sendOptions, asJSON bool, args []string
 			}
 		}
 	}
-	if text == "" && !o.enter && len(o.keys) == 0 {
-		return e.Usagef("nothing to send: give TEXT, --enter or --key")
+	if text == "" && !o.enter && len(o.keys) == 0 && len(o.attachments) == 0 {
+		return e.Usagef("nothing to send: give TEXT, --enter, --key or --attach-file")
 	}
 	client, code := e.connect()
 	if client == nil {
 		return code
 	}
 	defer client.Close()
-	var info contract.SessionInfo
-	if err := client.Do(ctx, http.MethodGet, "/api/sessions/"+url.PathEscape(id), nil, &info); err != nil {
-		return e.Fail(err)
-	}
-	if info.Hybrid != nil && info.Hybrid.Side != contract.HybridSideTUI {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux send: session %s is on its chat side; use webmux chat send\n", id)
-		return contract.ExitError
+	base := "/api/sessions/" + url.PathEscape(id)
+	request := contract.SessionInputRequest{ClientRequestID: newRequestID(), Text: text, Submit: o.enter, Keys: o.keys, Mode: o.mode}
+	// Uploads and --reply need the chat view: check it before anything is
+	// uploaded or sent.
+	if o.reply || len(o.attachments) > 0 {
+		var info contract.SessionInfo
+		if err := client.Do(ctx, http.MethodGet, base, nil, &info); err != nil {
+			return e.sessionFail(err)
+		}
+		if !onChat(info) {
+			switch {
+			case o.reply && hasChatView(info):
+				_, _ = fmt.Fprintf(e.Stderr, "webmux send: session %s is on its terminal view, which has no reply to print; use --wait STATE, or webmux view %s chat first\n", id, id)
+			case o.reply:
+				_, _ = fmt.Fprintf(e.Stderr, "webmux send: session %s has no chat view, so there is no reply to print; use --wait STATE\n", id)
+			default:
+				_, _ = fmt.Fprintf(e.Stderr, "webmux send: session %s is not on its chat view; --attach-file is for the chat view (wrong_view)\n", id)
+			}
+			return contract.ExitError
+		}
+		for _, file := range o.attachments {
+			path, err := e.uploadFile(ctx, client, base+"/upload", file)
+			if err != nil {
+				return e.Fail(fmt.Errorf("upload %s: %w; nothing was sent", file, err))
+			}
+			request.Attachments = append(request.Attachments, contract.ChatAttachment{Path: path})
+		}
 	}
 	waitCtx := ctx
+	if o.timeout > 0 {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, o.timeout)
+		defer cancel()
+	}
+	if o.reply {
+		return e.sendReply(ctx, waitCtx, client, id, request, o)
+	}
 	var watch *sessionWatch
 	if o.wait != "" {
-		if o.timeout > 0 {
-			var cancel context.CancelFunc
-			waitCtx, cancel = context.WithTimeout(ctx, o.timeout)
-			defer cancel()
-		}
 		var err error
 		// Subscribe before the input: the change it causes must be seen.
 		if watch, err = watchSessions(waitCtx, client); err != nil {
@@ -357,105 +490,78 @@ func (e Env) send(ctx context.Context, o sendOptions, asJSON bool, args []string
 			return e.waitFailure(err)
 		}
 	}
-	if err := e.writeInput(ctx, client, info, text, o); err != nil {
-		return e.Fail(err)
+	var result contract.SessionInputResult
+	if err := client.Do(ctx, http.MethodPost, base+"/input", request, &result); err != nil {
+		return e.sessionFail(err)
 	}
 	if watch == nil {
+		if o.asJSON {
+			writeJSON(e.Stdout, result)
+		}
 		return contract.ExitOK
 	}
 	matched, err := watch.waitFor(waitCtx, waitOptions{ids: []string{id}, states: states, changed: true, primed: true})
 	if err != nil {
 		return e.waitFailure(err)
 	}
-	if asJSON {
+	if o.asJSON {
 		writeJSON(e.Stdout, matched[0])
 	}
 	return contract.ExitOK
 }
 
-// writeInput submits text (with Enter) and waits for its acknowledgement,
-// then sends the named keys.
-func (e Env) writeInput(ctx context.Context, client *localclient.Client, info contract.SessionInfo, text string, o sendOptions) error {
-	clientID := newRequestID()
-	query := url.Values{"client": {clientID}, "label": {e.scriptLabel()}}
-	conn, err := client.DialWebSocket(ctx, "/ws/s/"+url.PathEscape(info.ID)+"?"+query.Encode())
+// sendReply sends a prompt and follows the turn it starts: for a queued
+// prompt the turn that later sends it, with steer the running turn.
+func (e Env) sendReply(ctx, waitCtx context.Context, client *localclient.Client, id string, request contract.SessionInputRequest, o sendOptions) int {
+	// Subscribe first and read the snapshot, so the turn cannot start (or
+	// a steered turn end) unseen.
+	stream, err := openChat(waitCtx, client, id)
 	if err != nil {
-		return err
+		return e.Fail(err)
 	}
-	defer func() { _ = conn.CloseNow() }()
-	conn.SetReadLimit(64 << 20)
-	// Text, Enter and every key are acknowledged submissions, so send
-	// returns only once each reached the PTY.
-	submit := func(body, key string) error {
-		id := newRequestID()
-		header, _ := json.Marshal(contract.SubmissionHeader{ID: id, Generation: info.Generation, BodyBytes: len(body)})
-		frame := contract.Frame(contract.FrameSubmit, append(append(header, '\n'), body+key...))
-		if err := conn.Write(ctx, websocket.MessageBinary, frame); err != nil {
-			return err
-		}
-		return awaitSubmission(ctx, conn, id)
+	defer stream.close()
+	if _, err := stream.read(waitCtx); err != nil {
+		return e.waitFailure(err)
 	}
-	if text != "" || o.enter {
-		key := ""
-		if o.enter {
-			key = "\r"
-		}
-		if err := submit(text, key); err != nil {
-			return err
-		}
+	var result contract.SessionInputResult
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions/"+url.PathEscape(id)+"/input", request, &result); err != nil {
+		return e.sessionFail(err)
 	}
-	for _, key := range o.keys {
-		if err := submit(namedKeys[key], ""); err != nil {
-			return err
-		}
+	if result.View != contract.ViewChat {
+		// The session changed views between the check and the input.
+		_, _ = fmt.Fprintf(e.Stderr, "webmux send: the input went to the %s view, which has no reply to print\n", result.View)
+		return contract.ExitError
 	}
-	// Close cleanly so queued input reaches the PTY before the server
-	// tears the connection down.
-	_ = conn.Close(websocket.StatusNormalClosure, "sent")
-	return nil
-}
-
-// awaitSubmission reads terminal frames until submission id is written or
-// fails.
-func awaitSubmission(ctx context.Context, conn *websocket.Conn, id string) error {
-	for {
-		_, frame, err := conn.Read(ctx)
-		if err != nil {
-			if websocket.CloseStatus(err) == contract.CloseMoved {
-				return errors.New("the session moved to its chat side; use webmux chat send")
-			}
-			return fmt.Errorf("connection lost before the input was confirmed: %w", err)
+	w := turnWatch{stopAtRequest: !o.autoWaitRequests}
+	switch {
+	case result.Queued != nil && *result.Queued:
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: the prompt is queued as %s; waiting for its turn\n", result.ItemID)
+		w.accept = func(t contract.ChatTurnStart) bool { return t.QueueItemID == result.ItemID }
+		w.gone = queuedGone(result.ItemID)
+	case result.PromptID != "":
+		w.accept = func(t contract.ChatTurnStart) bool { return t.PromptID == result.PromptID }
+	default:
+		// Steering joins the running turn.
+		if stream.state == nil || !stream.state.Turn.Running {
+			return e.Fail(errors.New("no turn is running to follow"))
 		}
-		if len(frame) == 0 || frame[0] != contract.FrameSubmission {
-			continue
-		}
-		var status contract.SubmissionStatus
-		if json.Unmarshal(frame[1:], &status) != nil || status.ID != id {
-			continue
-		}
-		switch status.State {
-		case "written":
-			return nil
-		case "received":
-			continue
-		}
-		if status.Error != "" {
-			return fmt.Errorf("the input was not written: %s (%s)", status.State, status.Error)
-		}
-		return fmt.Errorf("the input was not written: %s", status.State)
+		w.current = stream.state.Turn.TurnID
 	}
+	turn, err := stream.turnWait(waitCtx, w)
+	if err != nil {
+		return e.waitFailure(err)
+	}
+	return e.reportTurn(turn, o.asJSON)
 }
 
 var waitCommand = &Command{
 	Name: "wait", Group: GroupSessions, Args: "SESSION...",
 	Summary: "Wait until sessions reach a state: running, waiting, idle, exited or attention.",
 	Description: "Subscribes to the session list (/ws/sessions) and returns when every session (or with --any, one) is in one of the " +
-		"--until states. waiting means the session needs you: an agent's permission request or question, an unread done or error, " +
-		"or, without any agent signal, a prompt-like last line or a process reading the terminal (so a shell at its prompt is " +
-		"waiting). idle only means long silence (idle_after_seconds) without those signs; it is not a completion signal. " +
-		"attention means the session has a latched attention signal, which an agent raises when it finishes a turn. Without " +
-		"--changed the current state counts; with --changed only a change after subscribing does. --stable requires the " +
-		"condition to hold that long, which filters short-lived transitions.",
+		"--until states: a status (running, waiting, idle, exited) or attention, a latched signal that the session needs you. " +
+		"waiting means the session needs you, so a shell at its prompt is waiting; idle is long silence, not completion " +
+		"(webmux guide sessions explains each). Without --changed the current state counts; with --changed only a change " +
+		"after subscribing does. --stable requires the condition to hold that long, which filters short-lived transitions.",
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
 	Output:    "Nothing; with --json the matching SessionInfo, or an array for several sessions.",
@@ -468,7 +574,7 @@ var waitCommand = &Command{
 		{Command: "webmux wait abcd2345 --until exited --json | jq .exitCode", Text: "Wait for a command and read its exit code."},
 		{Command: "webmux wait a1 b2 c3 --until attention --changed --any", Text: "Return when the first of three agents needs you or finishes its turn."},
 	},
-	SeeAlso: []string{"webmux send --wait", "webmux events"},
+	SeeAlso: []string{"webmux send --wait", "webmux events", "webmux guide sessions"},
 	Bind: func(fs *flag.FlagSet) Action {
 		until := fs.String("until", "", "comma-separated `STATES` to wait for (required)")
 		changed := fs.Bool("changed", false, "ignore the state at subscription; wait for a change into the states")
@@ -654,7 +760,7 @@ var screenCommand = &Command{
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
 	Output:    "The visible lines without trailing blanks. With --json, {cols, rows, cursor: {row, col}, altScreen, lines}. --cursor writes the 1-based cursor position to standard error.",
-	Exit:      exitsCommon(ExitItem{Code: 1, Text: "No such session, or it is on its chat side."}),
+	Exit:      exitsCommon(ExitItem{Code: 1, Text: "No such session, or it is on its chat view."}),
 	Examples: []Example{
 		{Command: "webmux screen abcd2345", Text: "See what an agent's terminal shows."},
 		{Command: "webmux screen abcd2345 --json | jq -r '.lines[-1]'", Text: "Read the last line of the screen."},

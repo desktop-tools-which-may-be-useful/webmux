@@ -42,9 +42,13 @@ export function createSessionList({
   const socket = connectSessions(
     (event) => {
       if (event.type === "forwards") return;
+      // A session with a chat view leaves the list when it is closed or
+      // interrupted, and lives on as an archived session.
       const removedHybrid =
         event.type === "removed" &&
-        !!sessions.find((session) => session.id === event.id)?.hybrid;
+        !!sessions
+          .find((session) => session.id === event.id)
+          ?.views.includes("chat");
       sessions = applySessionEvent(sessions, event);
       homeCache.rememberSessions(sessions);
       if (event.type === "snapshot") {
@@ -63,8 +67,8 @@ export function createSessionList({
       } else {
         observeAttentionSession(event.session);
         if (
-          event.session.hybrid &&
-          (event.type === "created" || event.session.hybrid.state !== "active")
+          event.session.views.includes("chat") &&
+          (event.type === "created" || event.session.state !== "active")
         ) {
           // A resumed shell or one that just closed or was interrupted.
           void archived.refresh();

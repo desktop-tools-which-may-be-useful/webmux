@@ -1,15 +1,20 @@
 import { z } from "zod";
 
-// Hybrid sessions and their chat channel (internal/contract/hybrid.go and
-// chat.go). Re-exported from schemas.ts, the single contract entry point.
+// Session views, archives and the chat view's channel
+// (internal/contract/views.go and chat.go). Re-exported from schemas.ts, the
+// single contract entry point.
 
 const datetime = z.iso.datetime({ offset: true });
 
-export const HybridSideSchema = z.enum(["tui", "acp", "switching"]);
-export type HybridSide = z.infer<typeof HybridSideSchema>;
-export const HybridStateSchema = z.enum(["active", "closed", "interrupted"]);
-export type HybridState = z.infer<typeof HybridStateSchema>;
-export const HybridPhaseSchema = z.enum([
+// A session has the terminal view, and with a chat-enabled launch config
+// also the chat view.
+export const SessionViewSchema = z.enum(["terminal", "chat"]);
+export type SessionView = z.infer<typeof SessionViewSchema>;
+// Ordinary sessions are always active; a session with a chat view becomes
+// closed or interrupted and then lives on as an archive record.
+export const SessionStateSchema = z.enum(["active", "closed", "interrupted"]);
+export type SessionState = z.infer<typeof SessionStateSchema>;
+export const TransitionPhaseSchema = z.enum([
   "interrupting",
   "awaiting_choice",
   "cancelling",
@@ -18,64 +23,53 @@ export const HybridPhaseSchema = z.enum([
   "loading",
   "rolling_back",
 ]);
-export type HybridPhase = z.infer<typeof HybridPhaseSchema>;
+export type TransitionPhase = z.infer<typeof TransitionPhaseSchema>;
 
-export const SessionHybridSchema = z.object({
-  side: HybridSideSchema,
-  phase: HybridPhaseSchema.optional(),
-  state: HybridStateSchema,
-  agent: z.string(),
+// A view change in progress.
+export const SessionTransitionSchema = z.object({
+  to: SessionViewSchema,
+  phase: TransitionPhaseSchema,
+});
+export type SessionTransition = z.infer<typeof SessionTransitionSchema>;
+
+// The agent behind a session's chat view.
+export const SessionAgentSchema = z.object({
+  name: z.string(),
   // The agent's display name and its brand glyph, a launch-config icon key.
-  agentTitle: z.string(),
-  agentIcon: z.string(),
-  agentSessionId: z.string().nullable(),
+  title: z.string(),
+  icon: z.string(),
+  sessionId: z.string().nullable(),
   // Present only while the agent is working (a running turn): the
   // tool call or plan step it is on, one line. Omitted otherwise.
   work: z.string().optional(),
 });
-export type SessionHybrid = z.infer<typeof SessionHybridSchema>;
+export type SessionAgent = z.infer<typeof SessionAgentSchema>;
 
-export const HybridSwitchResultSchema = z.object({
-  side: HybridSideSchema,
+// What a closed or interrupted session's archive record adds.
+export const SessionArchiveSchema = z.object({
+  configMissing: z.boolean(),
+  previousAgentSessionIds: z.array(z.string()),
+  activity: z.enum(["idle", "turn", "switching"]).optional(),
+  queuedCount: z.number().int().nonnegative(),
+  interruptedAt: datetime.nullable(),
+  updatedAt: datetime,
+});
+export type SessionArchive = z.infer<typeof SessionArchiveSchema>;
+
+export const ViewChangeResultSchema = z.object({
+  view: SessionViewSchema,
   draft: z.string().optional(),
   dropped: z.array(z.string()),
   unsupported: z.array(z.string()),
 });
-export type HybridSwitchResult = z.infer<typeof HybridSwitchResultSchema>;
+export type ViewChangeResult = z.infer<typeof ViewChangeResultSchema>;
 
-export const HybridRecordSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  title: z.string(),
-  configId: z.string(),
-  configMissing: z.boolean(),
-  agent: z.string(),
-  cwd: z.string(),
-  cmd: z.array(z.string()),
-  side: HybridSideSchema,
-  agentSessionId: z.string().nullable(),
-  previousIds: z.array(z.string()),
-  state: HybridStateSchema,
-  activity: z.enum(["idle", "turn", "switching"]).optional(),
-  queuedCount: z.number().int().nonnegative(),
-  createdAt: datetime,
-  updatedAt: datetime,
-  interruptedAt: datetime.nullable(),
-  // The registered worktree the session last belonged to; omitted when it
-  // had none or the record predates it.
-  workspace: z
-    .object({ repositoryId: z.string(), worktreeId: z.string() })
-    .optional(),
-});
-export type HybridRecord = z.infer<typeof HybridRecordSchema>;
-export const HybridRecordsSchema = z.array(HybridRecordSchema);
-
-export const HybridCandidateSchema = z.object({
+export const AgentCandidateSchema = z.object({
   agentSessionId: z.string(),
   title: z.string(),
   updatedAt: datetime,
 });
-export type HybridCandidate = z.infer<typeof HybridCandidateSchema>;
+export type AgentCandidate = z.infer<typeof AgentCandidateSchema>;
 
 // A third-party connector that provides an agent's chat (ACP) side and is
 // installed separately; its presence does not mean it is installed.
@@ -87,19 +81,22 @@ export const AgentConnectorSchema = z.object({
 });
 export type AgentConnector = z.infer<typeof AgentConnectorSchema>;
 
-export const HybridConflictSchema = z.object({
+// The 409 body of every session, view, input, interrupt, resume and chat
+// command; reason is a stable code.
+export const SessionConflictSchema = z.object({
   error: z.string(),
   reason: z.string(),
   eligibility: z.string().optional(),
-  candidates: z.array(HybridCandidateSchema).optional(),
+  candidates: z.array(AgentCandidateSchema).optional(),
   connector: AgentConnectorSchema.optional(),
+  submission: z.unknown().optional(),
 });
-export type HybridConflict = z.infer<typeof HybridConflictSchema>;
+export type SessionConflict = z.infer<typeof SessionConflictSchema>;
 
-export const HybridSwitchRequestSchema = z
+export const ViewChangeRequestSchema = z
   .object({
     clientRequestId: z.string(),
-    to: z.enum(["acp", "tui"]).optional(),
+    to: SessionViewSchema.optional(),
     choice: z.enum(["wait", "force", "cancel"]).optional(),
     agentSessionId: z.string().optional(),
   })
@@ -334,7 +331,7 @@ export const ChatEventSchema = z.discriminatedUnion("kind", [
     kind: z.literal("marker"),
     marker: z.object({
       kind: z.enum(["loaded", "switched", "truncated", "reconnected"]),
-      side: HybridSideSchema.optional(),
+      view: SessionViewSchema.optional(),
     }),
   }),
 ]);
@@ -357,10 +354,6 @@ export const ChatEligibilitySchema = z.object({
 export type ChatEligibility = z.infer<typeof ChatEligibilitySchema>;
 
 export const ChatStateSchema = z.object({
-  side: HybridSideSchema,
-  phase: HybridPhaseSchema.optional(),
-  agent: z.string(),
-  agentSessionId: z.string().nullable(),
   // Components running below their verified versions.
   outdated: z.array(
     z.object({ name: z.string(), version: z.string(), verified: z.string() }),
@@ -403,7 +396,7 @@ export const ChatStateSchema = z.object({
   unsupported: z.array(z.string()),
   idChange: z.object({ from: z.string(), to: z.string() }).nullable(),
   queueLost: z.number().int().nonnegative().optional(),
-  recovery: z.object({ state: HybridStateSchema }).nullable(),
+  recovery: z.object({ state: SessionStateSchema }).nullable(),
 });
 export type ChatState = z.infer<typeof ChatStateSchema>;
 
@@ -427,10 +420,14 @@ export const ChatFrameSchema = z.discriminatedUnion("type", [
 ]);
 export type ChatFrame = z.infer<typeof ChatFrameSchema>;
 
-export const ChatPromptResultSchema = z.object({
-  queued: z.boolean(),
+// The 200 body of POST /sessions/:id/input. On the chat view a sent prompt
+// names its turn and a queued one its queue item; the terminal view sets
+// only `view`.
+export const SessionInputResultSchema = z.object({
+  view: SessionViewSchema,
+  queued: z.boolean().optional(),
   itemId: z.string().optional(),
   turnId: z.string().optional(),
   promptId: z.string().optional(),
 });
-export type ChatPromptResult = z.infer<typeof ChatPromptResultSchema>;
+export type SessionInputResult = z.infer<typeof SessionInputResultSchema>;

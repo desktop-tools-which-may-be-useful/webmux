@@ -47,7 +47,7 @@ func TestRequiredArraysAndNullableCollections(t *testing.T) {
 		{"nil change entries", CodeChanges(codeview.Changes{}), []string{`"entries":[]`}},
 		{"empty env names", LaunchSummaries([]launch.Summary{{EnvNames: []string{}}}, nil), []string{`"envNames":[]`}},
 		{"unknown chat options", LaunchSummaries([]launch.Summary{{}}, func(string) []hybrid.ConfigOption { return nil }), []string{`"chatOptions":[]`}},
-		{"nil quick start warnings", QuickStartResult(workspace.QuickStartResult{}), []string{`"configWarnings":[]`}},
+		{"nil create warnings", CreateResult(workspace.CreateResult{}, session.Info{}), []string{`"configWarnings":[]`}},
 		{"repository without worktrees", Repository(workspace.Repository{}), []string{`"worktrees":[]`}},
 		{"repository with no worktrees", Repository(workspace.Repository{Worktrees: []workspace.Worktree{}}), []string{`"worktrees":[]`}},
 		{"preview", Preview(workspace.Preview{Sessions: []session.Info{}, Blockers: []string{}}, nil), []string{`"sessions":[]`, `"blockers":[]`}},
@@ -87,104 +87,122 @@ func TestSessionCopiesNestedValues(t *testing.T) {
 	}
 }
 
-func TestSessionHybrid(t *testing.T) {
-	if got := encode(t, Session(session.Info{})); strings.Contains(got, "hybrid") {
-		t.Fatalf("ordinary session carries hybrid: %s", got)
+func TestSessionViews(t *testing.T) {
+	got := encode(t, Session(session.Info{}))
+	for _, want := range []string{`"state":"active"`, `"views":["terminal"]`, `"view":"terminal"`, `"transition":null`, `"agent":null`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ordinary session %s lacks %s", got, want)
+		}
+	}
+	if strings.Contains(got, "hybrid") || strings.Contains(got, "archive") {
+		t.Fatalf("ordinary session carries hybrid or archive: %s", got)
 	}
 	in := session.Info{Hybrid: &session.HybridInfo{Side: "tui", State: "active", Agent: "omp", AgentTitle: "omp", AgentIcon: "pi"}}
-	got := encode(t, Session(in).Hybrid)
-	if want := `{"side":"tui","state":"active","agent":"omp","agentTitle":"omp","agentIcon":"pi","agentSessionId":null}`; got != want {
-		t.Fatalf("unknown agent session: %s, want %s", got, want)
+	out := Session(in)
+	if got := encode(t, out.Agent); got != `{"name":"omp","title":"omp","icon":"pi","sessionId":null}` {
+		t.Fatalf("unknown agent session: %s", got)
+	}
+	if len(out.Views) != 2 || out.View != contract.ViewTerminal || out.Transition != nil {
+		t.Fatalf("terminal view %+v", out)
 	}
 	id := "ses_abc"
-	in.Hybrid = &session.HybridInfo{Side: "acp", Phase: "loading", State: "active", Agent: "opencode", AgentTitle: "OpenCode", AgentIcon: "opencode", AgentSessionID: &id}
-	out := Session(in)
-	got = encode(t, out.Hybrid)
-	if want := `{"side":"acp","phase":"loading","state":"active","agent":"opencode","agentTitle":"OpenCode","agentIcon":"opencode","agentSessionId":"ses_abc"}`; got != want {
-		t.Fatalf("known agent session: %s, want %s", got, want)
+	in.Hybrid = &session.HybridInfo{Side: "tui", To: "acp", Phase: "interrupting", State: "active", Agent: "opencode", AgentSessionID: &id, Work: "读取 internal/wire/wire.go"}
+	out = Session(in)
+	if out.View != contract.ViewTerminal || out.Transition == nil || *out.Transition != (contract.SessionTransition{To: contract.ViewChat, Phase: contract.PhaseInterrupting}) {
+		t.Fatalf("transition %+v", out.Transition)
 	}
-	work := "读取 internal/wire/wire.go"
-	got = encode(t, Hybrid(&session.HybridInfo{Side: "acp", State: "active", Agent: "omp", Work: work}))
-	if !strings.Contains(got, `"work":"读取 internal/wire/wire.go"`) {
-		t.Fatalf("work detail: %s", got)
+	if got := encode(t, out.Agent); !strings.Contains(got, `"sessionId":"ses_abc"`) || !strings.Contains(got, `"work":"读取 internal/wire/wire.go"`) {
+		t.Fatalf("agent %s", got)
 	}
-	if strings.Contains(got, `"work":""`) {
+	if got := encode(t, Session(session.Info{Hybrid: &session.HybridInfo{Side: "acp", State: "active"}}).Agent); strings.Contains(got, `"work"`) {
 		t.Fatalf("empty work detail must be omitted: %s", got)
 	}
 	id = "changed"
-	if *out.Hybrid.AgentSessionID != "ses_abc" {
+	if *out.Agent.SessionID != "ses_abc" {
 		t.Fatal("agent session ID aliases the service value")
 	}
 }
 
-func TestHybridRecord(t *testing.T) {
+func TestArchivedSession(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	rec := hybrid.Record{
-		ID: "abcdefgh", Name: "omp", Title: "session title", ConfigID: "cfgomp01", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"}, Side: hybrid.SideACP,
+		ID: "abcdefgh", Title: "session title", ConfigID: "cfgomp01", Agent: "omp", Cwd: "/w", Cmd: []string{"omp"}, Side: hybrid.SideACP,
 		Config: map[string]string{"model": "fast"}, State: hybrid.StateClosed, Activity: "turn", QueuedCount: 2,
-		CreatedAt: at, UpdatedAt: at, PID: 42,
+		CreatedAt: at.Add(-time.Hour), UpdatedAt: at, PID: 42,
 	}
-	got := encode(t, HybridRecord(rec, true))
-	for _, want := range []string{`"configMissing":true`, `"title":"session title"`, `"agentSessionId":null`, `"previousIds":[]`, `"interruptedAt":null`, `"queuedCount":2`, `"activity":"turn"`} {
+	out := ArchivedSession(rec, Archived{ConfigMissing: true, AgentTitle: "Oh My Pi", AgentIcon: "pi"})
+	got := encode(t, out)
+	for _, want := range []string{`"state":"closed"`, `"status":"exited"`, `"generation":""`, `"clients":0`, `"preview":""`, `"listeningPorts":[]`,
+		`"view":"chat"`, `"configMissing":true`, `"previousAgentSessionIds":[]`, `"interruptedAt":null`, `"queuedCount":2`, `"activity":"turn"`, `"title":"session title"`} {
 		if !strings.Contains(got, want) {
-			t.Errorf("record %s lacks %s", got, want)
+			t.Errorf("archived %s lacks %s", got, want)
 		}
+	}
+	if !out.LastActiveAt.Equal(at) || !out.Archive.UpdatedAt.Equal(at) || out.Agent.Title != "Oh My Pi" || out.Agent.SessionID != nil {
+		t.Fatalf("archived %+v", out)
 	}
 	for _, private := range []string{"fast", "42", "pid", "process"} {
 		if strings.Contains(got, private) {
-			t.Errorf("record %s exposes %s", got, private)
+			t.Errorf("archived %s exposes %s", got, private)
 		}
 	}
+	rec.Name = "named"
 	rec.SetAgentSessionID("one")
 	rec.SetAgentSessionID("two")
 	rec.InterruptedAt = &at
 	rec.Workspace = &hybrid.WorkspaceRef{RepositoryID: "r1", WorktreeID: "w1"}
-	out := HybridRecord(rec, false)
-	if *out.AgentSessionID != "two" || len(out.PreviousIDs) != 1 || out.PreviousIDs[0] != "one" || !out.InterruptedAt.Equal(at) || out.ConfigMissing {
-		t.Fatalf("record %+v", out)
+	out = ArchivedSession(rec, Archived{})
+	if out.Title != "named" || *out.Agent.SessionID != "two" || len(out.Archive.PreviousAgentSessionIDs) != 1 || !out.Archive.InterruptedAt.Equal(at) {
+		t.Fatalf("archived %+v", out)
 	}
-	if out.Workspace == nil || *out.Workspace != (contract.WorkspaceReference{RepositoryID: "r1", WorktreeID: "w1"}) {
-		t.Fatalf("record workspace %+v", out.Workspace)
+	if out.Workspace == nil || out.Workspace.RepositoryID != "r1" || out.Workspace.WorktreeID != "w1" {
+		t.Fatalf("archived workspace %+v", out.Workspace)
 	}
-	if got := encode(t, HybridRecord(hybrid.Record{ID: "x"}, false)); strings.Contains(got, "workspace") {
-		t.Fatalf("record without workspace %s", got)
-	}
-	list := HybridRecords([]hybrid.Record{rec, {ID: "bcdefghi", ConfigID: "gone"}}, func(id string) bool { return id == "gone" })
-	if len(list) != 2 || list[0].ConfigMissing || !list[1].ConfigMissing || encode(t, HybridRecords(nil, nil)) != "[]" {
-		t.Fatalf("records %+v", list)
-	}
-	if got := encode(t, contract.HybridConflict{Error: "x", Reason: "config_missing"}); strings.Contains(got, "candidates") {
+	if got := encode(t, contract.SessionConflict{Error: "x", Reason: "config_missing"}); strings.Contains(got, "candidates") || strings.Contains(got, "submission") {
 		t.Fatalf("conflict without candidates: %s", got)
 	}
-	if got := HybridCandidates(nil); got == nil {
+	if got := AgentCandidates(nil); got == nil {
 		t.Fatal("nil candidates")
 	}
-	in := HybridResumeInput(contract.HybridResumeRequest{ClientRequestID: "req-0001", Side: contract.HybridSideTUI, AgentSessionID: "ses_x", ConfirmWithoutEnv: true})
+	in := ResumeInput(contract.ResumeRequest{ClientRequestID: "req-0001", View: contract.ViewTerminal, AgentSessionID: "ses_x", ConfirmWithoutEnv: true})
 	if in != (workspace.HybridResumeInput{ClientRequestID: "req-0001", Side: "tui", AgentSessionID: "ses_x", ConfirmWithoutEnv: true}) {
 		t.Fatalf("resume input %+v", in)
+	}
+	if got := ViewChangeInput(contract.ViewChangeRequest{To: contract.ViewChat}); got.To != hybrid.SideACP {
+		t.Fatalf("view change input %+v", got)
 	}
 }
 
 func TestRequestsConvertToServiceInputs(t *testing.T) {
 	id := "abcdefgh"
-	in := SessionInput(contractRequest(id))
-	if in.Cwd != "/w" || in.Workspace == nil || in.Workspace.WorktreeID != "t" || *in.ConfigID != id || in.StartSide != "acp" {
+	in := CreateInput(contractRequest(id))
+	if in.Cwd != "/w" || in.Workspace == nil || in.Workspace.WorktreeID != "t" || *in.ConfigID != id || in.Side != "acp" {
 		t.Fatalf("session input %+v", in)
 	}
-	if SessionInput(contractRequest("")).Workspace == nil {
+	if CreateInput(contractRequest("")).Workspace == nil {
 		t.Fatal("reference dropped")
+	}
+	nw := CreateInput(contract.CreateSessionRequest{NewWorktree: &contract.NewWorktree{RepositoryID: "r", Mode: "new"}, Attachments: []contract.ChatAttachment{{Path: "/a"}}})
+	if nw.NewWorktree == nil || nw.NewWorktree.RepositoryID != "r" || len(nw.Attachments) != 1 || nw.Attachments[0] != "/a" {
+		t.Fatalf("create input %+v", nw)
+	}
+	if keys, ok := InputKeys([]string{"esc", "enter"}); !ok || string(keys[0]) != "\x1b" || string(keys[1]) != "\r" {
+		t.Fatalf("keys %q", keys)
+	}
+	if _, ok := InputKeys([]string{"f13"}); ok {
+		t.Fatal("unknown key accepted")
 	}
 }
 
 func contractRequest(id string) contract.CreateSessionRequest {
-	return contract.CreateSessionRequest{Cwd: "/w", Workspace: &contract.WorkspaceReference{RepositoryID: "r", WorktreeID: "t"}, ConfigID: &id, StartSide: contract.HybridSideACP}
+	return contract.CreateSessionRequest{Cwd: "/w", Workspace: &contract.WorkspaceReference{RepositoryID: "r", WorktreeID: "t"}, ConfigID: &id, View: contract.ViewChat}
 }
 
 func TestChatAttachmentsConvert(t *testing.T) {
-	input := ChatPromptInput(contract.ChatPromptRequest{
+	input := SessionInput(contract.SessionInputRequest{
 		ClientRequestID: "req-1234", Text: "",
 		Attachments: []contract.ChatAttachment{{Path: "/tmp/webmux-upload-a/note.txt", Kind: contract.AttachmentFile}},
-	})
+	}, "script")
 	if len(input.Attachments) != 1 || input.Attachments[0].Path != "/tmp/webmux-upload-a/note.txt" {
 		t.Fatalf("prompt input %+v", input)
 	}

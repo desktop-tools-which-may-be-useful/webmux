@@ -1,0 +1,7 @@
+{
+  "status": 409,
+  "body": {
+    "error": "会话仍在运行，只有已关闭或已中断的会话可以恢复",
+    "reason": "not_archived"
+  }
+}

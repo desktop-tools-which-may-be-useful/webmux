@@ -44,20 +44,6 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	reply(w, http.StatusCreated, contract.UploadResult{Path: upload.Path})
 }
 
-// quickStartUpload stores an attachment of a quick start that has no
-// session yet in the shared staging folder; the quick start moves it to
-// its session.
-func (s *Server) quickStartUpload(w http.ResponseWriter, r *http.Request) {
-	upload, received := s.storeUpload(w, r, s.Artifacts.EnsureStaging)
-	if !received {
-		if upload != nil {
-			upload.Discard()
-		}
-		return
-	}
-	reply(w, http.StatusCreated, contract.UploadResult{Path: upload.Path})
-}
-
 // storeUpload receives one file into the folder dir returns, answering
 // every failure. The caller discards the file when it reports false.
 func (s *Server) storeUpload(w http.ResponseWriter, r *http.Request, dir func() (string, error)) (*files.Upload, bool) {

@@ -8,32 +8,39 @@ const directory = fileURLToPath(
   new URL("../../internal/api/testdata/wire/", import.meta.url),
 );
 // A terminal close is not a JSON frame; its snapshot pins the code and reason
-// that src/ws.ts treats as terminal (4409: the session moved to its other side).
+// that src/ws.ts treats as terminal (4409: the session moved to its other view).
 const TerminalMovedSchema = z.object({
   code: z.literal(4409),
   reason: z.string().startsWith("session moved"),
 });
 const groups: Array<[z.ZodType, string[]]> = [
   [S.ChatFrameSchema, ["ws-chat-events", "ws-chat-snapshot", "ws-chat-state"]],
-  [S.QuickStartOptionsSchema, ["quick-start-options"]],
-  [S.ChatPromptResultSchema, ["chat-prompt-queued", "chat-prompt-sent"]],
+  [S.LaunchOptionsSchema, ["launch-config-options"]],
   [
-    S.HybridConflictSchema,
+    S.SessionInputResultSchema,
+    ["chat-prompt-queued", "chat-prompt-sent", "session-input"],
+  ],
+  [
+    S.SessionConflictSchema,
     [
       "chat-conflict-answered",
-      "chat-conflict-wrong-side",
-      "hybrid-conflict-connector-missing",
+      "chat-conflict-wrong-view",
       "hybrid-conflict-not-eligible",
       "hybrid-resume-config-missing",
       "hybrid-resume-session-missing",
     ],
   ],
-  [S.HybridSupportSchema, ["launch-hybrid-support"]],
-  [S.HybridRecordsSchema, ["hybrid-records"]],
-  [S.HybridSwitchResultSchema, ["hybrid-switch"]],
+  [S.ChatSupportSchema, ["launch-hybrid-support"]],
+  [S.ArchivedSessionsSchema, ["sessions-archived"]],
+  [S.ViewChangeResultSchema, ["hybrid-view"]],
   [
     S.NoContentSchema,
-    ["chat-answer", "chat-permission-mode", "hybrid-record-delete"],
+    [
+      "chat-answer",
+      "chat-permission-mode",
+      "session-forget",
+      "session-interrupt",
+    ],
   ],
   [S.CodeChangesSchema, ["code-changes"]],
   [S.CodeCheckSchema, ["code-check"]],
@@ -49,7 +56,6 @@ const groups: Array<[z.ZodType, string[]]> = [
     S.ErrorSchema,
     [
       "settings-conflict",
-      "session-create-labels-invalid",
       "session-details-missing",
       "session-labels-invalid",
       "session-attention-invalid",
@@ -93,13 +99,33 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.PushSubscriptionResultSchema, ["push-subscribe-gone", "push-subscribe"]],
   [S.PushTestResultSchema, ["push-test"]],
   [S.RepositoriesSchema, ["repositories-empty", "repositories"]],
-  [S.QuickStartResultSchema, ["quick-start", "quick-start-retry"]],
   [
-    S.QuickStartFailureSchema,
+    S.CreateSessionResultSchema,
     [
-      "error-400-quick-start-not-hybrid",
-      "error-409-quick-start-connector-missing",
-      "error-409-quick-start-worktree",
+      "session-create",
+      "session-create-cat",
+      "session-create-exiting",
+      "session-create-from-config",
+      "session-create-new-worktree",
+      "session-create-new-worktree-retry",
+      "session-create-workspace",
+    ],
+  ],
+  [
+    S.CreateSessionFailureSchema,
+    [
+      "error-400-session-config-empty",
+      "error-400-session-conflict",
+      "error-400-session-create-chat-field",
+      "error-400-session-create-not-chat",
+      "error-409-session-create-connector-missing",
+      "error-409-session-create-worktree",
+      "error-400-session-env",
+      "error-400-session-json",
+      "error-404-session-config",
+      "error-503-session-config",
+      "hybrid-conflict-connector-missing",
+      "session-create-labels-invalid",
     ],
   ],
   [S.BranchesSchema, ["repository-branches"]],
@@ -124,10 +150,6 @@ const groups: Array<[z.ZodType, string[]]> = [
     S.SessionInfoSchema,
     [
       "hybrid-resume",
-      "session-create-exiting",
-      "session-create-from-config",
-      "session-create-workspace",
-      "session-create",
       "session-get",
       "session-labels",
       "session-attention",
@@ -212,7 +234,7 @@ function normalize(value: unknown): unknown {
       Object.entries(value).map(([key, item]) => [key, normalize(item)]),
     );
   if (typeof value !== "string") return value;
-  const id = /^<(?:id|sessionId)#(\d+)>$/.exec(value);
+  const id = /^<(?:id|sessionId|configId)#(\d+)>$/.exec(value);
   if (id?.[1]) {
     const suffix = id[1].replace(/\d/g, (digit) =>
       "abcdefghij".charAt(Number(digit)),

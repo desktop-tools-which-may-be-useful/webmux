@@ -17,9 +17,21 @@ var (
 	ErrInvalid = errors.New("混合会话请求无效")
 	// ErrTooLarge: an attachment exceeds the size limits (413).
 	ErrTooLarge = errors.New("混合会话附件过大")
-	// ErrWrongSide: the command needs the other side, e.g. a prompt while
-	// the session is in the terminal (409 wrong_side).
-	ErrWrongSide = errors.New("混合会话不在该端")
+	// ErrWrongSide: the command needs the other view, e.g. a prompt while
+	// the session is in the terminal (409 wrong_view).
+	ErrWrongSide = errors.New("会话不在该视图")
+	// ErrNoChatView: the session has no chat view; it was not started from
+	// a launch config with the chat view (409 no_chat_view).
+	ErrNoChatView = errors.New("会话没有聊天视图")
+	// ErrNotActive: the session is closed or interrupted; resume it first
+	// (409 not_active).
+	ErrNotActive = errors.New("会话已结束，请先恢复")
+	// ErrNotArchived: the session is still active; only a closed or
+	// interrupted session can be resumed (409 not_archived).
+	ErrNotArchived = errors.New("会话仍在运行，只有已关闭或已中断的会话可以恢复")
+	// ErrInputFailed: terminal input was not (fully) written; the error is
+	// an *InputFailedError with the receipt (409 input_failed).
+	ErrInputFailed = errors.New("输入未写入终端")
 	// ErrAnswered: the request was already answered or withdrawn (409
 	// answered).
 	ErrAnswered = errors.New("该请求已被答复")

@@ -202,7 +202,9 @@ func hybridStatus(err error) (status int, ok bool) {
 		errors.Is(err, hybrid.ErrSteeringUnavailable), errors.Is(err, hybrid.ErrNotEligible),
 		errors.Is(err, hybrid.ErrSessionMissing), errors.Is(err, hybrid.ErrConfigMissing),
 		errors.Is(err, hybrid.ErrConnectorMissing), errors.Is(err, hybrid.ErrSessionAmbiguous),
-		errors.Is(err, hybrid.ErrExternalWriter):
+		errors.Is(err, hybrid.ErrExternalWriter), errors.Is(err, hybrid.ErrNoChatView),
+		errors.Is(err, hybrid.ErrNotActive), errors.Is(err, hybrid.ErrNotArchived),
+		errors.Is(err, hybrid.ErrInputFailed):
 		return http.StatusConflict, true
 	case errors.Is(err, hybrid.ErrAgent), errors.Is(err, hybrid.ErrAgentCall):
 		return http.StatusBadGateway, true
@@ -212,7 +214,7 @@ func hybridStatus(err error) (status int, ok bool) {
 	return 0, false
 }
 
-// hybridReason is the contract.HybridConflict reason of a 409 hybrid
+// hybridReason is the contract.SessionConflict reason of a 409 hybrid
 // error; empty for a plain conflict.
 func hybridReason(err error) string {
 	switch {
@@ -221,7 +223,15 @@ func hybridReason(err error) string {
 	case errors.Is(err, hybrid.ErrSwitching):
 		return "switching"
 	case errors.Is(err, hybrid.ErrWrongSide):
-		return "wrong_side"
+		return "wrong_view"
+	case errors.Is(err, hybrid.ErrNoChatView):
+		return "no_chat_view"
+	case errors.Is(err, hybrid.ErrNotActive):
+		return "not_active"
+	case errors.Is(err, hybrid.ErrNotArchived):
+		return "not_archived"
+	case errors.Is(err, hybrid.ErrInputFailed):
+		return "input_failed"
 	case errors.Is(err, hybrid.ErrAnswered):
 		return "answered"
 	case errors.Is(err, hybrid.ErrSent):
@@ -244,7 +254,7 @@ func hybridReason(err error) string {
 	return ""
 }
 
-// hybridFailure answers a hybrid error kind, with a HybridConflict body
+// hybridFailure answers a hybrid error kind, with a SessionConflict body
 // for 409s that have a reason (not_eligible with its eligibility reason,
 // session_missing and session_ambiguous with their candidates,
 // connector_missing with its connector); false for other errors.
@@ -254,22 +264,27 @@ func hybridFailure(w http.ResponseWriter, err error) bool {
 		return false
 	}
 	if reason := hybridReason(err); reason != "" {
-		conflict := contract.HybridConflict{Error: err.Error(), Reason: reason}
+		conflict := contract.SessionConflict{Error: err.Error(), Reason: reason}
 		var ineligible *hybrid.IneligibleError
 		if errors.As(err, &ineligible) {
 			conflict.Eligibility = ineligible.Reason
 		}
 		var missing *hybrid.SessionMissingError
 		if errors.As(err, &missing) {
-			conflict.Candidates = wire.HybridCandidates(missing.Candidates)
+			conflict.Candidates = wire.AgentCandidates(missing.Candidates)
 		}
 		var ambiguous *hybrid.SessionAmbiguousError
 		if errors.As(err, &ambiguous) {
-			conflict.Candidates = wire.HybridCandidates(ambiguous.Candidates)
+			conflict.Candidates = wire.AgentCandidates(ambiguous.Candidates)
 		}
 		var connector *hybrid.ConnectorMissingError
 		if errors.As(err, &connector) {
 			conflict.Connector = wire.AgentConnector(connector.Connector)
+		}
+		var input *hybrid.InputFailedError
+		if errors.As(err, &input) {
+			submission := wire.SubmissionStatus(input.Status)
+			conflict.Submission = &submission
 		}
 		reply(w, status, conflict)
 		return true
@@ -278,14 +293,18 @@ func hybridFailure(w http.ResponseWriter, err error) bool {
 	return true
 }
 
-// chatFailure answers a failed chat command; a request that ended first is
-// a timeout.
-func chatFailure(w http.ResponseWriter, err error) {
+// sessionCommandFailure answers a failed session or chat command: hybrid
+// kinds with their SessionConflict, session errors with their statuses; a
+// request that ended first is a timeout.
+func sessionCommandFailure(w http.ResponseWriter, err error) {
 	var bad *badRequest
 	switch {
 	case errors.As(err, &bad):
 		failure(w, http.StatusBadRequest, bad.err)
 	case hybridFailure(w, err):
+	case errors.Is(err, session.ErrNotFound), errors.Is(err, session.ErrRunning), errors.Is(err, session.ErrExited),
+		errors.Is(err, session.ErrInvalid), errors.Is(err, session.ErrShuttingDown):
+		failure(w, sessionStatus(err), err)
 	case cancelled(err):
 		failure(w, http.StatusGatewayTimeout, err)
 	default:
@@ -384,10 +403,10 @@ func forwardFailure(w http.ResponseWriter, err error) {
 	failure(w, status, err)
 }
 
-// quickStartStatus maps the error of a quick start step like the endpoint
-// of that step does: launch configs and hybrid sessions keep their
-// statuses, the rest are workspace errors.
-func quickStartStatus(err error) int {
+// createStatus maps the error of a create step like the endpoint of that
+// step does: launch configs and hybrid sessions keep their statuses, the
+// rest are workspace errors.
+func createStatus(err error) int {
 	if errors.Is(err, launch.ErrInvalid) || errors.Is(err, launch.ErrNotFound) || errors.Is(err, launch.ErrDuplicate) || errors.Is(err, launch.ErrUnavailable) {
 		return launchStatus(err)
 	}
@@ -397,20 +416,20 @@ func quickStartStatus(err error) int {
 	return workspaceStatus(err)
 }
 
-// quickStartFailure answers a failed quick start with its step, what it
-// had created, and the HybridConflict details of a hybrid conflict;
-// Reason is "conflict" for an existing branch or path.
-func quickStartFailure(w http.ResponseWriter, err error) {
-	body := contract.QuickStartFailure{Step: workspace.StepPrecheck}
-	var failed *workspace.QuickStartError
+// createFailure answers a failed create with its step, what it had
+// created, and the SessionConflict details of a hybrid conflict; Reason is
+// "conflict" for an existing branch or path.
+func createFailure(w http.ResponseWriter, err error) {
+	body := contract.CreateSessionFailure{Step: workspace.StepPrecheck}
+	var failed *workspace.CreateError
 	if errors.As(err, &failed) {
-		body.Step, body.Worktree, body.SessionID = failed.Step, wire.QuickStartWorktree(failed.Worktree), failed.SessionID
+		body.Step, body.Worktree, body.SessionID = failed.Step, wire.OptionalWorktree(failed.Worktree), failed.SessionID
 		err = failed.Err
 	}
-	status := quickStartStatus(err)
+	status := createStatus(err)
 	body.Error = err.Error()
 	if status == http.StatusInternalServerError {
-		slog.Error("quick start failed", "step", body.Step, "error", err)
+		slog.Error("session create failed", "step", body.Step, "error", err)
 		body.Error = http.StatusText(status)
 	}
 	if _, ok := hybridStatus(err); ok {

@@ -15,7 +15,6 @@
   import * as Popover from "$lib/components/ui/popover";
   import { Textarea } from "$lib/components/ui/textarea";
   import { api, store, stored, uploadQuickStartFile } from "../api";
-  import { suggestWorktreeBranch } from "../branchName";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import type { ConfigValue } from "../chat-api";
   import ChatAttachmentList from "../components/chat/ChatAttachmentList.svelte";
@@ -43,13 +42,14 @@
   import { quickCommands } from "../quickCommands.svelte";
   import {
     BranchesSchema,
-    QuickStartOptionsRequestSchema,
-    QuickStartOptionsSchema,
+    LaunchOptionsRequestSchema,
+    LaunchOptionsSchema,
     type ChatAttachment,
     type ChatConfig as ChatOption,
     type ChatPermissionMode as PermissionMode,
-    type QuickStartFailure,
+    type CreateSessionFailure,
     type Repository,
+    type SessionView,
   } from "../schemas";
   import { getShell, openSession } from "../shell.svelte";
   import { z } from "zod";
@@ -65,7 +65,7 @@
   const repositories = $derived(shell.repositories.list);
   const agents = $derived(
     shell.launchConfigs.state.status === "ready"
-      ? shell.launchConfigs.state.configs.filter((config) => config.hybrid)
+      ? shell.launchConfigs.state.configs.filter((config) => config.chat)
       : [],
   );
   const initialDraft = quickStartMemory.loadDraft();
@@ -83,10 +83,14 @@
 
   // Where the agent starts: its chat, or its terminal, which gets the message
   // typed in. A terminal start has no agent options, permission mode or files.
-  let startSide = $state<"acp" | "tui">(
-    stored("quickStartSide") === "tui" ? "tui" : "acp",
+  // Stored as "tui" before views were named.
+  let startSide = $state<SessionView>(
+    stored("quickStartSide") === "tui" ||
+      stored("quickStartSide") === "terminal"
+      ? "terminal"
+      : "chat",
   );
-  const chat = $derived(startSide === "acp");
+  const chat = $derived(startSide === "chat");
 
   let text = $state(initialDraft.text);
   let attachments = $state<ChatAttachment[]>(initialDraft.attachments ?? []);
@@ -141,12 +145,12 @@
     probe = { agentId: id, done: false };
     const controller = new AbortController();
     api(
-      "/quick-starts/options",
-      QuickStartOptionsSchema,
+      `/launch-configs/${id}/options`,
+      LaunchOptionsSchema,
       "POST",
-      { repositoryId: repo, configId: id },
+      { repositoryId: repo },
       controller.signal,
-      QuickStartOptionsRequestSchema,
+      LaunchOptionsRequestSchema,
     )
       .then((options) => (probe = { agentId: id, options, done: true }))
       .catch(() => {
@@ -248,7 +252,7 @@
     ),
   );
   let sending = $state(false);
-  let failure = $state<QuickStartFailure>();
+  let failure = $state<CreateSessionFailure>();
   // Attachments wait in the server's staging folder until the quick start
   // hands them to its new session with the first message.
   let uploadError = $state("");
@@ -286,59 +290,41 @@
     if (!canSend || !repository || !agent || !branches?.data) return;
     sending = true;
     failure = undefined;
-    const data = branches.data;
     const attachments = uploads.take();
-    const taken = data.branches.map((branch) => branch.name);
-    const paths = repository.worktrees.map((tree) => tree.path);
-    let avoid: string | undefined;
     try {
-      // A branch or directory that appeared since the list was read is a
-      // conflict; draw another name and send again under a new request ID.
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const branch = suggestWorktreeBranch({
-          branchNames: taken,
-          worktreePaths: paths,
-          avoid,
-        });
-        const outcome = await sendQuickStart({
+      // The server names the new branch and its directory so they do not
+      // collide with existing ones.
+      const outcome = await sendQuickStart({
+        newWorktree: { repositoryId: repository.id, mode: "new", base },
+        configId: agent.id,
+        view: startSide,
+        prompt: text,
+        useInitInstruction: !!repository.initInstruction && useInstruction,
+        // A terminal start takes no agent options, permission mode or files.
+        ...(chat
+          ? {
+              agentConfig: configValues(options),
+              permissionMode,
+              ...(attachments.length ? { attachments } : {}),
+            }
+          : {}),
+      });
+      if (outcome.ok) {
+        store("quickStartSide", startSide);
+        quickStartMemory.rememberChoice({
           repositoryId: repository.id,
           configId: agent.id,
-          base,
-          branch,
-          text,
-          config: configValues(options),
-          permissionMode,
-          attachments,
-          useInitInstruction: !!repository.initInstruction && useInstruction,
-          startSide,
         });
-        if (outcome.ok) {
-          store("quickStartSide", startSide);
-          quickStartMemory.rememberChoice({
-            repositoryId: repository.id,
-            configId: agent.id,
-          });
-          text = "";
-          unticked = undefined;
-          quickStartMemory.clearDraft();
-          openSession({ id: outcome.sessionId });
-          return;
-        }
-        if (
-          outcome.failure.step !== "worktree" ||
-          outcome.failure.reason !== "conflict"
-        ) {
-          failure = outcome.failure;
-          // Before the first prompt the files are still staged and can go
-          // again; from then on they belong to the created session.
-          if (outcome.failure.step !== "prompt") uploads.restore(attachments);
-          return;
-        }
-        taken.push(branch);
-        avoid = branch;
-        failure = outcome.failure;
+        text = "";
+        unticked = undefined;
+        quickStartMemory.clearDraft();
+        openSession({ id: outcome.sessionId });
+        return;
       }
-      uploads.restore(attachments);
+      failure = outcome.failure;
+      // Before the first prompt the files are still staged and can go
+      // again; from then on they belong to the created session.
+      if (outcome.failure.step !== "prompt") uploads.restore(attachments);
     } finally {
       sending = false;
       void shell.repositories.refresh();
@@ -733,15 +719,15 @@
     name="启动方式"
     value={startSide}
     choices={[
-      { value: "acp", name: "聊天" },
-      { value: "tui", name: "终端" },
+      { value: "chat", name: "聊天" },
+      { value: "terminal", name: "终端" },
     ]}
     disabled={sending}
     onchange={(value) => {
-      if (value === "acp" || value === "tui") startSide = value;
+      if (value === "chat" || value === "terminal") startSide = value;
     }}
   >
-    {#snippet choiceIcon(value)}{#if value === "tui"}<IconTerminal2
+    {#snippet choiceIcon(value)}{#if value === "terminal"}<IconTerminal2
           aria-hidden="true"
         />{:else}<IconMessage aria-hidden="true" />{/if}{/snippet}
   </ChatSelect>

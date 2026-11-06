@@ -87,6 +87,17 @@ func TestSessionControlCommands(t *testing.T) {
 	if _, _, code := f.cli(t, "send", echo); code != contract.ExitUsage {
 		t.Fatalf("nothing to send: %d", code)
 	}
+	// Chat view options on the terminal view are refused before writing.
+	if _, stderr, code := f.cli(t, "send", echo, "x", "--mode", "steer"); code != contract.ExitError || !strings.Contains(stderr, "wrong_view") {
+		t.Fatalf("--mode on the terminal view: %d %q", code, stderr)
+	}
+	if _, _, code := f.cli(t, "send", echo, "x", "--reply", "--wait", "idle"); code != contract.ExitUsage {
+		t.Fatalf("--reply with --wait: %d", code)
+	}
+	// send --json reports the view the input went to.
+	if out, stderr, code := f.cli(t, "send", keyed, "more", "--json"); code != 0 || !strings.Contains(out, `"view": "terminal"`) {
+		t.Fatalf("send --json: %d %q %q", code, out, stderr)
+	}
 
 	// notify raises attention with a message; send and --clear clear it.
 	if _, _, code := f.cli(t, "notify", "--kind", "done", "built"); code != contract.ExitUsage {
@@ -201,6 +212,37 @@ func TestSessionControlCommands(t *testing.T) {
 	if _, _, code := f.cli(t, "get", running); code != contract.ExitError {
 		t.Fatalf("removed running session still found: %d", code)
 	}
+	// rm --forget needs --yes without a terminal; it ends a running
+	// session first, like rm.
+	forgotten := detachedID(t, f, "sleep", "30")
+	if _, stderr, code := f.cli(t, "rm", forgotten, "--forget"); code != contract.ExitUsage || !strings.Contains(stderr, "--yes") {
+		t.Fatalf("rm --forget without --yes: %d %q", code, stderr)
+	}
+	if _, stderr, code := f.cli(t, "rm", forgotten, "--forget", "--yes"); code != 0 {
+		t.Fatalf("rm --forget --yes: %d %q", code, stderr)
+	}
+	if _, _, code := f.cli(t, "get", forgotten); code != contract.ExitError {
+		t.Fatalf("forgotten session still found: %d", code)
+	}
+
+	// interrupt presses Ctrl-C in a terminal session; view needs a chat
+	// view; resume needs an archived session.
+	sleeper := detachedID(t, f, "sh", "-c", "sleep 100; echo after")
+	if _, stderr, code := f.cli(t, "interrupt", sleeper); code != 0 {
+		t.Fatalf("interrupt: %d %q", code, stderr)
+	}
+	if _, _, code := f.cli(t, "wait", sleeper, "--until", "exited", "--timeout", "10s"); code != 0 {
+		t.Fatalf("interrupted sleep did not end: %d", code)
+	}
+	if _, stderr, code := f.cli(t, "view", echo, "chat"); code != contract.ExitError || !strings.Contains(stderr, "no chat view") {
+		t.Fatalf("view on a terminal session: %d %q", code, stderr)
+	}
+	if _, _, code := f.cli(t, "view", echo, "sideways"); code != contract.ExitUsage {
+		t.Fatalf("unknown view: %d", code)
+	}
+	if _, stderr, code := f.cli(t, "resume", echo, "--detach"); code != contract.ExitError || !strings.Contains(stderr, "not_archived") {
+		t.Fatalf("resume an active session: %d %q", code, stderr)
+	}
 
 	// Completion offers commands, options, values and live session IDs.
 	if out, err := f.command(nil, "completion", "bash").Output(); err != nil || !strings.Contains(string(out), "complete -o default -F _webmux webmux") {
@@ -211,17 +253,19 @@ func TestSessionControlCommands(t *testing.T) {
 		want  string
 	}{
 		{[]string{"se"}, "send\t"},
-		{[]string{"chat", ""}, "new\t"},
-		{[]string{"run", "--st"}, "--start-side\t"},
-		{[]string{"run", "--start-side", ""}, "chat\t"},
+		{[]string{"chat", ""}, "answer\t"},
+		{[]string{"in"}, "interrupt\t"},
+		{[]string{"run", "--vi"}, "--view\t"},
+		{[]string{"run", "--view", ""}, "chat\t"},
+		{[]string{"view", echo, ""}, "terminal\t"},
 		{[]string{"guide", "art"}, "artifacts\t"},
 		{[]string{"send", ""}, echo + "\t"},
 		{[]string{"wait", echo, "--until", "id"}, "idle\t"},
-		{[]string{"chat", "switch", echo, "--to", ""}, "terminal\t"},
+		{[]string{"resume", "--view", ""}, "terminal\t"},
 		{[]string{"chat", "queue", ""}, "send-now\t"},
 		{[]string{"worktree", ""}, "pin\t"},
 		{[]string{"repo", "s"}, "settings\t"},
-		{[]string{"chat", "ls", "--state", "in"}, "interrupted\t"},
+		{[]string{"ls", "--state", "ar"}, "archived\t"},
 	} {
 		cmd := f.command([]string{"WEBMUX_SOCKET=" + f.record(t).Socket}, append([]string{"__complete"}, tc.words...)...)
 		out, _ := cmd.Output()
@@ -245,8 +289,8 @@ func TestCompletionScriptsRun(t *testing.T) {
 	}
 	path := bin + string(os.PathListSeparator) + os.Getenv("PATH")
 	for _, tc := range []struct{ shell, script string }{
-		{"bash", `source <(webmux completion bash); COMP_WORDS=(webmux chat n); COMP_CWORD=2; _webmux; printf '%s\n' "${COMPREPLY[@]}"`},
-		{"fish", `webmux completion fish | source; complete -C 'webmux chat n'`},
+		{"bash", `source <(webmux completion bash); COMP_WORDS=(webmux chat a); COMP_CWORD=2; _webmux; printf '%s\n' "${COMPREPLY[@]}"`},
+		{"fish", `webmux completion fish | source; complete -C 'webmux chat a'`},
 	} {
 		if _, err := exec.LookPath(tc.shell); err != nil {
 			t.Logf("%s is not installed; skipped", tc.shell)
@@ -255,7 +299,7 @@ func TestCompletionScriptsRun(t *testing.T) {
 		cmd := exec.Command(tc.shell, "-c", tc.script)
 		cmd.Env = append(os.Environ(), "PATH="+path, "WEBMUX_SOCKET=/nonexistent/webmux.sock")
 		out, err := cmd.CombinedOutput()
-		if err != nil || !strings.Contains(string(out), "new") {
+		if err != nil || !strings.Contains(string(out), "answer") {
 			t.Errorf("%s completion: %v %q", tc.shell, err, out)
 		}
 	}

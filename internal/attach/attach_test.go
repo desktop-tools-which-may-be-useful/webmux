@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -504,5 +505,23 @@ func TestRunCancelsAndJoinsIdleInput(t *testing.T) {
 				t.Fatal("cancel killed persistent session")
 			}
 		})
+	}
+}
+
+func TestMovedToReadsTheCloseReason(t *testing.T) {
+	for reason, want := range map[string]contract.SessionView{
+		"session moved: chat":     contract.ViewChat,
+		"session moved: terminal": contract.ViewTerminal,
+		"session moved":           "",
+		"session moved: acp":      "",
+	} {
+		err := fmt.Errorf("read: %w", websocket.CloseError{Code: contract.CloseMoved, Reason: reason})
+		if got := movedTo(err); got != want {
+			t.Errorf("%q: %q, want %q", reason, got, want)
+		}
+	}
+	refused := &MovedError{To: contract.ViewChat}
+	if !errors.Is(refused, ErrMoved) || !strings.Contains(refused.Error(), "webmux view") {
+		t.Fatalf("refusal %v", refused)
 	}
 }

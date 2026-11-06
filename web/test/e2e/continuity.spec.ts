@@ -76,7 +76,7 @@ test("returning to the foreground appends missed output without a full replay", 
     },
   });
   expect(response.status()).toBe(201);
-  const { id } = await response.json();
+  const { id } = (await response.json()).session;
   const sockets: WebSocket[] = [];
   const frames = new Map<WebSocket, Buffer[]>();
   page.on("websocket", (socket) => {

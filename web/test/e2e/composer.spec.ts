@@ -236,7 +236,7 @@ test("drafts survive navigation and reload, remain session-local and stop persis
     },
   });
   expect(response.status()).toBe(201);
-  const { id: b } = await response.json();
+  const { id: b } = (await response.json()).session;
   const back = () => backToList(page);
   await back();
   await page.goto(`/s/${b}`);

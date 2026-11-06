@@ -40,22 +40,22 @@ func TestConfigIDRulesRunBeforeDirectoryChecks(t *testing.T) {
 	missing := filepath.Join(cwd, "missing")
 	for _, row := range []struct {
 		name string
-		in   SessionInput
+		in   CreateInput
 		kind error
 		text string
 	}{
-		{"empty", SessionInput{Cwd: missing, ConfigID: &empty}, ErrInvalid, "configId must not be empty"},
-		{"with cmd", SessionInput{Cwd: missing, ConfigID: &id, Cmd: []string{"x"}}, ErrInvalid, "configId cannot be combined with cmd or env"},
-		{"with env", SessionInput{Cwd: missing, ConfigID: &id, Env: map[string]string{"A": "1"}}, ErrInvalid, "configId cannot be combined with cmd or env"},
-		{"unknown", SessionInput{Cwd: missing, ConfigID: &unknown}, launch.ErrNotFound, launch.ErrNotFound.Error()},
-		{"forged env", SessionInput{Cwd: missing, Cmd: []string{"/bin/sh"}, Env: map[string]string{"WEBMUX_SESSION_ID": "x"}}, ErrInvalid, ""},
+		{"empty", CreateInput{Cwd: missing, ConfigID: &empty}, ErrInvalid, "configId must not be empty"},
+		{"with cmd", CreateInput{Cwd: missing, ConfigID: &id, Cmd: []string{"x"}}, ErrInvalid, "configId cannot be combined with cmd or env"},
+		{"with env", CreateInput{Cwd: missing, ConfigID: &id, Env: map[string]string{"A": "1"}}, ErrInvalid, "configId cannot be combined with cmd or env"},
+		{"unknown", CreateInput{Cwd: missing, ConfigID: &unknown}, launch.ErrNotFound, launch.ErrNotFound.Error()},
+		{"forged env", CreateInput{Cwd: missing, Cmd: []string{"/bin/sh"}, Env: map[string]string{"WEBMUX_SESSION_ID": "x"}}, ErrInvalid, ""},
 	} {
 		_, err := s.CreateSession(context.Background(), row.in)
 		if !errors.Is(err, row.kind) || (row.text != "" && err.Error() != row.text) {
 			t.Errorf("%s: %v, want %v %q", row.name, err, row.kind, row.text)
 		}
 	}
-	item, err := s.CreateSession(context.Background(), SessionInput{ConfigID: &id})
+	item, err := s.CreateSession(context.Background(), CreateInput{ConfigID: &id})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestConfigIDRulesRunBeforeDirectoryChecks(t *testing.T) {
 	if !reflect.DeepEqual(info.Cmd, saved.Cmd) || info.Cwd != cwd || info.ConfigID != saved.ID {
 		t.Fatalf("session from config: %+v", info)
 	}
-	direct, err := s.CreateSession(context.Background(), SessionInput{Cwd: cwd, Cmd: []string{"/bin/sh", "-c", "printf DIRECT"}})
+	direct, err := s.CreateSession(context.Background(), CreateInput{Cwd: cwd, Cmd: []string{"/bin/sh", "-c", "printf DIRECT"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestConfigIDRulesRunBeforeDirectoryChecks(t *testing.T) {
 func TestConfigIDWithoutLaunchStoreIsUnavailable(t *testing.T) {
 	s, _ := configService(t, nil)
 	id := "abcdefgh"
-	if _, err := s.CreateSession(context.Background(), SessionInput{ConfigID: &id}); !errors.Is(err, launch.ErrUnavailable) {
+	if _, err := s.CreateSession(context.Background(), CreateInput{ConfigID: &id}); !errors.Is(err, launch.ErrUnavailable) {
 		t.Fatalf("nil store: %v", err)
 	}
 }

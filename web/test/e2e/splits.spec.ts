@@ -248,7 +248,7 @@ test("existing sessions can join a split and missing panes can be dismissed", as
     },
   });
   expect(response.ok()).toBe(true);
-  const existing = await response.json();
+  const existing = (await response.json()).session;
   await openPaneMenu(page);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
   await page.getByRole("radio", { name: "上下分屏", exact: true }).click();
@@ -314,19 +314,19 @@ test("a split preserves hybrid chat and terminal switching beside a shell", asyn
     .locator(".xterm")
     .evaluate((element) => element.setAttribute("data-retained", "yes"));
   const config = await request.post("/api/launch-configs", {
-    data: { name: "Chat agent", cmd: ["omp"], env: {}, hybrid: true },
+    data: { name: "Chat agent", cmd: ["omp"], env: {}, chat: true },
   });
   expect(config.status()).toBe(201);
   const created = await request.post("/api/sessions", {
     data: {
       cwd: workDir,
       configId: (await config.json()).id,
-      startSide: "acp",
+      view: "chat",
       name: "Chat agent",
     },
   });
   expect(created.status()).toBe(201);
-  const chatId = (await created.json()).id;
+  const chatId = (await created.json()).session.id;
   await openPaneMenu(anchor);
   await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
   await page

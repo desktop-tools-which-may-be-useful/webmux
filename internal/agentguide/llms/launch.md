@@ -1,37 +1,33 @@
 # 启动会话
 
-## run
+`webmux run` 是唯一的创建命令，与 Web 端新建会话对话框一样，一次请求完成全部步骤。选项与示例用 `webmux run --help` 查看。
 
-```sh
-webmux run --detach -- make test                          # 后台运行，输出 "<ID>\t<链接>"
-webmux run --detach --json --wait idle --timeout 60s --launch-config omp   # 等 agent 就绪，输出 {session, link}
-webmux run --follow --strip -- go test ./...              # 在持久会话里跑命令，输出纯文本，以命令的退出码退出
-webmux run --new-worktree fix/lint --base main --launch-config "Claude Code" --start-side chat --init --prompt "修复 lint" --detach
-webmux run --dry-run --label run=7 -- make build          # 只打印将要发送的请求，不创建任何东西
-```
+## 命令
 
-- `--` 之后的参数原样作为 argv，不经 shell 展开；需要 shell 特性时显式写 `bash -lc '...'`。
-- 自定义命令继承调用方的环境（终端身份变量与 `WEBMUX_*` 除外），`--env` 覆盖同名变量；`--launch-config` 的环境由服务端展开，与 `--` 后的命令、`--env` 互斥。
-- 没有终端时（agent 的工具调用、管道）`run` 自动后台运行；`--attach` 强制附着。
-- 位置：当前目录所在的已登记 worktree 会自动关联；`--worktree REPO:WORKTREE|PATH` 选已有 worktree；`--new-worktree BRANCH` 新建 worktree（默认放在 `<仓库>.worktrees/<分支末段>`，并像 Web 端一样加入主页显示，`--no-pin` 不加入）。
-- 混合会话：`--start-side terminal|chat`，`--prompt TEXT|-` 作为首条消息，`--init` 在前面加上仓库初始化指令。
-- `--follow`：Ctrl+C 只停止跟随（退出码 130），会话继续运行；`--kill-on-interrupt` 先结束程序。连接中断时以 1 退出，用 `webmux attach` 重新查看。
-- `--label KEY=VALUE` 给会话打标签，便于之后 `webmux ls --label` 找回。
+- 自定义命令写在 `--` 之后，原样作为 argv，不经 shell 展开；需要 shell 特性时显式写 `bash -lc '...'`。没有 `--` 时出现的位置参数是用法错误。
+- 自定义命令继承调用方的环境（终端身份变量与 `WEBMUX_*` 除外）。`--launch-config` 使用 Web 端保存的启动配置，环境由服务端展开，不会经过 CLI。
+- `webmux run -- <argv…>` 总是创建普通会话（只有终端视图），即使命令是 agent；要聊天视图必须用开启了聊天视图的启动配置。
 
-## chat new
+## 位置
 
-`webmux chat new` 等同于 Web 端“新聊天”：一次完成新建 worktree、启动混合 agent、应用配置项与权限模式、发送首条消息。
+与 Web 端对话框中的“位置”相同：
 
-```sh
-webmux chat new --agent "Claude Code" "Add a POST /books endpoint"
-webmux chat new --agent Codex --label task=lint --wait --timeout 20m "修复所有 lint 并汇报改动"
-webmux launch-config options "Claude Code" --json        # 列出 --set 可用的配置项与值
-webmux chat new --agent omp --set model=smart --permission ask --attach design.png -
-```
+- 当前目录：位于已登记 worktree 内时自动关联该 worktree；
+- 已有 worktree：`--worktree`；
+- 新建 worktree：`--new-worktree` 是开关，分支名用 `--branch` 给出，省略时由服务端自动生成（`wt/<日期>-<时间>`）。
+  会话从新 worktree 的根目录开始，新 worktree 像 Web 端一样加入主页显示。
 
-- 仓库默认是当前目录所属的已登记仓库；分支名默认自动生成（`wt/<日期>-<时间>`）。
-- `--wait` 等第一轮结束，输出 agent 的最终回复；回合中 agent 请求授权或提问时以 1 退出并在标准错误给出请求 ID，`--auto-wait-requests` 则继续等待用户在 Web 端回答。
-- 失败时按步骤（precheck、worktree、session、config、prompt）报告，已创建的 worktree 与会话保留。
+## 视图与首条消息
 
-之后用 `webmux chat send`、`chat status`、`chat answer` 继续驱动它，见 [混合会话聊天](/llms/chat.md)。
-启动配置名称可以在 Web 端设置页或 `webmux api /api/launch-configs` 中查看。
+- 启动配置开启了聊天视图时，可以直接以聊天视图启动（`--view chat`，没有终端可附着，因此总是后台运行）。
+- `--prompt` 是首条消息：聊天视图上是第一条提示，终端视图上是输入并回车。`--init` 在它前面加上仓库的初始化指令（见 [仓库与工作区](/llms/workspace.md)），需要关联 worktree。
+- 聊天视图的 agent 设置、权限模式与附件也在创建时给出；可用的设置项与取值用 `webmux launch-config options` 查询。
+
+## 之后怎样跟进
+
+- 后台运行：输出会话 ID 与链接；没有终端时（agent 的工具调用、管道）`run` 自动后台运行。
+- 等就绪：`--wait` 等会话第一次进入某个状态；`--reply` 跟踪首条提示的回合并输出 agent 的最终回复，规则与 `send` 的 `--reply` 相同（见 [会话](/llms/sessions.md)）。
+- 跟随：`--follow` 把输出写到标准输出并以程序的退出码退出；Ctrl+C 只停止跟随，会话继续运行。
+- 失败：按步骤（precheck、worktree、session、config、prompt）报告，已创建的 worktree 与会话保留，不回滚。
+
+启动配置名称可以用 `webmux launch-config ls` 查看。

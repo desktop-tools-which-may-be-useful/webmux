@@ -26,7 +26,7 @@ test("session links open the terminal in this tab without reloading", async ({
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
 
   await page.goto("/");
   const timeOrigin = await page.evaluate(() => performance.timeOrigin);
@@ -87,7 +87,7 @@ test("Home Screen session links keep authenticated navigation inside the app", a
       },
     });
     expect(created.status()).toBe(201);
-    const { id } = await created.json();
+    const { id } = (await created.json()).session;
     // Emulate only the display-mode capability; routing, storage, authentication
     // and the PTY connection remain real.
     await page.addInitScript(() => {

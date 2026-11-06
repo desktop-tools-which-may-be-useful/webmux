@@ -134,11 +134,8 @@ func (s *Server) routes() *http.ServeMux {
 		hostname, _ := os.Hostname()
 		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported})
 	})
-	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, wire.Sessions(m.List())) })
-	mux.HandleFunc("POST /api/sessions", s.create)
-	mux.HandleFunc("GET /api/sessions/{id}", s.get)
+	s.sessionRoutes(mux)
 	serveIn(mux, "PATCH /api/sessions/{id}", http.StatusOK, renameFailure, s.rename)
-	mux.HandleFunc("DELETE /api/sessions/{id}", s.delete)
 	mux.HandleFunc("GET /api/sessions/{id}/buffer", s.buffer)
 	mux.HandleFunc("GET /api/sessions/{id}/upload", s.readUpload)
 	mux.HandleFunc("POST /api/sessions/{id}/upload", s.upload)
@@ -149,7 +146,6 @@ func (s *Server) routes() *http.ServeMux {
 	s.guideRoutes(mux)
 	s.chatRoutes(mux)
 	s.workspaceRoutes(mux)
-	s.quickStartRoutes(mux)
 	s.pushRoutes(mux)
 	s.launchRoutes(mux)
 	s.settingsRoutes(mux)
@@ -187,7 +183,7 @@ const chatBodyBytes = 8 * hybrid.MaxPromptBytes
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	limit := int64(65536)
 	switch v.(type) {
-	case *contract.ChatPromptRequest, *contract.ChatQueueRequest:
+	case *contract.SessionInputRequest, *contract.ChatQueueRequest:
 		limit = chatBodyBytes
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
@@ -327,27 +323,6 @@ func (s *Server) originAllowed(r *http.Request) bool {
 	}
 	return false
 }
-func (s *Server) create(w http.ResponseWriter, r *http.Request) {
-	var req contract.CreateSessionRequest
-	if !decode(w, r, &req) {
-		return
-	}
-	// Labels are checked first so an invalid request starts nothing.
-	if err := s.Manager.ValidateLabels(req.Labels); err != nil {
-		failure(w, http.StatusBadRequest, err)
-		return
-	}
-	item, err := s.Workspace.CreateSession(r.Context(), wire.SessionInput(req))
-	if err != nil {
-		sessionFailure(w, err)
-		return
-	}
-	info, err := s.adopt(r, item.Info().ID, req.Labels)
-	if err != nil {
-		info = item.Info()
-	}
-	reply(w, 201, wire.Session(info))
-}
 func (s *Server) find(w http.ResponseWriter, r *http.Request) *session.Session {
 	item, err := s.Manager.Get(r.PathValue("id"))
 	if err != nil {
@@ -355,11 +330,6 @@ func (s *Server) find(w http.ResponseWriter, r *http.Request) *session.Session {
 		return nil
 	}
 	return item
-}
-func (s *Server) get(w http.ResponseWriter, r *http.Request) {
-	if item := s.find(w, r); item != nil {
-		reply(w, 200, wire.Session(item.Info()))
-	}
 }
 
 // rename sets the user-chosen name of a session; a hybrid session also keeps
@@ -384,23 +354,6 @@ func (s *Server) rename(r *http.Request, req contract.RenameSessionRequest) (con
 	return wire.Session(info), nil
 }
 
-func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
-	var err error
-	if r.URL.Query().Get("remove") == "1" {
-		err = s.Manager.Remove(r.PathValue("id"))
-	} else {
-		err = s.Manager.Close(r.PathValue("id"))
-	}
-	if err != nil {
-		// A hybrid session refuses a close during a switch (409 switching).
-		if hybridFailure(w, err) {
-			return
-		}
-		failure(w, sessionStatus(err), err)
-		return
-	}
-	w.WriteHeader(204)
-}
 func (s *Server) buffer(w http.ResponseWriter, r *http.Request) {
 	if item := s.find(w, r); item != nil {
 		w.Header().Set("Content-Type", "application/octet-stream")

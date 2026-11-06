@@ -4,8 +4,8 @@ import { api } from "../api";
 import { setBrowserChrome } from "../browser-chrome";
 import {
   answerSwitch,
+  changeView,
   chatActions,
-  switchSide,
   type ChatActions,
 } from "../chat-api";
 import { errorMessage } from "../error";
@@ -18,14 +18,13 @@ import {
   type SwitchStep,
   type SwitchTarget,
 } from "../hybrid";
-import { hybridConflict, loadRecord } from "../recoverable";
+import { loadRecord, sessionConflict } from "../recoverable";
 import {
   SessionInfoSchema,
+  type AgentCandidate,
   type AgentConnector,
+  type ArchivedSession,
   type ChatEvent,
-  type ChatState,
-  type HybridCandidate,
-  type HybridRecord,
   type SessionInfo,
 } from "../schemas";
 import type { TerminalDraft, TerminalDrafts } from "../terminal-draft.svelte";
@@ -68,7 +67,7 @@ type HybridConfirm = { to: SwitchTarget; title: string; body: string };
 /** A switch to chat that found several agent sessions to continue. */
 type HybridAmbiguous = {
   message: string;
-  candidates: HybridCandidate[];
+  candidates: AgentCandidate[];
 };
 
 export interface HybridSession {
@@ -77,11 +76,11 @@ export interface HybridSession {
   readonly view: HybridView;
   readonly chat: ChatSocket;
   readonly actions: ChatActions;
-  /** Session info for the header: the terminal's, or read on the chat side. */
+  /** Session info for the header: the terminal's, or read on the chat view. */
   readonly info: SessionInfo | undefined;
-  /** The side the session settled on, null while switching or unknown. */
+  /** The view the session settled on, null while switching or unknown. */
   readonly side: SwitchTarget | null;
-  /** The side a running switch goes to, when known. */
+  /** The view a running switch goes to, when known. */
   readonly target: SwitchTarget | null;
   readonly steps: SwitchStep[];
   /** Why switching to chat is unavailable now; "" when it is available. */
@@ -91,8 +90,8 @@ export interface HybridSession {
   readonly awaitingChoice: boolean;
   readonly answering: boolean;
   readonly notices: HybridNotice[];
-  /** The record of a closed or interrupted session, to resume it. */
-  readonly recoverable: HybridRecord | undefined;
+  /** The closed or interrupted session, to resume it. */
+  readonly recoverable: ArchivedSession | undefined;
   /** Neither the session nor a record exists: its drafts can go. */
   readonly missing: boolean;
   /** The chat side's connector is not installed; undefined once dismissed. */
@@ -111,11 +110,11 @@ export interface HybridSession {
 }
 
 const confirmations: Record<SwitchTarget, Omit<HybridConfirm, "to">> = {
-  tui: {
+  terminal: {
     title: "切换到终端？",
     body: "当前回合会被中断，已输出的内容会保留。",
   },
-  acp: {
+  chat: {
     title: "切换到聊天？",
     body: "TUI 正在执行回合：会先发送中断键，等它停下后再退出 TUI。",
   },
@@ -139,9 +138,14 @@ export function useHybrid(
     clearTimeout(lingerTimer);
   });
 
-  let record = $state.raw<HybridRecord>();
+  let record = $state.raw<ArchivedSession>();
   let lookup = $state<"none" | "found" | "absent" | "failed">("none");
-  let restInfo = $state.raw<SessionInfo>();
+  // The session as last read: from a terminal frame while the stream is
+  // attached, otherwise from the server whenever the chat channel or the
+  // stream reports a change. The latest of the two wins.
+  let current = $state.raw<SessionInfo>();
+  // Whether `current` was read from the server rather than the stream.
+  let fromServer = $state(false);
   let requesting = $state<SwitchTarget | null>(null);
   let confirming = $state<HybridConfirm | null>(null);
   let answering = $state(false);
@@ -154,25 +158,20 @@ export function useHybrid(
   let switchConnector = $state.raw<AgentConnector>();
   // The install banner was closed on this page view.
   let connectorDismissed = $state(false);
-  // The side before the current switch, for a switch first seen mid-way.
+  // The view before the current switch, for a switch first seen mid-way.
   let settled: SwitchTarget | undefined;
-  // The state that last reattached the terminal; one try per state.
-  let reattachedFor: ChatState | undefined;
+  // The session read that last reattached the terminal; one try per read.
+  let reattachedFor: SessionInfo | undefined;
 
   const state = $derived(chat.state);
-  // The session's streams exist: its terminal reported it hybrid, or moved.
+  // The session's streams exist: its terminal reported a chat view, or moved.
   const streaming = $derived(
-    !!terminal.info?.hybrid || terminal.connection === "moved",
+    !!terminal.info?.views.includes("chat") || terminal.connection === "moved",
   );
   const known = $derived(streaming || !!state || !!record);
-  const where = $derived(state?.side ?? terminal.info?.hybrid?.side);
-  const phase = $derived(state ? state.phase : terminal.info?.hybrid?.phase);
-  const side = $derived<SwitchTarget | null>(
-    phase ? null : where === "acp" || where === "tui" ? where : null,
-  );
-  const recoverable = $derived(
-    record && record.state !== "active" ? record : undefined,
-  );
+  const where = $derived(current?.view);
+  const phase = $derived(current?.transition?.phase);
+  const side = $derived<SwitchTarget | null>(phase ? null : (where ?? null));
   // A switch to the terminal seen on this page: the progress stays up until
   // the reattached stream drew the new run (terminalDrawn below).
   let arriving = $state(false);
@@ -184,22 +183,23 @@ export function useHybrid(
   // Where the switch on screen goes, kept while its progress lingers.
   let movingTo = $state<SwitchTarget | null>(null);
   const moving = $derived(
-    where === "switching" ||
-      !!phase ||
-      (!!requesting && where !== requesting) ||
-      arriving,
+    !!phase || (!!requesting && where !== requesting) || arriving,
   );
   const view = $derived.by<HybridView>(() => {
     if (!known) return "terminal";
     if (terminal.connection === "missing" && !state)
-      return recoverable ? "recovery" : "terminal";
+      return record ? "recovery" : "terminal";
     if (moving || lingering) return "switching";
-    return where === "tui" ? "terminal" : "chat";
+    return where === "terminal" ? "terminal" : "chat";
   });
   const target = $derived(
     view === "switching"
       ? (requesting ??
-          (phase ? switchTarget(phase, settled) : arriving ? "tui" : movingTo))
+          (phase
+            ? (current?.transition?.to ?? switchTarget(phase, settled))
+            : arriving
+              ? "terminal"
+              : movingTo))
       : requesting,
   );
   const terminalDrawn = $derived.by(() => {
@@ -217,11 +217,12 @@ export function useHybrid(
     terminal.connection === "missing" ||
       chat.connection === "missing" ||
       chat.connection === "exited" ||
-      (terminal.info?.hybrid?.state ?? "active") !== "active" ||
+      (current?.state ?? "active") !== "active" ||
       !!state?.recovery,
   );
   const info = $derived.by(() => {
-    if (where === "tui" || !restInfo) return terminal.info ?? restInfo;
+    const restInfo = fromServer ? current : undefined;
+    if (where === "terminal" || !restInfo) return terminal.info ?? current;
     // Read once per change below; the turn itself is newer than that read.
     const running = state?.turn.running ?? false;
     const status = running
@@ -233,22 +234,26 @@ export function useHybrid(
           : restInfo.status;
     return { ...restInfo, status } satisfies SessionInfo;
   });
-  // What the header shows of a session off its terminal side. The model's
-  // title re-reads the session so the server's name precedence still applies.
-  const infoKey = $derived(
-    state && where !== "tui"
-      ? [
-          state.side,
-          state.phase ?? "",
-          state.turn.running,
-          state.requests.length,
-          chat.model.title ?? "",
-        ].join()
-      : "",
-  );
+  // While the stream is not attached, the session's view, transition and
+  // header are read from the server on every change the chat channel or the
+  // stream reports. The model's title re-reads the session so the server's
+  // name precedence still applies.
+  const readKey = $derived.by(() => {
+    if (!known || terminal.connection === "connected") return undefined;
+    return [state, chat.model.title, terminal.connection] as const;
+  });
 
   $effect(() => {
     if (streaming) chat.open();
+  });
+  // Every terminal frame is the newest description of the session.
+  $effect(() => {
+    const next = terminal.info;
+    if (!next) return;
+    untrack(() => {
+      current = next;
+      fromServer = false;
+    });
   });
   $effect(() => {
     if (side) settled = side;
@@ -270,8 +275,8 @@ export function useHybrid(
   // a session that ended, or arrivalTimeout lets it go.
   $effect(() => {
     const toTerminal =
-      (!!phase && target === "tui") ||
-      (requesting === "tui" && where !== "tui");
+      (!!phase && target === "terminal") ||
+      (requesting === "terminal" && where !== "terminal");
     if (arriving || !toTerminal) return;
     leftRun = untrack(() => terminal.info?.generation);
     arriving = true;
@@ -280,8 +285,8 @@ export function useHybrid(
     if (!arriving) return;
     if (ended) arriving = false;
     else if (!phase && !requesting) {
-      if (where === "acp") arriving = false;
-      else if (where === "tui" && terminalDrawn) arriving = false;
+      if (where === "chat") arriving = false;
+      else if (where === "terminal" && terminalDrawn) arriving = false;
     }
   });
   $effect(() => {
@@ -289,37 +294,54 @@ export function useHybrid(
     const timer = setTimeout(() => (arriving = false), arrivalTimeout);
     return () => clearTimeout(timer);
   });
-  $effect(() => {
-    if (!infoKey) return;
-    const controller = new AbortController();
-    api(
-      `/sessions/${id}`,
-      SessionInfoSchema,
-      "GET",
-      undefined,
-      controller.signal,
-    )
-      .then((value) => (restInfo = value))
+  // One read at a time: changes during a read ask for one more afterwards.
+  let reading = false;
+  let readAgain = false;
+  let disposed = false;
+  onDestroy(() => (disposed = true));
+  function read() {
+    if (reading) {
+      readAgain = true;
+      return;
+    }
+    reading = true;
+    api(`/sessions/${id}`, SessionInfoSchema, "GET")
+      .then((value) => {
+        if (disposed) return;
+        current = value;
+        fromServer = true;
+      })
       .catch(() => {
         // The next change reads it again; the page keeps the last one.
+      })
+      .finally(() => {
+        reading = false;
+        if (readAgain && !disposed) {
+          readAgain = false;
+          read();
+        }
       });
-    return () => controller.abort();
+  }
+  $effect(() => {
+    if (readKey === undefined) return;
+    untrack(read);
   });
   $effect(() => {
     if (!manageChrome || view !== "chat" || !info) return;
     setBrowserChrome(`${info.title} · WebMux`, info.status === "running");
   });
-  // Back on the terminal side, the stream that 4409 closed attaches again.
+  // Back on the terminal view, the stream that 4409 closed attaches again.
   $effect(() => {
     if (
-      where !== "tui" ||
+      where !== "terminal" ||
       phase ||
       terminal.connection !== "moved" ||
-      !state ||
-      reattachedFor === state
+      !fromServer ||
+      !current ||
+      reattachedFor === current
     )
       return;
-    reattachedFor = state;
+    reattachedFor = current;
     terminal.reconnect();
   });
   $effect(() => {
@@ -366,11 +388,11 @@ export function useHybrid(
     for (const key of dismissed)
       if (key.startsWith("failure:")) dismissed.delete(key);
     try {
-      const result = await switchSide(id, to, agentSessionId);
+      const result = await changeView(id, to, agentSessionId);
       if (result.draft) returnDraft(result.draft);
       dropped = result.dropped;
     } catch (err) {
-      const conflict = hybridConflict(err);
+      const conflict = sessionConflict(err);
       if (conflict?.reason === "session_ambiguous" && conflict.candidates)
         ambiguous = {
           message: conflict.error,
@@ -388,15 +410,15 @@ export function useHybrid(
   const progressPhase = $derived.by<SwitchProgressPhase | undefined>(() => {
     if (view !== "switching") return undefined;
     if (phase) return phase;
-    if (where === "tui" && target === "tui") return "arriving";
-    if (where === "acp" && target === "acp") return "loading";
+    if (where === "terminal" && target === "terminal") return "arriving";
+    if (where === "chat" && target === "chat") return "loading";
     return "requested";
   });
   const steps = $derived(
     progressPhase ? switchSteps(target, progressPhase) : [],
   );
   const chatUnavailable = $derived(
-    side !== "tui"
+    side !== "terminal"
       ? ""
       : state
         ? eligibilityText(state.eligibility)
@@ -405,7 +427,7 @@ export function useHybrid(
   const connector = $derived.by(() => {
     if (connectorDismissed) return undefined;
     const eligibility = state?.eligibility;
-    if (side === "tui" && eligibility?.reason === "connector_missing")
+    if (side === "terminal" && eligibility?.reason === "connector_missing")
       return eligibility.connector ?? switchConnector;
     return switchConnector;
   });
@@ -424,7 +446,7 @@ export function useHybrid(
         text: `以下参数在恢复时未保留：${dropped.join(" ")}`,
       });
     const change = state?.idChange;
-    if (change && where === "tui")
+    if (change && where === "terminal")
       list.push({
         key: `id:${change.from}>${change.to}`,
         tone: "info",
@@ -476,7 +498,7 @@ export function useHybrid(
       return notices;
     },
     get recoverable() {
-      return recoverable;
+      return record;
     },
     get missing() {
       return terminal.connection === "missing" && lookup === "absent";
@@ -490,12 +512,12 @@ export function useHybrid(
     request(to) {
       if (requesting || view === "switching" || !side || to === side) return;
       notice = "";
-      if (to === "acp" && chatUnavailable) {
+      if (to === "chat" && chatUnavailable) {
         notice = `现在不能切到聊天：${chatUnavailable}`;
         return;
       }
       const running =
-        to === "tui"
+        to === "terminal"
           ? !!state?.turn.running
           : terminal.info?.status === "running";
       if (running) confirming = { to, ...confirmations[to] };
@@ -521,7 +543,7 @@ export function useHybrid(
     },
     pick(agentSessionId) {
       if (requesting || !agentSessionId) return;
-      void run("acp", agentSessionId);
+      void run("chat", agentSessionId);
     },
     cancelPick() {
       ambiguous = null;

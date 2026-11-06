@@ -14,7 +14,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 )
 
-func TestChatCommandsDriveAHybridSession(t *testing.T) {
+func TestSessionVerbsDriveAChatSession(t *testing.T) {
 	t.Parallel()
 	agent := fakeAgent(t)
 	f := newFixture(t, "")
@@ -26,15 +26,16 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	if err := client.Do(ctx, http.MethodPost, "/api/repositories", contract.RegisterRepositoryRequest{Path: repo}, nil); err != nil {
 		t.Fatal(err)
 	}
-	config := contract.LaunchConfigInput{Name: "Fake", Cmd: []string{agent}, Hybrid: true, Env: map[string]string{
+	config := contract.LaunchConfigInput{Name: "Fake", Cmd: []string{agent}, Chat: true, Env: map[string]string{
 		"FAKEAGENT_STORE": t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms", "FAKEAGENT_PERMISSION": "1",
 	}}
 	if err := client.Do(ctx, http.MethodPost, "/api/launch-configs", config, nil); err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, code := f.cli(t, "chat", "new", "--repo", repo, "--agent", "Fake", "--wait", "--timeout", "40s", "start")
+	stdout, stderr, code := f.cli(t, "run", "--new-worktree", "--repo", repo, "--launch-config", "Fake", "--view", "chat",
+		"--prompt", "start", "--reply", "--timeout", "40s")
 	if code != 0 {
-		t.Fatalf("chat new: %d %q %q", code, stdout, stderr)
+		t.Fatalf("run --reply: %d %q %q", code, stdout, stderr)
 	}
 	sessions, _, _ := f.cli(t, "ls", "--json")
 	var list []contract.SessionInfo
@@ -43,14 +44,19 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	}
 	id := list[0].ID
 
-	// Not a hybrid session: a clear refusal.
+	// A session without a chat view: clear refusals, nothing sent.
 	plain := detachedID(t, f, "sleep", "30")
-	if _, stderr, code := f.cli(t, "chat", "send", plain, "hi"); code != contract.ExitError || !strings.Contains(stderr, "not a hybrid session") {
-		t.Fatalf("plain session: %d %q", code, stderr)
+	for _, args := range [][]string{{"chat", "status", plain}, {"view", plain, "chat"}} {
+		if _, stderr, code := f.cli(t, args...); code != contract.ExitError || !strings.Contains(stderr, "no chat view") {
+			t.Fatalf("%v: %d %q", args, code, stderr)
+		}
+	}
+	if _, stderr, code := f.cli(t, "send", plain, "hi", "--reply"); code != contract.ExitError || !strings.Contains(stderr, "--wait") {
+		t.Fatalf("send --reply to a terminal session: %d %q", code, stderr)
 	}
 
-	// Auto permission: --wait returns the reply of the prompt's own turn,
-	// and watch shows it live without the earlier history.
+	// --reply returns the reply of the input's own turn, and watch shows
+	// it live without the earlier history.
 	watch := f.command(nil, "chat", "watch", "--config", f.config, id, "--json")
 	pipe, _ := watch.StdoutPipe()
 	if err := watch.Start(); err != nil {
@@ -82,9 +88,9 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	if frame := next(); frame.Type != contract.ChatFrameSnapshot {
 		t.Fatalf("first watch frame %+v", frame)
 	}
-	stdout, stderr, code = f.cli(t, "chat", "send", id, "hello there", "--wait", "--timeout", "30s")
+	stdout, stderr, code = f.cli(t, "send", id, "hello there", "--reply", "--timeout", "30s")
 	if code != 0 || strings.TrimSpace(stdout) == "" {
-		t.Fatalf("send --wait: %d %q %q", code, stdout, stderr)
+		t.Fatalf("send --reply: %d %q %q", code, stdout, stderr)
 	}
 	var users []string
 	for ended := false; !ended; {
@@ -100,8 +106,12 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	if strings.Join(users, "|") != "hello there" {
 		t.Fatalf("watch saw user messages %q; want only the new one", users)
 	}
-	if _, _, code := f.cli(t, "chat", "cancel", id); code != 0 {
-		t.Fatalf("cancel while idle: %d", code)
+	if _, _, code := f.cli(t, "interrupt", id); code != 0 {
+		t.Fatalf("interrupt while idle: %d", code)
+	}
+	// Keys belong to the terminal view: refused, nothing sent.
+	if _, stderr, code := f.cli(t, "send", id, "--key", "esc"); code != contract.ExitError || !strings.Contains(stderr, "wrong_view") {
+		t.Fatalf("--key on the chat view: %d %q", code, stderr)
 	}
 
 	// Settings: a select takes one of its values; refusals name the cause.
@@ -124,13 +134,13 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 		t.Fatalf("malformed setting: %d", code)
 	}
 
-	// Ask: --wait stops at the request; status lists it; answer resolves it.
+	// Ask: --reply stops at the request; status lists it; answer resolves it.
 	if _, _, code := f.cli(t, "chat", "permission", id, "ask"); code != 0 {
 		t.Fatalf("permission ask: %d", code)
 	}
-	_, stderr, code = f.cli(t, "chat", "send", id, "needs a tool", "--wait", "--timeout", "30s")
+	_, stderr, code = f.cli(t, "send", id, "needs a tool", "--reply", "--timeout", "30s")
 	if code != contract.ExitError || !strings.Contains(stderr, "chat answer") {
-		t.Fatalf("send --wait at a request: %d %q", code, stderr)
+		t.Fatalf("send --reply at a request: %d %q", code, stderr)
 	}
 	state := chatState(t, f, id)
 	if len(state.Requests) != 1 || len(state.Requests[0].Options) == 0 || !state.Turn.Running {
@@ -138,10 +148,11 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	}
 	request := state.Requests[0]
 
-	// A prompt sent during the turn is queued; the queue commands edit it.
-	stdout, _, code = f.cli(t, "chat", "send", id, "later")
-	var queued contract.ChatPromptResult
-	if err := json.Unmarshal([]byte(stdout), &queued); err != nil || code != 0 || !queued.Queued || queued.ItemID == "" {
+	// Input sent during the turn is queued; the queue commands edit it.
+	stdout, _, code = f.cli(t, "send", id, "later", "--json")
+	var queued contract.SessionInputResult
+	if err := json.Unmarshal([]byte(stdout), &queued); err != nil || code != 0 || queued.View != contract.ViewChat ||
+		queued.Queued == nil || !*queued.Queued || queued.ItemID == "" {
 		t.Fatalf("queued send: %d %q", code, stdout)
 	}
 	if _, _, code := f.cli(t, "chat", "queue", "edit", id, queued.ItemID, "later, edited"); code != 0 {
@@ -168,12 +179,12 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	}
 	eventuallyCLI(t, "the answered turn to end", func() bool { return !chatState(t, f, id).Turn.Running })
 
-	// A queued prompt removed before it is sent ends --wait with 1.
-	if _, _, code := f.cli(t, "chat", "send", id, "blocks on a tool"); code != 0 {
+	// A queued prompt removed before it is sent ends --reply with 1.
+	if _, _, code := f.cli(t, "send", id, "blocks on a tool"); code != 0 {
 		t.Fatalf("send: %d", code)
 	}
 	eventuallyCLI(t, "the next request", func() bool { return len(chatState(t, f, id).Requests) == 1 })
-	waiting := f.command(nil, "chat", "send", "--config", f.config, id, "never sent", "--wait", "--timeout", "30s")
+	waiting := f.command(nil, "send", "--config", f.config, id, "never sent", "--reply", "--timeout", "30s")
 	var waitErr strings.Builder
 	waiting.Stderr = &waitErr
 	if err := waiting.Start(); err != nil {
@@ -187,70 +198,83 @@ func TestChatCommandsDriveAHybridSession(t *testing.T) {
 	if waiting.ProcessState.ExitCode() != contract.ExitError || !strings.Contains(waitErr.String(), "removed") {
 		t.Fatalf("waiting for a removed prompt: %d %q", waiting.ProcessState.ExitCode(), waitErr.String())
 	}
-	if _, _, code := f.cli(t, "chat", "cancel", id); code != 0 {
-		t.Fatalf("cancel: %d", code)
+	// interrupt cancels the turn waiting on its request.
+	if _, _, code := f.cli(t, "interrupt", id); code != 0 {
+		t.Fatalf("interrupt: %d", code)
 	}
 	eventuallyCLI(t, "the cancelled turn to end", func() bool { return !chatState(t, f, id).Turn.Running })
-
-	// History: the record is active, so forget refuses; without a
-	// terminal it needs --yes anyway.
-	stdout, _, _ = f.cli(t, "chat", "ls", "--repo", repo, "--json")
-	var records []contract.HybridRecord
-	if err := json.Unmarshal([]byte(stdout), &records); err != nil || len(records) != 1 || records[0].ID != id {
-		t.Fatalf("chat ls: %q %v", stdout, err)
-	}
-	if out, _, _ := f.cli(t, "chat", "ls", "--archived", "--json"); strings.TrimSpace(out) != "[]" {
-		t.Fatalf("chat ls --archived: %q", out)
-	}
-	if _, _, code := f.cli(t, "chat", "forget", id, "--yes"); code != contract.ExitError {
-		t.Fatalf("forget an active record: %d", code)
+	if out, _, _ := f.cli(t, "ls", "--archived", "--json"); strings.TrimSpace(out) != "[]" {
+		t.Fatalf("ls --archived with nothing archived: %q", out)
 	}
 
-	// Switch to the terminal and back.
-	if _, stderr, code := f.cli(t, "chat", "switch", id, "--to", "terminal", "--force"); code != 0 {
-		t.Fatalf("switch to terminal: %d %q", code, stderr)
+	// Change to the terminal view and back.
+	if _, stderr, code := f.cli(t, "view", id, "terminal", "--force"); code != 0 {
+		t.Fatalf("view terminal: %d %q", code, stderr)
 	}
-	if _, stderr, code := f.cli(t, "chat", "send", id, "hi"); code != contract.ExitError || !strings.Contains(stderr, "--to chat") {
-		t.Fatalf("send on the terminal side: %d %q", code, stderr)
+	if _, stderr, code := f.cli(t, "send", id, "hi", "--reply"); code != contract.ExitError || !strings.Contains(stderr, "--wait") {
+		t.Fatalf("send --reply on the terminal view: %d %q", code, stderr)
 	}
-	if _, stderr, code := f.cli(t, "chat", "switch", id, "--to", "chat"); code != 0 {
-		t.Fatalf("switch to chat: %d %q", code, stderr)
+	if _, stderr, code := f.cli(t, "chat", "permission", id, "auto"); code != contract.ExitError || !strings.Contains(stderr, "webmux view "+id+" chat") {
+		t.Fatalf("chat permission on the terminal view: %d %q", code, stderr)
 	}
-	if out, _, _ := f.cli(t, "chat", "status", id); !strings.Contains(out, "side") || !strings.Contains(out, "acp") {
-		t.Fatalf("status after switching back: %q", out)
+	if out, _, _ := f.cli(t, "ls"); !strings.Contains(out, "终端") {
+		t.Fatalf("ls on the terminal view: %q", out)
+	}
+	if _, stderr, code := f.cli(t, "view", id, "chat"); code != 0 {
+		t.Fatalf("view chat: %d %q", code, stderr)
+	}
+	if out, _, _ := f.cli(t, "chat", "status", id); !strings.Contains(out, "view") || !strings.Contains(out, "chat") {
+		t.Fatalf("status after changing back: %q", out)
+	}
+	if _, _, code := f.cli(t, "resume", id, "--detach"); code != contract.ExitError {
+		t.Fatalf("resume an active session: %d", code)
 	}
 
-	// Closing keeps the record for resume; forget removes it.
+	// Removing archives it; rm alone then points to --forget; resume brings
+	// it back under the same ID on its chat view.
 	if _, stderr, code := f.cli(t, "rm", id); code != 0 {
 		t.Fatalf("rm: %d %q", code, stderr)
 	}
-	eventuallyCLI(t, "the closed record", func() bool {
-		out, _, _ := f.cli(t, "chat", "ls", "--archived", "--json")
+	eventuallyCLI(t, "the archived session", func() bool {
+		out, _, _ := f.cli(t, "ls", "--archived", "--repo", repo, "--json")
 		return strings.Contains(out, id)
 	})
-	// Resume brings it back under the same ID on its chat side.
-	stdout, stderr, code = f.cli(t, "chat", "resume", id, "--detach")
+	if _, stderr, code := f.cli(t, "rm", id); code != contract.ExitError || !strings.Contains(stderr, "--forget") {
+		t.Fatalf("rm an archived session: %d %q", code, stderr)
+	}
+	stdout, stderr, code = f.cli(t, "resume", id, "--detach")
 	if code != 0 || !strings.HasPrefix(stdout, id+"\t") {
 		t.Fatalf("resume: %d %q %q", code, stdout, stderr)
 	}
-	if got := chatState(t, f, id); got.Side != contract.HybridSideACP {
-		t.Fatalf("resumed side %q", got.Side)
+	if out, _, _ := f.cli(t, "get", id, "--field", "session.view"); strings.TrimSpace(out) != "chat" {
+		t.Fatalf("resumed view %q", out)
 	}
 	if _, stderr, code := f.cli(t, "rm", id); code != 0 {
 		t.Fatalf("rm after resume: %d %q", code, stderr)
 	}
-	eventuallyCLI(t, "the closed record again", func() bool {
-		out, _, _ := f.cli(t, "chat", "ls", "--state", "closed", "--json")
+	eventuallyCLI(t, "the closed session", func() bool {
+		out, _, _ := f.cli(t, "ls", "--state", "closed", "--json")
 		return strings.Contains(out, id)
 	})
-	if _, stderr, code := f.cli(t, "chat", "forget", id); code != contract.ExitUsage || !strings.Contains(stderr, "--yes") {
+	if _, stderr, code := f.cli(t, "rm", id, "--forget"); code != contract.ExitUsage || !strings.Contains(stderr, "--yes") {
 		t.Fatalf("forget without a terminal: %d %q", code, stderr)
 	}
-	if _, stderr, code := f.cli(t, "chat", "forget", id, "--yes"); code != 0 {
+	if _, stderr, code := f.cli(t, "rm", id, "--forget", "--yes"); code != 0 {
 		t.Fatalf("forget: %d %q", code, stderr)
 	}
-	if out, _, _ := f.cli(t, "chat", "ls", "--json"); strings.Contains(out, id) {
-		t.Fatalf("forgotten record still listed: %q", out)
+	if out, _, _ := f.cli(t, "ls", "--state", "all", "--json"); strings.Contains(out, id) {
+		t.Fatalf("forgotten session still listed: %q", out)
+	}
+
+	// The removed commands and options are unknown: usage errors.
+	for _, args := range [][]string{
+		{"chat", "send", plain, "hi"}, {"chat", "cancel", plain}, {"chat", "switch", plain, "--to", "chat"},
+		{"chat", "ls"}, {"chat", "resume", plain}, {"chat", "forget", plain, "--yes"},
+		{"run", "--start-side", "chat", "--launch-config", "Fake"}, {"launch-config", "add", "X", "--hybrid", "--", "true"},
+	} {
+		if _, _, code := f.cli(t, args...); code != contract.ExitUsage {
+			t.Errorf("%v: exit %d, want %d", args, code, contract.ExitUsage)
+		}
 	}
 }
 

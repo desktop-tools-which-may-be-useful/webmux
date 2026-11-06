@@ -28,9 +28,6 @@ const events = (items: ChatEvent[], generation = "g1"): ChatFrame => ({
   items,
 });
 const state = {
-  side: "acp",
-  agent: "omp",
-  agentSessionId: "01a",
   outdated: [],
   eligibility: { available: true },
   turn: { running: false },

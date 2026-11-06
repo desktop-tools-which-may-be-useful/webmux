@@ -268,14 +268,16 @@ test("external changes refresh and restart retains registry but not sessions", a
   await page.getByRole("option", { name: "external", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(repo.getByText("external", { exact: true })).toBeVisible();
-  const session = await (
-    await request.post("/api/sessions", {
-      data: {
-        cwd: external,
-        cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
-      },
-    })
-  ).json();
+  const session = (
+    await (
+      await request.post("/api/sessions", {
+        data: {
+          cwd: external,
+          cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+        },
+      })
+    ).json()
+  ).session;
   expect(session.workspace.repositoryId).toBe(before[0].id);
   await server.restart();
   expect(await (await request.get("/api/sessions")).json()).toEqual([]);
@@ -358,7 +360,7 @@ test("multiple repositories keep every session visible through local failure, co
       data: { cwd, cmd: ["/bin/bash", "--noprofile", "--norc", "-i"], name },
     });
     expect(response.status()).toBe(201);
-    entries.push(await response.json());
+    entries.push((await response.json()).session);
   }
   await page.goto("/");
   const tree = page.getByRole("tree", { name: "仓库与会话" });
@@ -542,15 +544,17 @@ test("existing branch creation, safe removal and stale destructive confirmation 
   await expect(
     page.getByRole("button", { name: "确认安全删除", exact: true }),
   ).toBeVisible();
-  const started = await (
-    await request.post("/api/sessions", {
-      data: {
-        cwd: path,
-        cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
-        name: "New arrival",
-      },
-    })
-  ).json();
+  const started = (
+    await (
+      await request.post("/api/sessions", {
+        data: {
+          cwd: path,
+          cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+          name: "New arrival",
+        },
+      })
+    ).json()
+  ).session;
   await page.getByRole("button", { name: "确认安全删除", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
     "重新",
@@ -650,7 +654,7 @@ test("returning home keeps the cached snapshot until a slow Git refresh finishes
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   await page.goto("/");
   const group = page.locator(`[data-repository-id="${repo.id}"]`);
   await expect(group).toHaveCount(1);

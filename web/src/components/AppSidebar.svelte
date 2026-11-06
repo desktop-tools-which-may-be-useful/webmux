@@ -7,9 +7,9 @@
   import { removableRecordWorktree } from "../archived";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { connectorMissingText } from "../hybrid";
-  import { removeRecord, resumeHybrid } from "../recoverable";
+  import { removeRecord, resumeSession } from "../recoverable";
   import type { Route } from "../route";
-  import type { HybridRecord } from "../schemas";
+  import type { ArchivedSession } from "../schemas";
   import {
     getShell,
     openPage,
@@ -42,9 +42,7 @@
   const shell = getShell();
   const current = $derived(route.name === "terminal" ? route.id : "");
   const live = $derived(
-    shell.sessions.sessions.filter(
-      (session) => !session.hybrid || session.hybrid.state === "active",
-    ),
+    shell.sessions.sessions.filter((session) => session.state === "active"),
   );
   const configs = $derived(
     shell.launchConfigs.state.status === "ready"
@@ -60,9 +58,9 @@
   // The last failed sidebar action (resume or record deletion), shown above
   // the list.
   let resumeError = $state("");
-  let removing = $state<HybridRecord | null>(null);
+  let removing = $state<ArchivedSession | null>(null);
   let removeOpen = $state(false);
-  function askRemove(record: HybridRecord) {
+  function askRemove(record: ArchivedSession) {
     const worktree = removableRecordWorktree(record, shell.repositories.list);
     if (worktree) {
       shell.removeWorktree(worktree);
@@ -84,17 +82,17 @@
       resumeError = `无法删除“${recordTitle(record)}”的记录：${errorMessage(err)}`;
     }
   }
-  function recordTitle(record: HybridRecord) {
-    return record.name || record.title || record.agent;
+  function recordTitle(record: ArchivedSession) {
+    return record.title || record.agent.name;
   }
-  // An archived chat resumes on its chat side through the existing flow;
+  // An archived chat resumes on its chat view through the existing flow;
   // choices that need the user (another agent session, a deleted launch
   // config) are made on the record's own page.
-  async function resume(record: HybridRecord) {
+  async function resume(record: ArchivedSession) {
     resuming = record.id;
     resumeError = "";
     try {
-      const outcome = await resumeHybrid(record.id, "acp");
+      const outcome = await resumeSession(record.id, "chat");
       if (outcome.status === "resumed") {
         void shell.archived.refresh();
         openSession(outcome.session);
@@ -102,7 +100,7 @@
         resumeError = `${outcome.message}。${connectorMissingText(outcome.connector)}`;
       else openPage(`/s/${record.id}`);
     } catch (err) {
-      resumeError = `无法恢复“${record.name || record.title}”：${errorMessage(err)}`;
+      resumeError = `无法恢复“${record.title}”：${errorMessage(err)}`;
     } finally {
       resuming = "";
     }

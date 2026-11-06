@@ -4,6 +4,7 @@
   import { connectorNoticeText } from "../hybrid";
   import { launchConfigIcon, type LaunchConfigsState } from "../launchConfigs";
   import type { LaunchSource } from "../newSessionDefaults";
+  import type { SessionView } from "../schemas";
   import * as Command from "$lib/components/ui/command";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -28,7 +29,7 @@
     source: LaunchSource;
     configId: string;
     command: string;
-    startSide: "tui" | "acp";
+    startSide: SessionView;
     disabled?: boolean;
     /** The user picked a source; defaults must no longer replace it. */
     onchoose: () => void;
@@ -158,34 +159,32 @@
     <p id="custom-command-help" class="text-xs text-muted-foreground">
       直接执行，不展开变量或管道；需要 shell 语法请用 bash -lc '命令'。
     </p>
-  {:else if chosen?.hybrid}
+  {:else if chosen?.chat}
     <RadioGroup.Root
       bind:value={
         () => startSide,
         (next) => {
-          if (next === "tui" || next === "acp") startSide = next;
+          if (next === "terminal" || next === "chat") startSide = next;
         }
       }
       aria-label="起始端"
       {disabled}
     >
       <RadioGroup.Item
-        value="tui"
+        value="terminal"
         aria-label="从终端开始"
         title="从终端开始"
         description="先在终端里运行，随时可切到聊天"
       />
       <RadioGroup.Item
-        value="acp"
+        value="chat"
         aria-label="从聊天开始"
         title="从聊天开始"
         description="直接打开聊天界面，随时可切到终端"
       />
     </RadioGroup.Root>
-    {#if chosen.hybridSupport.connector}<p
-        class="text-xs text-muted-foreground"
-      >
-        {connectorNoticeText(chosen.hybridSupport.connector)}。
+    {#if chosen.chatSupport.connector}<p class="text-xs text-muted-foreground">
+        {connectorNoticeText(chosen.chatSupport.connector)}。
       </p>{/if}
   {/if}
 </div>

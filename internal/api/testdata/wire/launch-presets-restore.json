@@ -2,16 +2,9 @@
   "status": 200,
   "body": [
     {
+      "chat": false,
       "chatOptions": [],
-      "cmd": [
-        "/bin/sh",
-        "-c",
-        "sleep 60"
-      ],
-      "createdAt": "<time>",
-      "envNames": [],
-      "hybrid": false,
-      "hybridSupport": {
+      "chatSupport": {
         "reason": "unknown_agent",
         "supported": false,
         "supportedAgents": [
@@ -24,27 +17,22 @@
           "Antigravity CLI"
         ]
       },
+      "cmd": [
+        "/bin/sh",
+        "-c",
+        "sleep 60"
+      ],
+      "createdAt": "<time>",
+      "envNames": [],
       "id": "<id#2>",
       "name": "Shell",
       "preview": null,
       "updatedAt": "<time>"
     },
     {
+      "chat": true,
       "chatOptions": [],
-      "cmd": [
-        "bash",
-        "-ic",
-        "exec -- \"$@\"",
-        "webmux",
-        "omp",
-        "--auto-approve"
-      ],
-      "createdAt": "<time>",
-      "envNames": [
-        "PI_FORCE_IMAGE_PROTOCOL"
-      ],
-      "hybrid": true,
-      "hybridSupport": {
+      "chatSupport": {
         "agent": "omp",
         "supported": true,
         "supportedAgents": [
@@ -57,6 +45,18 @@
           "Antigravity CLI"
         ]
       },
+      "cmd": [
+        "bash",
+        "-ic",
+        "exec -- \"$@\"",
+        "webmux",
+        "omp",
+        "--auto-approve"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "PI_FORCE_IMAGE_PROTOCOL"
+      ],
       "icon": "pi",
       "id": "<id#4>",
       "name": "omp",

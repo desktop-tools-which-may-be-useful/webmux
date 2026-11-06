@@ -122,10 +122,7 @@ func TestWorkspaceAPIRoutesAndErrorBoundaries(t *testing.T) {
 	ref := &contract.WorkspaceReference{RepositoryID: repository.ID, WorktreeID: tree.ID}
 	workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cwd": root, "cmd": []string{"/bin/sh"}, "workspace": ref}, 400)
 	started := workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "printf READY; read value"}, "workspace": ref}, 201)
-	var info contract.SessionInfo
-	if err := json.Unmarshal(started.Body.Bytes(), &info); err != nil {
-		t.Fatal(err)
-	}
+	info := createdInfo(t, started.Body.Bytes())
 	if info.Cwd != tree.Path || info.Workspace == nil || info.Workspace.WorktreeID != tree.ID {
 		t.Fatalf("workspace JSON: %+v", info)
 	}
@@ -281,8 +278,10 @@ func TestWorkspaceAPIConfigDegradationAndTimeout(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer secret")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != 504 {
-		t.Fatalf("timeout boundary: %d %s", recorder.Code, recorder.Body.String())
+	// A create runs to its end even when the client is gone: a retry with
+	// its request ID would get the outcome.
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create after the client left: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 func TestUnavailableRepositoryIsLocalToList(t *testing.T) {
@@ -313,7 +312,8 @@ func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := service.CreateSession(context.Background(), workspace.SessionInput{Cwd: root, Cmd: []string{"/bin/sh", "-c", "printf READY; read value"}})
+	created, err := service.Create(context.Background(), workspace.CreateInput{Cwd: root, Cmd: []string{"/bin/sh", "-c", "printf READY; read value"}})
+	item := created.Session
 	if err != nil {
 		t.Fatal(err)
 	}

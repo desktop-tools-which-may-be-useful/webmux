@@ -135,10 +135,11 @@ func TestRelayCarriesRESTAndTerminal(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("create through relay: %d %s", resp.StatusCode, body)
 	}
-	var info contract.SessionInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+	var created contract.CreateSessionResult
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
 		t.Fatal(err)
 	}
+	info := created.Session
 	if resp := request(t, http.MethodGet, base+"/api/sessions", "", "", "wrong", nil); resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("wrong token: %d", resp.StatusCode)
 	}

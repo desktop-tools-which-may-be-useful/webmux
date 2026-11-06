@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// The chat channel of a hybrid session: GET /ws/s/{id}/chat carries text
+// The chat view of a session: GET /ws/s/{id}/chat carries text
 // JSON frames (ChatFrame) and /api/sessions/{id}/chat/... carries commands.
 // Events are WebMux's normalized model, not ACP: they upsert by messageId
 // and toolCallId so another agent protocol only needs a new translator.
@@ -38,21 +38,19 @@ type ChatFrame struct {
 
 // ChatState is the replaceable, non-timeline state of the chat channel.
 // Every state frame carries the whole object.
+// The view, transition phase and agent identity are not part of it: they
+// are the session's (SessionInfo).
 type ChatState struct {
-	Side           HybridSide      `json:"side"`
-	Phase          HybridPhase     `json:"phase,omitempty"`
-	Agent          string          `json:"agent"`
-	AgentSessionID *string         `json:"agentSessionId"`
-	Eligibility    ChatEligibility `json:"eligibility"`
-	Turn           ChatTurn        `json:"turn"`
-	Requests       []ChatRequest   `json:"requests"`
-	Config         []ChatConfig    `json:"config"`
-	Commands       []ChatCommand   `json:"commands"`
-	Plan           *ChatPlan       `json:"plan"`
-	Usage          *ChatUsage      `json:"usage"`
-	Queue          ChatQueue       `json:"queue"`
-	Steering       bool            `json:"steering"`
-	AuthRequired   bool            `json:"authRequired"`
+	Eligibility  ChatEligibility `json:"eligibility"`
+	Turn         ChatTurn        `json:"turn"`
+	Requests     []ChatRequest   `json:"requests"`
+	Config       []ChatConfig    `json:"config"`
+	Commands     []ChatCommand   `json:"commands"`
+	Plan         *ChatPlan       `json:"plan"`
+	Usage        *ChatUsage      `json:"usage"`
+	Queue        ChatQueue       `json:"queue"`
+	Steering     bool            `json:"steering"`
+	AuthRequired bool            `json:"authRequired"`
 	// ForceSwitchNote says what forcing a switch while the terminal UI
 	// runs a turn loses; the agent's adapter supplies it.
 	ForceSwitchNote string `json:"forceSwitchNote"`
@@ -81,8 +79,8 @@ type ChatOutdated struct {
 	Verified string `json:"verified"`
 }
 
-// ChatEligibility says whether switching to chat is possible from the
-// terminal side. Reason is a stable code when Available is false:
+// ChatEligibility says whether changing to the chat view is possible from
+// the terminal view. Reason is a stable code when Available is false:
 // unknown_agent, connector_missing, not_root, no_session_id, not_listed,
 // occupied, checking. Connector names the missing connector.
 type ChatEligibility struct {
@@ -133,7 +131,7 @@ type ChatIDChange struct {
 
 // ChatRecoveryTip tells an interrupted session's page what can be resumed.
 type ChatRecoveryTip struct {
-	State HybridState `json:"state"`
+	State SessionState `json:"state"`
 }
 
 // ChatQueue is the server-side prompt queue shared by every device.
@@ -367,30 +365,8 @@ type ChatRequestOutcome struct {
 // ChatMarker is a WebMux timeline marker; Kind is loaded, switched,
 // truncated or reconnected.
 type ChatMarker struct {
-	Kind string     `json:"kind"`
-	Side HybridSide `json:"side,omitempty"`
-}
-
-// ChatPromptRequest is the body of POST /api/sessions/{id}/chat/prompts.
-// Mode is auto (send now or queue) or steer (inject into the running turn).
-type ChatPromptRequest struct {
-	ClientRequestID string `json:"clientRequestId"`
-	Text            string `json:"text"`
-	Mode            string `json:"mode,omitempty"`
-	// Attachments are files returned by the upload endpoint. Their other
-	// fields are ignored; the server reads the stored file.
-	Attachments []ChatAttachment `json:"attachments,omitempty"`
-}
-
-// ChatPromptResult reports whether the prompt was sent or queued. A sent
-// prompt names its turn (TurnID, PromptID as in turn.start); a queued one
-// its queue item, which the turn that sends it names as queueItemId.
-// Steering names neither.
-type ChatPromptResult struct {
-	Queued   bool   `json:"queued"`
-	ItemID   string `json:"itemId,omitempty"`
-	TurnID   string `json:"turnId,omitempty"`
-	PromptID string `json:"promptId,omitempty"`
+	Kind string      `json:"kind"`
+	View SessionView `json:"view,omitempty"`
 }
 
 // ChatQueueRequest is the body of the queue commands under
@@ -401,12 +377,6 @@ type ChatQueueRequest struct {
 	ClientRequestID string  `json:"clientRequestId"`
 	Text            *string `json:"text,omitempty"`
 	Move            string  `json:"move,omitempty"`
-}
-
-// ChatCommandRequest is the body of commands without parameters, such as
-// POST /api/sessions/{id}/chat/cancel.
-type ChatCommandRequest struct {
-	ClientRequestID string `json:"clientRequestId"`
 }
 
 // ChatAnswerRequest is the body of POST .../chat/requests/{requestId}.

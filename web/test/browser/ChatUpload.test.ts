@@ -17,7 +17,7 @@ import type { ChatState } from "../../src/schemas";
 installChatFixture();
 
 const id = "hybrid22";
-const prompts = `/api/sessions/${id}/chat/prompts`;
+const prompts = `/api/sessions/${id}/input`;
 
 class FakeXHR {
   static pending: FakeXHR[] = [];
@@ -98,7 +98,9 @@ const sentPrompts = () =>
   commands().filter((request) => request.path === prompts);
 
 test("a chosen image uploads with progress, then waits as a chip and is sent with the message", async () => {
-  respond(/^POST .*\/chat\/prompts$/, () => Response.json({ queued: false }));
+  respond(/^POST .*\/input$/, () =>
+    Response.json({ view: "chat", queued: false }),
+  );
   await open();
   const input = page.getByRole("textbox", { name: "消息" });
   await input.fill("看看这张图");
@@ -138,7 +140,9 @@ test("a chosen image uploads with progress, then waits as a chip and is sent wit
 });
 
 test("a message of attachments alone can be sent", async () => {
-  respond(/^POST .*\/chat\/prompts$/, () => Response.json({ queued: false }));
+  respond(/^POST .*\/input$/, () =>
+    Response.json({ view: "chat", queued: false }),
+  );
   await open();
   await expect.element(sendButton()).toBeDisabled();
   choose([new File(["a"], "notes.txt", { type: "text/plain" })]);
@@ -154,7 +158,7 @@ test("a message of attachments alone can be sent", async () => {
 });
 
 test("a failed send gives the text and attachments back", async () => {
-  respond(/^POST .*\/chat\/prompts$/, () =>
+  respond(/^POST .*\/input$/, () =>
     Response.json({ error: "附件路径无效" }, { status: 400 }),
   );
   await open();

@@ -479,7 +479,7 @@ var repoBaseCommand = &Command{
 var repoSettingsCommand = &Command{
 	Name: "repo settings", Group: GroupWorkspace, Args: "REPO",
 	Summary: "Show or change a repository's settings (the Web UI's repository settings dialog).",
-	Description: "The only setting is the initialization instruction, which quick start (and webmux chat new) puts before the " +
+	Description: "The only setting is the initialization instruction, which quick start (and webmux run --init) puts before the " +
 		"first message. Without options, the instruction is printed with its length, the limit and the references it uses. " +
 		"--init sets it from TEXT, - (standard input) or @FILE; text that is empty after trimming clears it, as " +
 		"--clear-init does. --edit opens it in $VISUAL or $EDITOR.\n\n" +
@@ -496,7 +496,7 @@ var repoSettingsCommand = &Command{
 		{Command: "webmux repo settings . --init @.webmux/init.md", Text: "Set the instruction from a file."},
 		{Command: "webmux repo settings .", Text: "Show the instruction and what it references."},
 	},
-	SeeAlso: []string{"webmux chat new", "webmux guide"},
+	SeeAlso: []string{"webmux run", "webmux guide workspace"},
 	Notes: map[string]Note{
 		"init":       {Conflicts: []string{"clear-init", "edit"}},
 		"clear-init": {Conflicts: []string{"init", "edit"}},

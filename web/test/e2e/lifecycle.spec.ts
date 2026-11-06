@@ -54,7 +54,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
       },
     });
     expect(created.status()).toBe(201);
-    const { id } = await created.json();
+    const { id } = (await created.json()).session;
     await page.goto(`/s/${id}`);
     const timeOrigin = await page.evaluate(() => performance.timeOrigin);
     const session = page.getByRole("link", { name, exact: true });

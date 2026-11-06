@@ -248,32 +248,15 @@ func TestConnectLocalPrefersSocketThenConfigThenEnvironment(t *testing.T) {
 	}
 }
 
-// TestGuideCommandReference keeps /llms/commands.md generated from the
-// command table. Run with WEBMUX_UPDATE_GUIDE=1 to rewrite it.
-func TestGuideCommandReference(t *testing.T) {
-	e := sessionEnv(io.Discard, io.Discard)
-	registry := commandRegistry()
-	e.Commands = registry
-	want := e.Reference(registry)
-	path := "../../internal/agentguide/llms/commands.md"
-	if os.Getenv("WEBMUX_UPDATE_GUIDE") == "1" {
-		if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != want {
-		t.Fatal("internal/agentguide/llms/commands.md is stale; run WEBMUX_UPDATE_GUIDE=1 go test ./cmd/webmux -run TestGuideCommandReference")
-	}
-}
-
 // TestHelpReferencesResolve keeps every "See also" target and every webmux
-// command in an example pointing at a command this build has.
+// command in an example pointing at a command this build has, and holds the
+// hand-written guide pages and docs/usage/shell-control.md to the command
+// table: each option they write after a command belongs to it, and only
+// recipes repeats a command line of the table's examples.
 func TestHelpReferencesResolve(t *testing.T) {
 	registry := commandRegistry()
+	e := sessionEnv(io.Discard, io.Discard)
+	e.Commands = registry
 	// A mention starts a line or follows a space, an opening bracket, a pipe,
 	// a separator, a quote or a backtick (inline code in the guide pages).
 	mention := regexp.MustCompile(`(?m)(?:^|[\s(|;&"\x60])webmux((?: [a-z][a-z0-9-]*)+)`)
@@ -290,6 +273,7 @@ func TestHelpReferencesResolve(t *testing.T) {
 			}
 		}
 	}
+	examples := map[string]string{}
 	for _, c := range registry {
 		for _, see := range c.SeeAlso {
 			for _, m := range mention.FindAllStringSubmatch(see, -1) {
@@ -297,26 +281,132 @@ func TestHelpReferencesResolve(t *testing.T) {
 			}
 		}
 		for _, ex := range c.Examples {
+			examples[strings.TrimSpace(ex.Command)] = c.Name
 			for _, m := range mention.FindAllStringSubmatch(ex.Command, -1) {
 				check(c.Name+" example", m[1])
 			}
 		}
 	}
-	// The hand-written guide pages name commands too.
 	pages, err := filepath.Glob("../../internal/agentguide/llms/*.md")
 	if err != nil || len(pages) < 2 {
 		t.Fatalf("guide pages: %v %v", pages, err)
 	}
-	for _, page := range pages {
-		if filepath.Base(page) == "commands.md" {
-			continue
-		}
+	for _, page := range append(pages, "../../docs/usage/shell-control.md") {
 		data, err := os.ReadFile(page)
 		if err != nil {
 			t.Fatal(err)
 		}
+		name := filepath.Base(page)
 		for _, m := range mention.FindAllStringSubmatch(string(data), -1) {
-			check(filepath.Base(page), m[1])
+			check(name, m[1])
+		}
+		for _, line := range commandLines(string(data)) {
+			checkOptions(t, e, registry, name, line)
+			// A bare command name is a mention, not a command line.
+			if from, ok := examples[line]; ok && name != "recipes.md" && strings.HasPrefix(page, "../../internal/agentguide/") && !bareCommand(registry, line) {
+				t.Errorf("%s repeats the %s example %q; point to webmux %s --help instead", name, from, line, from)
+			}
 		}
 	}
+	// The directory is rendered from the same table.
+	directory := sessioncmd.Directory(registry)
+	for _, c := range registry.Visible("unix") {
+		if c.Bind != nil && !strings.Contains(directory, "- `"+c.Usage()+"`: ") {
+			t.Errorf("the command directory lacks %s", c.Name)
+		}
+	}
+	for _, section := range []string{"Options:", "Examples:", "Exit status:"} {
+		if strings.Contains(directory, section) {
+			t.Errorf("the command directory contains %q", section)
+		}
+	}
+}
+
+// commandLines lists the command lines of a Markdown page: each line of a
+// fenced code block (continuations joined, comments dropped) and each
+// inline code span.
+func commandLines(page string) []string {
+	var out []string
+	inFence := false
+	pending := ""
+	for _, line := range strings.Split(page, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			line = pending + line
+			pending = ""
+			if strings.HasSuffix(line, "\\") {
+				pending = strings.TrimSuffix(line, "\\")
+				continue
+			}
+			if i := strings.Index(line, "  #"); i >= 0 {
+				line = line[:i]
+			}
+			out = append(out, strings.TrimSpace(line))
+			continue
+		}
+		for _, m := range codeSpan.FindAllStringSubmatch(line, -1) {
+			out = append(out, strings.TrimSpace(m[1]))
+		}
+	}
+	return out
+}
+
+var codeSpan = regexp.MustCompile("`([^`]+)`")
+
+// checkOptions reports each --option after a webmux command in line that
+// the command does not take.
+func checkOptions(t *testing.T, e sessioncmd.Env, registry sessioncmd.Registry, where, line string) {
+	t.Helper()
+	words := splitShell(strings.ReplaceAll(line, ";", " ; "))
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		if k := strings.LastIndexAny(w, "($`\"="); k >= 0 {
+			w = w[k+1:]
+		}
+		if w != "webmux" {
+			continue
+		}
+		var path []string
+		j := i + 1
+		for ; j < len(words) && commandWord.MatchString(words[j]); j++ {
+			path = append(path, words[j])
+		}
+		c, _ := registry.Find(path)
+		if c == nil {
+			continue
+		}
+		valid := map[string]bool{"help": true}
+		for _, o := range e.Options(c) {
+			valid[o.Name] = true
+		}
+		for ; j < len(words); j++ {
+			w := words[j]
+			if w == "--" || w == "|" || w == "||" || w == "&&" || w == ";" || strings.HasPrefix(w, ">") || strings.HasPrefix(w, "|") {
+				break
+			}
+			if !strings.HasPrefix(w, "--") {
+				continue
+			}
+			name, _, _ := strings.Cut(strings.TrimPrefix(w, "--"), "=")
+			name = strings.TrimRight(name, ");`'\"")
+			if !valid[name] {
+				t.Errorf("%s: webmux %s takes no --%s (in %q)", where, c.Name, name, line)
+			}
+		}
+	}
+}
+
+var commandWord = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// bareCommand reports whether line is only "webmux" and a command path.
+func bareCommand(registry sessioncmd.Registry, line string) bool {
+	words := strings.Fields(line)
+	if len(words) < 2 || words[0] != "webmux" {
+		return false
+	}
+	c, rest := registry.Find(words[1:])
+	return c != nil && len(rest) == 0
 }

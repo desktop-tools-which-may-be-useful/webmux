@@ -7,7 +7,9 @@ import {
   type ChatEvent,
   type ChatRequest,
   type ChatState,
-  type HybridCandidate,
+  type AgentCandidate,
+  type SessionView,
+  type TransitionPhase,
 } from "../../src/schemas";
 
 // Sample data for the hybrid session stories: the chat channel's frames as
@@ -89,7 +91,7 @@ export const claudeCandidates = [
     title: "更新 README",
     updatedAt: "2026-01-01T11:59:00Z",
   },
-] satisfies HybridCandidate[];
+] satisfies AgentCandidate[];
 
 const at = "2026-01-01T11:59:00Z";
 type EventBody = ChatEvent extends infer E
@@ -454,7 +456,7 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
     state: ChatStateSchema.parse(baseState(agent)),
   });
   const model = withEvents(start, events);
-  const phase =
+  const phase: TransitionPhase | undefined =
     scenario === "switching"
       ? "stopping"
       : scenario === "awaiting-choice"
@@ -478,15 +480,13 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
       ? { ...option, value: "acceptEdits" }
       : option,
   );
+  // Where the session is, as its SessionInfo says: the view it settled on
+  // (or leaves, during a switch) and the switch's phase.
+  const view: SessionView = terminalScenarios.includes(scenario)
+    ? "terminal"
+    : "chat";
   const state = ChatStateSchema.parse({
     ...baseState(agent),
-    side: terminalScenarios.includes(scenario)
-      ? "tui"
-      : scenario === "switching"
-        ? "switching"
-        : "acp",
-    phase,
-    agentSessionId: ids.current,
     eligibility,
     config,
     turn: running
@@ -521,10 +521,10 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
         : undefined,
     recovery: scenario === "recovery-failure" ? { state: "interrupted" } : null,
   } satisfies ChatState);
-  return { model, state };
+  return { model, state, view, phase, agentSessionId: ids.current };
 }
 
-// The third-party connector Codex CLI's chat side runs through.
+// The third-party connector Codex CLI's chat view runs through.
 const codexConnector = {
   executable: "codex-acp",
   title: "Codex ACP 适配器",
@@ -534,9 +534,6 @@ const codexConnector = {
 
 function baseState(agent: Agent): ChatState {
   return {
-    side: "acp",
-    agent,
-    agentSessionId: sessionIds[agent].current,
     outdated: [],
     eligibility: { available: true },
     turn: { running: false },

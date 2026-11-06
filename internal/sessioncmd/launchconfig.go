@@ -42,12 +42,12 @@ func sortedKeys(m map[string]string) []string {
 
 var launchConfigListCommand = &Command{
 	Name: "launch-config ls", Group: GroupLaunch,
-	Summary: "List the saved launch configs: name, icon, command, hybrid mode and environment variable names.",
-	Output:  "A table: NAME, ICON, HYBRID, ENV, COMMAND. With --json, the LaunchConfigSummary array (variable names only, never values).",
+	Summary: "List the saved launch configs: name, icon, command, chat view and environment variable names.",
+	Output:  "A table: NAME, ICON, CHAT, ENV, COMMAND. With --json, the LaunchConfigSummary array (variable names only, never values).",
 	Exit:    exitsCommon(),
 	Examples: []Example{
-		{Command: "webmux launch-config ls", Text: "See which configs run --launch-config and chat new --agent accept."},
-		{Command: "webmux launch-config ls --json | jq -r '.[] | select(.hybrid) | .name'", Text: "List the hybrid agents."},
+		{Command: "webmux launch-config ls", Text: "See which configs run --launch-config accepts."},
+		{Command: "webmux launch-config ls --json | jq -r '.[] | select(.chat) | .name'", Text: "List the configs that can start on the chat view."},
 	},
 	SeeAlso: []string{"webmux launch-config show", "webmux run --launch-config"},
 	Bind: func(fs *flag.FlagSet) Action {
@@ -73,11 +73,11 @@ var launchConfigListCommand = &Command{
 				return contract.ExitOK
 			}
 			w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "NAME\tICON\tHYBRID\tENV\tCOMMAND")
+			_, _ = fmt.Fprintln(w, "NAME\tICON\tCHAT\tENV\tCOMMAND")
 			for _, c := range list {
-				hybrid, env, icon := "-", "-", c.Icon
-				if c.Hybrid {
-					hybrid = "yes"
+				chat, env, icon := "-", "-", c.Icon
+				if c.Chat {
+					chat = "yes"
 				}
 				if len(c.EnvNames) > 0 {
 					env = strings.Join(c.EnvNames, ",")
@@ -85,7 +85,7 @@ var launchConfigListCommand = &Command{
 				if icon == "" {
 					icon = "-"
 				}
-				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.Name, icon, hybrid, env, strings.Join(c.Cmd, " "))
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.Name, icon, chat, env, strings.Join(c.Cmd, " "))
 			}
 			_ = w.Flush()
 			return contract.ExitOK
@@ -134,18 +134,18 @@ var launchConfigShowCommand = &Command{
 			if config.Preview != nil {
 				preview = fmt.Sprintf("%d lines, skip %d", config.Preview.Lines, config.Preview.Skip)
 			}
-			hybrid := "no"
-			if config.Hybrid {
-				hybrid = "yes"
+			chat := "no"
+			if config.Chat {
+				chat = "yes"
 			}
-			if config.HybridSupport.Supported {
-				hybrid += " (supported: " + config.HybridSupport.Agent + ")"
-			} else if config.HybridSupport.Reason != "" {
-				hybrid += " (unsupported: " + config.HybridSupport.Reason + ")"
+			if config.ChatSupport.Supported {
+				chat += " (supported: " + config.ChatSupport.Agent + ")"
+			} else if config.ChatSupport.Reason != "" {
+				chat += " (unsupported: " + config.ChatSupport.Reason + ")"
 			}
 			for _, row := range [][2]string{
 				{"id", config.ID}, {"name", config.Name}, {"icon", config.Icon}, {"command", strings.Join(config.Cmd, " ")},
-				{"hybrid", hybrid}, {"preview", preview},
+				{"chat", chat}, {"preview", preview},
 			} {
 				if row[1] != "" {
 					_, _ = fmt.Fprintf(w, "%s\t%s\n", row[0], row[1])
@@ -164,7 +164,7 @@ var launchConfigShowCommand = &Command{
 type configFields struct {
 	icon                      string
 	env                       envFlag
-	hybrid                    bool
+	chat                      bool
 	previewLines, previewSkip int
 	set                       map[string]bool
 }
@@ -173,7 +173,7 @@ func bindConfigFields(fs *flag.FlagSet, f *configFields) {
 	f.env = envFlag{}
 	fs.StringVar(&f.icon, "icon", "", "the launch picker `ICON` key (for example claudecode, codex, terminal)")
 	fs.Var(f.env, "env", "set environment variable `NAME=VALUE` for sessions started from the config")
-	fs.BoolVar(&f.hybrid, "hybrid", false, "enable hybrid mode (terminal and chat) for a supported agent")
+	fs.BoolVar(&f.chat, "chat", false, "enable the chat view for a supported agent, beside its terminal")
 	fs.IntVar(&f.previewLines, "preview-lines", 0, "show `N` preview lines on the home page (1-50) instead of the global default")
 	fs.IntVar(&f.previewSkip, "preview-skip", 0, "skip the last `N` lines of the preview (0-50)")
 }
@@ -185,19 +185,19 @@ func visited(fs *flag.FlagSet) map[string]bool {
 	return set
 }
 
-// checkHybrid asks the server whether argv can run as a hybrid session.
-func (e Env) checkHybrid(ctx context.Context, client *localclient.Client, argv []string) (int, bool) {
-	var support contract.HybridSupport
-	if err := client.Do(ctx, http.MethodPost, "/api/launch-configs/hybrid-support", contract.HybridSupportRequest{Cmd: argv}, &support); err != nil {
+// checkChat asks the server whether argv can have a chat view.
+func (e Env) checkChat(ctx context.Context, client *localclient.Client, argv []string) (int, bool) {
+	var support contract.ChatSupport
+	if err := client.Do(ctx, http.MethodPost, "/api/launch-configs/chat-support", contract.ChatSupportRequest{Cmd: argv}, &support); err != nil {
 		return e.Fail(err), false
 	}
 	if !support.Supported {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: this command cannot run in hybrid mode (%s); supported agents: %s\n",
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: this command cannot have a chat view (%s); supported agents: %s\n",
 			support.Reason, strings.Join(support.SupportedAgents, ", "))
 		return contract.ExitError, false
 	}
 	if support.Connector != nil {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: its chat side needs %s (install: %s)\n", support.Connector.Title, support.Connector.InstallCommand)
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: its chat view needs %s (install: %s)\n", support.Connector.Title, support.Connector.InstallCommand)
 	}
 	return contract.ExitOK, true
 }
@@ -207,12 +207,12 @@ var launchConfigAddCommand = &Command{
 	Summary: "Save a new launch config; it appears in every browser's launch picker.",
 	Description: "ARGV after -- is the command exactly as given; it is never expanded by a shell (write bash -lc '...' " +
 		"explicitly when you need one). Environment values travel only in the request body and are never printed. " +
-		"--hybrid asks the server first whether the command is a supported agent, and refuses with the reason if not.",
+		"--chat asks the server first whether the command is a supported agent, and refuses with the reason if not.",
 	Arguments: []Item{launchConfigNameArgument, {Name: "ARGV", Text: "The command and its arguments."}},
 	Output:    "The new config's ID; with --json, the LaunchConfig with values hidden.",
-	Exit:      exitsCommon(ExitItem{Code: 1, Text: "Also: the name is taken, validation failed, or hybrid mode is unsupported."}),
+	Exit:      exitsCommon(ExitItem{Code: 1, Text: "Also: the name is taken, validation failed, or the chat view is unsupported."}),
 	Examples: []Example{
-		{Command: `webmux launch-config add "Claude (sandbox)" --icon claudecode --hybrid --env CLAUDE_CONFIG_DIR=/w/.claude -- claude --dangerously-skip-permissions`, Text: "Add an agent config with hybrid mode."},
+		{Command: `webmux launch-config add "Claude (sandbox)" --icon claudecode --chat --env CLAUDE_CONFIG_DIR=/w/.claude -- claude --dangerously-skip-permissions`, Text: "Add an agent config with the chat view."},
 		{Command: `webmux launch-config add "Dev server" --icon terminal -- bash -lc 'npm run dev'`, Text: "Add a shell command config."},
 	},
 	SeeAlso: []string{"webmux launch-config edit", "webmux run --launch-config"},
@@ -226,7 +226,7 @@ var launchConfigAddCommand = &Command{
 				return e.Usagef("a name and a command after -- are required")
 			}
 			f.set = visited(fs)
-			input := contract.LaunchConfigInput{Name: args[0], Icon: f.icon, Cmd: args[1:], Env: map[string]string(f.env), Hybrid: f.hybrid}
+			input := contract.LaunchConfigInput{Name: args[0], Icon: f.icon, Cmd: args[1:], Env: map[string]string(f.env), Chat: f.chat}
 			if code, ok := e.applyPreview(&input, f); !ok {
 				return code
 			}
@@ -235,8 +235,8 @@ var launchConfigAddCommand = &Command{
 				return code
 			}
 			defer client.Close()
-			if input.Hybrid {
-				if code, ok := e.checkHybrid(ctx, client, input.Cmd); !ok {
+			if input.Chat {
+				if code, ok := e.checkChat(ctx, client, input.Cmd); !ok {
 					return code
 				}
 			}
@@ -287,18 +287,18 @@ var launchConfigEditCommand = &Command{
 	Summary: "Change some fields of a launch config; everything not given keeps its value.",
 	Description: "The config is read, the given fields are changed and the whole config is saved again, so environment values " +
 		"you do not mention are kept as they are. --env sets or replaces a variable, --unset-env removes one. ARGV after -- " +
-		"replaces the command. Turning on --hybrid checks support first.",
+		"replaces the command. Turning on --chat checks support first.",
 	Arguments: []Item{launchConfigNameArgument, {Name: "ARGV", Text: "A new command and its arguments."}},
 	Output:    "The config's ID; with --json, the LaunchConfig with values hidden.",
-	Exit:      exitsCommon(ExitItem{Code: 1, Text: "Also: the new name is taken, validation failed, or hybrid mode is unsupported."}, ExitItem{Code: 2, Text: "Also: no launch config has that name."}),
+	Exit:      exitsCommon(ExitItem{Code: 1, Text: "Also: the new name is taken, validation failed, or the chat view is unsupported."}, ExitItem{Code: 2, Text: "Also: no launch config has that name."}),
 	Examples: []Example{
 		{Command: `webmux launch-config edit "Claude (sandbox)" --unset-env CLAUDE_CONFIG_DIR`, Text: "Remove one variable and keep everything else."},
-		{Command: `webmux launch-config edit omp --rename "omp (fast)" --no-hybrid -- omp --model fast`, Text: "Rename a config and change its command."},
+		{Command: `webmux launch-config edit omp --rename "omp (fast)" --no-chat -- omp --model fast`, Text: "Rename a config and change its command."},
 	},
 	SeeAlso: []string{"webmux launch-config show", "webmux launch-config add"},
 	Notes: map[string]Note{
 		"env": {Repeatable: true}, "unset-env": {Repeatable: true},
-		"hybrid": {Conflicts: []string{"no-hybrid"}}, "no-hybrid": {Conflicts: []string{"hybrid"}},
+		"chat": {Conflicts: []string{"no-chat"}}, "no-chat": {Conflicts: []string{"chat"}},
 	},
 	Bind: func(fs *flag.FlagSet) Action {
 		var f configFields
@@ -306,15 +306,15 @@ var launchConfigEditCommand = &Command{
 		rename := fs.String("rename", "", "rename the config to `NEW`")
 		var unset stringsFlag
 		fs.Var(&unset, "unset-env", "remove environment variable `NAME`")
-		noHybrid := fs.Bool("no-hybrid", false, "turn hybrid mode off")
+		noChat := fs.Bool("no-chat", false, "turn the chat view off")
 		asJSON := fs.Bool("json", false, "print the LaunchConfig, values hidden")
 		return func(ctx context.Context, e Env, args []string) int {
 			if len(args) < 1 {
 				return e.Usagef("a name is required")
 			}
 			f.set = visited(fs)
-			if f.hybrid && *noHybrid {
-				return e.Usagef("--hybrid and --no-hybrid cannot be combined")
+			if f.chat && *noChat {
+				return e.Usagef("--chat and --no-chat cannot be combined")
 			}
 			client, code := e.connect()
 			if client == nil {
@@ -325,7 +325,7 @@ var launchConfigEditCommand = &Command{
 			if !ok {
 				return code
 			}
-			input := contract.LaunchConfigInput{Name: config.Name, Icon: config.Icon, Cmd: config.Cmd, Env: config.Env, Preview: config.Preview, Hybrid: config.Hybrid}
+			input := contract.LaunchConfigInput{Name: config.Name, Icon: config.Icon, Cmd: config.Cmd, Env: config.Env, Preview: config.Preview, Chat: config.Chat}
 			if input.Env == nil {
 				input.Env = map[string]string{}
 			}
@@ -346,16 +346,16 @@ var launchConfigEditCommand = &Command{
 				delete(input.Env, name)
 			}
 			switch {
-			case f.hybrid:
-				input.Hybrid = true
-			case *noHybrid:
-				input.Hybrid = false
+			case f.chat:
+				input.Chat = true
+			case *noChat:
+				input.Chat = false
 			}
 			if code, ok := e.applyPreview(&input, f); !ok {
 				return code
 			}
-			if input.Hybrid && (f.hybrid || len(args) > 1) {
-				if code, ok := e.checkHybrid(ctx, client, input.Cmd); !ok {
+			if input.Chat && (f.chat || len(args) > 1) {
+				if code, ok := e.checkChat(ctx, client, input.Cmd); !ok {
 					return code
 				}
 			}
@@ -409,7 +409,7 @@ var launchConfigRemoveCommand = &Command{
 var launchConfigPresetsCommand = &Command{
 	Name: "launch-config presets", Group: GroupLaunch,
 	Summary: "List the built-in launch presets that restore can bring back.",
-	Output:  "A table: NAME, HYBRID, COMMAND; with --json, the LaunchPreset array.",
+	Output:  "A table: NAME, CHAT, COMMAND; with --json, the LaunchPreset array.",
 	Exit:    exitsCommon(),
 	Examples: []Example{
 		{Command: "webmux launch-config presets", Text: "See the built-in agent configs."},
@@ -436,13 +436,13 @@ var launchConfigPresetsCommand = &Command{
 				return contract.ExitOK
 			}
 			w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "NAME\tHYBRID\tCOMMAND")
+			_, _ = fmt.Fprintln(w, "NAME\tCHAT\tCOMMAND")
 			for _, p := range presets {
-				hybrid := "-"
-				if p.Hybrid {
-					hybrid = "yes"
+				chat := "-"
+				if p.Chat {
+					chat = "yes"
 				}
-				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", p.Name, hybrid, strings.Join(p.Cmd, " "))
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", p.Name, chat, strings.Join(p.Cmd, " "))
 			}
 			_ = w.Flush()
 			return contract.ExitOK

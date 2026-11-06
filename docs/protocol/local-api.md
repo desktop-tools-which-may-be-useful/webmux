@@ -31,7 +31,7 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 
 会话与套接字：
 
-- 每个会话进程（包括混合会话聊天端的 ACP 进程）都有 `WEBMUX_SOCKET`（本套接字的绝对路径）与 `WEBMUX_BIN`（服务端正在运行的可执行文件），会话内的 CLI 因此不依赖 `PATH` 或默认配置就能连回本实例。
+- 每个会话进程（包括聊天视图的 ACP 进程）都有 `WEBMUX_SOCKET`（本套接字的绝对路径）与 `WEBMUX_BIN`（服务端正在运行的可执行文件），会话内的 CLI 因此不依赖 `PATH` 或默认配置就能连回本实例。
 - `GET /local/v1/status` 的 `bin` 字段给出同一个可执行文件路径；旧服务没有该字段。
 - 经本套接字创建会话时，服务端按对端进程判断调用者所在的会话并记为新会话的 `parentId`（见 [会话 API](http-sessions.md)）。
 

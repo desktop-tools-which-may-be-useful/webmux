@@ -7,7 +7,7 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as Collapsible from "$lib/components/ui/collapsible";
   import type {
-    HybridRecord,
+    ArchivedSession,
     Repository,
     SessionInfo,
     Worktree,
@@ -99,7 +99,7 @@
     ),
   );
   // Archived records of a group that the filters keep.
-  function shownArchive(records: readonly HybridRecord[] = []) {
+  function shownArchive(records: readonly ArchivedSession[] = []) {
     return visibleArchiveIds
       ? records.filter((record) => visibleArchiveIds.has(record.id))
       : [...records];

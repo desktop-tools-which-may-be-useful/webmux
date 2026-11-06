@@ -2,6 +2,7 @@
   "status": 200,
   "body": [
     {
+      "chat": true,
       "chatOptions": [
         {
           "category": "mode",
@@ -38,16 +39,7 @@
           "value": "smart"
         }
       ],
-      "cmd": [
-        "<fakeagent>/omp"
-      ],
-      "createdAt": "<time>",
-      "envNames": [
-        "FAKEAGENT_STORE",
-        "FAKEAGENT_TURN_DELAY"
-      ],
-      "hybrid": true,
-      "hybridSupport": {
+      "chatSupport": {
         "agent": "omp",
         "supported": true,
         "supportedAgents": [
@@ -60,20 +52,23 @@
           "Antigravity CLI"
         ]
       },
-      "id": "<id#4>",
+      "cmd": [
+        "<fakeagent>/omp"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "FAKEAGENT_STORE",
+        "FAKEAGENT_TURN_DELAY"
+      ],
+      "id": "<configId#1>",
       "name": "agent",
       "preview": null,
       "updatedAt": "<time>"
     },
     {
+      "chat": false,
       "chatOptions": [],
-      "cmd": [
-        "/bin/sh"
-      ],
-      "createdAt": "<time>",
-      "envNames": [],
-      "hybrid": false,
-      "hybridSupport": {
+      "chatSupport": {
         "reason": "unknown_agent",
         "supported": false,
         "supportedAgents": [
@@ -86,22 +81,20 @@
           "Antigravity CLI"
         ]
       },
-      "id": "<id#5>",
+      "cmd": [
+        "/bin/sh"
+      ],
+      "createdAt": "<time>",
+      "envNames": [],
+      "id": "<id#4>",
       "name": "plain",
       "preview": null,
       "updatedAt": "<time>"
     },
     {
+      "chat": true,
       "chatOptions": [],
-      "cmd": [
-        "<fakeagent>/codex"
-      ],
-      "createdAt": "<time>",
-      "envNames": [
-        "PATH"
-      ],
-      "hybrid": true,
-      "hybridSupport": {
+      "chatSupport": {
         "agent": "codex",
         "connector": {
           "docsUrl": "https://github.com/agentclientprotocol/codex-acp",
@@ -120,7 +113,14 @@
           "Antigravity CLI"
         ]
       },
-      "id": "<id#6>",
+      "cmd": [
+        "<fakeagent>/codex"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "PATH"
+      ],
+      "id": "<id#5>",
       "name": "codex",
       "preview": null,
       "updatedAt": "<time>"

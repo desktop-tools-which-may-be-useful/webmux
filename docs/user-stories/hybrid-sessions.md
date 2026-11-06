@@ -5,7 +5,7 @@
 - **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 或 QoderCN 会话能在聊天视图与终端之间切换。
   验收要点：
   - 新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
-  - 设置页编辑器提供“混合模式（聊天 ↔ 终端）”勾选框，可用性只取服务端判定（打开时用配置的 `hybridSupport`，改命令后去抖查询 `hybrid-support`）；
+  - 设置页编辑器提供“混合模式（聊天 ↔ 终端）”勾选框，可用性只取服务端判定（打开时用配置的 `chatSupport`，改命令后去抖查询 `POST /api/launch-configs/chat-support`）；线上字段为 `chat`/`chatSupport`，请求体中的旧字段 `hybrid`/`hybridSupport` 返回 400；
   - 不可用时禁用并显示原因：
     - 未识别的 agent、命令写法、会话库或目录参数、非交互参数；
     - `codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等打开已有会话的参数；
@@ -14,17 +14,19 @@
   - 勾选不受支持的命令保存返回 400，保存不检查第三方连接器是否已安装；
   - Claude Code 使用稳定档案 ID `claudecode`，允许 `CLAUDE_CONFIG_DIR` 环境但不允许命令内会话参数；
   - 列表显示“混合”标记；
-  - `launch-configs.json` 仍为 v2，未勾选时不写入字段，旧文件照常读取。
+  - `launch-configs.json` 仍为 v2，持久化键仍为 `hybrid`，未勾选时不写入字段，旧文件照常读取，回退到旧版本时数据可读。
 - **US-Q02 选择起始端**：作为使用者，我希望新建混合会话时选择从终端或从聊天开始，以便在电脑上直接用 TUI、在手机上直接对话。
   验收要点：
   - 选中混合配置时以带说明的单选项显示“从终端开始 / 从聊天开始”，默认终端；每个 agent 在浏览器里记住自己上次的起始端，没用过的 agent 沿用最近一次混合会话的选择；
   - 从终端开始在 PTY 中运行配置命令（OpenCode 注入 `--standalone`，命令中可见）；
   - 从聊天开始启动 ACP 进程并新建 agent 会话，PTY 中没有进程；
   - 从聊天开始且未命名时，第一条消息一发出就以其文本（折叠空白，最多 80 个字符）作为临时标题，agent 上报标题后被替换，清除标题后回到目录名；只有附件、已命名或由终端切来的会话不设置；
-  - 普通配置或手动命令带起始端返回 400；
+  - 起始端以 `POST /api/sessions` 的 `view: "terminal" | "chat"` 提交，会话信息的 `view` 为所选视图、`views` 为 `["terminal","chat"]`；
+  - 普通配置或手动命令带 `view: "chat"` 返回 400，旧字段 `startSide` 作为未知字段返回 400；
   - 记录存储不可用 503、记录已满 409。
 - **US-Q03 从终端切到聊天**：作为在电脑上用 TUI 的使用者，我希望离开电脑前一键切到聊天视图，以便在手机上继续同一段对话。
   验收要点：
+  - 切换经 `POST /api/sessions/{id}/view {to}`，切换中会话信息的 `view` 仍为来源视图、`transition` 为 `{to, phase}`；普通会话返回 409 `no_chat_view`；
   - 头部“聊天 | 终端”控件只在满足六个条件时可切，否则禁用并显示原因：
     - 受支持的 agent；
     - 档案需要的第三方连接器已安装；
@@ -88,6 +90,7 @@
   - 输入 `/` 打开随输入过滤的命令菜单。
 - **US-Q08 排队与插话**：作为使用者，我希望 agent 忙时继续发送消息并按顺序处理，以便不必等待也不会打断当前回合。
   验收要点：
+  - 发送经 `POST /api/sessions/{id}/input`（`mode` 为 `auto` 或 `steer`），停止回合经 `POST /api/sessions/{id}/interrupt`；会话在终端视图时带 `mode` 或附件的输入返回 409 `wrong_view`；
   - 服务端队列多设备共享：空闲且未暂停时立即发送，否则排队，回合正常结束后逐条发送；
   - 队列可编辑、上移、删除、二次确认后立即发送；
   - 回合被停止、出错或拒绝时队列暂停并提示继续或清空；
@@ -114,6 +117,8 @@
   - 旧 `settings.json` 中遗留的 `chatIdleSleepMinutes` 照常读取并在下次保存时移除。
 - **US-Q12 关闭后恢复**：作为使用者，我希望关闭或因重启中断的混合会话之后还能接着聊，以便服务重启不再意味着失去 agent 对话。
   验收要点：
+  - 已归档会话与运行中会话同形：经 `GET /api/sessions?state=archived`（按 `archive.updatedAt` 倒序）与 `GET /api/sessions/{id}` 读取，`state` 为 `closed` 或 `interrupted`，运行时字段取零值，记录独有的字段在 `archive` 中；
+  - 恢复经 `POST /api/sessions/{id}/resume {view}`（缺省为归档时的视图，对运行中会话 409 `not_archived`），删除记录经 `DELETE /api/sessions/{id}?forget=1`（同时删除临时文件夹，之后该 ID 返回 404）；
   - 归档（关闭）混合会话把记录标为已关闭，记录保存会话最近的仓库/工作树关联，服务启动时把活动记录改为已中断并结束 PID 与启动标识都匹配的残留进程组；
   - 已归档记录显示在首页所属工作树活动会话下方的“已归档”中：旧记录按目录归入包含它的工作树，无匹配时进入直接会话；默认折叠并显示数量与已中断条数，每次显示最近 5 条；
   - 每条记录优先显示持久化的当前会话标题（旧记录没有标题时回退到创建名称）、agent、所在端、状态、时间与“上一轮可能未完成”“排队消息已丢失”提示：
@@ -125,10 +130,11 @@
   - 记录不含环境变量值、消息、注册记录正文或 token，存储不可用时只禁用混合会话。
 - **US-Q13 本地终端接入混合会话**：作为原生终端使用者，我希望 CLI 对混合会话的行为清楚可预期，以便与 Web 端的切换配合使用。
   验收要点：
-  - `webmux run --launch-config` 引用混合配置时创建混合会话，默认从终端开始，`--start-side chat` 从聊天开始（US-S07）；
-  - `webmux attach` 在会话处于聊天端或切换中时拒绝并以 1 退出，附着期间被切到聊天视为被动分离，恢复终端、提示后以 0 退出，切回终端不自动重新附着；
-  - `webmux ls` 在状态列附加所在端，`--json` 原样包含 `hybrid`；
-  - `webmux chat switch --to chat|terminal` 从命令行切换并等到切换结束，`webmux chat send|status|answer` 等驱动聊天端（US-S14、US-S15）。
+  - `webmux run --launch-config` 引用混合配置时创建混合会话，默认从终端开始，`--view chat` 从聊天开始（US-S07）；
+  - `webmux attach` 在会话处于聊天视图或切换中时拒绝并以 1 退出，附着期间被切到聊天视为被动分离，恢复终端、提示后以 0 退出，切回终端不自动重新附着；4409 关闭原因中的视图取值为 `chat` 或 `terminal`；
+  - `webmux ls` 在状态列附加所在视图（终端、聊天、切换中），`--json` 原样包含 `views`、`view`、`transition` 与 `agent`，不含 `hybrid`；
+  - `webmux view <ID> chat|terminal` 从命令行切换并等到切换结束，`webmux send`、`webmux interrupt` 按视图分派，`webmux chat status|answer` 等驱动聊天视图专有操作（US-S14、US-S15）；
+  - 删除的旧命令 `chat new|send|cancel|switch|ls|resume|forget`、`run --start-side` 按未知命令或选项以 2 结束。
 - **US-Q14 聊天中上传素材**：作为聊天中的使用者，我希望上传文件或图片作为下一条消息的附件，以便让 agent 获得素材而不用切回终端。
   验收要点：
   - 聊天输入框的回形针、拖放到聊天视图与文件粘贴共用会话上传接口，多文件按顺序上传；
@@ -157,7 +163,7 @@
   - webmux 不自动安装连接器或 Node，也不用 `npx` 临时下载。
 - **US-Q17 识别聊天端 agent**：作为同时开着多个聊天会话的使用者，我希望在首页和聊天页都能一眼看出每个会话由哪个 agent 承接，以便不用切到终端或凭标题猜测。
   验收要点：
-  - 混合会话的 `hybrid` 对象带档案声明的显示名 `agentTitle` 与品牌图标键 `agentIcon`（属于启动配置图标目录），列表快照、列表事件与单个会话信息一致；前端不内置 agent 名称；
+  - 混合会话的会话信息 `agent` 对象带档案名 `name`、档案声明的显示名 `title` 与品牌图标键 `icon`（属于启动配置图标目录），列表快照、列表事件与单个会话信息一致；普通会话 `agent` 为 `null`；前端不内置 agent 名称；
   - 首页混合会话卡片（聊天端、切换中与终端端，含“恢复到终端”后）以 agent 单色品牌小图标替换通用聊天/终端图标，元信息行形如“OpenCode · 聊天 · 2 个设备已连接”或“OpenCode · 终端 · 后台会话”；
   - 会话页显示聊天视图时，头部在标题后、状态点前显示低强调的图标与名称；窄屏（小于 640px）只显示图标，可访问名称与悬停提示均为“Agent：<名称>”，空间不足时先截断标题；
   - 标识只用于展示，不可聚焦或点击；切到终端视图后隐藏；浏览器不认识的图标键只显示名称，不用其他图标代替。
@@ -169,24 +175,26 @@
   - 仓库列出全部已登记仓库（不可用的禁用并说明原因），agent 只列出勾选了混合模式的启动配置；缺少可用仓库或 agent 时禁用发送并提供“添加仓库”或“新建启动配置”入口；
   - 本设备记住上次成功时的仓库和 agent，失效时回退到第一个可用项；基准分支默认为仓库主工作区当前的分支，只列本地分支，以可搜索列表（与新建工作树的“已有本地分支”共用）按名称选择，指向同一提交的分支互不影响；
   - 未发送的文字、待发送附件及当次调整的仓库、基准分支、agent、权限模式、配置项与初始化指令勾选状态保存在本设备，切换页面后保留，发送成功后清除；
-  - 打开页面和每次切换 agent 都经 `POST /api/quick-starts/options` 让 agent 在仓库中临时开一个会话，重新读取配置项：
+  - 打开页面和每次切换 agent 都经 `POST /api/launch-configs/{id}/options {repositoryId}` 让 agent 在仓库中临时开一个会话，重新读取配置项：
     - 读取期间显示“正在读取配置…”，agent、权限、配置与发送均禁用，完成后恢复可用；
     - 读取失败时沿用该启动配置记住的清单（`chatOptions`），不提供重试按钮；
     - agent 不接受的值不阻断发送，只在聊天中留下说明；
   - 权限模式默认“全部接受”；
   - 与聊天输入框相同，可用“上传文件”按钮、粘贴或拖放把文件加为附件（显示为可移除的标签，带上传进度，数量与大小限制相同）：
-    - 会话还不存在时上传到服务端的快速开始暂存文件夹，发送后移入新会话的上传目录，随首条消息发送；
+    - 会话还不存在时经 `POST /api/uploads` 上传到服务端的暂存文件夹，发送后移入新会话的上传目录，随首条消息发送；
     - 首条消息之前的步骤失败时附件保留以便重发；首条消息发送失败时附件已归新会话，输入框不再保留；
-  - 发送后服务端依次创建 worktree（自动分支名，路径为默认父目录下的分支名末段）、以聊天端启动混合会话、应用配置与权限模式，并把首条消息作为第一轮提示发出，浏览器断开不影响；同一请求 ID 在执行中及完成后 10 分钟内重复提交只返回同一结果；
+  - 发送只发出一次 `POST /api/sessions`（`newWorktree`、`configId`、`view: "chat"`、`prompt`、`attachments`、`agentConfig`、`permissionMode` 与 `clientRequestId`），快速开始没有独立接口：
+    - 服务端依次创建 worktree（自动分支名，路径为默认父目录下的分支名末段）、以聊天视图启动混合会话、应用配置与权限模式，并把首条消息作为第一轮提示发出，浏览器断开不影响；
+    - 同一请求 ID 在执行中及完成后 10 分钟内重复提交只返回同一结果；
   - 仓库设置了初始化指令时，输入框附近显示“使用初始化指令”勾选框：
     - 默认勾选，取消勾选在切换页面时保留，发送成功后或切换仓库时恢复勾选；
     - 勾选时首条消息为“展开后的指令、空行、用户输入”，指令里写了 `{{user}}` 时用户输入放在那里而不是接在后面；可预览展开后的内容（`{{dir}}` 与 `{{webmux}}` 在会话创建后才替换为临时文件夹路径与 WebMux 工具说明）；
     - 引用了不存在的快捷指令时服务端拒绝发送并列出缺少的名称，不创建 worktree；
-  - 成功后当前标签页进入新会话的聊天视图；失败时停在原页面、保留文字，说明失败步骤与原因，已创建的 worktree 或会话保留并提供入口；
+  - 成功后当前标签页进入新会话的聊天视图；失败时停在原页面、保留文字，按失败体的 `step`（`precheck`、`worktree`、`session`、`config`、`prompt`）说明失败步骤与原因，已创建的 worktree 或会话保留并提供入口；
   - 生成的是标准混合会话：切换、恢复、关闭、归档与删除 worktree 都按本节其他故事进行。
 - **US-Q19 聊天历史**：作为同时进行多个聊天的使用者，我希望聊天模式的侧栏按最近活动列出全部聊天，以便不回首页就切换聊天或恢复已结束的聊天。
   验收要点：
-  - 上方按最近活动从新到旧平铺运行中的混合会话，服务端保存的已归档记录收在下方的“已归档”折叠分组中（默认折叠并显示数量，按最近更新从新到旧排列；当前打开或正在恢复已归档记录时自动展开），纯终端会话不列出，同一会话只出现一次，随会话事件实时更新；
+  - 上方按最近活动从新到旧平铺运行中的混合会话，服务端保存的已归档会话（`GET /api/sessions?state=archived`）收在下方的“已归档”折叠分组中（默认折叠并显示数量，按最近更新从新到旧排列；当前打开或正在恢复已归档记录时自动展开），纯终端会话不列出，同一会话只出现一次，随会话事件实时更新；
   - 每行显示 agent 图标、标题和彩色状态圆点（工作中、等待、空闲、已结束，文字在可访问名与悬停提示中），运行中与已归档的行圆点在行尾右对齐，当前会话标 `aria-current`；
   - 点运行中的行在当前标签页进入该会话；点已归档记录按现有流程恢复到聊天端并进入，需要选择时转到该记录的恢复页，无法恢复时在侧栏说明原因、不新建会话；
   - “新聊天”回到快速开始页；手机上从抽屉中选择后抽屉关闭。
@@ -199,7 +207,7 @@
 - [会话外壳与伴随进程](../../internal/session/shell.go)、[进程事实](../../internal/session/process_facts.go)、[聊天接口](../../internal/api/chat.go)、[聊天通道](../../internal/hub/chat.go)
 - [启动配置](../../internal/launch/types.go)、[聊天视图](../../web/src/components/chat/)、[代码链接解析](../../web/src/markdown-link.ts)、[代码工作区](../../web/src/components/CodeWorkspace.svelte)、[会话页](../../web/src/pages/Terminal.svelte)
 - [已归档记录](../../web/src/components/ArchivedSessions.svelte)、[归位规则](../../web/src/archived.ts)、[安装提示](../../web/src/components/ConnectorInstallHint.svelte)、[原生附着](../../internal/attach/attach.go)
-- [使用说明](../hybrid-sessions.md)、[协议](../protocol/http-hybrid.md)、[端到端测试](../../web/test/e2e/hybrid.spec.ts)。
+- [使用说明](../hybrid-sessions.md)、[协议](../protocol/http-hybrid.md)、[创建会话协议](../protocol/http-session-create.md)、[端到端测试](../../web/test/e2e/hybrid.spec.ts)。
 - [会话卡片](../../web/src/components/SessionRow.svelte)、[会话页头部](../../web/src/components/TerminalHeader.svelte)、[品牌图标](../../web/src/components/LaunchConfigIcon.svelte)、[图标一致性测试](../../internal/launch/presets_test.go)
-- [快速开始页](../../web/src/pages/QuickStart.svelte)、[快速开始状态](../../web/src/quickStart.ts)、[编排](../../internal/workspace/quickstart.go)、[接口](../../internal/api/quickstart.go)、[配置项清单](../../internal/hybrid/options.go)
+- [快速开始页](../../web/src/pages/QuickStart.svelte)、[快速开始状态](../../web/src/quickStart.ts)、[创建编排](../../internal/workspace/create_session.go)、[会话接口](../../internal/api/sessions.go)、[按视图输入](../../internal/hybrid/input.go)、[配置项清单](../../internal/hybrid/options.go)
 - [聊天历史](../../web/src/components/ChatHistory.svelte)、[快速开始浏览器用例](../../web/test/browser/QuickStart.test.ts)、[聊天历史浏览器用例](../../web/test/browser/ChatHistory.test.ts)、[快速开始端到端用例](../../web/test/e2e/quick-start.spec.ts)。

@@ -46,14 +46,15 @@
       (to) => {
         if (to === "code") return code.set(true);
         if (inCode) code.set(false);
-        if ((to === "acp" || to === "tui") && to !== shown) hybrid?.request(to);
+        if ((to === "chat" || to === "terminal") && to !== shown)
+          hybrid?.request(to);
       }
     }
   >
     <Tabs.List variant="line" aria-label="会话视图">
       {#if hybrid}
         <Tabs.Trigger
-          value="acp"
+          value="chat"
           disabled={switching}
           aria-disabled={unavailable && !switching ? "true" : undefined}
           aria-label={unavailable ? `聊天（${unavailable}）` : "聊天"}
@@ -64,7 +65,7 @@
           /><span>聊天</span></Tabs.Trigger
         >
         <Tabs.Trigger
-          value="tui"
+          value="terminal"
           disabled={switching}
           aria-label="终端"
           title="终端"

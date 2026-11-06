@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import {
+  ArchivedSessionSchema,
   BranchesSchema,
   ChatFrameSchema,
   CodeChangesSchema,
   CodeCheckSchema,
   CodeListingSchema,
-  HybridRecordsSchema,
+  CreateSessionResultSchema,
   LaunchConfigSchema,
   LaunchConfigSummarySchema,
   LaunchPresetsSchema,
@@ -51,7 +52,8 @@ const schemas = {
   tailscale: TailscaleStatusSchema.pick({ entries: true }),
   chatSnapshot: ChatFrameSchema,
   chatEvents: ChatFrameSchema,
-  hybridRecords: HybridRecordsSchema,
+  archivedSession: ArchivedSessionSchema,
+  createResult: CreateSessionResultSchema,
 };
 
 describe("Go response arrays match the browser contract", () => {
@@ -78,10 +80,11 @@ describe("Go response arrays match the browser contract", () => {
       false,
     );
   });
-  test("hybrid records keep empty history and null optional fields", () => {
-    const [record] = HybridRecordsSchema.parse(fixture.hybridRecords);
-    expect(record?.previousIds).toEqual([]);
-    expect(record?.agentSessionId).toBeNull();
-    expect(record?.interruptedAt).toBeNull();
+  test("archived sessions keep empty history and null optional fields", () => {
+    const record = ArchivedSessionSchema.parse(fixture.archivedSession);
+    expect(record.archive.previousAgentSessionIds).toEqual([]);
+    expect(record.agent.sessionId).toBeNull();
+    expect(record.archive.interruptedAt).toBeNull();
+    expect(record.listeningPorts).toEqual([]);
   });
 });

@@ -28,7 +28,7 @@ test("a running session animates the tab chrome until it exits", async ({
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
 
   await page.goto("/");
   await expect(page).toHaveTitle("▶ WebMux · 工作区");

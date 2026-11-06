@@ -1,15 +1,8 @@
 {
   "status": 201,
   "body": {
-    "cmd": [
-      "/bin/sh",
-      "-c",
-      "sleep 60"
-    ],
-    "createdAt": "<time>",
-    "env": {},
-    "hybrid": false,
-    "hybridSupport": {
+    "chat": false,
+    "chatSupport": {
       "reason": "unknown_agent",
       "supported": false,
       "supportedAgents": [
@@ -22,6 +15,13 @@
         "Antigravity CLI"
       ]
     },
+    "cmd": [
+      "/bin/sh",
+      "-c",
+      "sleep 60"
+    ],
+    "createdAt": "<time>",
+    "env": {},
     "id": "<id#2>",
     "name": "Shell",
     "preview": null,

@@ -126,7 +126,7 @@ test("search and status filters compose and follow live session changes", async 
       },
     });
     expect(response.status()).toBe(201);
-    created.push(await response.json());
+    created.push((await response.json()).session);
   }
   await page.goto("/");
   const rows = page.locator("[data-session-id]:visible");

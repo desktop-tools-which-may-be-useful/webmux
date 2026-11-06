@@ -34,6 +34,7 @@ import (
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/sessioncmd"
 	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
@@ -452,7 +453,12 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	})
 	// The shell guide and the {{webmux}} brief; the socket is added once the
 	// local API listens.
-	guide := &agentguide.Instance{Version: version, LocalURL: localOrigin(listener.Addr()), Bin: serverExecutable()}
+	// The commands topic is the command directory, rendered once from this
+	// build's command table.
+	guide := &agentguide.Instance{
+		Guide:   agentguide.New(sessioncmd.Directory(commandRegistry())),
+		Version: version, LocalURL: localOrigin(listener.Addr()), Bin: serverExecutable(),
+	}
 	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)
 	workspaces.UseBrief(func(id, dir string) string {
 		return guide.Brief(agentguide.BriefInput{SessionID: id, Dir: dir})

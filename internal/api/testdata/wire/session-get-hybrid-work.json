@@ -1,6 +1,13 @@
 {
   "status": 200,
   "body": {
+    "agent": {
+      "icon": "pi",
+      "name": "omp",
+      "sessionId": "<sessionId#1>",
+      "title": "omp",
+      "work": "读取 internal/wire/wire.go"
+    },
     "attention": null,
     "clients": 1,
     "cmd": [
@@ -11,24 +18,21 @@
     "cwd": "<repo>",
     "exitCode": null,
     "generation": "<generation#1>",
-    "hybrid": {
-      "agent": "omp",
-      "agentIcon": "pi",
-      "agentSessionId": "ses_wire",
-      "agentTitle": "omp",
-      "phase": "loading",
-      "side": "acp",
-      "state": "active",
-      "work": "读取 internal/wire/wire.go"
-    },
     "id": "<id#1>",
     "lastActiveAt": "<time>",
     "listeningPorts": [],
     "preview": "",
     "reportedCwd": null,
     "rows": 24,
+    "state": "active",
     "status": "running",
     "title": "hybrid",
+    "transition": null,
+    "view": "chat",
+    "views": [
+      "terminal",
+      "chat"
+    ],
     "workspace": null
   }
 }

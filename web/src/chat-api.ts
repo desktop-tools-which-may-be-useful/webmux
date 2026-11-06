@@ -2,15 +2,16 @@ import { api } from "./api";
 import { newRequestId } from "./ids";
 import {
   ChatPermissionModeRequestSchema,
-  ChatPromptResultSchema,
-  HybridSwitchRequestSchema,
-  HybridSwitchResultSchema,
   NoContentSchema,
+  SessionInputResultSchema,
+  ViewChangeRequestSchema,
+  ViewChangeResultSchema,
   type ChatAttachment,
   type ChatPermissionMode,
+  type SessionView,
 } from "./schemas";
 
-// Commands of a hybrid session (docs/protocol/http-hybrid.md). Every request
+// Commands of a session's chat view (docs/protocol). Every request
 // carries a fresh clientRequestId, which the server runs at most once. The
 // outcome reaches every device as chat events and state, so callers only
 // report failures.
@@ -44,7 +45,8 @@ export interface ChatActions {
 
 /** The chat commands of session `id`. */
 export function chatActions(id: string): ChatActions {
-  const base = `/sessions/${id}/chat`;
+  const session = `/sessions/${id}`;
+  const base = `${session}/chat`;
   const command = (path: string, method: string, body: object = {}) =>
     api(`${base}/${path}`, NoContentSchema, method, {
       clientRequestId: newRequestId(),
@@ -52,8 +54,10 @@ export function chatActions(id: string): ChatActions {
     });
   const item = (itemId: string) => `queue/${encodeURIComponent(itemId)}`;
   return {
+    // Input goes to the session's current view; the chat view takes it as
+    // a prompt.
     send: (text, mode, attachments) =>
-      api(`${base}/prompts`, ChatPromptResultSchema, "POST", {
+      api(`${session}/input`, SessionInputResultSchema, "POST", {
         clientRequestId: newRequestId(),
         text,
         mode,
@@ -61,7 +65,11 @@ export function chatActions(id: string): ChatActions {
           ? { attachments: attachments.map(({ path }) => ({ path })) }
           : {}),
       }),
-    cancel: () => command("cancel", "POST"),
+    // On the chat view an interrupt cancels the running turn.
+    cancel: () =>
+      api(`${session}/interrupt`, NoContentSchema, "POST", {
+        clientRequestId: newRequestId(),
+      }),
     editQueued: (itemId, text) => command(item(itemId), "PATCH", { text }),
     moveQueuedUp: (itemId) => command(item(itemId), "PATCH", { move: "up" }),
     removeQueued: (itemId) => command(item(itemId), "DELETE"),
@@ -85,33 +93,33 @@ export function chatActions(id: string): ChatActions {
 }
 
 /**
- * Moves session `id` to side `to`. Resolves once the switch finished; while
+ * Moves session `id` to view `to`. Resolves once the change finished; while
  * it waits for the user's choice (D21) another request answers it.
  * `agentSessionId` picks one of a session_ambiguous conflict's candidates.
  */
-export function switchSide(
+export function changeView(
   id: string,
-  to: "acp" | "tui",
+  to: SessionView,
   agentSessionId?: string,
 ) {
   return api(
-    `/sessions/${id}/switch`,
-    HybridSwitchResultSchema,
+    `/sessions/${id}/view`,
+    ViewChangeResultSchema,
     "POST",
     { clientRequestId: newRequestId(), to, agentSessionId },
     undefined,
-    HybridSwitchRequestSchema,
+    ViewChangeRequestSchema,
   );
 }
 
-/** Answers a switch waiting for the user after the interrupt timed out. */
+/** Answers a view change waiting for the user after the interrupt timed out. */
 export function answerSwitch(id: string, choice: "wait" | "force" | "cancel") {
   return api(
-    `/sessions/${id}/switch`,
-    HybridSwitchResultSchema,
+    `/sessions/${id}/view`,
+    ViewChangeResultSchema,
     "POST",
     { clientRequestId: newRequestId(), choice },
     undefined,
-    HybridSwitchRequestSchema,
+    ViewChangeRequestSchema,
   );
 }

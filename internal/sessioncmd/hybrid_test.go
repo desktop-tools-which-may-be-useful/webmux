@@ -82,9 +82,9 @@ func realServer(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer, *session.Manag
 	}, &stdout, &stderr, m, agent
 }
 
-// `webmux run --launch-config` with a hybrid config creates a hybrid
-// session on the terminal side, listed with its side; `run -- omp` stays an
-// ordinary session.
+// `webmux run --launch-config` with a chat-enabled config creates a session
+// with a chat view, on its terminal view and listed with it; `run -- omp`
+// stays an ordinary session.
 func TestRunLaunchConfigStartsHybridSessionInTerminal(t *testing.T) {
 	e, stdout, stderr, m, agent := realServer(t)
 	ctx := context.Background()
@@ -108,8 +108,15 @@ func TestRunLaunchConfigStartsHybridSessionInTerminal(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].ID != id || list[0].Hybrid == nil || list[0].Hybrid.Side != contract.HybridSideTUI {
+	if len(list) != 1 || list[0].ID != id || !hasChatView(list[0]) || list[0].View != contract.ViewTerminal || list[0].Agent == nil {
 		t.Fatalf("ls --json %s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), `"hybrid"`) {
+		t.Fatalf("ls --json still carries hybrid: %s", stdout.String())
+	}
+	stdout.Reset()
+	if code := List(ctx, e, nil); code != contract.ExitOK || !strings.Contains(stdout.String(), "· 终端") {
+		t.Fatalf("ls table: %d %s", code, stdout.String())
 	}
 
 	stdout.Reset()
@@ -126,7 +133,7 @@ func TestRunLaunchConfigStartsHybridSessionInTerminal(t *testing.T) {
 }
 
 // An attached `run --launch-config` ends like a detach (exit 0) when the
-// session moves to its chat side.
+// session moves to its chat view.
 func TestAttachedHybridRunDetachesWhenMoved(t *testing.T) {
 	e, _, stderr, m, _ := realServer(t)
 	console := &heldConsole{}
@@ -152,7 +159,9 @@ func TestAttachedHybridRunDetachesWhenMoved(t *testing.T) {
 	s.MoveClients()
 	select {
 	case code := <-done:
-		if code != contract.ExitOK || !console.restored || !strings.Contains(stderr.String(), "已切换到聊天视图") {
+		// A bare move names the terminal view; a switch to chat names chat
+		// (TestAttachHybridSessionOnChatSide).
+		if code != contract.ExitOK || !console.restored || !strings.Contains(stderr.String(), "webmux attach "+s.Info().ID) {
 			t.Fatalf("moved run exit %d restored %v: %s", code, console.restored, stderr.String())
 		}
 	case <-ctx.Done():

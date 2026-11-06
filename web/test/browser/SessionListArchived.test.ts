@@ -3,25 +3,43 @@ import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import ShellHarness from "./ShellHarness.svelte";
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
-import type { HybridRecord, Repository, SessionInfo } from "../../src/schemas";
+import type {
+  ArchivedSession,
+  Repository,
+  SessionInfo,
+} from "../../src/schemas";
 
-const record: HybridRecord = {
+const record: ArchivedSession = {
   id: "hybrid22",
-  name: "修复排序",
+  generation: "",
   title: "修复排序",
-  configId: "cfgomp01",
-  configMissing: false,
-  agent: "omp",
   cwd: "/work",
   cmd: ["omp"],
-  side: "tui",
-  agentSessionId: "01a",
-  previousIds: [],
-  state: "closed",
-  queuedCount: 0,
+  status: "exited",
+  exitCode: null,
+  preview: "",
   createdAt: "2026-10-28T00:00:00Z",
-  updatedAt: "2026-10-28T00:00:00Z",
-  interruptedAt: null,
+  lastActiveAt: "2026-10-28T00:00:00Z",
+  cols: 0,
+  rows: 0,
+  clients: 0,
+  workspace: null,
+  attention: null,
+  reportedCwd: null,
+  configId: "cfgompaa",
+  state: "closed",
+  views: ["terminal", "chat"],
+  view: "terminal",
+  transition: null,
+  agent: { name: "omp", title: "omp", icon: "pi", sessionId: "01a" },
+  archive: {
+    configMissing: false,
+    previousAgentSessionIds: [],
+    queuedCount: 0,
+    interruptedAt: null,
+    updatedAt: "2026-10-28T00:00:00Z",
+  },
+  listeningPorts: [],
 };
 const active: SessionInfo = {
   id: "hybrid33",
@@ -32,6 +50,11 @@ const active: SessionInfo = {
   status: "idle",
   exitCode: null,
   listeningPorts: [],
+  state: "active",
+  views: ["terminal", "chat"],
+  view: "chat",
+  transition: null,
+  agent: { name: "omp", title: "omp", icon: "pi", sessionId: "01b" },
   preview: "",
   createdAt: "2026-10-28T00:00:00Z",
   lastActiveAt: "2026-10-28T00:00:00Z",
@@ -41,14 +64,6 @@ const active: SessionInfo = {
   workspace: null,
   attention: null,
   reportedCwd: null,
-  hybrid: {
-    side: "acp",
-    state: "active",
-    agent: "omp",
-    agentTitle: "omp",
-    agentIcon: "pi",
-    agentSessionId: "01b",
-  },
 };
 
 const worktree = {
@@ -89,7 +104,7 @@ const repository = {
   ],
 } satisfies Repository;
 
-let records: HybridRecord[] = [];
+let records: ArchivedSession[] = [];
 let repositories: Repository[] = [];
 const sockets: FakeSocket[] = [];
 
@@ -126,12 +141,17 @@ beforeEach(() => {
     vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input), location.href);
       const method = init?.method ?? "GET";
-      if (url.pathname === "/api/hybrid-sessions" && method === "GET")
+      if (
+        url.pathname === "/api/sessions" &&
+        url.searchParams.get("state") === "archived" &&
+        method === "GET"
+      )
         return Response.json(records);
       if (url.pathname === "/api/repositories" && method === "GET")
         return Response.json(repositories);
       if (
-        url.pathname === "/api/hybrid-sessions/hybrid22" &&
+        url.pathname === "/api/sessions/hybrid22" &&
+        url.searchParams.get("forget") === "1" &&
         method === "DELETE"
       ) {
         records = [];
@@ -196,7 +216,7 @@ test("archiving a hybrid session keeps its draft; deleting the record deletes it
   render(ShellHarness, { drafts });
   const socket = await connected();
   socket.message({ type: "snapshot", sessions: [active], forwards: [] });
-  records = [{ ...record, id: "hybrid33", name: "进行中", title: "进行中" }];
+  records = [{ ...record, id: "hybrid33", title: "进行中" }];
   socket.message({ type: "removed", id: "hybrid33" });
   const group = page.getByRole("region", { name: "work 的已归档会话" });
   await expect.element(group).toMatchTextContent(/已归档\s*1/);
@@ -217,10 +237,12 @@ test("archiving a hybrid session keeps its draft; deleting the record deletes it
   await vi.waitFor(() => expect(drafts.valid(closed!)).toBe(false));
 });
 
-const archived = (id: string, patch: Partial<HybridRecord>): HybridRecord => ({
+const archived = (
+  id: string,
+  patch: Partial<ArchivedSession>,
+): ArchivedSession => ({
   ...record,
   id,
-  name: id,
   title: id,
   ...patch,
 });
@@ -230,12 +252,20 @@ test("archived records sit in the group a live session of theirs would", async (
   records = [
     archived("recorded", {
       cwd: "/repos/project-feature",
-      workspace: { repositoryId: "repo-1", worktreeId: "feature" },
+      workspace: {
+        repositoryId: "repo-1",
+        worktreeId: "feature",
+        worktreePath: "/repos/project-feature",
+      },
     }),
     archived("legacysb", { cwd: "/repos/project/web" }),
-    archived("goneworkt", {
+    archived("goneworx", {
       cwd: "/repos/project-old",
-      workspace: { repositoryId: "repo-1", worktreeId: "old" },
+      workspace: {
+        repositoryId: "repo-1",
+        worktreeId: "old",
+        worktreePath: "/repos/project-old",
+      },
     }),
     archived("elsewher", { cwd: "/srv/elsewhere" }),
   ];
@@ -245,7 +275,7 @@ test("archived records sit in the group a live session of theirs would", async (
   for (const [group, title] of [
     ["feature", "recorded"],
     ["main", "legacysb"],
-    ["已不可用工作区", "goneworkt"],
+    ["已不可用工作区", "goneworx"],
     ["elsewhere", "elsewher"],
   ] as const) {
     const region = page.getByRole("region", { name: `${group} 的已归档会话` });
@@ -258,12 +288,20 @@ test("archived records sit in the group a live session of theirs would", async (
 });
 
 test("status and search filters cover archived records", async () => {
-  records = [archived("archivd1", { title: "整理灯塔文档" })];
+  records = [archived("archivda", { title: "整理灯塔文档" })];
   render(ShellHarness, { drafts: createTerminalDrafts() });
   const socket = await connected();
   socket.message({
     type: "snapshot",
-    sessions: [{ ...active, id: "livesess", hybrid: undefined }],
+    sessions: [
+      {
+        ...active,
+        id: "livesess",
+        views: ["terminal"],
+        view: "terminal",
+        agent: null,
+      },
+    ],
     forwards: [],
   });
   const region = page.getByRole("region", { name: "work 的已归档会话" });
@@ -309,8 +347,12 @@ test("a scope without archived matches shows the empty state", async () => {
   } satisfies Repository;
   repositories = [repository, other];
   records = [
-    archived("archivd1", {
-      workspace: { repositoryId: "repo-1", worktreeId: "main" },
+    archived("archivda", {
+      workspace: {
+        repositoryId: "repo-1",
+        worktreeId: "main",
+        worktreePath: "/repos/project",
+      },
     }),
   ];
   render(ShellHarness, { drafts: createTerminalDrafts() });

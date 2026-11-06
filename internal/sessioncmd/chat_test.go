@@ -55,14 +55,31 @@ func TestQueuedGone(t *testing.T) {
 	}
 }
 
-func TestSideNames(t *testing.T) {
-	for name, side := range map[string]contract.HybridSide{"chat": contract.HybridSideACP, "terminal": contract.HybridSideTUI} {
-		got, ok := sideNamed(name)
-		if !ok || got != side || sideName(side) != name {
-			t.Errorf("%s: %q %v %q", name, got, ok, sideName(side))
+func TestViewNames(t *testing.T) {
+	for _, name := range []string{"chat", "terminal"} {
+		if got, ok := viewNamed(name); !ok || string(got) != name {
+			t.Errorf("%s: %q %v", name, got, ok)
 		}
 	}
-	if _, ok := sideNamed("tui"); ok {
-		t.Error("tui is not a CLI side name")
+	for _, old := range []string{"tui", "acp", "switching", ""} {
+		if _, ok := viewNamed(old); ok {
+			t.Errorf("%q is not a view name", old)
+		}
+	}
+}
+
+func TestViewLabel(t *testing.T) {
+	both := []contract.SessionView{contract.ViewTerminal, contract.ViewChat}
+	for want, s := range map[string]contract.SessionInfo{
+		"终端":  {Views: both, View: contract.ViewTerminal},
+		"聊天":  {Views: both, View: contract.ViewChat},
+		"切换中": {Views: both, View: contract.ViewTerminal, Transition: &contract.SessionTransition{To: contract.ViewChat, Phase: contract.PhaseStarting}},
+	} {
+		if got := viewLabel(s); got != want || !hasChatView(s) {
+			t.Errorf("viewLabel %+v = %q, want %q", s, got, want)
+		}
+	}
+	if hasChatView(contract.SessionInfo{Views: []contract.SessionView{contract.ViewTerminal}}) {
+		t.Error("a terminal-only session has no chat view")
 	}
 }

@@ -139,7 +139,8 @@ test("the service worker shows a pushed alert and opens its session", async ({
   const created = await request.post("/api/sessions", {
     data: { cmd: ["/bin/bash", "--noprofile", "--norc", "-i"] },
   });
-  const sessionId = ((await created.json()) as { id: string }).id;
+  const sessionId = ((await created.json()) as { session: { id: string } })
+    .session.id;
   await enablePush(page, context, request, baseURL!);
 
   // Wait for activation before injecting one trusted, server-shaped push.

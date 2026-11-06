@@ -31,16 +31,16 @@ var worktreeGroup = &Command{
 }
 
 // home is what the home page display of every repository depends on: the
-// homeWorktrees setting, live sessions, and archived hybrid records, each
-// placed as the web home page places them.
+// homeWorktrees setting, active sessions, and archived (closed or
+// interrupted) sessions, each placed as the web home page places them.
 type home struct {
 	pins     map[string][]string
-	sessions map[string][]contract.SessionInfo  // by worktree ID
-	archived map[string][]contract.HybridRecord // by worktree ID
+	sessions map[string][]contract.SessionInfo // by worktree ID
+	archived map[string][]contract.SessionInfo // by worktree ID
 }
 
 func loadHome(ctx context.Context, client *localclient.Client) (home, error) {
-	h := home{sessions: map[string][]contract.SessionInfo{}, archived: map[string][]contract.HybridRecord{}}
+	h := home{sessions: map[string][]contract.SessionInfo{}, archived: map[string][]contract.SessionInfo{}}
 	var snapshot contract.SettingsSnapshot
 	if err := client.Do(ctx, http.MethodGet, "/api/settings", nil, &snapshot); err != nil {
 		return h, err
@@ -51,39 +51,34 @@ func loadHome(ctx context.Context, client *localclient.Client) (home, error) {
 		return h, err
 	}
 	for _, s := range sessions {
-		// Closed or interrupted hybrid shells show as archived records only.
-		if s.Workspace != nil && (s.Hybrid == nil || s.Hybrid.State == "active") {
+		if s.Workspace != nil {
 			h.sessions[s.Workspace.WorktreeID] = append(h.sessions[s.Workspace.WorktreeID], s)
 		}
 	}
-	var records []contract.HybridRecord
-	// Without hybrid sessions there are no archived records to count.
-	if err := client.Do(ctx, http.MethodGet, "/api/hybrid-sessions", nil, &records); err != nil || len(records) == 0 {
+	var archived []contract.SessionInfo
+	if err := client.Do(ctx, http.MethodGet, "/api/sessions?state=archived", nil, &archived); err != nil || len(archived) == 0 {
 		return h, nil
 	}
 	var repositories []contract.Repository
 	if err := client.Do(ctx, http.MethodGet, "/api/repositories", nil, &repositories); err != nil {
 		return h, err
 	}
-	for _, r := range records {
-		if r.State == "active" {
-			continue
-		}
-		if id, ok := recordWorktree(r, repositories); ok {
-			h.archived[id] = append(h.archived[id], r)
+	for _, s := range archived {
+		if id, ok := archivedWorktree(s, repositories); ok {
+			h.archived[id] = append(h.archived[id], s)
 		}
 	}
 	return h, nil
 }
 
-// recordWorktree is the web's recordWorktree: the recorded worktree wins; a
-// record written before associations were recorded joins the registered
-// worktree with the longest path containing its cwd.
-func recordWorktree(r contract.HybridRecord, repositories []contract.Repository) (string, bool) {
-	if r.Workspace != nil {
-		return r.Workspace.WorktreeID, true
+// archivedWorktree is the web's archived session placement: the recorded
+// worktree wins; a session recorded before associations were kept joins
+// the registered worktree with the longest path containing its cwd.
+func archivedWorktree(s contract.SessionInfo, repositories []contract.Repository) (string, bool) {
+	if s.Workspace != nil {
+		return s.Workspace.WorktreeID, true
 	}
-	_, tree, ok := findWorktree(repositories, r.Cwd)
+	_, tree, ok := findWorktree(repositories, s.Cwd)
 	return tree.ID, ok
 }
 
@@ -209,7 +204,7 @@ var worktreeListCommand = &Command{
 	Name: "worktree ls", Group: GroupWorkspace, Args: "[REPO]",
 	Summary: "List the worktrees of every registered repository, or of one, with their home page state.",
 	Description: "HOME is how the Web UI's home page treats the worktree: pinned (added to the home page), sessions (not added, " +
-		"but shown because it has sessions or archived chat records) or hidden. A repository nobody curated shows only its " +
+		"but shown because it has sessions or archived sessions) or hidden. A repository nobody curated shows only its " +
 		"main worktree.",
 	Arguments: []Item{repoArgument},
 	Output: "A table: REPO, ID, KIND, BRANCH, PATH, STATE, SESSIONS, HOME. With --json, the Repository array; each worktree " +
@@ -279,7 +274,7 @@ var worktreeListCommand = &Command{
 
 var worktreeShowCommand = &Command{
 	Name: "worktree show", Group: GroupWorkspace, Args: "REPO WORKTREE",
-	Summary:   "Show one worktree: every field, its home page state, its sessions and archived chat records.",
+	Summary:   "Show one worktree: every field, its home page state, its sessions and archived sessions.",
 	Arguments: []Item{repoArgument, worktreeArgument},
 	Output:    "Aligned key-value lines and lists; with --json, {worktree, sessions, archived}.",
 	Exit:      exitsCommon(ExitItem{Code: 2, Text: "Also: REPO or WORKTREE names nothing."}),
@@ -308,7 +303,7 @@ var worktreeShowCommand = &Command{
 				return e.Fail(err)
 			}
 			sessions := append([]contract.SessionInfo{}, h.sessions[tree.ID]...)
-			archived := append([]contract.HybridRecord{}, h.archived[tree.ID]...)
+			archived := append([]contract.SessionInfo{}, h.archived[tree.ID]...)
 			view := worktreeView{Worktree: tree, Home: h.status(repo, tree), Sessions: len(sessions)}
 			if *asJSON {
 				writeJSON(e.Stdout, map[string]any{"worktree": view, "sessions": sessions, "archived": archived})
@@ -336,9 +331,9 @@ var worktreeShowCommand = &Command{
 				}
 			}
 			if len(archived) > 0 {
-				_, _ = fmt.Fprintln(e.Stdout, "\nArchived chat records:")
+				_, _ = fmt.Fprintln(e.Stdout, "\nArchived sessions:")
 				for _, r := range archived {
-					_, _ = fmt.Fprintf(e.Stdout, "  %s  %s  %s\n", r.ID, r.State, r.Agent)
+					_, _ = fmt.Fprintf(e.Stdout, "  %s  %s  %s\n", r.ID, r.State, sessionName(r))
 				}
 			}
 			return contract.ExitOK
@@ -411,7 +406,7 @@ var worktreeCreateCommand = &Command{
 var worktreeRemoveCommand = &Command{
 	Name: "worktree rm", Group: GroupWorkspace, Args: "REPO WORKTREE",
 	Summary: "Remove a worktree after previewing what it affects.",
-	Description: "The removal preview is printed to standard error first: the sessions in the worktree, the archived chat " +
+	Description: "The removal preview is printed to standard error first: the sessions in the worktree, the archived " +
 		"records that would be deleted, and what blocks a safe removal (uncommitted changes, running sessions, a lock). " +
 		"With blockers the command exits 1 unless --force, which closes the sessions and removes the worktree anyway. " +
 		"On a terminal it asks you to type the worktree path; without a terminal it needs --yes. The branch is kept.",
@@ -478,7 +473,7 @@ func (e Env) printRemovalPreview(p contract.RemovalPreview) {
 		_, _ = fmt.Fprintf(e.Stderr, "webmux:   session %s (%s) %s\n", s.ID, s.Status, s.Title)
 	}
 	for _, r := range p.Archived {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux:   archived chat record %s (%s) will be deleted\n", r.ID, r.Agent)
+		_, _ = fmt.Fprintf(e.Stderr, "webmux:   archived session %s (%s) will be deleted\n", r.ID, sessionName(r))
 	}
 	for _, b := range p.Blockers {
 		_, _ = fmt.Fprintf(e.Stderr, "webmux:   blocked: %s\n", b)
@@ -506,7 +501,7 @@ func pinCommand(name string, pinned bool, summary string, examples []Example) *C
 		Summary: summary,
 		Description: "Only this repository's entry of the homeWorktrees setting changes, and every open browser follows. A " +
 			"conflicting write from another client is read again and the change replayed, at most three times. A worktree " +
-			"with sessions or archived chat records stays on the home page whether or not it is added.",
+			"with sessions or archived sessions stays on the home page whether or not it is added.",
 		Arguments: []Item{repoArgument, worktreeArgument},
 		Exit:      exitsCommon(ExitItem{Code: 1, Text: "Also: the setting kept conflicting."}, ExitItem{Code: 2, Text: "Also: REPO or WORKTREE names nothing."}),
 		Examples:  examples,
@@ -536,7 +531,7 @@ func pinCommand(name string, pinned bool, summary string, examples []Example) *C
 					if h, err := loadHome(ctx, client); err == nil {
 						for _, id := range ids {
 							if len(h.sessions[id]) > 0 || len(h.archived[id]) > 0 {
-								_, _ = fmt.Fprintf(e.Stderr, "webmux: %s stays on the home page while it has sessions or archived chat records\n", id)
+								_, _ = fmt.Fprintf(e.Stderr, "webmux: %s stays on the home page while it has sessions or archived sessions\n", id)
 							}
 						}
 					}

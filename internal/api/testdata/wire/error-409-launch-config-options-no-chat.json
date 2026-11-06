@@ -1,0 +1,7 @@
+{
+  "status": 409,
+  "body": {
+    "error": "会话没有聊天视图",
+    "reason": "no_chat_view"
+  }
+}

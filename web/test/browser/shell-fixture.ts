@@ -1,8 +1,9 @@
 import type {
-  HybridRecord,
+  ArchivedSession,
   LaunchConfigSummary,
   Repository,
   SessionInfo,
+  SessionView,
   Worktree,
 } from "../../src/schemas";
 
@@ -19,6 +20,11 @@ export function session(patch: Partial<SessionInfo> = {}): SessionInfo {
     status: "idle",
     exitCode: null,
     listeningPorts: [],
+    state: "active",
+    views: ["terminal"],
+    view: "terminal",
+    transition: null,
+    agent: null,
     preview: "",
     createdAt: "2026-10-28T00:00:00Z",
     lastActiveAt: "2026-10-28T00:00:00Z",
@@ -34,17 +40,17 @@ export function session(patch: Partial<SessionInfo> = {}): SessionInfo {
 
 export function chat(
   patch: Partial<SessionInfo> = {},
-  side: "acp" | "tui" = "acp",
+  view: SessionView = "chat",
 ): SessionInfo {
   return session({
     cmd: ["claude"],
-    hybrid: {
-      side,
-      state: "active",
-      agent: "claude",
-      agentTitle: "Claude Code",
-      agentIcon: "claudecode",
-      agentSessionId: "01a",
+    views: ["terminal", "chat"],
+    view,
+    agent: {
+      name: "claude",
+      title: "Claude Code",
+      icon: "claudecode",
+      sessionId: "01a",
     },
     ...patch,
   });
@@ -86,24 +92,42 @@ export function repository(patch: Partial<Repository> = {}): Repository {
   };
 }
 
-export function record(patch: Partial<HybridRecord> = {}): HybridRecord {
+export function record(
+  patch: Partial<ArchivedSession> = {},
+  archive: Partial<ArchivedSession["archive"]> = {},
+): ArchivedSession {
+  const updatedAt = archive.updatedAt ?? "2026-10-27T00:00:00Z";
   return {
-    id: "archivea",
-    name: "",
-    title: "整理文档",
-    configId: "cfgclaud",
-    configMissing: false,
-    agent: "claude",
-    cwd: "/repos/webmux",
-    cmd: ["claude"],
-    side: "acp",
-    agentSessionId: "01c",
-    previousIds: [],
+    ...session({
+      id: "archivea",
+      generation: "",
+      title: "整理文档",
+      configId: "cfgclaud",
+      cwd: "/repos/webmux",
+      cmd: ["claude"],
+      status: "exited",
+      cols: 0,
+      rows: 0,
+      createdAt: "2026-10-27T00:00:00Z",
+      lastActiveAt: updatedAt,
+    }),
     state: "closed",
-    queuedCount: 0,
-    createdAt: "2026-10-27T00:00:00Z",
-    updatedAt: "2026-10-27T00:00:00Z",
-    interruptedAt: null,
+    views: ["terminal", "chat"],
+    view: "chat",
+    agent: {
+      name: "claude",
+      title: "Claude Code",
+      icon: "claudecode",
+      sessionId: "01c",
+    },
+    archive: {
+      configMissing: false,
+      previousAgentSessionIds: [],
+      queuedCount: 0,
+      interruptedAt: null,
+      ...archive,
+      updatedAt,
+    },
     ...patch,
   };
 }
@@ -119,8 +143,8 @@ export function launchConfig(
     envNames: [],
     chatOptions: [],
     preview: null,
-    hybrid: true,
-    hybridSupport: { supported: true, supportedAgents: [], agent: "claude" },
+    chat: true,
+    chatSupport: { supported: true, supportedAgents: [], agent: "claude" },
     createdAt: "2026-10-01T00:00:00Z",
     updatedAt: "2026-10-01T00:00:00Z",
     ...patch,

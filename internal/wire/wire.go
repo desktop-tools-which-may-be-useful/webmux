@@ -17,6 +17,8 @@ import (
 	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/workspace"
 	"maps"
+	"path/filepath"
+	"slices"
 )
 
 // each maps a required response array, normalizing nil to an empty slice.
@@ -64,37 +66,170 @@ func Session(i session.Info) contract.SessionInfo {
 		r := contract.SessionReportedCwd(*i.ReportedCwd)
 		out.ReportedCwd = &r
 	}
-	out.Hybrid = Hybrid(i.Hybrid)
+	out.State, out.Views, out.View = contract.SessionStateActive, []contract.SessionView{contract.ViewTerminal}, contract.ViewTerminal
+	if h := i.Hybrid; h != nil {
+		if h.State != "" {
+			out.State = contract.SessionState(h.State)
+		}
+		out.Views = []contract.SessionView{contract.ViewTerminal, contract.ViewChat}
+		out.View = View(h.Side)
+		if h.To != "" {
+			out.Transition = &contract.SessionTransition{To: View(h.To), Phase: contract.TransitionPhase(h.Phase)}
+		}
+		out.Agent = &contract.SessionAgent{Name: h.Agent, Title: h.AgentTitle, Icon: h.AgentIcon, Work: h.Work}
+		if h.AgentSessionID != nil {
+			id := *h.AgentSessionID
+			out.Agent.SessionID = &id
+		}
+	}
 	return out
 }
 
-// Hybrid converts a shell's hybrid description; nil (an ordinary session)
-// stays nil so the field is omitted.
-func Hybrid(h *session.HybridInfo) *contract.SessionHybrid {
-	if h == nil {
-		return nil
+// Active reports whether a listed shell is an active session: every
+// ordinary session, and a hybrid session until it is closed or interrupted.
+// Only active sessions are listed and streamed; the others are described by
+// their archive records.
+func Active(i session.Info) bool {
+	return i.Hybrid == nil || i.Hybrid.State == "" || i.Hybrid.State == string(hybrid.StateActive)
+}
+
+// View converts a hybrid side (tui or acp) to a view; anything but acp is
+// the terminal.
+func View(side string) contract.SessionView {
+	if side == string(hybrid.SideACP) {
+		return contract.ViewChat
 	}
-	out := &contract.SessionHybrid{
-		Side: contract.HybridSide(h.Side), Phase: contract.HybridPhase(h.Phase),
-		State: contract.HybridState(h.State), Agent: h.Agent, AgentTitle: h.AgentTitle, AgentIcon: h.AgentIcon, Work: h.Work,
+	return contract.ViewTerminal
+}
+
+// side converts a requested view to a hybrid side; empty stays empty and an
+// unknown view becomes a side no service accepts, so it is rejected.
+func side(v contract.SessionView) string {
+	switch v {
+	case "":
+		return ""
+	case contract.ViewTerminal:
+		return string(hybrid.SideTUI)
+	case contract.ViewChat:
+		return string(hybrid.SideACP)
 	}
-	if h.AgentSessionID != nil {
-		id := *h.AgentSessionID
-		out.AgentSessionID = &id
-	}
-	return out
+	return "view:" + string(v)
 }
 
 func Sessions(in []session.Info) []contract.SessionInfo { return each(in, Session) }
 
-// SessionInput converts the body of POST /api/sessions.
-func SessionInput(r contract.CreateSessionRequest) workspace.SessionInput {
-	in := workspace.SessionInput{Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID, StartSide: string(r.StartSide), Prompt: r.Prompt, UseInitInstruction: r.UseInitInstruction}
+// Archived is what an archived session's conversion needs besides its
+// record: whether its launch config was deleted and its agent's label.
+type Archived struct {
+	ConfigMissing bool
+	AgentTitle    string
+	AgentIcon     string
+}
+
+// ArchivedSession converts the record of a closed or interrupted session:
+// runtime fields are zero, lastActiveAt is the record's update time. The
+// option values and process identity stay on the server.
+func ArchivedSession(r hybrid.Record, a Archived) contract.SessionInfo {
+	title := r.Name
+	if title == "" {
+		title = r.Title
+	}
+	if title == "" {
+		title = filepath.Base(r.Cwd)
+	}
+	out := contract.SessionInfo{
+		ID: r.ID, Title: title, Cwd: r.Cwd, Cmd: required(r.Cmd), Status: contract.SessionStatusExited,
+		CreatedAt: r.CreatedAt, LastActiveAt: r.UpdatedAt, ConfigID: r.ConfigID, ListeningPorts: []contract.ListeningPort{},
+		State: contract.SessionState(r.State), Views: []contract.SessionView{contract.ViewTerminal, contract.ViewChat}, View: View(string(r.Side)),
+		Agent: &contract.SessionAgent{Name: r.Agent, Title: a.AgentTitle, Icon: a.AgentIcon},
+		Archive: &contract.SessionArchive{
+			ConfigMissing: a.ConfigMissing, PreviousAgentSessionIDs: required(slices.Clone(r.PreviousIDs)),
+			Activity: r.Activity, QueuedCount: r.QueuedCount, UpdatedAt: r.UpdatedAt,
+		},
+	}
+	if r.AgentSessionID != "" {
+		id := r.AgentSessionID
+		out.Agent.SessionID = &id
+	}
+	if r.InterruptedAt != nil {
+		at := *r.InterruptedAt
+		out.Archive.InterruptedAt = &at
+	}
+	if r.Workspace != nil {
+		// The record keeps no worktree path; the session's directory stands
+		// in for it.
+		out.Workspace = &contract.SessionWorkspace{RepositoryID: r.Workspace.RepositoryID, WorktreeID: r.Workspace.WorktreeID, WorktreePath: r.Cwd}
+	}
+	return out
+}
+
+// CreateInput converts the body of POST /api/sessions.
+func CreateInput(r contract.CreateSessionRequest) workspace.CreateInput {
+	in := workspace.CreateInput{
+		ClientRequestID: r.ClientRequestID, Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID,
+		Side: side(r.View), Prompt: r.Prompt, UseInitInstruction: r.UseInitInstruction,
+		AgentConfig: r.AgentConfig, PermissionMode: string(r.PermissionMode),
+	}
 	if r.Workspace != nil {
 		ref := workspace.Reference(*r.Workspace)
 		in.Workspace = &ref
 	}
+	if r.NewWorktree != nil {
+		nw := workspace.NewWorktree(*r.NewWorktree)
+		in.NewWorktree = &nw
+	}
+	if r.Attachments != nil {
+		in.Attachments = each(r.Attachments, func(a contract.ChatAttachment) string { return a.Path })
+	}
 	return in
+}
+
+// CreateResult converts a created session; info is its snapshot after the
+// request's labels were applied.
+func CreateResult(r workspace.CreateResult, info session.Info) contract.CreateSessionResult {
+	return contract.CreateSessionResult{Session: Session(info), Worktree: OptionalWorktree(r.Worktree), ConfigWarnings: required(r.ConfigWarnings)}
+}
+
+// OptionalWorktree converts a worktree that may not exist; nil stays nil.
+func OptionalWorktree(w *workspace.Worktree) *contract.Worktree {
+	if w == nil {
+		return nil
+	}
+	out := Worktree(*w)
+	return &out
+}
+
+// InputKeys converts named keys to their bytes; ok is false for an unknown
+// name.
+func InputKeys(names []string) (keys [][]byte, ok bool) {
+	for _, name := range names {
+		key, known := contract.InputKeys[name]
+		if !known {
+			return nil, false
+		}
+		keys = append(keys, []byte(key))
+	}
+	return keys, true
+}
+
+// SessionInput converts the body of POST /api/sessions/{id}/input; label
+// names the terminal controller. Keys must already be valid.
+func SessionInput(r contract.SessionInputRequest, label string) hybrid.InputRequest {
+	keys, _ := InputKeys(r.Keys)
+	return hybrid.InputRequest{
+		ClientRequestID: r.ClientRequestID, Label: label, Text: r.Text, Submit: r.Submit, Keys: keys,
+		Attachments: promptAttachments(r.Attachments), Mode: r.Mode,
+	}
+}
+
+// SessionInputResult converts where input went.
+func SessionInputResult(r hybrid.InputResult) contract.SessionInputResult {
+	out := contract.SessionInputResult{View: View(string(r.Side))}
+	if r.Side == hybrid.SideACP {
+		queued := r.Prompt.Queued
+		out.Queued, out.ItemID, out.TurnID, out.PromptID = &queued, r.Prompt.ItemID, r.Prompt.TurnID, r.Prompt.PromptID
+	}
+	return out
 }
 
 func Capability(c workspace.Capability) contract.WorkspaceCapability {
@@ -147,12 +282,12 @@ func RefreshBranchBase(r workspace.BranchBaseRefresh) contract.RefreshBranchBase
 	return contract.RefreshBranchBaseResponse(r)
 }
 
-// Preview converts a removal preview; configMissing reports a deleted
-// launch config for each archived record.
-func Preview(p workspace.Preview, configMissing func(configID string) bool) contract.RemovalPreview {
+// Preview converts a removal preview; archived describes each archived
+// record.
+func Preview(p workspace.Preview, archived func(hybrid.Record) Archived) contract.RemovalPreview {
 	return contract.RemovalPreview{
 		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree),
-		Sessions: Sessions(p.Sessions), Archived: HybridRecords(p.Archived, configMissing),
+		Sessions: Sessions(p.Sessions), Archived: each(p.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
 		Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
 	}
 }
@@ -182,7 +317,7 @@ func launchPreview(p *contract.PreviewSettings) *launch.PreviewSettings {
 func LaunchConfig(c launch.Config) contract.LaunchConfig {
 	return contract.LaunchConfig{
 		ID: c.ID, Name: c.Name, Icon: c.Icon, Cmd: required(c.Cmd), Env: requiredMap(c.Env), Preview: previewSettings(c.Preview),
-		Hybrid: c.Hybrid, HybridSupport: HybridSupport(c.HybridSupport()),
+		Chat: c.Hybrid, ChatSupport: ChatSupport(c.HybridSupport()),
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -197,26 +332,26 @@ func LaunchSummaries(in []launch.Summary, chatOptions func(configID string) []hy
 		}
 		return contract.LaunchConfigSummary{
 			ID: s.ID, Name: s.Name, Icon: s.Icon, Cmd: required(s.Cmd), EnvNames: required(s.EnvNames), Preview: previewSettings(s.Preview),
-			Hybrid: s.Hybrid, HybridSupport: HybridSupport(s.HybridSupport), ChatOptions: each(options, chatConfig),
+			Chat: s.Hybrid, ChatSupport: ChatSupport(s.HybridSupport), ChatOptions: each(options, chatConfig),
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		}
 	})
 }
 
 func LaunchInput(r contract.LaunchConfigInput) launch.Input {
-	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview), Hybrid: r.Hybrid}
+	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview), Hybrid: r.Chat}
 }
 
 func LaunchPresets(in []launch.Preset) []contract.LaunchPreset {
 	return each(in, func(p launch.Preset) contract.LaunchPreset {
 		return contract.LaunchPreset{
-			Name: p.Name, Icon: p.Icon, Cmd: required(p.Cmd), EnvNames: required(p.EnvNames), Hybrid: p.Hybrid,
+			Name: p.Name, Icon: p.Icon, Cmd: required(p.Cmd), EnvNames: required(p.EnvNames), Chat: p.Hybrid,
 		}
 	})
 }
 
-func HybridSupport(s agentprofile.Support) contract.HybridSupport {
-	return contract.HybridSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason), Connector: AgentConnector(s.Connector),
+func ChatSupport(s agentprofile.Support) contract.ChatSupport {
+	return contract.ChatSupport{Supported: s.Supported, Agent: s.Agent, Reason: string(s.Reason), Connector: AgentConnector(s.Connector),
 		SupportedAgents: required(s.Agents),
 	}
 }

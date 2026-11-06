@@ -17,12 +17,12 @@
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import { api, APIError } from "../api";
   import {
-    HybridSupportSchema,
+    ChatSupportSchema,
     LaunchConfigSchema,
-    type HybridSupport,
+    type ChatSupport,
     type LaunchConfig,
   } from "../schemas";
-  import { connectorNoticeText, hybridSupportReason } from "../hybrid";
+  import { connectorNoticeText, chatSupportReason } from "../hybrid";
   import {
     defaultPreviewSettings,
     previewSettings,
@@ -73,8 +73,8 @@
   let hybrid = $state(false);
   // The server decides which commands can run as hybrid sessions; the
   // checkbox only reflects its answer for the command being edited.
-  let hybridSupport = $state<HybridSupport | null>(null);
-  const hybridReason = $derived(hybridSupportReason(hybridSupport));
+  let hybridSupport = $state<ChatSupport | null>(null);
+  const hybridReason = $derived(chatSupportReason(hybridSupport));
   // The argv (as JSON) that hybridSupport answers; not rendered.
   let supportFor = "";
   const preview = $derived(
@@ -171,8 +171,8 @@
             rows = Object.entries(config.env).map(([key, value]) =>
               row(key, value),
             );
-            hybrid = config.hybrid;
-            hybridSupport = config.hybridSupport;
+            hybrid = config.chat;
+            hybridSupport = config.chatSupport;
             supportFor = JSON.stringify(config.cmd);
           })
           .catch((err: unknown) => {
@@ -199,8 +199,8 @@
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       api(
-        "/launch-configs/hybrid-support",
-        HybridSupportSchema,
+        "/launch-configs/chat-support",
+        ChatSupportSchema,
         "POST",
         { cmd },
         controller.signal,
@@ -229,7 +229,7 @@
         configId ? `/launch-configs/${configId}` : "/launch-configs",
         LaunchConfigSchema,
         configId ? "PUT" : "POST",
-        { ...draft.value, hybrid, ...(icon === "auto" ? {} : { icon }) },
+        { ...draft.value, chat: hybrid, ...(icon === "auto" ? {} : { icon }) },
       );
       onsaved(saved);
       open = false;

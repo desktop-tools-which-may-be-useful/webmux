@@ -62,7 +62,7 @@ export type TimelineEntry =
       type: "marker";
       id: string;
       kind: "loaded" | "switched" | "truncated" | "reconnected";
-      side?: string;
+      view?: string;
     };
 
 export type ChatModel = {
@@ -210,7 +210,7 @@ function applyEvent(model: ChatModel, event: ChatEvent): ChatModel {
         type: "marker",
         id: String(event.seq),
         kind: event.marker.kind,
-        ...(event.marker.side ? { side: event.marker.side } : {}),
+        ...(event.marker.view ? { view: event.marker.view } : {}),
       });
     case "request.open":
       return trackRequest(next, event.request);

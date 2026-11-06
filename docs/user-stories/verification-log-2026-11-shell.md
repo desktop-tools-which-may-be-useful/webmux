@@ -76,3 +76,10 @@
     启动配置的增删改（隐藏变量值、只改给出的字段、改名、混合模式检查）、预设恢复与端口转发；
   - `internal/sessioncmd` 单元测试：主页状态与 `web/src/homeWorktrees.ts` 规则对照、设置冲突后的重放与放弃。
 - 限制：`repo settings --edit` 需要真实终端与编辑器，只做了代码审查；`repo base` 在没有上游的仓库中没有覆盖取回成功的路径；未在 macOS 上运行。
+
+本次局部核对（2026-11-06）：按在途变更 `unify-session-surface` 与 `unify-session-cli` 的规格更新协议文档与故事，不新增或退役故事。
+
+- 更新的故事：US-Q01、US-Q02、US-Q03、US-Q08、US-Q12、US-Q13、US-Q17、US-Q18、US-Q19；US-S01、US-S03、US-S04、US-S05、US-S07、US-S08、US-S09、US-S10、US-S11、US-S12、US-S13、US-S14、US-S15、US-S16、US-S17、US-S18；US-M03、US-M05。
+- 依据：两个变更的 `specs/` 与工作树中 `internal/contract`（`sessions.go`、`views.go`、`chat.go`、`launch.go`）及 `internal/api` 路由的对照阅读；只运行了 `make docs-check`。
+- 限制：实现仍在进行中，未运行 Go、前端或端到端测试，也未用真实服务进程冒烟；CLI 部分（`run --view`、`send --reply`、`interrupt`、`view`、`resume`、`ls --archived`、`rm --forget`、
+  命令目录在运行时渲染）只按规格描述，待变更的验证任务完成后再核对。

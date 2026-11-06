@@ -1,6 +1,7 @@
 {
   "status": 503,
   "body": {
-    "error": "启动配置不可用: 服务未启用"
+    "error": "启动配置不可用: 服务未启用",
+    "step": "precheck"
   }
 }

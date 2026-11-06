@@ -1,0 +1,7 @@
+{
+  "status": 400,
+  "body": {
+    "error": "attachments、agentConfig 与 permissionMode 只适用于聊天视图",
+    "step": "precheck"
+  }
+}

@@ -20,6 +20,11 @@ const base: SessionInfo = {
   status: "waiting",
   exitCode: null,
   listeningPorts: [],
+  state: "active",
+  views: ["terminal"],
+  view: "terminal",
+  transition: null,
+  agent: null,
   preview: "⠋ Working",
   createdAt: "2026-10-16T00:00:00Z",
   lastActiveAt: "2026-10-16T00:00:01Z",
@@ -231,13 +236,16 @@ test("uses the launch config preview rows and height", async () => {
   setLaunchPreviews([]);
 });
 
+const chatAgent = {
+  name: "opencode",
+  title: "OpenCode",
+  icon: "opencode",
+  sessionId: "01a",
+};
 const chatHybrid = {
-  side: "acp" as const,
-  state: "active" as const,
-  agent: "opencode",
-  agentTitle: "OpenCode",
-  agentIcon: "opencode",
-  agentSessionId: "01a",
+  views: ["terminal", "chat"] as SessionInfo["views"],
+  view: "chat" as const,
+  agent: chatAgent,
 };
 // Rendered text: an SVG <title> is not drawn, so innerText leaves it out.
 const agentElement = () =>
@@ -251,7 +259,7 @@ test("a chat-side hybrid card names its agent and shows the latest agent message
       status: "idle",
       clients: 2,
       preview: "已修复排序。\n新增两个测试。\n全部通过。",
-      hybrid: chatHybrid,
+      ...chatHybrid,
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
@@ -279,11 +287,8 @@ test("a chat card renders known brand glyphs; an unknown glyph leaves the name a
   render(SessionRow, {
     session: {
       ...base,
-      hybrid: {
-        ...chatHybrid,
-        agentTitle: "omp",
-        agentIcon: "pi",
-      },
+      ...chatHybrid,
+      agent: { ...chatAgent, title: "omp", icon: "pi" },
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
@@ -298,7 +303,8 @@ test("a chat card renders known brand glyphs; an unknown glyph leaves the name a
   render(SessionRow, {
     session: {
       ...base,
-      hybrid: { ...chatHybrid, agentTitle: "Future", agentIcon: "future" },
+      ...chatHybrid,
+      agent: { ...chatAgent, title: "Future", icon: "future" },
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
@@ -314,7 +320,8 @@ test("a working chat card shows its live work detail instead of a placeholder", 
       ...base,
       status: "running",
       preview: "",
-      hybrid: { ...chatHybrid, work: "读取 internal/wire/wire.go" },
+      ...chatHybrid,
+      agent: { ...chatAgent, work: "读取 internal/wire/wire.go" },
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
@@ -333,7 +340,7 @@ test("a chat card without preview or work detail renders no message block", asyn
       ...base,
       status: "idle",
       preview: "",
-      hybrid: chatHybrid,
+      ...chatHybrid,
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
@@ -348,9 +355,13 @@ test("a chat card without preview or work detail renders no message block", asyn
 
 test("terminal-side and switching hybrid cards keep the agent and the terminal preview", async () => {
   // A session resumed to the terminal still names the agent it runs.
-  const hybrid = { ...chatHybrid, side: "tui" as const, agentSessionId: null };
+  const hybrid = {
+    ...chatHybrid,
+    view: "terminal" as const,
+    agent: { ...chatAgent, sessionId: null },
+  };
   render(SessionRow, {
-    session: { ...base, clients: 1, hybrid },
+    session: { ...base, clients: 1, ...hybrid },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
   });
@@ -368,7 +379,8 @@ test("terminal-side and switching hybrid cards keep the agent and the terminal p
   render(SessionRow, {
     session: {
       ...base,
-      hybrid: { ...hybrid, side: "switching", phase: "stopping" },
+      ...hybrid,
+      transition: { to: "chat", phase: "stopping" },
     },
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
@@ -415,7 +427,7 @@ test("compact rows keep session state and location hints without rendering previ
         remote: false,
         since: base.lastActiveAt,
       },
-      hybrid: chatHybrid,
+      ...chatHybrid,
     },
     compact: true,
     groupPath: base.cwd,

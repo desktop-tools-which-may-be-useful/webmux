@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/wire"
@@ -92,17 +91,14 @@ func (s *Server) details(r *http.Request) (contract.SessionDetails, error) {
 		config, err := s.Launch.Get(info.ConfigID)
 		switch {
 		case err == nil:
-			out.LaunchConfig = &contract.DetailsLaunchConfig{ID: config.ID, Name: config.Name, Icon: config.Icon, Hybrid: config.Hybrid}
+			out.LaunchConfig = &contract.DetailsLaunchConfig{ID: config.ID, Name: config.Name, Icon: config.Icon, Chat: config.Hybrid}
 		case errors.Is(err, launch.ErrNotFound):
 			out.LaunchConfigMissing = true
 		}
 	}
-	if s.Hybrid != nil {
-		if record, err := s.Hybrid.Record(info.ID); err == nil {
-			value := wire.HybridRecord(record, s.configMissing(record.ConfigID))
-			out.Hybrid = &value
-		} else if !errors.Is(err, hybrid.ErrNotFound) && !errors.Is(err, hybrid.ErrUnavailable) {
-			return contract.SessionDetails{}, err
+	if !wire.Active(info) {
+		if described, err := s.sessionInfo(info.ID); err == nil {
+			out.Session = described
 		}
 	}
 	if s.Artifacts != nil {

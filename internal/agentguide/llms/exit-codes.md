@@ -7,6 +7,7 @@
 | 2      | 用法错误：参数不对、`self` 用在会话外等           |
 | 3      | 服务未运行，或指定的套接字连不上                  |
 | 124    | 等待超时（与 GNU `timeout` 一致）                 |
+| 130/143 | `run --follow` 被 SIGINT/SIGTERM 中断，会话继续运行 |
 
 - 数据只写标准输出，诊断只写标准错误。
 - 用法错误会提示 `Run 'webmux <命令> --help' for details.`。

@@ -3,8 +3,8 @@ import {
   connectorMissingText,
   connectorNoticeText,
   eligibilityText,
-  hybridSideLabel,
-  hybridSupportReason,
+  chatSupportReason,
+  sessionViewLabel,
   outdatedText,
   shortId,
   switchSteps,
@@ -18,39 +18,34 @@ const connector = {
   docsUrl: "https://github.com/agentclientprotocol/codex-acp",
 };
 
-const hybrid = {
-  side: "acp" as const,
-  state: "active" as const,
-  agent: "omp",
-  agentTitle: "omp",
-  agentIcon: "pi",
-  agentSessionId: null,
-};
-
 describe("hybrid labels", () => {
-  test("a phase means switching even before the side flips", () => {
-    expect(hybridSideLabel({ ...hybrid, side: "tui" })).toBe("终端");
-    expect(hybridSideLabel(hybrid)).toBe("聊天");
-    expect(hybridSideLabel({ ...hybrid, side: "switching" })).toBe("切换中");
-    expect(hybridSideLabel({ ...hybrid, side: "tui", phase: "stopping" })).toBe(
-      "切换中",
+  test("a transition means switching even before the view flips", () => {
+    expect(sessionViewLabel({ view: "terminal", transition: null })).toBe(
+      "终端",
     );
+    expect(sessionViewLabel({ view: "chat", transition: null })).toBe("聊天");
+    expect(
+      sessionViewLabel({
+        view: "terminal",
+        transition: { to: "chat", phase: "stopping" },
+      }),
+    ).toBe("切换中");
   });
 
   test("support and eligibility reasons fall back for unknown codes", () => {
-    expect(hybridSupportReason(null)).toBe("");
+    expect(chatSupportReason(null)).toBe("");
     expect(
-      hybridSupportReason({
+      chatSupportReason({
         supported: true,
         supportedAgents: [],
         agent: "omp",
       }),
     ).toBe("");
-    expect(hybridSupportReason({ supported: false, supportedAgents: [] })).toBe(
+    expect(chatSupportReason({ supported: false, supportedAgents: [] })).toBe(
       "未识别到支持的 Agent",
     );
     expect(
-      hybridSupportReason({
+      chatSupportReason({
         supported: false,
         supportedAgents: ["A", "B"],
         reason: "unknown_agent",
@@ -68,7 +63,7 @@ describe("hybrid labels", () => {
 
   test("Codex reasons name the connector and the other client", () => {
     expect(
-      hybridSupportReason({
+      chatSupportReason({
         supported: false,
         supportedAgents: [],
         reason: "session_arg",
@@ -100,26 +95,26 @@ describe("hybrid labels", () => {
 });
 
 describe("switch progress", () => {
-  test("the direction comes from one-way phases, else the side left", () => {
-    expect(switchTarget("awaiting_choice", undefined)).toBe("acp");
-    expect(switchTarget("cancelling", undefined)).toBe("tui");
-    expect(switchTarget("stopping", "acp")).toBe("tui");
-    expect(switchTarget("starting", "tui")).toBe("acp");
+  test("the direction comes from one-way phases, else the view left", () => {
+    expect(switchTarget("awaiting_choice", undefined)).toBe("chat");
+    expect(switchTarget("cancelling", undefined)).toBe("terminal");
+    expect(switchTarget("stopping", "chat")).toBe("terminal");
+    expect(switchTarget("starting", "terminal")).toBe("chat");
     expect(switchTarget("stopping", undefined)).toBeNull();
   });
 
   test("steps mark done, current and pending; awaiting a choice is interrupting", () => {
-    expect(switchSteps("acp", "stopping")).toEqual([
+    expect(switchSteps("chat", "stopping")).toEqual([
       { label: "中断中", state: "done" },
       { label: "退出中", state: "current" },
       { label: "启动中", state: "pending" },
       { label: "加载历史中", state: "pending" },
     ]);
-    expect(switchSteps("acp", "awaiting_choice")[0]).toEqual({
+    expect(switchSteps("chat", "awaiting_choice")[0]).toEqual({
       label: "中断中",
       state: "current",
     });
-    expect(switchSteps("tui", "starting").map((s) => s.state)).toEqual([
+    expect(switchSteps("terminal", "starting").map((s) => s.state)).toEqual([
       "done",
       "done",
       "current",
@@ -128,13 +123,13 @@ describe("switch progress", () => {
   });
 
   test("a switch to the terminal ends by connecting it; a request starts at the first step", () => {
-    expect(switchSteps("tui", "arriving")).toEqual([
+    expect(switchSteps("terminal", "arriving")).toEqual([
       { label: "中断中", state: "done" },
       { label: "退出中", state: "done" },
       { label: "启动中", state: "done" },
       { label: "连接终端", state: "current" },
     ]);
-    expect(switchSteps("acp", "requested").map((s) => s.state)).toEqual([
+    expect(switchSteps("chat", "requested").map((s) => s.state)).toEqual([
       "current",
       "pending",
       "pending",
@@ -144,7 +139,7 @@ describe("switch progress", () => {
   });
 
   test("a rollback or unknown direction is shown on its own", () => {
-    expect(switchSteps("acp", "rolling_back")).toEqual([
+    expect(switchSteps("chat", "rolling_back")).toEqual([
       { label: "切换失败，正在回到原端", state: "current" },
     ]);
     expect(switchSteps(null, "stopping")).toEqual([

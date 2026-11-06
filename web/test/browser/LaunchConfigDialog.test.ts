@@ -9,8 +9,8 @@ const saved: LaunchConfig = {
   name: "Claude 恢复",
   cmd: ["claude", "--resume"],
   env: { API_KEY: "secret-value" },
-  hybrid: false,
-  hybridSupport: {
+  chat: false,
+  chatSupport: {
     supported: false,
     supportedAgents: [],
     reason: "unknown_agent",
@@ -184,7 +184,7 @@ test("the startup-file checkbox saves a normal command without expanding its arg
       ],
       env: {},
       preview: null,
-      hybrid: false,
+      chat: false,
     },
   });
 });
@@ -346,7 +346,7 @@ test("editing only the name keeps every env variable in the PUT body", async () 
       cmd: ["claude", "--resume"],
       env: { API_KEY: "secret-value" },
       preview: null,
-      hybrid: false,
+      chat: false,
     },
   });
 });
@@ -408,7 +408,7 @@ test("the hybrid checkbox follows the server's verdict for the edited command", 
       method === "GET"
         ? Response.json({ ...saved, cmd: ["/bin/bash", "-l"], env: {} })
         : Response.json({ ...saved, ...(body as object) }),
-    "/api/launch-configs/hybrid-support": (_method, body) => {
+    "/api/launch-configs/chat-support": (_method, body) => {
       asked.push(body);
       return Response.json({
         supported: true,
@@ -433,6 +433,6 @@ test("the hybrid checkbox follows the server's verdict for the edited command", 
   await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
   expect(requests.at(-1)).toMatchObject({
     method: "PUT",
-    body: { cmd: ["omp", "--model", "haiku"], hybrid: true },
+    body: { cmd: ["omp", "--model", "haiku"], chat: true },
   });
 });

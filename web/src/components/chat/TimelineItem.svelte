@@ -213,7 +213,7 @@
 {:else if entry.type === "marker"}
   {@render separator(
     entry.kind === "switched"
-      ? entry.side === "tui"
+      ? entry.view === "terminal"
         ? "已切到终端"
         : "已切到聊天"
       : markers[entry.kind],

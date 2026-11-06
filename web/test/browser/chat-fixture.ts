@@ -59,7 +59,13 @@ export class FakeSocket {
   }
 }
 
-type Recorded = { method: string; path: string; body: unknown };
+// `query` is set only for a request with a query string.
+type Recorded = {
+  method: string;
+  path: string;
+  body: unknown;
+  query?: string;
+};
 type Responder = (request: Recorded) => Response | Promise<Response>;
 
 export let sockets: FakeSocket[] = [];
@@ -97,6 +103,7 @@ export function installChatFixture() {
           method: init?.method ?? "GET",
           path: url.pathname,
           body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+          ...(url.search ? { query: url.search } : {}),
         };
         requests.push(request);
         const key = `${request.method} ${request.path}`;
@@ -137,9 +144,6 @@ export function commands() {
 
 export function chatState(patch: Partial<ChatState> = {}): ChatState {
   return {
-    side: "acp",
-    agent: "omp",
-    agentSessionId: "01a17e26c4b84f0e9d2a",
     outdated: [],
     eligibility: { available: true },
     turn: { running: false },

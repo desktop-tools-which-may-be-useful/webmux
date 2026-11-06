@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HybridRecord, SessionInfo } from "../schemas";
+  import type { ArchivedSession, SessionInfo } from "../schemas";
   import type { ArchiveActions } from "../archived";
   import WorkspaceGroup from "./WorkspaceGroup.svelte";
 
@@ -22,7 +22,7 @@
     now: number;
     onclose: (session: SessionInfo) => void;
     // Archived records outside every registered repository.
-    archived?: HybridRecord[];
+    archived?: ArchivedSession[];
     // Archived records the filters keep; undefined while not filtering.
     visibleArchiveIds?: ReadonlySet<string>;
     archive?: ArchiveActions;

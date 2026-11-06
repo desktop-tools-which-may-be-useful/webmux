@@ -22,6 +22,11 @@ const shell: SessionInfo = {
   status: "running",
   exitCode: null,
   listeningPorts: [],
+  state: "active",
+  views: ["terminal"],
+  view: "terminal",
+  transition: null,
+  agent: null,
   preview: "",
   createdAt: "2026-10-28T00:00:00Z",
   lastActiveAt: "2026-10-28T00:00:00Z",
@@ -36,14 +41,9 @@ const hybrid: SessionInfo = {
   ...shell,
   id: "hybrid01",
   title: "修复排序",
-  hybrid: {
-    side: "acp",
-    state: "active",
-    agent: "omp",
-    agentTitle: "omp",
-    agentIcon: "pi",
-    agentSessionId: "01a",
-  },
+  views: ["terminal", "chat"],
+  view: "chat",
+  agent: { name: "omp", title: "omp", icon: "pi", sessionId: "01a" },
 };
 
 function show(session: SessionInfo, status: number) {

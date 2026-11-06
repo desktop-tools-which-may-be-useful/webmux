@@ -20,17 +20,20 @@
     type LaunchScope,
     type LaunchSource,
   } from "../newSessionDefaults";
-  import { hybridConflict } from "../recoverable";
+  import { sessionConflict } from "../recoverable";
   import ConnectorInstallHint from "./ConnectorInstallHint.svelte";
   import {
+    CreateSessionFailureSchema,
     CreateSessionRequestSchema,
+    CreateSessionResultSchema,
     CreateWorktreeRequestSchema,
     NoContentSchema,
-    SessionInfoSchema,
     WorktreeSchema,
     type AgentConnector,
+    type CreateSessionRequest,
     type Repository,
     type SessionInfo,
+    type SessionView,
     type Worktree,
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
@@ -47,6 +50,12 @@
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import WorktreeCreateFields from "./WorktreeCreateFields.svelte";
   import type { SplitDirection } from "../terminal-layout";
+
+  // The view a config starts on, as stored; values before the view names
+  // were "acp" and "tui".
+  function storedView(value: string): SessionView {
+    return value === "chat" || value === "acp" ? "chat" : "terminal";
+  }
 
   let {
     launchConfigs,
@@ -114,14 +123,12 @@
   let launchResolved = lastLaunch === "custom";
   let launchTouched = false;
   let command = $state(stored("customCommand"));
-  let startSide = $state<"tui" | "acp">(
-    stored("hybridStartSide") === "acp" ? "acp" : "tui",
-  );
+  let startSide = $state<SessionView>(storedView(stored("hybridStartSide")));
   let name = $state("");
   let prompt = $state("");
   let useInstruction = $state(true);
   let error = $state("");
-  // Starting on the chat side failed: its connector is not installed.
+  // Starting on the chat view failed: its connector is not installed.
   let missingConnector = $state.raw<AgentConnector>();
   let busy = $state(false);
   let mkdirOpen = $state(false);
@@ -169,13 +176,13 @@
     return repository;
   });
   const hasInstruction = $derived(!!instructionRepository?.initInstruction);
-  const startsOnChat = $derived(!!chosenConfig?.hybrid && startSide === "acp");
-  const hybridConfigId = $derived(chosenConfig?.hybrid ? chosenConfig.id : "");
+  const startsOnChat = $derived(!!chosenConfig?.chat && startSide === "chat");
+  const hybridConfigId = $derived(chosenConfig?.chat ? chosenConfig.id : "");
   $effect(() => {
     if (!hybridConfigId) return;
-    const side =
-      stored("hybridStartSide:" + hybridConfigId) || stored("hybridStartSide");
-    startSide = side === "acp" ? "acp" : "tui";
+    startSide = storedView(
+      stored("hybridStartSide:" + hybridConfigId) || stored("hybridStartSide"),
+    );
   });
   const commandReady = $derived.by(() => {
     if (source === "config") return !!chosenConfig;
@@ -266,6 +273,16 @@
     return `将在 ${locationText} 运行 ${launch}`;
   });
 
+  // A worktree made on the way becomes the chosen location.
+  function adoptTree(tree: Worktree) {
+    createdTree = tree;
+    repositoryId = tree.repositoryId;
+    worktreeId = tree.id;
+    kind = "worktree";
+    onworktreecreated(tree);
+    onchange();
+  }
+
   async function create(makeDirectory = false) {
     if (busy) return;
     const onlyTree = treeOnly;
@@ -290,7 +307,9 @@
       const cmd = custom && !onlyTree ? parseArgs(command) : undefined;
       if (custom && !onlyTree && (!cmd?.length || !cmd[0]))
         throw new Error("请输入可执行程序及参数");
-      if (kind === "new-worktree") {
+      // Only a worktree: create it on its own. With a session, the create
+      // request makes the worktree first.
+      if (kind === "new-worktree" && onlyTree) {
         const tree = await api(
           `/repositories/${repositoryId}/worktrees`,
           WorktreeSchema,
@@ -304,13 +323,7 @@
           undefined,
           CreateWorktreeRequestSchema,
         );
-        createdTree = tree;
-        worktreeId = tree.id;
-        kind = "worktree";
-        onworktreecreated(tree);
-        onchange();
-      }
-      if (onlyTree) {
+        adoptTree(tree);
         onclose();
         return;
       }
@@ -319,44 +332,69 @@
           ? entryDirectory.workspace
           : null;
       const target =
-        kind === "directory"
+        kind === "new-worktree"
           ? {
-              cwd,
-              ...(workspace
-                ? {
-                    workspace: {
-                      repositoryId: workspace.repositoryId,
-                      worktreeId: workspace.worktreeId,
-                    },
-                  }
-                : {}),
+              newWorktree: {
+                repositoryId,
+                mode: branchMode,
+                branch,
+                ...(branchMode === "new" ? { base } : {}),
+                ...(newPath ? { path: newPath } : {}),
+              },
             }
-          : { workspace: { repositoryId, worktreeId } };
+          : kind === "directory"
+            ? {
+                cwd,
+                ...(workspace
+                  ? {
+                      workspace: {
+                        repositoryId: workspace.repositoryId,
+                        worktreeId: workspace.worktreeId,
+                      },
+                    }
+                  : {}),
+              }
+            : { workspace: { repositoryId, worktreeId } };
       const first = {
         ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
         ...(hasInstruction && useInstruction
           ? { useInitInstruction: true }
           : {}),
       };
-      const payload = chosenConfig
+      const payload: CreateSessionRequest = chosenConfig
         ? {
             ...target,
             configId: chosenConfig.id,
             name,
-            ...(chosenConfig.hybrid ? { startSide } : {}),
+            ...(chosenConfig.chat ? { view: startSide } : {}),
             ...first,
           }
         : { ...target, cmd, name, ...first };
       if (makeDirectory)
         await api("/fs/mkdir", NoContentSchema, "POST", { path: cwd });
-      const session = await api(
-        "/sessions",
-        SessionInfoSchema,
-        "POST",
-        payload,
-        undefined,
-        CreateSessionRequestSchema,
-      );
+      let result;
+      try {
+        result = await api(
+          "/sessions",
+          CreateSessionResultSchema,
+          "POST",
+          payload,
+          undefined,
+          CreateSessionRequestSchema,
+        );
+      } catch (err) {
+        // A worktree the request made stays; a retry starts the session in
+        // it instead of making another.
+        const failure =
+          err instanceof APIError
+            ? CreateSessionFailureSchema.safeParse(err.body)
+            : undefined;
+        if (failure?.success && failure.data.worktree)
+          adoptTree(failure.data.worktree);
+        throw err;
+      }
+      if (result.worktree) adoptTree(result.worktree);
+      const session = result.session;
       store(
         "recentDirs",
         JSON.stringify(
@@ -370,7 +408,7 @@
         "lastLaunch",
         chosenConfig ? `config:${chosenConfig.id}` : "custom",
       );
-      if (chosenConfig?.hybrid) {
+      if (chosenConfig?.chat) {
         store("hybridStartSide", startSide);
         store("hybridStartSide:" + chosenConfig.id, startSide);
       }
@@ -379,7 +417,7 @@
       else navigate("/s/" + session.id);
     } catch (err) {
       if (kind !== "directory") onchange();
-      const conflict = hybridConflict(err);
+      const conflict = sessionConflict(err);
       if (
         kind === "directory" &&
         !makeDirectory &&
@@ -514,7 +552,7 @@
               variant="outline"
               disabled={busy}
               onclick={() => {
-                startSide = "tui";
+                startSide = "terminal";
                 void create();
               }}>改为从终端开始</Button
             >{/snippet}

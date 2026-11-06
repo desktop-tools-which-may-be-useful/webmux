@@ -3,6 +3,7 @@
   "body": {
     "promptId": "p1",
     "queued": false,
-    "turnId": "t1"
+    "turnId": "t1",
+    "view": "chat"
   }
 }

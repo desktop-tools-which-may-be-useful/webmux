@@ -43,19 +43,19 @@ async function shell(
     data: { cmd: ["/bin/sh", "-c", "sleep 600"], name, ...data },
   });
   expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).id as string;
+  return (await response.json()).session.id as string;
 }
 
 async function chat(request: APIRequestContext, cwd: string, name: string) {
   const config = await request.post("/api/launch-configs", {
-    data: { name: "Claude Code", cmd: ["claude"], env: {}, hybrid: true },
+    data: { name: "Claude Code", cmd: ["claude"], env: {}, chat: true },
   });
   expect(config.status(), await config.text()).toBe(201);
   const response = await request.post("/api/sessions", {
-    data: { cwd, configId: (await config.json()).id, startSide: "acp", name },
+    data: { cwd, configId: (await config.json()).id, view: "chat", name },
   });
   expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).id as string;
+  return (await response.json()).session.id as string;
 }
 
 const tree = (page: Page) => page.getByRole("tree", { name: "仓库与会话" });
@@ -202,13 +202,13 @@ test.describe("desktop sidebar", () => {
     const first = await shell(request, "panel one", { cwd: root, workspace });
     await shell(request, "panel two", { cwd: root, workspace });
     const config = await request.post("/api/launch-configs", {
-      data: { name: "Claude Code", cmd: ["claude"], env: {}, hybrid: true },
+      data: { name: "Claude Code", cmd: ["claude"], env: {}, chat: true },
     });
     expect(config.status(), await config.text()).toBe(201);
     const configId = (await config.json()).id as string;
     for (const name of ["面板甲", "面板乙"]) {
       const response = await request.post("/api/sessions", {
-        data: { cwd: root, configId, startSide: "acp", name },
+        data: { cwd: root, configId, view: "chat", name },
       });
       expect(response.status(), await response.text()).toBe(201);
     }

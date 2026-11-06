@@ -1,6 +1,6 @@
 # 混合会话（聊天 ↔ 终端）
 
-混合会话让 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI（`agy`）、Qoder 或 QoderCN 的同一段对话在两种界面之间切换：原生 TUI（终端端）适合在电脑上精细操作，聊天视图适合在手机上阅读和回复。
+混合会话让 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI（`agy`）、Qoder 或 QoderCN 的同一段对话在两种界面之间切换：原生 TUI（终端视图）适合在电脑上精细操作，聊天视图适合在手机上阅读和回复。
 
 切换前后是同一个 webmux 会话与同一个 agent 会话，历史由 agent 自己保存。接口见 [混合会话协议](protocol/http-hybrid.md)。
 
@@ -102,7 +102,7 @@ Claude 的 `session/cancel` 不等于后台任务已清理。切换还会结束�
 
 两个方向的切换都在原窗格显示进度：切到聊天依次为中断、退出、启动、加载历史；切到终端依次为中断、退出、启动、连接终端，进度一直显示到新的 TUI 在本页输出第一屏内容（最多等 10 秒），终端不会先显示空白。进度至少显示 0.4 秒，切换完成后新窗格淡入；系统开启“减少动态效果”时不播放动画。
 
-切换失败会自动回到原来的一端并显示原因。
+切换失败会自动回到原来的视图并显示原因。
 
 ## 聊天视图
 
@@ -155,9 +155,20 @@ Claude 的 `session/cancel` 不等于后台任务已清理。切换还会结束�
 
 ## 命令行
 
-- `webmux run --launch-config <名称>` 引用混合配置时创建混合会话，从终端开始；本地终端可以照常输入，但切换只能在 Web 端发起。
-- `webmux attach <ID>` 在会话处于聊天端或切换中时拒绝附着，以退出码 1 结束；附着期间被切到聊天视为被动分离，恢复终端、提示后以 0 结束。切回终端后需重新 `attach`。
-- `webmux ls` 在状态列附加所在端（终端、聊天、切换中），`--json` 原样包含 `hybrid` 对象。
+命令行只用会话 ID 操作，不必先判断会话种类或所在视图：输入、中断、切换、恢复与清理由服务端按当前视图分派。
+
+- 创建：`webmux run --launch-config <名称>` 引用混合配置时创建混合会话，默认从终端开始；本地终端可以照常输入，附着中的终端不提供切换按键。
+  - `--view chat` 从聊天开始（隐含 `--detach`），`--prompt` 给出首条提示，`--reply` 等回合结束后输出 agent 的最终回复。
+  - `--new-worktree [--branch B]` 先新建 worktree，省略分支名时自动生成；`--set ID=VALUE`、`--permission ask|auto`、`--attach-file PATH` 只在 `--view chat` 时可用。
+- 输入与中断：`webmux send <ID> TEXT` 在终端视图写入终端，在聊天视图作为提示发送（`--attach-file`、`--mode steer`、`--reply` 只用于聊天视图）；`webmux interrupt <ID>` 在聊天视图取消回合，在终端视图发送中断键。
+- 切换：`webmux view <ID> terminal|chat` 发起切换并等到结束；终端 TUI 忙时 `--force` 强制切换，否则取消切换并以 1 退出。
+- 已归档会话：`webmux ls --archived`（或 `--state closed|interrupted|all`、`--repo`）列出，`webmux resume <ID> [--view chat|terminal]` 恢复，`webmux rm <ID> --forget --yes` 删除记录。
+- 聊天视图专有操作留在 `webmux chat` 组：`status`、`watch`、`answer`、`set`、`permission` 与 `queue …`；对没有聊天视图的会话以 1 结束，会话在终端视图时提示 `webmux view <ID> chat`。
+- `webmux attach <ID>` 在会话处于聊天视图或切换中时拒绝附着，以退出码 1 结束；附着期间被切到聊天视为被动分离，恢复终端、提示后以 0 结束。切回终端后需重新 `attach`。
+- `webmux ls` 在状态列附加所在视图（终端、聊天、切换中），`--json` 原样包含 `views`、`view`、`transition` 与 `agent`，不再含 `hybrid` 对象。
+- 启动配置：`webmux launch-config add|edit --chat|--no-chat` 开启或关闭混合模式（旧选项 `--hybrid` 已删除）。
+
+完整用法以 `webmux <命令> --help` 为准，见 [用脚本和 agent 控制 WebMux](usage/shell-control.md)。
 
 ## 注意事项
 

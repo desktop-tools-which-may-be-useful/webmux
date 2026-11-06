@@ -62,7 +62,8 @@
     /** Why uploads are refused (session gone or exited); "" otherwise. */
     uploadUnavailable?: string;
     /** Where the session runs, shown read-only above the input. */
-    location?: Pick<SessionInfo, "workspace" | "cwd">;
+    location?: Pick<SessionInfo, "workspace" | "cwd"> &
+      Partial<Pick<SessionInfo, "view">>;
     /** Opens a changed file in the code panel. */
     onreview: (path: string) => void;
     /** Opens a code-location link in the code panel. */
@@ -102,7 +103,7 @@
         ? "会话已中断，请先恢复"
         : connection !== "connected" || !chat
           ? "正在连接聊天…"
-          : chat.side !== "acp"
+          : location?.view === "terminal"
             ? "会话不在聊天端"
             : ""),
   );

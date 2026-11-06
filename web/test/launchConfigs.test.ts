@@ -293,8 +293,8 @@ describe("launch config schemas", () => {
     cmd: ["claude"],
     envNames: [],
     chatOptions: [],
-    hybrid: false,
-    hybridSupport: {
+    chat: false,
+    chatSupport: {
       supported: false,
       supportedAgents: [],
       reason: "unknown_agent" as const,

@@ -5,8 +5,8 @@ import { render } from "vitest-browser-svelte/pure";
 import Terminal from "../../src/pages/Terminal.svelte";
 import type {
   ChatState,
-  HybridSwitchResult,
   SessionInfo,
+  ViewChangeResult,
 } from "../../src/schemas";
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
 import {
@@ -15,6 +15,7 @@ import {
   claudeSessionIds,
   commands,
   events,
+  FakeSocket,
   installChatFixture,
   respond,
   snapshot,
@@ -28,7 +29,7 @@ installChatFixture();
 const id = "hybrid22";
 const terminalPath = `/ws/s/${id}`;
 const chatPath = `/ws/s/${id}/chat`;
-const switchPath = `/api/sessions/${id}/switch`;
+const viewPath = `/api/sessions/${id}/view`;
 
 const info: SessionInfo = {
   id,
@@ -39,6 +40,16 @@ const info: SessionInfo = {
   status: "idle",
   exitCode: null,
   listeningPorts: [],
+  state: "active",
+  views: ["terminal", "chat"],
+  view: "terminal",
+  transition: null,
+  agent: {
+    name: "omp",
+    title: "omp",
+    icon: "pi",
+    sessionId: "01a17e26c4b84f0e9d2a",
+  },
   preview: "",
   createdAt: "2026-10-28T00:00:00Z",
   lastActiveAt: "2026-10-28T00:00:00Z",
@@ -48,40 +59,52 @@ const info: SessionInfo = {
   workspace: null,
   attention: null,
   reportedCwd: null,
-  hybrid: {
-    side: "tui",
-    state: "active",
-    agent: "omp",
-    agentTitle: "omp",
-    agentIcon: "pi",
-    agentSessionId: "01a17e26c4b84f0e9d2a",
-  },
 };
 
-const tuiState = (patch: Partial<ChatState> = {}) =>
-  chatState({ side: "tui", ...patch });
+// The session as the server describes it now: GET /api/sessions/hybrid22
+// answers it, and the attached terminal stream reports each change.
+let server: SessionInfo = info;
+const described = () => ({
+  ...server,
+  generation: server.view === "chat" ? "" : server.generation,
+});
 
-/** The page on a hybrid session's terminal side, both streams attached. */
-async function onTerminalSide(state: ChatState) {
+const tuiState = (patch: Partial<ChatState> = {}) => chatState(patch);
+
+/**
+ * The session's view or transition changes: the attached terminal stream
+ * reports it, and the chat channel publishes its state, after which the page
+ * reads the session again.
+ */
+function move(
+  streams: { terminal: FakeSocket; chat: FakeSocket },
+  patch: Partial<SessionInfo>,
+  state: ChatState = chatState(),
+) {
+  server = { ...server, ...patch };
+  if (streams.terminal.readyState === FakeSocket.OPEN)
+    streams.terminal.binary(2, server);
+  streams.chat.frame({ type: "state", state });
+}
+
+/** The page on a session's terminal view, both streams attached. */
+async function onTerminalSide(state: ChatState, claude = false) {
   await page.viewport(1280, 900);
   const sessionInfo: SessionInfo = {
     ...info,
-    title:
-      state.agent === "claudecode" ? "Claude Code · 修复首页排序" : info.title,
-    cmd: [state.agent === "claudecode" ? "claude" : state.agent],
-    hybrid: {
-      ...info.hybrid!,
-      agent: state.agent,
-      ...(state.agent === "claudecode" && {
-        agentTitle: "Claude Code",
-        agentIcon: "claudecode",
-      }),
-      agentSessionId: state.agentSessionId,
-    },
+    title: claude ? "Claude Code · 修复首页排序" : info.title,
+    cmd: [claude ? "claude" : "omp"],
+    agent: claude
+      ? {
+          name: "claudecode",
+          title: "Claude Code",
+          icon: "claudecode",
+          sessionId: claudeSessionIds.current,
+        }
+      : info.agent,
   };
-  respond(/^GET \/api\/sessions\/hybrid22$/, () =>
-    Response.json({ ...sessionInfo, generation: "" }),
-  );
+  server = sessionInfo;
+  respond(/^GET \/api\/sessions\/hybrid22$/, () => Response.json(described()));
   const drafts = createTerminalDrafts();
   render(Terminal, {
     id,
@@ -99,13 +122,17 @@ async function onTerminalSide(state: ChatState) {
 /** A switch request the test finishes when it chooses. */
 function pendingSwitch() {
   const done = Promise.withResolvers<Response>();
-  respond(/^POST \/api\/sessions\/hybrid22\/switch$/, (request) => {
+  respond(/^POST \/api\/sessions\/hybrid22\/view$/, (request) => {
     const body = request.body;
     if (body && typeof body === "object" && "choice" in body)
-      return Response.json({ side: "switching", dropped: [], unsupported: [] });
+      return Response.json({
+        view: server.view,
+        dropped: [],
+        unsupported: [],
+      });
     return done.promise;
   });
-  return (result: HybridSwitchResult) => done.resolve(Response.json(result));
+  return (result: ViewChangeResult) => done.resolve(Response.json(result));
 }
 
 const chatTab = (name: string | RegExp = /^聊天/) =>
@@ -124,10 +151,9 @@ const steps = () =>
 test("the chat tab explains why the session cannot switch yet", async () => {
   const { chat } = await onTerminalSide(
     tuiState({
-      agent: "claudecode",
-      agentSessionId: claudeSessionIds.current,
       eligibility: { available: false, reason: "no_session_id" },
     }),
+    true,
   );
   const tab = chatTab("聊天（请先在 TUI 中发送一条消息）");
   await expect.element(tab).toHaveAttribute("aria-disabled", "true");
@@ -147,8 +173,6 @@ test("the chat tab explains why the session cannot switch yet", async () => {
   chat.frame({
     type: "state",
     state: tuiState({
-      agent: "claudecode",
-      agentSessionId: claudeSessionIds.current,
       eligibility: { available: false, reason: "occupied" },
     }),
   });
@@ -157,10 +181,7 @@ test("the chat tab explains why the session cannot switch yet", async () => {
     .toHaveAttribute("aria-disabled", "true");
   chat.frame({
     type: "state",
-    state: tuiState({
-      agent: "claudecode",
-      agentSessionId: claudeSessionIds.current,
-    }),
+    state: tuiState({}),
   });
   await expect.element(chatTab("聊天")).not.toHaveAttribute("aria-disabled");
 });
@@ -168,14 +189,13 @@ test("the chat tab explains why the session cannot switch yet", async () => {
 test("a missing connector disables chat, explains installation and rechecks", async () => {
   const { chat } = await onTerminalSide(
     tuiState({
-      agent: "claudecode",
-      agentSessionId: claudeSessionIds.current,
       eligibility: {
         available: false,
         reason: "connector_missing",
         connector: claudeConnector,
       },
     }),
+    true,
   );
   await expect
     .element(
@@ -194,17 +214,14 @@ test("a missing connector disables chat, explains installation and rechecks", as
   // The next eligibility probe finds the installed connector without a reload.
   chat.frame({
     type: "state",
-    state: tuiState({
-      agent: "claudecode",
-      agentSessionId: claudeSessionIds.current,
-    }),
+    state: tuiState({}),
   });
   await expect.element(chatTab("聊天")).not.toHaveAttribute("aria-disabled");
 });
 
 test("an ambiguous switch lets the user pick the agent session and resends it", async () => {
   let attempts = 0;
-  respond(/^POST \/api\/sessions\/hybrid22\/switch$/, () => {
+  respond(/^POST \/api\/sessions\/hybrid22\/view$/, () => {
     attempts += 1;
     if (attempts === 1)
       return Response.json(
@@ -226,14 +243,9 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
         },
         { status: 409 },
       );
-    return Response.json({ side: "acp", dropped: [], unsupported: [] });
+    return Response.json({ view: "chat", dropped: [], unsupported: [] });
   });
-  await onTerminalSide(
-    tuiState({
-      agent: "claudecode",
-      agentSessionId: claudeSessionIds.current,
-    }),
-  );
+  await onTerminalSide(tuiState(), true);
   await chatTab("聊天").click();
   const picker = page.getByRole("combobox", { name: "选择要打开的会话" });
   await expect.element(picker).toBeVisible();
@@ -242,10 +254,10 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
   await expect
     .poll(() => commands().map((command) => command.body))
     .toEqual([
-      { clientRequestId: expect.any(String), to: "acp" },
+      { clientRequestId: expect.any(String), to: "chat" },
       {
         clientRequestId: expect.any(String),
-        to: "acp",
+        to: "chat",
         agentSessionId: claudeSessionIds.alternative,
       },
     ]);
@@ -253,17 +265,18 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
 
 test("switching to chat shows its steps, asks after a stuck interrupt and lands on the chat view", async () => {
   const finish = pendingSwitch();
-  const { terminal, chat } = await onTerminalSide(tuiState());
+  const streams = await onTerminalSide(tuiState());
+  const { terminal } = streams;
   await chatTab("聊天").click();
   await expect.poll(commands).toEqual([
     {
       method: "POST",
-      path: switchPath,
-      body: { clientRequestId: expect.any(String), to: "acp" },
+      path: viewPath,
+      body: { clientRequestId: expect.any(String), to: "chat" },
     },
   ]);
 
-  chat.frame({ type: "state", state: tuiState({ phase: "interrupting" }) });
+  move(streams, { transition: { to: "chat", phase: "interrupting" } });
   await expect
     .element(page.getByRole("heading", { name: "正在切换到聊天…" }))
     .toBeVisible();
@@ -278,13 +291,11 @@ test("switching to chat shows its steps, asks after a stuck interrupt and lands 
   await expect.element(page.getByRole("tab", { name: "终端" })).toBeDisabled();
 
   // D21: the interrupt did not stop the TUI; every device is asked.
-  chat.frame({
-    type: "state",
-    state: tuiState({
-      phase: "awaiting_choice",
-      forceSwitchNote: "omp 已输出的部分可能丢失",
-    }),
-  });
+  move(
+    streams,
+    { transition: { to: "chat", phase: "awaiting_choice" } },
+    tuiState({ forceSwitchNote: "omp 已输出的部分可能丢失" }),
+  );
   const dialog = page.getByRole("alertdialog", { name: "TUI 仍在执行回合" });
   await expect.element(dialog).toBeVisible();
   await expect.element(dialog).toMatchTextContent(/omp 已输出的部分可能丢失/);
@@ -293,11 +304,11 @@ test("switching to chat shows its steps, asks after a stuck interrupt and lands 
     .poll(() => commands().at(-1))
     .toEqual({
       method: "POST",
-      path: switchPath,
+      path: viewPath,
       body: { clientRequestId: expect.any(String), choice: "force" },
     });
 
-  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
+  move(streams, { transition: { to: "chat", phase: "stopping" } });
   await expect.element(dialog).not.toBeInTheDocument();
   await expect.poll(steps).toEqual([
     ["中断中", "完成"],
@@ -307,18 +318,15 @@ test("switching to chat shows its steps, asks after a stuck interrupt and lands 
   ]);
   // The TUI exits: its stream closes with 4409 and does not reconnect.
   terminal.drop(4409);
-  chat.frame({
-    type: "state",
-    state: chatState({ side: "switching", phase: "loading" }),
-  });
+  move(streams, { transition: { to: "chat", phase: "loading" } });
   await expect.poll(steps).toEqual([
     ["中断中", "完成"],
     ["退出中", "完成"],
     ["启动中", "完成"],
     ["加载历史中", "进行中"],
   ]);
-  chat.frame({ type: "state", state: chatState() });
-  finish({ side: "acp", dropped: [], unsupported: [] });
+  move(streams, { view: "chat", transition: null });
+  finish({ view: "chat", dropped: [], unsupported: [] });
 
   await expect
     .element(page.getByRole("textbox", { name: "消息" }))
@@ -333,15 +341,16 @@ test("switching to chat shows its steps, asks after a stuck interrupt and lands 
 });
 
 test("an agent title refreshes the chat side's header", async () => {
-  const { terminal, chat } = await onTerminalSide(tuiState());
+  const streams = await onTerminalSide(tuiState());
+  const { chat } = streams;
   let title = "creating name";
   respond(/^GET \/api\/sessions\/hybrid22$/, () =>
-    Response.json({ ...info, generation: "", title }),
+    Response.json({ ...described(), title }),
   );
   // Another device moved the session to the chat side.
-  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
-  terminal.drop(4409);
-  chat.frame({ type: "state", state: chatState() });
+  move(streams, { transition: { to: "chat", phase: "stopping" } });
+  streams.terminal.drop(4409);
+  move(streams, { view: "chat", transition: null });
   await expect
     .element(page.getByText("creating name", { exact: true }))
     .toBeVisible();
@@ -364,20 +373,21 @@ test("an agent title refreshes the chat side's header", async () => {
 
 test("port prompts follow the terminal side and stay off the chat view", async () => {
   seedForwards([]);
-  const { terminal, chat } = await onTerminalSide(tuiState());
+  const streams = await onTerminalSide(tuiState());
+  const { terminal } = streams;
   const port = { port: 5173, process: "node" };
-  terminal.binary(2, { ...info, listeningPorts: [port] });
+  terminal.binary(2, { ...server, listeningPorts: [port] });
   const prompt = page.getByText("检测到端口 5173（node）正在监听");
   await expect.element(prompt).toBeVisible();
 
   // Moved to the chat side: the session info read then still lists the port
   // the stopped run held, and nothing re-reads it when the port changes.
   respond(/^GET \/api\/sessions\/hybrid22$/, () =>
-    Response.json({ ...info, generation: "", listeningPorts: [port] }),
+    Response.json({ ...described(), listeningPorts: [port] }),
   );
-  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
-  terminal.drop(4409);
-  chat.frame({ type: "state", state: chatState() });
+  move(streams, { transition: { to: "chat", phase: "stopping" } });
+  streams.terminal.drop(4409);
+  move(streams, { view: "chat", transition: null });
   await expect
     .element(page.getByRole("textbox", { name: "消息" }))
     .toBeVisible();
@@ -386,11 +396,12 @@ test("port prompts follow the terminal side and stay off the chat view", async (
 
 test("a session moved by another device shows the chat view; switching back reattaches the terminal", async () => {
   const finish = pendingSwitch();
-  const { terminal, chat } = await onTerminalSide(tuiState());
+  const streams = await onTerminalSide(tuiState());
+  const { terminal } = streams;
   // Another device moved the session: the terminal stream ends with 4409.
-  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
-  terminal.drop(4409);
-  chat.frame({ type: "state", state: chatState() });
+  move(streams, { transition: { to: "chat", phase: "stopping" } });
+  streams.terminal.drop(4409);
+  move(streams, { view: "chat", transition: null });
   const input = page.getByRole("textbox", { name: "消息" });
   await expect.element(input).toBeVisible();
   await expect.element(agentBadge()).toBeVisible();
@@ -403,13 +414,10 @@ test("a session moved by another device shows the chat view; switching back reat
     .poll(() => commands().at(-1))
     .toEqual({
       method: "POST",
-      path: switchPath,
-      body: { clientRequestId: expect.any(String), to: "tui" },
+      path: viewPath,
+      body: { clientRequestId: expect.any(String), to: "terminal" },
     });
-  chat.frame({
-    type: "state",
-    state: chatState({ side: "switching", phase: "stopping" }),
-  });
+  move(streams, { transition: { to: "terminal", phase: "stopping" } });
   await expect
     .element(page.getByRole("heading", { name: "正在切换到终端…" }))
     .toBeVisible();
@@ -419,8 +427,8 @@ test("a session moved by another device shows the chat view; switching back reat
     ["启动中", "等待"],
     ["连接终端", "等待"],
   ]);
-  chat.frame({ type: "state", state: tuiState() });
-  finish({ side: "tui", dropped: [], unsupported: [] });
+  move(streams, { view: "terminal", transition: null });
+  finish({ view: "terminal", dropped: [], unsupported: [] });
 
   // The progress stays until the new run has drawn on this page.
   const reattached = await socketAt(terminalPath, 1);
@@ -434,7 +442,7 @@ test("a session moved by another device shows the chat view; switching back reat
   // A new run that has not drawn yet keeps the progress. Wait out the real
   // minimum display (400 ms) first: fake timers would also stop
   // expect.element's polling, so the clock cannot be advanced instead.
-  reattached.binary(2, { ...info, generation: "fedcba9876543210" });
+  reattached.binary(2, { ...server, generation: "fedcba9876543210" });
   const lingered = Promise.withResolvers<void>();
   setTimeout(lingered.resolve, 600);
   await lingered.promise;
@@ -449,7 +457,7 @@ test("a session moved by another device shows the chat view; switching back reat
 });
 
 test("the chat view names its agent beside the title, icon only on a phone", async () => {
-  const { terminal, chat } = await onTerminalSide(tuiState());
+  const streams = await onTerminalSide(tuiState());
   // The terminal view shows the agent itself; the header adds nothing.
   await expect
     .element(page.getByText(info.title, { exact: true }))
@@ -459,7 +467,7 @@ test("the chat view names its agent beside the title, icon only on a phone", asy
   const title = `omp · ${"修复首页排序与置顶工作区".repeat(6)}`;
   respond(/^GET \/api\/sessions\/hybrid22$/, () =>
     Response.json({
-      ...info,
+      ...described(),
       generation: "",
       title,
       status: "waiting",
@@ -468,12 +476,13 @@ test("the chat view names its agent beside the title, icon only on a phone", asy
         source: "agent",
         since: "2026-10-16T00:00:02Z",
       },
-      hybrid: { ...info.hybrid!, side: "acp" },
+      view: "chat",
+      transition: null,
     }),
   );
-  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
-  terminal.drop(4409);
-  chat.frame({ type: "state", state: chatState() });
+  move(streams, { transition: { to: "chat", phase: "stopping" } });
+  streams.terminal.drop(4409);
+  move(streams, { view: "chat", transition: null });
   await expect.element(agentBadge()).toBeVisible();
   const badge = agentBadge().element() as HTMLElement;
   expect(badge.title).toBe("Agent：omp");
@@ -511,23 +520,25 @@ test("the chat view names its agent beside the title, icon only on a phone", asy
 
 test("prompts still queued return to this device's draft; a new TUI session ID is announced", async () => {
   const finish = pendingSwitch();
-  const { terminal, chat, draft } = await onTerminalSide(tuiState());
-  chat.frame({ type: "state", state: tuiState({ phase: "stopping" }) });
-  terminal.drop(4409);
-  chat.frame({ type: "state", state: chatState() });
+  const streams = await onTerminalSide(tuiState());
+  const { draft } = streams;
+  move(streams, { transition: { to: "chat", phase: "stopping" } });
+  streams.terminal.drop(4409);
+  move(streams, { view: "chat", transition: null });
   await expect
     .element(page.getByRole("textbox", { name: "消息" }))
     .toBeVisible();
 
   await page.getByRole("tab", { name: "终端" }).click();
-  chat.frame({
-    type: "state",
-    state: chatState({ side: "switching", phase: "starting" }),
-  });
+  move(streams, { transition: { to: "terminal", phase: "starting" } });
   const ids = { from: "01a17e26c4b84f0e9d2a", to: "01b2c3d4e5f60718293a" };
-  chat.frame({ type: "state", state: tuiState({ idChange: ids }) });
+  move(
+    streams,
+    { view: "terminal", transition: null },
+    tuiState({ idChange: ids }),
+  );
   finish({
-    side: "tui",
+    view: "terminal",
     draft: "然后更新 README\n\n最后运行测试",
     dropped: ["--resume"],
     unsupported: [],
@@ -549,6 +560,6 @@ test("prompts still queued return to this device's draft; a new TUI session ID i
   expect(draft.enabled).toBe(true);
   // Returned prompts are never sent by themselves.
   expect(commands().map((request) => request.body)).toEqual([
-    { clientRequestId: expect.any(String), to: "tui" },
+    { clientRequestId: expect.any(String), to: "terminal" },
   ]);
 });

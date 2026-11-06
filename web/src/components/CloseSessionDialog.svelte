@@ -23,7 +23,9 @@
   let busy = $state(false);
   let error = $state("");
   const removing = $derived(session.status === "exited");
-  const archiving = $derived(!removing && session.hybrid?.state === "active");
+  const archiving = $derived(
+    !removing && session.views.includes("chat") && session.state === "active",
+  );
 
   async function submit() {
     busy = true;

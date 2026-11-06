@@ -5,14 +5,14 @@ import { newRequestId } from "./ids";
 import {
   ChatAttachmentSchema,
   ChatPermissionModeSchema,
-  QuickStartFailureSchema,
-  QuickStartRequestSchema,
-  QuickStartResultSchema,
+  CreateSessionFailureSchema,
+  CreateSessionRequestSchema,
+  CreateSessionResultSchema,
   type ChatAttachment,
   type ChatConfig,
   type ChatPermissionMode,
-  type QuickStartFailure,
-  type QuickStartRequest,
+  type CreateSessionFailure,
+  type CreateSessionRequest,
 } from "./schemas";
 
 // Quick start's memory on this device: the repository and agent of the last
@@ -165,33 +165,34 @@ export function configValues(options: readonly ChatConfig[]) {
 
 export type QuickStartOutcome =
   | { ok: true; sessionId: string }
-  | { ok: false; failure: QuickStartFailure };
+  | { ok: false; failure: CreateSessionFailure };
 
 /**
- * Sends one quick start. A dropped connection is retried once with the same
- * request ID, which the server answers with the first run's result.
+ * Sends one quick start: a session created in a new worktree with its first
+ * message. A dropped connection is retried once with the same request ID,
+ * which the server answers with the first run's result.
  */
 export async function sendQuickStart(
-  request: Omit<QuickStartRequest, "clientRequestId">,
+  request: Omit<CreateSessionRequest, "clientRequestId">,
   clientRequestId = newRequestId(),
 ): Promise<QuickStartOutcome> {
   const body = { ...request, clientRequestId };
   for (let attempt = 0; ; attempt++) {
     try {
       const result = await api(
-        "/quick-starts",
-        QuickStartResultSchema,
+        "/sessions",
+        CreateSessionResultSchema,
         "POST",
         body,
         undefined,
-        QuickStartRequestSchema,
+        CreateSessionRequestSchema,
       );
-      return { ok: true, sessionId: result.sessionId };
+      return { ok: true, sessionId: result.session.id };
     } catch (err) {
       if (err instanceof TypeError && attempt === 0) continue;
       const failure =
         err instanceof APIError
-          ? QuickStartFailureSchema.safeParse(err.body).data
+          ? CreateSessionFailureSchema.safeParse(err.body).data
           : undefined;
       return {
         ok: false,
@@ -204,7 +205,7 @@ export async function sendQuickStart(
   }
 }
 
-export const failedStep: Record<QuickStartFailure["step"], string> = {
+export const failedStep: Record<CreateSessionFailure["step"], string> = {
   precheck: "无法开始",
   worktree: "创建 worktree 失败",
   session: "启动 agent 失败",

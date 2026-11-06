@@ -1,8 +1,10 @@
 // Package agentguide is the WebMux shell guide for scripts and CLI agents,
 // served llms.txt-style: an index at /llms.txt, one Markdown page per topic
 // at /llms/<topic>.md and everything at /llms-full.txt. It also writes the
-// short brief that {{webmux}} expands to. Pages are embedded and rendered
-// in memory; nothing is written to disk.
+// short brief that {{webmux}} expands to. The hand-written topics are
+// embedded; the command directory is rendered from the CLI's command table
+// by the caller (this shared package cannot import the CLI) and handed to
+// New. Nothing is written to disk.
 package agentguide
 
 import (
@@ -27,24 +29,30 @@ type Topic struct {
 	Section string
 }
 
+// CommandsTopic is the topic whose page is the command directory.
+const CommandsTopic = "commands"
+
 // Topics lists every page in index order; /llms-full.txt joins them in
 // this order.
 var Topics = []Topic{
 	{Name: "connect", Title: "连接与身份", Section: "基础", Summary: "找到 webmux 可执行文件与套接字，会话中的变量，会话内被禁止的操作与排错。"},
-	{Name: "sessions", Title: "会话", Section: "基础", Summary: "列出与详情、父会话与标签、输入与等待、输出与画面、提醒用户、结束与改名、附着与链接。"},
-	{Name: "launch", Title: "启动会话", Section: "基础", Summary: "用 run 启动、跟随或等待会话，在新 worktree 中启动；用 chat new 一次完成快速开始。"},
-	{Name: "chat", Title: "混合会话聊天", Section: "基础", Summary: "向 agent 发送提示并取回回复、回答授权与提问、切换端、队列、设置与恢复历史会话。"},
+	{Name: "sessions", Title: "会话", Section: "基础", Summary: "会话状态与视图，列出（含已归档）与元数据，输入与取回回复，中断与切换视图，等待、输出与画面，提醒，结束、恢复与删除记录。"},
+	{Name: "launch", Title: "启动会话", Section: "基础", Summary: "用 run 在目录、已有或新建 worktree 中启动会话，选择终端或聊天视图并下达首条消息，跟随或等待。"},
+	{Name: "chat", Title: "聊天视图", Section: "基础", Summary: "聊天视图专有的操作：回答授权与提问、agent 设置与权限模式、队列、状态与观察。"},
 	{Name: "workspace", Title: "仓库与工作区", Section: "基础", Summary: "worktree 的创建、删除与主页显示，仓库登记与初始化指令，启动配置的增删改，端口转发。"},
 	{Name: "artifacts", Title: "临时文件夹", Section: "基础", Summary: "交付文件放在哪里、上传文件在哪里，以及怎样告诉用户。"},
-	{Name: "commands", Title: "命令参考", Section: "参考", Summary: "每个命令的用法、选项与默认值，由命令表生成。"},
+	{Name: CommandsTopic, Title: "命令目录", Section: "参考", Summary: "每个命令一行的用法与摘要；选项、输出与示例用 `webmux <命令> --help` 查看。"},
 	{Name: "exit-codes", Title: "退出码", Section: "参考", Summary: "退出码与输出约定。"},
 	{Name: "rules", Title: "操作守则", Section: "参考", Summary: "操作其他会话、Token 与外部内容的规则。"},
 	{Name: "recipes", Title: "常用流程", Optional: true, Summary: "分派任务给 agent、继续对话、跑测试取退出码、后台任务、提醒用户、了解当前环境、交付文件、查看帮助的完整例子。"},
 }
 
 // Instance is what the local socket adds to the guide and the brief. The
-// TCP listener serves the guide without it.
+// TCP listener serves the guide without its facts.
 type Instance struct {
+	// Guide is the guide both listeners serve; only the local socket adds
+	// the instance facts to it.
+	Guide   Guide
 	Version string
 	// LocalURL is the token-free local origin, such as http://127.0.0.1:7681.
 	LocalURL string
@@ -74,16 +82,32 @@ func (i *Instance) GuideURL() string {
 	return strings.TrimSuffix(i.LocalURL, "/") + "/llms.txt"
 }
 
+// Guide is the shell guide: the embedded topics plus the command
+// directory. The zero Guide has an empty directory.
+type Guide struct {
+	directory string
+}
+
+// New returns the guide whose commands topic is directory, the Markdown
+// command directory rendered from the command table.
+func New(directory string) Guide {
+	return Guide{directory: directory}
+}
+
 // Page returns the Markdown of topic name.
-func Page(name string) (string, bool) {
+func (g Guide) Page(name string) (string, bool) {
 	for _, t := range Topics {
-		if t.Name == name {
-			data, err := pages.ReadFile("llms/" + name + ".md")
-			if err != nil {
-				return "", false
-			}
-			return string(data), true
+		if t.Name != name {
+			continue
 		}
+		if name == CommandsTopic {
+			return g.directory, true
+		}
+		data, err := pages.ReadFile("llms/" + name + ".md")
+		if err != nil {
+			return "", false
+		}
+		return string(data), true
 	}
 	return "", false
 }
@@ -95,12 +119,13 @@ const prefix = "下文的 `webmux` 指 WebMux 可执行文件：优先使用 `\"
 	"其次是 `{{webmux}}` 简述或本实例信息中的绝对路径，最后才是 `PATH` 中的 `webmux`。" +
 	"环境变量丢失时加 `--socket <套接字>`，并用会话 ID 代替 `self`。详见 [连接与身份](/llms/connect.md)。"
 
-const when = "需要查看或控制 WebMux 会话、启动命令或 agent、了解当前会话所在的仓库与分支、给会话打标签、" +
-	"或把文件交给用户时阅读本手册。先读本索引，再只读需要的主题；任务与 WebMux 无关时不必读取。"
+const when = "需要查看或控制 WebMux 会话、启动命令或 agent、等待会话、驱动聊天视图、准备 worktree、转发端口、提醒用户、" +
+	"或把文件交给用户时阅读本手册。先读本索引，再只读需要的主题；任务与 WebMux 无关时不必读取。" +
+	"单个命令的选项、输出与示例不在手册中：运行 `webmux <命令> --help` 或 `webmux help --json`。"
 
 // Index renders /llms.txt. A nil instance leaves out everything specific
 // to the running server, for the unauthenticated TCP listener.
-func Index(instance *Instance) string {
+func (g Guide) Index(instance *Instance) string {
 	var b strings.Builder
 	b.WriteString("# WebMux\n\n> " + summary + "\n\n")
 	if instance != nil {
@@ -131,11 +156,11 @@ func Index(instance *Instance) string {
 }
 
 // Full renders /llms-full.txt: the index, then every topic in order.
-func Full(instance *Instance) string {
+func (g Guide) Full(instance *Instance) string {
 	var b strings.Builder
-	b.WriteString(Index(instance))
+	b.WriteString(g.Index(instance))
 	for _, t := range Topics {
-		if page, ok := Page(t.Name); ok {
+		if page, ok := g.Page(t.Name); ok {
 			b.WriteString("\n---\n\n" + page)
 		}
 	}

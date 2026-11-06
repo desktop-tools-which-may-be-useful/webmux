@@ -34,7 +34,9 @@
     if (target.kind !== "live") return "";
     const { session } = target;
     if (session.status === "exited") return "移除会话";
-    return session.hybrid?.state === "active" ? "停止会话并归档" : "关闭会话";
+    return session.views.includes("chat") && session.state === "active"
+      ? "停止会话并归档"
+      : "关闭会话";
   });
 </script>
 

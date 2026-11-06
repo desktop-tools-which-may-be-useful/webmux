@@ -10,7 +10,7 @@ import {
   socketAt,
 } from "./chat-fixture";
 import ShellHarness from "./ShellHarness.svelte";
-import { launchConfig, repository, worktree } from "./shell-fixture";
+import { chat, launchConfig, repository, worktree } from "./shell-fixture";
 
 installChatFixture();
 
@@ -59,12 +59,12 @@ beforeEach(() => {
   );
   respond(/^GET \/api\/launch-configs$/, () =>
     Response.json([
-      launchConfig({ id: "cfgplain", name: "Shell", hybrid: false }),
+      launchConfig({ id: "cfgplain", name: "Shell", chat: false }),
       launchConfig({ chatOptions: [effort] }),
       launchConfig({ id: "cfgcodex", name: "Codex", icon: "codex" }),
     ]),
   );
-  respond(/^GET \/api\/hybrid-sessions/, () => Response.json([]));
+  respond(/^GET \/api\/sessions$/, () => Response.json([]));
 });
 afterEach(() => {
   for (const key of [
@@ -94,10 +94,10 @@ async function open() {
 }
 
 test("defaults skip what is unusable, and the first send goes in one request", async () => {
-  respond(/^POST \/api\/quick-starts$/, () =>
+  respond(/^POST \/api\/sessions$/, () =>
     Response.json(
       {
-        sessionId: "chataaaa",
+        session: chat({ id: "chataaaa" }),
         worktree: worktree({ id: "otter", kind: "linked" }),
         configWarnings: [],
       },
@@ -129,17 +129,17 @@ test("defaults skip what is unusable, and the first send goes in one request", a
   await input.fill("修复首页排序");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
-  const sent = commands().find((c) => c.path === "/api/quick-starts");
-  expect(sent?.body).toMatchObject({
-    repositoryId: "repo1",
+  const sent = commands().find((c) => c.path === "/api/sessions");
+  expect(sent?.body).toEqual({
+    clientRequestId: expect.stringMatching(/\S/),
+    // The server names the new branch.
+    newWorktree: { repositoryId: "repo1", mode: "new", base: "a".repeat(40) },
     configId: "cfgclaud",
-    base: "a".repeat(40),
-    branch: expect.stringMatching(/^wt\/[a-z]+-[a-z]+$/),
-    text: "修复首页排序",
-    config: { effort: "high" },
+    view: "chat",
+    prompt: "修复首页排序",
+    agentConfig: { effort: "high" },
     permissionMode: "auto",
     useInitInstruction: true,
-    startSide: "acp",
   });
   expect(JSON.parse(localStorage.getItem("webmux.quickStart")!)).toEqual({
     repositoryId: "repo1",
@@ -221,7 +221,7 @@ test("switching pages away from /new and back keeps all composer choices, attach
 const created = () =>
   Response.json(
     {
-      sessionId: "chataaaa",
+      session: chat({ id: "chataaaa" }),
       worktree: worktree({ id: "otter", kind: "linked" }),
       configWarnings: [],
     },
@@ -229,7 +229,7 @@ const created = () =>
   );
 
 test("starting in the terminal drops chat-only controls and is remembered", async () => {
-  respond(/^POST \/api\/quick-starts$/, created);
+  respond(/^POST \/api\/sessions$/, created);
   const { input, toolbar } = await open();
   await expect
     .element(toolbar.getByRole("button", { name: "思考：中" }))
@@ -248,13 +248,15 @@ test("starting in the terminal drops chat-only controls and is remembered", asyn
   await input.fill("修复首页排序");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
-  const sent = commands().find((c) => c.path === "/api/quick-starts");
-  expect(sent?.body).toMatchObject({ startSide: "tui" });
-  expect(localStorage.getItem("webmux.quickStartSide")).toBe("tui");
+  const sent = commands().find((c) => c.path === "/api/sessions");
+  expect(sent?.body).toMatchObject({ view: "terminal" });
+  expect(sent?.body).not.toHaveProperty("agentConfig");
+  expect(sent?.body).not.toHaveProperty("permissionMode");
+  expect(localStorage.getItem("webmux.quickStartSide")).toBe("terminal");
 });
 
 test("unticking the init instruction applies to that send only", async () => {
-  respond(/^POST \/api\/quick-starts$/, created);
+  respond(/^POST \/api\/sessions$/, created);
   const { input } = await open();
   const box = page.getByRole("checkbox", { name: "使用初始化指令" });
   await box.click();
@@ -262,7 +264,7 @@ test("unticking the init instruction applies to that send only", async () => {
   await input.fill("修复首页排序");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
-  const sent = commands().find((c) => c.path === "/api/quick-starts");
+  const sent = commands().find((c) => c.path === "/api/sessions");
   expect(sent?.body).toMatchObject({ useInitInstruction: false });
 });
 
@@ -285,7 +287,7 @@ test("the preview expands quick command references and flags unknown ones", asyn
 
 test("the control is hidden and false is sent without an instruction", async () => {
   respond(/^GET \/api\/repositories$/, () => Response.json([repository()]));
-  respond(/^POST \/api\/quick-starts$/, created);
+  respond(/^POST \/api\/sessions$/, created);
   const { input } = await open();
   expect(
     page.getByRole("checkbox", { name: "使用初始化指令" }).elements(),
@@ -293,15 +295,15 @@ test("the control is hidden and false is sent without an instruction", async () 
   await input.fill("修复首页排序");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
-  const sent = commands().find((c) => c.path === "/api/quick-starts");
+  const sent = commands().find((c) => c.path === "/api/sessions");
   expect(sent?.body).toMatchObject({ useInitInstruction: false });
 });
 
 test("the base branch is searched and picked by name", async () => {
-  respond(/^POST \/api\/quick-starts$/, () =>
+  respond(/^POST \/api\/sessions$/, () =>
     Response.json(
       {
-        sessionId: "chataaaa",
+        session: chat({ id: "chataaaa" }),
         worktree: worktree({ id: "otter", kind: "linked" }),
         configWarnings: [],
       },
@@ -320,14 +322,16 @@ test("the base branch is searched and picked by name", async () => {
   await input.fill("修复首页排序");
   await userEvent.keyboard("{Enter}");
   await expect.poll(() => location.pathname).toBe("/s/chataaaa");
-  const sent = commands().find((c) => c.path === "/api/quick-starts");
-  expect(sent?.body).toMatchObject({ base: "b".repeat(40) });
+  const sent = commands().find((c) => c.path === "/api/sessions");
+  expect(sent?.body).toMatchObject({
+    newWorktree: { base: "b".repeat(40) },
+  });
 });
 
 test("choosing an agent reads its options and holds the row until done", async () => {
   const pending = Promise.withResolvers<Response>();
-  respond(/^POST \/api\/quick-starts\/options$/, (request) =>
-    (request.body as { configId: string }).configId === "cfgcodex"
+  respond(/^POST \/api\/launch-configs\/\w+\/options$/, (request) =>
+    request.path === "/api/launch-configs/cfgcodex/options"
       ? pending.promise
       : Response.json({ error: "agent 已退出" }, { status: 502 }),
   );
@@ -344,8 +348,10 @@ test("choosing an agent reads its options and holds the row until done", async (
   await page.getByRole("menuitemradio", { name: /Codex/ }).click();
   await userEvent.keyboard("{Escape}");
   expect(
-    commands().findLast((c) => c.path === "/api/quick-starts/options")?.body,
-  ).toEqual({ repositoryId: "repo1", configId: "cfgcodex" });
+    commands().findLast(
+      (c) => c.path === "/api/launch-configs/cfgcodex/options",
+    )?.body,
+  ).toEqual({ repositoryId: "repo1" });
   await expect
     .element(toolbar.getByRole("status"))
     .toHaveTextContent("正在读取配置…");
@@ -384,7 +390,7 @@ test("a remembered agent that is gone falls back to the first hybrid config", as
 });
 
 test("a failed step keeps the text and offers what was created", async () => {
-  respond(/^POST \/api\/quick-starts$/, () =>
+  respond(/^POST \/api\/sessions$/, () =>
     Response.json(
       {
         error: "claude-agent-acp 在初始化阶段退出（exit 1）",
@@ -447,7 +453,7 @@ test("files attached before the session exist go with the first message", async 
   StagingXHR.sent = [];
   vi.stubGlobal("XMLHttpRequest", StagingXHR);
   let step = "precheck";
-  respond(/^POST \/api\/quick-starts$/, () =>
+  respond(/^POST \/api\/sessions$/, () =>
     Response.json({ error: "不行", step }, { status: 409 }),
   );
   const { input } = await open();
@@ -461,7 +467,7 @@ test("files attached before the session exist go with the first message", async 
   picker.files = transfer.files;
   picker.dispatchEvent(new Event("change", { bubbles: true }));
   await expect.poll(() => StagingXHR.sent.length).toBe(1);
-  expect(StagingXHR.sent[0]!.url).toBe("/api/quick-starts/uploads");
+  expect(StagingXHR.sent[0]!.url).toBe("/api/uploads");
   const { xhr } = StagingXHR.sent[0]!;
   xhr.status = 201;
   xhr.response = { path: "/tmp/staging/spec.md" };
@@ -474,7 +480,7 @@ test("files attached before the session exist go with the first message", async 
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect.element(page.getByRole("alert")).toBeVisible();
   expect(
-    commands().findLast((c) => c.path === "/api/quick-starts")?.body,
+    commands().findLast((c) => c.path === "/api/sessions")?.body,
   ).toMatchObject({ attachments: [{ path: "/tmp/staging/spec.md" }] });
   await expect.element(chips).toHaveTextContent("spec.md");
 
@@ -486,7 +492,7 @@ test("files attached before the session exist go with the first message", async 
 
 test("without hybrid configs the send stays off and says why", async () => {
   respond(/^GET \/api\/launch-configs$/, () =>
-    Response.json([launchConfig({ id: "cfgplain", hybrid: false })]),
+    Response.json([launchConfig({ id: "cfgplain", chat: false })]),
   );
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await expect

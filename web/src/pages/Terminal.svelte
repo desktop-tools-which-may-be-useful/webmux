@@ -4,7 +4,7 @@
   import { api, navigate, store, stored } from "../api";
   import {
     CreateSessionRequestSchema,
-    SessionInfoSchema,
+    CreateSessionResultSchema,
     LaunchConfigsSchema,
     RepositoriesSchema,
     type Repository,
@@ -207,9 +207,9 @@
     busy = true;
     error = "";
     try {
-      const session = await api(
+      const { session } = await api(
         "/sessions",
-        SessionInfoSchema,
+        CreateSessionResultSchema,
         "POST",
         {
           cmd: ["/bin/sh", "-i"],

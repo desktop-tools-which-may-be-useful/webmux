@@ -2,17 +2,15 @@ import type {
   AgentConnector,
   ChatEligibility,
   ChatState,
-  HybridPhase,
-  HybridSupport,
-  SessionHybrid,
+  ChatSupport,
+  SessionInfo,
+  SessionView,
+  TransitionPhase,
 } from "./schemas";
 
-// User-facing text for the server's hybrid support reason codes. The rules
+// User-facing text for the server's chat support reason codes. The rules
 // themselves stay on the server (agent profiles); only the wording lives here.
-const hybridSupportReasons: Record<
-  NonNullable<HybridSupport["reason"]>,
-  string
-> = {
+const chatSupportReasons: Record<NonNullable<ChatSupport["reason"]>, string> = {
   unknown_agent: "未识别到支持的 Agent",
   unsupported_form: "命令写法不受支持",
   session_store: "该参数使聊天视图无法找到会话",
@@ -21,10 +19,10 @@ const hybridSupportReasons: Record<
   session_arg: "该参数打开已有会话，混合配置请不要指定会话",
 };
 
-export function hybridSupportReason(support: HybridSupport | null) {
+export function chatSupportReason(support: ChatSupport | null) {
   if (!support || support.supported) return "";
   const reason = support.reason ?? "unknown_agent";
-  const text = hybridSupportReasons[reason];
+  const text = chatSupportReasons[reason];
   return reason === "unknown_agent" && support.supportedAgents.length > 0
     ? `${text}，当前版本支持：${support.supportedAgents.join("、")}`
     : text;
@@ -32,10 +30,12 @@ export function hybridSupportReason(support: HybridSupport | null) {
 
 export type HybridSideLabel = "终端" | "聊天" | "切换中";
 
-/** Where a hybrid session currently runs, as shown on cards and pages. */
-export function hybridSideLabel(hybrid: SessionHybrid): HybridSideLabel {
-  if (hybrid.side === "switching" || hybrid.phase) return "切换中";
-  if (hybrid.side === "acp") return "聊天";
+/** Which view a session is on, as shown on cards and pages. */
+export function sessionViewLabel(
+  session: Pick<SessionInfo, "view" | "transition">,
+): HybridSideLabel {
+  if (session.transition) return "切换中";
+  if (session.view === "chat") return "聊天";
   return "终端";
 }
 
@@ -76,14 +76,14 @@ export function eligibilityText(eligibility: ChatEligibility) {
   return eligibilityReasons[reason] ?? (reason || "暂时不能切到聊天");
 }
 
-export type SwitchTarget = "acp" | "tui";
+export type SwitchTarget = SessionView;
 
 /**
  * Where a switch stands on this device: a server phase, "requested" before
  * the server reports one, or "arriving" once the terminal run has started
  * and the page waits for its first output.
  */
-export type SwitchProgressPhase = HybridPhase | "requested" | "arriving";
+export type SwitchProgressPhase = TransitionPhase | "requested" | "arriving";
 
 type StepPhase = Exclude<SwitchProgressPhase, "requested">;
 
@@ -98,23 +98,23 @@ const phaseLabels: Record<StepPhase, string> = {
   arriving: "连接终端",
 };
 const stepOrder: Record<SwitchTarget, StepPhase[]> = {
-  acp: ["interrupting", "stopping", "starting", "loading"],
-  tui: ["cancelling", "stopping", "starting", "arriving"],
+  chat: ["interrupting", "stopping", "starting", "loading"],
+  terminal: ["cancelling", "stopping", "starting", "arriving"],
 };
 
 /**
  * Which way a running switch goes: its phase names it for the steps only one
- * direction has, otherwise the side it left does. Null when neither tells.
+ * direction has, otherwise the view it left does. Null when neither tells.
  */
 export function switchTarget(
-  phase: HybridPhase | undefined,
+  phase: TransitionPhase | undefined,
   from: SwitchTarget | undefined,
 ): SwitchTarget | null {
-  if (phase === "interrupting" || phase === "awaiting_choice") return "acp";
-  if (phase === "loading") return "acp";
-  if (phase === "cancelling") return "tui";
-  if (from === "tui") return "acp";
-  if (from === "acp") return "tui";
+  if (phase === "interrupting" || phase === "awaiting_choice") return "chat";
+  if (phase === "loading") return "chat";
+  if (phase === "cancelling") return "terminal";
+  if (from === "terminal") return "chat";
+  if (from === "chat") return "terminal";
   return null;
 }
 

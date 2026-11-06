@@ -1,8 +1,6 @@
 {
   "body": {
     "state": {
-      "agent": "omp",
-      "agentSessionId": "<agentSessionId#1>",
       "authRequired": false,
       "commands": [
         {
@@ -100,7 +98,6 @@
           "toolCallId": "call_1"
         }
       ],
-      "side": "acp",
       "steering": true,
       "turn": {
         "running": true,

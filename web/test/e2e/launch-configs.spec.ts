@@ -127,7 +127,7 @@ test("saved preview changes and global fallbacks apply to an existing session", 
     data: { configId: config.id, cwd: workDir, name: "E2E preview" },
   });
   expect(started.status()).toBe(201);
-  const session = await started.json();
+  const session = (await started.json()).session;
   expect(session.configId).toBe(config.id);
 
   await page.goto("/");

@@ -2,17 +2,18 @@
   "status": 200,
   "body": [
     {
+      "chat": false,
       "cmd": [
         "/bin/sh",
         "-l",
         "-i"
       ],
       "envNames": [],
-      "hybrid": false,
       "icon": "terminal",
       "name": "Shell"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -22,11 +23,11 @@
         "--dangerously-skip-permissions"
       ],
       "envNames": [],
-      "hybrid": true,
       "icon": "claudecode",
       "name": "Claude Code"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -36,11 +37,11 @@
         "--dangerously-bypass-approvals-and-sandbox"
       ],
       "envNames": [],
-      "hybrid": true,
       "icon": "codex",
       "name": "Codex CLI"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -50,11 +51,11 @@
         "--dangerously-skip-permissions"
       ],
       "envNames": [],
-      "hybrid": true,
       "icon": "antigravity",
       "name": "Antigravity CLI"
     },
     {
+      "chat": false,
       "cmd": [
         "bash",
         "-ic",
@@ -63,11 +64,11 @@
         "agent"
       ],
       "envNames": [],
-      "hybrid": false,
       "icon": "cursor",
       "name": "Cursor CLI"
     },
     {
+      "chat": false,
       "cmd": [
         "bash",
         "-ic",
@@ -76,11 +77,11 @@
         "copilot"
       ],
       "envNames": [],
-      "hybrid": false,
       "icon": "githubcopilot",
       "name": "GitHub Copilot CLI"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -90,11 +91,11 @@
         "--auto"
       ],
       "envNames": [],
-      "hybrid": true,
       "icon": "opencode",
       "name": "Open Code"
     },
     {
+      "chat": false,
       "cmd": [
         "bash",
         "-ic",
@@ -103,11 +104,11 @@
         "qwen"
       ],
       "envNames": [],
-      "hybrid": false,
       "icon": "qwen",
       "name": "Qwen Code"
     },
     {
+      "chat": false,
       "cmd": [
         "bash",
         "-ic",
@@ -116,11 +117,11 @@
         "kimi"
       ],
       "envNames": [],
-      "hybrid": false,
       "icon": "kimi",
       "name": "Kimi Code CLI"
     },
     {
+      "chat": false,
       "cmd": [
         "bash",
         "-ic",
@@ -129,11 +130,11 @@
         "codebuddy"
       ],
       "envNames": [],
-      "hybrid": false,
       "icon": "codebuddy",
       "name": "CodeBuddy Code"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -145,11 +146,11 @@
       "envNames": [
         "PI_FORCE_IMAGE_PROTOCOL"
       ],
-      "hybrid": true,
       "icon": "pi",
       "name": "omp"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -159,11 +160,11 @@
         "--dangerously-skip-permissions"
       ],
       "envNames": [],
-      "hybrid": true,
       "icon": "qoder",
       "name": "Qoder"
     },
     {
+      "chat": true,
       "cmd": [
         "bash",
         "-ic",
@@ -173,7 +174,6 @@
         "--dangerously-skip-permissions"
       ],
       "envNames": [],
-      "hybrid": true,
       "icon": "qoder",
       "name": "QoderCN"
     }

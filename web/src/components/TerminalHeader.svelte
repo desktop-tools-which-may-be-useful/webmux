@@ -107,12 +107,12 @@
   let fileInput = $state<{ open(): void }>();
   let openingFind = false;
   let shortcutsOpen = $state(false);
-  // Off the terminal side there is no PTY: terminal-only actions are hidden;
+  // Off the terminal view there is no PTY: terminal-only actions are hidden;
   // fullscreen, the code panel and closing the session stay.
   const terminalShown = $derived(!hybrid || hybrid.view === "terminal");
   // The chat view names the agent it talks to beside the session title.
   const chatAgent = $derived(
-    hybrid?.view === "chat" ? t.info?.hybrid : undefined,
+    hybrid?.view === "chat" ? (t.info?.agent ?? undefined) : undefined,
   );
   const connectionText = $derived(
     t.connection === "connected"
@@ -182,14 +182,15 @@
     {#if chatAgent}<span
         class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground sm:order-2"
         role="img"
-        aria-label={`Agent：${chatAgent.agentTitle}`}
-        title={`Agent：${chatAgent.agentTitle}`}
+        aria-label={`Agent：${chatAgent.title}`}
+        title={`Agent：${chatAgent.title}`}
         data-slot="chat-agent"
-        >{#if hasLaunchIcon(chatAgent.agentIcon)}<LaunchConfigIcon
-            icon={chatAgent.agentIcon}
+        >{#if hasLaunchIcon(chatAgent.icon)}<LaunchConfigIcon
+            icon={chatAgent.icon}
             size="sm"
-          /><span class="max-sm:hidden">{chatAgent.agentTitle}</span
-          >{:else}<span>{chatAgent.agentTitle}</span>{/if}</span
+          /><span class="max-sm:hidden">{chatAgent.title}</span>{:else}<span
+            >{chatAgent.title}</span
+          >{/if}</span
       >{/if}
     {#if !t.info || t.connection !== "connected"}<span
         class="shrink-0 text-xs whitespace-nowrap text-muted-foreground max-sm:hidden sm:order-4"
@@ -398,7 +399,9 @@
         </div>{/if}
       <DropdownMenu.Separator />
       {@const archivable =
-        t.exitCode === null && t.info?.hybrid?.state === "active"}
+        t.exitCode === null &&
+        !!t.info?.views.includes("chat") &&
+        t.info.state === "active"}
       <DropdownMenu.Item
         variant={archivable ? "default" : "destructive"}
         disabled={!t.info}

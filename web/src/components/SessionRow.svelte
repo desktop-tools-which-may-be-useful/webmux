@@ -11,7 +11,7 @@
   import IconChevronRight from "~icons/tabler/chevron-right";
   import IconDots from "~icons/tabler/dots";
   import IconLoader2 from "~icons/tabler/loader-2";
-  import { hybridSideLabel } from "../hybrid";
+  import { sessionViewLabel } from "../hybrid";
   import LaunchConfigIcon, { hasLaunchIcon } from "./LaunchConfigIcon.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
@@ -45,10 +45,8 @@
   );
   const settings = $derived(previewFor(session.configId));
   const preview = $derived(selectPreview(session.preview, settings));
-  // On the chat side the server's preview is the latest agent message.
-  const chat = $derived(
-    session.hybrid?.side === "acp" && !session.hybrid.phase,
-  );
+  // On the chat view the server's preview is the latest agent message.
+  const chat = $derived(session.view === "chat" && !session.transition);
   const hints = $derived(locationHints(session, groupPath));
   const copyTarget = $derived(
     session.reportedCwd
@@ -129,15 +127,15 @@
       <div
         class="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground"
       >
-        {#if session.hybrid}<span
+        {#if session.agent}<span
             class="inline-flex min-w-0 items-center gap-1"
             data-slot="session-agent"
-            >{#if hasLaunchIcon(session.hybrid.agentIcon)}<LaunchConfigIcon
-                icon={session.hybrid.agentIcon}
+            >{#if hasLaunchIcon(session.agent.icon)}<LaunchConfigIcon
+                icon={session.agent.icon}
                 size="xs"
-              />{/if}{session.hybrid.agentTitle}</span
+              />{/if}{session.agent.title}</span
           ><span aria-hidden="true">·</span><span
-            >{hybridSideLabel(session.hybrid)}</span
+            >{sessionViewLabel(session)}</span
           ><span aria-hidden="true">·</span>{/if}
         <span
           >{session.clients ? `${session.clients} 个设备已连接` : "后台会话"} ·
@@ -147,19 +145,19 @@
             >{copyNotice}</span
           >{/if}
       </div>
-      {#if !compact && session.hybrid?.work}
+      {#if !compact && session.agent?.work}
         <!-- What the agent is doing right now: the running turn's tool
              call or plan step, one line. -->
         <p
           aria-label="当前工作"
-          title={session.hybrid.work}
+          title={session.agent.work}
           class="mt-2 flex min-w-0 items-center gap-1.5 text-xs text-foreground/80"
         >
           <IconLoader2
             class="size-3.5 shrink-0 animate-spin text-info"
             aria-hidden="true"
           />
-          <span class="min-w-0 truncate">{session.hybrid.work}</span>
+          <span class="min-w-0 truncate">{session.agent.work}</span>
         </p>
       {/if}
       {#if hints.launch || hints.reported}
@@ -241,7 +239,9 @@
           >
           <DropdownMenu.Separator />
           {@const archivable =
-            session.status !== "exited" && session.hybrid?.state === "active"}
+            session.status !== "exited" &&
+            session.views.includes("chat") &&
+            session.state === "active"}
           <DropdownMenu.Item
             variant={archivable ? "default" : "destructive"}
             onSelect={() => onclose(session)}

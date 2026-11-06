@@ -91,8 +91,18 @@ func TestGuideReadsTheServer(t *testing.T) {
 
 func TestGuideFallsBackToTheBuiltInCopy(t *testing.T) {
 	e, stdout, stderr := guideEnv(t, false, "")
-	if code := e.Run(context.Background(), guideCommand, nil); code != 0 || stdout.String() != agentguide.Index(nil) || !strings.Contains(stderr.String(), "built into this executable") {
+	guide := agentguide.New(Directory(Commands()))
+	if code := e.Run(context.Background(), guideCommand, nil); code != 0 || stdout.String() != guide.Index(nil) || !strings.Contains(stderr.String(), "built into this executable") {
 		t.Fatalf("fallback: %d %q %q", code, stdout.String()[:min(40, stdout.Len())], stderr)
+	}
+	// The offline commands topic is the directory of this CLI's table.
+	stdout.Reset()
+	if code := e.Run(context.Background(), guideCommand, []string{"commands"}); code != 0 || !strings.Contains(stdout.String(), "`webmux send [options] SESSION [TEXT|-]`") {
+		t.Fatalf("offline commands topic: %d %q", code, stdout)
+	}
+	stdout.Reset()
+	if code := e.Run(context.Background(), guideCommand, []string{"--full"}); code != 0 || strings.Contains(stdout.String(), "Options:") {
+		t.Fatalf("offline --full: %d", code)
 	}
 	if code := e.Run(context.Background(), guideCommand, []string{"--path"}); code != contract.ExitNotRunning {
 		t.Fatalf("--path without a server: %d", code)
@@ -107,5 +117,34 @@ func TestDirPrintsTheArtifactsFolder(t *testing.T) {
 	outside, _, _ := guideEnv(t, true, "")
 	if code := outside.Run(context.Background(), dirCommand, nil); code != contract.ExitUsage {
 		t.Fatalf("dir outside a session: %d", code)
+	}
+}
+
+// TestDirectoryListsEveryCommandOnce keeps the commands topic a directory:
+// one line per visible command, no help sections.
+func TestDirectoryListsEveryCommandOnce(t *testing.T) {
+	r := Commands()
+	page := Directory(r)
+	for _, c := range r.Visible("unix") {
+		if c.Bind == nil {
+			continue
+		}
+		line := "- `" + c.Usage() + "`: " + c.Summary + "\n"
+		if strings.Count(page, line) != 1 {
+			t.Errorf("directory lists %s %d times", c.Name, strings.Count(page, line))
+		}
+	}
+	for _, c := range r {
+		if c.Hidden && strings.Contains(page, "`webmux "+c.Name+" ") {
+			t.Errorf("directory lists hidden %s", c.Name)
+		}
+	}
+	for _, section := range []string{"Options:", "Examples:", "Arguments:", "Exit status:"} {
+		if strings.Contains(page, section) {
+			t.Errorf("directory contains %q", section)
+		}
+	}
+	if !strings.Contains(page, "--help") || !strings.Contains(page, "help --json") {
+		t.Error("directory does not point to --help and help --json")
 	}
 }

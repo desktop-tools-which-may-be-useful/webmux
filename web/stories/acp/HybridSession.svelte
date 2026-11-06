@@ -30,8 +30,9 @@
   import type {
     ChatAttachment,
     ChatState,
-    HybridPhase,
     SessionInfo,
+    SessionView,
+    TransitionPhase,
   } from "../../src/schemas";
   import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
   import { session } from "../fixtures";
@@ -58,6 +59,10 @@
   const fixture = untrack(() => chatFixture(scenario, agent));
   let model = $state.raw(fixture.model);
   let chat = $state.raw<ChatState>(fixture.state);
+  // Where the session is, as its SessionInfo would say: the settled view and
+  // a running switch's phase.
+  let where = $state<SessionView>(fixture.view);
+  let phase = $state<TransitionPhase | undefined>(fixture.phase);
   let confirming = $state<SwitchTarget | null>(null);
   let choiceOpen = $state(untrack(() => scenario === "awaiting-choice"));
   let candidateOpen = $state(untrack(() => scenario === "ambiguous"));
@@ -143,21 +148,19 @@
     },
   };
 
-  const side = $derived<SwitchTarget | null>(
-    chat.phase || chat.side === "switching" ? null : chat.side,
-  );
-  // The side before the current switch: chat unless it started on the TUI.
+  const side = $derived<SwitchTarget | null>(phase ? null : where);
+  // The view before the current switch: chat unless it started on the TUI.
   let from = $state<SwitchTarget>(
-    untrack(() => (scenario === "awaiting-choice" ? "tui" : "acp")),
+    untrack(() => (scenario === "awaiting-choice" ? "terminal" : "chat")),
   );
   const view = $derived<HybridView>(
-    side === null ? "switching" : side === "tui" ? "terminal" : "chat",
+    side === null ? "switching" : side === "terminal" ? "terminal" : "chat",
   );
   const target = $derived(
-    view === "switching" ? switchTarget(chat.phase, from) : null,
+    view === "switching" ? switchTarget(phase, from) : null,
   );
   const chatUnavailable = $derived(
-    side === "tui" ? eligibilityText(chat.eligibility) : "",
+    side === "terminal" ? eligibilityText(chat.eligibility) : "",
   );
   const info = $derived<SessionInfo>({
     ...session,
@@ -179,14 +182,14 @@
     preview: "",
     clients: 1,
     reportedCwd: null,
-    hybrid: {
-      side: chat.side,
-      phase: chat.phase,
-      state: "active",
-      agent,
-      agentTitle: agentMetadata[agent].title,
-      agentIcon: agentMetadata[agent].icon,
-      agentSessionId: chat.agentSessionId,
+    views: ["terminal", "chat"],
+    view: where,
+    transition: phase && target ? { to: target, phase } : null,
+    agent: {
+      name: agent,
+      title: agentMetadata[agent].title,
+      icon: agentMetadata[agent].icon,
+      sessionId: fixture.agentSessionId,
     },
   });
   const notices = $derived.by(() => {
@@ -200,7 +203,7 @@
     if (notice)
       list.push({ key: `notice:${notice}`, tone: "info", text: notice });
     const change = chat.idChange;
-    if (change && side === "tui")
+    if (change && side === "terminal")
       list.push({
         key: `id:${change.from}>${change.to}`,
         tone: "info",
@@ -308,25 +311,26 @@
   };
 
   // The phases a switch passes through, as the server reports them.
-  const phases: Record<SwitchTarget, HybridPhase[]> = {
-    acp: ["interrupting", "stopping", "starting", "loading"],
-    tui: ["cancelling", "stopping", "starting"],
+  const phases: Record<SwitchTarget, TransitionPhase[]> = {
+    chat: ["interrupting", "stopping", "starting", "loading"],
+    terminal: ["cancelling", "stopping", "starting"],
   };
-  function advance(to: SwitchTarget, rest: HybridPhase[]) {
-    const [phase, ...next] = rest;
-    if (!phase) {
+  function advance(to: SwitchTarget, rest: TransitionPhase[]) {
+    const [step, ...next] = rest;
+    if (!step) {
       model = withEvents(model, [
-        { kind: "marker", marker: { kind: "switched", side: to } },
+        { kind: "marker", marker: { kind: "switched", view: to } },
       ]);
-      update({ side: to, phase: undefined });
+      where = to;
+      phase = undefined;
       return;
     }
-    update({ side: "switching", phase });
+    phase = step;
     timer = setTimeout(() => advance(to, next), 700);
   }
   function run(to: SwitchTarget) {
-    if (to === "tui" && chat.turn.running) interrupt();
-    from = to === "tui" ? "acp" : "tui";
+    if (to === "terminal" && chat.turn.running) interrupt();
+    from = to === "terminal" ? "chat" : "terminal";
     advance(to, phases[to]);
   }
   const hybrid = {
@@ -345,11 +349,11 @@
     request(to: SwitchTarget) {
       if (!side || to === side) return;
       notice = "";
-      if (to === "acp" && chatUnavailable) {
+      if (to === "chat" && chatUnavailable) {
         notice = `现在不能切到聊天：${chatUnavailable}`;
         return;
       }
-      if (to === "tui" && chat.turn.running) confirming = to;
+      if (to === "terminal" && chat.turn.running) confirming = to;
       else run(to);
     },
   };
@@ -472,13 +476,13 @@
             openedLocation = target;
             codeShown = true;
           }}
-          onterminal={() => hybrid.request("tui")}
+          onterminal={() => hybrid.request("terminal")}
         />
       {:else if view === "switching"}
         <SwitchProgress
           {target}
-          steps={chat.phase ? switchSteps(target, chat.phase) : []}
-          awaitingChoice={chat.phase === "awaiting_choice"}
+          steps={phase ? switchSteps(target, phase) : []}
+          awaitingChoice={phase === "awaiting_choice"}
           onchoose={() => (choiceOpen = true)}
         />
       {:else}
@@ -540,7 +544,7 @@
   title="切换到终端？"
   onconfirm={() => {
     confirming = null;
-    run("tui");
+    run("terminal");
   }}>当前回合会被中断，已输出的内容会保留。</ConfirmDialog
 >
 <ConfirmDialog
@@ -548,7 +552,7 @@
   title="选择要切到聊天的会话"
   onconfirm={() => {
     candidateOpen = false;
-    run("acp");
+    run("chat");
   }}
   >无法确定当前会话，请选择要打开的会话。<HybridCandidatePicker
     candidates={claudeCandidates}
@@ -562,7 +566,9 @@
   busy={false}
   onchoose={(choice) => {
     choiceOpen = false;
-    if (choice === "cancel") update({ side: "tui", phase: undefined });
-    else advance("acp", phases.acp.slice(1));
+    if (choice === "cancel") {
+      where = "terminal";
+      phase = undefined;
+    } else advance("chat", phases.chat.slice(1));
   }}
 />

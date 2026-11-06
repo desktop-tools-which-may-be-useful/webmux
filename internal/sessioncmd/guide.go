@@ -28,7 +28,9 @@ var guideCommand = &Command{
 	Summary: "Print the WebMux shell guide for scripts and agents (the llms.txt index, a topic, or everything).",
 	Description: "The guide is served by the running server at /llms.txt, /llms/<topic>.md and /llms-full.txt; " +
 		"this command reads it over the local socket, so it matches the server's version and needs no token. " +
-		"When the server is not running, the copy built into this executable is printed with a note on standard error.",
+		"When the server is not running, the copy built into this executable is printed with a note on standard error. " +
+		"The guide holds concepts, how to choose a command and cross-command recipes; its commands topic lists every " +
+		"command in one line, and each command's options stay in its --help.",
 	Arguments: []Item{{Name: "TOPIC", Text: "One of: " + strings.Join(topicNames(), ", ") + "."}},
 	Env: []Item{
 		{Name: "WEBMUX_SOCKET", Text: "Local API socket used when neither --socket nor --config is given."},
@@ -97,14 +99,15 @@ func (e Env) guide(ctx context.Context, page string, args []string, full bool) i
 		}
 		// A stopped or older server: print the copy built into this CLI.
 		_, _ = fmt.Fprintln(e.Stderr, "webmux guide: the server did not serve the guide; printing the copy built into this executable, which may differ from the server's version")
+		guide := agentguide.New(Directory(e.registry()))
 		switch {
 		case full:
-			text = []byte(agentguide.Full(nil))
+			text = []byte(guide.Full(nil))
 		case len(args) == 1:
-			body, _ := agentguide.Page(args[0])
+			body, _ := guide.Page(args[0])
 			text = []byte(body)
 		default:
-			text = []byte(agentguide.Index(nil))
+			text = []byte(guide.Index(nil))
 		}
 	}
 	_, _ = e.Stdout.Write(text)
@@ -131,8 +134,8 @@ func (e Env) guidePath(ctx context.Context) int {
 var dirCommand = &Command{
 	Name: "dir", Group: GroupSessions, Args: "[SESSION]",
 	Summary: "Print a session's artifacts folder, creating it when needed.",
-	Description: "The artifacts folder is where the user and the programs of a session exchange files: uploads land in its uploads/ " +
-		"subdirectory, and files saved there show in the code panel's Temporary folder. Inside a session SESSION defaults to self.",
+	Description: "The artifacts folder is where the user and the programs of a session exchange files (webmux guide artifacts " +
+		"has the rules). Inside a session SESSION defaults to self.",
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
 	Output:    "The absolute path, unquoted.",

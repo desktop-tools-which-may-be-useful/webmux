@@ -152,7 +152,7 @@
           <p class="font-medium">将删除的已归档会话（删除后不可恢复）</p>
           <ul class="space-y-1">
             {#each preview.archived as record (record.id)}<li class="break-all">
-                {record.title || record.name} · {record.state === "closed"
+                {record.title} · {record.state === "closed"
                   ? "已关闭"
                   : "已中断"} · {record.cwd}
               </li>{/each}

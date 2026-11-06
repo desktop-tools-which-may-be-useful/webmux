@@ -3,6 +3,7 @@
     "forwards": [],
     "sessions": [
       {
+        "agent": null,
         "attention": null,
         "clients": 0,
         "cmd": [
@@ -24,8 +25,14 @@
         "preview": "x",
         "reportedCwd": null,
         "rows": 24,
+        "state": "active",
         "status": "running",
         "title": "wire",
+        "transition": null,
+        "view": "terminal",
+        "views": [
+          "terminal"
+        ],
         "workspace": null
       }
     ],

@@ -1,4 +1,50 @@
 {
+  "archivedSession": {
+    "id": "abcdefgh",
+    "generation": "",
+    "title": "omp",
+    "cwd": "/w",
+    "cmd": [
+      "omp"
+    ],
+    "status": "exited",
+    "exitCode": null,
+    "preview": "",
+    "createdAt": "2026-01-02T03:04:05Z",
+    "lastActiveAt": "2026-01-02T03:04:05Z",
+    "cols": 0,
+    "rows": 0,
+    "clients": 0,
+    "workspace": {
+      "repositoryId": "repo0001",
+      "worktreeId": "tree0001",
+      "worktreePath": "/w"
+    },
+    "attention": null,
+    "reportedCwd": null,
+    "configId": "abcdefgh",
+    "state": "closed",
+    "views": [
+      "terminal",
+      "chat"
+    ],
+    "view": "terminal",
+    "transition": null,
+    "agent": {
+      "name": "omp",
+      "title": "Oh My Pi",
+      "icon": "pi",
+      "sessionId": null
+    },
+    "archive": {
+      "configMissing": false,
+      "previousAgentSessionIds": [],
+      "queuedCount": 0,
+      "interruptedAt": null,
+      "updatedAt": "2026-01-02T03:04:05Z"
+    },
+    "listeningPorts": []
+  },
   "branches": {
     "branches": [
       {
@@ -65,9 +111,6 @@
     "from": 1,
     "next": 1,
     "state": {
-      "side": "acp",
-      "agent": "omp",
-      "agentSessionId": null,
       "eligibility": {
         "available": false
       },
@@ -105,32 +148,37 @@
     "changes": "unchanged",
     "checkedAt": "0001-01-01T00:00:00Z"
   },
-  "hybridRecords": [
-    {
+  "createResult": {
+    "session": {
       "id": "abcdefgh",
-      "name": "omp",
-      "title": "session title",
-      "configId": "abcdefgh",
-      "configMissing": false,
-      "agent": "omp",
-      "cwd": "/w",
+      "generation": "",
+      "title": "",
+      "cwd": "",
       "cmd": [
-        "omp"
+        "sh"
       ],
-      "side": "tui",
-      "agentSessionId": null,
-      "previousIds": [],
-      "state": "closed",
-      "queuedCount": 0,
-      "createdAt": "2026-01-02T03:04:05Z",
-      "updatedAt": "2026-01-02T03:04:05Z",
-      "interruptedAt": null,
-      "workspace": {
-        "repositoryId": "repo0001",
-        "worktreeId": "tree0001"
-      }
-    }
-  ],
+      "status": "running",
+      "exitCode": null,
+      "preview": "",
+      "createdAt": "0001-01-01T00:00:00Z",
+      "lastActiveAt": "0001-01-01T00:00:00Z",
+      "cols": 0,
+      "rows": 0,
+      "clients": 0,
+      "workspace": null,
+      "attention": null,
+      "reportedCwd": null,
+      "state": "active",
+      "views": [
+        "terminal"
+      ],
+      "view": "terminal",
+      "transition": null,
+      "agent": null,
+      "listeningPorts": []
+    },
+    "configWarnings": []
+  },
   "launch": [
     {
       "id": "abcdefgh",
@@ -140,8 +188,8 @@
       ],
       "envNames": [],
       "preview": null,
-      "hybrid": false,
-      "hybridSupport": {
+      "chat": false,
+      "chatSupport": {
         "supported": false,
         "supportedAgents": []
       },
@@ -158,8 +206,8 @@
     ],
     "env": {},
     "preview": null,
-    "hybrid": false,
-    "hybridSupport": {
+    "chat": false,
+    "chatSupport": {
       "supported": false,
       "reason": "unknown_agent",
       "supportedAgents": [
@@ -182,7 +230,7 @@
         "sh"
       ],
       "envNames": [],
-      "hybrid": false
+      "chat": false
     }
   ],
   "launches": [],
@@ -225,27 +273,6 @@
     "removed": [],
     "errors": []
   },
-  "quickStart": {
-    "sessionId": "",
-    "worktree": {
-      "id": "",
-      "repositoryId": "",
-      "path": "",
-      "kind": "",
-      "branch": null,
-      "head": null,
-      "detached": false,
-      "locked": false,
-      "lockReason": "",
-      "prunable": false,
-      "available": false,
-      "dirty": null,
-      "hasUntracked": false,
-      "hasIgnored": false,
-      "error": ""
-    },
-    "configWarnings": []
-  },
   "repositories": [],
   "repository": {
     "id": "",
@@ -277,6 +304,13 @@
     "workspace": null,
     "attention": null,
     "reportedCwd": null,
+    "state": "active",
+    "views": [
+      "terminal"
+    ],
+    "view": "terminal",
+    "transition": null,
+    "agent": null,
     "listeningPorts": []
   },
   "sessions": [],

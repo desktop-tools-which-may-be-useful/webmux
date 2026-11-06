@@ -1,32 +1,33 @@
 import { api, APIError } from "./api";
 import { newRequestId } from "./ids";
 import {
-  HybridConflictSchema,
-  HybridRecordSchema,
-  HybridRecordsSchema,
+  ArchivedSessionSchema,
+  ArchivedSessionsSchema,
   NoContentSchema,
+  SessionConflictSchema,
   SessionInfoSchema,
+  type AgentCandidate,
   type AgentConnector,
-  type HybridCandidate,
-  type HybridConflict,
-  type HybridRecord,
+  type ArchivedSession,
+  type SessionConflict,
   type SessionInfo,
+  type SessionView,
 } from "./schemas";
 
-/** The hybrid conflict a 409 carries, or undefined for any other failure. */
-export function hybridConflict(err: unknown): HybridConflict | undefined {
+/** The session conflict a 409 carries, or undefined for any other failure. */
+export function sessionConflict(err: unknown): SessionConflict | undefined {
   if (!(err instanceof APIError) || err.status !== 409) return undefined;
-  const conflict = HybridConflictSchema.safeParse(err.body);
+  const conflict = SessionConflictSchema.safeParse(err.body);
   return conflict.success ? conflict.data : undefined;
 }
 
-// Hybrid session records that can be resumed: closed or interrupted sessions
+// Archived sessions that can be resumed: closed or interrupted sessions
 // whose agent conversation lives on in the agent's own store.
 
 export function loadRecoverable(signal?: AbortSignal) {
   return api(
-    "/hybrid-sessions?state=recoverable",
-    HybridRecordsSchema,
+    "/sessions?state=archived",
+    ArchivedSessionsSchema,
     "GET",
     undefined,
     signal,
@@ -34,18 +35,20 @@ export function loadRecoverable(signal?: AbortSignal) {
 }
 
 /**
- * The record of session `id`, the session page's fallback when the session
- * itself is gone. Undefined when there is none: no such record (404) or no
- * readable store (503). Other failures prove nothing and are thrown.
+ * Archived session `id`, the session page's fallback when the running
+ * session is gone. Undefined when there is none: no such session (404), no
+ * readable store (503), or a session that is still active. Other failures
+ * prove nothing and are thrown.
  */
 export async function loadRecord(
   id: string,
   signal?: AbortSignal,
-): Promise<HybridRecord | undefined> {
+): Promise<ArchivedSession | undefined> {
+  let session: SessionInfo;
   try {
-    return await api(
-      `/hybrid-sessions/${id}`,
-      HybridRecordSchema,
+    session = await api(
+      `/sessions/${id}`,
+      SessionInfoSchema,
       "GET",
       undefined,
       signal,
@@ -55,6 +58,8 @@ export async function loadRecord(
       return undefined;
     throw err;
   }
+  const archived = ArchivedSessionSchema.safeParse(session);
+  return archived.success ? archived.data : undefined;
 }
 
 export type ResumeChoice = {
@@ -66,14 +71,14 @@ export type ResumeChoice = {
 
 export type ResumeOutcome =
   | { status: "resumed"; session: SessionInfo }
-  | { status: "candidates"; message: string; candidates: HybridCandidate[] }
+  | { status: "candidates"; message: string; candidates: AgentCandidate[] }
   | { status: "config_missing"; message: string }
   | { status: "connector_missing"; message: string; connector: AgentConnector };
 
-/** Resumes a record on one side; 409s that need a user choice are returned. */
-export async function resumeHybrid(
+/** Resumes an archived session on one view; 409s that need a user choice are returned. */
+export async function resumeSession(
   id: string,
-  side: "tui" | "acp",
+  view: SessionView,
   choice: ResumeChoice = {},
 ): Promise<ResumeOutcome> {
   try {
@@ -81,11 +86,11 @@ export async function resumeHybrid(
       `/sessions/${id}/resume`,
       SessionInfoSchema,
       "POST",
-      { clientRequestId: newRequestId(), side, ...choice },
+      { clientRequestId: newRequestId(), view, ...choice },
     );
     return { status: "resumed", session };
   } catch (err) {
-    const conflict = hybridConflict(err);
+    const conflict = sessionConflict(err);
     if (conflict?.reason === "session_missing")
       return {
         status: "candidates",
@@ -104,6 +109,7 @@ export async function resumeHybrid(
   }
 }
 
+/** Deletes an archived session's record and its temporary folder. */
 export function removeRecord(id: string) {
-  return api(`/hybrid-sessions/${id}`, NoContentSchema, "DELETE");
+  return api(`/sessions/${id}?forget=1`, NoContentSchema, "DELETE");
 }

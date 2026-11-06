@@ -149,8 +149,8 @@ const configs = (...ids: string[]): LaunchConfigsState => ({
     cmd: [id],
     envNames: [],
     chatOptions: [],
-    hybrid: false,
-    hybridSupport: {
+    chat: false,
+    chatSupport: {
       supported: false,
       supportedAgents: [],
       reason: "unknown_agent",

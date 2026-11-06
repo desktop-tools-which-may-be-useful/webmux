@@ -15,7 +15,7 @@
   import RepositoryGroup from "../components/RepositoryGroup.svelte";
   import DirectSessions from "../components/DirectSessions.svelte";
   import SidebarButton from "../components/SidebarButton.svelte";
-  import { removeRecord, resumeHybrid } from "../recoverable";
+  import { removeRecord, resumeSession } from "../recoverable";
   import {
     repositoryRecords,
     matchesArchivedQuery,
@@ -67,11 +67,9 @@
     z.enum(["compact", "preview"]).safeParse(stored("homeSessionView")).data ===
       "compact",
   );
-  // Closed or interrupted hybrid shells show as archived records only.
+  // Closed or interrupted sessions show as archived records only.
   const list = $derived(
-    sessions.filter(
-      (session) => !session.hybrid || session.hybrid.state === "active",
-    ),
+    sessions.filter((session) => session.state === "active"),
   );
   const direct = $derived(
     list.filter(
@@ -220,7 +218,7 @@
   const archive: ArchiveActions = $derived({
     now,
     filtering,
-    resume: resumeHybrid,
+    resume: resumeSession,
     remove: async (id) => {
       await removeRecord(id);
       drafts.remove(id);

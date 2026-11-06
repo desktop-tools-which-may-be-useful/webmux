@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HybridRecord, SessionInfo, Worktree } from "../schemas";
+  import type { ArchivedSession, SessionInfo, Worktree } from "../schemas";
   import type { ArchiveActions } from "../archived";
   import IconDots from "~icons/tabler/dots";
   import IconFolder from "~icons/tabler/folder";
@@ -47,7 +47,7 @@
     ontogglepin?: () => void;
     // Closed and interrupted hybrid sessions placed in this group; already
     // narrowed by the home page's filters.
-    archived?: HybridRecord[];
+    archived?: ArchivedSession[];
     archive?: ArchiveActions;
   } = $props();
   const detailsId = $props.id();

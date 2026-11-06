@@ -1,6 +1,7 @@
 {
   "status": 400,
   "body": {
-    "error": "configId must not be empty"
+    "error": "configId must not be empty",
+    "step": "precheck"
   }
 }

@@ -84,7 +84,7 @@ type Service struct {
 	reservations  map[string]bool
 	changed       chan struct{}
 	confirmations map[string]confirmation
-	quickStarts   quickStarts
+	creates       creates
 }
 
 // New never makes optional Git or storage availability a server startup failure.

@@ -46,6 +46,11 @@ export function demoSession(
     attention: null,
     reportedCwd: null,
     listeningPorts,
+    state: "active",
+    views: ["terminal"],
+    view: "terminal",
+    transition: null,
+    agent: null,
   });
 }
 

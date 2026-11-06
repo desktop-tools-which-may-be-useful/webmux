@@ -1,27 +1,28 @@
 import type { ResumeChoice, ResumeOutcome } from "./recoverable";
 import type {
-  HybridRecord,
+  ArchivedSession,
   Repository,
   SessionInfo,
+  SessionView,
   Worktree,
 } from "./schemas";
 
-// Archived records are the closed and interrupted hybrid sessions. The home
+// Archived records are the closed and interrupted sessions. The home
 // page shows each one under the group a live session would have: its
 // worktree, its repository's unavailable-workspace group, or the direct
 // session group of its directory.
 
 export interface RepositoryArchive {
   /** Records by worktree ID, for worktrees in the repository's Git list. */
-  worktrees: ReadonlyMap<string, HybridRecord[]>;
+  worktrees: ReadonlyMap<string, ArchivedSession[]>;
   /** Records whose worktree is no longer in the Git list. */
-  missing: HybridRecord[];
+  missing: ArchivedSession[];
 }
 
 export interface ArchivePlacement {
   repositories: ReadonlyMap<string, RepositoryArchive>;
   /** Records outside every registered repository, grouped by `cwd` later. */
-  direct: HybridRecord[];
+  direct: ArchivedSession[];
 }
 
 /** What every archived section needs from the home page. */
@@ -31,7 +32,7 @@ export interface ArchiveActions {
   filtering: boolean;
   resume: (
     id: string,
-    side: "tui" | "acp",
+    view: SessionView,
     choice?: ResumeChoice,
   ) => Promise<ResumeOutcome>;
   remove: (id: string) => Promise<unknown>;
@@ -62,7 +63,7 @@ function within(root: string, path: string) {
  * longest path containing its `cwd`.
  */
 export function recordWorktree(
-  record: HybridRecord,
+  record: ArchivedSession,
   repositories: readonly Repository[],
 ): Worktree | undefined {
   const recorded = record.workspace;
@@ -92,7 +93,7 @@ export function recordWorktree(
  * gone).
  */
 export function removableRecordWorktree(
-  record: HybridRecord,
+  record: ArchivedSession,
   repositories: readonly Repository[],
 ): Worktree | undefined {
   const tree = recordWorktree(record, repositories);
@@ -108,14 +109,14 @@ export function removableRecordWorktree(
  * other record is a direct one. Record order is kept, newest first.
  */
 export function placeArchived(
-  records: readonly HybridRecord[],
+  records: readonly ArchivedSession[],
   repositories: readonly Repository[],
 ): ArchivePlacement {
   const placed = new Map<
     string,
-    { worktrees: Map<string, HybridRecord[]>; missing: HybridRecord[] }
+    { worktrees: Map<string, ArchivedSession[]>; missing: ArchivedSession[] }
   >();
-  const direct: HybridRecord[] = [];
+  const direct: ArchivedSession[] = [];
   const repositoryOf = (id: string) => {
     let entry = placed.get(id);
     if (!entry) {
@@ -127,7 +128,7 @@ export function placeArchived(
   const toWorktree = (
     repositoryId: string,
     worktreeId: string,
-    record: HybridRecord,
+    record: ArchivedSession,
   ) => {
     const entry = repositoryOf(repositoryId);
     const list = entry.worktrees.get(worktreeId);
@@ -159,15 +160,14 @@ export function repositoryRecords(archive: RepositoryArchive) {
 }
 
 export function matchesArchivedQuery(
-  record: HybridRecord,
+  record: ArchivedSession,
   search: string,
   repositoryName?: string,
   branch?: string | null,
 ) {
   return [
     record.title,
-    record.name,
-    record.agent,
+    record.agent.name,
     record.cwd,
     repositoryName,
     branch,

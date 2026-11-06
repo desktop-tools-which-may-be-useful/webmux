@@ -54,7 +54,7 @@ test("a detected port forwards, opens through authentication, echoes WebSockets 
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   let port = 0;
   await expect
     .poll(

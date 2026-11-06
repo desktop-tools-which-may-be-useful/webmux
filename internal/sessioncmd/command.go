@@ -61,7 +61,7 @@ type Note struct {
 // its flag parsing, --help, help --json and completion: flags exist only
 // through Bind.
 type Command struct {
-	// Name is the command path, such as "get" or "chat send".
+	// Name is the command path, such as "get" or "chat status".
 	Name  string
 	Group string
 	// Args is the positional part of the usage line, such as "[SESSION]".
@@ -81,6 +81,11 @@ type Command struct {
 	// Strict stops flag parsing at the first positional argument, for a
 	// command whose trailing arguments are another program's argv.
 	Strict bool
+	// DashArgs makes a Strict command take positional arguments only after
+	// "--"; a stray word before it is a usage error, explained by StrayHint
+	// when set.
+	DashArgs  bool
+	StrayHint func(fs *flag.FlagSet) string
 	// NoGlobal leaves out the client flags (--config, --socket) of Env.
 	NoGlobal bool
 	// RawArgs passes every argument to the action unparsed.
@@ -200,6 +205,13 @@ func (e Env) Parse(c *Command, args []string) (Action, []string, int, bool) {
 		if stop := len(rest) - len(remaining); stop > 0 && rest[stop-1] == "--" {
 			positional = append(positional, remaining...)
 			break
+		}
+		if c.Strict && c.DashArgs {
+			hint := "positional arguments go after --"
+			if c.StrayHint != nil {
+				hint = c.StrayHint(fs)
+			}
+			return nil, nil, e.usageError(c, fmt.Sprintf("unexpected argument %q: %s", remaining[0], hint)), false
 		}
 		if c.Strict {
 			positional = append(positional, remaining...)

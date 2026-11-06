@@ -7,10 +7,11 @@
   import { errorMessage } from "../error";
   import type { ResumeChoice, ResumeOutcome } from "../recoverable";
   import type {
+    AgentCandidate,
     AgentConnector,
-    HybridCandidate,
-    HybridRecord,
+    ArchivedSession,
     SessionInfo,
+    SessionView,
   } from "../schemas";
 
   // "恢复到聊天 / 恢复到终端" for one closed or interrupted hybrid session,
@@ -25,10 +26,10 @@
     onbusy = () => {},
     onerror,
   }: {
-    record: HybridRecord;
+    record: ArchivedSession;
     resume: (
       id: string,
-      side: "tui" | "acp",
+      view: SessionView,
       choice?: ResumeChoice,
     ) => Promise<ResumeOutcome>;
     onresumed: (session: SessionInfo) => void;
@@ -41,20 +42,20 @@
   // A resume that needs the user's answer before it can be retried. Earlier
   // answers ride along, so a second question does not undo the first.
   let pending = $state<{
-    side: "tui" | "acp";
+    view: SessionView;
     choice: ResumeChoice;
     kind: "candidates" | "config_missing";
     message: string;
-    candidates: HybridCandidate[];
+    candidates: AgentCandidate[];
   } | null>(null);
   let pendingOpen = $state(false);
   let picked = $state("");
 
-  async function run(side: "tui" | "acp", choice: ResumeChoice = {}) {
+  async function run(view: SessionView, choice: ResumeChoice = {}) {
     onbusy(true);
     onerror("");
     try {
-      const outcome = await resume(record.id, side, choice);
+      const outcome = await resume(record.id, view, choice);
       if (outcome.status === "resumed") {
         onresumed(outcome.session);
         return;
@@ -65,7 +66,7 @@
         return;
       }
       pending = {
-        side,
+        view,
         choice,
         kind: outcome.status,
         message: outcome.message,
@@ -74,7 +75,7 @@
       picked = pending.candidates[0]?.agentSessionId ?? "";
       pendingOpen = true;
     } catch (err) {
-      onerror(`无法恢复“${record.title || record.name}”：${errorMessage(err)}`);
+      onerror(`无法恢复“${record.title}”：${errorMessage(err)}`);
     } finally {
       onbusy(false);
     }
@@ -85,14 +86,14 @@
     pendingOpen = false;
     if (!answer) return;
     void run(
-      answer.side,
+      answer.view,
       answer.kind === "candidates"
         ? { ...answer.choice, agentSessionId: picked }
         : { ...answer.choice, confirmWithoutEnv: true },
     );
   }
 
-  // The chat side's connector is not installed; the terminal side still
+  // The chat view's connector is not installed; the terminal view still
   // works, with the answers given so far.
   let missing = $state<{
     connector: AgentConnector;
@@ -103,12 +104,12 @@
   function resumeTerminal() {
     const answer = missing;
     missingOpen = false;
-    if (answer) void run("tui", answer.choice);
+    if (answer) void run("terminal", answer.choice);
   }
 </script>
 
-<Button size="sm" {disabled} onclick={() => run("acp")}>恢复到聊天</Button>
-<Button size="sm" variant="outline" {disabled} onclick={() => run("tui")}
+<Button size="sm" {disabled} onclick={() => run("chat")}>恢复到聊天</Button>
+<Button size="sm" variant="outline" {disabled} onclick={() => run("terminal")}
   >恢复到终端</Button
 >
 

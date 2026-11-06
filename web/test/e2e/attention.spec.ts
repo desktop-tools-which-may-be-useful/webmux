@@ -28,7 +28,7 @@ test("agent attention survives spinner output and clears on user input", async (
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   const row = page.locator(`[data-session-id="${id}"]`);
 
   await page.goto("/");
@@ -102,7 +102,7 @@ test("opening a session does not clear attention through terminal replies", asyn
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   const attention = async () =>
     (await (await request.get(`/api/sessions/${id}`)).json()).attention;
   await expect.poll(attention).toMatchObject({ kind: "question" });
@@ -161,7 +161,7 @@ test("program status reports drive attention and status", async ({
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   const info = async () =>
     (await request.get(`/api/sessions/${id}`)).json() as Promise<{
       status: string;
@@ -230,7 +230,7 @@ test("structured agents do not trigger the waiting heuristics", async ({
       },
     });
     expect(created.status()).toBe(201);
-    ids[String(structured)] = (await created.json()).id;
+    ids[String(structured)] = (await created.json()).session.id;
   }
   const status = async (structured: boolean) =>
     (
@@ -270,7 +270,7 @@ test("raises a top-right toast by default while browsing and navigates to the se
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   await expect
     .poll(() => frames.some((frame) => frame.includes(`"${id}"`)))
     .toBe(true);
@@ -306,7 +306,7 @@ test("shows a script's notify message in the toast and clears it on request", as
     },
   });
   expect(created.status()).toBe(201);
-  const { id } = await created.json();
+  const { id } = (await created.json()).session;
   // The first snapshot is the toast baseline: raise only after the page
   // has seen the session.
   const frames: string[] = [];

@@ -21,20 +21,21 @@ import (
 
 // Commands is the registry of the session commands both clients share.
 func Commands() Registry {
-	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand, chatGroup, chatNewCommand, chatSendCommand, chatWatchCommand, chatStatusCommand, chatCancelCommand,
-		chatAnswerCommand, chatSwitchCommand, chatListCommand, chatResumeCommand, chatForgetCommand, chatSetCommand, chatPermissionCommand,
+	return Registry{runCommand, attachCommand, listCommand, openCommand, getCommand, labelCommand, dirCommand, guideCommand,
+		chatGroup, chatWatchCommand, chatStatusCommand, chatAnswerCommand, chatSetCommand, chatPermissionCommand,
 		chatQueueGroup, chatQueueListCommand, chatQueueRemoveCommand, chatQueueEditCommand, chatQueueSendNowCommand, chatQueueClearCommand, chatQueueResumeCommand,
 		launchConfigGroup, launchConfigListCommand, launchConfigShowCommand, launchConfigAddCommand, launchConfigEditCommand, launchConfigRemoveCommand,
 		launchConfigPresetsCommand, launchConfigRestoreCommand, launchConfigOptionsCommand,
 		worktreeGroup, worktreeListCommand, worktreeShowCommand, worktreeCreateCommand, worktreeRemoveCommand, worktreePinCommand, worktreeUnpinCommand, worktreeHomeCommand,
 		repoGroup, repoListCommand, repoAddCommand, repoRemoveCommand, repoShowCommand, repoRefreshCommand, repoBranchesCommand, repoCommitsCommand, repoBaseCommand, repoSettingsCommand,
 		forwardGroup, forwardListCommand, forwardAddCommand, forwardRemoveCommand,
-		apiCommand, killCommand, rmCommand, renameCommand, sendCommand, waitCommand, logsCommand, screenCommand, eventsCommand, notifyCommand, completionCommand, completeCommand}
+		apiCommand, killCommand, rmCommand, renameCommand, sendCommand, interruptCommand, viewCommand, resumeCommand,
+		waitCommand, logsCommand, screenCommand, eventsCommand, notifyCommand, completionCommand, completeCommand}
 }
 
 var getCommand = &Command{
 	Name: "get", Group: GroupSessions, Args: "[SESSION]",
-	Summary: "Show a session's metadata: repository, branch, launch config, hybrid state, links, parent, children and labels.",
+	Summary: "Show a session's metadata: repository, branch, launch config, views, links, parent, children and labels.",
 	Description: "Inside a WebMux session SESSION defaults to self. The details are gathered by the server in one request " +
 		"(GET /api/sessions/{id}/details); they never include the token or launch environment values. " +
 		"The artifacts folder is reported only when it exists; get never creates it.",
@@ -188,12 +189,21 @@ func printDetails(e Env, d contract.SessionDetails) {
 	case d.LaunchConfigMissing:
 		row("Launch config", "(deleted)")
 	}
-	if d.Hybrid != nil {
-		side := string(d.Hybrid.Side)
-		if d.Hybrid.AgentSessionID != nil {
-			side += " · agent session " + *d.Hybrid.AgentSessionID
+	if hasChatView(s) {
+		view := string(s.View)
+		if s.Transition != nil {
+			view += " → " + string(s.Transition.To) + " (" + string(s.Transition.Phase) + ")"
 		}
-		row("Hybrid", d.Hybrid.Agent+" · "+side)
+		if s.Agent != nil {
+			view += " · " + s.Agent.Name
+			if s.Agent.SessionID != nil {
+				view += " · agent session " + *s.Agent.SessionID
+			}
+		}
+		row("View", view)
+	}
+	if s.State != "" && s.State != contract.SessionStateActive {
+		row("State", string(s.State))
 	}
 	if d.ArtifactsDir != nil {
 		row("Artifacts", *d.ArtifactsDir)

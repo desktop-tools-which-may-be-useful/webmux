@@ -32,9 +32,9 @@
     aria-hidden="true"
   />
   <h2 class="text-center text-base font-medium">
-    {target === "tui"
+    {target === "terminal"
       ? "正在切换到终端…"
-      : target === "acp"
+      : target === "chat"
         ? "正在切换到聊天…"
         : "正在切换…"}
   </h2>

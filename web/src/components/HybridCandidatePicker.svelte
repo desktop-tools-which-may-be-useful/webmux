@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as NativeSelect from "$lib/components/ui/native-select";
-  import type { HybridCandidate } from "../schemas";
+  import type { AgentCandidate } from "../schemas";
 
   // The agent sessions a hybrid request may continue with, when the server
   // could not settle on one by itself; `picked` holds the chosen ID.
@@ -9,7 +9,7 @@
     picked = $bindable(""),
     label,
   }: {
-    candidates: HybridCandidate[];
+    candidates: AgentCandidate[];
     picked?: string;
     label: string;
   } = $props();

@@ -414,7 +414,8 @@ func (a *actor) choose(choice string) (SwitchResult, error) {
 	if choice == ChoiceCancel {
 		return a.resultOn(SideTUI), nil
 	}
-	return SwitchResult{Side: SideSwitching, Dropped: []string{}, Unsupported: []string{}}, nil
+	// The switch goes on; the result names where it is heading.
+	return SwitchResult{Side: op.to, Dropped: []string{}, Unsupported: []string{}}, nil
 }
 
 // runToACP is the subtask of a switch to the chat: interrupt the turn if

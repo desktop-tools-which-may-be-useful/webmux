@@ -347,7 +347,7 @@ func TestChatSwitchingRefusesCommandsAndClearsAttention(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := call(ctxT(t), a, func() (struct{}, error) {
-		a.side, a.switching, a.dirty = SideSwitching, &switchOp{}, true
+		a.side, a.switching, a.dirty = SideSwitching, &switchOp{from: SideACP, to: SideTUI}, true
 		return struct{}{}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -355,7 +355,7 @@ func TestChatSwitchingRefusesCommandsAndClearsAttention(t *testing.T) {
 	if _, err := h.svc.Prompt(ctxT(t), id, PromptInput{ClientRequestID: rid(), Text: "hi"}); !errors.Is(err, ErrSwitching) {
 		t.Fatalf("prompt while switching: %v", err)
 	}
-	if info := shell.Info(); info.Attention != nil || info.Hybrid.Side != string(SideSwitching) {
+	if info := shell.Info(); info.Attention != nil || info.Hybrid.Side != string(SideACP) || info.Hybrid.To != string(SideTUI) {
 		t.Fatalf("info while switching %+v", info)
 	}
 	cleared, err := call(ctxT(t), a, func() (bool, error) {

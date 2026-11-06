@@ -107,9 +107,10 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var info contract.SessionInfo
-			err = json.NewDecoder(response.Body).Decode(&info)
+			var created contract.CreateSessionResult
+			err = json.NewDecoder(response.Body).Decode(&created)
 			_ = response.Body.Close()
+			info := created.Session
 			if err != nil || response.StatusCode != 201 || info.Cwd != dir || info.Workspace != nil {
 				t.Fatalf("real degraded launch: status %d info %+v err %v", response.StatusCode, info, err)
 			}

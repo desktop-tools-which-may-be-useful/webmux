@@ -170,13 +170,7 @@ export function uploadQuickStartFile(
   progress: (percent: number) => void,
   signal: AbortSignal,
 ): Promise<z.infer<typeof UploadSchema>> {
-  return uploadForm(
-    "/quick-starts/uploads",
-    file,
-    UploadSchema,
-    progress,
-    signal,
-  );
+  return uploadForm("/uploads", file, UploadSchema, progress, signal);
 }
 // XHR exposes upload progress; fetch does not. Authentication and errors stay
 // shared with the JSON transport, and multipart boundaries belong to the browser.

@@ -1,13 +1,8 @@
 {
   "status": 200,
   "body": {
-    "cmd": [
-      "claude"
-    ],
-    "createdAt": "<time>",
-    "env": {},
-    "hybrid": false,
-    "hybridSupport": {
+    "chat": false,
+    "chatSupport": {
       "agent": "claudecode",
       "connector": {
         "docsUrl": "https://github.com/agentclientprotocol/claude-agent-acp",
@@ -26,6 +21,11 @@
         "Antigravity CLI"
       ]
     },
+    "cmd": [
+      "claude"
+    ],
+    "createdAt": "<time>",
+    "env": {},
     "id": "<id#1>",
     "name": "Claude 2",
     "preview": null,

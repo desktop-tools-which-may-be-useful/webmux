@@ -316,7 +316,6 @@ test("a missing connector offers its install hint and the terminal; outdated par
   socket.frame(
     snapshot(
       chatState({
-        agent: "codex",
         outdated: [
           { name: "codex", version: "0.150.0", verified: "0.166.0" },
           { name: "codex-acp", version: "2.4.0", verified: "2.5.0" },
@@ -405,7 +404,9 @@ test("renders the attachments of a user prompt", async () => {
 });
 
 test("the composer posts the prompt with a request ID and mode auto", async () => {
-  respond(/^POST .*\/chat\/prompts$/, () => Response.json({ queued: false }));
+  respond(/^POST .*\/input$/, () =>
+    Response.json({ view: "chat", queued: false }),
+  );
   const socket = await open();
   socket.frame(snapshot(chatState()));
   const input = page.getByRole("textbox", { name: "消息" });
@@ -414,7 +415,7 @@ test("the composer posts the prompt with a request ID and mode auto", async () =
   await expect.poll(commands).toEqual([
     {
       method: "POST",
-      path: `${base}/prompts`,
+      path: `/api/sessions/${id}/input`,
       body: {
         clientRequestId: expect.stringMatching(/\S/),
         text: "补一个回归测试",
@@ -575,7 +576,9 @@ test("a request answered on another device closes with the next state", async ()
 });
 
 test("steering is offered only while a turn runs on an agent that takes it", async () => {
-  respond(/^POST .*\/chat\/prompts$/, () => Response.json({ queued: false }));
+  respond(/^POST .*\/input$/, () =>
+    Response.json({ view: "chat", queued: false }),
+  );
   const socket = await open();
   const steer = page.getByRole("button", { name: "插话" });
   socket.frame(snapshot(chatState({ steering: true })));
@@ -602,7 +605,7 @@ test("steering is offered only while a turn runs on an agent that takes it", asy
   await expect.poll(commands).toEqual([
     {
       method: "POST",
-      path: `${base}/prompts`,
+      path: `/api/sessions/${id}/input`,
       body: {
         clientRequestId: expect.any(String),
         text: "顺便检查空列表",
@@ -617,7 +620,6 @@ test("typing / lists and filters published commands without authentication flows
   socket.frame(
     snapshot(
       chatState({
-        agent: "claudecode",
         commands: [
           { name: "compact", description: "压缩上下文" },
           { name: "review", description: "审阅当前改动", hint: "文件" },
@@ -722,7 +724,6 @@ test("config options expose the actual fallback mode and adapter notice", async 
   socket.frame(
     snapshot(
       chatState({
-        agent: "claudecode",
         config: [
           {
             id: "model",

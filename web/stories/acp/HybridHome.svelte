@@ -1,7 +1,11 @@
 <script lang="ts">
   import WorkspaceGroup from "../../src/components/WorkspaceGroup.svelte";
   import type { ArchiveActions } from "../../src/archived";
-  import type { HybridRecord, SessionInfo } from "../../src/schemas";
+  import type {
+    ArchivedSession,
+    SessionInfo,
+    SessionView,
+  } from "../../src/schemas";
   import { now, session } from "../fixtures";
   import { agentMetadata, sessionIds } from "./fixtures";
 
@@ -15,45 +19,83 @@
   const record = (
     id: string,
     title: string,
-    patch: Partial<HybridRecord> = {},
-  ): HybridRecord => ({
-    id,
-    name: title,
-    title,
-    configId: "cfgomp01",
-    configMissing: false,
-    agent: "omp",
-    cwd: "/home/developer/webmux",
-    cmd: ["omp"],
-    side: "acp",
-    agentSessionId: sessionIds.omp.current,
-    previousIds: [],
-    state: "closed",
-    queuedCount: 0,
-    createdAt: "2026-01-01T09:00:00Z",
-    updatedAt: "2026-01-01T11:58:00Z",
-    interruptedAt: null,
-    ...patch,
-  });
-  const records: HybridRecord[] = [
+    patch: Partial<ArchivedSession> = {},
+    archive: Partial<ArchivedSession["archive"]> = {},
+  ): ArchivedSession => {
+    const updatedAt = archive.updatedAt ?? "2026-01-01T11:58:00Z";
+    return {
+      ...session,
+      id,
+      generation: "",
+      title,
+      configId: "cfgompaa",
+      cwd: "/home/developer/webmux",
+      cmd: ["omp"],
+      status: "exited",
+      exitCode: null,
+      preview: "",
+      cols: 0,
+      rows: 0,
+      clients: 0,
+      attention: null,
+      reportedCwd: null,
+      workspace: null,
+      createdAt: "2026-01-01T09:00:00Z",
+      lastActiveAt: updatedAt,
+      listeningPorts: [],
+      state: "closed",
+      views: ["terminal", "chat"],
+      view: "chat",
+      transition: null,
+      agent: {
+        name: "omp",
+        title: agentMetadata.omp.title,
+        icon: agentMetadata.omp.icon,
+        sessionId: sessionIds.omp.current,
+      },
+      archive: {
+        configMissing: false,
+        previousAgentSessionIds: [],
+        queuedCount: 0,
+        interruptedAt: null,
+        ...archive,
+        updatedAt,
+      },
+      ...patch,
+    };
+  };
+  const records: ArchivedSession[] = [
     record(
-      "archivd1",
+      "archivda",
       "omp · 修复首页排序后补充回归测试与文档说明，确认长标题会截断",
     ),
-    record("archivd2", "OpenCode · 升级依赖", {
-      agent: "opencode",
-      cmd: ["opencode"],
-      side: "tui",
-      state: "interrupted",
-      activity: "turn",
-      queuedCount: 2,
-      interruptedAt: "2026-01-01T10:00:00Z",
-      updatedAt: "2026-01-01T10:00:00Z",
-    }),
-    record("archivd3", "omp · web 子目录的样式调整", {
-      cwd: "/home/developer/webmux/web",
-      updatedAt: "2025-12-30T12:00:00Z",
-    }),
+    record(
+      "archivdb",
+      "OpenCode · 升级依赖",
+      {
+        agent: {
+          name: "opencode",
+          title: agentMetadata.opencode.title,
+          icon: agentMetadata.opencode.icon,
+          sessionId: sessionIds.opencode.current,
+        },
+        cmd: ["opencode"],
+        view: "terminal",
+        state: "interrupted",
+      },
+      {
+        activity: "turn",
+        queuedCount: 2,
+        interruptedAt: "2026-01-01T10:00:00Z",
+        updatedAt: "2026-01-01T10:00:00Z",
+      },
+    ),
+    record(
+      "archivdc",
+      "omp · web 子目录的样式调整",
+      { cwd: "/home/developer/webmux/web" },
+      { updatedAt: "2025-12-30T12:00:00Z" },
+    ),
   ];
   const archive: ArchiveActions = {
     now,
@@ -73,18 +115,21 @@
     reportedCwd: null,
     clients: 0,
   };
+  // The fields of a session with a chat view, on view `view`.
   const hybrid = (
     agent: "omp" | "opencode",
-    side: "acp" | "tui" | "switching",
-    patch: Partial<NonNullable<SessionInfo["hybrid"]>> = {},
-  ) => ({
-    side,
-    state: "active" as const,
-    agent,
-    agentTitle: agentMetadata[agent].title,
-    agentIcon: agentMetadata[agent].icon,
-    agentSessionId: sessionIds[agent].current,
-    ...patch,
+    view: SessionView,
+    work?: string,
+  ): Pick<SessionInfo, "views" | "view" | "agent"> => ({
+    views: ["terminal", "chat"],
+    view,
+    agent: {
+      name: agent,
+      title: agentMetadata[agent].title,
+      icon: agentMetadata[agent].icon,
+      sessionId: sessionIds[agent].current,
+      ...(work ? { work } : {}),
+    },
   });
   const sessions: SessionInfo[] = [
     {
@@ -101,7 +146,7 @@
       },
       preview:
         "排序只比较了最近活动时间，没有考虑置顶。我先补测试，再修改 sortWorkspaces。需要授权运行 pnpm --dir web exec vitest。",
-      hybrid: hybrid("omp", "acp", { work: "pnpm --dir web exec vitest" }),
+      ...hybrid("omp", "chat", "pnpm --dir web exec vitest"),
     },
     {
       ...base,
@@ -112,9 +157,7 @@
       status: "running",
       attention: null,
       preview: "",
-      hybrid: hybrid("opencode", "acp", {
-        work: "读取 internal/hybrid/work.go",
-      }),
+      ...hybrid("opencode", "chat", "读取 internal/hybrid/work.go"),
     },
     {
       ...base,
@@ -129,7 +172,7 @@
         "  ✓ Read README.md",
         "  ● Editing README.md …",
       ].join("\n"),
-      hybrid: hybrid("opencode", "tui"),
+      ...hybrid("opencode", "terminal"),
     },
     {
       ...base,
@@ -140,7 +183,7 @@
       status: "idle",
       attention: null,
       preview: "测试已整理完毕，全部通过。",
-      hybrid: hybrid("omp", "acp"),
+      ...hybrid("omp", "chat"),
     },
     {
       ...base,

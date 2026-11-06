@@ -94,9 +94,10 @@ func TestProtocolAndSecurity(t *testing.T) {
 	if res.StatusCode != 201 {
 		t.Fatal(res.Status)
 	}
-	var info contract.SessionInfo
-	_ = json.NewDecoder(res.Body).Decode(&info)
+	var created contract.CreateSessionResult
+	_ = json.NewDecoder(res.Body).Decode(&created)
 	_ = res.Body.Close()
+	info := created.Session
 	res = request("DELETE", "/api/sessions/"+info.ID+"?remove=1", "", "secret", "")
 	_ = res.Body.Close()
 	if res.StatusCode != 409 {
@@ -249,10 +250,7 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
 	}
-	var info contract.SessionInfo
-	if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
-		t.Fatal(err)
-	}
+	info := createdInfo(t, recorder.Body.Bytes())
 	if info.Cwd != cwd || info.Title != "My command" || !reflect.DeepEqual(info.Cmd, cmd) {
 		t.Fatalf("custom session info: %+v", info)
 	}
@@ -327,10 +325,7 @@ func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("command with arguments: status %d: %s", recorder.Code, recorder.Body.String())
 	}
-	var info contract.SessionInfo
-	if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
-		t.Fatal(err)
-	}
+	info := createdInfo(t, recorder.Body.Bytes())
 	if !reflect.DeepEqual(info.Cmd, []string{"/bin/echo", "two words", "$HOME"}) {
 		t.Fatalf("command arguments: %+v", info)
 	}

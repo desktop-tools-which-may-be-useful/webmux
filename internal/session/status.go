@@ -144,7 +144,7 @@ func sameHybrid(a, b *HybridInfo) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return a.Side == b.Side && a.Phase == b.Phase &&
+	return a.Side == b.Side && a.To == b.To && a.Phase == b.Phase &&
 		a.State == b.State && a.Agent == b.Agent &&
 		a.AgentTitle == b.AgentTitle && a.AgentIcon == b.AgentIcon &&
 		sameString(a.AgentSessionID, b.AgentSessionID) && a.Work == b.Work

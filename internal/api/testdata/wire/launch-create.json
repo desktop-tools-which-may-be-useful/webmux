@@ -1,16 +1,8 @@
 {
   "status": 201,
   "body": {
-    "cmd": [
-      "claude",
-      "--resume"
-    ],
-    "createdAt": "<time>",
-    "env": {
-      "API_KEY": "value"
-    },
-    "hybrid": false,
-    "hybridSupport": {
+    "chat": false,
+    "chatSupport": {
       "reason": "session_arg",
       "supported": false,
       "supportedAgents": [
@@ -22,6 +14,14 @@
         "QoderCN",
         "Antigravity CLI"
       ]
+    },
+    "cmd": [
+      "claude",
+      "--resume"
+    ],
+    "createdAt": "<time>",
+    "env": {
+      "API_KEY": "value"
     },
     "id": "<id#1>",
     "name": "Claude",

@@ -28,7 +28,7 @@ beforeEach(() => {
   history.replaceState(null, "", "/");
   respond(/^GET \/api\/repositories$/, () => Response.json([repository()]));
   respond(/^GET \/api\/launch-configs$/, () => Response.json([launchConfig()]));
-  respond(/^GET \/api\/hybrid-sessions/, () => Response.json([record()]));
+  respond(/^GET \/api\/sessions$/, () => Response.json([record()]));
 });
 afterEach(() => {
   localStorage.removeItem("webmux.shellMode");
@@ -234,7 +234,7 @@ test("an archived chat resumes on its chat side, or says why it cannot", async (
   expect(location.pathname).toBe("/s/otherabc");
   expect(commands().at(-1)).toMatchObject({
     path: "/api/sessions/archivea/resume",
-    body: { side: "acp" },
+    body: { view: "chat" },
   });
 
   respond(/^POST \/api\/sessions\/archivea\/resume$/, () =>
@@ -252,7 +252,7 @@ test("the sidebar menu archives a live chat and deletes an archived record", asy
     () => new Response(null, { status: 204 }),
   );
   respond(
-    /^DELETE \/api\/hybrid-sessions\/archivea$/,
+    /^DELETE \/api\/sessions\/archivea$/,
     () => new Response(null, { status: 204 }),
   );
   render(ShellHarness, { drafts: createTerminalDrafts() });
@@ -286,7 +286,9 @@ test("the sidebar menu archives a live chat and deletes an archived record", asy
     .poll(() =>
       commands().some(
         (c) =>
-          c.method === "DELETE" && c.path === "/api/hybrid-sessions/archivea",
+          c.method === "DELETE" &&
+          c.path === "/api/sessions/archivea" &&
+          c.query === "?forget=1",
       ),
     )
     .toBe(true);
@@ -304,13 +306,17 @@ test("deleting an archived record whose linked worktree still exists opens workt
   respond(/^GET \/api\/repositories$/, () =>
     Response.json([repository({ worktrees: [worktree(), linked] })]),
   );
-  respond(/^GET \/api\/hybrid-sessions/, () =>
+  respond(/^GET \/api\/sessions$/, () =>
     Response.json([
       record({
         id: "archivew",
         title: "分支聊天",
         cwd: linked.path,
-        workspace: { repositoryId: "repo1", worktreeId: "wt1" },
+        workspace: {
+          repositoryId: "repo1",
+          worktreeId: "wt1",
+          worktreePath: linked.path,
+        },
       }),
     ]),
   );
@@ -327,7 +333,11 @@ test("deleting an archived record whose linked worktree still exists opens workt
             id: "archivew",
             title: "分支聊天",
             cwd: linked.path,
-            workspace: { repositoryId: "repo1", worktreeId: "wt1" },
+            workspace: {
+              repositoryId: "repo1",
+              worktreeId: "wt1",
+              worktreePath: linked.path,
+            },
           }),
         ],
         blockers: [],

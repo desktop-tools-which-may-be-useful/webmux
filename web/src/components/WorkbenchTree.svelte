@@ -327,7 +327,7 @@
   }
   function sessionIcon(session: SessionInfo) {
     return (
-      session.hybrid?.agentIcon ??
+      session.agent?.icon ??
       (session.configId ? configIcons.get(session.configId) : undefined) ??
       ""
     );

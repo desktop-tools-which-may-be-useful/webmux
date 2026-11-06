@@ -38,8 +38,6 @@ func ChatFrame(f hybrid.Frame) contract.ChatFrame {
 
 func ChatState(s hybrid.ChatState) contract.ChatState {
 	out := contract.ChatState{
-		Side: contract.HybridSide(s.Side), Phase: contract.HybridPhase(s.Phase),
-		Agent: s.Agent,
 		Eligibility: contract.ChatEligibility{
 			Available: s.Eligibility.Available, Reason: s.Eligibility.Reason,
 			Connector: AgentConnector(s.Eligibility.Connector),
@@ -62,16 +60,12 @@ func ChatState(s hybrid.ChatState) contract.ChatState {
 	if s.PermissionMode == hybrid.PermissionAsk {
 		out.PermissionMode = contract.ChatPermissionAsk
 	}
-	if s.AgentSessionID != nil {
-		id := *s.AgentSessionID
-		out.AgentSessionID = &id
-	}
 	if s.IDChange != nil {
 		change := contract.ChatIDChange(*s.IDChange)
 		out.IDChange = &change
 	}
 	if s.Recovery != nil {
-		out.Recovery = &contract.ChatRecoveryTip{State: contract.HybridState(s.Recovery.State)}
+		out.Recovery = &contract.ChatRecoveryTip{State: contract.SessionState(s.Recovery.State)}
 	}
 	return out
 }
@@ -123,7 +117,10 @@ func ChatEvent(e hybrid.Event) contract.ChatEvent {
 		out.Resolved = &r
 	}
 	if e.Marker != nil {
-		out.Marker = &contract.ChatMarker{Kind: e.Marker.Kind, Side: contract.HybridSide(e.Marker.Side)}
+		out.Marker = &contract.ChatMarker{Kind: e.Marker.Kind}
+		if e.Marker.Side != "" {
+			out.Marker.View = View(string(e.Marker.Side))
+		}
 	}
 	return out
 }
@@ -209,17 +206,6 @@ func chatRequest(r hybrid.Request) contract.ChatRequest {
 	return out
 }
 
-func ChatPromptResult(r hybrid.PromptResult) contract.ChatPromptResult {
-	return contract.ChatPromptResult{Queued: r.Queued, ItemID: r.ItemID, TurnID: r.TurnID, PromptID: r.PromptID}
-}
-
-func ChatPromptInput(r contract.ChatPromptRequest) hybrid.PromptInput {
-	return hybrid.PromptInput{
-		ClientRequestID: r.ClientRequestID, Text: r.Text, Mode: r.Mode,
-		Attachments: promptAttachments(r.Attachments),
-	}
-}
-
 func promptAttachments(list []contract.ChatAttachment) []hybrid.Attachment {
 	if list == nil {
 		return nil
@@ -241,51 +227,22 @@ func ChatPermissionModeInput(r contract.ChatPermissionModeRequest) hybrid.Permis
 	return hybrid.PermissionModeInput{ClientRequestID: r.ClientRequestID, Mode: hybrid.PermissionMode(r.Mode)}
 }
 
-func HybridSwitchInput(r contract.HybridSwitchRequest) hybrid.SwitchInput {
-	return hybrid.SwitchInput{ClientRequestID: r.ClientRequestID, To: hybrid.Side(r.To), Choice: r.Choice, AgentSessionID: r.AgentSessionID}
+func ViewChangeInput(r contract.ViewChangeRequest) hybrid.SwitchInput {
+	return hybrid.SwitchInput{ClientRequestID: r.ClientRequestID, To: hybrid.Side(side(r.To)), Choice: r.Choice, AgentSessionID: r.AgentSessionID}
 }
 
-func HybridSwitchResult(r hybrid.SwitchResult) contract.HybridSwitchResult {
-	return contract.HybridSwitchResult{Side: contract.HybridSide(r.Side), Draft: r.Draft, Dropped: r.Dropped, Unsupported: r.Unsupported}
+func ViewChangeResult(r hybrid.SwitchResult) contract.ViewChangeResult {
+	return contract.ViewChangeResult{View: View(string(r.Side)), Draft: r.Draft, Dropped: required(r.Dropped), Unsupported: required(r.Unsupported)}
 }
 
-func HybridResumeInput(r contract.HybridResumeRequest) workspace.HybridResumeInput {
+func ResumeInput(r contract.ResumeRequest) workspace.HybridResumeInput {
 	return workspace.HybridResumeInput{
-		ClientRequestID: r.ClientRequestID, Side: string(r.Side), AgentSessionID: r.AgentSessionID, ConfirmWithoutEnv: r.ConfirmWithoutEnv,
+		ClientRequestID: r.ClientRequestID, Side: side(r.View), AgentSessionID: r.AgentSessionID, ConfirmWithoutEnv: r.ConfirmWithoutEnv,
 	}
 }
 
-// HybridRecord converts one record; configMissing tells whether its launch
-// config was deleted. The activity before an interruption, option values
-// and process identity stay on the server.
-func HybridRecord(r hybrid.Record, configMissing bool) contract.HybridRecord {
-	out := contract.HybridRecord{
-		ID: r.ID, Name: r.Name, Title: r.Title, ConfigID: r.ConfigID, ConfigMissing: configMissing, Agent: r.Agent, Cwd: r.Cwd,
-		Cmd: required(r.Cmd), Side: contract.HybridSide(r.Side), PreviousIDs: required(r.PreviousIDs),
-		State: contract.HybridState(r.State), Activity: r.Activity, QueuedCount: r.QueuedCount, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-	}
-	if r.AgentSessionID != "" {
-		id := r.AgentSessionID
-		out.AgentSessionID = &id
-	}
-	if r.InterruptedAt != nil {
-		at := *r.InterruptedAt
-		out.InterruptedAt = &at
-	}
-	if r.Workspace != nil {
-		out.Workspace = &contract.WorkspaceReference{RepositoryID: r.Workspace.RepositoryID, WorktreeID: r.Workspace.WorktreeID}
-	}
-	return out
-}
-
-// HybridRecords converts a record list; configMissing reports whether the
-// launch config with an ID was deleted.
-func HybridRecords(list []hybrid.Record, configMissing func(configID string) bool) []contract.HybridRecord {
-	return each(list, func(r hybrid.Record) contract.HybridRecord { return HybridRecord(r, configMissing(r.ConfigID)) })
-}
-
-func HybridCandidates(list []hybrid.Candidate) []contract.HybridCandidate {
-	return each(list, func(c hybrid.Candidate) contract.HybridCandidate { return contract.HybridCandidate(c) })
+func AgentCandidates(list []hybrid.Candidate) []contract.AgentCandidate {
+	return each(list, func(c hybrid.Candidate) contract.AgentCandidate { return contract.AgentCandidate(c) })
 }
 
 // ChatAnswer converts a request answer; hybrid.FormValue checks each form

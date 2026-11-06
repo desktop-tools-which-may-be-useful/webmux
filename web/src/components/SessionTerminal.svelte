@@ -815,7 +815,7 @@
               actions={hybrid.actions}
               onreview={review}
               onopenlocation={openCodeLocation}
-              onterminal={() => hybrid.request("tui")}
+              onterminal={() => hybrid.request("terminal")}
               {quickMenu}
             />
           </div>

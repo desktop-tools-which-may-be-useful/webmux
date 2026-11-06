@@ -296,10 +296,10 @@ func TestResumeRefusals(t *testing.T) {
 	in := h.input(omp.Name, SideACP)
 	id := h.create(in).Info().ID
 	repeated := rid()
-	if _, err := h.resume(id, ResumeInput{ClientRequestID: repeated, Env: in.Env}); !errors.Is(err, ErrConflict) {
+	if _, err := h.resume(id, ResumeInput{ClientRequestID: repeated, Env: in.Env}); !errors.Is(err, ErrNotArchived) {
 		t.Fatalf("resume of an active session: %v", err)
 	}
-	if err := h.svc.RemoveRecord(ctxT(t), id); !errors.Is(err, ErrConflict) {
+	if err := h.svc.RemoveRecord(ctxT(t), id); !errors.Is(err, ErrNotArchived) {
 		t.Fatalf("removing an active record: %v", err)
 	}
 	if _, err := h.resume("zzzzzzzz", ResumeInput{}); !errors.Is(err, ErrNotFound) {
@@ -309,7 +309,7 @@ func TestResumeRefusals(t *testing.T) {
 		t.Fatalf("resume to an unknown side: %v", err)
 	}
 	h.closeSession(id)
-	if _, err := h.resume(id, ResumeInput{ClientRequestID: repeated, Env: in.Env}); !errors.Is(err, ErrConflict) {
+	if _, err := h.resume(id, ResumeInput{ClientRequestID: repeated, Env: in.Env}); !errors.Is(err, ErrNotArchived) {
 		t.Fatalf("retried request: %v", err)
 	}
 	release, err := h.svc.claim(id)
