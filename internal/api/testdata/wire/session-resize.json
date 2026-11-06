@@ -15,7 +15,7 @@
     "id": "<id#3>",
     "lastActiveAt": "<time>",
     "listeningPorts": [],
-    "preview": "echo hi\n^[[Aecho hi",
+    "preview": "echo hi\necho hi",
     "reportedCwd": null,
     "rows": 30,
     "state": "active",

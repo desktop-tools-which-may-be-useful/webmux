@@ -739,7 +739,7 @@ func wireQuickStart(f *wireFixture) {
 	f.norm.path(filepath.Dir(agent), "<fakeagent>")
 	repository := f.call("repository-register-instruction", "POST", "/api/repositories", contract.RegisterRepositoryRequest{Path: f.root}, 201)
 	f.call("repository-update-instruction", "PATCH", "/api/repositories/"+str(repository, "id"), contract.UpdateRepositoryRequest{InitInstruction: "先读 AGENTS.md"}, 200)
-	saved, err := f.launches.Create(launch.Input{Name: "agent", Cmd: []string{agent}, Env: map[string]string{"FAKEAGENT_STORE": f.t.TempDir(), "FAKEAGENT_TURN_DELAY": "5ms"}, Hybrid: true})
+	saved, err := f.launches.Create(launch.Input{Name: "agent", Cmd: []string{agent}, Env: map[string]string{"FAKEAGENT_STORE": f.t.TempDir(), "FAKEAGENT_TURN_DELAY": "10s"}, Hybrid: true})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -842,7 +842,16 @@ func wireSessions(f *wireFixture) {
 	f.call("session-get", "GET", "/api/sessions/"+runningID, nil, 200)
 	cat := f.call("session-create-cat", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/cat"}, "name": "cat"}, 201)
 	catID := str(field(cat, "session"), "id")
-	f.call("session-input", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-1", Text: "echo hi", Submit: true, Keys: []string{"up"}}, 200)
+	f.call("session-input", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-1", Text: "echo hi", Submit: true}, 200)
+	// Wait for both the kernel echo ("echo hi\r\n") and /bin/cat's stdout
+	// ("echo hi\r\n") to land in the PTY buffer so the preview recorded by
+	// session-resize is deterministic.
+	if catItem, err := f.manager.Get(catID); err == nil {
+		deadline := time.Now().Add(5 * time.Second)
+		for strings.Count(string(catItem.Buffer()), "echo hi") < 2 && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	f.call("error-409-session-input-wrong-view", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-2", Text: "x", Mode: "steer"}, 409)
 	f.call("error-400-session-input-key", "POST", "/api/sessions/"+catID+"/input", contract.SessionInputRequest{ClientRequestID: "wire-input-3", Keys: []string{"f13"}}, 400)
 	f.call("error-409-session-view-no-chat", "POST", "/api/sessions/"+catID+"/view", contract.ViewChangeRequest{ClientRequestID: "wire-view-1", To: contract.ViewChat}, 409)

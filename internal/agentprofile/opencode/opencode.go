@@ -29,9 +29,10 @@ var profile = &ap.Profile{
 	ResumeFlag:      "-s",
 	// The default TUI is a client of the background service, where a turn
 	// keeps running after the TUI exits; a private server stops with it.
-	TUIInject:  []string{"--standalone"},
-	Positional: ap.PositionalDirectory,
-	Options:    options(),
+	TUIInject:     []string{"--standalone"},
+	InitialPrompt: func(prompt string) ([]string, bool) { return []string{"--prompt=" + prompt}, true },
+	Positional:    ap.PositionalDirectory,
+	Options:       options(),
 }
 
 func options() map[string]ap.Option {

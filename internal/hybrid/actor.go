@@ -519,7 +519,7 @@ type startResult struct {
 // outcome on started once the actor has applied it. When the actor ended
 // first, the subtask stops the ACP process it started and reports
 // errStopped.
-func (a *actor) start(started chan<- error) {
+func (a *actor) start(started chan<- error, initialArgv []string) {
 	a.starting = true
 	report := func(res startResult) {
 		if !a.sync(func() { a.started(started, res) }) {
@@ -530,7 +530,10 @@ func (a *actor) start(started chan<- error) {
 		}
 	}
 	if a.side == SideTUI {
-		shell, argv := a.shell, a.cmd.TUIArgv()
+		shell, argv := a.shell, initialArgv
+		if len(argv) == 0 {
+			argv = a.cmd.TUIArgv()
+		}
 		a.runStart = time.Now()
 		go func() {
 			if err := shell.StartRun(argv); err != nil {

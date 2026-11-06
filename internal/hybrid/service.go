@@ -206,6 +206,12 @@ type CreateInput struct {
 	StartSide Side
 	// Cols and Rows are the initial terminal size, both zero for the default.
 	Cols, Rows int
+	// InitialPrompt resolves the first message for a terminal-side start once
+	// the session ID is allocated. When the agent profile supports passing it
+	// on the command line, InitialPromptSent is set to true so the caller does
+	// not also type the message into the PTY.
+	InitialPrompt     func(id string) (string, error)
+	InitialPromptSent *bool
 }
 
 // CheckCreate makes the checks of a Create of in before anything exists:
@@ -294,6 +300,22 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 			return nil, err
 		}
 	}
+	var initialArgv []string
+	if side == SideTUI && in.InitialPrompt != nil {
+		if probe, ok := cmd.InitialTUIArgv("x"); ok && len(probe) > 0 {
+			prompt, err := in.InitialPrompt(info.ID)
+			if err != nil {
+				_ = s.manager.Remove(info.ID)
+				return nil, err
+			}
+			if argv, ok := cmd.InitialTUIArgv(prompt); ok {
+				initialArgv = argv
+				if in.InitialPromptSent != nil {
+					*in.InitialPromptSent = true
+				}
+			}
+		}
+	}
 	now := time.Now().UTC()
 	rec := Record{
 		ID: info.ID, Name: in.Name, Title: info.Title, ConfigID: in.ConfigID, Agent: cmd.Profile.Name, Cwd: cwd,
@@ -314,7 +336,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	go a.watchShell()
 	go a.observeLoop()
 	started := make(chan error, 1)
-	a.post(func() { a.start(started) })
+	a.post(func() { a.start(started, initialArgv) })
 	// The start runs to completion even if ctx ends, so a cancelled request
 	// never leaves a half-started session behind.
 	if err := awaitStarted(a, started); err != nil {

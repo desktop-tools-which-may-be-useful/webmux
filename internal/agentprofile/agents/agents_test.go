@@ -257,6 +257,113 @@ func TestTUIArgv(t *testing.T) {
 	}
 }
 
+func TestInitialTUIArgv(t *testing.T) {
+	tests := []struct {
+		name   string
+		argv   []string
+		prompt string
+		want   []string
+		ok     bool
+	}{
+		{
+			name:   "opencode inline prompt",
+			argv:   []string{"opencode", "--auto"},
+			prompt: "修复排序\n第二行",
+			want:   []string{"opencode", "--standalone", "--auto", "--prompt=修复排序\n第二行"},
+			ok:     true,
+		},
+		{
+			name:   "opencode dash-prefixed prompt",
+			argv:   wrapped("opencode"),
+			prompt: "--version",
+			want:   wrapped("opencode", "--standalone", "--prompt=--version"),
+			ok:     true,
+		},
+		{
+			name:   "omp positional after double dash",
+			argv:   []string{"omp", "--auto-approve"},
+			prompt: "-foo\nbar",
+			want:   []string{"omp", "--auto-approve", "--", "-foo\nbar"},
+			ok:     true,
+		},
+		{
+			name:   "omp help flag falls back",
+			argv:   []string{"omp"},
+			prompt: "--help",
+			ok:     false,
+		},
+		{
+			name:   "codex positional after double dash",
+			argv:   wrapped("codex", "-m", "gpt-5"),
+			prompt: "--help",
+			want:   wrapped("codex", "--no-daemon", "-m", "gpt-5", "--", "--help"),
+			ok:     true,
+		},
+		{
+			name:   "claude positional after double dash",
+			argv:   []string{"claude", "--dangerously-skip-permissions"},
+			prompt: "-v",
+			want:   []string{"claude", "--dangerously-skip-permissions", "--", "-v"},
+			ok:     true,
+		},
+		{
+			name:   "agy interactive flag",
+			argv:   []string{"agy", "--dangerously-skip-permissions"},
+			prompt: "修复 bug\n第二行",
+			want:   []string{"agy", "--settings", agy.TUISettingsJSON, "--dangerously-skip-permissions", "--prompt-interactive=修复 bug\n第二行"},
+			ok:     true,
+		},
+		{
+			name:   "agy dash-prefixed prompt falls back",
+			argv:   []string{"agy"},
+			prompt: "-foo",
+			ok:     false,
+		},
+		{
+			name:   "qoder unmigrated falls back",
+			argv:   []string{"qoder", "--dangerously-skip-permissions"},
+			prompt: "修复 bug",
+			ok:     false,
+		},
+		{
+			name:   "qodercn unmigrated falls back",
+			argv:   []string{"qodercn", "--dangerously-skip-permissions"},
+			prompt: "修复 bug",
+			ok:     false,
+		},
+		{
+			name:   "command with existing prompt falls back",
+			argv:   []string{"claude", "已有指令"},
+			prompt: "新指令",
+			ok:     false,
+		},
+		{
+			name:   "command with existing prompt flag falls back",
+			argv:   []string{"opencode", "--prompt", "已有指令"},
+			prompt: "新指令",
+			ok:     false,
+		},
+		{
+			name:   "empty prompt falls back",
+			argv:   []string{"claude"},
+			prompt: "",
+			ok:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := registry.Parse(tt.argv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := cmd.InitialTUIArgv(tt.prompt)
+			if ok != tt.ok || !slices.Equal(got, tt.want) {
+				t.Fatalf("InitialTUIArgv(%q, %q) = %q, %v; want %q, %v", tt.argv, tt.prompt, got, ok, tt.want, tt.ok)
+			}
+		})
+	}
+}
+
 func TestACPArgv(t *testing.T) {
 	tests := []struct {
 		name        string

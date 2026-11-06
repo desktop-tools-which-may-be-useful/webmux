@@ -61,10 +61,11 @@ var profile = &ap.Profile{
 	ResumeFlag: "resume",
 	// The default TUI hands turns to a shared app-server daemon outside the
 	// session's process group, where a turn outlives the TUI.
-	TUIInject:  []string{"--no-daemon"},
-	Positional: ap.PositionalPrompt,
-	Options:    codexOptions(),
-	ChatSide:   codexChatSide,
+	TUIInject:     []string{"--no-daemon"},
+	InitialPrompt: func(prompt string) ([]string, bool) { return []string{"--", prompt}, true },
+	Positional:    ap.PositionalPrompt,
+	Options:       codexOptions(),
+	ChatSide:      codexChatSide,
 	Subcommands: ap.SetOf("exec", "e", "review", "login", "logout", "mcp", "plugin",
 		"app-server", "remote-control", "app", "completion", "update", "doctor",
 		"sandbox", "debug", "apply", "a", "cloud", "exec-server", "features",

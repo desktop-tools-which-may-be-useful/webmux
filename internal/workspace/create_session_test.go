@@ -42,7 +42,7 @@ func fakeAgentPath(t *testing.T, profile string) string {
 		if fakeAgent.err != nil {
 			return
 		}
-		for _, name := range []string{"omp", "codex"} {
+		for _, name := range []string{"omp", "codex", "qoder"} {
 			build := exec.Command("go", "build", "-o", filepath.Join(fakeAgent.dir, name), "../acp/testdata/fakeagent")
 			build.Env = fakeAgent.env
 			if out, err := build.CombinedOutput(); err != nil {
@@ -741,8 +741,10 @@ func TestCreateSessionFirstMessage(t *testing.T) {
 }
 
 // A terminal quick start creates the worktree and the agent's TUI, adopts
-// staged attachments and appends their paths to the typed message, and
-// rejects chat-only options.
+// staged attachments and appends their paths to the initial prompt (passed on
+// the command line for migrated agents without persisting it in SessionInfo.Cmd
+// or the hybrid record, or typed into the terminal once quiet for unmigrated
+// agents), and rejects chat-only options.
 func TestQuickStartTerminalSide(t *testing.T) {
 	h := newQuickHarness(t, "")
 	folders := artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: t.TempDir(), Manager: h.manager})
@@ -783,14 +785,52 @@ func TestQuickStartTerminalSide(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(15 * time.Second)
-	for (!strings.Contains(string(item.Buffer()), in.Prompt) || !strings.Contains(string(item.Buffer()), adopted)) && time.Now().Before(deadline) {
-		time.Sleep(50 * time.Millisecond)
+	for (!strings.Contains(string(item.Buffer()), "echo: "+in.Prompt) || !strings.Contains(string(item.Buffer()), adopted)) && time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
 	}
-	if !strings.Contains(string(item.Buffer()), in.Prompt) || !strings.Contains(string(item.Buffer()), adopted) {
-		t.Fatalf("terminal never received %q and %q: %q", in.Prompt, adopted, item.Buffer())
+	// Migrated agent (omp) receives the prompt (with adopted attachment paths)
+	// through argv rather than typed into stdin.
+	if !strings.Contains(string(item.Buffer()), "echo: "+in.Prompt) || !strings.Contains(string(item.Buffer()), adopted) {
+		t.Fatalf("terminal never ran initial prompt %q with %q: %q", in.Prompt, adopted, item.Buffer())
+	}
+	for _, arg := range item.Info().Cmd {
+		if strings.Contains(arg, in.Prompt) || strings.Contains(arg, adopted) {
+			t.Fatalf("session Info.Cmd leaked prompt: %q", item.Info().Cmd)
+		}
+	}
+	rec, err := h.hybrids.Record(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arg := range rec.Cmd {
+		if strings.Contains(arg, in.Prompt) || strings.Contains(arg, adopted) {
+			t.Fatalf("hybrid record Cmd leaked prompt: %q", rec.Cmd)
+		}
 	}
 	if len(result.ConfigWarnings) != 0 {
 		t.Fatalf("warnings %v", result.ConfigWarnings)
+	}
+
+	// Unmigrated agent (qoder) falls back to typing the prompt into the PTY
+	// once the terminal is quiet.
+	qoderCfg := h.config("qoder", fakeAgentPath(t, "qoder"), map[string]string{"FAKEAGENT_STORE": h.store, "FAKEAGENT_TURN_DELAY": "5ms"}, true)
+	fallback := h.input("quick-start-tui2", "wt/tui-qoder")
+	fallback.ConfigID = &qoderCfg
+	fallback.Side = "tui"
+	result2, err := h.start(fallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item2, err := h.manager.Get(result2.Session.Info().ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(15 * time.Second)
+	for !strings.Contains(string(item2.Buffer()), "echo: "+fallback.Prompt) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !strings.Contains(string(item2.Buffer()), "echo: "+fallback.Prompt) {
+		t.Fatalf("unmigrated terminal never received fallback prompt %q: %q", fallback.Prompt, item2.Buffer())
 	}
 }
 

@@ -29,6 +29,7 @@ var profile = &ap.Profile{
 	// omp names models by display name, which several providers share; the
 	// chat view shows the value instead so the choices stay distinct.
 	ModelChoiceValues: true,
+	InitialPrompt:     initialPrompt,
 	Positional:        ap.PositionalPrompt,
 	Options:           options(),
 	Subcommands: ap.SetOf("acp", "agents", "anonymize", "auth", "auth-broker",
@@ -85,3 +86,13 @@ func (adapter) ReapplyOnLoad() []string { return []string{"mode"} }
 
 // ForceSwitchNote: a killed omp turn loses what it has not saved.
 func (adapter) ForceSwitchNote() string { return "omp 已输出的部分可能丢失" }
+
+// initialPrompt passes prompt after -- unless it is a help or version flag,
+// which omp intercepts even after --.
+func initialPrompt(prompt string) ([]string, bool) {
+	switch prompt {
+	case "-h", "--help", "-v", "--version":
+		return nil, false
+	}
+	return []string{"--", prompt}, true
+}

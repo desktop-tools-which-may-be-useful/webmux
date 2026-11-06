@@ -5,6 +5,7 @@ package agy
 
 import (
 	"slices"
+	"strings"
 
 	ap "github.com/rainchan/webmux/internal/agentprofile"
 )
@@ -29,6 +30,7 @@ var profile = &ap.Profile{
 	VerifiedVersion: "1.4.12",
 	ResumeFlag:      "--conversation",
 	TUIInject:       []string{"--settings", TUISettingsJSON},
+	InitialPrompt:   initialPrompt,
 	Positional:      ap.PositionalPrompt,
 	Options:         options(),
 	ChatSide:        chatSide,
@@ -73,6 +75,15 @@ func (adapter) ResumesSessions() bool { return true }
 // ReapplyOnLoad: agy acp resets model and thought_level to defaults when a new
 // process loads or resumes a session.
 func (adapter) ReapplyOnLoad() []string { return []string{"model", "thought_level"} }
+
+// initialPrompt uses --prompt-interactive=<prompt> unless prompt starts with
+// '-', which agy's parser rejects when it matches a flag name.
+func initialPrompt(prompt string) ([]string, bool) {
+	if strings.HasPrefix(prompt, "-") {
+		return nil, false
+	}
+	return []string{"--prompt-interactive=" + prompt}, true
+}
 
 func chatSide(kept []ap.KeptOption) ([]ap.Seed, []string) {
 	var seeds []ap.Seed

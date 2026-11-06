@@ -154,3 +154,11 @@
 - 更新的故事：US-L02；覆盖索引同步，故事数量不变。
 - 已运行：`make check`（含 `make docs-check`、`make persistence-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）、`go test -race ./internal/agentprofile/codex ./internal/tailscale`、新增 Vitest 浏览器用例与 CI 全量覆盖率采集。
 - 限制：未在 macOS 与真机浏览器上运行。
+
+本次局部核对（2026-11-06，终端启动首条消息命令行参数传递）：混合会话终端端启动时支持按 agent 渐进迁移命令行初始提示参数：
+
+- 已核查并迁移的 agent（Claude Code、Codex CLI、OpenCode、omp、Antigravity CLI）通过首次 TUI 启动参数传入首条消息；
+- 未迁移的 agent（Qoder、QoderCN）、已有初始提示的启动配置、边界参数与普通终端命令回退 `SendWhenReady` 注入；
+- 更新的故事：US-B01、US-Q18；索引与故事数量不变；
+- 已运行：本机实测 `claude 2.1.316`、`codex 0.166.0`、`opencode 2.1.4`、`omp 18.17.0`、`agy 1.5.2` 的 `--`、`-` 前缀、多行与子命令参数行为；`go test -race` 覆盖 `internal/agentprofile/...`、`internal/hybrid/...`、`internal/workspace/...`；`make docs-check`、`make go-lint`；
+- 限制：本机未安装 `qoder` 与 `qodercn`，二者保持 `InitialPrompt == nil` 走 `SendWhenReady` 旧路径，待实测后再迁移。

@@ -233,6 +233,8 @@ func profileFromName(argv0 string) string {
 		return "claudecode"
 	case "agy":
 		return "agy"
+	case "qoder", "qodercli":
+		return "qoder"
 	}
 	return "omp"
 }
@@ -349,35 +351,61 @@ func parseArgs(args []string) (config, bool, error) {
 		fs.String("agent", "", "")
 		fs.String("add-dir", "", "")
 		fs.String("log-file", "", "")
-		fs.String("i", "", "")
-		fs.String("prompt-interactive", "", "")
+		fs.StringVar(&cfg.prompt, "prompt", "", "")
+		fs.StringVar(&cfg.prompt, "i", "", "")
+		fs.StringVar(&cfg.prompt, "prompt-interactive", "", "")
 	}
 
 	// Third-party connectors take no arguments: their names select ACP mode.
 	acpMode := filepath.Base(os.Args[0]) == connectorName || filepath.Base(os.Args[0]) == claudeConnectorName
+	var acpFlag bool
+	if !codex && !claude {
+		fs.BoolVar(&acpFlag, "acp", false, "")
+	}
 	positional := 0
 	resumeNext := false
+	optionsDone := false
 	for {
-		if err := fs.Parse(args); err != nil {
-			return cfg, false, err
+		if !optionsDone {
+			for i, a := range args {
+				if a == "--" {
+					optionsDone = true
+					if err := fs.Parse(args[:i]); err != nil {
+						return cfg, false, err
+					}
+					args = append(fs.Args(), args[i+1:]...)
+					break
+				}
+				if !strings.HasPrefix(a, "-") || a == "-" {
+					break
+				}
+			}
+			if !optionsDone {
+				if err := fs.Parse(args); err != nil {
+					return cfg, false, err
+				}
+				args = fs.Args()
+			}
 		}
-		if fs.NArg() == 0 {
+		if len(args) == 0 {
 			break
 		}
-		arg := fs.Arg(0)
+		arg := args[0]
 		positional++
 		switch {
-		case arg == "acp":
+		case !optionsDone && arg == "acp":
 			acpMode = true
-		case !codex:
-		case resumeNext:
+		case codex && resumeNext:
 			cfg.resume, resumeNext = arg, false
-		case positional == 1 && arg == "resume":
+		case codex && !optionsDone && positional == 1 && arg == "resume":
 			resumeNext = true
-		case cfg.prompt == "":
+		case (codex || claude || cfg.profile == "omp") && cfg.prompt == "":
 			cfg.prompt = arg
 		}
-		args = fs.Args()[1:]
+		args = args[1:]
+	}
+	if acpFlag {
+		acpMode = true
 	}
 	if cfg.version {
 		return cfg, acpMode, nil
@@ -388,7 +416,7 @@ func parseArgs(args []string) (config, bool, error) {
 	if cfg.store == "" {
 		return cfg, false, fmt.Errorf("--store or FAKEAGENT_STORE is required")
 	}
-	if cfg.profile != "omp" && cfg.profile != "opencode" && cfg.profile != "codex" && cfg.profile != "claudecode" && cfg.profile != "agy" {
+	if cfg.profile != "omp" && cfg.profile != "opencode" && cfg.profile != "codex" && cfg.profile != "claudecode" && cfg.profile != "agy" && cfg.profile != "qoder" {
 		return cfg, false, fmt.Errorf("unknown profile %q", cfg.profile)
 	}
 	if cfg.profile == "claudecode" && os.Getenv("FAKEAGENT_CONNECTOR_VERSION") == "" {

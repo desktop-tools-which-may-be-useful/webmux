@@ -248,10 +248,15 @@ type Profile struct {
 	ModelChoiceValues bool
 	// ChatSide derives chat-side config values from the kept options and
 	// lists the kept options the chat side cannot apply.
-	ChatSide    func(kept []KeptOption) ([]Seed, []string)
-	Options     map[string]Option
-	Positional  Positional
-	Subcommands map[string]bool
+	ChatSide func(kept []KeptOption) ([]Seed, []string)
+	// InitialPrompt returns the arguments to append to a fresh terminal launch
+	// to submit prompt at start, and true when the agent supports doing so for
+	// prompt. Nil or a false return falls back to typing the prompt into the
+	// terminal once it is quiet.
+	InitialPrompt func(prompt string) ([]string, bool)
+	Options       map[string]Option
+	Positional    Positional
+	Subcommands   map[string]bool
 	// SubcommandPrefixes also start no interactive UI.
 	SubcommandPrefixes []string
 	// SessionSubcommands open an existing session.

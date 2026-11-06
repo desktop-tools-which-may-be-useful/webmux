@@ -128,6 +128,7 @@ type Command struct {
 	acpKept    []string
 	keptOpts   []KeptOption
 	dropped    []string
+	hasPrompt  bool
 }
 
 func newCommand(agent Agent, form Form, shell, exe string, args []string) (Command, error) {
@@ -156,6 +157,7 @@ func (c *Command) classify() error {
 		token := c.args[i]
 		if !optionsDone && token == "--" {
 			optionsDone = true
+			c.hasPrompt = true
 			continue
 		}
 		if optionsDone || !strings.HasPrefix(token, "-") || token == "-" {
@@ -171,6 +173,7 @@ func (c *Command) classify() error {
 				}
 			}
 			positionalSeen = true
+			c.hasPrompt = true
 			c.dropped = append(c.dropped, token)
 			continue
 		}
@@ -210,6 +213,9 @@ func (c *Command) classify() error {
 			}
 			c.keptOpts = append(c.keptOpts, kept)
 		case ArgDrop:
+			if name == "--prompt" || name == "-i" || name == "--prompt-interactive" {
+				c.hasPrompt = true
+			}
 			c.dropped = append(c.dropped, strings.Join(taken, " "))
 		case ArgStore:
 			return &UnsupportedError{Reason: ReasonSessionStore, Arg: name}
@@ -323,6 +329,24 @@ func (c Command) withoutOverriddenInject(args []string) []string {
 func (c Command) TUIArgv() []string {
 	cleaned := c.withoutOverriddenInject(c.args)
 	return c.wrap(startupScript, append(c.injected(cleaned), cleaned...)...)
+}
+
+// InitialTUIArgv is the first terminal launch with prompt passed through the
+// agent's command-line interface when the profile supports it and the launch
+// command does not already carry a prompt. When ok is false, the caller should
+// start TUIArgv() and type the prompt into the terminal once it is quiet.
+func (c Command) InitialTUIArgv(prompt string) (argv []string, ok bool) {
+	if prompt == "" || c.hasPrompt || c.Profile.InitialPrompt == nil {
+		return nil, false
+	}
+	extra, ok := c.Profile.InitialPrompt(prompt)
+	if !ok || len(extra) == 0 {
+		return nil, false
+	}
+	cleaned := c.withoutOverriddenInject(c.args)
+	args := append(c.injected(cleaned), cleaned...)
+	args = append(args, extra...)
+	return c.wrap(startupScript, args...), true
 }
 
 // ResumeArgv opens agentSessionID in the terminal UI, keeping only the

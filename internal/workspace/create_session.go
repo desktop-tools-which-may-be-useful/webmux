@@ -194,7 +194,25 @@ func (s *Service) create(ctx context.Context, in CreateInput) (CreateResult, err
 		tree = &created
 		reference = &Reference{RepositoryID: nw.RepositoryID, WorktreeID: created.ID}
 	}
-	item, err := s.startSession(ctx, in.Cwd, in.Name, reference, plan.command, plan.side)
+	var initialPrompt func(id string) (string, error)
+	var preparedPrompt string
+	var promptPrepared bool
+	prepareTerminalPrompt := func(id string) (string, error) {
+		if promptPrepared {
+			return preparedPrompt, nil
+		}
+		text, err := s.composeTerminalPrompt(id, plan)
+		if err != nil {
+			return "", err
+		}
+		preparedPrompt = text
+		promptPrepared = true
+		return preparedPrompt, nil
+	}
+	if plan.side != hybrid.SideACP && (plan.text != "" || plan.instruction != "") {
+		initialPrompt = prepareTerminalPrompt
+	}
+	item, promptSent, err := s.startSession(ctx, in.Cwd, in.Name, reference, plan.command, plan.side, initialPrompt)
 	if err != nil {
 		return fail(StepSession, tree, "", err)
 	}
@@ -205,8 +223,14 @@ func (s *Service) create(ctx context.Context, in CreateInput) (CreateResult, err
 			return fail(StepConfig, tree, id, err)
 		}
 	}
-	if plan.text != "" || plan.instruction != "" {
-		if err := s.sendFirstMessage(ctx, item, in.ClientRequestID, plan); err != nil {
+	if !promptSent && (plan.text != "" || plan.instruction != "") {
+		if plan.side != hybrid.SideACP {
+			text, err := prepareTerminalPrompt(id)
+			if err != nil {
+				return fail(StepPrompt, tree, id, err)
+			}
+			go func() { _ = item.SendWhenReady(context.Background(), text) }()
+		} else if err := s.sendFirstMessage(ctx, item, in.ClientRequestID, plan); err != nil {
 			return fail(StepPrompt, tree, id, err)
 		}
 	}
@@ -467,7 +491,7 @@ func (s *Service) resolveCommand(in CreateInput) (resolvedCommand, error) {
 // startSession starts a session in cwd or the selected worktree. Launch
 // config errors keep their launch error kinds; a config with hybrid mode
 // starts a hybrid session, whose errors keep their hybrid kinds.
-func (s *Service) startSession(ctx context.Context, cwd, name string, reference *Reference, command resolvedCommand, side hybrid.Side) (*session.Session, error) {
+func (s *Service) startSession(ctx context.Context, cwd, name string, reference *Reference, command resolvedCommand, side hybrid.Side, initialPrompt func(id string) (string, error)) (*session.Session, bool, error) {
 	requestCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
@@ -475,23 +499,23 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 	if reference != nil {
 		r, err := s.repository(reference.RepositoryID)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		// Do not hold a repository operation gate while registering an in-flight
 		// launch: removal holds that gate and waits for earlier launches to finish.
 		snapshot, err := s.snapshot(ctx, r)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if snapshot.Availability != "available" {
-			return nil, problemf(ErrUnavailable, "%s", snapshot.Error)
+			return nil, false, problemf(ErrUnavailable, "%s", snapshot.Error)
 		}
 		tree, err := findTree(snapshot, reference.WorktreeID)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if !tree.Available || tree.Kind == "bare" {
-			return nil, problemf(ErrConflict, "所选工作树不可作为启动目录: %s", tree.Error)
+			return nil, false, problemf(ErrConflict, "所选工作树不可作为启动目录: %s", tree.Error)
 		}
 		selected = &tree
 		if cwd == "" {
@@ -503,37 +527,39 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 	}
 	path, err := canonical(cwd)
 	if err != nil {
-		return nil, problemf(ErrInvalid, "directory: %v", err)
+		return nil, false, problemf(ErrInvalid, "directory: %v", err)
 	}
 	stat, err := os.Stat(path)
 	if err != nil {
-		return nil, problemf(ErrInvalid, "directory: %v", err)
+		return nil, false, problemf(ErrInvalid, "directory: %v", err)
 	}
 	if !stat.IsDir() {
-		return nil, problemf(ErrInvalid, "path is not a directory")
+		return nil, false, problemf(ErrInvalid, "path is not a directory")
 	}
 	if selected != nil && !within(selected.Path, path) {
-		return nil, problemf(ErrInvalid, "cwd 与所选工作树不一致")
+		return nil, false, problemf(ErrInvalid, "cwd 与所选工作树不一致")
 	}
 	if err := s.beginStart(path); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer s.endStart(path)
 	association := s.association(ctx, path)
 	if selected != nil && (association == nil || association.RepositoryID != reference.RepositoryID || association.WorktreeID != reference.WorktreeID) {
-		return nil, problemf(ErrConflict, "所选工作树身份已变化或 cwd 属于嵌套仓库，请刷新")
+		return nil, false, problemf(ErrConflict, "所选工作树身份已变化或 cwd 属于嵌套仓库，请刷新")
 	}
 	if err := requestCtx.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var item *session.Session
+	var promptSent bool
 	if command.hybrid {
 		item, err = s.hybrids.Create(requestCtx, hybrid.CreateInput{
 			Cwd: path, Name: name, ConfigID: command.configID, Cmd: command.cmd, Env: command.env, StartSide: side,
 			Cols: command.cols, Rows: command.rows,
+			InitialPrompt: initialPrompt, InitialPromptSent: &promptSent,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	} else {
 		item, err = s.manager.Create(session.CreateInput{
@@ -541,17 +567,39 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 			Cols: command.cols, Rows: command.rows,
 		})
 		if err != nil {
-			return nil, sessionCreateError(err)
+			return nil, false, sessionCreateError(err)
 		}
 	}
 	s.commitAssociation(item.Info(), association, false)
-	return item, nil
+	return item, promptSent, nil
 }
 
-// sendFirstMessage sends the plan's first message to a session just
-// started: as the first chat prompt with its attachments, or typed into
-// the terminal (with adopted attachment paths appended) followed by Enter
-// once the program is quiet (in the background; it ends with the session).
+// composeTerminalPrompt adopts staged attachments into session id and builds
+// the terminal start prompt with adopted attachment paths appended.
+func (s *Service) composeTerminalPrompt(id string, plan createPlan) (string, error) {
+	attachments, err := s.adoptUploads(id, plan.attachments)
+	if err != nil {
+		return "", err
+	}
+	text, err := s.composePrompt(id, plan)
+	if err != nil {
+		return "", err
+	}
+	if len(attachments) > 0 {
+		paths := make([]string, len(attachments))
+		for i, at := range attachments {
+			paths[i] = at.Path
+		}
+		if text != "" {
+			text += "\n\n"
+		}
+		text += "附件路径：\n" + strings.Join(paths, "\n")
+	}
+	return text, nil
+}
+
+// sendFirstMessage sends the plan's first message to a chat session just
+// started with its attachments.
 func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, requestID string, plan createPlan) error {
 	id := item.Info().ID
 	attachments, err := s.adoptUploads(id, plan.attachments)
@@ -561,20 +609,6 @@ func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, r
 	text, err := s.composePrompt(id, plan)
 	if err != nil {
 		return err
-	}
-	if plan.side != hybrid.SideACP {
-		if len(attachments) > 0 {
-			paths := make([]string, len(attachments))
-			for i, at := range attachments {
-				paths[i] = at.Path
-			}
-			if text != "" {
-				text += "\n\n"
-			}
-			text += "附件路径：\n" + strings.Join(paths, "\n")
-		}
-		go func() { _ = item.SendWhenReady(context.Background(), text) }()
-		return nil
 	}
 	if requestID == "" {
 		requestID = "first-" + id

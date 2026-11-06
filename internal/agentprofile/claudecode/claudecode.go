@@ -43,6 +43,7 @@ var profile = &ap.Profile{
 	AgentPathEnv:   "CLAUDE_CODE_EXECUTABLE",
 	HiddenCommands: []string{"login", "logout"},
 	ResumeFlag:     "--resume",
+	InitialPrompt:  func(prompt string) ([]string, bool) { return []string{"--", prompt}, true },
 	Positional:     ap.PositionalPrompt,
 	Options:        claudeOptions(),
 	ChatSide:       claudeChatSide,
