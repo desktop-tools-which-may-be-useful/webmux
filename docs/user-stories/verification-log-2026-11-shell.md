@@ -148,3 +148,9 @@
   - Playwright E2E：`worktrees.spec.ts`（批量清理空闲与 `prunable` 工作树并跳过受阻项、保留分支）、`app-shell.spec.ts`（工作台侧栏仓库操作菜单）；
   - `make check`（含 `make docs-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）。
 - 限制：未在 macOS 与真机移动浏览器上运行，全量 Playwright 分片与 Storybook 构建交给 CI。
+
+本次局部核对（2026-11-06，测试覆盖率报告）：引入 Go race（`-coverpkg` 跨包插桩）与前端 Vitest（Node 单元 + Chromium 浏览器）覆盖率采集、合并与 CI 摘要，并补齐 `internal/agentprofile/codex`、`internal/tailscale` 及前端 `SplitSessionDialog`、`QuickCommandDialog`、`code-popout-frame`、`upload` 用例。
+
+- 更新的故事：US-L02；覆盖索引同步，故事数量不变。
+- 已运行：`make check`（含 `make docs-check`、`make persistence-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）、`go test -race ./internal/agentprofile/codex ./internal/tailscale`、新增 Vitest 浏览器用例与 CI 全量覆盖率采集。
+- 限制：未在 macOS 与真机浏览器上运行。

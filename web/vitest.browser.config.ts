@@ -2,6 +2,7 @@ import { mergeConfig } from "vite";
 import { defineConfig } from "vitest/config";
 import { defineBrowserCommand, playwright } from "@vitest/browser-playwright";
 import viteConfig from "./vite.config";
+import { sharedCoverage } from "./vitest.config";
 
 // Reuse the production compiler, Tailwind and aliases, but never its API proxy.
 const { server: _applicationServer, ...sharedConfig } = viteConfig;
@@ -95,6 +96,16 @@ export default mergeConfig(
         instances: [{ browser: "chromium" }],
         viewport: { width: 1024, height: 900 },
         commands: { nativeTouchGesture },
+      },
+      coverage: {
+        ...sharedCoverage,
+        reportsDirectory: ".vitest/coverage/browser",
+        reporter: ["text-summary", "json", "json-summary", "html"],
+      },
+      expect: {
+        poll: {
+          timeout: 15_000,
+        },
       },
     },
   }),

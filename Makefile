@@ -41,7 +41,7 @@ RELEASE_FILES = $(addprefix $(ASSET_PREFIX),linux-amd64 linux-arm64 darwin-amd64
 	windows-amd64.exe windows-arm64.exe tray-windows-amd64.exe tray-windows-arm64.exe \
 	setup-windows-amd64.exe setup-windows-arm64.exe) $(LINUX_PACKAGES)
 
-.PHONY: web build tray installer linux-packages release release-build release-sign check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install frontend e2e-runtime format format-check install baseline test-install
+.PHONY: web build tray installer linux-packages release release-build release-sign check docs-check persistence-check go-lint test test-fast test-go test-frontend test-unit test-browser test-e2e test-performance test-browsers-install cover cover-go cover-web frontend e2e-runtime format format-check install baseline test-install
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -153,6 +153,16 @@ test-go:
 test-frontend:
 	$(PNPM) --dir web test:unit
 	$(PNPM) --dir web test:browser
+
+cover: cover-go cover-web
+
+cover-go: frontend
+	mkdir -p .cache/coverage
+	$(GO) test -race -parallel=$(GO_TEST_PARALLEL) -covermode=atomic -coverpkg=./cmd/...,./internal/...,./web,./deploy -coverprofile=.cache/coverage/raw.coverprofile ./...
+	sh .github/scripts/go-coverage-summary.sh .cache/coverage/raw.coverprofile .cache/coverage
+
+cover-web:
+	$(PNPM) --dir web test:coverage
 
 # Production frontend for Go's embed and the prepared E2E runtime.
 frontend:

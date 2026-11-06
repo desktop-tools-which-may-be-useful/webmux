@@ -200,3 +200,205 @@ func TestDetectTimeout(t *testing.T) {
 		t.Fatalf("timeout = %+v", got)
 	}
 }
+
+func TestConfigureRefreshAndLazyRequireCLI(t *testing.T) {
+	cli, logPath := fakeCLI(t, runningStatus, emptyServe)
+	now := time.Now()
+	svc := New(Options{
+		LookPath: func(name string) (string, error) {
+			if name == "tailscale" {
+				return cli, nil
+			}
+			return "", ErrNotFound
+		},
+		Now: func() time.Time { return now },
+	})
+
+	// ServeStatus without prior Detect resolves the CLI via Detect.
+	if _, err := svc.ServeStatus(context.Background()); err != nil {
+		t.Fatalf("ServeStatus without prior Detect: %v", err)
+	}
+	// Cached hit within CacheTTL.
+	if got := svc.Detect(context.Background()); got.BackendState != BackendRunning {
+		t.Fatalf("cached Detect = %+v", got)
+	}
+
+	// Configure with same provider is a no-op; empty resets to "auto".
+	svc.Configure("auto")
+	svc.Configure("linux")
+	svc.Configure("")
+	svc.Refresh()
+
+	// Apply after Configure/Refresh resolves the CLI lazily through requireCLI.
+	if err := svc.Apply(context.Background(), "serve", 443, 7681); err != nil {
+		t.Fatalf("Apply after Refresh: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil || !strings.Contains(string(data), "serve --bg --https=443 http://127.0.0.1:7681") {
+		t.Fatalf("Apply log = %q, err = %v", string(data), err)
+	}
+}
+
+func TestMissingCLIErrorsOnOperations(t *testing.T) {
+	svc := New(Options{
+		Provider: "linux",
+		LookPath: func(string) (string, error) { return "", ErrNotFound },
+	})
+	if _, err := svc.ServeStatus(context.Background()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ServeStatus err = %v, want ErrNotFound", err)
+	}
+	if err := svc.Apply(context.Background(), "serve", 443, 7681); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Apply err = %v, want ErrNotFound", err)
+	}
+	node := svc.Inspect(context.Background(), "linux")
+	if err := node.Remove(context.Background(), 443); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Node.Remove err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestChooseProviderMatrix(t *testing.T) {
+	tests := []struct {
+		name          string
+		provider      string
+		inWSL         bool
+		native        string
+		nativeErr     error
+		nativeRunning bool
+		windows       string
+		windowsErr    error
+		wantProvider  string
+		wantCLI       string
+	}{
+		{
+			name:         "windows missing",
+			provider:     "windows",
+			windowsErr:   ErrNotFound,
+			wantProvider: ProviderWindows,
+			wantCLI:      "",
+		},
+		{
+			name:         "linux missing",
+			provider:     "linux",
+			nativeErr:    ErrNotFound,
+			wantProvider: ProviderLinux,
+			wantCLI:      "",
+		},
+		{
+			name:          "wsl auto prefers running native",
+			provider:      "auto",
+			inWSL:         true,
+			native:        "/usr/bin/tailscale",
+			nativeRunning: true,
+			windows:       "/mnt/c/tailscale.exe",
+			wantProvider:  ProviderWSLNative,
+			wantCLI:       "/usr/bin/tailscale",
+		},
+		{
+			name:          "wsl auto falls back to windows when native stopped",
+			provider:      "auto",
+			inWSL:         true,
+			native:        "/usr/bin/tailscale",
+			nativeRunning: false,
+			windows:       "/mnt/c/tailscale.exe",
+			wantProvider:  ProviderWindows,
+			wantCLI:       "/mnt/c/tailscale.exe",
+		},
+		{
+			name:          "wsl auto uses stopped native when windows absent",
+			provider:      "auto",
+			inWSL:         true,
+			native:        "/usr/bin/tailscale",
+			nativeRunning: false,
+			windowsErr:    ErrNotFound,
+			wantProvider:  ProviderWSLNative,
+			wantCLI:       "/usr/bin/tailscale",
+		},
+		{
+			name:         "wsl auto uses windows when native absent",
+			provider:     "auto",
+			inWSL:        true,
+			nativeErr:    ErrNotFound,
+			windows:      "/mnt/c/tailscale.exe",
+			wantProvider: ProviderWindows,
+			wantCLI:      "/mnt/c/tailscale.exe",
+		},
+		{
+			name:         "wsl auto none when both absent",
+			provider:     "auto",
+			inWSL:        true,
+			nativeErr:    ErrNotFound,
+			windowsErr:   ErrNotFound,
+			wantProvider: ProviderNone,
+			wantCLI:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotProvider, gotCLI := choose(tt.provider, tt.inWSL, tt.native, tt.nativeErr, tt.nativeRunning, tt.windows, tt.windowsErr)
+			if gotProvider != tt.wantProvider || gotCLI != tt.wantCLI {
+				t.Fatalf("choose() = (%q, %q), want (%q, %q)", gotProvider, gotCLI, tt.wantProvider, tt.wantCLI)
+			}
+		})
+	}
+}
+
+func TestPublicURLAndPureHelpers(t *testing.T) {
+	if got := PublicURL("", 443); got != "" {
+		t.Fatalf("PublicURL empty = %q", got)
+	}
+	if got := PublicURL("node.tailnet.ts.net.", 443); got != "https://node.tailnet.ts.net" {
+		t.Fatalf("PublicURL 443 = %q", got)
+	}
+	if got := PublicURL("node.tailnet.ts.net", 8443); got != "https://node.tailnet.ts.net:8443" {
+		t.Fatalf("PublicURL 8443 = %q", got)
+	}
+
+	cliErr := &CLIError{Action: "tailscale serve", Detail: "access denied"}
+	if got := cliErr.Error(); got != "tailscale serve: access denied" {
+		t.Fatalf("CLIError.Error() = %q", got)
+	}
+
+	reasons := []struct {
+		stderr string
+		err    error
+		want   string
+	}{
+		{"", errors.New("context deadline exceeded"), "命令超时"},
+		{"Access denied: operator check failed", errors.New("exit 1"), "权限不足"},
+		{"Tailscale needs login", errors.New("exit 1"), "需要登录"},
+		{"tailscaled is not running", errors.New("exit 1"), "后端未运行"},
+		{"unexpected failure", errors.New("exit 1"), "命令执行失败"},
+	}
+	for _, r := range reasons {
+		if got := safeCLIReason([]byte(r.stderr), r.err); got != r.want {
+			t.Fatalf("safeCLIReason(%q, %v) = %q, want %q", r.stderr, r.err, got, r.want)
+		}
+	}
+
+	backends := map[string]string{
+		"Running":     BackendRunning,
+		"Stopped":     BackendStopped,
+		"NeedsLogin":  BackendNeedsLogin,
+		"needs-login": BackendNeedsLogin,
+		"":            BackendUnknown,
+		"Starting":    BackendUnknown,
+	}
+	for in, want := range backends {
+		if got := mapBackend(in); got != want {
+			t.Fatalf("mapBackend(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	if got := funnelCapability([]string{"https://tailscale.com/cap/funnel"}, nil); got != FunnelAvailable {
+		t.Fatalf("funnelCapability slice = %q", got)
+	}
+	if got := funnelCapability(nil, []byte(`{"https://tailscale.com/cap/funnel-ports":[443]}`)); got != FunnelAvailable {
+		t.Fatalf("funnelCapability capMap = %q", got)
+	}
+	if got := funnelCapability([]string{"other-cap"}, []byte(`{"other":true}`)); got != FunnelUnavailable {
+		t.Fatalf("funnelCapability unavailable = %q", got)
+	}
+	if got := funnelCapability(nil, nil); got != FunnelUnknown {
+		t.Fatalf("funnelCapability empty = %q", got)
+	}
+}
