@@ -850,6 +850,77 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expect(conversation(resumed)).toContainText("echo: before-release");
   });
 
+  test("deleting a worktree keeps its archived chat released, and the sidebar tree resumes it", async ({
+    page,
+    request,
+    workDir,
+  }, testInfo) => {
+    test.skip(!!testInfo.project.use.isMobile, "the desktop sidebar tree");
+    const root = join(workDir, "delete-repo");
+    const tree = join(workDir, "delete-repo-feature");
+    await mkdir(root);
+    await writeFile(join(root, ".gitignore"), "node_modules/\n");
+    const git = (...args: string[]) =>
+      expect(spawnSync("git", ["-C", root, ...args]).status).toBe(0);
+    git("init", "-b", "main");
+    git("add", ".gitignore");
+    git(
+      "-c",
+      "user.name=WebMux QA",
+      "-c",
+      "user.email=qa@example.invalid",
+      "commit",
+      "-m",
+      "initial",
+    );
+    git("worktree", "add", "-b", "feature-y", tree);
+    const registered = await request.post("/api/repositories", {
+      data: { path: root },
+    });
+    expect(registered.status(), await registered.text()).toBe(201);
+    const id = await createHybrid(request, tree, "chat", {
+      name: "E2E delete",
+    });
+    await openHybrid(page, id, "chat");
+    await chatTurn(page, "before-delete");
+    const archived = await request.delete(`/api/sessions/${id}`);
+    expect(archived.status(), await archived.text()).toBe(204);
+
+    await page.goto("/");
+    await page
+      .getByRole("button", { name: "工作树菜单 feature-y", exact: true })
+      .click();
+    await page
+      .getByRole("menuitem", { name: "删除 worktree", exact: true })
+      .click();
+    const removal = page.getByRole("dialog", { name: "删除 worktree" });
+    await expect(removal).toContainText("保留的已归档会话（之后可重建并恢复）");
+    await expect(removal).toContainText("E2E delete");
+    await removal.getByRole("button", { name: "确认安全删除" }).click();
+    await expect(removal).toHaveCount(0);
+    await expect(access(tree)).rejects.toThrow();
+    git("rev-parse", "--verify", "refs/heads/feature-y");
+
+    // The record stays, released, under the repository's unavailable
+    // workspaces in the sidebar tree.
+    const sidebarTree = page.getByRole("tree", { name: "仓库与会话" });
+    await sidebarTree
+      .getByRole("button", { name: "展开已不可用工作区", exact: true })
+      .click();
+    const row = sidebarTree.getByRole("treeitem", {
+      name: "E2E delete（已释放空间，已结束）",
+    });
+    await row.click();
+    const rebuild = page.getByRole("dialog", { name: "重建工作树后恢复" });
+    await expect(rebuild).toContainText("将在原路径检出分支 feature-y");
+    await rebuild
+      .getByRole("button", { name: "重建并恢复", exact: true })
+      .click();
+    await expectSide(page, "chat");
+    await expect(conversation(page)).toContainText("echo: before-delete");
+    await access(join(tree, ".gitignore"));
+  });
+
   test("after a backend restart both sides resume the recorded conversation", async ({
     page,
     request,

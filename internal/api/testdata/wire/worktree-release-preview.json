@@ -57,6 +57,11 @@
     ],
     "ignoredBytes": 20,
     "ignoredMore": 0,
+    "push": {
+      "branches": [],
+      "more": 0,
+      "state": "noRemote"
+    },
     "sizeComplete": true,
     "worktree": {
       "available": true,

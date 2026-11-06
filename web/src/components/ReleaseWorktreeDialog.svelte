@@ -8,6 +8,7 @@
   import BlockerList from "./BlockerList.svelte";
   import InlineNotice from "./InlineNotice.svelte";
   import PreviewForm from "./PreviewForm.svelte";
+  import PushCheckNotice from "./PushCheckNotice.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
 
   // Frees the disk space of a linked worktree whose sessions are archived:
@@ -110,6 +111,9 @@
           </ul>
         </div>
       {/if}
+      {#if preview.archived.length && preview.commit}<PushCheckNotice
+          push={preview.push}
+        />{/if}
       {#if hasIgnored}
         <div class="space-y-2 text-sm">
           <p class="flex flex-wrap justify-between gap-x-3">

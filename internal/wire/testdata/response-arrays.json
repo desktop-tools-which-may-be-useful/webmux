@@ -264,6 +264,12 @@
     },
     "sessions": [],
     "archived": [],
+    "commit": "",
+    "push": {
+      "state": "unknown",
+      "branches": [],
+      "more": 0
+    },
     "blockers": [],
     "forceAllowed": false
   },

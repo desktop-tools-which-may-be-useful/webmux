@@ -101,7 +101,7 @@ func TestReleaseWithOnlyIgnoredFilesKeepsCommitBranchAndRecords(t *testing.T) {
 	if _, err := h.s.ReleaseWorktree(context.Background(), h.repo.ID, tree.ID, ReleaseRequest{ConfirmationID: removal.ConfirmationID}); errorKind(err) != ErrConflict {
 		t.Fatalf("removal confirmation released: %v", err)
 	}
-	if _, err := h.s.RemoveWorktree(context.Background(), h.repo.ID, tree.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "force", ConfirmPath: tree.Path, CloseSessions: true}); errorKind(err) != ErrConflict {
+	if err := h.s.RemoveWorktree(context.Background(), h.repo.ID, tree.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "force", ConfirmPath: tree.Path, CloseSessions: true}); errorKind(err) != ErrConflict {
 		t.Fatalf("release confirmation removed: %v", err)
 	}
 	result, err := h.s.ReleaseWorktree(context.Background(), h.repo.ID, tree.ID, ReleaseRequest{ConfirmationID: preview.ConfirmationID})
@@ -360,11 +360,10 @@ func TestRemovingOccupantKeepsReleasedRecords(t *testing.T) {
 	if len(preview.Archived) != 0 {
 		t.Fatalf("removal preview lists released records: %+v", preview.Archived)
 	}
-	forgotten, err := h.s.RemoveWorktree(context.Background(), h.repo.ID, occupant.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"})
-	if err != nil {
+	if err := h.s.RemoveWorktree(context.Background(), h.repo.ID, occupant.ID, RemoveRequest{ConfirmationID: preview.ConfirmationID, Mode: "safe"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(forgotten) != 0 || h.released(id) == nil {
-		t.Fatalf("released record forgotten: %v", forgotten)
+	if h.released(id) == nil {
+		t.Fatal("released record lost")
 	}
 }

@@ -125,10 +125,16 @@ type RemovalPreview struct {
 	Worktree       Worktree      `json:"worktree"`
 	Sessions       []SessionInfo `json:"sessions"`
 	// Archived are the closed and interrupted sessions in the worktree; a
-	// successful removal deletes them.
-	Archived     []SessionInfo `json:"archived"`
-	Blockers     []string      `json:"blockers"`
-	ForceAllowed bool          `json:"forceAllowed"`
+	// successful removal keeps them, marked released at Commit so they can
+	// be rebuilt. With an empty Commit (HEAD does not resolve) they stay
+	// unchanged and cannot be rebuilt.
+	Archived []SessionInfo `json:"archived"`
+	// Commit is the full OID the removal keeps, empty when HEAD does not
+	// resolve; Push is its push check.
+	Commit       string    `json:"commit"`
+	Push         PushCheck `json:"push"`
+	Blockers     []string  `json:"blockers"`
+	ForceAllowed bool      `json:"forceAllowed"`
 }
 
 // HybridRelease records that a linked worktree directory was released while an
@@ -177,12 +183,25 @@ type ReleasePreview struct {
 	ExpiresAt      time.Time      `json:"expiresAt"`
 	Worktree       Worktree       `json:"worktree"`
 	Commit         string         `json:"commit"`
+	Push           PushCheck      `json:"push"`
 	Archived       []SessionInfo  `json:"archived"`
 	Ignored        []IgnoredEntry `json:"ignored"`
 	IgnoredMore    int            `json:"ignoredMore"`
 	IgnoredBytes   *int64         `json:"ignoredBytes,omitempty"`
 	SizeComplete   bool           `json:"sizeComplete"`
 	Blockers       []string       `json:"blockers"`
+}
+
+// PushCheck says whether Commit is contained in a remote-tracking ref of the
+// repository. State is "pushed", "unpushed" (remotes exist, none contains
+// it), "noRemote" or "unknown" (no commit, or the check failed). It reads
+// local refs only, so it can lag behind the remote. Branches name at most a
+// few containing remote-tracking branches such as "origin/main"; More counts
+// the rest.
+type PushCheck struct {
+	State    string   `json:"state"`
+	Branches []string `json:"branches"`
+	More     int      `json:"more"`
 }
 
 // IgnoredEntry is a top-level ignored path relative to the worktree;

@@ -148,10 +148,16 @@ type Preview struct {
 	Worktree       Worktree       `json:"worktree"`
 	Sessions       []session.Info `json:"sessions"`
 	// Archived are the closed and interrupted hybrid records in the
-	// worktree; a successful removal deletes them.
-	Archived     []hybrid.Record `json:"archived"`
-	Blockers     []string        `json:"blockers"`
-	ForceAllowed bool            `json:"forceAllowed"`
+	// worktree; a successful removal keeps them, marked released at Commit
+	// so they can be rebuilt. Without a Commit (HEAD does not resolve) they
+	// stay as they were and cannot be rebuilt.
+	Archived []hybrid.Record `json:"archived"`
+	// Commit is the full OID the removal pins, empty when HEAD does not
+	// resolve; Push is its push check.
+	Commit       string    `json:"commit"`
+	Push         PushCheck `json:"push"`
+	Blockers     []string  `json:"blockers"`
+	ForceAllowed bool      `json:"forceAllowed"`
 }
 
 func randomID() (string, error) {

@@ -661,6 +661,17 @@ export const CreateWorktreeRequestSchema = z.object({
   branch: z.string(),
   base: z.string().optional(),
 });
+// Whether a commit is contained in a remote-tracking ref of its repository,
+// read from local refs only. `unpushed`: remotes exist and none contains it;
+// `noRemote`: none is configured; `unknown`: no commit or the check failed.
+// `branches` name at most a few containing branches ("origin/main"), `more`
+// counts the rest.
+export const PushCheckSchema = z.object({
+  state: z.enum(["pushed", "unpushed", "noRemote", "unknown"]),
+  branches: z.array(z.string()),
+  more: z.number().int().nonnegative(),
+});
+export type PushCheck = z.infer<typeof PushCheckSchema>;
 
 export const RemovalPreviewSchema = z.object({
   confirmationId: z.string(),
@@ -668,8 +679,13 @@ export const RemovalPreviewSchema = z.object({
   worktree: WorktreeSchema,
   sessions: z.array(SessionInfoSchema),
   // Closed and interrupted sessions in the worktree; a successful removal
-  // deletes them.
+  // keeps them, marked released at `commit`, so they can be rebuilt and
+  // resumed. With an empty `commit` (HEAD does not resolve) they stay
+  // unchanged and cannot be rebuilt.
   archived: z.array(SessionInfoSchema),
+  // Full OID the removal keeps; "" when HEAD does not resolve.
+  commit: z.string(),
+  push: PushCheckSchema,
   blockers: z.array(z.string()),
   forceAllowed: z.boolean(),
 });
@@ -692,6 +708,7 @@ export const ReleasePreviewSchema = z.object({
   worktree: WorktreeSchema,
   // Full OID; "" when HEAD does not resolve, which is also a blocker.
   commit: z.string(),
+  push: PushCheckSchema,
   // The records that stay archived and are marked released.
   archived: z.array(SessionInfoSchema),
   ignored: z.array(

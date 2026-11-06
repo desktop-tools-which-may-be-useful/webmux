@@ -16,6 +16,7 @@
   import BlockerList from "./BlockerList.svelte";
   import PreviewForm from "./PreviewForm.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
+  import PushCheckNotice from "./PushCheckNotice.svelte";
   let {
     worktree,
     onclose,
@@ -33,6 +34,18 @@
   let error = $state("");
   let force = $state(false);
   let closeSessions = $state(false);
+  // The records a removal keeps are pinned to the commit, which needs a
+  // resolvable HEAD.
+  const retained = $derived(
+    !!preview && preview.commit !== "" && preview.archived.length > 0,
+  );
+  // A force removal also keeps the records of the chat sessions it closes.
+  const keepsRecords = $derived(
+    !!preview &&
+      preview.commit !== "" &&
+      (preview.archived.length > 0 ||
+        preview.sessions.some((session) => session.agent !== null)),
+  );
   const route = $derived(
     `/repositories/${worktree.repositoryId}/worktrees/${worktree.id}`,
   );
@@ -95,8 +108,8 @@
 <ResponsiveDialog
   title={force ? "强制删除 worktree" : "删除 worktree"}
   description={force
-    ? "危险操作：停止已确认的 WebMux 会话，永久丢弃删除时目录中的全部内容，并删除该目录下混合会话的恢复记录。"
-    : "先检查文件与会话。删除 worktree 不删除分支，但会一并删除该目录下已归档的混合会话记录。"}
+    ? "危险操作：停止已确认的 WebMux 会话，永久丢弃删除时目录中的全部内容；已归档的混合会话记录保留，只保存提交。"
+    : "先检查文件与会话。删除 worktree 不删除分支；该目录下已归档的混合会话记录会保留，之后可重建并恢复。"}
   {onclose}
   {busy}
 >
@@ -112,10 +125,12 @@
         <p class="mt-1 font-mono break-all whitespace-pre-wrap">
           {worktree.path}
         </p>
-        {#if worktree.detached}<p class="mt-2 text-destructive">
+        {#if worktree.detached && !retained}<p class="mt-2 text-destructive">
             detached 提交可能没有分支保护，请先在终端保留需要的提交。
           </p>{:else}<p class="mt-2 text-muted-foreground">
-            分支保留；目录内未提交、未跟踪及忽略文件不会保留。
+            {worktree.detached
+              ? "提交由保留的会话记录保护"
+              : "分支保留"}；目录内未提交、未跟踪及忽略文件不会保留，只保留提交。
           </p>{/if}
       </div>
     {/snippet}
@@ -139,7 +154,11 @@
       {/if}
       {#if preview.archived.length}
         <div class="space-y-2 text-sm">
-          <p class="font-medium">将删除的已归档会话（删除后不可恢复）</p>
+          <p class="font-medium">
+            {retained
+              ? "保留的已归档会话（之后可重建并恢复）"
+              : "无法保存提交，已归档会话将原样保留（只能查看或手动删除，不能重建）"}
+          </p>
           <ul class="space-y-1">
             {#each preview.archived as record (record.id)}<li class="break-all">
                 {record.title} · {record.state === "closed"
@@ -149,6 +168,7 @@
           </ul>
         </div>
       {/if}
+      {#if keepsRecords}<PushCheckNotice push={preview.push} />{/if}
       <p class="text-xs text-muted-foreground">
         不追踪终端内 cd
         后的位置，也无法停止外部进程。外部写入和确认后产生的文件也可能丢失。确认

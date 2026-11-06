@@ -60,14 +60,10 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		preview, err := s.Workspace.PreviewRemoval(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"))
 		return wire.Preview(preview, s.archived), err
 	})
+	// The archived records of the removed directory stay, released, with
+	// their artifact folders: they can be rebuilt and resumed.
 	serveInDone(mux, "POST "+repo+"/worktrees/{worktreeId}/remove", workspaceFailure, func(r *http.Request, req contract.RemoveWorktreeRequest) error {
-		forgotten, err := s.Workspace.RemoveWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.RemoveWorktree(req))
-		// Records of sessions in the removed directory are gone, so their
-		// folders cannot come back either.
-		for _, id := range forgotten {
-			s.Artifacts.Remove(id)
-		}
-		return err
+		return s.Workspace.RemoveWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.RemoveWorktree(req))
 	})
 	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/release-preview", http.StatusOK, sessionFailure, func(r *http.Request, _ contract.ReleasePreviewRequest) (contract.ReleasePreview, error) {
 		preview, err := s.Workspace.PreviewRelease(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"))

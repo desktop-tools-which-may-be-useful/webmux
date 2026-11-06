@@ -4,7 +4,7 @@
   import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import { errorMessage } from "../error";
-  import { removableRecordWorktree } from "../archived";
+  import { recordTitle, removableRecordWorktree } from "../archived";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { connectorMissingText } from "../hybrid";
   import { removeRecord, resumeSession } from "../recoverable";
@@ -82,9 +82,6 @@
     } catch (err) {
       resumeError = `无法删除“${recordTitle(record)}”的记录：${errorMessage(err)}`;
     }
-  }
-  function recordTitle(record: ArchivedSession) {
-    return record.title || record.agent.name;
   }
   // An archived chat resumes on its chat view through the existing flow;
   // choices that need the user (another agent session, a deleted launch
@@ -205,6 +202,10 @@
           shell.start({ kind: "new-worktree", repositoryId })}
         onrename={shell.rename}
         onclose={shell.close}
+        records={shell.archived.records}
+        {resuming}
+        onresume={open}
+        onremove={askRemove}
       />
     {/if}
   </div>

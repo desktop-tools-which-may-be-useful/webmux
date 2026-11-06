@@ -5,9 +5,15 @@
     "blockers": [
       "存在运行中的 WebMux 会话"
     ],
+    "commit": "2de8fe1f09b18871f913bbafa26fee479279c2b6",
     "confirmationId": "<confirmationId#1>",
     "expiresAt": "<time>",
     "forceAllowed": true,
+    "push": {
+      "branches": [],
+      "more": 0,
+      "state": "noRemote"
+    },
     "sessions": [
       {
         "agent": null,

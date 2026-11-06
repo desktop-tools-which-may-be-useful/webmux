@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"path/filepath"
@@ -43,7 +44,9 @@ type ReleasePreview struct {
 	// resolve (then a blocker says so).
 	Commit string
 	// Archived are the records the release keeps and marks released.
-	Archived    []hybrid.Record
+	Archived []hybrid.Record
+	// Push is the push check of Commit; PushUnknown when it is empty.
+	Push        PushCheck
 	Ignored     []IgnoredEntry
 	IgnoredMore int
 	// IgnoredBytes is the total counted, nil when nothing was counted.
@@ -92,6 +95,31 @@ func (s *Service) headCommit(ctx context.Context, tree Worktree) string {
 	return oid
 }
 
+// pinRecords keeps commit reachable under a new private ref and marks the
+// archived records ids as released from tree under it, returning the
+// release ID. The caller holds r's gate, which keeps the sweep from
+// dropping the ref before the mark is written. A failed mark leaves the
+// ref: it may have reached the disk, and the sweep drops the ref only when
+// no loaded record uses it.
+func (s *Service) pinRecords(ctx context.Context, r *repositoryState, repositoryID string, tree Worktree, commit string, ids []string) (string, error) {
+	id, err := randomID()
+	if err != nil {
+		return "", err
+	}
+	// The empty old value makes Git refuse an existing ref.
+	if _, err := s.git(ctx, r.entry.AnchorPath, "update-ref", releasedRef(id), commit, ""); err != nil {
+		return "", err
+	}
+	rel := hybrid.Release{ID: id, RepositoryID: repositoryID, Path: tree.Path, Commit: commit, ReleasedAt: time.Now().UTC()}
+	if tree.Branch != nil {
+		rel.Branch = *tree.Branch
+	}
+	if err := s.hybrids.MarkReleased(ctx, ids, rel); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // releaseBlockers are the removal blockers without ignored files, plus a
 // commit that must resolve and at least one archived record.
 func releaseBlockers(state removalState, commit string, records []hybrid.Record) []string {
@@ -127,7 +155,7 @@ func (s *Service) PreviewRelease(ctx context.Context, repositoryID, worktreeID s
 	records := s.targetRecords(state.tree.Path)
 	preview := ReleasePreview{
 		Worktree: state.tree, Commit: commit, Archived: records, Ignored: []IgnoredEntry{},
-		Blockers: releaseBlockers(state, commit, records),
+		Blockers: releaseBlockers(state, commit, records), Push: s.checkPushed(ctx, r, commit),
 	}
 	if state.tree.Available {
 		ignored, err := s.ignoredEntries(ctx, state.tree.Path)
@@ -299,27 +327,13 @@ func (s *Service) ReleaseWorktree(ctx context.Context, repositoryID, worktreeID 
 	if err := ctx.Err(); err != nil {
 		return ReleaseResult{}, err
 	}
-	id, err := randomID()
+	id, err := s.pinRecords(ctx, r, repositoryID, current.tree, commit, ids)
 	if err != nil {
-		return ReleaseResult{}, err
-	}
-	ref := releasedRef(id)
-	// The empty old value makes Git refuse an existing ref.
-	if _, err := s.git(ctx, r.entry.AnchorPath, "update-ref", ref, commit, ""); err != nil {
-		return ReleaseResult{}, problemf(errorKind(err), "无法保存释放点，工作树未释放: %v", err)
-	}
-	rel := hybrid.Release{ID: id, RepositoryID: repositoryID, Path: path, Commit: commit, ReleasedAt: time.Now().UTC()}
-	if current.tree.Branch != nil {
-		rel.Branch = *current.tree.Branch
+		return ReleaseResult{}, fmt.Errorf("无法保存释放点，工作树未释放: %w", err)
 	}
 	// Cleanup runs even when the request was cancelled midway.
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
 	defer cleanupCancel()
-	// A failed mark may still have reached the disk, so the ref stays; the
-	// deferred sweep drops it only when the loaded records do not use it.
-	if err := s.hybrids.MarkReleased(ctx, ids, rel); err != nil {
-		return ReleaseResult{}, err
-	}
 	if _, err := s.git(ctx, r.entry.AnchorPath, "worktree", "remove", "--", path); err != nil {
 		category := errorKind(err)
 		if category == ErrInternal {

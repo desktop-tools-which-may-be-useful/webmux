@@ -223,7 +223,7 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   验收要点：
   - 安全删除拒绝未提交、未跟踪、忽略文件或活动会话；
   - 主工作区、bare、locked、含子模块等目标受保护；
-  - 预览显示阻止原因、关联会话以及删除后将一并移除的已归档混合会话；
+  - 预览显示阻止原因、关联会话以及删除后将保留（并标为已释放，之后可重建恢复）的已归档混合会话、保存的提交与推送检查结果（未推送时警告但不阻止，规则同 US-J13）；detached 工作树只有存在被保留的记录（私有引用保护提交）时才不再提示“提交可能没有分支保护”；
   - 有效确认限时且目标或会话变化后需重新预览。
   - 新建会话对话框的位置列表中，每个 linked 工作树带有删除按钮，打开同一删除预览；删除成功后若其为当前选择则回退到主工作区。
 - **US-J09 明确强制删除**：作为确实要丢弃任务的使用者，我希望在核对路径和相关会话后强制删除，以便清理不再需要的 worktree。
@@ -231,7 +231,12 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   - 仅允许可强制删除的目标；
   - 无需输入路径，只须勾选关闭列出会话及删除全部内容的确认后点击确定；
   - 可能丢弃未提交及忽略文件；
-  - 保留分支与已退出的普通会话；关闭列出的混合会话后其 shell 离开列表不阻止删除；安全或强制删除成功后，该目录下已关闭或已中断的混合会话记录及其临时文件夹一并移除，不再出现在“已归档”中，也不再提供恢复；
+  - 保留分支与已退出的普通会话；关闭列出的混合会话后其 shell 离开列表不阻止删除；
+  - 安全或强制删除成功后，该目录下已关闭或已中断的混合会话记录（含强制删除时刚关闭的会话留下的）及其临时文件夹保留：
+    - 记录与释放空间一样标为已释放（保存原路径、提交与分支，私有引用 `refs/webmux/released/<id>` 保住提交），出现在所属仓库“已不可用工作区”下；
+    - 恢复前先确认在原路径重建 worktree（US-J13）；只保留提交，未提交、未跟踪与忽略文件仍随目录丢弃；
+  - 删除前预览解析 HEAD 提交并存入确认，执行时提交变化则拒绝并要求重新预览；已释放的记录不被再次处理；
+  - HEAD 无法解析（没有提交）时无法保存释放点：不阻止删除，记录保持原样（只能查看或手动删除，不能重建），预览与对话框明确说明；
   - 不能保证处理外部进程或终端 `cd` 后的归属。
 - **US-J10 移除仓库登记**：作为使用者，我希望把不再关注的仓库从列表移除，以便整理项目清单。
   验收要点：
@@ -259,11 +264,16 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   - 释放前预览列出阻止原因、将保留的已归档记录、保存的提交以及将删除的顶层忽略项与估算大小（超时显示“未知”或“至少”）；未提交修改、未跟踪文件、运行中会话、锁定、子模块或嵌套仓库阻止释放，忽略文件不阻止但不可通过重建找回，没有强制模式；
   - 释放以非强制方式删除 worktree，保留分支，用私有引用 `refs/webmux/released/<id>` 保住提交，记录标注“已释放空间”并保存原路径、提交与分支，重启后仍在；确认后目标变化时拒绝并要求重新预览，删除失败时撤销标记与引用；
   - 恢复已释放的记录（含侧栏点击）先二次确认重建：分支尖端仍为保存的提交且未被占用时检出该分支，否则以 detached 方式检出保存的提交并说明原因，原路径被占用或仓库不可用时不可确认；确认后先重建再恢复，取消不做改动；
-  - 重建后同一次释放下的记录都回到普通已归档状态并删除私有引用；未经重建直接调用恢复接口返回 409；删除已释放的记录只删除记录，最后一条被删时同时删除私有引用。
+  - 重建后同一次释放下的记录都回到普通已归档状态并删除私有引用；未经重建直接调用恢复接口返回 409；删除已释放的记录只删除记录，最后一条被删时同时删除私有引用；
+  - 预览与确认对话框检查保存的提交是否已推送：只读本地远程跟踪引用（`git for-each-ref --contains`），不联网、不 fetch：
+    - 结果为已推送（列出至多 5 个包含它的远程分支）、未推送（有远程但没有任何远程跟踪引用包含它）、未配置远程，或未知（没有提交，或检查失败、超时）；
+    - 未推送时警告“该提交尚未推送到任何远程；仓库本地丢失或被清理后将无法重建，请先推送”，并注明以本地远程跟踪引用为准；只警告、不禁用确认；
+    - 未配置远程与未知不提示。
 
 依据：
 
-- [释放空间](../../internal/workspace/release.go)、[重建](../../internal/workspace/rebuild.go)、[释放确认](../../web/src/components/ReleaseWorktreeDialog.svelte)、[重建确认](../../web/src/components/RebuildWorktreeDialog.svelte)、[释放服务端测试](../../internal/workspace/release_test.go)
+- [释放空间](../../internal/workspace/release.go)、[重建](../../internal/workspace/rebuild.go)、[推送检查](../../internal/workspace/pushcheck.go)、[释放确认](../../web/src/components/ReleaseWorktreeDialog.svelte)、[重建确认](../../web/src/components/RebuildWorktreeDialog.svelte)
+- [推送警告](../../web/src/components/PushCheckNotice.svelte)、[对话框浏览器用例](../../web/test/browser/WorktreeDialogs.test.ts)、[释放服务端测试](../../internal/workspace/release_test.go)、[删除保留记录测试](../../internal/workspace/remove_retain_test.go)
 - [工作区总览](../../web/src/components/WorkspaceGroup.svelte)、[主页选择](../../web/src/homeWorktrees.ts)、[分支与路径表单](../../web/src/components/WorktreeCreateFields.svelte)、[分支与提交信息](../../internal/workspace/git.go)、[删除确认](../../web/src/components/RemoveWorktreeDialog.svelte)
 - [仓库清单](../../internal/workspace/registry.go)、[创建](../../internal/workspace/create.go)、[删除](../../internal/workspace/remove.go)、[工作区 API](../../internal/api/workspace.go)
 - [仓库设置弹窗](../../web/src/components/RepositorySettingsDialog.svelte)、[指令输入框](../../web/src/components/InitInstructionField.svelte)、[添加仓库弹窗](../../web/src/components/AddRepositoryDialog.svelte)

@@ -1,19 +1,34 @@
 <script lang="ts" module>
   import { z } from "zod";
+  import { placeArchived, recordTitle } from "../archived";
   import { homeLayout, worktreeTitle } from "../homeWorktrees";
-  import type { HomeWorktrees, Repository, SessionInfo } from "../schemas";
+  import type {
+    ArchivedSession,
+    HomeWorktrees,
+    Repository,
+    SessionInfo,
+  } from "../schemas";
   import { rowStatus } from "../session-status";
 
   export type TreeNode = {
     key: string;
     level: number;
     parent?: string;
-    kind: "all" | "repository" | "direct" | "worktree" | "missing" | "session";
+    kind:
+      | "all"
+      | "repository"
+      | "direct"
+      | "worktree"
+      | "missing"
+      | "session"
+      | "archived";
     label: string;
     /** Repository or worktree ID; the session for session rows. */
     repositoryId?: string;
     worktreeId?: string;
     session?: SessionInfo;
+    /** The archived record of an archived row. */
+    record?: ArchivedSession;
     path?: string;
     /** Why a repository is unavailable; "" when it is fine. */
     reason?: string;
@@ -56,16 +71,44 @@
     };
   }
 
+  function archivedNodes(
+    records: readonly ArchivedSession[],
+    parent: string,
+    level: number,
+  ): TreeNode[] {
+    return records.map((record) => ({
+      key: `a:${record.id}`,
+      level,
+      parent,
+      kind: "archived",
+      label: recordTitle(record),
+      record,
+      children: [],
+      count: 0,
+      waiting: 0,
+    }));
+  }
+
   /**
    * The workbench tree: all repositories, each registered repository with
    * the worktrees its home group shows and their live sessions, then direct
    * sessions. Worktree order is the home page's, independent of output.
+   * Counts and waiting numbers cover live sessions only.
    */
   export function workbenchTree(
     repositories: readonly Repository[],
     sessions: readonly SessionInfo[],
     home: HomeWorktrees,
+    records: readonly ArchivedSession[],
   ): TreeNode[] {
+    // The archived records that fit no existing worktree, such as those of
+    // a removed or released one, sit under their repository's unavailable
+    // workspaces; a live session wins over a record with its ID.
+    const live = new Set(sessions.map((s) => s.id));
+    const placement = placeArchived(
+      records.filter((record) => !live.has(record.id)),
+      repositories,
+    );
     const nodes: TreeNode[] = [
       counted(
         { key: "all", level: 1, kind: "all", label: "全部仓库", children: [] },
@@ -102,7 +145,8 @@
         const missing = own.filter(
           (s) => !repo.worktrees.some((t) => t.id === s.workspace?.worktreeId),
         );
-        if (missing.length)
+        const kept = placement.repositories.get(repo.id)?.missing ?? [];
+        if (missing.length || kept.length)
           children.push(
             counted(
               {
@@ -112,7 +156,10 @@
                 kind: "missing",
                 label: "已不可用工作区",
                 repositoryId: repo.id,
-                children: sessionNodes(missing, `m:${repo.id}`, 3),
+                children: [
+                  ...sessionNodes(missing, `m:${repo.id}`, 3),
+                  ...archivedNodes(kept, `m:${repo.id}`, 3),
+                ],
               },
               missing,
             ),
@@ -163,6 +210,7 @@
   import IconBook2 from "~icons/tabler/book-2";
   import IconChevronRight from "~icons/tabler/chevron-right";
   import IconFolder from "~icons/tabler/folder";
+  import IconFolderOff from "~icons/tabler/folder-off";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLayoutDashboard from "~icons/tabler/layout-dashboard";
   import IconPlus from "~icons/tabler/plus";
@@ -176,12 +224,17 @@
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
 
   // The workbench-mode sidebar: repositories → worktrees → live sessions.
-  // One roving tab stop for the rows (arrow keys move, left and right fold),
-  // and the focused row's action button is the next stop. Collapsed nodes
-  // keep their counts and waiting numbers.
+  // Archived records that fit no worktree (a removed or released one) sit
+  // under the repository's "已不可用工作区" like the home page's, resuming
+  // when clicked. One roving tab stop for the rows (arrow keys move, left
+  // and right fold), and the focused row's action button is the next stop.
+  // Collapsed nodes keep their counts and waiting numbers, which cover live
+  // sessions only.
   let {
     repositories,
     sessions,
+    records,
+    resuming = "",
     home,
     scope,
     worktree,
@@ -193,10 +246,16 @@
     onnewworktree,
     onrename,
     onclose,
+    onresume,
+    onremove,
   }: {
     repositories: readonly Repository[];
     /** Live sessions, as the home page lists them. */
     sessions: readonly SessionInfo[];
+    /** Archived records; those fitting no worktree sit under their repository's unavailable workspaces. */
+    records: readonly ArchivedSession[];
+    /** The record being resumed; its row shows the progress. */
+    resuming?: string;
     home: HomeWorktrees;
     /** The home view shown ("all", "direct" or a repository ID); "" elsewhere. */
     scope: string;
@@ -213,9 +272,13 @@
     onnewworktree: (repositoryId: string) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
+    /** Resumes an archived record, rebuilding a released worktree first. */
+    onresume: (record: ArchivedSession) => void;
+    /** Asks to delete an archived record. */
+    onremove: (record: ArchivedSession) => void;
   } = $props();
 
-  const nodes = $derived(workbenchTree(repositories, sessions, home));
+  const nodes = $derived(workbenchTree(repositories, sessions, home, records));
   let saved = $state<Record<string, boolean>>(
     (() => {
       try {
@@ -230,7 +293,11 @@
     // The keys of the current session's ancestors.
     const find = (list: TreeNode[], path: string[]): string[] => {
       for (const node of list) {
-        if (current && node.session?.id === current) return path;
+        if (
+          current &&
+          (node.session?.id === current || node.record?.id === current)
+        )
+          return path;
         const found = find(node.children, [...path, node.key]);
         if (found.length) return found;
       }
@@ -308,6 +375,7 @@
   }
   function isCurrent(node: TreeNode) {
     if (node.kind === "session") return node.session?.id === current;
+    if (node.kind === "archived") return node.record?.id === current;
     if (current || node.kind === "missing") return false;
     if (node.kind === "worktree")
       return scope === node.repositoryId && worktree === node.worktreeId;
@@ -318,6 +386,7 @@
   function activate(node: TreeNode) {
     focusKey = node.key;
     if (node.session) onopen(node.session);
+    else if (node.record) onresume(node.record);
     else if (node.kind === "worktree" || node.kind === "missing")
       onscope(node.repositoryId ?? "all", node.worktreeId);
     else
@@ -331,6 +400,11 @@
       (session.configId ? configIcons.get(session.configId) : undefined) ??
       ""
     );
+  }
+  function recordTitleText(record: ArchivedSession) {
+    return record.released
+      ? `${recordTitle(record)}（${record.agent.name} · 已释放空间：${record.released.path} · ${record.released.commit.slice(0, 12)}，点击重建并恢复）`
+      : `${recordTitle(record)}（${record.agent.name} · 已结束，点击恢复）`;
   }
 </script>
 
@@ -367,7 +441,20 @@
 {/snippet}
 
 {#snippet row(node: TreeNode)}
-  {@const status = node.session ? rowStatus(node.session) : undefined}
+  {@const status = node.session
+    ? rowStatus(node.session)
+    : node.record
+      ? "ended"
+      : undefined}
+  {@const stateText = node.record
+    ? resuming === node.record.id
+      ? "正在恢复"
+      : node.record.released
+        ? "已释放空间，已结束"
+        : "已结束"
+    : status
+      ? rowStatusLabels[status]
+      : undefined}
   {@const open = isOpen(node)}
   <li
     role="none"
@@ -384,8 +471,8 @@
         aria-expanded={node.children.length && !node.reason ? open : undefined}
         aria-selected={isCurrent(node)}
         aria-current={isCurrent(node) ? "page" : undefined}
-        aria-label={status
-          ? `${node.label}（${rowStatusLabels[status]}）`
+        aria-label={stateText
+          ? `${node.label}（${stateText}）`
           : node.reason
             ? `${node.label}（不可用）`
             : node.waiting
@@ -395,13 +482,17 @@
                 : node.label}
         title={node.reason
           ? `${node.label}：${node.reason}`
-          : status
-            ? `${node.label}（${rowStatusLabels[status]}）`
-            : (node.path ?? node.label)}
+          : node.record
+            ? recordTitleText(node.record)
+            : status
+              ? `${node.label}（${rowStatusLabels[status]}）`
+              : (node.path ?? node.label)}
         tabindex={tabStop === node.key ? 0 : -1}
         data-tree-key={node.key}
         onfocus={() => (focusKey = node.key)}
         onkeydown={(event: KeyboardEvent) => keydown(event, node)}
+        aria-busy={node.record ? resuming === node.record.id : undefined}
+        disabled={!!resuming && !!node.record}
         onclick={() => activate(node)}
       >
         {#if node.kind === "all"}<IconLayoutDashboard aria-hidden="true" />
@@ -413,15 +504,29 @@
         {:else if node.session}<LaunchConfigIcon
             icon={sessionIcon(node.session)}
             size="xs"
+          />
+        {:else if node.record}<LaunchConfigIcon
+            icon={node.record.configId
+              ? (configIcons.get(node.record.configId) ?? "")
+              : ""}
+            size="xs"
           />{/if}
         <span
           class={`min-w-0 flex-1 truncate ${node.kind === "repository" ? "font-medium" : ""} ${node.reason || status === "ended" ? "text-muted-foreground" : ""}`}
           >{node.label}</span
         >
+        {#if node.record?.released}<IconFolderOff
+            class="text-muted-foreground"
+            aria-hidden="true"
+          />{/if}
         {#if node.reason}<IconAlertCircle
             class="text-warning"
             aria-hidden="true"
           />
+        {:else if node.record && resuming === node.record.id}<span
+            class="shrink-0 text-xs font-normal text-muted-foreground"
+            >恢复中…</span
+          >
         {:else if status}<RowStatus {status} />
         {:else}{@render counts(
             node,
@@ -442,6 +547,18 @@
           label={node.label}
           tabindex={tabStop === node.key ? 0 : -1}
           target={{ kind: "live", session: node.session, onrename, onclose }}
+        />
+      {:else if node.record}
+        {@const record = node.record}
+        <SidebarSessionMenu
+          label={node.label}
+          tabindex={tabStop === node.key ? 0 : -1}
+          disabled={!!resuming}
+          target={{
+            kind: "archived",
+            onresume: () => onresume(record),
+            onremove: () => onremove(record),
+          }}
         />
       {/if}
     </div>

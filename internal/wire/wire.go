@@ -298,13 +298,22 @@ func Preview(p workspace.Preview, archived func(hybrid.Record) Archived) contrac
 	return contract.RemovalPreview{
 		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree),
 		Sessions: Sessions(p.Sessions), Archived: each(p.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
-		Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
+		Commit: p.Commit, Push: PushCheck(p.Push), Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
 	}
+}
+
+// PushCheck converts a push check; its branches are never null.
+func PushCheck(c workspace.PushCheck) contract.PushCheck {
+	state := string(c.State)
+	if state == "" {
+		state = string(workspace.PushUnknown)
+	}
+	return contract.PushCheck{State: state, Branches: required(c.Branches), More: c.More}
 }
 
 func ReleasePreview(p workspace.ReleasePreview, archived func(hybrid.Record) Archived) contract.ReleasePreview {
 	return contract.ReleasePreview{
-		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree), Commit: p.Commit,
+		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree), Commit: p.Commit, Push: PushCheck(p.Push),
 		Archived:    each(p.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
 		Ignored:     each(p.Ignored, func(e workspace.IgnoredEntry) contract.IgnoredEntry { return contract.IgnoredEntry(e) }),
 		IgnoredMore: p.IgnoredMore, IgnoredBytes: p.IgnoredBytes, SizeComplete: p.SizeComplete, Blockers: required(p.Blockers),

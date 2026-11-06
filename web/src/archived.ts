@@ -58,6 +58,11 @@ export const EMPTY_ARCHIVE: RepositoryArchive = {
   missing: [],
 };
 
+/** The title an archived record shows: its own, else its agent's name. */
+export function recordTitle(record: ArchivedSession) {
+  return record.title || record.agent.name;
+}
+
 function trimmed(path: string) {
   return path.length > 1 ? path.replace(/\/+$/, "") : path;
 }

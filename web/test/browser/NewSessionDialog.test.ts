@@ -157,6 +157,8 @@ beforeEach(() => {
           worktree: createdTree,
           sessions: [],
           archived: [],
+          commit: "c".repeat(40),
+          push: { state: "noRemote", branches: [], more: 0 },
           blockers: [],
           forceAllowed: true,
         });

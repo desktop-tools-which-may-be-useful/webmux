@@ -205,10 +205,11 @@ func TestCreateHybridSessionRecordLimit(t *testing.T) {
 }
 
 // A force removal closes the worktree's hybrid session, whose shell leaves
-// the list once its close is recorded, then removes the worktree and
-// forgets the session's record and folder: nothing can resume there. A
-// closed session elsewhere stays recoverable.
-func TestForceRemoveWorktreeForgetsHybridSessions(t *testing.T) {
+// the list once its close is recorded, then removes the worktree and keeps
+// the session's record and folder, marked released like the archived
+// record's: both can be rebuilt and resumed. A closed session elsewhere is
+// left as it is.
+func TestForceRemoveWorktreeKeepsHybridRecords(t *testing.T) {
 	root := gitRepository(t)
 	h := newHybridAPI(t, nil)
 	var repository contract.Repository
@@ -256,15 +257,23 @@ func TestForceRemoveWorktreeForgetsHybridSessions(t *testing.T) {
 	if _, err := os.Stat(tree.Path); !os.IsNotExist(err) {
 		t.Fatalf("worktree still present: %v", err)
 	}
+	// Both records stay, released together at the removed worktree's commit,
+	// with their artifact folders: they can be rebuilt and resumed.
+	var releaseID string
 	for _, id := range []string{inside, archived} {
-		if _, err := h.hybrids.Record(id); !errors.Is(err, hybrid.ErrNotFound) {
-			t.Fatalf("removed worktree's record %s: %v", id, err)
+		rec, err := h.hybrids.Record(id)
+		if err != nil || rec.Released == nil || rec.Released.Commit != preview.Commit || rec.Released.Path != tree.Path {
+			t.Fatalf("removed worktree's record %s: %+v %v", id, rec, err)
 		}
+		if releaseID != "" && rec.Released.ID != releaseID {
+			t.Fatalf("records released apart: %s and %s", releaseID, rec.Released.ID)
+		}
+		releaseID = rec.Released.ID
 	}
-	if _, err := os.Stat(folder.Path); !os.IsNotExist(err) {
-		t.Fatalf("removed worktree's folder: %v", err)
+	if _, err := os.Stat(folder.Path); err != nil {
+		t.Fatalf("kept record's folder: %v", err)
 	}
-	if rec, err := h.hybrids.Record(outside); err != nil || rec.State != hybrid.StateClosed {
+	if rec, err := h.hybrids.Record(outside); err != nil || rec.State != hybrid.StateClosed || rec.Released != nil {
 		t.Fatalf("record outside the worktree: %+v %v", rec, err)
 	}
 }

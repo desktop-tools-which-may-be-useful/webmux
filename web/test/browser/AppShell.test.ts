@@ -340,6 +340,8 @@ test("deleting an archived record whose linked worktree still exists opens workt
             },
           }),
         ],
+        commit: "c".repeat(40),
+        push: { state: "unpushed", branches: [], more: 0 },
         blockers: [],
         forceAllowed: true,
       }),
@@ -359,6 +361,14 @@ test("deleting an archived record whose linked worktree still exists opens workt
   const dialog = page.getByRole("dialog", { name: "删除 worktree" });
   await expect.element(dialog).toBeVisible();
   await expect.element(dialog).toMatchTextContent(/wt\/fix-sort/);
+  await expect
+    .element(dialog)
+    .toMatchTextContent(/保留的已归档会话（之后可重建并恢复）.*分支聊天/);
+  await expect
+    .element(dialog)
+    .toMatchTextContent(/尚未推送到任何远程.*请先推送/);
+  expect(dialog.getByText("将删除的已归档会话").elements()).toEqual([]);
+  // An unpushed commit warns, never blocks.
   await dialog.getByRole("button", { name: "确认安全删除" }).click();
   await expect
     .poll(() =>
@@ -415,6 +425,7 @@ test("the sidebar releases an archived chat's worktree after a preview and marks
         expiresAt: "2026-10-28T01:00:00Z",
         worktree: branchTree,
         commit: "c".repeat(40),
+        push: { state: "unpushed", branches: [], more: 0 },
         archived: [branchChat],
         ignored: [
           { path: "node_modules/", bytes: 3 * 1024 * 1024 },
@@ -450,6 +461,10 @@ test("the sidebar releases an archived chat's worktree after a preview and marks
   await expect.element(dialog).toMatchTextContent(/至少 3 MiB/);
   await expect.element(dialog).toMatchTextContent(/另有 2 项未列出/);
   await expect.element(dialog).toMatchTextContent(/重建工作树也无法找回/);
+  await expect
+    .element(dialog)
+    .toMatchTextContent(/尚未推送到任何远程.*请先推送/);
+  // An unpushed commit warns, never blocks.
   await dialog.getByRole("button", { name: "释放空间" }).click();
   await expect
     .element(
@@ -527,6 +542,45 @@ test("a released archived chat rebuilds its worktree after confirmation before r
     },
     { path: "/api/sessions/archivew/resume", body: { view: "chat" } },
   ]);
+});
+
+test("the workbench tree lists a released record under 已不可用工作区 and rebuilds it on click", async () => {
+  shellUi.setMode("workbench");
+  history.replaceState(null, "", "/s/otherabc");
+  respond(/^GET \/api\/repositories$/, () =>
+    Response.json([repository({ worktrees: [worktree()] })]),
+  );
+  respond(/^GET \/api\/sessions$/, () => Response.json([releasedChat]));
+  respond(/^POST \/api\/hybrid-sessions\/archivew\/rebuild-preview$/, () =>
+    Response.json({
+      releaseId: "rel1",
+      path: branchTree.path,
+      commit: "c".repeat(40),
+      branch: "wt/fix-sort",
+      mode: "branch",
+      blockers: [],
+    }),
+  );
+  respond(/^POST \/api\/hybrid-sessions\/archivew\/rebuild$/, () =>
+    Response.json(branchTree),
+  );
+  respond(/^POST \/api\/sessions\/archivew\/resume$/, () =>
+    Response.json(chat({ id: "archivew", title: "分支聊天" })),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  await snapshot();
+  const tree = sidebar().getByRole("tree", { name: "仓库与会话" });
+  // Only live sessions count: the record alone adds no number.
+  const group = tree.getByRole("treeitem", { name: "已不可用工作区" });
+  await expect.element(group).toHaveAttribute("aria-expanded", "false");
+  await tree.getByRole("button", { name: "展开已不可用工作区" }).click();
+  const row = tree.getByRole("treeitem", {
+    name: "分支聊天（已释放空间，已结束）",
+  });
+  await row.click();
+  const dialog = page.getByRole("dialog", { name: "重建工作树后恢复" });
+  await dialog.getByRole("button", { name: "重建并恢复" }).click();
+  await expect.poll(() => location.pathname).toBe("/s/archivew");
 });
 
 test("a session on a worktree this page has not read re-reads the repositories once", async () => {

@@ -1,9 +1,12 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
-import WorkbenchTree from "../../src/components/WorkbenchTree.svelte";
+import WorkbenchTree, {
+  workbenchTree,
+  type TreeNode,
+} from "../../src/components/WorkbenchTree.svelte";
 import type { SessionInfo } from "../../src/schemas";
-import { chat, repository, session, worktree } from "./shell-fixture";
+import { chat, record, repository, session, worktree } from "./shell-fixture";
 
 afterEach(async () => {
   await cleanup();
@@ -50,10 +53,13 @@ function renderTree(
     onnewworktree: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
+    onresume: vi.fn(),
+    onremove: vi.fn(),
   };
   render(WorkbenchTree, {
     repositories: [webmux, legacy],
     sessions,
+    records: [],
     // Both worktrees are on the home page.
     home: { repo1: ["main", "otter"] },
     scope: props.scope ?? "",
@@ -231,4 +237,181 @@ test("arrow keys move through the visible rows; the action is the next tab stop"
   await expect
     .element(tree().getByRole("button", { name: "在 webmux 新建工作树" }))
     .toHaveFocus();
+});
+
+// Records of a removed or released worktree: their worktree ID is not in the
+// repository's Git list.
+const gone = {
+  repositoryId: "repo1",
+  worktreeId: "gone",
+  worktreePath: "/repos/webmux.worktrees/gone",
+};
+const keptRecord = record({
+  id: "released1",
+  title: "已释放的聊天",
+  cwd: gone.worktreePath,
+  workspace: gone,
+  released: {
+    id: "rel1",
+    repositoryId: "repo1",
+    path: gone.worktreePath,
+    commit: "c".repeat(40),
+    branch: "wt/gone",
+    releasedAt: "2026-10-28T00:00:00Z",
+  },
+});
+const endedRecord = record({
+  id: "ended0002",
+  title: "普通归档",
+  cwd: gone.worktreePath,
+  workspace: gone,
+});
+const inMainRecord = record({
+  id: "inmain001",
+  title: "主干归档",
+  workspace: inMain,
+});
+
+const missingOf = (nodes: TreeNode[]) =>
+  nodes
+    .find((node) => node.key === "r:repo1")
+    ?.children.find((node) => node.key === "m:repo1");
+
+test("archived records that fit no worktree make the unavailable-workspace node; counts stay live-only", () => {
+  const home = { repo1: ["main", "otter"] };
+  const repositories = [webmux, legacy];
+  // Records alone are enough for the node; a record in a listed worktree is not.
+  const onlyRecords = missingOf(
+    workbenchTree(repositories, [], home, [
+      keptRecord,
+      endedRecord,
+      inMainRecord,
+    ]),
+  );
+  expect(onlyRecords?.children.map((node) => node.key)).toEqual([
+    "a:released1",
+    "a:ended0002",
+  ]);
+  expect([onlyRecords?.count, onlyRecords?.waiting]).toEqual([0, 0]);
+  expect(onlyRecords?.children.map((node) => node.level)).toEqual([3, 3]);
+  expect(missingOf(workbenchTree(repositories, [], home, [inMainRecord]))).toBe(
+    undefined,
+  );
+  // Live sessions come first and are the only ones counted; the totals above
+  // them ignore records too.
+  const nodes = workbenchTree(
+    repositories,
+    [session({ id: "orphan01", title: "孤儿", workspace: gone })],
+    home,
+    [keptRecord],
+  );
+  const missing = missingOf(nodes);
+  expect(missing?.children.map((node) => node.key)).toEqual([
+    "s:orphan01",
+    "a:released1",
+  ]);
+  expect(missing?.count).toBe(1);
+  expect(nodes.find((node) => node.key === "all")?.count).toBe(1);
+  // A record is not listed beside the live session carrying its ID.
+  expect(
+    missingOf(
+      workbenchTree(
+        repositories,
+        [session({ id: "released1", workspace: gone })],
+        home,
+        [keptRecord],
+      ),
+    )?.children.map((node) => node.key),
+  ).toEqual(["s:released1"]);
+});
+
+function renderArchived(props: { current?: string; resuming?: string } = {}) {
+  const onresume = vi.fn();
+  const onremove = vi.fn();
+  render(WorkbenchTree, {
+    repositories: [webmux],
+    sessions: [session({ id: "orphan01", title: "孤儿", workspace: gone })],
+    records: [keptRecord, endedRecord],
+    resuming: props.resuming ?? "",
+    home: { repo1: ["main", "otter"] },
+    scope: "",
+    current: props.current ?? "",
+    canCreate: true,
+    configIcons: new Map(),
+    onscope: vi.fn(),
+    onopen: vi.fn(),
+    onnewworktree: vi.fn(),
+    onrename: vi.fn(),
+    onclose: vi.fn(),
+    onresume,
+    onremove,
+  });
+  return { onresume, onremove };
+}
+
+test("archived rows resume on click and mark a released record", async () => {
+  const { onresume } = renderArchived();
+  // Only the one live session counts.
+  await expect
+    .element(item("已不可用工作区"))
+    .toHaveAttribute("aria-label", "已不可用工作区，1 个会话");
+  await tree().getByRole("button", { name: "展开已不可用工作区" }).click();
+  const released = item("已释放的聊天（已释放空间，已结束）");
+  await expect.element(released).toHaveAttribute("aria-level", "3");
+  expect(released.element().getAttribute("title")).toContain(
+    "已释放空间：/repos/webmux.worktrees/gone",
+  );
+  await released.click();
+  expect(onresume).toHaveBeenLastCalledWith(keptRecord);
+  await item("普通归档（已结束）").click();
+  expect(onresume).toHaveBeenLastCalledWith(endedRecord);
+  expect(onresume).toHaveBeenCalledTimes(2);
+});
+
+test("arrow keys reach archived rows, which offer resume and delete in their menu", async () => {
+  const { onresume, onremove } = renderArchived();
+  await item("已不可用工作区").click();
+  await userEvent.keyboard("{ArrowRight}");
+  await expect
+    .element(item("已不可用工作区"))
+    .toHaveAttribute("aria-expanded", "true");
+  await userEvent.keyboard("{ArrowRight}");
+  await expect.element(item("孤儿（空闲）")).toHaveFocus();
+  await userEvent.keyboard("{ArrowDown}");
+  await expect
+    .element(item("已释放的聊天（已释放空间，已结束）"))
+    .toHaveFocus();
+  await userEvent.keyboard("{Enter}");
+  expect(onresume).toHaveBeenCalledWith(keptRecord);
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.element(item("普通归档（已结束）")).toHaveFocus();
+  await userEvent.keyboard("{ArrowLeft}");
+  await expect.element(item("已不可用工作区")).toHaveFocus();
+  // Folding keeps the roving stop on the visible node.
+  await userEvent.keyboard("{ArrowLeft}");
+  await expect
+    .element(item("已不可用工作区"))
+    .toHaveAttribute("aria-expanded", "false");
+  await userEvent.keyboard("{ArrowRight}");
+  await userEvent.keyboard("{ArrowRight}");
+  await userEvent.keyboard("{ArrowDown}");
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.element(item("普通归档（已结束）")).toHaveFocus();
+  await page.getByRole("button", { name: "会话操作：普通归档" }).click();
+  await page.getByRole("menuitem", { name: "删除记录" }).click();
+  expect(onremove).toHaveBeenCalledWith(endedRecord);
+});
+
+test("the current archived record opens its path, and resuming marks the row busy", async () => {
+  renderArchived({ current: "ended0002", resuming: "ended0002" });
+  // The current record's page opens the node without saving it.
+  await expect
+    .element(item("普通归档（正在恢复）"))
+    .toHaveAttribute("aria-current", "page");
+  await expect
+    .element(item("普通归档（正在恢复）"))
+    .toHaveAttribute("aria-busy", "true");
+  await expect
+    .element(item("已释放的聊天（已释放空间，已结束）"))
+    .toBeDisabled();
 });

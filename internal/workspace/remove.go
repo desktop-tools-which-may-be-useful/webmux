@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -93,7 +94,8 @@ type confirmation struct {
 	state        removalState
 	// records are the archived record IDs a release preview showed.
 	records []string
-	// commit is the commit a release preview resolved.
+	// commit is the commit the preview resolved, empty when HEAD does not
+	// resolve.
 	commit string
 	timer  *time.Timer
 }
@@ -246,13 +248,16 @@ func (s *Service) PreviewRemoval(ctx context.Context, repositoryID, worktreeID s
 	if err != nil {
 		return Preview{}, err
 	}
-	c := confirmation{purpose: purposeRemove, repositoryID: repositoryID, worktreeID: worktreeID, state: state}
+	commit := s.headCommit(ctx, state.tree)
+	records := s.targetRecords(state.tree.Path)
+	check := s.checkPushed(ctx, r, commit)
+	c := confirmation{purpose: purposeRemove, repositoryID: repositoryID, worktreeID: worktreeID, state: state, commit: commit}
 	id, expires, err := s.confirm(c)
 	if err != nil {
 		return Preview{}, err
 	}
 	return Preview{
-		ConfirmationID: id, ExpiresAt: expires, Worktree: state.tree, Sessions: state.sessions, Archived: s.targetRecords(state.tree.Path),
+		ConfirmationID: id, ExpiresAt: expires, Worktree: state.tree, Sessions: state.sessions, Archived: records, Commit: commit, Push: check,
 		Blockers: state.messages(), ForceAllowed: state.supported,
 	}, nil
 }
@@ -315,18 +320,12 @@ func (s *Service) takeConfirmation(id string, p purpose, repositoryID, worktreeI
 	return c, true
 }
 
-// RemoveWorktree removes a linked worktree after its confirmation and
-// returns the IDs of the hybrid records it forgot: the closed and
-// interrupted sessions under the removed directory, which cannot resume.
-func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) ([]string, error) {
-	path, err := s.removeWorktree(ctx, repositoryID, worktreeID, req)
-	if err != nil {
-		return nil, err
-	}
-	// The worktree is gone whatever the client does now.
-	forgetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
-	defer cancel()
-	return s.forgetRecords(forgetCtx, path), nil
+// RemoveWorktree removes a linked worktree after its confirmation. The
+// closed and interrupted hybrid records under the removed directory stay,
+// marked released at the commit the confirmation resolved, so they can be
+// rebuilt and resumed; without such a commit they stay as they were.
+func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) error {
+	return s.removeWorktree(ctx, repositoryID, worktreeID, req)
 }
 
 // targetRecords lists the closed and interrupted hybrid records whose
@@ -357,46 +356,77 @@ func (s *Service) targetRecords(path string) []hybrid.Record {
 	return result
 }
 
-// forgetRecords deletes the closed and interrupted hybrid records whose
-// directory lies in removed worktree path, including those of sessions the
-// removal closed. A record that cannot be removed stays recoverable, so it
-// can still be deleted by hand.
-func (s *Service) forgetRecords(ctx context.Context, path string) []string {
-	var forgotten []string
-	for _, rec := range s.targetRecords(path) {
-		if s.hybrids.RemoveRecord(ctx, rec.ID) == nil {
-			forgotten = append(forgotten, rec.ID)
-		}
+// retainRecords marks the closed and interrupted hybrid records whose
+// directory lies in removed worktree tree as released at commit, including
+// those of the sessions the removal closed (closedHybrids), whose records
+// are awaited first. Without a commit nothing can be pinned, so the
+// records stay unchanged and can only be viewed or deleted. The caller
+// holds r's gate. The worktree is gone whatever the client does now, so a
+// cancelled request still retains. A failure is logged: the records then
+// stay as they were.
+func (s *Service) retainRecords(ctx context.Context, r *repositoryState, repositoryID string, tree Worktree, commit string, closedHybrids []string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
+	defer cancel()
+	s.awaitClosed(ctx, closedHybrids)
+	records := s.targetRecords(tree.Path)
+	if len(records) == 0 {
+		return
 	}
-	return forgotten
+	if commit == "" {
+		slog.Info("archived records kept unreleased: HEAD did not resolve", "records", len(records))
+		return
+	}
+	id, err := s.pinRecords(ctx, r, repositoryID, tree, commit, recordIDs(records))
+	if err != nil {
+		slog.Warn("archived records could not be marked released after removal", "records", len(records), "error", err)
+		return
+	}
+	slog.Info("worktree removed, archived records released", "release", id, "records", len(records))
 }
 
-// removeWorktree performs the removal and returns the removed path.
-func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) (string, error) {
+// closeRecordWait bounds the wait for a closed session's record.
+const closeRecordWait = 5 * time.Second
+
+// awaitClosed waits, within closeRecordWait, until each hybrid session in
+// ids has recorded its close; a record that never shows is left out.
+func (s *Service) awaitClosed(ctx context.Context, ids []string) {
+	deadline := time.Now().Add(closeRecordWait)
+	for _, id := range ids {
+		for time.Now().Before(deadline) && ctx.Err() == nil {
+			if rec, err := s.hybrids.Record(id); err == nil && rec.State != hybrid.StateActive {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+}
+
+// removeWorktree performs the removal and retains the archived records.
+func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID string, req RemoveRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()
 	if req.Mode != "safe" && req.Mode != "force" {
-		return "", problemf(ErrInvalid, "删除模式必须为 safe 或 force")
+		return problemf(ErrInvalid, "删除模式必须为 safe 或 force")
 	}
 	confirmation, ok := s.takeConfirmation(req.ConfirmationID, purposeRemove, repositoryID, worktreeID)
 	if !ok {
-		return "", problemf(ErrConflict, "删除确认已失效，请重新预览")
+		return problemf(ErrConflict, "删除确认已失效，请重新预览")
 	}
 	defer confirmation.state.identity.close()
 	if req.Mode == "force" && (req.ConfirmPath != confirmation.state.tree.Path || !req.CloseSessions) {
-		return "", problemf(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
+		return problemf(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
 	}
 	r, err := s.repository(repositoryID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if err := acquire(ctx, r); err != nil {
-		return "", err
+		return err
 	}
 	defer release(r)
 	path := confirmation.state.tree.Path
 	if err := s.reserve(ctx, path); err != nil {
-		return "", err
+		return err
 	}
 	defer s.unreserve(path)
 	// Every execution path releases the reservation and re-reads real Git state,
@@ -408,20 +438,20 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 	}()
 	current, err := s.removalState(ctx, r, worktreeID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer current.identity.close()
 	if !current.supported {
-		return "", problemf(ErrConflict, "不支持删除此工作树: %v", current.messages())
+		return problemf(ErrConflict, "不支持删除此工作树: %v", current.messages())
 	}
 	if !sameTarget(confirmation.state, current) || !sameSessions(confirmation.state.sessions, current.sessions) {
-		return "", problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
+		return problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
 	}
 	if req.Mode == "safe" && len(current.blockers) != 0 {
-		return "", problemf(ErrConflict, "安全删除被阻止: %v", current.messages())
+		return problemf(ErrConflict, "安全删除被阻止: %v", current.messages())
 	}
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return err
 	}
 	closed := make(map[string]bool)
 	if req.Mode == "force" {
@@ -432,7 +462,7 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 			}
 			item, err := s.manager.Get(info.ID)
 			if err != nil {
-				return "", problemf(ErrConflict, "会话集合已变化，请重新预览")
+				return problemf(ErrConflict, "会话集合已变化，请重新预览")
 			}
 			active = append(active, item)
 		}
@@ -446,28 +476,32 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 			case <-item.Done():
 				closed[item.Info().ID] = true
 			case <-ctx.Done():
-				return "", problemf(ErrTimeout, "关闭会话未在期限内完成，工作树未删除；部分会话可能已关闭")
+				return problemf(ErrTimeout, "关闭会话未在期限内完成，工作树未删除；部分会话可能已关闭")
 			}
 		}
 	}
 	final, err := s.removalState(ctx, r, worktreeID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer final.identity.close()
 	if !final.supported || !sameTarget(current, final) || !remainingSessions(current.sessions, final.sessions) {
-		return "", problemf(ErrConflict, "关闭期间目标身份或会话集合变化，工作树未删除；部分会话可能已关闭")
+		return problemf(ErrConflict, "关闭期间目标身份或会话集合变化，工作树未删除；部分会话可能已关闭")
 	}
 	for _, info := range final.sessions {
 		if !closed[info.ID] && info.Status != session.StatusExited {
-			return "", problemf(ErrConflict, "仍有运行会话，工作树未删除")
+			return problemf(ErrConflict, "仍有运行会话，工作树未删除")
 		}
 	}
 	if req.Mode == "safe" && len(final.blockers) != 0 {
-		return "", problemf(ErrConflict, "安全删除被最新状态阻止: %v", final.messages())
+		return problemf(ErrConflict, "安全删除被最新状态阻止: %v", final.messages())
+	}
+	// The commit the records will be pinned to is the one the user saw.
+	if s.headCommit(ctx, final.tree) != confirmation.commit {
+		return problemf(ErrConflict, "提交已变化，工作树未删除，请重新预览；部分会话可能已关闭")
 	}
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return err
 	}
 	argv := []string{"worktree", "remove"}
 	if req.Mode == "force" {
@@ -475,9 +509,18 @@ func (s *Service) removeWorktree(ctx context.Context, repositoryID, worktreeID s
 	}
 	argv = append(argv, "--", path)
 	if _, err := s.git(ctx, r.entry.AnchorPath, argv...); err != nil {
-		return "", problemf(errorKind(err), "%v；删除未完整成功，部分会话可能已关闭，请刷新实际状态", err)
+		return problemf(errorKind(err), "%v；删除未完整成功，部分会话可能已关闭，请刷新实际状态", err)
 	}
-	return path, nil
+	// The records of the removed directory, including those of sessions the
+	// removal closed, stay restorable.
+	var closedHybrids []string
+	for _, info := range current.sessions {
+		if closed[info.ID] && info.Hybrid != nil {
+			closedHybrids = append(closedHybrids, info.ID)
+		}
+	}
+	s.retainRecords(ctx, r, repositoryID, confirmation.state.tree, confirmation.commit, closedHybrids)
+	return nil
 }
 
 func (s *Service) clearConfirmations() {
