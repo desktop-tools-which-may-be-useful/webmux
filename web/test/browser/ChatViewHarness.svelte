@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
   import { uploadFile } from "../../src/api";
+  import QuickCommandMenu from "../../src/components/QuickCommandMenu.svelte";
+  import type { ButtonSize } from "$lib/components/ui/button";
   import ChatView from "../../src/components/chat/ChatView.svelte";
   import { chatActions } from "../../src/chat-api";
   import { createChatSocket } from "../../src/hooks/chat-socket.svelte";
@@ -38,6 +40,20 @@
   );
 </script>
 
+{#snippet quickMenu(side: "top" | "bottom", size?: ButtonSize)}
+  <QuickCommandMenu
+    commands={[]}
+    target="chat"
+    unavailable=""
+    disabled={false}
+    {side}
+    {size}
+    run={() => {}}
+    manage={() => {}}
+    onCloseAutoFocus={() => {}}
+  />
+{/snippet}
+
 <div style="height: 800px">
   <ChatView
     sessionId={session}
@@ -48,6 +64,7 @@
     {drafts}
     {uploads}
     {actions}
+    {quickMenu}
     onreview={(path) => (reviewed = path)}
     onopenlocation={(target) => (openedLocation = target)}
     onterminal={() => (terminalRequests += 1)}

@@ -27,6 +27,7 @@
   import { useChatUpload, useUpload } from "../hooks/upload.svelte";
   import { useFullscreen } from "../hooks/fullscreen.svelte";
   import { hasTouchInput, isIOS } from "../touchInput";
+  import type { ButtonSize } from "$lib/components/ui/button";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import { quickCommands } from "../quickCommands.svelte";
   import type { ChatCodeLink } from "../markdown-link";
@@ -645,7 +646,7 @@
   }
 </script>
 
-{#snippet quickMenu(side: "top" | "bottom")}
+{#snippet quickMenu(side: "top" | "bottom", size?: ButtonSize)}
   <QuickCommandMenu
     commands={quickCommands.list}
     target={hybrid.view === "chat"
@@ -658,6 +659,7 @@
       ? hybrid.missing
       : t.connection === "missing"}
     {side}
+    {size}
     run={(cmd) => void runQuickCommand(cmd)}
     manage={() => navigate(`/settings?session=${id}#quick-commands`)}
     onCloseAutoFocus={focusTerminal}

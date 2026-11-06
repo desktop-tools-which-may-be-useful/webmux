@@ -831,6 +831,38 @@ test("narrow screens move session options into a popover beside the upload butto
   }
 });
 
+async function composerButtonSizes() {
+  const socket = await open();
+  socket.frame(
+    snapshot(chatState({ steering: true, turn: { running: true } })),
+  );
+  await page.getByRole("textbox", { name: "消息" }).fill("下一步");
+  const names = ["上传文件", "插话", "停止", "快捷指令", "加入排队"];
+  const sizes: Record<string, string> = {};
+  for (const name of names) {
+    const button = page.getByRole("button", { name });
+    await expect.element(button).toBeVisible();
+    const box = button.element().getBoundingClientRect();
+    sizes[name] = `${box.width}x${box.height}`;
+  }
+  return sizes;
+}
+
+test("composer toolbar buttons share one box size on desktop", async () => {
+  const sizes = await composerButtonSizes();
+  expect(new Set(Object.values(sizes)).size, JSON.stringify(sizes)).toBe(1);
+});
+
+test("composer toolbar buttons share one box size on a phone", async () => {
+  await page.viewport(390, 844);
+  try {
+    const sizes = await composerButtonSizes();
+    expect(new Set(Object.values(sizes)).size, JSON.stringify(sizes)).toBe(1);
+  } finally {
+    await page.viewport(1024, 900);
+  }
+});
+
 test("the usage ring opens the exact token counts", async () => {
   const socket = await open();
   socket.frame(

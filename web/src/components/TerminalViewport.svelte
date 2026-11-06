@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import IconArrowDown from "~icons/tabler/arrow-down";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, type ButtonSize } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import SoftKeys from "./SoftKeys.svelte";
   import type { Modifiers } from "../input";
@@ -49,7 +49,7 @@
     // Keeps the PTY grid fixed and lets the host scroll past its edges.
     sizeLocked?: boolean;
     uploads: ViewportUploads;
-    quickMenu: Snippet<["top" | "bottom"]>;
+    quickMenu: Snippet<["top" | "bottom", ButtonSize?]>;
     // Phones keep the draft switch beside the quick commands.
     draftToggle: Snippet;
     send: (input: string) => void;

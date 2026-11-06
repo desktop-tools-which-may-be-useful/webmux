@@ -62,6 +62,7 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 | `Button`            | `aria-pressed` / `aria-expanded` / `aria-current="true"`    | outline、ghost、quiet 在开关按下、展开或当前项时显示前景色描边；不再提供填充的 `secondary`                                                   |
 | `Button`            | `raised`                                                    | 浮在终端或代码上的按钮（边框加阴影）                                                                                                         |
 | `Button`            | `size="icon-touch"` / `size="sm-touch"`                     | 窄屏（小于 `sm`）44px 触控尺寸，`sm` 以上恢复常规尺寸                                                                                        |
+| `Button`            | `size="icon-touch-sm"`                                      | 手机 44px、`sm` 以上 32px：紧凑工具栏中需保留触控尺寸的按钮（如终端顶栏 ⋯）                                                                  |
 | `Input`、`Textarea` | `mono`                                                      | 命令、路径、环境变量与终端文本                                                                                                               |
 | `Textarea`          | `variant="ghost"`                                           | 在列表项或卡片中原地编辑                                                                                                                     |
 | `Textarea`          | `variant="bare"`                                            | 填满自带边框与焦点环的容器（如聊天输入框），自身不再显示焦点环                                                                               |

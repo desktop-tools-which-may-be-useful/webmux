@@ -179,7 +179,7 @@
         <Popover.Trigger>
           {#snippet child({ props })}<Button
               {...props}
-              size="icon-touch"
+              size="icon-sm"
               variant="ghost"
               aria-label={`仓库详情 ${repo.name}`}
               title={`仓库详情 ${repo.name}`}

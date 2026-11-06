@@ -70,6 +70,7 @@ description: Use for any WebMux UI change — components, layout, styling, icons
 - **应用内导航不开新标签页。** 进入会话、聊天或 shell 等应用内跳转都在当前页完成，不加 `target="_blank"`。
 - **只保留一层焦点指示。** 带焦点环的容器里，内层控件不能再画第二个焦点环（例如在容器内使用 `Textarea variant="bare"`）。
 - **对齐要精确。** 并列的元数据、图标和文字按基线或网格对齐，桌面端和移动端都要检查。重复出现的元数据优先用 grid 布局，避免文字参差不齐。
+- **同排按钮尺寸一致。** 同一工具栏或按钮行里并排的图标按钮必须使用同一尺寸档位，桌面档与触屏档成对设置：宽松工具栏用 `size="icon-touch"`（即 `size-(--control-touch) sm:size-(--control-default)`），紧凑工具栏（如终端 32px 顶栏、工作区行）整体用 `icon-sm`，手机上需 44px 的个别按钮用 `icon-touch-sm`。同一行不得混用 `icon-sm` 与 `icon-touch`，也不手写 `size-8`、`min-h-*` 补尺寸。共用组件（如 `QuickCommandMenu`）接收 `size` 属性，由所在工具栏传入，不写死。验证时用 `getBoundingClientRect` 检查桌面与 390×844 下同排按钮的盒尺寸。
 - **工具栏按直觉排序。** 依次放高频主要操作、状态、次要工具、低频菜单。顺序在各页面间保持一致。
 - **点击显示详情。** 紧凑的指标（如 token 用量）点击后弹出 Popover 显示明细，不把所有信息常驻在界面上。
 - **加载时不闪现其他组件。** 首次渲染就是最终结构，不要先出现一个组件再替换成另一个；手机端尤其要检查。

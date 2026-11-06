@@ -3,7 +3,7 @@
   import IconArrowUp from "~icons/tabler/arrow-up";
   import IconMessageBolt from "~icons/tabler/message-bolt";
   import IconPlayerStopFilled from "~icons/tabler/player-stop-filled";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, type ButtonSize } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { Textarea } from "$lib/components/ui/textarea";
   import type { ChatActions, ConfigValue } from "../../chat-api";
@@ -53,7 +53,7 @@
     uploadUnavailable: string;
     actions: ChatActions;
     onerror: (message: string) => void;
-    quickMenu?: Snippet<["top" | "bottom"]>;
+    quickMenu?: Snippet<["top" | "bottom", ButtonSize?]>;
   } = $props();
 
   let textarea = $state<HTMLTextAreaElement | null>(null);
@@ -293,7 +293,7 @@
           onclick={stop}><IconPlayerStopFilled aria-hidden="true" /></Button
         >
       {/if}
-      {@render quickMenu?.("top")}
+      {@render quickMenu?.("top", "icon-touch")}
       <Button
         size="icon-touch"
         aria-label={queueing ? "加入排队" : "发送"}

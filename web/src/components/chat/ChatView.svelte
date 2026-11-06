@@ -5,7 +5,7 @@
   import IconHandStop from "~icons/tabler/hand-stop";
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconX from "~icons/tabler/x";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, type ButtonSize } from "$lib/components/ui/button";
   import FileDropZone from "../FileDropZone.svelte";
   import InlineNotice from "../InlineNotice.svelte";
   import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
@@ -71,7 +71,7 @@
     /** Moves the session to its terminal, such as to log in there. */
     onterminal: () => void;
     /** The quick-command menu, shown beside the send button. */
-    quickMenu?: Snippet<["top" | "bottom"]>;
+    quickMenu?: Snippet<["top" | "bottom", ButtonSize?]>;
   } = $props();
 
   let scroller = $state<HTMLDivElement>();

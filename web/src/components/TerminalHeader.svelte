@@ -9,7 +9,7 @@
   import IconUpload from "~icons/tabler/upload";
   import IconSearch from "~icons/tabler/search";
   import { navigate, sessionStatusText } from "../api";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, type ButtonSize } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { Fullscreen } from "../hooks/fullscreen.svelte";
   import type { HybridView } from "../hooks/hybrid.svelte";
@@ -83,7 +83,7 @@
     setKeyboardSizeHold: (value: boolean) => void;
     codeShown: boolean;
     forceSoftKeys: boolean;
-    quickMenu: Snippet<["top" | "bottom"]>;
+    quickMenu: Snippet<["top" | "bottom", ButtonSize?]>;
     upload: (files: File[]) => Promise<void>;
     toggleDraft: () => void;
     copy: () => Promise<void>;
@@ -144,7 +144,7 @@
   <Button
     class="max-sm:hidden"
     variant="ghost"
-    size="icon-touch"
+    size="icon-sm"
     aria-label={shellUi.mode === "chat" ? "返回新聊天" : "返回会话列表"}
     title={shellUi.mode === "chat" ? "返回新聊天" : "返回会话列表"}
     onclick={() => navigate(shellUi.home)}
@@ -285,7 +285,7 @@
       {#snippet child({ props })}<Button
           {...props}
           variant="ghost"
-          size="icon-touch"
+          size="icon-touch-sm"
           aria-label={terminalShown ? "终端菜单" : "会话菜单"}
           title={terminalShown ? "终端菜单" : "会话菜单"}>⋯</Button
         >{/snippet}

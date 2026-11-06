@@ -124,7 +124,7 @@
           ><IconPlus class="size-4" aria-hidden="true" />新建会话</Button
         >{/if}
       <Button
-        size="icon-touch"
+        size="icon-sm"
         variant="ghost"
         aria-label={`${worktree ? "工作树" : "目录"}详情 ${title}`}
         title={`${worktree ? "工作树" : "目录"}详情 ${title}`}
@@ -141,7 +141,6 @@
                 {...props}
                 size="icon-sm"
                 variant="ghost"
-                class="size-9 sm:size-8"
                 title={`工作树菜单 ${title}`}
                 aria-label={`工作树菜单 ${title}`}
                 ><IconDots class="size-4" aria-hidden="true" /></Button

@@ -3,7 +3,7 @@
   import IconCornerDownLeft from "~icons/tabler/corner-down-left";
   import IconPlus from "~icons/tabler/plus";
   import IconSettings from "~icons/tabler/settings";
-  import { Button } from "$lib/components/ui/button";
+  import { Button, type ButtonSize } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { QuickCommand } from "../schemas";
   import { commandPreview } from "../quickCommands";
@@ -14,6 +14,7 @@
     unavailable,
     disabled,
     side,
+    size = "icon-sm",
     run,
     manage,
     onCloseAutoFocus,
@@ -24,6 +25,8 @@
     unavailable: string;
     disabled: boolean;
     side: "top" | "bottom";
+    // Match the neighbouring buttons of the toolbar that hosts the trigger.
+    size?: ButtonSize;
     run: (cmd: QuickCommand) => void;
     manage: () => void;
     onCloseAutoFocus: (event: Event) => void;
@@ -39,7 +42,7 @@
     {#snippet child({ props })}<Button
         {...props}
         variant="outline"
-        size="icon-sm"
+        {size}
         aria-label="快捷指令"
         title="快捷指令"><IconBolt class="size-4" aria-hidden="true" /></Button
       >{/snippet}

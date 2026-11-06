@@ -38,6 +38,8 @@
         "icon-lg": "size-(--control-lg)",
         // Narrow layouts: the touch size below `sm`, the regular size above.
         "icon-touch": "size-(--control-touch) sm:size-(--control-default)",
+        // Compact toolbars that keep a full touch target on phones only.
+        "icon-touch-sm": "size-(--control-touch) sm:size-(--control-sm)",
         "sm-touch":
           "h-(--control-touch) sm:h-(--control-default) gap-1.5 rounded-md px-4 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
       },
