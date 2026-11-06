@@ -14,6 +14,7 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import BlockerList from "./BlockerList.svelte";
+  import InlineNotice from "./InlineNotice.svelte";
   import PreviewForm from "./PreviewForm.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import PushCheckNotice from "./PushCheckNotice.svelte";
@@ -140,6 +141,13 @@
       {:else}<p class="text-sm">
           当前工作树可安全删除：没有受保护的文件或活动会话。
         </p>{/if}
+      {#if preview.warnings.length}
+        <InlineNotice tone="warning">
+          <ul class="space-y-1">
+            {#each preview.warnings as warning (warning)}<li>{warning}</li>{/each}
+          </ul>
+        </InlineNotice>
+      {/if}
       {#if preview.sessions.length}
         <div class="space-y-2 text-sm">
           <p class="font-medium">关联会话（按启动目录识别）</p>

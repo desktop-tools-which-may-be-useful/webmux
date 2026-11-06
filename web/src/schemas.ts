@@ -690,6 +690,7 @@ export const RemovalPreviewSchema = z.object({
   commit: z.string(),
   push: PushCheckSchema,
   blockers: z.array(z.string()),
+  warnings: z.array(z.string()),
   forceAllowed: z.boolean(),
 });
 export type RemovalPreview = z.infer<typeof RemovalPreviewSchema>;

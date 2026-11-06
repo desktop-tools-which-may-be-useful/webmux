@@ -134,6 +134,7 @@ type RemovalPreview struct {
 	Commit       string    `json:"commit"`
 	Push         PushCheck `json:"push"`
 	Blockers     []string  `json:"blockers"`
+	Warnings     []string  `json:"warnings"`
 	ForceAllowed bool      `json:"forceAllowed"`
 }
 

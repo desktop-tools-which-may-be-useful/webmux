@@ -38,7 +38,7 @@ func TestSafeRemovalProtectsEveryContentCategoryAndRetainsBranches(t *testing.T)
 	root := initRepo(t)
 	s, _ := testService(t, t.TempDir(), root)
 	r := registerTest(t, s, root)
-	for _, category := range []string{"modified", "untracked", "ignored", "running"} {
+	for _, category := range []string{"modified", "untracked", "running"} {
 		t.Run(category, func(t *testing.T) {
 			tree := linkedTest(t, s, r, category)
 			var item *session.Session
@@ -47,8 +47,6 @@ func TestSafeRemovalProtectsEveryContentCategoryAndRetainsBranches(t *testing.T)
 				putFile(t, filepath.Join(tree.Path, "tracked"), "changed")
 			case "untracked":
 				putFile(t, filepath.Join(tree.Path, "untracked"), "new")
-			case "ignored":
-				putFile(t, filepath.Join(tree.Path, ".env"), "secret")
 			case "running":
 				var err error
 				item, err = s.CreateSession(context.Background(), CreateInput{Cwd: tree.Path, Cmd: []string{"/bin/sh", "-c", "printf READY; read value"}})
@@ -73,6 +71,15 @@ func TestSafeRemovalProtectsEveryContentCategoryAndRetainsBranches(t *testing.T)
 				t.Fatal("confirmation reused")
 			}
 		})
+	}
+	ignored := linkedTest(t, s, r, "ignored")
+	putFile(t, filepath.Join(ignored.Path, ".env"), "secret")
+	warned := previewTest(t, s, r, ignored)
+	if len(warned.Blockers) != 0 || len(warned.Warnings) != 1 {
+		t.Fatalf("ignored files should only warn: %+v", warned)
+	}
+	if err := s.RemoveWorktree(context.Background(), r.ID, ignored.ID, RemoveRequest{ConfirmationID: warned.ConfirmationID, Mode: "safe"}); err != nil {
+		t.Fatal(err)
 	}
 	clean := linkedTest(t, s, r, "clean")
 	exited, err := s.CreateSession(context.Background(), CreateInput{Cwd: clean.Path, Cmd: []string{"/bin/sh", "-c", "printf RETAINED"}})

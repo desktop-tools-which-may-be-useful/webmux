@@ -41,6 +41,7 @@ function preview(patch: Preview = {}): Preview {
     ignoredMore: 0,
     sizeComplete: true,
     blockers: [],
+    warnings: [],
     forceAllowed: true,
     ...patch,
   };

@@ -41,15 +41,13 @@ func (id *identity) close() {
 	id.handles = nil
 }
 
-// blockerKind tells removal and release which blockers they share: a
-// release ignores blockIgnored, the rest block both.
+// blockerKind tells removal and release which blockers they share.
 type blockerKind int
 
 const (
 	blockUnsupported blockerKind = iota
 	blockDirty
 	blockUntracked
-	blockIgnored
 	blockSessions
 )
 
@@ -63,6 +61,8 @@ type removalState struct {
 	identity  identity
 	sessions  []session.Info
 	blockers  []blocker
+	// warnings do not block removal or release; the preview shows them.
+	warnings  []string
 	supported bool
 }
 
@@ -219,7 +219,7 @@ func (s *Service) removalState(ctx context.Context, r *repositoryState, worktree
 		add(blockUntracked, "存在未跟踪文件")
 	}
 	if tree.HasIgnored {
-		add(blockIgnored, "存在忽略文件（可能包含 .env 或构建产物）")
+		state.warnings = append(state.warnings, "存在忽略文件（可能包含 .env 或构建产物），删除后将一并丢失")
 	}
 	for _, info := range state.sessions {
 		if info.Status != session.StatusExited {
@@ -258,7 +258,7 @@ func (s *Service) PreviewRemoval(ctx context.Context, repositoryID, worktreeID s
 	}
 	return Preview{
 		ConfirmationID: id, ExpiresAt: expires, Worktree: state.tree, Sessions: state.sessions, Archived: records, Commit: commit, Push: check,
-		Blockers: state.messages(), ForceAllowed: state.supported,
+		Blockers: state.messages(), Warnings: append([]string{}, state.warnings...), ForceAllowed: state.supported,
 	}, nil
 }
 

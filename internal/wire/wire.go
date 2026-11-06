@@ -298,7 +298,7 @@ func Preview(p workspace.Preview, archived func(hybrid.Record) Archived) contrac
 	return contract.RemovalPreview{
 		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree),
 		Sessions: Sessions(p.Sessions), Archived: each(p.Archived, func(r hybrid.Record) contract.SessionInfo { return ArchivedSession(r, archived(r)) }),
-		Commit: p.Commit, Push: PushCheck(p.Push), Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
+		Commit: p.Commit, Push: PushCheck(p.Push), Blockers: required(p.Blockers), Warnings: required(p.Warnings), ForceAllowed: p.ForceAllowed,
 	}
 }
 

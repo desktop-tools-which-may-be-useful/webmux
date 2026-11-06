@@ -123,7 +123,7 @@ func (s *Service) pinRecords(ctx context.Context, r *repositoryState, repository
 // releaseBlockers are the removal blockers without ignored files, plus a
 // commit that must resolve and at least one archived record.
 func releaseBlockers(state removalState, commit string, records []hybrid.Record) []string {
-	out := state.messages(blockIgnored)
+	out := state.messages()
 	if commit == "" {
 		out = append(out, "HEAD 无法解析为提交，不能保存释放点")
 	}
