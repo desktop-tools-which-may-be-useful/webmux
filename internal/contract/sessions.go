@@ -6,7 +6,11 @@ import "time"
 // names, omitempty and nil-versus-empty behavior are part of the wire
 // contract and are pinned by internal/api/testdata/wire.
 
-// SessionStatus is the display state of a session.
+// SessionStatus is the display state of a session. waiting means the session
+// needs the user: an agent's blocked state or unread done/error, a latched
+// attention signal, or, without agent signals, a prompt-like last line or a
+// process reading the terminal. idle means long silence without those signs,
+// not completion.
 type SessionStatus string
 
 const (

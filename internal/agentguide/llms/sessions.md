@@ -13,7 +13,14 @@ webmux get <ID> --json                      # SessionDetails：仓库、分支�
 webmux get --field worktree.branch          # 只输出一个字段，不需要 jq
 ```
 
-状态取值：`running`（有输出）、`waiting`（像在等待输入）、`idle`、`exited`。`attention` 字段表示会话需要用户介入（问题、授权、完成、出错、通知）。
+状态取值：
+
+- `running`：最近 2 秒内有输出，或 agent 报告正在工作。
+- `waiting`：需要用户介入。包括 agent 的授权请求或提问、未读的完成或出错；没有 agent 信号时，末行像提示符或进程在等终端输入也算，因此停在提示符的 shell 是 `waiting`。
+- `idle`：长期无活动（超过 `idle_after_seconds` 无输出）且没有上述迹象。它不是“命令或回合已结束”的信号。
+- `exited`：进程已结束。
+
+`attention` 字段表示会话需要用户介入（问题、授权、完成、出错、通知）；agent 完成一回合后会锁存 `done` 关注，用户输入后才清除。
 
 ## 父会话与标签
 
@@ -24,15 +31,15 @@ webmux get --field worktree.branch          # 只输出一个字段，不需要 
 ## 输入与等待
 
 ```sh
-webmux send <ID> 'make test' --enter --wait idle --timeout 10m   # 输入并回车，等会话回到空闲
+webmux send <ID> 'make test' --enter --wait waiting,idle --timeout 10m   # 输入并回车，等 shell 回到提示符（提示符读作 waiting）
 webmux send <ID> --key esc                                       # 发送按键：enter esc tab ctrl-c ctrl-d up down left right backspace
 git diff | webmux send <ID> - --enter                            # 从标准输入读取文字
-webmux wait <ID> --until attention,idle --changed --timeout 30m  # 等 agent 需要介入或本轮结束
+webmux wait <ID> --until attention --changed --timeout 30m       # 等 agent 需要介入或本轮结束
 webmux wait <ID> --until exited --json | jq .exitCode
 ```
 
 - `send` 只在服务端确认输入已写入 PTY 后才以 0 退出；它会像在浏览器里打字一样取得终端控制权。
-- `send --wait` 先订阅再输入，只接受输入之后的状态变化；单独的 `wait` 默认当前状态也算，`--changed` 才只看之后的变化，`--stable 5s` 过滤短暂的空闲。
+- `send --wait` 先订阅再输入，只接受输入之后的状态变化；单独的 `wait` 默认当前状态也算，`--changed` 才只看之后的变化，`--stable 5s` 要求条件持续一段时间，过滤短暂的状态切换。
 - 混合会话在聊天端时不能 `send`，请用 `webmux chat send`。
 
 ## 输出与画面

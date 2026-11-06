@@ -264,7 +264,8 @@ var sendCommand = &Command{
 		"Sending takes control of the terminal, as typing does in the browser; the control indicator names this client \"script\" " +
 		"and, inside a session, that session.\n\n" +
 		"--wait subscribes to the session list before sending and returns on the first change into STATE after the input, so a " +
-		"stale idle state cannot end the wait early. A hybrid session on its chat side takes webmux chat send instead.",
+		"stale state cannot end the wait early. STATE is one or more comma-separated session states (see webmux wait). A hybrid " +
+		"session on its chat side takes webmux chat send instead.",
 	Arguments: []Item{sessionArgument, {Name: "TEXT", Text: "The text to type; - reads standard input."}},
 	Env:       []Item{sessionIDEnv},
 	Output:    "Nothing; with --wait --json, the SessionInfo that matched.",
@@ -273,7 +274,7 @@ var sendCommand = &Command{
 		ExitItem{Code: 124, Text: "--wait timed out."},
 	),
 	Examples: []Example{
-		{Command: "webmux send abcd2345 'make test' --enter --wait idle --timeout 10m", Text: "Run a command in a shell session and wait until it is idle again."},
+		{Command: "webmux send abcd2345 'make test' --enter --wait waiting,idle --timeout 10m", Text: "Run a command in a shell session and wait until its prompt is back (an idle shell prompt reads as waiting, and idle only follows long silence)."},
 		{Command: "webmux send abcd2345 --key esc", Text: "Interrupt an agent's turn."},
 		{Command: "git diff | webmux send abcd2345 - --enter", Text: "Paste standard input into an agent and submit it."},
 	},
@@ -449,9 +450,12 @@ var waitCommand = &Command{
 	Name: "wait", Group: GroupSessions, Args: "SESSION...",
 	Summary: "Wait until sessions reach a state: running, waiting, idle, exited or attention.",
 	Description: "Subscribes to the session list (/ws/sessions) and returns when every session (or with --any, one) is in one of the " +
-		"--until states; attention means the session has a latched attention signal. Without --changed the current state counts; " +
-		"with --changed only a change after subscribing does. --stable requires the condition to hold that long, which filters an " +
-		"agent's brief idle moments between tool calls.",
+		"--until states. waiting means the session needs you: an agent's permission request or question, an unread done or error, " +
+		"or, without any agent signal, a prompt-like last line or a process reading the terminal (so a shell at its prompt is " +
+		"waiting). idle only means long silence (idle_after_seconds) without those signs; it is not a completion signal. " +
+		"attention means the session has a latched attention signal, which an agent raises when it finishes a turn. Without " +
+		"--changed the current state counts; with --changed only a change after subscribing does. --stable requires the " +
+		"condition to hold that long, which filters short-lived transitions.",
 	Arguments: []Item{sessionArgument},
 	Env:       []Item{sessionIDEnv},
 	Output:    "Nothing; with --json the matching SessionInfo, or an array for several sessions.",
@@ -462,7 +466,7 @@ var waitCommand = &Command{
 	Examples: []Example{
 		{Command: "webmux wait abcd2345 --until attention,idle --changed --timeout 30m", Text: "Wait until an agent needs you or finishes its turn."},
 		{Command: "webmux wait abcd2345 --until exited --json | jq .exitCode", Text: "Wait for a command and read its exit code."},
-		{Command: "webmux wait a1 b2 c3 --until idle --stable 5s --any", Text: "Return when the first of three agents has been idle for five seconds."},
+		{Command: "webmux wait a1 b2 c3 --until attention --changed --any", Text: "Return when the first of three agents needs you or finishes its turn."},
 	},
 	SeeAlso: []string{"webmux send --wait", "webmux events"},
 	Bind: func(fs *flag.FlagSet) Action {

@@ -42,7 +42,7 @@ echo "exit $?"
 
 ```sh
 id=$(webmux run --detach --name build -- bash | cut -f1)
-webmux send "$id" 'make build' --enter --wait idle --stable 3s --timeout 20m
+webmux send "$id" 'make build' --enter --wait waiting,idle --stable 3s --timeout 20m
 webmux logs "$id" --strip --tail 30
 ```
 
