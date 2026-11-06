@@ -925,6 +925,7 @@ func TestCloseInterruptsTerminalTurn(t *testing.T) {
 	// before the bound and close returns early on a slow runner.
 	s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=5s"))
 	id := s.Info().ID
+	waitFor(t, "idle terminal", func() bool { return !tuiBusy(s.Info()) })
 	typeLine(t, s, strings.Repeat("slow ", 100))
 	waitFor(t, "terminal turn", func() bool { return tuiBusy(s.Info()) })
 	started := time.Now()
