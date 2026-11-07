@@ -255,7 +255,7 @@
   <UploadFileInput bind:this={fileInput} {upload} />
   {#if terminalShown}
     <div class="quick-commands-header flex items-center gap-1">
-      {@render quickMenu("bottom")}
+      {@render quickMenu("bottom", undefined, "ghost")}
     </div>
     <DraftToggle
       class="max-sm:hidden"

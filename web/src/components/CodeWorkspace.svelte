@@ -1008,7 +1008,7 @@
   <div class="flex shrink-0 items-stretch border-b">
     <div class="flex shrink-0 items-center px-2 py-1">
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon-sm"
         class="relative"
         aria-label={navOpen ? "收起导航" : "文件导航"}
@@ -1070,7 +1070,7 @@
     </div>
     <div class="flex shrink-0 items-center gap-1 px-2 py-1">
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon-sm"
         aria-label="刷新全部"
         title={context?.rootPath
@@ -1083,7 +1083,7 @@
         }}><IconRefresh aria-hidden="true" /></Button
       >
       {#if popout}<Button
-          variant="outline"
+          variant="ghost"
           size="icon-sm"
           class="max-sm:hidden"
           aria-label={popout.popped ? "收回代码窗口" : "在独立窗口中显示代码"}
@@ -1098,7 +1098,7 @@
           <DropdownMenu.Trigger>
             {#snippet child({ props })}<Button
                 {...props}
-                variant="outline"
+                variant="ghost"
                 size="icon-sm"
                 class="sm:hidden"
                 aria-label="代码菜单"
