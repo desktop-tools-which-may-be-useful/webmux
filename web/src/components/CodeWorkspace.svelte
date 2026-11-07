@@ -42,6 +42,7 @@
   import IconX from "~icons/tabler/x";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import CodeDocumentView from "./CodeDocumentView.svelte";
+  import "../fonts-terminal.css";
   let {
     id,
     visible,

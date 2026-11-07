@@ -56,7 +56,7 @@
   验收要点：
   - 浏览器支持时可进入和退出原生全屏（窄于 640px 时在终端菜单中）；
   - 不支持时浏览器标签页提示添加到主屏幕，主屏幕 Web App 中不显示全屏入口；
-  - 字体可在 8–20px 间调整，只保存在当前浏览器、不跨设备同步（各设备屏幕大小不同），并用于终端布局。
+  - 字体可在 8–20px 间调整，只保存在当前浏览器、不跨设备同步（各设备屏幕大小不同），并用于终端布局；终端与代码区内置 `Maple Mono NF CN`（含拉丁、制表符、Nerd Font 图标及按需加载的 `unicode-range` 中文切片），保证中英文 2:1 等宽对齐。
 - **US-D09 查看退出结果**：作为使用者，我希望程序结束后仍能看到退出码和最后输出，以便确认成功或排查失败。
   验收要点：
   - 最终输出排空后发布退出；
@@ -125,7 +125,7 @@
 - [WebSocket 桥接](../../internal/hub/hub.go)、[会话 IO](../../internal/session/input_write.go)、[控制权](../../internal/session/control.go)
 - [会话管理](../../internal/session/manager.go)、[Kitty 图形协议](../../web/src/kitty-graphics.ts)、[图形渲染层](../../web/src/hooks/terminal-graphics.ts)
 - [协议单元用例](../../web/test/kitty-graphics.test.ts)
-- [图形浏览器用例](../../web/test/browser/TerminalGraphics.test.ts)。
+- [图形浏览器用例](../../web/test/browser/TerminalGraphics.test.ts)、[终端渲染与等宽字体回归](../../web/test/browser/TerminalRenderer.test.ts)。
 
 图形滚动补充依据：[图像行锚点](../../web/src/hooks/terminal-graphics-anchor.ts)、[共享重绘字节](../../web/test/fixtures/kitty-scroll.ts)、[交互式 PTY 复现程序](../../web/test/fixtures/kitty-scroll-demo.mjs)。
 

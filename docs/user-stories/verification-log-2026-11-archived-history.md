@@ -72,3 +72,15 @@
   - 前端新增 `web/test/voice.test.ts` 与 `web/test/browser/VoiceButton.test.ts`，覆盖重采样、PCM 编码、音量计算及四阶段点击录音插入流程。
 - 限制：
   - 自动化测试使用模拟子进程与模拟 WebSocket，未在 CI 中连接外部云端 ASR 服务。
+
+本次局部核对（2026-11-07）：终端与代码区内置 `Maple Mono NF CN` 中文 `unicode-range` 字体切片，更新 US-D08 与覆盖索引，不新增故事。
+
+- 范围：
+  - `web/scripts/build-fonts.py` 在去重 Regular/Bold 共享无 hinting 图标（`maple-icons-*.woff2`）的基础上，使用 `cn-font-split` 将 `Maple Mono NF CN`（400/700）的 CJK 与其余字形切分为按需加载的 WOFF2 分片，写入 `web/src/fonts-terminal.css`；
+  - `web/src/hooks/terminal-renderer.ts` 与 `web/src/components/CodeWorkspace.svelte` 按需导入 `fonts-terminal.css`，使终端与代码区（含 `/code/<id>` 独立窗口和混合会话代码面板）均使用 `Maple Mono NF CN` 渲染中文并保持 2:1 等宽比；
+  - 首页冷启动不预拉取 CJK 分片，UI 正文（`--font-sans`）中文继续使用系统无衬线字体。
+- 依据：
+  - `web/test/browser/TerminalRenderer.test.ts` 新增 `Maple Mono NF CN` 400/700 字重下 `"中文"` 与 `"WWWW"` 宽度一致（2:1 等宽）的真实浏览器测量断言；
+  - `make check`、`pnpm --dir web check:arch` 与 `go test ./web ./internal/api` 静态资源嵌入校验通过。
+- 限制：
+  - 未重新运行完整 E2E 与性能套件；未重新核验其余故事能力。

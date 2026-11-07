@@ -246,17 +246,26 @@ test("terminal measures the bundled monospace face before painting", async () =>
   for (const weight of [400, 700]) {
     // Loading the shared icon face must not shadow the Latin unicode slice.
     await document.fonts.load(`${weight} 14px "Maple Mono NF CN"`, "\uf07b");
+    await document.fonts.load(`${weight} 14px "Maple Mono NF CN"`, "中文一二");
     for (const size of [14, 16]) {
       context.font = `${weight} ${size}px "Maple Mono NF CN", sans-serif`;
       expect(
         context.measureText("WWWW").width,
         `weight ${weight}: Latin glyphs must use the bundled monospace face`,
       ).toBeCloseTo(context.measureText("iiii").width, 2);
-      // Maple's advance is 0.6em. Linux font hinting can round each glyph
-      // to a whole pixel; macOS retains the fractional advance.
+      expect(
+        context.measureText("中文").width,
+        `weight ${weight}: CJK glyphs must use the bundled 2:1 monospace face`,
+      ).toBeCloseTo(context.measureText("一二").width, 2);
+      // Maple's Latin advance is 0.6em and CJK advance is 1.2em. Linux font
+      // hinting can round each glyph independently to a whole pixel; macOS
+      // retains the fractional advance.
       const advance = context.measureText("WWWW").width / 4;
       expect(advance).toBeGreaterThanOrEqual(Math.floor(size * 0.6));
       expect(advance).toBeLessThanOrEqual(Math.ceil(size * 0.6));
+      const cjkAdvance = context.measureText("中文").width / 2;
+      expect(cjkAdvance).toBeGreaterThanOrEqual(Math.floor(size * 1.2));
+      expect(cjkAdvance).toBeLessThanOrEqual(Math.ceil(size * 1.2));
     }
   }
 });
