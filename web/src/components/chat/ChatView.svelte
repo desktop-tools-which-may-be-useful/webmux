@@ -10,6 +10,7 @@
     type ButtonSize,
     type ButtonVariant,
   } from "$lib/components/ui/button";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
   import FileDropZone from "../FileDropZone.svelte";
   import InlineNotice from "../InlineNotice.svelte";
   import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
@@ -78,7 +79,7 @@
     quickMenu?: Snippet<["top" | "bottom", ButtonSize?, ButtonVariant?]>;
   } = $props();
 
-  let scroller = $state<HTMLDivElement>();
+  let scroller = $state<HTMLElement | null>(null);
   let stick = $state(true);
   let error = $state("");
   let answering = $state(false);
@@ -192,6 +193,13 @@
     stick =
       scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 32;
   }
+  // The viewport belongs to ScrollArea, which takes no scroll handler.
+  $effect(() => {
+    const element = scroller;
+    if (!element) return;
+    element.addEventListener("scroll", follow, { passive: true });
+    return () => element.removeEventListener("scroll", follow);
+  });
   function latest() {
     scroller?.scrollTo({ top: scroller.scrollHeight });
     stick = true;
@@ -245,10 +253,11 @@
   label="松开以上传文件到聊天"
 >
   <div class="relative flex min-h-0 flex-1 flex-col">
-    <div
-      bind:this={scroller}
-      class="min-h-0 flex-1 overflow-y-auto"
-      onscroll={follow}
+    <ScrollArea
+      bind:viewportRef={scroller}
+      type="hover"
+      class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block"
+      scrollbarYClasses="[&_[data-slot=scroll-area-thumb]]:bg-foreground/25 hover:[&_[data-slot=scroll-area-thumb]]:bg-foreground/40"
     >
       <div class="mx-auto flex max-w-3xl flex-col gap-2.5 px-4 py-6">
         {#if model.truncated}
@@ -327,7 +336,7 @@
           </p>
         {/if}
       </div>
-    </div>
+    </ScrollArea>
     {#if chat?.plan?.entries.length}
       <!-- Wide panes leave empty space right of the centred transcript: pin
            the plan there instead of stacking it above the input. -->

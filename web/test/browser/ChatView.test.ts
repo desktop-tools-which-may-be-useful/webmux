@@ -734,7 +734,9 @@ test("the transcript stays at its end when the composer grows on a phone", async
     });
     const transcript = page.getByRole("list", { name: "对话" });
     await expect.element(transcript.getByText("第 29 条回复")).toBeVisible();
-    const scroller = transcript.element().parentElement!.parentElement!;
+    const scroller = transcript
+      .element()
+      .closest("[data-slot=scroll-area-viewport]")!;
     const atEnd = () =>
       Math.abs(
         scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
@@ -1104,7 +1106,9 @@ test("the jump-to-latest button stays above a tall composer area", async () => {
   });
   const conversation = page.getByRole("list", { name: "对话" });
   await expect.element(conversation).toMatchTextContent(/第 39 段回复/);
-  const scroller = conversation.element().closest(".overflow-y-auto")!;
+  const scroller = conversation
+    .element()
+    .closest("[data-slot=scroll-area-viewport]")!;
   scroller.scrollTop = 0;
   scroller.dispatchEvent(new Event("scroll"));
   const jump = page.getByRole("button", { name: "回到最新" });
