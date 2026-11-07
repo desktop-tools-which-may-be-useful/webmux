@@ -687,7 +687,7 @@
                  the chat composer does; the row above keeps the location. -->
             <span class="flex min-w-0 items-center gap-0.5 sm:hidden">
               {@render agentPicker("hidden @md:inline")}
-              {@render sidePicker()}
+              {@render sidePicker("hidden @md:inline")}
               {#if chat}
                 <ChatSessionOptions
                   mode={permissionMode}
@@ -788,9 +788,10 @@
   </ChatSelect>
 {/snippet}
 
-{#snippet sidePicker()}
+{#snippet sidePicker(labelClass = "")}
   <ChatSelect
     labeled
+    {labelClass}
     name="启动方式"
     value={startSide}
     choices={[
