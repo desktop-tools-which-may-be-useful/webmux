@@ -10,11 +10,11 @@
   } from "@pierre/diffs";
   import { captureCursor, restoreCursor } from "../code-search";
   import { createCodeFind } from "../code-find.svelte";
+  import { codeFont } from "../hooks/code-font-preference.svelte";
   import { settings, changeSettings } from "../settings.svelte";
   import { defaultCodeReader } from "../settings-intent";
   import { acquireCodeHighlighter } from "../code-highlighter";
   import {
-    codeItemMetrics,
     codeTokenizeLimit,
     codeUnsafeCSS,
     pierreTheme,
@@ -33,6 +33,7 @@
   import CodeReaderPanels from "./CodeReaderPanels.svelte";
   import IconSearch from "~icons/tabler/search";
   import IconTextWrap from "~icons/tabler/text-wrap";
+  import IconZoomIn from "~icons/tabler/zoom-in";
 
   let {
     fileDiff,
@@ -284,7 +285,7 @@
       lineHoverHighlight: "number",
       expansionLineCount: expansionLines,
       hunkSeparators: "line-info",
-      itemMetrics: codeItemMetrics,
+      itemMetrics: codeFont.itemMetrics,
       layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
       onSelectedLinesChange: (selection) => choose(selection?.range ?? null),
       onLineNumberClick(props) {
@@ -379,6 +380,8 @@
       onScroll: () => {
         if (!pending) topLine();
       },
+      getFontSize: () => codeFont.size,
+      setFontSize: (value) => codeFont.set(value),
     });
     width = host.clientWidth;
     const highlighter = acquireCodeHighlighter();
@@ -502,6 +505,15 @@
         });
       }}><IconTextWrap aria-hidden="true" /></Button
     >
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      title="缩放"
+      aria-label="缩放"
+      aria-expanded={find.panel === "zoom"}
+      onclick={() => void find.actions.openPanel("zoom")}
+      ><IconZoomIn aria-hidden="true" /></Button
+    >
   </div>
   <CodeReaderPanels
     panel={find.panel}
@@ -524,6 +536,8 @@
     <div
       bind:this={host}
       class="code-diff-reader h-full overflow-x-hidden overflow-y-auto overscroll-contain outline-none contain-strict [overflow-anchor:none]"
+      style:--diffs-font-size={`${codeFont.size}px`}
+      style:--diffs-line-height={`${codeFont.lineHeight}px`}
       tabindex="-1"
       aria-label="只读代码"
     ></div>
@@ -546,7 +560,5 @@
 <style>
   .code-diff-reader {
     --diffs-font-family: var(--font-mono, monospace);
-    --diffs-font-size: 13px;
-    --diffs-line-height: 22px;
   }
 </style>

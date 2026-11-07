@@ -41,6 +41,7 @@
   - 文件的跳转行接受 `N`、`+N`、`-N`、`N%` 与 `N:列`；
   - Diff 换行偏好同样同步；
   - Diff 固定显示行号，保留自动换行和 Ctrl/⌘+Alt+G 跳转行快捷键；
+  - 单文件与 Diff 工具栏提供“缩放”按钮，点击展开或收起字号缩放条（10px–24px，默认 13px，非默认时可一键重置），也支持桌面端 `Ctrl + 鼠标滚轮` 缩放与触摸设备双指捏合缩放，代码字号保存在本机浏览器；
   - 单文件与未自动换行的 Diff 在代码行超出可视宽度时于视图底部显示横向滚动条，与代码区横向滚动保持同步。
 - **US-I06 总览 Git 修改**：作为使用者，我希望按未暂存、已暂存、未跟踪查看修改，并筛选路径，以便了解 agent 改了什么。
   验收要点：
@@ -165,7 +166,7 @@
 
 - [代码面板](../../web/src/components/CodePanel.svelte)、[独立窗口](../../web/src/components/code-popout.ts)、[平台能力判断](../../web/src/capabilities.ts)
 - [文件导航](../../web/src/components/CodeNavigator.svelte)、[文件树](../../web/src/components/CodeFileTree.svelte)、[文件操作菜单](../../web/src/components/CodeFileActions.svelte)
-- [文件与 Diff 切换](../../web/src/components/CodeDocumentView.svelte)、[文件阅读](../../web/src/components/CodeReader.svelte)
+- [文件与 Diff 切换](../../web/src/components/CodeDocumentView.svelte)、[文件阅读](../../web/src/components/CodeReader.svelte)、[代码缩放条](../../web/src/components/CodeZoomPanel.svelte)、[代码字号偏好](../../web/src/hooks/code-font-preference.svelte.ts)
 - [Markdown 代码块语言匹配](../../web/src/code-language.ts)、[Pierre 阅读器配置](../../web/src/code-pierre.ts)、[高亮 worker](../../web/src/code-highlighter.ts)
 - [Markdown 链接与图片路径解析](../../web/src/markdown-link.ts)、[标题锚点](../../web/src/markdown-slug.ts)、[代码块高亮](../../web/src/code-highlight.ts)
 - [Markdown 预览](../../web/src/components/CodeMarkdownPreview.svelte)、[Diff 阅读](../../web/src/components/CodeDiffReader.svelte)、[图片预览](../../web/src/components/CodeImageView.svelte)

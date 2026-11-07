@@ -9,14 +9,13 @@
   import { createCodeFind } from "../code-find.svelte";
   import { settings, changeSettings } from "../settings.svelte";
   import { defaultCodeReader } from "../settings-intent";
-  import { acquireCodeHighlighter } from "../code-highlighter";
   import {
-    codeItemMetrics,
-    codeLineHeight,
     codeTokenizeLimit,
     fileUnsafeCSS,
     pierreTheme,
   } from "../code-pierre";
+  import { acquireCodeHighlighter } from "../code-highlighter";
+  import { codeFont } from "../hooks/code-font-preference.svelte";
   import {
     bindHorizontalScrollbar,
     readerKeydown,
@@ -32,6 +31,7 @@
   import IconListNumbers from "~icons/tabler/list-numbers";
   import IconNumber from "~icons/tabler/number";
   import IconSearch from "~icons/tabler/search";
+  import IconZoomIn from "~icons/tabler/zoom-in";
 
   let {
     text,
@@ -279,7 +279,7 @@
         align: "start",
         // A positive offset leaves the line below the edge; the captured
         // fraction is how far the line is scrolled past it.
-        offset: -known.offset * codeLineHeight,
+        offset: -known.offset * codeFont.lineHeight,
       });
   }
 
@@ -397,7 +397,7 @@
       disableFileHeader: true,
       disableLineNumbers: !showGutter,
       lineHoverHighlight: "number",
-      itemMetrics: codeItemMetrics,
+      itemMetrics: codeFont.itemMetrics,
       tokenizeMaxLineLength: codeTokenizeLimit,
       unsafeCSS: fileUnsafeCSS,
       layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
@@ -448,6 +448,8 @@
       onScroll: () => {
         if (!pending) position();
       },
+      getFontSize: () => codeFont.size,
+      setFontSize: (value) => codeFont.set(value),
     });
     const highlighter = acquireCodeHighlighter();
     viewer = new CodeView(options(), highlighter.pool);
@@ -519,6 +521,15 @@
     <Button
       variant="ghost"
       size="icon-sm"
+      aria-label="缩放"
+      aria-expanded={find.panel === "zoom"}
+      title="缩放"
+      onclick={() => void find.actions.openPanel("zoom")}
+      ><IconZoomIn aria-hidden="true" /></Button
+    >
+    <Button
+      variant="ghost"
+      size="icon-sm"
       aria-label="显示行号"
       title={showGutter ? "隐藏行号" : "显示行号"}
       aria-pressed={showGutter}
@@ -537,9 +548,11 @@
     <div
       bind:this={host}
       data-code-reader
-      class="code-reader h-full overflow-x-hidden overflow-y-auto overscroll-contain outline-none contain-strict [overflow-anchor:none]"
       tabindex="-1"
       aria-label="只读代码"
+      style:--diffs-font-size={`${codeFont.size}px`}
+      style:--diffs-line-height={`${codeFont.lineHeight}px`}
+      class="code-reader h-full overflow-x-hidden overflow-y-auto overscroll-contain outline-none contain-strict [overflow-anchor:none]"
     ></div>
   </div>
   <CodeHorizontalScrollbar
@@ -552,7 +565,5 @@
 <style>
   .code-reader {
     --diffs-font-family: var(--font-mono, monospace);
-    --diffs-font-size: 13px;
-    --diffs-line-height: 22px;
   }
 </style>

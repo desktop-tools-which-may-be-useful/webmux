@@ -5,8 +5,6 @@ export const codeThemes: ThemesType = {
   dark: "pierre-dark",
 };
 
-export const codeLineHeight = 22;
-export const codeItemMetrics = { lineHeight: codeLineHeight };
 export const codeTokenizeLimit = 4096;
 
 /** Only fixed application CSS enters the library's shadow roots. */

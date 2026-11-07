@@ -32,3 +32,9 @@
 - 范围：桌面端与平板窄栏；展开后的侧栏、手机抽屉与模式记忆不变。
 - 依据：`AppShell` 浏览器组件测试（窄栏保留“展开侧栏”和“新建会话”，不渲染模式按钮；展开后模式按钮恢复）通过；`pnpm --dir web check`、`lint`、`check:arch`、格式检查与 `make docs-check` 通过。
 - 限制：未运行全量 E2E 与 Storybook；未在真机核对；未重新核验其余故事能力。
+
+本次局部核对（2026-11-08）：代码查看器（`CodeReader`）与 Diff 查看器（`CodeDiffReader`）支持代码字号缩放，对应更新 US-I05 与覆盖索引，不新增故事。
+
+- 范围：工具栏新增“缩放”按钮，点击在工具栏下方展开带滑块（10px–24px，默认 13px）与重置按钮的缩放条；桌面端支持 `Ctrl + 鼠标滚轮` 缩放，移动端支持双指捏合缩放，字号偏好持久保存在本机浏览器 `localStorage`（`webmux.codeFontSize`）。
+- 依据：`CodeReader` 与 `CodeDocument` 浏览器组件测试（覆盖缩放按钮与滑块、重置、`Ctrl + wheel`、双指捏合 `touchstart`/`touchmove`/`touchend`）通过；`make check` 通过。
+- 限制：未在 iOS/Android 真机核对双指手势；未重新核验其余故事能力。

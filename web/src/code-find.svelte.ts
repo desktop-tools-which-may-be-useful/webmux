@@ -5,9 +5,12 @@ import {
   type MatchCursor,
   type SearchSpec,
 } from "./code-search";
-import { createReaderPanelActions } from "./code-reader-controls";
+import {
+  createReaderPanelActions,
+  type CodeReaderPanel,
+} from "./code-reader-controls";
 
-export type CodeFindPanel = "search" | "goto";
+export type CodeFindPanel = CodeReaderPanel;
 
 /**
  * Search panel, query and match cursor shared by the file and diff readers.

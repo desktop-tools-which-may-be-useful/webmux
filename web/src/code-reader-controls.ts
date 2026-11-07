@@ -11,14 +11,14 @@ import {
   type SearchSpec,
 } from "./code-search";
 
-type Panel = "search" | "goto";
+export type CodeReaderPanel = "search" | "goto" | "zoom";
 
-/** Focuses the open search or go-to-line input after it renders. */
+/** Focuses the open search, go-to-line or zoom control after it renders. */
 async function focusCodePanel(root: ParentNode) {
   await tick();
   root
-    .querySelector<HTMLInputElement>(
-      "[data-code-search] input, [data-code-goto-line] input",
+    .querySelector<HTMLElement>(
+      "[data-code-search] input, [data-code-goto-line] input, [data-code-zoom] [role='slider']",
     )
     ?.focus();
 }
@@ -35,10 +35,10 @@ function togglePanel<Panel extends string>(
 /** Opens or closes a reader panel and focuses its input. */
 async function openCodePanel(
   root: ParentNode,
-  current: "search" | "goto" | undefined,
-  value: "search" | "goto",
+  current: CodeReaderPanel | undefined,
+  value: CodeReaderPanel,
   toggle: boolean,
-  setPanel: (panel: "search" | "goto" | undefined) => void,
+  setPanel: (panel: CodeReaderPanel | undefined) => void,
 ) {
   setPanel(togglePanel(current, value, toggle));
   await focusCodePanel(root);
@@ -57,8 +57,8 @@ function closeCodePanel(
 export function createReaderPanelActions(options: {
   root: () => ParentNode;
   host: () => HTMLElement;
-  getPanel: () => Panel | undefined;
-  setPanel: (panel: Panel | undefined) => void;
+  getPanel: () => CodeReaderPanel | undefined;
+  setPanel: (panel: CodeReaderPanel | undefined) => void;
   getCursor: () => MatchCursor | undefined;
   setCursor: (cursor: MatchCursor | undefined) => void;
   setSearch: (search: SearchSpec) => void;
@@ -68,8 +68,8 @@ export function createReaderPanelActions(options: {
   enabled?: () => boolean;
 }) {
   const actions = {
-    async openPanel(value: Panel, toggle = true) {
-      if (options.enabled && !options.enabled()) return;
+    async openPanel(value: CodeReaderPanel, toggle = true) {
+      if (value !== "zoom" && options.enabled && !options.enabled()) return;
       await openCodePanel(
         options.root(),
         options.getPanel(),
@@ -155,7 +155,7 @@ function watchScroll(host: HTMLElement, measure: () => void) {
   return () => host.removeEventListener("scroll", measure);
 }
 
-/** Pointer, theme, resize and scroll wiring shared by the code readers. */
+/** Pointer, theme, resize, scroll and zoom wiring shared by the code readers. */
 export function watchReader(
   host: HTMLElement,
   handlers: {
@@ -163,6 +163,8 @@ export function watchReader(
     onTheme: (dark: boolean) => void;
     onResize: () => void;
     onScroll: () => void;
+    getFontSize?: () => number;
+    setFontSize?: (size: number) => void;
   },
 ) {
   const pointer = matchMedia("(pointer: coarse)");
@@ -173,11 +175,90 @@ export function watchReader(
   const resize = new ResizeObserver(handlers.onResize);
   resize.observe(host);
   const stopScroll = watchScroll(host, handlers.onScroll);
+  const stopZoom =
+    handlers.getFontSize && handlers.setFontSize
+      ? watchCodeZoom(host, handlers.getFontSize, handlers.setFontSize)
+      : () => {};
   return () => {
     resize.disconnect();
     stopTheme();
     pointer.removeEventListener("change", updatePointer);
     stopScroll();
+    stopZoom();
+  };
+}
+
+/**
+ * Ctrl+wheel and two-finger pinch zoom on a code reader's scroll surface.
+ * One-finger scrolling stays native; two fingers scale the code font size.
+ */
+function watchCodeZoom(
+  host: HTMLElement,
+  getFontSize: () => number,
+  setFontSize: (size: number) => void,
+) {
+  let pinch: { distance: number; fontSize: number } | undefined;
+  let wheelRemainder = 0;
+  const distanceOf = (touches: TouchList) => {
+    const [a, b] = [touches[0], touches[1]];
+    if (!a || !b) return;
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+  };
+  const touchstart = (event: TouchEvent) => {
+    if (event.touches.length !== 2) return;
+    event.stopPropagation();
+    const distance = distanceOf(event.touches);
+    if (distance) pinch = { distance, fontSize: getFontSize() };
+  };
+  const touchmove = (event: TouchEvent) => {
+    if (!pinch || event.touches.length !== 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const distance = distanceOf(event.touches);
+    if (distance)
+      setFontSize(Math.round((pinch.fontSize * distance) / pinch.distance));
+  };
+  const touchend = (event: TouchEvent) => {
+    if (!pinch || event.touches.length >= 2) return;
+    event.stopPropagation();
+    pinch = undefined;
+  };
+  const wheel = (event: WheelEvent) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const unit =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? 100
+          : 1;
+    const delta = -event.deltaY * unit;
+    if (delta === 0) return;
+    if (Math.sign(delta) !== Math.sign(wheelRemainder)) wheelRemainder = 0;
+    wheelRemainder += delta / 50;
+    const steps =
+      Math.abs(wheelRemainder) >= 1
+        ? Math.trunc(wheelRemainder)
+        : Math.abs(delta) >= 15
+          ? Math.sign(delta)
+          : 0;
+    if (steps !== 0) {
+      wheelRemainder -= steps;
+      setFontSize(getFontSize() + steps);
+    }
+  };
+  host.addEventListener("touchstart", touchstart, { passive: true });
+  host.addEventListener("touchmove", touchmove, { passive: false });
+  host.addEventListener("touchend", touchend);
+  host.addEventListener("touchcancel", touchend);
+  host.addEventListener("wheel", wheel, { passive: false });
+  return () => {
+    host.removeEventListener("touchstart", touchstart);
+    host.removeEventListener("touchmove", touchmove);
+    host.removeEventListener("touchend", touchend);
+    host.removeEventListener("touchcancel", touchend);
+    host.removeEventListener("wheel", wheel);
   };
 }
 

@@ -48,6 +48,7 @@ afterEach(async () => {
   localStorage.removeItem("webmux.codeDiffStyle");
   localStorage.removeItem("webmux.codeDiffOverflow");
   localStorage.removeItem("webmux.codeLineNumbers");
+  localStorage.removeItem("webmux.codeFontSize");
 });
 
 test("previews Markdown on request without executing raw HTML or loading images", async () => {
@@ -392,4 +393,67 @@ test("replacing or hiding a document cancels its Worker and ignores late results
   await expect.poll(() => WorkerStub.instances.length).toBe(6);
   WorkerStub.instances[5].reply("retried result");
   await expect.poll(code, { timeout: 10000 }).toContain("retried result");
+});
+
+test("diff reader supports toolbar zoom panel, Ctrl+wheel and two-finger pinch zoom", async () => {
+  render(Harness);
+  await expect.poll(code, { timeout: 10000 }).toContain("changed revision 1");
+  const host = document.querySelector<HTMLElement>(".code-diff-reader")!;
+  expect(host.style.getPropertyValue("--diffs-font-size")).toBe("13px");
+
+  await page.getByRole("button", { name: "缩放" }).click();
+  await expect
+    .element(page.getByLabelText("当前代码字号"))
+    .toHaveTextContent("13px");
+  const slider = page.getByRole("slider", { name: "代码字号" });
+  (slider.element() as HTMLElement).focus();
+  await userEvent.keyboard("{ArrowRight}");
+  await expect
+    .element(page.getByLabelText("当前代码字号"))
+    .toHaveTextContent("14px");
+  expect(host.style.getPropertyValue("--diffs-font-size")).toBe("14px");
+
+  const wheelIn = new WheelEvent("wheel", {
+    deltaY: -100,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  host.dispatchEvent(wheelIn);
+  expect(wheelIn.defaultPrevented).toBe(true);
+  await expect
+    .poll(() => host.style.getPropertyValue("--diffs-font-size"))
+    .toBe("16px");
+
+  const touch = (identifier: number, clientX: number, clientY: number) =>
+    new Touch({ identifier, target: host, clientX, clientY });
+  host.dispatchEvent(
+    new TouchEvent("touchstart", {
+      touches: [touch(1, 0, 0), touch(2, 160, 0)],
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  host.dispatchEvent(
+    new TouchEvent("touchmove", {
+      touches: [touch(1, 0, 0), touch(2, 120, 0)],
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await expect
+    .poll(() => host.style.getPropertyValue("--diffs-font-size"))
+    .toBe("12px");
+  host.dispatchEvent(
+    new TouchEvent("touchend", {
+      touches: [],
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+
+  await page.getByRole("button", { name: "重置" }).click();
+  await expect
+    .poll(() => host.style.getPropertyValue("--diffs-font-size"))
+    .toBe("13px");
 });

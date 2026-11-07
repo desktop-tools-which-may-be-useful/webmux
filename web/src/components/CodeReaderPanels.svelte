@@ -1,7 +1,9 @@
 <script lang="ts">
+  import type { CodeReaderPanel } from "../code-reader-controls";
   import type { SearchSpec } from "../code-search";
   import CodeSearchPanel from "./CodeSearchPanel.svelte";
   import CodeGotoLine from "./CodeGotoLine.svelte";
+  import CodeZoomPanel from "./CodeZoomPanel.svelte";
 
   let {
     panel,
@@ -14,7 +16,7 @@
     ongoto,
     onclose,
   }: {
-    panel?: "search" | "goto";
+    panel?: CodeReaderPanel;
     query: SearchSpec;
     line: number;
     status?: string;
@@ -38,5 +40,9 @@
 {:else if panel === "goto"}
   <div class="shrink-0 border-b">
     <CodeGotoLine {line} onsubmit={ongoto} {onclose} />
+  </div>
+{:else if panel === "zoom"}
+  <div class="shrink-0 border-b">
+    <CodeZoomPanel {onclose} />
   </div>
 {/if}

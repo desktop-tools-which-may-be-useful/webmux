@@ -850,6 +850,7 @@ export const RecentDirsSchema = z
   .array(z.string())
   .transform((dirs) => dirs.slice(0, 10));
 export const FontSizeSchema = z.coerce.number().int().min(8).max(20);
+export const CodeFontSizeSchema = z.coerce.number().int().min(10).max(24);
 export const ThemeSchema = z.enum(["light", "dark"]);
 export type Theme = z.infer<typeof ThemeSchema>;
 export const TextSettingSchema = z.string();
@@ -1065,7 +1066,7 @@ const CodeLineSideSchema = z.enum(["deletions", "additions"]);
 // Search panel and match cursor shared by the file and diff readers.
 const CodeFindStateSchema = z.object({
   search: CodeSearchSpecSchema,
-  panel: z.enum(["search", "goto"]).optional(),
+  panel: z.enum(["search", "goto", "zoom"]).optional(),
   cursor: z
     .object({
       matches: z.array(z.number().int()),

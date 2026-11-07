@@ -25,6 +25,7 @@ afterEach(async () => {
   await cleanup();
   await userEvent.cleanup();
   vi.unstubAllGlobals();
+  localStorage.removeItem("webmux.codeFontSize");
 });
 
 // Toggles the coarse-pointer query and notifies the reader's listener.
@@ -387,4 +388,103 @@ test("captured reading state restores in a new reader, also one mounted hidden",
     search: restored.search,
     panel: "search",
   });
+});
+
+test("supports zoom panel slider, Ctrl+wheel and two-finger pinch zoom", async () => {
+  render(Harness, { text: "const a = 1;\nconst b = 2;\nconst c = 3;" });
+  await expect
+    .poll(() => shadow()?.textContent ?? "")
+    .toContain("const a = 1;");
+  const host = document.querySelector<HTMLElement>("[data-code-reader]")!;
+  expect(host.style.getPropertyValue("--diffs-font-size")).toBe("13px");
+  expect(host.style.getPropertyValue("--diffs-line-height")).toBe("22px");
+
+  // 1. Toolbar zoom icon toggles zoom bar and slider adjusts font size
+  await page.getByRole("button", { name: "缩放" }).click();
+  await expect
+    .element(page.getByLabelText("当前代码字号"))
+    .toHaveTextContent("13px");
+  const slider = page.getByRole("slider", { name: "代码字号" });
+  (slider.element() as HTMLElement).focus();
+  await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+  await expect
+    .element(page.getByLabelText("当前代码字号"))
+    .toHaveTextContent("15px");
+  expect(host.style.getPropertyValue("--diffs-font-size")).toBe("15px");
+  expect(host.style.getPropertyValue("--diffs-line-height")).toBe("25px");
+  expect(localStorage.getItem("webmux.codeFontSize")).toBe("15");
+
+  await page.getByRole("button", { name: "重置" }).click();
+  await expect
+    .element(page.getByLabelText("当前代码字号"))
+    .toHaveTextContent("13px");
+  expect(host.style.getPropertyValue("--diffs-font-size")).toBe("13px");
+  expect(localStorage.getItem("webmux.codeFontSize")).toBeNull();
+
+  await page.getByRole("button", { name: "关闭缩放" }).click();
+  expect(document.querySelector("[data-code-zoom]")).toBeNull();
+
+  // 2. Ctrl + wheel zooms in/out and prevents default browser zoom
+  const wheelIn = new WheelEvent("wheel", {
+    deltaY: -100,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  host.dispatchEvent(wheelIn);
+  expect(wheelIn.defaultPrevented).toBe(true);
+  await expect
+    .poll(() => host.style.getPropertyValue("--diffs-font-size"))
+    .toBe("15px");
+
+  const wheelOut = new WheelEvent("wheel", {
+    deltaY: 50,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  host.dispatchEvent(wheelOut);
+  expect(wheelOut.defaultPrevented).toBe(true);
+  await expect
+    .poll(() => host.style.getPropertyValue("--diffs-font-size"))
+    .toBe("14px");
+
+  // Non-ctrl wheel leaves font size unchanged and is not prevented
+  const plainWheel = new WheelEvent("wheel", {
+    deltaY: -100,
+    ctrlKey: false,
+    bubbles: true,
+    cancelable: true,
+  });
+  host.dispatchEvent(plainWheel);
+  expect(plainWheel.defaultPrevented).toBe(false);
+  expect(host.style.getPropertyValue("--diffs-font-size")).toBe("14px");
+
+  // 3. Two-finger pinch scales font size proportionally
+  const touch = (identifier: number, clientX: number, clientY: number) =>
+    new Touch({ identifier, target: host, clientX, clientY });
+  host.dispatchEvent(
+    new TouchEvent("touchstart", {
+      touches: [touch(1, 0, 0), touch(2, 100, 0)],
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  const pinchMove = new TouchEvent("touchmove", {
+    touches: [touch(1, 0, 0), touch(2, 150, 0)],
+    bubbles: true,
+    cancelable: true,
+  });
+  host.dispatchEvent(pinchMove);
+  expect(pinchMove.defaultPrevented).toBe(true);
+  await expect
+    .poll(() => host.style.getPropertyValue("--diffs-font-size"))
+    .toBe("21px");
+  host.dispatchEvent(
+    new TouchEvent("touchend", {
+      touches: [],
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
 });
