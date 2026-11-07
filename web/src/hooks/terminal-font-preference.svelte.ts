@@ -9,7 +9,7 @@ export const maxFontSize = 20;
 const key = "fontSize";
 
 const defaultFontSize = () =>
-  matchMedia("(pointer: coarse)").matches ? 13 : 14;
+  matchMedia("(pointer: coarse)").matches ? 15 : 14;
 const clampFontSize = (value: number) =>
   Math.max(minFontSize, Math.min(maxFontSize, Math.round(value)));
 

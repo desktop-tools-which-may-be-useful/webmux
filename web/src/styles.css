@@ -51,6 +51,14 @@
     @apply font-sans;
     font-synthesis-weight: none;
   }
+  /* Give the complete mobile interface a modest type increase. Component
+     spacing and control sizing remain governed by the same rem-based tokens,
+     while the existing desktop scale stays unchanged. */
+  @media (any-pointer: coarse), (max-width: 639px) {
+    html {
+      font-size: 106.25%;
+    }
+  }
   html:has(.workspace-page) {
     /* Keep the root track even where custom/overlay scrollbars do not reserve
        a stable gutter. Keep this policy scoped to the workspace document. */

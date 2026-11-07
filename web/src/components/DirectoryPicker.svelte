@@ -212,8 +212,10 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     max-height: min(
-      calc(100dvh - 16px),
-      var(--bits-popover-content-available-height, calc(100dvh - 16px))
+      calc(100dvh - 1rem),
+      calc(
+        var(--bits-popover-content-available-height, calc(100dvh - 1rem)) - 1px
+      )
     );
   }
 

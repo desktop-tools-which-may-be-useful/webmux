@@ -32,7 +32,7 @@ test("isolated desktop and phone synchronize preferences in both directions", as
     await a.getByLabel("终端字号", { exact: true }).fill("18");
     await a.getByLabel("终端字号", { exact: true }).press("Tab");
     await expect(a.getByLabel("终端字号", { exact: true })).toHaveValue("18");
-    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("13");
+    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("15");
     await b.getByRole("radio", { name: "浅色", exact: true }).click();
     await expect(a.locator("html")).not.toHaveClass(/dark/);
     await b.getByRole("switch", { name: "Diff 自动换行" }).click();
@@ -58,7 +58,7 @@ test("isolated desktop and phone synchronize preferences in both directions", as
     await a.reload();
     await b.reload();
     await expect(a.getByLabel("终端字号", { exact: true })).toHaveValue("18");
-    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("13");
+    await expect(b.getByLabel("终端字号", { exact: true })).toHaveValue("15");
     await expect(
       b.getByRole("button", { name: "编辑 共享回显" }),
     ).toBeVisible();
