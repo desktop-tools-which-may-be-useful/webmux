@@ -15,6 +15,7 @@
       "named": false,
       "state": "off"
     },
+    "voice": false,
     "workspace": {
       "gitAvailable": true,
       "gitError": "",

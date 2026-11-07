@@ -145,3 +145,23 @@
 - 小于 512 字节或压缩后不变小的帧原样发送；续接尾部（`0x00`）、实时输出与其他帧从不封装。
 - 不带 `zreplay=1` 的客户端（如 `webmux attach`）不会收到 `0x07`。
 - 回放不受实时输出的帧间隔合并（约 16 ms）限制，尽快发出；回放后的首个实时输出也不延迟。
+
+## WebSocket `/ws/voice`
+
+流式语音识别通道，将浏览器采集的 PCM 音频流桥接到服务端配置的 `[voice]` 子进程（见 [语音识别配置](../deployment/configuration.md#语音识别voice)）。未配置 `voice.cmd` 时握手直接返回 HTTP 404。
+
+客户端 → 服务端：
+
+- **二进制帧**：`16000 Hz`、单声道、`s16le` 原始 PCM 字节（通常每帧 `20ms` = `640 bytes`），服务端原样写入子进程 `STDIN`。
+- **文本帧 JSON**：`{"type": "stop"}`，通知服务端关闭子进程 `STDIN`（发送 `EOF`）并等待最终识别结果。
+
+服务端 → 客户端（文本帧 JSON，`VoiceServerEvent`）：
+
+```jsonc
+{"type": "ready"}
+{"type": "partial", "text": "中间结果"}
+{"type": "final", "text": "最终识别文本"}
+{"type": "error", "message": "错误原因"}
+```
+
+收到 `final` 或 `error` 后，服务端关闭连接并清理子进程；客户端主动断开时服务端同样立即终止子进程。

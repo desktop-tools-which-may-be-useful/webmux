@@ -47,7 +47,7 @@
         {...props}
         variant="quiet"
         size="xs"
-        class={labeled ? "max-w-48 min-w-0 shrink-0" : "shrink-0"}
+        class={labeled ? "max-w-48 min-w-0 shrink" : "shrink-0"}
         aria-label={label}
         title={title ?? label}
       >

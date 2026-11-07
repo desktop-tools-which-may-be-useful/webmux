@@ -10,6 +10,8 @@ export interface HomeSetup {
   capabilityError: string;
   // Whether the server detects the ports sessions listen on.
   portDetection: boolean;
+  // Whether the server has a [voice] ASR command configured.
+  voice?: boolean;
 }
 
 // The last data the workspace page showed, kept in memory across route changes

@@ -10,6 +10,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tailscale"
+	"github.com/rainchan/webmux/internal/voice"
 	"github.com/rainchan/webmux/internal/wsl"
 )
 
@@ -54,5 +55,14 @@ func TailscaleOptions(c config.Config) tailscale.Options {
 		Provider:       c.Tailscale.Provider,
 		IsWSL:          wsl.Detected,
 		NetworkingMode: wsl.NetworkingMode,
+	}
+}
+
+// VoiceOptions converts [voice] for voice.New.
+func VoiceOptions(c config.Config) voice.Options {
+	return voice.Options{
+		Cmd: c.Voice.Cmd,
+		Env: c.Voice.Env,
+		Cwd: c.DefaultCwd,
 	}
 }

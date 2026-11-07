@@ -21,6 +21,8 @@ type ServerConfig struct {
 	// PortDetection reports whether sessions report their listening ports on
 	// this platform.
 	PortDetection bool `json:"portDetection"`
+	// Voice reports whether external speech recognition is configured.
+	Voice bool `json:"voice"`
 }
 
 // PendingUpdate is an installed version awaiting a restart. Launcher is the

@@ -22,6 +22,7 @@ const EMPTY: HomeSetup = {
   capabilityError: "",
   // Until the server says otherwise, assume listening ports are detected.
   portDetection: true,
+  voice: false,
 };
 
 export function createServerSetup(): ServerSetup {
@@ -67,6 +68,7 @@ export function createServerSetup(): ServerSetup {
             .filter(Boolean)
             .join(" · "),
           portDetection: config.portDetection,
+          voice: config.voice,
         };
         homeCache.rememberSetup(value);
         error = "";

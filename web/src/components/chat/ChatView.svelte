@@ -83,6 +83,9 @@
   export function focus() {
     composer?.focus();
   }
+  export function setVoiceError(message: string) {
+    error = message;
+  }
   const entries = $derived(groupTimeline(model.entries));
   const request = $derived(chat?.requests[0]);
   const requestTool = $derived.by(() => {

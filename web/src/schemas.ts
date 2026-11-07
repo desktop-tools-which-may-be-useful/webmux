@@ -544,7 +544,22 @@ export const ConfigSchema = z.object({
   pendingUpdate: PendingUpdateSchema.optional(),
   // Whether sessions report listening ports on the server's platform.
   portDetection: z.boolean(),
+  // Whether external speech recognition is configured on the server.
+  voice: z.boolean().default(false),
 });
+
+export const VoiceClientMessageSchema = z.object({
+  type: z.literal("stop"),
+});
+export type VoiceClientMessage = z.infer<typeof VoiceClientMessageSchema>;
+
+export const VoiceServerEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ready") }),
+  z.object({ type: z.literal("partial"), text: z.string().default("") }),
+  z.object({ type: z.literal("final"), text: z.string().default("") }),
+  z.object({ type: z.literal("error"), error: z.string() }),
+]);
+export type VoiceServerEvent = z.infer<typeof VoiceServerEventSchema>;
 export const WorktreeSchema = z.object({
   id: z.string(),
   repositoryId: z.string(),

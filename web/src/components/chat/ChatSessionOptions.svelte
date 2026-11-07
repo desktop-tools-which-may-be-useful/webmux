@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IconLoader2 from "~icons/tabler/loader-2";
   import IconSettings from "~icons/tabler/settings";
   import { Button } from "$lib/components/ui/button";
   import { Label } from "$lib/components/ui/label";
@@ -20,6 +21,7 @@
     config,
     disabled,
     modeDisabled,
+    loading = false,
     onmodechange,
     onconfigchange,
   }: {
@@ -27,6 +29,7 @@
     config: ChatConfig[];
     disabled: boolean;
     modeDisabled: boolean;
+    loading?: boolean;
     onmodechange: (mode: ChatPermissionMode) => void;
     onconfigchange: (configId: string, value: ConfigValue) => void;
   } = $props();
@@ -49,6 +52,17 @@
     {/snippet}
   </Popover.Trigger>
   <Popover.Content align="start" side="top" class="w-[min(20rem,92vw)]">
+    {#if loading}
+      <p
+        class="flex items-center gap-1.5 text-xs text-muted-foreground"
+        role="status"
+      >
+        <IconLoader2
+          class="size-3.5 animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />正在读取配置…
+      </p>
+    {/if}
     <Label class="flex-col items-stretch">
       权限
       <NativeSelect.Root

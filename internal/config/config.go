@@ -12,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/rainchan/webmux/internal/attentionkind"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/pathutil"
 )
 
@@ -32,6 +33,41 @@ type Config struct {
 	Tunnel           TunnelConfig      `toml:"tunnel"`
 	Tailscale        TailscaleConfig   `toml:"tailscale"`
 	Push             PushConfig        `toml:"push"`
+	Voice            VoiceConfig       `toml:"voice"`
+}
+
+// VoiceConfig configures an optional external speech recognition command
+// driven over STDIN/STDOUT.
+type VoiceConfig struct {
+	Cmd []string `toml:"cmd"`
+	Env []string `toml:"env"`
+}
+
+// Enabled reports whether an external speech recognition command is configured.
+func (v VoiceConfig) Enabled() bool {
+	return len(v.Cmd) > 0
+}
+
+func (v *VoiceConfig) validate() error {
+	for i, arg := range v.Cmd {
+		if i == 0 && strings.TrimSpace(arg) == "" {
+			return errors.New("voice.cmd[0] must not be empty")
+		}
+		if arg == "~" || strings.HasPrefix(arg, "~/") {
+			expanded, err := pathutil.Expand(arg)
+			if err != nil {
+				return fmt.Errorf("voice.cmd[%d]: %w", i, err)
+			}
+			v.Cmd[i] = expanded
+		}
+	}
+	for _, entry := range v.Env {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok || !contract.ValidEnvName(name) || contract.ReservedEnv(name) {
+			return fmt.Errorf("voice.env: %q must be KEY=VALUE with a valid non-reserved variable name", name)
+		}
+	}
+	return nil
 }
 
 // TailscaleConfig selects the managed Tailscale Serve or Funnel entry point.
@@ -304,6 +340,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Tailscale.validate(); err != nil {
+		return err
+	}
+	if err := c.Voice.validate(); err != nil {
 		return err
 	}
 	return c.Push.validate()

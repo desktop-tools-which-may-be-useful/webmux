@@ -29,6 +29,7 @@ import (
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/settings"
+	"github.com/rainchan/webmux/internal/voice"
 	"github.com/rainchan/webmux/internal/wire"
 	"github.com/rainchan/webmux/internal/workspace"
 )
@@ -67,6 +68,9 @@ type Deps struct {
 	Hybrid *hybrid.Service
 	// Forward is the port forwarding registry; nil serves no forwards.
 	Forward *forward.Service
+	// Voice runs the optional external speech recognition command; nil or
+	// disabled answers 404 on GET /ws/voice.
+	Voice *voice.Service
 	// InstalledVersion returns the installed version awaiting a restart,
 	// or ""; nil never reports one.
 	InstalledVersion func() string
@@ -132,7 +136,8 @@ func (s *Server) routes() *http.ServeMux {
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
-		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported})
+		voiceEnabled := (s.Voice != nil && s.Voice.Enabled()) || c.Voice.Enabled()
+		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported, Voice: voiceEnabled})
 	})
 	s.sessionRoutes(mux)
 	serveIn(mux, "PATCH /api/sessions/{id}", http.StatusOK, renameFailure, s.rename)
@@ -152,6 +157,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.tunnelRoutes(mux)
 	s.forwardRoutes(mux)
 	s.tailscaleRoutes(mux)
+	s.voiceRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })

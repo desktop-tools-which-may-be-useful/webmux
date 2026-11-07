@@ -460,6 +460,16 @@ test("choosing an agent reads its options and holds the row until done", async (
   await expect
     .element(toolbar.getByRole("button", { name: "Agent：Codex" }))
     .toBeDisabled();
+  await page.viewport(390, 844);
+  try {
+    await page.getByRole("button", { name: "会话选项" }).click();
+    await expect
+      .element(page.getByRole("status"))
+      .toHaveTextContent("正在读取配置…");
+    await userEvent.keyboard("{Escape}");
+  } finally {
+    await page.viewport(1024, 900);
+  }
   await input.fill("修复首页排序");
   await expect
     .element(page.getByRole("button", { name: "发送", exact: true }))

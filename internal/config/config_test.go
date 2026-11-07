@@ -191,3 +191,45 @@ func TestListenAndAllowedOriginsFailAtStartup(t *testing.T) {
 		})
 	}
 }
+
+func TestVoiceConfiguration(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, row := range []struct {
+		name, body string
+		err        string
+		want       VoiceConfig
+	}{
+		{name: "absent", want: VoiceConfig{}},
+		{name: "valid cmd and env", body: "cmd = ['~/bin/asr', '--model', 'qwen']\nenv = ['ASR_KEY=secret', 'LANG_HINT=zh']\n",
+			want: VoiceConfig{Cmd: []string{filepath.Join(home, "bin", "asr"), "--model", "qwen"}, Env: []string{"ASR_KEY=secret", "LANG_HINT=zh"}}},
+		{name: "empty executable", body: "cmd = ['   ']\n", err: "voice.cmd[0]"},
+		{name: "env without equals", body: "cmd = ['node']\nenv = ['BAD_ENV']\n", err: "voice.env"},
+		{name: "env invalid name", body: "cmd = ['node']\nenv = ['BAD-NAME=1']\n", err: "voice.env"},
+		{name: "env reserved name", body: "cmd = ['node']\nenv = ['WEBMUX_SESSION_ID=1']\n", err: "voice.env"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			path := filepath.Join(home, strings.ReplaceAll(row.name, " ", "-")+".toml")
+			if err := os.WriteFile(path, []byte("[voice]\n"+row.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := Load(path, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = c.Validate()
+			if row.err != "" {
+				if err == nil || !strings.Contains(err.Error(), row.err) {
+					t.Fatalf("Validate() = %v, want %q", err, row.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(c.Voice, row.want) {
+				t.Fatalf("voice = %#v, want %#v", c.Voice, row.want)
+			}
+		})
+	}
+}

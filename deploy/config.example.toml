@@ -72,6 +72,13 @@ program_status = true
 # kinds = ["question", "permission", "error", "done", "notify"]  # also "bell"
 # include_title = true                                # false: title "WebMux"
 
+# External speech recognition (ASR) driven over STDIN/STDOUT:
+# WebMux sends 16kHz 16-bit signed little-endian mono PCM to STDIN, closes
+# STDIN on stop, and reads NDJSON events (or plain text) from STDOUT.
+# [voice]
+# cmd = ["node", "/path/to/voice-provider.js"]
+# env = ["DASHSCOPE_API_KEY=your-key"]
+
 # Save custom launch configurations in Settings → 启动配置.
 # Their complete argv and optional environment are stored separately in
 # <state_dir>/launch-configs.json. A new installation seeds Shell, nine CLI

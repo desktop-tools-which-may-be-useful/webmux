@@ -42,6 +42,18 @@ export function protocols(token: string): string[] {
   return ["webmux", "webmux.token." + encoded];
 }
 
+// Opens an authenticated one-shot WebSocket without reconnects (for example a
+// single speech-recognition session).
+export function openSocket(path: string, compress = true): WebSocket {
+  const target = compress ? withCompression(path) : path;
+  const socket = new WebSocket(
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${target}`,
+    protocols(stored("token")),
+  );
+  socket.binaryType = "arraybuffer";
+  return socket;
+}
+
 export type Connection =
   | "connecting"
   | "connected"

@@ -60,3 +60,15 @@
   - Playwright `quick-start.spec.ts` 桌面（2 通过、1 跳过）与 Pixel 7（3 通过）通过；
   - `make docs-check`、`openspec validate --all --strict --no-interactive`（本次涉及的 spec 与在途变更通过）、`git diff --check` 通过。
 - 限制：未运行完整 `make test`/`make check`；未在隔离演示服务上重新截取明暗主题与桌面/手机截图；未重新核验其余故事能力。
+
+本次局部核对（2026-11-07）：新增基于 `STDIN/STDOUT` 子进程的可插拔语音识别与聊天/终端双模式录音按钮，新增 US-G07 并更新覆盖索引。
+
+- 范围：
+  - `config.toml` 支持 `[voice]`（`cmd` 参数数组与 `env` 环境变量列表），`GET /api/config` 返回 `voice` 布尔值且不暴露命令与密钥；
+  - `GET /ws/voice` 接收浏览器 `16000 Hz` 单声道 `s16le` PCM 二进制帧与 `{"type":"stop"}`，驱动 `voice.cmd` 子进程并解析 `ready`、`partial`、`final`、`error` 事件及纯文本回退；
+  - 聊天模式（消息输入框、快速开始页 `/new`）与终端模式（软键快捷栏、桌面顶栏快捷区）提供四阶段切换式语音按钮（空闲、连接中、录音中实时音量、收尾中），识别文本插入当前输入目标且不自动回车。
+- 依据：
+  - `internal/config`、`internal/voice`、`internal/api` 新增单元测试并更新 `testdata/wire/config.json` 快照；
+  - 前端新增 `web/test/voice.test.ts` 与 `web/test/browser/VoiceButton.test.ts`，覆盖重采样、PCM 编码、音量计算及四阶段点击录音插入流程。
+- 限制：
+  - 自动化测试使用模拟子进程与模拟 WebSocket，未在 CI 中连接外部云端 ASR 服务。

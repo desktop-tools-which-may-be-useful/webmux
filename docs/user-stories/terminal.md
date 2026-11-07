@@ -250,7 +250,7 @@
 - [暂存演示](../../web/stories/ScratchNotes.stories.ts)、[草稿状态](../../web/src/terminal-draft.svelte.ts)、[本机存储](../../web/src/draft-storage.ts)
 - [终端发送](../../web/src/pages/Terminal.svelte)、[提交确认](../../internal/session/control.go)。
 
-## G. 快捷指令
+## G. 快捷指令与语音输入
 
 - **US-G01 保存常用文字**：作为使用者，我希望保存常用命令或多行提示词，以便减少重复输入。
   验收要点：
@@ -291,10 +291,20 @@
   - 快速开始页（US-Q18）还没有会话，选择后正文连同 `{{dir}}`、`{{webmux}}` 原样插入输入框，发送时由服务端在会话创建后替换（规则同初始化指令：先 `{{dir}}`、说明最后插入且不再被替换；其他名称原样保留），输入框下方提示该占位符会在会话创建后替换；
   - 文件夹或说明不可用时提示原因（“临时文件夹不可用”或“WebMux 工具说明不可用”）且不插入；
   - 删除后可在“添加系统预设”中补回；正文可自行编辑并跨设备同步；旧版本保存的“临时文件夹”预设原样保留，不迁移；临时文件夹的完整说明移入手册的 `artifacts` 主题。
+- **US-G07 点击录音并转文字插入**：作为在浏览器中向 agent 或终端输入长句子的使用者，我希望点击麦克风开始录音、看到实时音量、再次点击结束并把识别文字插入当前输入位置而不自动回车，以便补充或检查后再发送。
+  验收要点：
+  - 服务端在 `config.toml` 配置非空 `voice.cmd`（可选 `voice.env`）时，`GET /api/config` 返回 `voice: true`，但从不暴露 `cmd` 或 `env` 明文；未配置时返回 `voice: false`，界面不显示语音按钮，`/ws/voice` 返回 404；
+  - 启用后，聊天模式在消息输入框与快速开始页 `/new` 输入框底部、快捷指令按钮旁显示语音按钮；终端模式在软键快捷栏尾部（桌面未开启软键栏时在顶栏快捷指令旁）显示语音按钮；
+  - 采用点击开始、再次点击结束的切换手势，依次经过空闲、连接准备中（加载态）、录音中（根据麦克风实时音量展示动态音柱且 `aria-pressed="true"`）、完成收尾中（加载态）四个阶段；
+  - 浏览器将麦克风音频重采样为 `16000 Hz`、单声道、`s16le` PCM 二进制帧发往 `/ws/voice`，再次点击时发送 `{"type":"stop"}` 由服务端关闭子进程 `STDIN`（`EOF`）并等待 `final` 结果；
+  - 收到最终文本后：聊天视图与快速开始页插入输入框光标处（或替换选区），终端视图在开启草稿时插入草稿框、直接模式下作为文本写入终端，均不追加回车（`\r`）且不自动提交；
+  - 麦克风权限被拒绝或子进程报错时提示具体原因并恢复为空闲状态。
 
 依据：
 
 - [快捷指令数据](../../web/src/quick-commands.ts)、[状态与同步](../../web/src/quick-commands.svelte.ts)、[菜单](../../web/src/components/QuickCommandMenu.svelte)、[编辑弹窗](../../web/src/components/QuickCommandDialog.svelte)
+- [语音识别服务](../../internal/voice/voice.go)、[语音 WebSocket](../../internal/hub/voice.go)、[语音按钮](../../web/src/components/VoiceButton.svelte)、[录音状态机](../../web/src/hooks/voice.svelte.ts)、[音频重采样](../../web/src/voice.ts)
+- [语音后端用例](../../internal/voice/voice_test.go)、[语音接口用例](../../internal/api/voice_test.go)、[音频单元用例](../../web/test/voice.test.ts)、[语音按钮浏览器用例](../../web/test/browser/VoiceButton.test.ts)
 - [聊天视图插入验收](../../web/test/e2e/hybrid.spec.ts)
 - [设置](../../web/src/pages/Settings.svelte)、[系统预设菜单](../../web/src/components/QuickCommandPresetMenu.svelte)、[预设菜单用例](../../web/test/browser/QuickCommandPresetMenu.test.ts)、[初始化指令展开](../../internal/workspace/instruction.go)。
 

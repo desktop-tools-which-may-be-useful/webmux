@@ -16,6 +16,11 @@
   height: calc(var(--preview-lines) * 1lh + 1rem);
 }
 
+/* Microphone volume bar height driven by --voice-bar in [0, 1]. */
+@utility h-voice-bar {
+  height: calc(3px + var(--voice-bar, 0) * 11px);
+}
+
 /* shadcn-svelte marks direction-bound icons (submenu chevrons) with this. */
 @utility cn-rtl-flip {
   &:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {

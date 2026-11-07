@@ -15,6 +15,7 @@ import (
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tailscale"
+	"github.com/rainchan/webmux/internal/voice"
 	"github.com/rainchan/webmux/internal/workspace"
 	"maps"
 	"path/filepath"
@@ -546,4 +547,12 @@ func ControlState(c session.ControlState) contract.ControlState {
 		out.Controller = &controller
 	}
 	return out
+}
+
+func VoiceEvent(e voice.Event) contract.VoiceServerEvent {
+	return contract.VoiceServerEvent{
+		Type:  string(e.Type),
+		Text:  e.Text,
+		Error: e.Error,
+	}
 }

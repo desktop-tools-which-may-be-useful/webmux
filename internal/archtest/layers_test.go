@@ -31,6 +31,7 @@ var webmux = manifest{
 		"internal/tunnelsettings":    service,
 		"internal/tailscale":         service,
 		"internal/tailscalesettings": service,
+		"internal/voice":             service,
 
 		// Wire contracts and infrastructure every layer may use.
 		"internal/acp": shared,
