@@ -10,6 +10,7 @@ import (
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/hoststat"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
@@ -556,4 +557,16 @@ func VoiceEvent(e voice.Event) contract.VoiceServerEvent {
 		Text:  e.Text,
 		Error: e.Error,
 	}
+}
+
+// Health is the GET /api/health body; nil load or memory is left out.
+func Health(sessions int, load *hoststat.Load, mem *hoststat.Memory) contract.APIHealth {
+	h := contract.APIHealth{OK: true, Sessions: sessions}
+	if load != nil {
+		h.Load = &contract.HostLoad{One: load.One, Five: load.Five, Fifteen: load.Fifteen, CPUs: load.CPUs}
+	}
+	if mem != nil {
+		h.Memory = &contract.HostMemory{Total: mem.Total, Available: mem.Available}
+	}
+	return h
 }

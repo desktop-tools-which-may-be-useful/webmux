@@ -50,6 +50,7 @@ var webmux = manifest{
 		"internal/contract":                shared,
 		"internal/config":                  shared,
 		"internal/runtime":                 shared,
+		"internal/hoststat":                shared,
 		"internal/jsonutil":                shared,
 		"internal/statefile":               shared,
 		"internal/settingsstore":           shared,

@@ -4,6 +4,25 @@ package contract
 type APIHealth struct {
 	OK       bool `json:"ok"`
 	Sessions int  `json:"sessions"`
+	// Load and Memory are omitted where the platform cannot report them.
+	Load   *HostLoad   `json:"load,omitempty"`
+	Memory *HostMemory `json:"memory,omitempty"`
+}
+
+// HostLoad is the host's 1, 5 and 15 minute load averages and its logical
+// CPU count.
+type HostLoad struct {
+	One     float64 `json:"one"`
+	Five    float64 `json:"five"`
+	Fifteen float64 `json:"fifteen"`
+	CPUs    int     `json:"cpus"`
+}
+
+// HostMemory is physical memory in bytes; Available excludes what cannot be
+// reclaimed without swapping.
+type HostMemory struct {
+	Total     uint64 `json:"total"`
+	Available uint64 `json:"available"`
 }
 
 // ServerConfig is the body of GET /api/config.

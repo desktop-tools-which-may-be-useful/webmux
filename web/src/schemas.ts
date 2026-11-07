@@ -425,7 +425,22 @@ export type StoredScratch = z.infer<typeof StoredScratchSchema>;
 export const HealthSchema = z.object({
   ok: z.literal(true),
   sessions: z.number().int().nonnegative(),
+  load: z
+    .object({
+      one: z.number().nonnegative(),
+      five: z.number().nonnegative(),
+      fifteen: z.number().nonnegative(),
+      cpus: z.number().int().positive(),
+    })
+    .optional(),
+  memory: z
+    .object({
+      total: z.number().nonnegative(),
+      available: z.number().nonnegative(),
+    })
+    .optional(),
 });
+export type Health = z.infer<typeof HealthSchema>;
 export const WorkspaceCapabilitySchema = z.object({
   gitAvailable: z.boolean(),
   registryAvailable: z.boolean(),

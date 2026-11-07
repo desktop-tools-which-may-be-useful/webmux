@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import IconMoon from "~icons/tabler/moon";
   import IconFolderPlus from "~icons/tabler/folder-plus";
   import IconSettings from "~icons/tabler/settings";
@@ -7,7 +7,13 @@
   import { api } from "../api";
   import { Button } from "$lib/components/ui/button";
   import * as Popover from "$lib/components/ui/popover";
-  import { HealthSchema } from "../schemas";
+  import {
+    BUSY_LOAD_RATIO,
+    formatBytes,
+    hostStrain,
+    SLOW_LATENCY_MS,
+  } from "../host-health";
+  import { HealthSchema, type Health } from "../schemas";
   import { toggleTheme } from "../theme";
   import type { Connection } from "../ws";
   import ForwardButton from "./ForwardButton.svelte";
@@ -41,11 +47,14 @@
   let detailsOpen = $state(false);
   let latency = $state<number | null>(null);
   let measuring = $state(false);
+  let health = $state<Health | null>(null);
+  const strain = $derived(
+    connection === "connected" ? hostStrain(latency, health) : "",
+  );
   const statusLabel = $derived(
     connection === "connected"
-      ? hostname
-        ? `${hostname} 在线`
-        : "在线"
+      ? (hostname ? `${hostname} 在线` : "在线") +
+          (strain ? `（${strain}）` : "")
       : connection === "reconnecting"
         ? "连接已断开，重连中…"
         : "正在连接",
@@ -62,10 +71,12 @@
     measuring = true;
     const started = performance.now();
     try {
-      await api("/health", HealthSchema);
+      const next = await api("/health", HealthSchema);
       latency = Math.max(0, Math.round(performance.now() - started));
+      health = next;
     } catch {
       latency = null;
+      health = null;
     } finally {
       measuring = false;
     }
@@ -74,6 +85,16 @@
     detailsOpen = open;
     if (open) void measureLatency();
   }
+  // The dot turns yellow on a slow or loaded host, so it is measured while
+  // connected, not only when the details are open.
+  $effect(() => {
+    if (connection !== "connected") return;
+    // measureLatency reads and writes state; only `connection` may re-run
+    // this, or each measurement would start the next.
+    untrack(() => void measureLatency());
+    const timer = setInterval(() => void measureLatency(), 15_000);
+    return () => clearInterval(timer);
+  });
   onMount(() => {
     const theme = new MutationObserver(() => {
       dark = document.documentElement.classList.contains("dark");
@@ -102,7 +123,7 @@
     >
       <span role="status" class="flex min-w-0 items-center gap-2">
         <span
-          class={`status-dot shrink-0 ${connection === "connected" ? "status-running" : "status-waiting"}`}
+          class={`status-dot shrink-0 ${connection === "connected" && !strain ? "status-running" : "status-waiting"}`}
         ></span>{#if rail}<span class="sr-only">{statusLabel}</span
           >{:else if connection === "reconnecting"}<span
             class="truncate text-warning">连接已断开，重连中…</span
@@ -134,10 +155,34 @@
           {connectionLabel}
         </dd>
         <dt class="text-muted-foreground">网络延时</dt>
-        <dd>
+        <dd
+          class={latency !== null && latency > SLOW_LATENCY_MS
+            ? "text-warning"
+            : ""}
+        >
           {#if connection !== "connected"}不可用{:else if measuring}测量中…{:else if latency !== null}{latency}
             ms{:else}不可用{/if}
         </dd>
+        {#if health?.load}
+          <dt class="text-muted-foreground">系统负载</dt>
+          <dd
+            class={health.load.one > health.load.cpus * BUSY_LOAD_RATIO
+              ? "text-warning"
+              : ""}
+            title="1 / 5 / 15 分钟平均，{health.load.cpus} 个逻辑核心"
+          >
+            {health.load.one.toFixed(2)} / {health.load.five.toFixed(2)} /
+            {health.load.fifteen.toFixed(2)}（{health.load.cpus} 核）
+          </dd>
+        {/if}
+        {#if health?.memory}
+          <dt class="text-muted-foreground">内存</dt>
+          <dd>
+            可用 {formatBytes(health.memory.available)} / 共 {formatBytes(
+              health.memory.total,
+            )}
+          </dd>
+        {/if}
       </dl>
     </Popover.Content>
   </Popover.Root>

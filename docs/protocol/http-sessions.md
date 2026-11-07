@@ -274,10 +274,12 @@ interface SessionInfo {
 
 | 方法 | 路径                   | 说明                                                                                                                                                                                                           |
 | ---- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                                                                                                                      |
+| GET  | `/api/health`          | `{ok: true, sessions: n, load?, memory?}`，见下方说明                                                                                                                                                                                      |
 | GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel, pendingUpdate?, portDetection}`，不含 token；`portDetection` 表示本平台会话会报告监听端口 |
 | GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                                                                                               |
 | POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                                                                                                  |
+
+`/api/health` 的 `load` 为 `{one, five, fifteen, cpus}`（1/5/15 分钟负载与逻辑核心数），`memory` 为 `{total, available}`（字节，`available` 不含需换出才能回收的部分）；平台无法读取时省略对应字段（Linux 与 macOS 支持）。
 
 `tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。
 

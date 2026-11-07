@@ -22,6 +22,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/forward"
+	"github.com/rainchan/webmux/internal/hoststat"
 	"github.com/rainchan/webmux/internal/hub"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/jsonutil"
@@ -132,7 +133,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	s.codeRoutes(mux)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, 200, contract.APIHealth{OK: true, Sessions: len(m.List())})
+		load, mem := hoststat.Read()
+		reply(w, 200, wire.Health(len(m.List()), load, mem))
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()

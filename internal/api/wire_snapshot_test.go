@@ -142,6 +142,9 @@ func wireSchema(name string) wireRules {
 		if name == "ws-terminal-control-uncontrolled" || name == "ws-terminal-control-resize-take" {
 			add("/controller", "id", "clientId")
 		}
+	case "health":
+		// Host measurements differ on every machine and call.
+		add("", "hostStat", "load/one", "load/five", "load/fifteen", "load/cpus", "memory/total", "memory/available")
 	case "config":
 		add("", "path", "defaultCwd")
 		add("", "hostname", "hostname")
@@ -331,6 +334,10 @@ func (n *wireNormalizer) value(rules wireRules, path string, v any) any {
 			out[i] = n.value(rules, path+"/*", item)
 		}
 		return out
+	case float64:
+		if rules[path] == "hostStat" {
+			return 0.0
+		}
 	case string:
 		switch rules[path] {
 		case "id":
