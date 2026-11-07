@@ -120,8 +120,12 @@
           class="min-h-9 sm:min-h-8"
           disabled={worktree &&
             (!worktree.available || worktree.kind === "bare")}
+          aria-label="新建会话"
+          title="新建会话"
           onclick={onstart}
-          ><IconPlus class="size-4" aria-hidden="true" />新建会话</Button
+          ><IconPlus class="size-4" aria-hidden="true" /><span
+            class="hidden sm:inline">新建会话</span
+          ></Button
         >{/if}
       <Button
         size="icon-sm"

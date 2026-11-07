@@ -64,5 +64,10 @@ export default defineConfig({
       name: "chromium-mobile",
       use: { ...devices["Pixel 7"], browserName: "chromium" },
     },
+    {
+      // Narrowest supported phone (320×568, DPR 2): overlays must still fit.
+      name: "chromium-mobile-se",
+      use: { ...devices["iPhone SE"], browserName: "chromium" },
+    },
   ],
 });

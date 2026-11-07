@@ -1,34 +1,28 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import IconRefresh from "~icons/tabler/refresh";
-  import IconSettings from "~icons/tabler/settings";
   import { Button } from "$lib/components/ui/button";
 
   let {
     title = "工作区",
-    controls,
+    actions,
     loading,
     filtering,
     visibleCount,
     sessionCount,
     repositoryCount,
     refreshing,
-    onsettings,
-    onrefresh,
     onstart,
     children,
   }: {
     title?: string;
-    controls?: Snippet;
+    /** Icon controls; phones show them in the top bar instead. */
+    actions: Snippet;
     loading: boolean;
     filtering: boolean;
     visibleCount: number;
     sessionCount: number;
     repositoryCount: number;
     refreshing: boolean;
-    // Opens the settings of the repository in scope; absent when none is.
-    onsettings?: () => void;
-    onrefresh: () => void;
     // Opens the new-session dialog; the old header's primary action.
     onstart: () => void;
     // Search and status filters below the title row.
@@ -37,49 +31,31 @@
 </script>
 
 <div class="mb-5 space-y-3 border-b pb-4">
-  <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-    <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-      <h1 class="text-lg font-semibold tracking-tight break-all">{title}</h1>
-      <p role="status" class="sr-only">
-        {#if loading}正在加载…
-        {:else if filtering}显示 {visibleCount} / {sessionCount} 个会话
-        {:else}{repositoryCount} 个仓库 · {sessionCount} 个会话{/if}{#if refreshing}
-          · 正在读取 Git 状态…{/if}
-      </p>
-    </div>
-    <div
-      class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
+  <div
+    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:gap-x-1"
+  >
+    <p role="status" class="sr-only">
+      {#if loading}正在加载…
+      {:else if filtering}显示 {visibleCount} / {sessionCount} 个会话
+      {:else}{repositoryCount} 个仓库 · {sessionCount} 个会话{/if}{#if refreshing}
+        · 正在读取 Git 状态…{/if}
+    </p>
+    <!-- Phones already show the title in the top bar. -->
+    <h1
+      class="hidden min-w-0 text-lg font-semibold tracking-tight break-all sm:mr-3 sm:block"
     >
-      {@render controls?.()}
-      <Button
-        variant="ghost"
-        size="sm"
-        class="min-h-9 sm:min-h-8"
-        aria-label="仓库设置"
-        title="仓库设置"
-        disabled={!onsettings}
-        onclick={() => onsettings?.()}
-        ><IconSettings aria-hidden="true" /><span class="hidden sm:inline"
-          >仓库设置</span
-        ></Button
-      >
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="min-h-9 min-w-9 sm:min-h-8 sm:min-w-8"
-        aria-label="刷新 Git 状态"
-        title={refreshing ? "正在刷新 Git 状态…" : "刷新 Git 状态"}
-        aria-busy={refreshing}
-        onclick={() => onrefresh()}
-        ><IconRefresh
-          class={refreshing ? "animate-spin motion-reduce:animate-none" : ""}
-          aria-hidden="true"
-        /></Button
-      >
-      <Button size="sm" class="min-h-9 sm:min-h-8" onclick={() => onstart()}
-        >＋ 新建会话</Button
-      >
+      {title}
+    </h1>
+    <div
+      class="ml-auto hidden max-w-full items-center justify-end gap-1 sm:flex"
+    >
+      {@render actions()}
     </div>
+    <Button
+      size="sm"
+      class="order-last min-h-9 w-full sm:order-none sm:min-h-8 sm:w-auto"
+      onclick={() => onstart()}>＋ 新建会话</Button
+    >
   </div>
   {@render children()}
 </div>

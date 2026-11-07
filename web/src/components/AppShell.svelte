@@ -13,7 +13,7 @@
   import { createServerSetup } from "../hooks/server-setup.svelte";
   import { createSessionList } from "../hooks/session-list.svelte";
   import { homeWorktrees } from "../home-worktrees.svelte";
-  import { setPinned } from "../home-worktrees";
+  import { homeLayout, setPinned } from "../home-worktrees";
   import {
     resolveLaunchScope,
     type LaunchEntry,
@@ -43,6 +43,7 @@
   import LazyDialog from "./LazyDialog.svelte";
   import CloseSessionDialog from "./CloseSessionDialog.svelte";
   import RenameSessionDialog from "./RenameSessionDialog.svelte";
+  import UnregisterRepositoryDialog from "./UnregisterRepositoryDialog.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
 
   // The layout around the home page, quick start and session pages: the
@@ -89,7 +90,28 @@
     onremoved?: () => void;
     forgetRecords?: readonly ArchivedSession[];
   } | null>(null);
+  // Unpins a worktree from the home page; absent when its repository is gone.
+  function hideFromHome(tree: Worktree) {
+    const repo = repositories.list.find((r) => r.id === tree.repositoryId);
+    // Already off the home page: nothing to hide.
+    const pinned = repo
+      ? homeLayout(homeWorktrees.value, repo, [], new Map()).shown.some(
+          (w) => w.tree.id === tree.id && w.pinned,
+        )
+      : false;
+    return repo && pinned
+      ? () =>
+          homeWorktrees.save(
+            setPinned(homeWorktrees.value, repo, [tree.id], false),
+          )
+      : undefined;
+  }
   let managingWorktrees = $state<Repository | null>(null);
+  let choosingHome = $state<Repository | null>(null);
+  let viewingRepository = $state<Repository | null>(null);
+  // Kept after closing so the confirmation still names the repository.
+  let unregistering = $state<Repository | null>(null);
+  let unregisterOpen = $state(false);
   let releasingWorktree = $state<Worktree | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
@@ -142,6 +164,14 @@
     manageWorktrees(repository) {
       shellUi.drawerOpen = false;
       managingWorktrees = repository;
+    },
+    chooseHomeWorktrees(repository) {
+      shellUi.drawerOpen = false;
+      choosingHome = repository;
+    },
+    repositoryDetails(repository) {
+      shellUi.drawerOpen = false;
+      viewingRepository = repository;
     },
     releaseWorktree(worktree) {
       shellUi.drawerOpen = false;
@@ -424,6 +454,7 @@
         worktree={target.worktree}
         forgetRecords={target.forgetRecords ?? []}
         onremoved={target.onremoved}
+        onhide={hideFromHome(target.worktree)}
         onchange={refreshWorktrees}
         onclose={() => (removingWorktree = null)}
       />{/snippet}
@@ -453,6 +484,61 @@
       />{/snippet}
   </LazyDialog>
 {/if}
+{#if choosingHome}
+  {@const target = choosingHome}
+  {@const currentRepo =
+    repositories.list.find((r) => r.id === target.id) ?? target}
+  <LazyDialog
+    load={() => import("./HomeWorktreeDialog.svelte")}
+    label="主页显示"
+    onclose={() => (choosingHome = null)}
+  >
+    {#snippet children(page)}<page.default
+        repository={currentRepo}
+        sessions={sessions.sessions}
+        records={archived.records}
+        home={homeWorktrees.value}
+        ontoggle={(worktreeId, pinned) =>
+          homeWorktrees.save(
+            setPinned(homeWorktrees.value, currentRepo, [worktreeId], pinned),
+          )}
+        onmanage={() => {
+          choosingHome = null;
+          shell.manageWorktrees(currentRepo);
+        }}
+        onclose={() => (choosingHome = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+{#if viewingRepository}
+  {@const target = viewingRepository}
+  {@const currentRepo =
+    repositories.list.find((r) => r.id === target.id) ?? target}
+  <LazyDialog
+    load={() => import("./RepositoryDetailsDialog.svelte")}
+    label="仓库详情"
+    onclose={() => (viewingRepository = null)}
+  >
+    {#snippet children(page)}<page.default
+        repository={currentRepo}
+        sessions={sessions.sessions}
+        records={archived.records}
+        home={homeWorktrees.value}
+        refreshing={repositories.refreshing}
+        registryReady={setup.value.registryReady}
+        onunregister={() => {
+          unregistering = currentRepo;
+          unregisterOpen = true;
+        }}
+        onclose={() => (viewingRepository = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+<UnregisterRepositoryDialog
+  repository={unregistering}
+  bind:open={unregisterOpen}
+  onchange={() => repositories.refresh(true)}
+/>
 {#if releasingWorktree}
   {@const target = releasingWorktree}
   <LazyDialog

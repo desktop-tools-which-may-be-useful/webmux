@@ -130,6 +130,10 @@ export interface Shell {
   ): void;
   /** Opens the batch worktree management dialog of a repository. */
   manageWorktrees(repository: Repository): void;
+  /** Opens the choice of which worktrees a repository's home page lists. */
+  chooseHomeWorktrees(repository: Repository): void;
+  /** Opens a repository's details (path, counts, removal of its registration). */
+  repositoryDetails(repository: Repository): void;
   /** Opens the shared release preview of an archived record's worktree. */
   releaseWorktree(worktree: Worktree): void;
   /** Opens the port-forwarding dialog. */

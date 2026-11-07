@@ -1,9 +1,8 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
-import HomeWorktreePicker from "../../src/components/HomeWorktreePicker.svelte";
+import HomeWorktreeDialog from "../../src/components/HomeWorktreeDialog.svelte";
 import ManageWorktreesDialog from "../../src/components/ManageWorktreesDialog.svelte";
-import RepositoryGroup from "../../src/components/RepositoryGroup.svelte";
 import type { PushCheck } from "../../src/schemas";
 import { chat, record, repository, worktree } from "./shell-fixture";
 
@@ -343,43 +342,20 @@ test("supports explicit force authorization and keeps failed items selected for 
   });
 });
 
-test("RepositoryGroup toolbar and HomeWorktreePicker footer trigger batch management", async () => {
-  const onmanageGroup = vi.fn();
-  render(RepositoryGroup, {
-    repo,
+test("the home worktree dialog's footer hands over to batch management", async () => {
+  const onmanage = vi.fn();
+  const onclose = vi.fn();
+  render(HomeWorktreeDialog, {
+    repository: repo,
     sessions: [],
-    filtering: false,
-    open: true,
-    onopenchange: vi.fn(),
-    gitReady: true,
-    registryReady: true,
-    refreshing: false,
-    now: Date.now(),
-    onstart: vi.fn(),
-    onmanage: onmanageGroup,
-    onunregister: vi.fn(),
-    ontogglepin: vi.fn(),
-    onremove: vi.fn(),
-    onclose: vi.fn(),
-  });
-
-  await page.getByRole("button", { name: "管理工作树" }).click();
-  expect(onmanageGroup).toHaveBeenCalledOnce();
-
-  await cleanup();
-
-  const onmanagePicker = vi.fn();
-  render(HomeWorktreePicker, {
-    repositoryName: "webmux",
-    worktrees: repo.worktrees,
-    pinned: new Set(["main"]),
-    active: new Set(),
-    shown: 1,
+    records: [],
+    home: { repo1: ["main"] },
     ontoggle: vi.fn(),
-    onmanage: onmanagePicker,
+    onmanage,
+    onclose,
   });
 
-  await page.getByRole("button", { name: "选择主页工作树 webmux" }).click();
   await page.getByRole("button", { name: "批量管理…" }).click();
-  expect(onmanagePicker).toHaveBeenCalledOnce();
+  expect(onmanage).toHaveBeenCalledOnce();
+  expect(onclose).toHaveBeenCalledOnce();
 });

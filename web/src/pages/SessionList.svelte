@@ -2,10 +2,10 @@
   import InlineNotice from "../components/InlineNotice.svelte";
   import LazyDialog from "../components/LazyDialog.svelte";
   import { onMount } from "svelte";
-  import SessionViewControls from "../components/SessionViewControls.svelte";
+  import WorkspaceActions from "../components/WorkspaceActions.svelte";
   import WorkspaceToolbar from "../components/WorkspaceToolbar.svelte";
   import { store, stored } from "../api";
-  import type { ArchivedSession, Repository, Worktree } from "../schemas";
+  import type { ArchivedSession, Worktree } from "../schemas";
   import { errorMessage } from "../error";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
   import {
@@ -15,7 +15,6 @@
   } from "../pending-update";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
-  import UnregisterRepositoryDialog from "../components/UnregisterRepositoryDialog.svelte";
   import SessionFilters from "../components/SessionFilters.svelte";
   import RepositoryGroup from "../components/RepositoryGroup.svelte";
   import DirectSessions from "../components/DirectSessions.svelte";
@@ -47,8 +46,6 @@
   const refreshing = $derived(shell.repositories.refreshing);
   const repositoryError = $derived(shell.repositories.error);
   const setup = $derived(shell.setup.value);
-  const gitReady = $derived(setup.gitReady);
-  const registryReady = $derived(setup.registryReady);
   const capabilityError = $derived(setup.capabilityError);
   const loading = $derived(shell.sessions.loading);
   const initializing = $derived(!shell.setup.settled);
@@ -60,8 +57,6 @@
   let removing = $state<Worktree | null>(null);
   let removingRecord = $state<ArchivedSession | null>(null);
   let recordError = $state("");
-  let unregistering = $state<Repository | null>(null);
-  let unregisterOpen = $state(false);
   let now = $state(Date.now());
   let focusedExpanded = $state<Record<string, boolean>>({});
   let expansionOverrides = $state<Record<string, boolean>>({});
@@ -354,6 +349,18 @@
   });
 </script>
 
+{#snippet actions()}
+  <WorkspaceActions
+    {compact}
+    {refreshing}
+    onchange={setCompact}
+    onsettings={shell.settingsRepository
+      ? shell.openRepositorySettings
+      : undefined}
+    onrefresh={() => void shell.repositories.refresh(true)}
+  />
+{/snippet}
+
 <div class="workspace-page safe-area-page min-h-dvh">
   <!-- Phones reach the sidebar from this bar; wider screens show it. -->
   <header
@@ -366,9 +373,11 @@
     <!-- The sidebar footer is out of sight here, so phones keep this notice. -->
     {#if shell.sessions.connection === "reconnecting"}<span
         role="status"
-        class="ml-auto shrink-0 pr-2 text-xs text-warning"
-        >连接已断开，重连中…</span
+        class="shrink-0 text-xs text-warning">连接已断开，重连中…</span
       >{/if}
+    <div class="ml-auto flex shrink-0 items-center gap-1">
+      {@render actions()}
+    </div>
   </header>
   {#if updateNotice}
     {@const version = updateNotice.installedVersion}
@@ -404,23 +413,16 @@
               ? 0
               : 1}
           {refreshing}
-          onsettings={shell.settingsRepository
-            ? shell.openRepositorySettings
-            : undefined}
-          onrefresh={() => void shell.repositories.refresh(true)}
+          {actions}
           onstart={() => shell.start()}
         >
-          {#snippet controls()}<SessionViewControls
-              {compact}
-              onchange={setCompact}
-            />{/snippet}
           <SessionFilters
             sessions={scopedSessions}
             archivedCount={scopedArchiveCount}
             bind:query
             bind:statusFilter
             filtered={filtering && (visible.length > 0 || archivedMatches > 0)}
-            shortcutDisabled={Boolean(removing || unregisterOpen)}
+            shortcutDisabled={Boolean(removing)}
             onclear={clearFilters}
           />
         </WorkspaceToolbar>
@@ -486,9 +488,6 @@
                   focusedExpanded[repo.id] = open;
                 else expansionOverrides[repo.id] = open;
               }}
-              {gitReady}
-              {registryReady}
-              {refreshing}
               {now}
               onstart={(worktreeId) =>
                 worktreeId === undefined
@@ -501,11 +500,6 @@
                       repositoryId: repo.id,
                       worktreeId,
                     })}
-              onmanage={() => shell.manageWorktrees(repo)}
-              onunregister={() => {
-                unregistering = repo;
-                unregisterOpen = true;
-              }}
               ontogglepin={(worktreeId, pinned) =>
                 pin(repo.id, [worktreeId], pinned)}
               onremove={(tree) => {
@@ -565,8 +559,3 @@
       />{/snippet}
   </LazyDialog>
 {/if}
-<UnregisterRepositoryDialog
-  repository={unregistering}
-  bind:open={unregisterOpen}
-  onchange={() => shell.repositories.refresh(true)}
-/>

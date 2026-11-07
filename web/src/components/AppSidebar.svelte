@@ -215,11 +215,29 @@
         onopen={openSession}
         onnewworktree={(repositoryId) =>
           shell.start({ kind: "new-worktree", repositoryId })}
+        onhomeworktrees={(repositoryId) => {
+          const repo = shell.repositories.list.find(
+            (r) => r.id === repositoryId,
+          );
+          if (repo) shell.chooseHomeWorktrees(repo);
+        }}
         onmanageworktrees={(repositoryId) => {
           const repo = shell.repositories.list.find(
             (r) => r.id === repositoryId,
           );
           if (repo) shell.manageWorktrees(repo);
+        }}
+        onrepositorydetails={(repositoryId) => {
+          const repo = shell.repositories.list.find(
+            (r) => r.id === repositoryId,
+          );
+          if (repo) shell.repositoryDetails(repo);
+        }}
+        onremoveworktree={(repositoryId, worktreeId) => {
+          const tree = shell.repositories.list
+            .find((r) => r.id === repositoryId)
+            ?.worktrees.find((w) => w.id === worktreeId);
+          if (tree) shell.removeWorktree(tree);
         }}
         onrename={shell.rename}
         onclose={shell.close}

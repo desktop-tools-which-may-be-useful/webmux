@@ -570,6 +570,12 @@
     min-height: var(--control-touch);
     min-width: var(--control-touch);
   }
+  /* The sidebar tree's fold toggle keeps the slot of a row without one, so
+     rows with and without children line up. */
+  .wm-control[data-tree-toggle] {
+    min-width: 0;
+    min-height: var(--control-touch-compact);
+  }
   [data-slot="input"],
   [data-slot="input-group-control"],
   [data-slot="command-input"],

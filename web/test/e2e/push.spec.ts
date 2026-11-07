@@ -1,9 +1,23 @@
-import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type {
+  APIRequestContext,
+  BrowserContext,
+  Page,
+  TestInfo,
+} from "@playwright/test";
 import { expect, test } from "./fixtures";
 
 // chrome-headless-shell reports Notification.permission as "denied" even
 // after grantPermissions; new headless Chromium grants it.
 test.use({ channel: "chromium" });
+
+// The iPhone SE project sends an iOS user agent, and iOS only offers push
+// from the home screen (the app shows that advice instead of the switch).
+function skipOnIPhone(info: TestInfo) {
+  test.skip(
+    info.project.name === "chromium-mobile-se",
+    "iOS push needs a home-screen install",
+  );
+}
 
 // Chromium cannot reach a real push service in CI, so PushManager hands out
 // a subscription with real P-256 keys and an endpoint that never resolves.
@@ -111,7 +125,8 @@ test("enable push, send a test through the server, then disable", async ({
   context,
   request,
   baseURL,
-}) => {
+}, info) => {
+  skipOnIPhone(info);
   const card = await enablePush(page, context, request, baseURL!);
 
   // The endpoint does not resolve: the server answers 502 naming only the host.
@@ -131,7 +146,8 @@ test("the service worker shows a pushed alert and opens its session", async ({
   context,
   request,
   baseURL,
-}) => {
+}, info) => {
+  skipOnIPhone(info);
   test.skip(
     process.platform === "darwin",
     "Headless Chromium on macOS never lists the worker's notification.",

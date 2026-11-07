@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
+import { repositoryMenu } from "./repository-menu";
 
 const exec = promisify(execFile);
 
@@ -120,15 +121,12 @@ test("repository scope limits the home list, composes with filters and survives 
     page.getByRole("status").filter({ hasText: "个仓库" }),
   ).toHaveText("1 个仓库 · 1 个会话");
   const repo = page.locator("[data-repository-id]:visible");
-  await expect(page.locator('[data-slot="repository-details"]')).toHaveCount(0);
   await expect(repo.getByText("主工作区", { exact: true })).toBeHidden();
   await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeHidden();
-  await repo.getByRole("button", { name: /仓库详情/ }).click();
-  await expect(page.locator('[data-slot="repository-details"]')).toContainText(
-    "读取于",
-  );
+  await repositoryMenu(page, "仓库详情…");
+  await expect(page.getByRole("dialog")).toContainText("读取于");
   await page.keyboard.press("Escape");
-  await expect(page.locator('[data-slot="repository-details"]')).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await repo.getByRole("button", { name: "工作树详情 main" }).click();
   await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeVisible();
   await repo.getByRole("button", { name: "工作树详情 main" }).click();
@@ -193,7 +191,7 @@ test("repository scope limits the home list, composes with filters and survives 
   await page.keyboard.press("ArrowDown");
   await expect(nav.getByRole("treeitem", { name: /^直接会话/ })).toBeFocused();
   await page.keyboard.press("Enter");
-  if (testInfo.project.name === "chromium-mobile")
+  if (testInfo.project.name !== "chromium-desktop")
     await expect(nav).toBeHidden();
   await expect(page.locator("[data-repository-id]:visible")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Scratch shell" })).toBeVisible();

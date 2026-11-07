@@ -15,6 +15,7 @@ import {
   backToList,
   revealSidebar,
 } from "./fixtures";
+import { expectHomeWorktrees, repositoryMenu } from "./repository-menu";
 import { startE2EServer } from "./server.mjs";
 
 const exec = promisify(execFile);
@@ -54,7 +55,7 @@ async function expand(group: Locator) {
     await toggle.click();
 }
 async function openWorktreeCreation(page: Page, withSession = true) {
-  await page.getByRole("button", { name: "新建工作树", exact: true }).click();
+  await repositoryMenu(page, "新建工作树…");
   // The start commit and path are folded until requested.
   await page
     .getByRole("button", { name: "高级：起始提交与存放目录", exact: true })
@@ -229,7 +230,7 @@ test("failed agent start retains new worktree and retry does not create again; u
   await page.goto("/");
   const repos = await (await request.get("/api/repositories")).json();
   expect(repos[0].worktrees).toHaveLength(2);
-  await page.getByRole("button", { name: /仓库详情/ }).click();
+  await repositoryMenu(page, "仓库详情…");
   await page.getByRole("button", { name: "从列表移除仓库…" }).click();
   await page.getByRole("button", { name: "确认移除登记" }).click();
   await expect(
@@ -260,11 +261,19 @@ test("external changes refresh and restart retains registry but not sessions", a
   const repo = page.locator(`[data-repository-id="${before[0].id}"]`);
   await expand(repo);
   // Externally created worktrees stay off the home page until chosen.
-  await expect(
-    repo.getByRole("button", { name: /选择主页工作树/ }),
-  ).toContainText("1/2");
+  await expectHomeWorktrees(page, 1, 2);
   await expect(repo.getByText("external", { exact: true })).toHaveCount(0);
-  await repo.getByRole("button", { name: /选择主页工作树/ }).click();
+  await repositoryMenu(page, "主页显示…");
+  // The dialog (a drawer on phones) must stay inside the viewport, even on a
+  // 320×568 phone.
+  const picker = page.getByRole("dialog");
+  await expect(picker).toBeVisible();
+  const pickerBox = await picker.boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(pickerBox!.y).toBeGreaterThanOrEqual(0);
+  expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(viewport.height);
+  expect(pickerBox!.x).toBeGreaterThanOrEqual(0);
+  expect(pickerBox!.x + pickerBox!.width).toBeLessThanOrEqual(viewport.width);
   await page.getByRole("option", { name: "external", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(repo.getByText("external", { exact: true })).toBeVisible();
@@ -411,7 +420,7 @@ test("multiple repositories keep every session visible through local failure, co
     failed.getByText("已不可用工作区", { exact: true }),
   ).toBeVisible();
   await expect(page.locator("[data-session-link]")).toHaveCount(4);
-  await failed.getByRole("button", { name: /仓库详情/ }).click();
+  await repositoryMenu(page, "仓库详情…", registered[1].name);
   await page.getByRole("button", { name: "从列表移除仓库…" }).click();
   await page.getByRole("button", { name: "确认移除登记" }).click();
   await expect(failed).toHaveCount(0);
@@ -616,9 +625,7 @@ test("late Git response cannot replace a newer refresh", async ({
   );
   const repo = page.locator("[data-repository-id]");
   await expand(repo);
-  await expect(
-    repo.getByRole("button", { name: /选择主页工作树/ }),
-  ).toContainText("1/2");
+  await expectHomeWorktrees(page, 1, 2);
   const lateResponse = page.waitForResponse((response) =>
     response.url().endsWith("/api/repositories"),
   );
@@ -633,9 +640,7 @@ test("late Git response cannot replace a newer refresh", async ({
   await expect(
     page.getByRole("button", { name: "刷新 Git 状态" }),
   ).toHaveAttribute("aria-busy", "false");
-  await expect(
-    repo.getByRole("button", { name: /选择主页工作树/ }),
-  ).toContainText("1/2");
+  await expectHomeWorktrees(page, 1, 2);
 });
 
 test("returning home keeps the cached snapshot until a slow Git refresh finishes", async ({
@@ -681,18 +686,14 @@ test("returning home keeps the cached snapshot until a slow Git refresh finishes
     await expect(page.getByText(/Git 状态(?:刷新失败|读取失败)/)).toHaveCount(
       0,
     );
-    await expect(
-      group.getByRole("button", { name: /选择主页工作树/ }),
-    ).toContainText("1/1");
+    await expectHomeWorktrees(page, 1, 1);
     const refreshed = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/repositories") && response.ok(),
     );
     held.resolve();
     await (await refreshed).finished();
-    await expect(
-      group.getByRole("button", { name: /选择主页工作树/ }),
-    ).toContainText("1/2");
+    await expectHomeWorktrees(page, 1, 2);
   } finally {
     held.resolve();
   }
@@ -749,7 +750,7 @@ test("batch worktree management cleans unpinned and prunable worktrees while ski
   const group = page.locator("[data-repository-id]");
   await expect(group).toHaveCount(1);
 
-  await group.getByRole("button", { name: "管理工作树", exact: true }).click();
+  await repositoryMenu(page, "管理工作树…");
   const dialog = page.getByRole("dialog", { name: "管理工作树 · batch-repo" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("checkbox", { name: "main" })).toBeDisabled();

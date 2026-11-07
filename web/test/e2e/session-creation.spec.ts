@@ -11,6 +11,7 @@ import {
   test,
   useCustomCommand,
 } from "./fixtures";
+import { repositoryMenu } from "./repository-menu";
 
 const exec = promisify(execFile);
 
@@ -94,7 +95,7 @@ test("worktree management creates only a worktree even when launch configs are u
   await expect(
     page.getByRole("button", { name: "新建 worktree", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "新建工作树", exact: true }).click();
+  await repositoryMenu(page, "新建工作树…");
   await expect(
     page.getByRole("checkbox", { name: "创建后启动会话", exact: true }),
   ).not.toBeChecked();

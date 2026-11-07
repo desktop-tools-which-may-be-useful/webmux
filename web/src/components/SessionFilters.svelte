@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MediaQuery } from "svelte/reactivity";
   import IconSearch from "~icons/tabler/search";
   import { Button } from "$lib/components/ui/button";
   import * as InputGroup from "$lib/components/ui/input-group";
@@ -29,6 +30,15 @@
   } = $props();
 
   let searchInput = $state<HTMLInputElement | null>(null);
+  const wide = new MediaQuery("min-width: 768px");
+  let group = $state<HTMLElement | null>(null);
+  // The single-row filter scrolls sideways on phones; keep the choice visible.
+  $effect(() => {
+    void statusFilter;
+    group
+      ?.querySelector('[role="radio"][aria-checked="true"]')
+      ?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  });
   const filters = $derived.by(() => {
     const counts = countSessions(sessions);
     return [
@@ -75,7 +85,7 @@
       aria-label="搜索会话"
       aria-keyshortcuts="/"
       title="按 / 搜索，Esc 清除筛选"
-      placeholder="搜索会话、仓库、目录或分支"
+      placeholder={wide.current ? "搜索会话、仓库、目录或分支" : "搜索会话"}
       bind:ref={searchInput}
       bind:value={query}
       onkeydown={(event) => {
@@ -90,6 +100,7 @@
     </InputGroup.Addon>
   </InputGroup.Root>
   <SegmentedControl.Root
+    bind:ref={group}
     value={statusFilter}
     onValueChange={(value) => {
       const next = filters.find((filter) => filter.id === value);
@@ -97,15 +108,15 @@
     }}
     size="form"
     aria-label="按会话状态筛选"
-    wrap
+    class="no-scrollbar w-full justify-start overflow-x-auto overflow-y-hidden md:w-fit md:overflow-visible"
   >
     {#each filters as filter (filter.id)}
-      <SegmentedControl.Item value={filter.id} class="min-h-9">
+      <SegmentedControl.Item value={filter.id} class="min-h-9 shrink-0">
         {filter.label}
-        <span
-          class="inline-block w-[3ch] font-mono text-xs text-right tabular-nums opacity-60"
-          >{filter.count}</span
-        >
+        {#if filter.count > 0}<span
+            class="font-mono text-xs tabular-nums opacity-60"
+            >{filter.count}</span
+          >{/if}
       </SegmentedControl.Item>
     {/each}
   </SegmentedControl.Root>

@@ -185,13 +185,18 @@
   </div>{/if}
 {#if t.exitCode !== null && !recovery}
   <div
-    class="flex shrink-0 flex-wrap items-center gap-3 border-b bg-muted px-4 py-2 text-sm"
+    class="flex shrink-0 items-center gap-2 border-b bg-muted px-3 py-2 text-sm sm:gap-3 sm:px-4"
     role="status"
   >
-    <span>进程已退出（code {t.exitCode}）</span>
-    <Button variant="outline" size="sm" onclick={() => navigate(shellUi.home)}
-      >返回列表</Button
+    <span class="min-w-0 flex-1 truncate">进程已退出（code {t.exitCode}）</span>
+    <Button
+      variant="outline"
+      size="sm"
+      class="shrink-0"
+      onclick={() => navigate(shellUi.home)}>返回列表</Button
     >
-    <Button variant="outline" size="sm" onclick={remove}>移除会话</Button>
+    <Button variant="outline" size="sm" class="shrink-0" onclick={remove}
+      >移除会话</Button
+    >
   </div>
 {/if}

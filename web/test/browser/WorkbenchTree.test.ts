@@ -52,6 +52,7 @@ function renderTree(
     onopen: vi.fn(),
     onnewworktree: vi.fn(),
     onmanageworktrees: vi.fn(),
+    onremoveworktree: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
@@ -181,6 +182,18 @@ test("each available repository offers new-worktree and manage-worktrees actions
   expect(page.getByRole("button", { name: /仓库操作：/ }).elements()).toEqual(
     [],
   );
+});
+
+test("a linked worktree row offers a delete button; the main worktree does not", async () => {
+  const handlers = renderTree([]);
+  await expect.element(item("wt/brisk-otter")).toBeVisible();
+  expect(
+    tree().getByRole("button", { name: "删除工作树 main" }).elements(),
+  ).toEqual([]);
+  await tree()
+    .getByRole("button", { name: "删除工作树 wt/brisk-otter" })
+    .click();
+  expect(handlers.onremoveworktree).toHaveBeenCalledWith("repo1", "otter");
 });
 
 test("folded nodes keep waiting counts, and folds survive a remount", async () => {

@@ -26,6 +26,7 @@
     onclose,
     onchange,
     onremoved,
+    onhide,
   }: {
     worktree: Worktree;
     /** Archived records the caller deletes after the worktree is gone. */
@@ -34,12 +35,18 @@
     onchange: () => void;
     /** The worktree was removed; runs before `onclose`. */
     onremoved?: () => void;
+    /**
+     * Hides the worktree from the home page without deleting anything; when
+     * given, the dialog offers it as an alternative to removal.
+     */
+    onhide?: () => void;
   } = $props();
   let preview = $state<RemovalPreview | null>(null);
   let busy = $state(false);
   let error = $state("");
   let force = $state(false);
   let closeSessions = $state(false);
+  const canHide = $derived(!!onhide && forgetRecords.length === 0);
   // The records a removal keeps are pinned to the commit, which needs a
   // resolvable HEAD. Records the caller deletes with the worktree are not
   // kept.
@@ -101,6 +108,10 @@
   onMount(() => {
     void load();
   });
+  function hide() {
+    onhide?.();
+    onclose();
+  }
   async function remove() {
     if (!preview) return;
     busy = true;
@@ -257,6 +268,15 @@
           onclick={() => {
             force = true;
           }}>进入强制删除确认</Button
+        >
+      {/if}
+      {#if canHide}
+        <Button
+          type="button"
+          variant="success"
+          disabled={busy}
+          title="只移出主页，不删除目录、分支与会话记录；有会话的工作树仍会显示"
+          onclick={hide}>仅从主页隐藏</Button
         >
       {/if}
     {/snippet}

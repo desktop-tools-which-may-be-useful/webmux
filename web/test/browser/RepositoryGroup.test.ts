@@ -13,7 +13,7 @@ afterEach(async () => {
   document.body.style.padding = "";
 });
 
-function renderFocused() {
+function renderGroup(focused: boolean) {
   render(RepositoryGroup, {
     repo: repository({
       worktrees: [
@@ -23,49 +23,35 @@ function renderFocused() {
     }),
     sessions: [],
     filtering: false,
-    focused: true,
+    focused,
     open: true,
     onopenchange: () => {},
-    gitReady: true,
-    registryReady: true,
-    refreshing: false,
     now: Date.now(),
     onstart: () => {},
-    onmanage: () => {},
-    onunregister: () => {},
     ontogglepin: () => {},
     onremove: () => {},
     onclose: () => {},
   });
 }
 
-test("430px focused repository header stacks actions below a one-line title", async () => {
+test("a focused repository lists its worktrees without repeating a heading", async () => {
   await page.viewport(430, 932);
-  // The page pads its content by 16px on phones.
-  document.body.style.padding = "0 16px";
-  renderFocused();
-
-  const heading = page.getByRole("heading", { level: 2 });
-  await expect.element(heading).toBeVisible();
-  const manage = page.getByRole("button", { name: "管理工作树" });
-  const create = page.getByRole("button", { name: "新建工作树" });
-  await expect.element(manage).toBeVisible();
-  await expect.element(create).toBeVisible();
-
-  const title = heading.element().getBoundingClientRect();
-  const actions = [
-    manage.element().getBoundingClientRect(),
-    create.element().getBoundingClientRect(),
-  ];
-  // The title keeps its line instead of shrinking to one Han character per row.
-  expect(title.height).toBeLessThan(40);
-  // The actions take their own row below the title.
-  for (const action of actions) {
-    expect(action.top).toBeGreaterThanOrEqual(title.bottom);
-  }
-  // The toolbar stays on one line and does not overflow the viewport.
-  expect(Math.abs(actions[0].top - actions[1].top)).toBeLessThanOrEqual(1);
+  renderGroup(true);
+  await expect
+    .element(page.getByRole("region", { name: /^仓库 / }))
+    .toBeVisible();
+  await expect.element(page.getByText("main", { exact: true })).toBeVisible();
+  expect(page.getByRole("heading", { level: 2 }).elements()).toEqual([]);
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
     window.innerWidth,
   );
+});
+
+test("an unfocused repository keeps its name as a foldable heading", async () => {
+  renderGroup(false);
+  const heading = page.getByRole("heading", { level: 2 });
+  await expect.element(heading).toBeVisible();
+  await expect
+    .element(heading.getByRole("button", { expanded: true }))
+    .toBeVisible();
 });

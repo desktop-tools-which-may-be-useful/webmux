@@ -113,8 +113,8 @@ test("corrupt settings preserve bytes while terminal APIs remain available", asy
     expect((await request.get("/api/health")).status()).toBe(200);
     expect(await readFile(path, "utf8")).toBe("{corrupt-private-body");
     await createShell(page, "settings unavailable shell");
-    await runCommand(page, "printf 'TERMINAL_SURVIVES_SETTINGS_FAILURE\\n'");
-    await expectTerminalLine(page, "TERMINAL_SURVIVES_SETTINGS_FAILURE");
+    await runCommand(page, "printf 'TERMINAL_SURVIVES_FAILURE\\n'");
+    await expectTerminalLine(page, "TERMINAL_SURVIVES_FAILURE");
   } finally {
     await writeFile(path, prior);
     await server.restart();

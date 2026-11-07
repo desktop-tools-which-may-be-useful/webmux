@@ -30,6 +30,8 @@
     /** The archived record of an archived row. */
     record?: ArchivedSession;
     path?: string;
+    /** A linked worktree, which the row's delete button can remove. */
+    removable?: boolean;
     /** Why a repository is unavailable; "" when it is fine. */
     reason?: string;
     children: TreeNode[];
@@ -136,6 +138,7 @@
                 repositoryId: repo.id,
                 worktreeId: tree.id,
                 path: tree.path,
+                removable: tree.kind === "linked",
                 children: sessionNodes(inside, treeKey, 3),
               },
               inside,
@@ -213,6 +216,7 @@
   import IconFolderOff from "~icons/tabler/folder-off";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLayoutDashboard from "~icons/tabler/layout-dashboard";
+  import IconTrash from "~icons/tabler/trash";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { store, stored } from "../api";
@@ -244,7 +248,10 @@
     onscope,
     onopen,
     onnewworktree,
+    onhomeworktrees,
     onmanageworktrees,
+    onrepositorydetails,
+    onremoveworktree,
     onrename,
     onclose,
     onresume,
@@ -271,7 +278,11 @@
     onscope: (scope: string, worktreeId?: string) => void;
     onopen: (session: SessionInfo) => void;
     onnewworktree: (repositoryId: string) => void;
+    onhomeworktrees: (repositoryId: string) => void;
     onmanageworktrees: (repositoryId: string) => void;
+    onrepositorydetails: (repositoryId: string) => void;
+    /** Opens the removal dialog of a linked worktree. */
+    onremoveworktree: (repositoryId: string, worktreeId: string) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
     /** Resumes an archived record, rebuilding a released worktree first. */
@@ -429,7 +440,8 @@
     <Button
       variant="quiet"
       size="icon-xs"
-      class="shrink-0"
+      class="size-6 shrink-0"
+      data-tree-toggle
       tabindex={-1}
       aria-label={label}
       title={label}
@@ -532,7 +544,8 @@
         {:else if status}<RowStatus {status} />
         {:else}{@render counts(
             node,
-            node.kind === "repository" && !node.reason && canCreate,
+            (node.kind === "repository" && !node.reason && canCreate) ||
+              !!node.removable,
           )}{/if}
       </ListButton>
       {#if node.kind === "repository" && !node.reason && canCreate}
@@ -540,8 +553,21 @@
           label={node.label}
           tabindex={tabStop === node.key ? 0 : -1}
           onnewworktree={() => onnewworktree(node.repositoryId ?? "")}
+          onhome={() => onhomeworktrees(node.repositoryId ?? "")}
           onmanage={() => onmanageworktrees(node.repositoryId ?? "")}
+          ondetails={() => onrepositorydetails(node.repositoryId ?? "")}
         />
+      {:else if node.removable && node.repositoryId && node.worktreeId}
+        {@const repositoryId = node.repositoryId}
+        {@const worktreeId = node.worktreeId}
+        <ListButton
+          variant="file-tree-action"
+          aria-label={`删除工作树 ${node.label}`}
+          title={`删除工作树 ${node.label}`}
+          tabindex={tabStop === node.key ? 0 : -1}
+          onclick={() => onremoveworktree(repositoryId, worktreeId)}
+          ><IconTrash aria-hidden="true" /></ListButton
+        >
       {:else if node.session}
         <SidebarSessionMenu
           label={node.label}
