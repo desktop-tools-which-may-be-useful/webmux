@@ -9,7 +9,11 @@
   import IconUpload from "~icons/tabler/upload";
   import IconSearch from "~icons/tabler/search";
   import { navigate, sessionStatusText } from "../api";
-  import { Button, type ButtonSize } from "$lib/components/ui/button";
+  import {
+    Button,
+    type ButtonSize,
+    type ButtonVariant,
+  } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { Fullscreen } from "../hooks/fullscreen.svelte";
   import type { HybridView } from "../hooks/hybrid.svelte";
@@ -83,7 +87,7 @@
     setKeyboardSizeHold: (value: boolean) => void;
     codeShown: boolean;
     forceSoftKeys: boolean;
-    quickMenu: Snippet<["top" | "bottom", ButtonSize?]>;
+    quickMenu: Snippet<["top" | "bottom", ButtonSize?, ButtonVariant?]>;
     upload: (files: File[]) => Promise<void>;
     toggleDraft: () => void;
     copy: () => Promise<void>;

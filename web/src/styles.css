@@ -377,9 +377,13 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: var(--background);
-  opacity: 0.92;
+  pointer-events: none;
+  color: var(--muted-foreground);
   font-size: 0.875rem;
+}
+/* The replay stays out of sight while the plain message shows. */
+.terminal-host.restoring {
+  opacity: 0;
 }
 .soft-row {
   display: flex;

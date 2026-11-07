@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
   import IconAlertCircle from "~icons/tabler/alert-circle";
-  import IconArrowUp from "~icons/tabler/arrow-up";
   import IconBook2 from "~icons/tabler/book-2";
   import IconChevronDown from "~icons/tabler/chevron-down";
   import IconGitBranch from "~icons/tabler/git-branch";
@@ -13,27 +12,24 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
-  import { Textarea } from "$lib/components/ui/textarea";
   import { api, navigate, store, stored, uploadQuickStartFile } from "../api";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import { remoteBranchBases } from "../branch-name";
   import type { ConfigValue } from "../chat-api";
-  import ChatAttachmentList from "../components/chat/ChatAttachmentList.svelte";
   import ChatConfig from "../components/chat/ChatConfig.svelte";
   import ChatPermissionMode from "../components/chat/ChatPermissionMode.svelte";
   import ChatSelect from "../components/chat/ChatSelect.svelte";
   import ChatSessionOptions from "../components/chat/ChatSessionOptions.svelte";
   import ChatUploadButton from "../components/chat/ChatUploadButton.svelte";
+  import ComposerCard from "../components/chat/ComposerCard.svelte";
   import BranchCommandList from "../components/BranchCommandList.svelte";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import VoiceButton from "../components/VoiceButton.svelte";
   import ConnectorInstallHint from "../components/ConnectorInstallHint.svelte";
   import FileDropZone from "../components/FileDropZone.svelte";
-  import FileUploadProgress from "../components/FileUploadProgress.svelte";
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
   import SidebarButton from "../components/SidebarButton.svelte";
   import { errorMessage } from "../error";
-  import { useComposerCompact } from "../hooks/composer-compact.svelte";
   import { useChatUpload } from "../hooks/upload.svelte";
   import {
     configValues,
@@ -299,13 +295,6 @@
   );
 
   let input = $state<HTMLTextAreaElement | null>(null);
-  let footer = $state<HTMLElement | null>(null);
-  const compactState = useComposerCompact(
-    () => footer,
-    () =>
-      Boolean(text || attachments.length > 0 || uploads.progress || sending),
-  );
-  const compact = $derived(compactState.compact);
   onMount(() => {
     setBrowserChrome("新聊天 · WebMux", false);
     if (!hasTouchInput() && window.innerWidth >= 640) input?.focus();
@@ -409,11 +398,8 @@
     </div>
 
     <footer
-      bind:this={footer}
       class="mx-auto w-full max-w-3xl space-y-1.5 px-3 pb-safe-4 sm:px-4 sm:pb-6"
       data-quick-start-composer
-      data-compact={compact ? "" : undefined}
-      {...compactState.containerProps}
     >
       {#if missing}
         <div
@@ -500,176 +486,179 @@
         </div>
       {/if}
 
-      <!-- The location sits above the input, where an open chat shows the
-         same repository and branch, fixed once the session exists. -->
-      <div
-        class={[
-          "-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none]",
-          compact && "max-sm:hidden",
-        ]}
-        role="toolbar"
-        aria-label="仓库与分支"
+      <ComposerCard
+        bind:textarea={input}
+        value={text}
+        oninput={(event) => {
+          text = event.currentTarget.value;
+          persistDraft();
+        }}
+        placeholder="描述任务，发送后在新 worktree 中开始"
+        label="任务描述"
+        disabled={sending}
+        {uploads}
+        uploadsDisabled={sending}
+        busy={Boolean(
+          text || attachments.length > 0 || uploads.progress || sending,
+        )}
+        action={{
+          kind: "send",
+          label: "发送",
+          disabled: !canSend,
+          onclick: () => void send(),
+        }}
+        textareaProps={{ onkeydown: keydown }}
       >
-        <ChatSelect
-          labeled
-          name="仓库"
-          value={repository?.id ?? ""}
-          choices={repositories.map((repo) => ({
-            value: repo.id,
-            name: repo.name,
-            reason: usableRepository(repo)
-              ? undefined
-              : repo.error || "仓库当前不可用",
-          }))}
-          disabled={sending}
-          onchange={(id) => {
-            repositoryChoice = id;
-            unticked = undefined;
-            persistDraft();
-          }}
-        >
-          {#snippet icon()}<IconBook2 aria-hidden="true" />{/snippet}
-        </ChatSelect>
-        <Popover.Root bind:open={() => basePickerOpen, setBasePickerOpen}>
-          <Popover.Trigger disabled={sending || !baseBranches.length}>
-            {#snippet child({ props })}
-              <Button
-                {...props}
-                variant="quiet"
-                size="xs"
-                class="max-w-48 min-w-0 shrink-0"
-                aria-label={`基准分支：${baseName}`}
-                title={baseName ? `基准分支：${baseName}` : "基准分支"}
-                ><IconGitBranch aria-hidden="true" /><span
-                  class="min-w-0 truncate">{baseName}</span
-                ><IconChevronDown aria-hidden="true" /></Button
-              >
-            {/snippet}
-          </Popover.Trigger>
-          <Popover.Content align="start" class="w-72 gap-0 overflow-hidden p-0">
-            <BranchCommandList
-              label="基准分支"
-              branches={localBranches}
-              {remoteBranches}
-              selected={baseName}
-              loading={!branchData && !branches?.error}
-              failed={!!branches?.error}
-              disabled={sending}
-              bind:search={baseSearch}
-              onselect={(name) => {
-                baseChoice = { repositoryId: repository?.id ?? "", name };
-                persistDraft();
-                setBasePickerOpen(false);
-              }}
-            />
-          </Popover.Content>
-        </Popover.Root>
-      </div>
-
-      {#if uploadError}<p role="alert" class="px-1 text-sm text-destructive">
-          {uploadError}
-        </p>{/if}
-      <div
-        class={[
-          "rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20",
-          compact && "max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:p-1",
-        ]}
-      >
-        {#if repository?.initInstruction}
+        {#snippet location({ compact })}
           <div
             class={[
-              "flex items-center gap-2 border-b px-3 py-1",
+              "-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none]",
               compact && "max-sm:hidden",
             ]}
+            role="toolbar"
+            aria-label="仓库与分支"
           >
-            <Checkbox
-              id="use-init-instruction"
+            <ChatSelect
+              labeled
+              name="仓库"
+              value={repository?.id ?? ""}
+              choices={repositories.map((repo) => ({
+                value: repo.id,
+                name: repo.name,
+                reason: usableRepository(repo)
+                  ? undefined
+                  : repo.error || "仓库当前不可用",
+              }))}
               disabled={sending}
-              bind:checked={
-                () => useInstruction,
-                (next) => {
-                  unticked = next ? undefined : repository?.id;
-                  persistDraft();
-                }
-              }
-            />
-            <Label for="use-init-instruction">使用初始化指令</Label>
-            <Popover.Root>
-              <Popover.Trigger>
+              onchange={(id) => {
+                repositoryChoice = id;
+                unticked = undefined;
+                persistDraft();
+              }}
+            >
+              {#snippet icon()}<IconBook2 aria-hidden="true" />{/snippet}
+            </ChatSelect>
+            <Popover.Root bind:open={() => basePickerOpen, setBasePickerOpen}>
+              <Popover.Trigger disabled={sending || !baseBranches.length}>
                 {#snippet child({ props })}
                   <Button
                     {...props}
                     variant="quiet"
                     size="xs"
-                    title="预览将附带的初始化指令"
-                    ><IconNotes aria-hidden="true" />预览</Button
+                    class="max-w-48 min-w-0 shrink-0 [&_svg:not([class*='size-'])]:size-4"
+                    aria-label={`基准分支：${baseName}`}
+                    title={baseName ? `基准分支：${baseName}` : "基准分支"}
+                    ><IconGitBranch aria-hidden="true" /><span
+                      class="min-w-0 truncate">{baseName}</span
+                    ><IconChevronDown aria-hidden="true" /></Button
                   >
                 {/snippet}
               </Popover.Trigger>
-              <Popover.Content align="start" class="w-80 space-y-2">
-                <p class="font-medium">{repository.name} 的初始化指令</p>
-                <p
-                  class="max-h-64 overflow-y-auto whitespace-pre-wrap break-words text-muted-foreground"
-                >
-                  {instructionPreview.hasUser
-                    ? instructionPreview.text.replaceAll(
-                        "{{user}}",
-                        "〔你的消息〕",
-                      )
-                    : instructionPreview.text}
-                </p>
-                {#if instructionPreview.missing.length}
-                  <p class="text-xs text-warning" role="status">
-                    找不到快捷指令：{instructionPreview.missing
-                      .map((name) => `{{${name}}}`)
-                      .join("、")}，发送时会被服务端拒绝。
-                  </p>
-                {/if}
-                {#if !instructionPreview.hasUser}
-                  <p class="text-xs text-muted-foreground">
-                    指令没有 {"{{user}}"}，会放在你的消息前面，空一行后作为第一条消息一起发送。
-                  </p>
-                {/if}
-                {#if usesArtifactDir(instructionPreview.text)}
-                  <p class="text-xs text-muted-foreground">
-                    {"{{dir}}"} 会在会话创建后替换为它的临时文件夹路径。
-                  </p>
-                {/if}
-                {#if instructionPreview.hasWebmux}
-                  <p class="text-xs text-muted-foreground">
-                    {"{{webmux}}"} 会在会话创建后替换为 WebMux 工具说明：手册地址、命令路径与临时文件夹。
-                  </p>
-                {/if}
-                <p class="text-xs text-muted-foreground">
-                  取消勾选只影响这次发送。在首页侧栏底部的“仓库设置”中修改。
-                </p>
+              <Popover.Content
+                align="start"
+                class="w-72 gap-0 overflow-hidden p-0"
+              >
+                <BranchCommandList
+                  label="基准分支"
+                  branches={localBranches}
+                  {remoteBranches}
+                  selected={baseName}
+                  loading={!branchData && !branches?.error}
+                  failed={!!branches?.error}
+                  disabled={sending}
+                  bind:search={baseSearch}
+                  onselect={(name) => {
+                    baseChoice = { repositoryId: repository?.id ?? "", name };
+                    persistDraft();
+                    setBasePickerOpen(false);
+                  }}
+                />
               </Popover.Content>
             </Popover.Root>
           </div>
-        {/if}
-        <ChatAttachmentList {uploads} disabled={sending} />
-        <div
-          class={[
-            "px-2 pt-1",
-            compact && "max-sm:min-w-0 max-sm:flex-1 max-sm:px-1 max-sm:py-0",
-          ]}
-        >
-          <Textarea
-            variant="bare"
-            rows={compact ? 1 : 2}
-            class={[
-              "max-h-48 min-h-14 resize-none",
-              compact && "max-sm:max-h-9 max-sm:min-h-9 max-sm:overflow-hidden",
-            ]}
-            placeholder="描述任务，发送后在新 worktree 中开始"
-            aria-label="任务描述"
-            disabled={sending}
-            bind:ref={input}
-            bind:value={text}
-            oninput={() => persistDraft()}
-            onkeydown={keydown}
-            onpaste={(event) => uploads.filePaste(event)}
-          />
+
+          {#if uploadError}<p
+              role="alert"
+              class="px-1 text-sm text-destructive"
+            >
+              {uploadError}
+            </p>{/if}
+        {/snippet}
+        {#snippet menu({ compact })}
+          {#if repository?.initInstruction}
+            <div
+              class={[
+                "flex items-center gap-2 border-b px-3 py-1",
+                compact && "max-sm:hidden",
+              ]}
+            >
+              <Checkbox
+                id="use-init-instruction"
+                disabled={sending}
+                bind:checked={
+                  () => useInstruction,
+                  (next) => {
+                    unticked = next ? undefined : repository?.id;
+                    persistDraft();
+                  }
+                }
+              />
+              <Label for="use-init-instruction">使用初始化指令</Label>
+              <Popover.Root>
+                <Popover.Trigger>
+                  {#snippet child({ props })}
+                    <Button
+                      {...props}
+                      variant="quiet"
+                      size="xs"
+                      title="预览将附带的初始化指令"
+                      ><IconNotes aria-hidden="true" />预览</Button
+                    >
+                  {/snippet}
+                </Popover.Trigger>
+                <Popover.Content align="start" class="w-80 space-y-2">
+                  <p class="font-medium">{repository.name} 的初始化指令</p>
+                  <p
+                    class="max-h-64 overflow-y-auto whitespace-pre-wrap break-words text-muted-foreground"
+                  >
+                    {instructionPreview.hasUser
+                      ? instructionPreview.text.replaceAll(
+                          "{{user}}",
+                          "〔你的消息〕",
+                        )
+                      : instructionPreview.text}
+                  </p>
+                  {#if instructionPreview.missing.length}
+                    <p class="text-xs text-warning" role="status">
+                      找不到快捷指令：{instructionPreview.missing
+                        .map((name) => `{{${name}}}`)
+                        .join("、")}，发送时会被服务端拒绝。
+                    </p>
+                  {/if}
+                  {#if !instructionPreview.hasUser}
+                    <p class="text-xs text-muted-foreground">
+                      指令没有 {"{{user}}"}，会放在你的消息前面，空一行后作为第一条消息一起发送。
+                    </p>
+                  {/if}
+                  {#if usesArtifactDir(instructionPreview.text)}
+                    <p class="text-xs text-muted-foreground">
+                      {"{{dir}}"} 会在会话创建后替换为它的临时文件夹路径。
+                    </p>
+                  {/if}
+                  {#if instructionPreview.hasWebmux}
+                    <p class="text-xs text-muted-foreground">
+                      {"{{webmux}}"} 会在会话创建后替换为 WebMux 工具说明：手册地址、命令路径与临时文件夹。
+                    </p>
+                  {/if}
+                  <p class="text-xs text-muted-foreground">
+                    取消勾选只影响这次发送。在首页侧栏底部的“仓库设置”中修改。
+                  </p>
+                </Popover.Content>
+              </Popover.Root>
+            </div>
+          {/if}
+        {/snippet}
+        {#snippet hints()}
           {#if usesArtifactDir(text)}
             <p class="px-1 pt-1 text-xs text-muted-foreground">
               {"{{dir}}"} 会在会话创建后替换为它的临时文件夹路径。
@@ -680,130 +669,109 @@
               {"{{webmux}}"} 会在会话创建后替换为 WebMux 工具说明。
             </p>
           {/if}
-        </div>
-        {#if uploads.progress}<FileUploadProgress
-            progress={uploads.progress}
-            cancel={() => uploads.cancel()}
-            variant="card"
-          />{/if}
-        <div
-          class={[
-            "flex items-center justify-end gap-1 px-2 pb-2",
-            compact && "max-sm:shrink-0 max-sm:p-0",
-          ]}
-        >
-          <div
-            class={[
-              "mr-auto flex min-w-0 items-center gap-0.5 overflow-hidden",
-              compact && "max-sm:hidden",
-            ]}
-          >
-            <ChatUploadButton {uploads} disabled={sending} />
-            {#if sending}
-              <span
-                class="flex items-center gap-1.5 text-xs text-muted-foreground"
-                role="status"
-              >
-                <IconLoader2
-                  class="size-3.5 animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />正在创建 worktree 并启动 {agent?.name}…
-              </span>
-            {:else if agent}
-              <!-- Narrow screens keep the agent and its options in the card, as
+        {/snippet}
+        {#snippet leading()}
+          <ChatUploadButton {uploads} disabled={sending} />
+          {#if sending}
+            <span
+              class="flex items-center gap-1.5 text-xs text-muted-foreground"
+              role="status"
+            >
+              <IconLoader2
+                class="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />正在创建 worktree 并启动 {agent?.name}…
+            </span>
+          {:else if agent}
+            <!-- Narrow screens keep the agent and its options in the card, as
                  the chat composer does; the row above keeps the location. -->
-              <span class="flex min-w-0 items-center gap-0.5 sm:hidden">
+            <span class="flex min-w-0 items-center gap-0.5 sm:hidden">
+              {@render agentPicker("hidden @md:inline")}
+              {@render sidePicker()}
+              {#if chat}
+                <ChatSessionOptions
+                  mode={permissionMode}
+                  config={options}
+                  disabled={locked}
+                  modeDisabled={locked}
+                  loading={probing}
+                  onmodechange={(mode) => {
+                    permissionMode = mode;
+                    persistDraft();
+                  }}
+                  onconfigchange={setOption}
+                />
+              {/if}
+            </span>
+          {/if}
+        {/snippet}
+        {#snippet accessories({ size, variant })}
+          {#if shell.setup.value.voice}
+            <VoiceButton
+              {size}
+              {variant}
+              disabled={sending}
+              onresult={(recognized) => void insertTextAtCursor(recognized)}
+              onerror={(message) => (uploadError = message)}
+            />
+          {/if}
+          <QuickCommandMenu
+            commands={quickCommands.list}
+            target="chat"
+            unavailable=""
+            disabled={sending}
+            side="top"
+            {size}
+            {variant}
+            run={insertQuickCommand}
+            manage={() => navigate("/settings#quick-commands")}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              input?.focus();
+            }}
+          />
+        {/snippet}
+        {#snippet below()}
+          {#if agent}
+            <div
+              class="-my-1 flex min-w-0 flex-nowrap items-center justify-end gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] max-sm:hidden"
+              role="toolbar"
+              aria-label="启动选项"
+            >
+              <div class="flex shrink-0 items-center gap-0.5">
                 {@render agentPicker()}
                 {@render sidePicker()}
                 {#if chat}
-                  <ChatSessionOptions
+                  <ChatPermissionMode
                     mode={permissionMode}
-                    config={options}
                     disabled={locked}
-                    modeDisabled={locked}
-                    loading={probing}
-                    onmodechange={(mode) => {
+                    onchange={(mode) => {
                       permissionMode = mode;
                       persistDraft();
                     }}
-                    onconfigchange={setOption}
                   />
+                  {#if options.length}
+                    <ChatConfig
+                      config={options}
+                      disabled={locked}
+                      onchange={setOption}
+                    />
+                  {/if}
+                  {@render probeStatus()}
                 {/if}
-              </span>
-            {/if}
-          </div>
-          <span class={["flex items-center gap-1", compact && "max-sm:hidden"]}>
-            {#if shell.setup.value.voice}
-              <VoiceButton
-                size="icon-touch"
-                disabled={sending}
-                onresult={(recognized) => void insertTextAtCursor(recognized)}
-                onerror={(message) => (uploadError = message)}
-              />
-            {/if}
-            <QuickCommandMenu
-              commands={quickCommands.list}
-              target="chat"
-              unavailable=""
-              disabled={sending}
-              side="top"
-              size="icon-touch"
-              run={insertQuickCommand}
-              manage={() => navigate("/settings#quick-commands")}
-              onCloseAutoFocus={(event) => {
-                event.preventDefault();
-                input?.focus();
-              }}
-            />
-          </span>
-          <Button
-            size="icon-touch"
-            aria-label="发送"
-            title="发送"
-            disabled={!canSend}
-            onclick={() => void send()}
-            ><IconArrowUp aria-hidden="true" /></Button
-          >
-        </div>
-      </div>
-
-      {#if agent}
-        <div
-          class="-my-1 flex min-w-0 flex-nowrap items-center justify-end gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] max-sm:hidden"
-          role="toolbar"
-          aria-label="启动选项"
-        >
-          <div class="flex shrink-0 items-center gap-0.5">
-            {@render agentPicker()}
-            {@render sidePicker()}
-            {#if chat}
-              <ChatPermissionMode
-                mode={permissionMode}
-                disabled={locked}
-                onchange={(mode) => {
-                  permissionMode = mode;
-                  persistDraft();
-                }}
-              />
-              {#if options.length}
-                <ChatConfig
-                  config={options}
-                  disabled={locked}
-                  onchange={setOption}
-                />
-              {/if}
-              {@render probeStatus()}
-            {/if}
-          </div>
-        </div>
-      {/if}
+              </div>
+            </div>
+          {/if}
+        {/snippet}
+      </ComposerCard>
     </footer>
   </FileDropZone>
 </main>
 
-{#snippet agentPicker()}
+{#snippet agentPicker(labelClass = "")}
   <ChatSelect
     labeled
+    {labelClass}
     name="Agent"
     value={agent?.id ?? ""}
     choices={agents.map((item) => ({ value: item.id, name: item.name }))}
@@ -815,7 +783,7 @@
   >
     {#snippet choiceIcon(id)}<LaunchConfigIcon
         icon={agents.find((item) => item.id === id)?.icon ?? ""}
-        size="xs"
+        size="sm"
       />{/snippet}
   </ChatSelect>
 {/snippet}

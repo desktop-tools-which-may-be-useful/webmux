@@ -2,11 +2,16 @@
   import { onDestroy } from "svelte";
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconMicrophone from "~icons/tabler/microphone";
-  import { Button, type ButtonSize } from "$lib/components/ui/button";
+  import {
+    Button,
+    type ButtonSize,
+    type ButtonVariant,
+  } from "$lib/components/ui/button";
   import { createVoiceRecorder } from "../hooks/voice.svelte";
 
   let {
     size = "icon-sm",
+    variant = "outline",
     disabled = false,
     class: className = "",
     onresult,
@@ -14,6 +19,7 @@
     onmousedown,
   }: {
     size?: ButtonSize;
+    variant?: ButtonVariant;
     disabled?: boolean;
     class?: string;
     onresult: (text: string) => void;
@@ -47,7 +53,7 @@
 </script>
 
 <Button
-  variant="outline"
+  {variant}
   {size}
   class={className}
   aria-label={label}

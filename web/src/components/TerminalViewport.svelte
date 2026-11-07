@@ -1,8 +1,11 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import IconArrowDown from "~icons/tabler/arrow-down";
-  import { Button, type ButtonSize } from "$lib/components/ui/button";
-  import { Badge } from "$lib/components/ui/badge";
+  import {
+    Button,
+    type ButtonSize,
+    type ButtonVariant,
+  } from "$lib/components/ui/button";
   import SoftKeys from "./SoftKeys.svelte";
   import type { Modifiers } from "../input";
   import type { UploadProgress } from "../hooks/upload.svelte";
@@ -49,7 +52,7 @@
     // Keeps the PTY grid fixed and lets the host scroll past its edges.
     sizeLocked?: boolean;
     uploads: ViewportUploads;
-    quickMenu: Snippet<["top" | "bottom", ButtonSize?]>;
+    quickMenu: Snippet<["top" | "bottom", ButtonSize?, ButtonVariant?]>;
     // Phones keep the draft switch beside the quick commands.
     draftToggle: Snippet;
     send: (input: string) => void;
@@ -73,6 +76,7 @@
     <div
       class="terminal-host"
       class:size-locked={sizeLocked}
+      class:restoring={t.restoring && t.connection !== "missing"}
       bind:this={container}
     ></div>
     {@render findBar?.()}
@@ -113,7 +117,9 @@
       </div>{:else if t.connection === "connecting" || t.connection === "reconnecting"}<div
         class="pointer-events-none absolute top-2 right-2 z-20"
       >
-        <Badge variant="secondary" role="status">正在恢复…</Badge>
+        <span class="text-xs text-muted-foreground" role="status"
+          >正在恢复…</span
+        >
       </div>{/if}
     {#if !t.atBottom && !t.restoring && visible}<Button
         variant="outline"

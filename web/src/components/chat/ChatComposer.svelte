@@ -1,13 +1,9 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import IconArrowUp from "~icons/tabler/arrow-up";
-  import IconPlayerStopFilled from "~icons/tabler/player-stop-filled";
-  import { Button, type ButtonSize } from "$lib/components/ui/button";
+  import type { ButtonSize, ButtonVariant } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
-  import { Textarea } from "$lib/components/ui/textarea";
   import type { ChatActions, ConfigValue } from "../../chat-api";
   import { errorMessage } from "../../error";
-  import { useComposerCompact } from "../../hooks/composer-compact.svelte";
   import { useTextareaDraft } from "../../hooks/textarea-draft.svelte";
   import type { ChatUploads } from "../../hooks/upload.svelte";
   import type {
@@ -21,13 +17,12 @@
     TerminalDrafts,
   } from "../../terminal-draft.svelte";
   import { hasTouchInput } from "../../touch-input";
-  import FileUploadProgress from "../FileUploadProgress.svelte";
-  import ChatAttachmentList from "./ChatAttachmentList.svelte";
   import ChatConfig from "./ChatConfig.svelte";
   import ChatLocation from "./ChatLocation.svelte";
   import ChatPermissionMode from "./ChatPermissionMode.svelte";
   import ChatSessionOptions from "./ChatSessionOptions.svelte";
   import ChatUploadButton from "./ChatUploadButton.svelte";
+  import ComposerCard from "./ComposerCard.svelte";
   import UsageRing from "./UsageRing.svelte";
 
   // The chat input. Its text is the session's draft, saved on this device
@@ -42,7 +37,7 @@
     unavailable,
     uploads,
     uploadUnavailable,
-    location,
+    location: location_,
     actions,
     onerror,
     quickMenu,
@@ -59,11 +54,11 @@
     location?: Pick<SessionInfo, "workspace" | "cwd">;
     actions: ChatActions;
     onerror: (message: string) => void;
-    quickMenu?: Snippet<["top" | "bottom", ButtonSize?]>;
+    quickMenu?: Snippet<["top" | "bottom", ButtonSize?, ButtonVariant?]>;
   } = $props();
 
   let textarea = $state<HTMLTextAreaElement | null>(null);
-  let container = $state<HTMLDivElement | null>(null);
+  let card = $state<ComposerCard>();
   let sending = $state(false);
   const selection = useTextareaDraft(
     () => textarea,
@@ -85,14 +80,6 @@
   const locked = $derived(!!draft.submission);
   const disabled = $derived(!!unavailable || locked);
   const uploading = $derived(uploads.progress !== null);
-  const compactState = useComposerCompact(
-    () => container,
-    () =>
-      Boolean(
-        draft.text || uploads.attachments.length > 0 || uploading || sending,
-      ),
-  );
-  const compact = $derived(compactState.compact);
   const steerable = $derived(running && chat.steering);
   // With nothing to send the send button stops the running turn.
   const stopping = $derived(running && !ready && !uploading && !sending);
@@ -188,31 +175,63 @@
     );
   }
   export function focus() {
-    textarea?.focus();
+    card?.focus();
   }
 </script>
 
-<div
-  bind:this={container}
-  class="space-y-2 sm:space-y-1.5"
-  data-chat-composer
-  data-compact={compact ? "" : undefined}
-  {...compactState.containerProps}
+<ComposerCard
+  bind:this={card}
+  bind:textarea
+  value={draft.text}
+  oninput={(event) => {
+    const input = event.currentTarget;
+    drafts.edit(draft, input.value, input.selectionStart, input.selectionEnd);
+    highlighted = 0;
+  }}
+  placeholder={unavailable ||
+    (locked
+      ? "草稿正在提交到终端，确认结果前不能编辑"
+      : queueing
+        ? "继续输入，发送后加入排队"
+        : "给 Agent 发消息，输入 / 查看命令")}
+  label="消息"
+  {disabled}
+  {uploads}
+  uploadsDisabled={sending}
+  busy={Boolean(
+    draft.text || uploads.attachments.length > 0 || uploading || sending,
+  )}
+  action={stopping
+    ? {
+        kind: "stop",
+        label: "停止",
+        title: "停止当前回合",
+        disabled: !!unavailable,
+        onclick: stop,
+      }
+    : {
+        kind: "send",
+        label: queueing ? "加入排队" : "发送",
+        disabled: disabled || !ready || sending || uploading,
+        onclick: () => submit("auto"),
+      }}
+  textareaProps={{
+    "aria-controls": menuOpen ? "chat-commands" : undefined,
+    "aria-expanded": menuOpen,
+    ...selection.selectionProps,
+    onkeydown: keydown,
+  }}
 >
-  {#if location}
-    <ChatLocation
-      workspace={location.workspace}
-      cwd={location.cwd}
-      class={compact ? "max-sm:hidden" : ""}
-    />
-  {/if}
-  <!-- The card shows the message box's focus once; the box itself has none. -->
-  <div
-    class={[
-      "rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20",
-      compact && "max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:p-0.5",
-    ]}
-  >
+  {#snippet location({ compact })}
+    {#if location_}
+      <ChatLocation
+        workspace={location_.workspace}
+        cwd={location_.cwd}
+        class={compact ? "max-sm:hidden" : ""}
+      />
+    {/if}
+  {/snippet}
+  {#snippet menu()}
     {#if menuOpen}
       <div
         id="chat-commands"
@@ -241,123 +260,46 @@
         {/each}
       </div>
     {/if}
-    <ChatAttachmentList {uploads} disabled={sending} />
+  {/snippet}
+  {#snippet notices()}
     {#if imageDegraded}
       <p class="border-b px-3 py-1.5 text-xs text-warning" role="status">
         该 agent 不支持图片，图片将按服务器路径发送。
       </p>
     {/if}
-    <div
-      class={[
-        "px-2 pt-1",
-        compact && "max-sm:min-w-0 max-sm:flex-1 max-sm:px-1 max-sm:py-0",
-      ]}
-    >
-      <Textarea
-        bind:ref={textarea}
-        variant="bare"
-        onpaste={(event) => uploads.filePaste(event)}
-        rows={compact ? 1 : 2}
-        class={[
-          "max-h-48 min-h-14 resize-none",
-          compact && "max-sm:max-h-9 max-sm:min-h-9 max-sm:overflow-hidden",
-        ]}
-        placeholder={unavailable ||
-          (locked
-            ? "草稿正在提交到终端，确认结果前不能编辑"
-            : queueing
-              ? "继续输入，发送后加入排队"
-              : "给 Agent 发消息，输入 / 查看命令")}
-        aria-label="消息"
-        aria-controls={menuOpen ? "chat-commands" : undefined}
-        aria-expanded={menuOpen}
+  {/snippet}
+  {#snippet leading()}
+    <ChatUploadButton {uploads} {disabled} unavailable={uploadUnavailable} />
+    <span class="sm:hidden">
+      <ChatSessionOptions
+        mode={chat.permissionMode}
+        config={chat.config}
         {disabled}
-        value={draft.text}
-        oninput={(event) => {
-          const input = event.currentTarget;
-          drafts.edit(
-            draft,
-            input.value,
-            input.selectionStart,
-            input.selectionEnd,
-          );
-          highlighted = 0;
-        }}
-        {...selection.selectionProps}
-        onkeydown={keydown}
+        modeDisabled={!!unavailable || savingMode}
+        onmodechange={(mode) => void setPermissionMode(mode)}
+        onconfigchange={setConfig}
       />
-    </div>
-    {#if uploads.progress}<FileUploadProgress
-        progress={uploads.progress}
-        cancel={() => uploads.cancel()}
-        variant="card"
-      />{/if}
-    <!-- Only what acts on the message stays in the card: context use and the
-       send controls (they wrap only at very large text). -->
-    <div
-      class={[
-        "flex flex-wrap items-center justify-end gap-1 px-2 pb-2",
-        compact && "max-sm:shrink-0 max-sm:p-0",
-      ]}
-    >
-      <div
-        class={["mr-auto flex items-center gap-1", compact && "max-sm:hidden"]}
-      >
-        <ChatUploadButton
-          {uploads}
-          {disabled}
-          unavailable={uploadUnavailable}
-        />
-        <span class="sm:hidden">
-          <ChatSessionOptions
-            mode={chat.permissionMode}
-            config={chat.config}
-            {disabled}
-            modeDisabled={!!unavailable || savingMode}
-            onmodechange={(mode) => void setPermissionMode(mode)}
-            onconfigchange={setConfig}
-          />
-        </span>
-      </div>
-      {#if chat.usage}<span class={["contents", compact && "max-sm:hidden"]}
-          ><UsageRing usage={chat.usage} /></span
-        >{/if}
-      <span class={["flex items-center gap-1", compact && "max-sm:hidden"]}>
-        {@render quickMenu?.("top", "icon")}
-      </span>
-      {#if stopping}
-        <Button
-          size="icon"
-          aria-label="停止"
-          title="停止当前回合"
-          disabled={!!unavailable}
-          onclick={stop}><IconPlayerStopFilled aria-hidden="true" /></Button
-        >
-      {:else}
-        <Button
-          size="icon"
-          aria-label={queueing ? "加入排队" : "发送"}
-          title={queueing ? "加入排队" : "发送"}
-          disabled={disabled || !ready || sending || uploading}
-          onclick={() => submit("auto")}
-          ><IconArrowUp aria-hidden="true" /></Button
-        >
-      {/if}
-    </div>
-  </div>
-  <!-- Session options sit under the card as icon controls: the same quiet
+    </span>
+  {/snippet}
+  {#snippet accessories({ size, variant })}
+    {#if chat.usage}<UsageRing usage={chat.usage} />{/if}
+    {@render quickMenu?.("top", size, variant)}
+  {/snippet}
+  {#snippet below()}
+    <!-- Session options sit under the card as icon controls: the same quiet
        row at every width, scrolling instead of wrapping when a narrow screen
        or many agent options leave no room. -->
-  <div
-    class="-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] max-sm:hidden"
-    role="toolbar"
-    aria-label="会话选项"
-  >
-    <ChatPermissionMode
-      mode={chat.permissionMode}
-      disabled={!!unavailable || savingMode}
-      onchange={(mode) => void setPermissionMode(mode)}
-    />
-    <ChatConfig config={chat.config} {disabled} onchange={setConfig} />
-  </div>
-</div>
+    <div
+      class="-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] max-sm:hidden"
+      role="toolbar"
+      aria-label="会话选项"
+    >
+      <ChatPermissionMode
+        mode={chat.permissionMode}
+        disabled={!!unavailable || savingMode}
+        onchange={(mode) => void setPermissionMode(mode)}
+      />
+      <ChatConfig config={chat.config} {disabled} onchange={setConfig} />
+    </div>
+  {/snippet}
+</ComposerCard>

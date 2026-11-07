@@ -28,7 +28,7 @@
   import { useFullscreen } from "../hooks/fullscreen.svelte";
   import { hasTouchInput, isIOS } from "../touch-input";
   import { findShell } from "../shell.svelte";
-  import type { ButtonSize } from "$lib/components/ui/button";
+  import type { ButtonSize, ButtonVariant } from "$lib/components/ui/button";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import VoiceButton from "../components/VoiceButton.svelte";
   import { quickCommands } from "../quick-commands.svelte";
@@ -672,10 +672,15 @@
   }
 </script>
 
-{#snippet quickMenu(side: "top" | "bottom", size?: ButtonSize)}
+{#snippet quickMenu(
+  side: "top" | "bottom",
+  size?: ButtonSize,
+  variant?: ButtonVariant,
+)}
   {#if voiceEnabled}
     <VoiceButton
       {size}
+      {variant}
       disabled={hybrid.view === "chat"
         ? hybrid.missing || !!draft.submission
         : t.connection === "missing" ||
@@ -706,6 +711,7 @@
       : t.connection === "missing"}
     {side}
     {size}
+    {variant}
     run={(cmd) => void runQuickCommand(cmd)}
     manage={() => navigate(`/settings?session=${id}#quick-commands`)}
     onCloseAutoFocus={focusTerminal}

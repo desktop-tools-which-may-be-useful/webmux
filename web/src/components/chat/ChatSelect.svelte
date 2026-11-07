@@ -19,6 +19,7 @@
     disabled,
     title,
     labeled = false,
+    labelClass = "",
     icon,
     choiceIcon,
     onchange,
@@ -29,6 +30,8 @@
     disabled: boolean;
     title?: string;
     labeled?: boolean;
+    /** Extra classes on the value text, e.g. to hide it in a narrow card. */
+    labelClass?: string;
     icon?: Snippet;
     /** A per-choice icon, shown in the menu and, when labeled, the button. */
     choiceIcon?: Snippet<[string]>;
@@ -47,7 +50,11 @@
         {...props}
         variant="quiet"
         size="xs"
-        class={labeled ? "max-w-48 min-w-0 shrink" : "shrink-0"}
+        class={[
+          // Option icons read at the same 16px as the neighbouring icon buttons.
+          "[&_svg:not([class*='size-'])]:size-4",
+          labeled ? "max-w-48 min-w-0 shrink" : "shrink-0",
+        ]}
         aria-label={label}
         title={title ?? label}
       >
@@ -56,8 +63,10 @@
           )}{:else if icon}{@render icon()}{:else}<IconSettings
             aria-hidden="true"
           />{/if}
-        {#if labeled}<span class="min-w-0 truncate">{current}</span>{/if}
-        <IconChevronDown aria-hidden="true" />
+        {#if labeled}<span class={["min-w-0 truncate", labelClass]}
+            >{current}</span
+          >{/if}
+        <IconChevronDown class="size-3" aria-hidden="true" />
       </Button>
     {/snippet}
   </DropdownMenu.Trigger>
