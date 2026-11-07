@@ -289,8 +289,8 @@ test("scratch notes persist and move into the draft only on take", async ({
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "暂存" })).toBeHidden();
   await mode(page).click();
-  // The closed draft button still exposes the scratch count.
-  await expect(mode(page)).toContainText("2");
+  // The closed draft button still exposes the scratch count in its name.
+  await expect(mode(page)).toHaveAccessibleName(/2 条暂存/);
   expect(await readFile(received, "utf8")).toBe("");
 
   // The terminal menu reaches scratch without opening the draft; an update is

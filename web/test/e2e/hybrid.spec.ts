@@ -136,21 +136,22 @@ async function switchTo(page: Page, side: Side, confirm = false) {
 }
 
 test.describe("hybrid sessions with the fake agent", () => {
-  test("phones switch chat, terminal and code in one control", async ({
+  test("phones switch chat and terminal in tabs and open code with the header button", async ({
     page,
     request,
     workDir,
   }, testInfo) => {
-    test.skip(!testInfo.project.use.isMobile, "One control is a phone layout");
+    test.skip(!testInfo.project.use.isMobile, "A phone layout");
     const id = await createHybrid(request, workDir, "chat");
     await page.setViewportSize({ width: 393, height: 851 });
     await openHybrid(page, id, "chat");
+    const header = page.locator(".terminal-header");
     const views = page.getByRole("tablist", { name: "会话视图", exact: true });
-    await expect(views.getByRole("tab")).toHaveText(["聊天", "终端", "代码"]);
-    // Code replaces the pane without moving the session.
-    const code = views.getByRole("tab", { name: "代码", exact: true });
+    await expect(views.getByRole("tab")).toHaveText(["聊天", "终端"]);
+    // Code replaces the pane without moving the session, like the desktop
+    // button: it turns pressed and no side stays selected.
+    const code = header.getByRole("button", { name: "代码", exact: true });
     await code.click();
-    await expect(code).toHaveAttribute("aria-selected", "true");
     await expect(
       page.getByRole("region", { name: "代码工作区" }),
     ).toBeVisible();
@@ -162,22 +163,18 @@ test.describe("hybrid sessions with the fake agent", () => {
     await sideTab(page, "chat").click();
     await expectSide(page, "chat");
     await expect(page.getByRole("region", { name: "代码工作区" })).toBeHidden();
-    // A second control for code would be redundant.
-    await expect(
-      page.locator(".terminal-header").getByRole("button", { name: "代码" }),
-    ).toHaveCount(0);
   });
 
-  test("phones keep one view control while the session info arrives", async ({
+  test("phones gain the side tabs when the session info arrives", async ({
     page,
     request,
     workDir,
   }, testInfo) => {
-    test.skip(!testInfo.project.use.isMobile, "One control is a phone layout");
+    test.skip(!testInfo.project.use.isMobile, "A phone layout");
     const id = await createHybrid(request, workDir, "terminal");
     await page.setViewportSize({ width: 393, height: 851 });
     // Until the terminal stream connects the page cannot know the session is
-    // hybrid: it shows the ordinary terminal and code tabs.
+    // hybrid: it shows the ordinary terminal, which has no side tabs.
     const gate = Promise.withResolvers<void>();
     await page.routeWebSocket("**/ws/s/*", async (socket) => {
       await gate.promise;
@@ -185,13 +182,17 @@ test.describe("hybrid sessions with the fake agent", () => {
     });
     await page.goto(`/s/${id}`);
     const views = page.getByRole("tablist", { name: "会话视图", exact: true });
-    await expect(views.getByRole("tab")).toHaveText(["终端", "代码"]);
-    const control = await views.elementHandle();
+    const code = page
+      .locator(".terminal-header")
+      .getByRole("button", { name: "代码", exact: true });
+    await expect(code).toBeVisible();
+    await expect(views).toHaveCount(0);
+    const button = await code.elementHandle();
     gate.resolve();
     await expectSide(page, "terminal");
-    // The same control gains the chat tab instead of being replaced.
-    await expect(views.getByRole("tab")).toHaveText(["聊天", "终端", "代码"]);
-    expect(await control!.evaluate((list) => list.isConnected)).toBe(true);
+    await expect(views.getByRole("tab")).toHaveText(["聊天", "终端"]);
+    // The code button stays the same element.
+    expect(await button!.evaluate((node) => node.isConnected)).toBe(true);
   });
 
   for (const { start, agent } of [
