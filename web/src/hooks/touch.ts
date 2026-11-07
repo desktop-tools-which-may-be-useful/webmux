@@ -2,16 +2,15 @@ import type { Terminal } from "@xterm/xterm";
 
 type TouchPoint = { x: number; y: number };
 
-// Touch and stylus scrolling, pinch font sizing and long-press selection on
-// the terminal host. Pens are handled like fingers so a stylus tap cannot focus
-// xterm and raise the virtual keyboard. Returns the cleanup that releases
-// captured pointers and listeners.
+// Touch and stylus scrolling and long-press selection on the terminal host.
+// Pens are handled like fingers so a stylus tap cannot focus xterm and raise
+// the virtual keyboard. Two-finger gestures are swallowed: a pinch must never
+// resize the terminal by accident. Returns the cleanup that releases captured
+// pointers and listeners.
 export function attachTouchGestures(
   term: Terminal,
   parent: HTMLElement,
   options: {
-    fontSize: () => number;
-    setFontSize: (value: number) => void;
     hasSelection: () => boolean;
     keyboardDismissed: () => boolean;
     // The host's scroll event arrives on a later frame; report the pan now so a
@@ -24,14 +23,11 @@ export function attachTouchGestures(
   let disposed = false;
   const pointers = new Map<number, TouchPoint>();
   let firstPoint: TouchPoint | undefined;
-  let secondPoint: TouchPoint | undefined;
   let touchX = 0;
   let panX = 0;
   let touchY = 0;
   let wheelY = 0;
   let remainder = 0;
-  let pinchDistance = 0;
-  let pinchFont = options.fontSize();
   let longPress: number | undefined;
   let selecting = false;
   let selectionAnchor: { start: number; end: number } | undefined;
@@ -114,19 +110,14 @@ export function attachTouchGestures(
     const end = Math.max(selectionAnchor.end, position + width);
     term.select(start % term.cols, Math.floor(start / term.cols), end - start);
   };
-  const distance = () =>
-    Math.hypot(firstPoint!.x - secondPoint!.x, firstPoint!.y - secondPoint!.y);
   const rebasePointers = () => {
     const points = pointers.values();
     firstPoint = points.next().value;
-    secondPoint = points.next().value;
     touchX = firstPoint?.x ?? 0;
     panX = touchX;
     touchY = firstPoint?.y ?? 0;
     wheelY = touchY;
     remainder = 0;
-    pinchDistance = pointers.size === 2 ? distance() : 0;
-    pinchFont = options.fontSize();
   };
   const clearPointers = () => {
     cancelLongPress();
@@ -137,9 +128,7 @@ export function attachTouchGestures(
       if (parent.hasPointerCapture(id)) parent.releasePointerCapture(id);
     }
     firstPoint = undefined;
-    secondPoint = undefined;
     remainder = 0;
-    pinchDistance = 0;
   };
   const pointerDown = (event: PointerEvent) => {
     if (disposed || event.pointerType === "mouse") return;
@@ -181,9 +170,9 @@ export function attachTouchGestures(
     }
     // Preserve sub-row scrolling, but tolerate finger jitter before long press.
     if (Math.hypot(point.x - touchX, point.y - wheelY) >= 8) cancelLongPress();
-    if (pointers.size === 2 && pinchDistance > 0) {
-      options.setFontSize((pinchFont * distance()) / pinchDistance);
-    } else if (pointers.size === 1) {
+    // A second finger disables scrolling for the whole gesture; never translate
+    // its movement into a pinch or font change.
+    if (pointers.size === 1) {
       // An observer's or locked grid can exceed the host. Pan the host first,
       // so the rows above the visible part and history stay reachable in order.
       if (

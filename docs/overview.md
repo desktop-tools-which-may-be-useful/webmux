@@ -79,7 +79,7 @@ Windows 不是“顺带能用”的平台。
 
 ### 多设备与平台
 
-- **移动端优先**：软键栏（Esc / Ctrl / Alt / Shift / 方向键等）、触摸滚动、双指缩放、长按选词复制、虚拟键盘视口适配。
+- **移动端优先**：软键栏（Esc / Ctrl / Alt / Shift / 方向键等）、触摸滚动、长按选词复制、虚拟键盘视口适配。
 - **安装为应用与推送**：可安装为 PWA；agent 等你回复时，锁屏的手机也能收到 Web Push 通知，见 [安装为应用与手机推送](deployment/pwa-and-push.md)。
 - **远程访问**：推荐 Tailscale / WireGuard 等可信 VPN；也可托管 [Tailscale Serve / Funnel](tailscale.md) 或 [Cloudflare Named Tunnel](cloudflare-tunnel.md) 提供 HTTPS 入口。
 - **Windows（WSL）**：托盘程序管理 WSL 中的服务与访问入口，控制台客户端在 PowerShell / Windows Terminal 中附着会话。

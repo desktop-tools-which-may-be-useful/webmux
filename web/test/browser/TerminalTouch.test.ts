@@ -1,4 +1,4 @@
-// Native touch scrolling, wheel reports, pinch and long-press selection.
+// Native touch scrolling, wheel reports, two-finger pinch suppression and long-press selection.
 import { expect, test } from "vitest";
 import { commands, page } from "vitest/browser";
 import {
@@ -148,7 +148,7 @@ test("native alternate-buffer wheel fallback honors cursor-key mode and normal-b
   expect(focused).not.toHaveBeenCalled();
 });
 
-test("pinch resizes real cells and rebases one-finger scrolling, while cancel and capture loss discard ghost gestures", async () => {
+test("two-finger pinch never resizes the terminal, while cancel and capture loss discard ghost gestures", async () => {
   observeGlyphPixels(true);
   const { socket, rendered } = await openTerminal();
   socket.receive(0, "\x1b[?1049h\x1b[?1000h\x1b[?1006hedge-ready");
@@ -157,6 +157,7 @@ test("pinch resizes real cells and rebases one-finger scrolling, while cancel an
   const { textarea, focused } = blurAndTrackFocus();
   const start = gestureStart(socket);
   const originalHeight = geometry(socket).row;
+  const originalFont = localStorage.getItem("webmux.fontSize");
   await commands.nativeTouchGesture(
     [start, { x: start.x, y: start.y + originalHeight * 0.8 }],
     "cancel",
@@ -164,17 +165,21 @@ test("pinch resizes real cells and rebases one-finger scrolling, while cancel an
   expect(inputText(socket)).toBe("");
   expect(focused).not.toHaveBeenCalled();
   const capture = syntheticPointerCapture(target);
+  const resizeFrames = socket.sent.filter((frame) => frame[0] === 1).length;
   pointer(target, "pointerdown", 1, start);
   const first = { x: start.x, y: start.y + originalHeight * 0.8 };
   pointer(target, "pointermove", 1, first);
   pointer(target, "pointerdown", 2, { x: first.x + 100, y: first.y });
-  pointer(target, "pointermove", 2, { x: first.x + 130, y: first.y });
-  await expect.poll(() => geometry(socket).row).toBeGreaterThan(originalHeight);
+  // Spreading two fingers must not resize the grid through the font size.
+  pointer(target, "pointermove", 2, { x: first.x + 260, y: first.y });
+  pointer(target, "pointermove", 1, { x: first.x - 80, y: first.y });
+  expect(socket.sent.filter((frame) => frame[0] === 1)).toHaveLength(
+    resizeFrames,
+  );
+  expect(geometry(socket).row).toBe(originalHeight);
+  expect(localStorage.getItem("webmux.fontSize")).toBe(originalFont);
   await expectDomText("edge-ready");
-  await expect
-    .poll(() => Number(localStorage.getItem("webmux.fontSize")))
-    .toBeGreaterThan(14);
-  pointer(target, "pointerup", 2, { x: first.x + 130, y: first.y });
+  pointer(target, "pointerup", 2, { x: first.x + 260, y: first.y });
   expect(inputText(socket)).toBe("");
   const height = geometry(socket).row;
   pointer(target, "pointermove", 1, { x: first.x, y: first.y + height * 0.6 });

@@ -380,8 +380,6 @@ export function useTerminal(
       const hostScrolled = () => updateBottom(true);
       parent.addEventListener("scroll", hostScrolled, { passive: true });
       const detachTouch = attachTouchGestures(term, parent, {
-        fontSize: () => fontSize,
-        setFontSize,
         hasSelection: () => Boolean(selection),
         keyboardDismissed: isKeyboardDismissed,
         hostScrolled: () => updateBottom(true),
