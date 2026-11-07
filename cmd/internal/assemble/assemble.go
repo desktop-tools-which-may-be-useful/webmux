@@ -58,11 +58,16 @@ func TailscaleOptions(c config.Config) tailscale.Options {
 	}
 }
 
-// VoiceOptions converts [voice] for voice.New.
-func VoiceOptions(c config.Config) voice.Options {
-	return voice.Options{
-		Cmd: c.Voice.Cmd,
-		Env: c.Voice.Env,
-		Cwd: c.DefaultCwd,
+// VoiceOptions converts [voice] for voice.New. A bundled provider runs the
+// embedded program with Node.js, extracted under the state directory.
+func VoiceOptions(c config.Config) (voice.Options, error) {
+	cmd := c.Voice.Cmd
+	if c.Voice.Provider != "" {
+		script, err := voice.ExtractScript(c.StateDir)
+		if err != nil {
+			return voice.Options{}, err
+		}
+		cmd = []string{"node", script, c.Voice.Provider}
 	}
+	return voice.Options{Cmd: cmd, Env: c.Voice.Env, Cwd: c.DefaultCwd}, nil
 }

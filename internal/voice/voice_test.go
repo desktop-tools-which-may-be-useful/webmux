@@ -2,6 +2,7 @@ package voice
 
 import (
 	"context"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -138,4 +139,25 @@ func TestHungSubprocessTerminatedOnTimeoutAndClose(t *testing.T) {
 		t.Fatal("hung subprocess did not terminate after StopInput timeout")
 	}
 	sess.Close()
+}
+
+func TestExtractScriptIsReusedAndRunnable(t *testing.T) {
+	dir := t.TempDir()
+	first, err := ExtractScript(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ExtractScript(dir)
+	if err != nil || second != first {
+		t.Fatalf("second extract = %q, %v; want %q", second, err, first)
+	}
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	// An unknown provider must fail fast with the usage text, proving the
+	// extracted file is a complete program, not a truncated copy.
+	out, err := exec.Command("node", first, "nope").CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "unknown provider: nope") {
+		t.Fatalf("output = %q, err = %v", out, err)
+	}
 }

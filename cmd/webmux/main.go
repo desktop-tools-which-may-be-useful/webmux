@@ -505,11 +505,15 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if c.TunnelWebManaged {
 		tunnels.enabledSource = "web"
 	}
+	voiceOptions, err := assemble.VoiceOptions(c.Config)
+	if err != nil {
+		return fmt.Errorf("voice: %w", err)
+	}
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
 		Forward:      forwards,
-		Voice:        voice.New(assemble.VoiceOptions(c.Config)),
+		Voice:        voice.New(voiceOptions),
 		DefaultShell: agentprofile.DefaultShell(os.Getenv("SHELL")),
 		// The executable's identity is recorded now; later status and
 		// configuration requests compare against it.

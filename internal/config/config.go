@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -38,17 +39,32 @@ type Config struct {
 
 // VoiceConfig configures an optional external speech recognition command
 // driven over STDIN/STDOUT.
+//
+// Provider selects one of the cloud services bundled with WebMux instead of
+// a custom Cmd; the two are mutually exclusive.
 type VoiceConfig struct {
-	Cmd []string `toml:"cmd"`
-	Env []string `toml:"env"`
+	Cmd      []string `toml:"cmd"`
+	Env      []string `toml:"env"`
+	Provider string   `toml:"provider"`
 }
 
-// Enabled reports whether an external speech recognition command is configured.
+// VoiceProviders are the bundled recognition services, selected by name.
+var VoiceProviders = []string{"doubao", "wetype", "qwen", "baidu", "sogou", "ifly", "chatterfly"}
+
+// Enabled reports whether speech recognition is configured.
 func (v VoiceConfig) Enabled() bool {
-	return len(v.Cmd) > 0
+	return len(v.Cmd) > 0 || v.Provider != ""
 }
 
 func (v *VoiceConfig) validate() error {
+	if v.Provider != "" {
+		if len(v.Cmd) > 0 {
+			return errors.New("voice.provider and voice.cmd are mutually exclusive")
+		}
+		if !slices.Contains(VoiceProviders, v.Provider) {
+			return fmt.Errorf("voice.provider %q must be one of %s", v.Provider, strings.Join(VoiceProviders, ", "))
+		}
+	}
 	for i, arg := range v.Cmd {
 		if i == 0 && strings.TrimSpace(arg) == "" {
 			return errors.New("voice.cmd[0] must not be empty")
