@@ -10,6 +10,7 @@
     forwards,
     ignorePort,
     isIgnored,
+    isPromptedPort,
     pruneIgnored,
   } from "../forwards.svelte";
   import type { ListeningPort } from "../schemas";
@@ -53,7 +54,9 @@
       ? listening
           .filter(
             (entry) =>
-              !forwarded.has(entry.port) && !isIgnored(session, entry.port),
+              isPromptedPort(entry.port) &&
+              !forwarded.has(entry.port) &&
+              !isIgnored(session, entry.port),
           )
           .sort((a, b) => a.port - b.port)
       : [],

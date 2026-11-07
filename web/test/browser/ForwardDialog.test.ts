@@ -5,6 +5,7 @@ import ForwardButton from "../../src/components/ForwardButton.svelte";
 import ForwardDialog from "../../src/components/ForwardDialog.svelte";
 import { defaultForwardOptions } from "../../src/forwards.svelte";
 import { ForwardRequestSchema, ForwardUpdateSchema } from "../../src/schemas";
+import { stopSettings } from "../../src/settings.svelte";
 import {
   body,
   forward,
@@ -12,12 +13,14 @@ import {
   session,
   stubFetch,
 } from "./forward-fixture";
+import { seedSettings } from "./settings-fixture";
 
 afterEach(async () => {
   try {
     await cleanup();
     await userEvent.cleanup();
   } finally {
+    stopSettings();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     seedForwards([]);
@@ -214,6 +217,31 @@ test("a platform without detection says so", async () => {
   await expect
     .element(page.getByText("当前平台不支持自动检测", { exact: false }))
     .toBeVisible();
+});
+
+test("detected ports hide 30000 and above unless ignoreHighPorts is false; manual add still accepts them", async () => {
+  await seedSettings();
+  const high = session("highport", "rpc", [
+    { port: 29999, process: "vite" },
+    { port: 30000, process: "node" },
+    { port: 42000, process: "go" },
+  ]);
+  await open([high]);
+  const detected = page
+    .getByRole("region", { name: "检测到的端口" })
+    .getByRole("listitem");
+  await expect
+    .poll(() => detected.elements().map((item) => item.textContent?.trim()))
+    .toEqual([expect.stringMatching(/^29999\s+vite · rpc\s+转发$/)]);
+
+  await seedSettings({ ignoreHighPorts: false });
+  await expect
+    .poll(() => detected.elements().map((item) => item.textContent?.trim()))
+    .toEqual([
+      expect.stringMatching(/^29999\s+vite · rpc\s+转发$/),
+      expect.stringMatching(/^30000\s+node · rpc\s+转发$/),
+      expect.stringMatching(/^42000\s+go · rpc\s+转发$/),
+    ]);
 });
 
 test("the header button names its forward count", async () => {

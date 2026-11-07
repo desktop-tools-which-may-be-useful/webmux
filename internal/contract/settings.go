@@ -17,12 +17,13 @@ type SettingsCommand struct {
 	Enter   bool   `json:"enter"`
 }
 type SettingsValues struct {
-	Theme         *string             `json:"theme"`
-	Preview       *SettingsPreview    `json:"preview"`
-	CodeReader    *SettingsCodeReader `json:"codeReader"`
-	QuickCommands *[]SettingsCommand  `json:"quickCommands"`
-	HomeWorktrees map[string][]string `json:"homeWorktrees"`
-	ForceSoftKeys *bool               `json:"forceSoftKeys"`
+	Theme           *string             `json:"theme"`
+	Preview         *SettingsPreview    `json:"preview"`
+	CodeReader      *SettingsCodeReader `json:"codeReader"`
+	QuickCommands   *[]SettingsCommand  `json:"quickCommands"`
+	HomeWorktrees   map[string][]string `json:"homeWorktrees"`
+	ForceSoftKeys   *bool               `json:"forceSoftKeys"`
+	IgnoreHighPorts *bool               `json:"ignoreHighPorts"`
 }
 type SettingsSnapshot struct {
 	Revision  int64          `json:"revision"`

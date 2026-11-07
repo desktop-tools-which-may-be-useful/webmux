@@ -36,7 +36,7 @@
     type Divider,
     type SplitDirection,
   } from "../terminal-layout";
-  import { connectSessions } from "../forwards.svelte";
+  import { connectSessions, isPromptedPort } from "../forwards.svelte";
   import { applySessionEvent } from "../session-list";
 
   let {
@@ -136,7 +136,11 @@
   // Every session, for the forwarding dialog's detected ports.
   let feedSessions = $state.raw<SessionInfo[]>([]);
   const listening = $derived(
-    ids.some((sessionId) => !!info[sessionId]?.listeningPorts.length),
+    ids.some((sessionId) =>
+      info[sessionId]?.listeningPorts.some((entry) =>
+        isPromptedPort(entry.port),
+      ),
+    ),
   );
   // The session-list connection carries the forward list and live session
   // updates for panes on the chat view (whose terminal stream is detached).

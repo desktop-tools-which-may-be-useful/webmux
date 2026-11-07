@@ -5,12 +5,15 @@ import TerminalNotices from "../../src/components/TerminalNotices.svelte";
 import type { ListeningPort } from "../../src/schemas";
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
 import { body, forward, seedForwards, stubFetch } from "./forward-fixture";
+import { seedSettings } from "./settings-fixture";
+import { stopSettings } from "../../src/settings.svelte";
 
 afterEach(async () => {
   try {
     await cleanup();
     await userEvent.cleanup();
   } finally {
+    stopSettings();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   }
@@ -209,4 +212,20 @@ test("more than two ports collapse into one strip that opens the dialog", async 
   await expect.element(page.getByText("另有 2 个端口")).toBeVisible();
   await page.getByRole("button", { name: "查看全部" }).click();
   expect(showForwards).toHaveBeenCalledOnce();
+});
+
+test("ports from 30000 up are ignored by default and prompted when the setting is turned off", async () => {
+  await seedSettings();
+  seedForwards([]);
+  await notices({
+    session: "webwebwe",
+    listening: ports(5173, 29999, 30000, 45000),
+  });
+  await expect.element(prompt(5173)).toBeVisible();
+  await expect.element(prompt(29999)).toBeVisible();
+  await expect.element(prompt(30000)).not.toBeInTheDocument();
+  await expect.element(page.getByText(/^另有/)).not.toBeInTheDocument();
+
+  await seedSettings({ ignoreHighPorts: false });
+  await expect.element(page.getByText("另有 2 个端口")).toBeVisible();
 });

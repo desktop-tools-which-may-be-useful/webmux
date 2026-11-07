@@ -9,6 +9,7 @@ import {
   type ForwardUpdate,
   type ListeningPort,
 } from "./schemas";
+import { settings } from "./settings.svelte";
 import { connect, type Connection, type SocketConnection } from "./ws";
 
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
@@ -107,6 +108,14 @@ export async function removeForward(port: number): Promise<void> {
 /** The absolute address of a forward path, for sharing. */
 export function forwardLink(path: string): string {
   return new URL(path, location.origin).href;
+}
+
+/** Ports from 30000 up are usually ephemeral RPC or helper sockets. */
+export const HIGH_PORT_MIN = 30000;
+
+/** Whether automatic port prompts and detected lists offer `port`. */
+export function isPromptedPort(port: number): boolean {
+  return port < HIGH_PORT_MIN || settings.values.ignoreHighPorts === false;
 }
 
 // Ports dismissed with "忽略" on the terminal page, per session ID. They live

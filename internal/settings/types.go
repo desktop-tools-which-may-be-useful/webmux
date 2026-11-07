@@ -39,6 +39,10 @@ type Values struct {
 	QuickCommands *[]Command          `json:"quickCommands"`
 	HomeWorktrees map[string][]string `json:"homeWorktrees"`
 	ForceSoftKeys *bool               `json:"forceSoftKeys"`
+	// IgnoreHighPorts suppresses automatic port-forwarding prompts and
+	// detected-port rows for ports 30000 and above when nil or true;
+	// omitempty keeps files written before this setting loadable.
+	IgnoreHighPorts *bool `json:"ignoreHighPorts,omitempty"`
 	// LegacyFontSize, LegacyChatIdleSleepMinutes and LegacyArtifactPrompt
 	// only let files written before those settings were removed load under
 	// strict decoding. Open discards them and they are never written back.
@@ -164,6 +168,7 @@ func cloneValues(v Values) Values {
 	v.Preview = clonePtr(v.Preview)
 	v.CodeReader = clonePtr(v.CodeReader)
 	v.ForceSoftKeys = clonePtr(v.ForceSoftKeys)
+	v.IgnoreHighPorts = clonePtr(v.IgnoreHighPorts)
 	if v.QuickCommands != nil {
 		list := append([]Command{}, (*v.QuickCommands)...)
 		v.QuickCommands = &list
@@ -196,6 +201,8 @@ func apply(v Values, c Changes) (Values, error) {
 			v.HomeWorktrees = c.Values.HomeWorktrees
 		case "forceSoftKeys":
 			v.ForceSoftKeys = c.Values.ForceSoftKeys
+		case "ignoreHighPorts":
+			v.IgnoreHighPorts = c.Values.IgnoreHighPorts
 		default:
 			return v, ErrInvalid
 		}

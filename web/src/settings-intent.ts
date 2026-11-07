@@ -13,6 +13,7 @@ export const emptySettings: SettingsValues = {
   quickCommands: null,
   homeWorktrees: null,
   forceSoftKeys: null,
+  ignoreHighPorts: null,
 };
 export type SettingsIntent = (
   latest: SettingsValues,

@@ -7,6 +7,7 @@
       "codeReader": null,
       "forceSoftKeys": null,
       "homeWorktrees": null,
+      "ignoreHighPorts": null,
       "preview": null,
       "quickCommands": [],
       "theme": null

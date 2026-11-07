@@ -16,7 +16,8 @@ test.afterAll(async () => {
 });
 
 // A dev-server stand-in run as the session's own process: any path serves a
-// page, and a WebSocket upgrade echoes short text frames back.
+// page, and a WebSocket upgrade echoes short text frames back. Ports >= 30000
+// are ignored by default, so pick a free low port instead of an ephemeral one.
 const echoServer = String.raw`
 const http = require("node:http");
 const { createHash } = require("node:crypto");
@@ -37,7 +38,11 @@ server.on("upgrade", (request, socket) => {
     socket.write(Buffer.concat([Buffer.from([0x81, payload.length]), payload]));
   });
 });
-server.listen(0, "127.0.0.1", () => console.log("ECHO_READY " + server.address().port));
+function bind(port) {
+  server.once("error", () => bind(port + 1));
+  server.listen(port, "127.0.0.1", () => console.log("ECHO_READY " + server.address().port));
+}
+bind(15173);
 `;
 
 test("a detected port forwards, opens through authentication, echoes WebSockets and is removed", async ({

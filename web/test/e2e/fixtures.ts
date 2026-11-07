@@ -136,6 +136,7 @@ export const test = base.extend<
                 quickCommands: null,
                 homeWorktrees: null,
                 forceSoftKeys: null,
+                ignoreHighPorts: null,
               },
             },
           })
@@ -214,6 +215,7 @@ export const test = base.extend<
                     quickCommands: null,
                     homeWorktrees: null,
                     forceSoftKeys: null,
+                    ignoreHighPorts: null,
                   },
                 },
               })

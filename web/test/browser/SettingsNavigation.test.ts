@@ -127,3 +127,53 @@ test("standalone navigation follows the measured header height", async () => {
     )
     .toBe(0);
 });
+
+test("network switch toggles ignoreHighPorts between false and default null", async () => {
+  const patches: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input), location.href).pathname;
+      if (path === "/api/settings") {
+        if (init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body));
+          patches.push(body);
+          return Response.json({
+            revision: patches.length,
+            updatedAt: "",
+            values: { ...emptySettings, ...body.changes },
+          });
+        }
+        return Response.json({
+          revision: 0,
+          updatedAt: "",
+          values: emptySettings,
+        });
+      }
+      if (path === "/api/launch-configs") return Response.json([]);
+      if (path === "/api/config")
+        return Response.json({ defaultCwd: "/tmp", portDetection: true });
+      return Response.json({ error: "unavailable" }, { status: 503 });
+    }),
+  );
+  stopSettings();
+  await reloadSettings();
+  render(Settings);
+
+  const toggle = page.getByRole("switch", {
+    name: "忽略 30000 及以上端口的转发提示",
+  });
+  await expect.element(toggle).toHaveAttribute("aria-checked", "true");
+  await toggle.click();
+  await expect.element(toggle).toHaveAttribute("aria-checked", "false");
+  expect(patches).toEqual([
+    { baseRevision: 0, changes: { ignoreHighPorts: false } },
+  ]);
+
+  await toggle.click();
+  await expect.element(toggle).toHaveAttribute("aria-checked", "true");
+  expect(patches).toEqual([
+    { baseRevision: 0, changes: { ignoreHighPorts: false } },
+    { baseRevision: 1, changes: { ignoreHighPorts: null } },
+  ]);
+});

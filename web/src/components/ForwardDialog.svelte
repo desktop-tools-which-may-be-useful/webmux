@@ -20,6 +20,7 @@
     defaultForwardOptions,
     forwardLink,
     forwards,
+    isPromptedPort,
     removeForward,
   } from "../forwards.svelte";
   import type { Forward, ForwardOptions, SessionInfo } from "../schemas";
@@ -73,7 +74,9 @@
     sessions
       .flatMap((session) =>
         session.listeningPorts
-          .filter((entry) => !taken.has(entry.port))
+          .filter(
+            (entry) => isPromptedPort(entry.port) && !taken.has(entry.port),
+          )
           .map((entry) => ({
             ...entry,
             session: session.id,

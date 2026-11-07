@@ -1295,6 +1295,7 @@ export const SettingsValuesSchema = z.strictObject({
     );
   }).nullable(),
   forceSoftKeys: z.boolean().nullable(),
+  ignoreHighPorts: z.boolean().nullable(),
 });
 export type SettingsValues = z.infer<typeof SettingsValuesSchema>;
 export const SettingsSnapshotSchema = z.strictObject({
