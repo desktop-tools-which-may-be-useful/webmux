@@ -10,6 +10,14 @@ import {
 } from "./fixtures";
 
 const card = (page: Page) => page.locator("#launch-configs");
+
+/** Opens a row's "⋯" menu and returns one of its items, e.g. 删除. */
+async function rowItem(page: Page, row: string, action: string) {
+  await card(page)
+    .getByRole("button", { name: `操作 ${row}`, exact: true })
+    .click();
+  return page.getByRole("menuitem", { name: `${action} ${row}`, exact: true });
+}
 const secret = "e2e-launch-secret-42";
 
 async function createConfig(page: Page, name: string) {
@@ -81,9 +89,7 @@ test("a saved launch config starts a session with its environment and survives r
 
   // Deleting the config leaves the running session alone.
   await page.goto("/settings#launch-configs");
-  await card(page)
-    .getByRole("button", { name: "删除 E2E env shell", exact: true })
-    .click();
+  await (await rowItem(page, "E2E env shell", "删除")).click();
   await page
     .getByRole("alertdialog")
     .getByRole("button", { name: "删除", exact: true })

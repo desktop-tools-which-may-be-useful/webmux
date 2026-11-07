@@ -10,7 +10,7 @@
   const ignoreHighPorts = $derived(settings.values.ignoreHighPorts ?? true);
 </script>
 
-<Card.Root id="network" class="scroll-mt-4">
+<Card.Root flat id="network" class="scroll-mt-4">
   <Card.Header>
     <Card.Title>网络</Card.Title>
     <Card.Description

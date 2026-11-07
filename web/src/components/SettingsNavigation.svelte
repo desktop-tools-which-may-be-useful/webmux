@@ -19,6 +19,15 @@
   let navigation: HTMLElement;
   let vertical = $state(false);
   let links: HTMLDivElement;
+  // Which edges of the horizontal strip hide more links; they fade out.
+  let more = $state({ start: false, end: false });
+
+  function edges() {
+    more = {
+      start: links.scrollLeft > 1,
+      end: links.scrollLeft + links.clientWidth < links.scrollWidth - 1,
+    };
+  }
 
   onMount(() => {
     const targets = sections.map(({ id }) => document.getElementById(id)!);
@@ -53,6 +62,7 @@
       if (item.left < strip.left) links.scrollLeft -= strip.left - item.left;
       else if (item.right > strip.right)
         links.scrollLeft += item.right - strip.right;
+      edges();
     }
     function schedule() {
       if (!frame) frame = requestAnimationFrame(update);
@@ -97,7 +107,13 @@
   >
     设置分区
   </p>
-  <div bind:this={links} class="settings-links">
+  <div
+    bind:this={links}
+    class="settings-links"
+    data-more-start={more.start ? "" : undefined}
+    data-more-end={more.end ? "" : undefined}
+    onscroll={edges}
+  >
     <NavigationMenu.Root
       aria-label="设置分区"
       layout="sections"
@@ -137,7 +153,25 @@
     padding: 0.25rem;
     scrollbar-width: thin;
   }
+  .settings-links[data-more-start] {
+    mask-image: linear-gradient(to right, transparent, #000 1.75rem);
+  }
+  .settings-links[data-more-end] {
+    mask-image: linear-gradient(to left, transparent, #000 1.75rem);
+  }
+  .settings-links[data-more-start][data-more-end] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 1.75rem,
+      #000 calc(100% - 1.75rem),
+      transparent
+    );
+  }
   @media (min-width: 1024px) {
+    .settings-links {
+      mask-image: none !important;
+    }
     .settings-navigation {
       top: 1rem;
       margin-top: 2rem;

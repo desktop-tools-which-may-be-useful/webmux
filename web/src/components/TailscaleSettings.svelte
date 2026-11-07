@@ -15,7 +15,7 @@
   };
 </script>
 
-<Card.Root id="tailscale" class="scroll-mt-4">
+<Card.Root flat id="tailscale" class="scroll-mt-4">
   <Card.Header>
     <Card.Title>Tailscale（Serve / Funnel）</Card.Title>
     <Card.Description

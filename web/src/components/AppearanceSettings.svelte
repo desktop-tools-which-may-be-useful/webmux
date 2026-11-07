@@ -23,7 +23,7 @@
   );
 </script>
 
-<Card.Root id="appearance" class="scroll-mt-4">
+<Card.Root flat id="appearance" class="scroll-mt-4">
   <Card.Header>
     <Card.Title>外观与阅读</Card.Title>
     <Card.Description

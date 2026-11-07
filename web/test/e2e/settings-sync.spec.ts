@@ -137,14 +137,15 @@ test("loading and refreshing the home page never rewrites shared pins", async ({
     if (req.method() === "PATCH" && req.url().endsWith("/api/settings"))
       writes.push(req.url());
   });
-  await page.goto("/");
-  await page.getByRole("heading", { name: "工作区", exact: true }).waitFor();
-  await page.reload();
-  await page.getByRole("heading", { name: "工作区", exact: true }).waitFor();
+  // Phones show the scope as the top bar title, so wait for the page itself.
   const refresh = page.getByRole("button", {
     name: "刷新 Git 状态",
     exact: true,
   });
+  await page.goto("/");
+  await refresh.waitFor();
+  await page.reload();
+  await refresh.waitFor();
   await expect(refresh).toHaveAttribute("aria-busy", "false");
   const refreshed = page.waitForResponse(
     (response) => response.url().endsWith("/api/repositories") && response.ok(),

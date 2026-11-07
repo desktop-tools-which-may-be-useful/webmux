@@ -10,7 +10,7 @@
   const error = $derived(read.error);
 </script>
 
-<Card.Root id="access" class="scroll-mt-4">
+<Card.Root flat id="access" class="scroll-mt-4">
   <Card.Header>
     <Card.Title>公网访问（Cloudflare Tunnel）</Card.Title>
     <Card.Description

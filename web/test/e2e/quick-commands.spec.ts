@@ -19,6 +19,14 @@ const item = (page: Page, name: string) =>
 const draft = (page: Page) =>
   page.getByRole("textbox", { name: "草稿内容", exact: true });
 const card = (page: Page) => page.locator("#quick-commands");
+
+/** Opens a row's "⋯" menu and returns one of its items, e.g. 上移 or 删除. */
+async function rowItem(page: Page, row: string, action: string) {
+  await card(page)
+    .getByRole("button", { name: `操作 ${row}`, exact: true })
+    .click();
+  return page.getByRole("menuitem", { name: `${action} ${row}`, exact: true });
+}
 const commandNames = (scope: Locator) =>
   scope
     .getByRole("menuitem")
@@ -216,13 +224,11 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
     "编辑 新会话",
     "编辑 WebMux 工具",
   ]);
-  await expect(
-    card(page).getByRole("button", { name: "上移 恢复会话" }),
-  ).toBeDisabled();
-  await expect(
-    card(page).getByRole("button", { name: "下移 WebMux 工具" }),
-  ).toBeDisabled();
-  await card(page).getByRole("button", { name: "上移 新会话" }).click();
+  await expect(await rowItem(page, "恢复会话", "上移")).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(await rowItem(page, "WebMux 工具", "下移")).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await (await rowItem(page, "新会话", "上移")).click();
   expect(await labels()).toEqual([
     "编辑 新会话",
     "编辑 恢复会话",
@@ -250,15 +256,13 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   const reordered = ["编辑 新会话", "编辑 恢复会话", "编辑 WebMux 工具"];
   expect(await labels()).toEqual(reordered);
 
-  await card(page).getByRole("button", { name: "删除 新会话" }).click();
+  await (await rowItem(page, "新会话", "删除")).click();
   const confirm = page.getByRole("alertdialog", { name: "删除快捷指令？" });
   await expect(confirm).toContainText("新会话");
   await confirm.getByRole("button", { name: "取消", exact: true }).click();
   expect(await labels()).toEqual(reordered);
   for (const name of ["新会话", "恢复会话", "WebMux 工具"]) {
-    await card(page)
-      .getByRole("button", { name: `删除 ${name}` })
-      .click();
+    await (await rowItem(page, name, "删除")).click();
     await confirm.getByRole("button", { name: "删除", exact: true }).click();
     await expect(confirm).toBeHidden();
   }
@@ -335,9 +339,7 @@ test("an open add dialog preserves input when another tab fills the list", async
       "echo tab-b",
     ]);
 
-    await card(other)
-      .getByRole("button", { name: "删除 cmd 0", exact: true })
-      .click();
+    await (await rowItem(other, "cmd 0", "删除")).click();
     await other
       .getByRole("alertdialog")
       .getByRole("button", { name: "删除", exact: true })

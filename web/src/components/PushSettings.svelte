@@ -128,7 +128,7 @@
   });
 </script>
 
-<Card.Root id="push" class="scroll-mt-4">
+<Card.Root flat id="push" class="scroll-mt-4">
   <Card.Header>
     <Card.Title>通知推送</Card.Title>
     <Card.Description

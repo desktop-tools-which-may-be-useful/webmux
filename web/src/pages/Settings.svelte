@@ -7,6 +7,7 @@
   import IconArrowDown from "~icons/tabler/arrow-down";
   import IconArrowUp from "~icons/tabler/arrow-up";
   import IconBolt from "~icons/tabler/bolt";
+  import IconPencil from "~icons/tabler/pencil";
   import IconPlus from "~icons/tabler/plus";
   import IconRocket from "~icons/tabler/rocket";
   import IconTrash from "~icons/tabler/trash";
@@ -15,6 +16,9 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { ListButton } from "$lib/components/ui/list-button";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import InfoHint from "../components/InfoHint.svelte";
+  import SettingsRowMenu from "../components/SettingsRowMenu.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import * as Card from "$lib/components/ui/card";
   import * as Empty from "$lib/components/ui/empty";
@@ -34,6 +38,7 @@
   import {
     LAUNCH_CONFIGS_LIMIT,
     launchConfigIcon,
+    launchConfigSummary,
     type StartupShell,
   } from "../launch-configs";
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
@@ -250,16 +255,6 @@
   });
 </script>
 
-{#snippet deleteButton(label: string, onclick: () => void)}
-  <Button
-    variant="ghost"
-    size="icon-sm"
-    aria-label={`删除 ${label}`}
-    title="删除"
-    disabled={!settings.ready}
-    {onclick}><IconTrash aria-hidden="true" /></Button
-  >
-{/snippet}
 {#snippet presetMenu()}
   <QuickCommandPresetMenu
     commands={quickCommands.list}
@@ -305,20 +300,26 @@
     >
       <div>
         <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">设置</h1>
-        <p class="mt-2 text-sm text-muted-foreground">
-          外观、快捷指令、预览和主页工作树保存在服务端，在所有设备间同步；草稿、最近目录与登录凭据仅在当前设备保存。启动配置与公网访问设置也由服务端管理。隧道配置和启停无需重启；通知推送按当前设备管理。
+        <p class="mt-2 flex items-center gap-1 text-sm text-muted-foreground">
+          大部分设置保存在服务端，在所有设备间同步。<InfoHint label="设置"
+            >外观、快捷指令、预览和主页工作树保存在服务端，在所有设备间同步；草稿、最近目录与登录凭据仅在当前设备保存。启动配置与公网访问设置也由服务端管理。隧道配置和启停无需重启；通知推送按当前设备管理。</InfoHint
+          >
         </p>
       </div>
       {#if pendingUpdate}<PendingUpdateNotice update={pendingUpdate} />{/if}
       <AppearanceSettings />
-      <Card.Root id="quick-commands" class="scroll-mt-4">
+      <Card.Root flat id="quick-commands" class="scroll-mt-4">
         <Card.Header>
           <Card.Title>快捷指令</Card.Title>
           <Card.Description
-            >点击终端底部工具栏或顶栏的 <IconBolt
-              class="inline size-3.5 align-[-2px]"
-              aria-label="闪电"
-            /> 按钮即可发送；保存到服务端并同步至所有设备。</Card.Description
+            ><span class="flex items-center gap-1"
+              >常用命令一键发送，同步到所有设备。<InfoHint label="快捷指令"
+                >点击终端底部工具栏或顶栏的 <IconBolt
+                  class="inline size-3.5 align-[-2px]"
+                  aria-label="闪电"
+                /> 按钮即可发送；保存到服务端并同步至所有设备。</InfoHint
+              ></span
+            ></Card.Description
           >
         </Card.Header>
         <Card.Content class="space-y-4">
@@ -343,18 +344,18 @@
               </Empty.Content>
             </Empty.Root>
           {:else}
-            <Item.Group class="gap-2" aria-label="快捷指令列表">
+            <Item.Group aria-label="快捷指令列表">
               {#each quickCommands.list as cmd, index (cmd.id)}
                 {@const label = commandLabel(cmd)}
-                <Item.Root variant="outline" size="sm">
+                <Item.Root variant="divided" size="flush" class="min-h-14">
                   <ListButton
                     variant="content"
-                    class="flex min-w-0 flex-1 flex-col"
+                    class="flex min-w-0 flex-1 flex-col justify-center"
                     aria-label={`编辑 ${label}`}
                     onclick={() => edit(cmd)}
                   >
                     <span class="flex min-w-0 items-center gap-2">
-                      <span class="truncate text-xs font-medium">{label}</span>
+                      <span class="truncate text-sm font-medium">{label}</span>
                       {#if cmd.enter}<Badge variant="secondary">回车</Badge
                         >{/if}
                     </span>
@@ -363,31 +364,35 @@
                         >{commandPreview(cmd)}</span
                       >{/if}
                   </ListButton>
-                  <Item.Actions class="gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
+                  <SettingsRowMenu {label} disabled={!settings.ready}>
+                    <DropdownMenu.Item
+                      aria-label={`编辑 ${label}`}
+                      onSelect={() => edit(cmd)}
+                      ><IconPencil aria-hidden="true" />编辑</DropdownMenu.Item
+                    >
+                    <DropdownMenu.Item
                       aria-label={`上移 ${label}`}
-                      title="上移"
-                      disabled={!settings.ready || index === 0}
-                      onclick={() => move(index, -1)}
-                      ><IconArrowUp aria-hidden="true" /></Button
+                      disabled={index === 0}
+                      onSelect={() => move(index, -1)}
+                      ><IconArrowUp aria-hidden="true" />上移</DropdownMenu.Item
                     >
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
+                    <DropdownMenu.Item
                       aria-label={`下移 ${label}`}
-                      title="下移"
-                      disabled={!settings.ready ||
-                        index === quickCommands.list.length - 1}
-                      onclick={() => move(index, 1)}
-                      ><IconArrowDown aria-hidden="true" /></Button
+                      disabled={index === quickCommands.list.length - 1}
+                      onSelect={() => move(index, 1)}
+                      ><IconArrowDown
+                        aria-hidden="true"
+                      />下移</DropdownMenu.Item
                     >
-                    {@render deleteButton(label, () => {
-                      deleting = cmd;
-                      deleteOpen = true;
-                    })}
-                  </Item.Actions>
+                    <DropdownMenu.Item
+                      variant="destructive"
+                      aria-label={`删除 ${label}`}
+                      onSelect={() => {
+                        deleting = cmd;
+                        deleteOpen = true;
+                      }}><IconTrash aria-hidden="true" />删除</DropdownMenu.Item
+                    >
+                  </SettingsRowMenu>
                 </Item.Root>
               {/each}
             </Item.Group>
@@ -429,6 +434,7 @@
         </Card.Content>
       </Card.Root>
       <Card.Root
+        flat
         role="region"
         id="launch-configs"
         class="scroll-mt-4"
@@ -437,8 +443,12 @@
         <Card.Header>
           <Card.Title id="launch-configs-title">启动配置</Card.Title>
           <Card.Description
-            >保存“名称 + 完整命令 +
-            环境变量”，在新建会话时选用；自定义启动配置保存在服务端，所有设备共享。也可以在新建会话时输入不保存的临时命令。</Card.Description
+            ><span class="flex items-center gap-1"
+              >新建会话时选用的命令与环境变量。<InfoHint label="启动配置"
+                >保存“名称 + 完整命令 +
+                环境变量”，在新建会话时选用；自定义启动配置保存在服务端，所有设备共享。也可以在新建会话时输入不保存的临时命令。</InfoHint
+              ></span
+            ></Card.Description
           >
         </Card.Header>
         <Card.Content class="space-y-4">
@@ -491,47 +501,46 @@
               </Empty.Content>
             </Empty.Root>
           {:else}
-            <Item.Group class="gap-2" aria-label="启动配置列表">
+            <Item.Group aria-label="启动配置列表">
               {#each launchConfigs as config (config.id)}
-                <Item.Root variant="outline" size="sm">
+                <Item.Root variant="divided" size="flush" class="min-h-14">
                   <ListButton
                     variant="content"
-                    class="flex min-w-0 flex-1"
+                    class="flex min-w-0 flex-1 items-center"
                     aria-label={`编辑 ${config.name}`}
                     onclick={() => editLaunchConfig(config.id)}
                   >
                     <span class="flex min-w-0 flex-1 items-center gap-3">
-                      <LaunchConfigIcon icon={launchConfigIcon(config)} />
-                      <span class="grid min-w-0 flex-1 gap-1">
-                        <span class="flex min-w-0 items-center gap-2">
-                          <span class="truncate text-xs font-medium"
-                            >{config.name}</span
-                          >
-                          {#if config.chat}<Badge variant="secondary"
-                              >混合</Badge
-                            >{/if}
-                          {#if config.envNames.length}<Badge variant="secondary"
-                              >{config.envNames.length} 个环境变量</Badge
-                            >{/if}
-                          {#if config.preview}<Badge variant="outline"
-                              >预览 {config.preview.lines} 行 · 跳过 {config
-                                .preview.skip} 行</Badge
-                            >{/if}
-                        </span>
-                        <span
-                          class="truncate font-mono text-xs text-muted-foreground"
-                          >{joinArgs(config.cmd)}</span
+                      <span
+                        class="grid size-9 shrink-0 place-items-center rounded-md bg-muted/60"
+                        ><LaunchConfigIcon
+                          icon={launchConfigIcon(config)}
+                        /></span
+                      >
+                      <span class="grid min-w-0 flex-1 gap-0.5">
+                        <span class="truncate text-sm font-medium"
+                          >{config.name}</span
+                        >
+                        <span class="truncate text-xs text-muted-foreground"
+                          >{launchConfigSummary(config)}</span
                         >
                       </span>
                     </span>
                   </ListButton>
-                  <Item.Actions class="gap-1">
-                    {@render deleteButton(config.name, () => {
-                      launchDeleting = config;
-                      launchDeleteError = "";
-                      launchDeleteOpen = true;
-                    })}
-                  </Item.Actions>
+                  <SettingsRowMenu
+                    label={config.name}
+                    disabled={!settings.ready}
+                  >
+                    <DropdownMenu.Item
+                      variant="destructive"
+                      aria-label={`删除 ${config.name}`}
+                      onSelect={() => {
+                        launchDeleting = config;
+                        launchDeleteError = "";
+                        launchDeleteOpen = true;
+                      }}><IconTrash aria-hidden="true" />删除</DropdownMenu.Item
+                    >
+                  </SettingsRowMenu>
                 </Item.Root>
               {/each}
             </Item.Group>
@@ -562,7 +571,7 @@
           {/if}
         </Card.Content>
       </Card.Root>
-      <Card.Root id="drafts" class="scroll-mt-4">
+      <Card.Root flat id="drafts" class="scroll-mt-4">
         <Card.Header>
           <Card.Title>草稿与暂存</Card.Title>
           <Card.Description
@@ -604,7 +613,7 @@
       <TailscaleSettings />
       <InstallSettings />
       <PushSettings />
-      <Card.Root id="preview">
+      <Card.Root flat id="preview">
         <Card.Header>
           <Card.Title>会话输出预览</Card.Title>
           <Card.Description

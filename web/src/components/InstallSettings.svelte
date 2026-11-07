@@ -37,7 +37,7 @@
   }
 </script>
 
-<Card.Root id="install" class="scroll-mt-4">
+<Card.Root flat id="install" class="scroll-mt-4">
   <Card.Header>
     <Card.Title>安装应用</Card.Title>
     <Card.Description

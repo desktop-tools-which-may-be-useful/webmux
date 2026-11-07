@@ -9,6 +9,9 @@
         outline: "border-border",
         muted: "bg-muted/50 border-transparent",
         row: "rounded-md border-0 hover:bg-muted/50 [&_[data-slot=item-title]]:text-sm",
+        // A flat list row, separated from the one above by a hairline.
+        divided:
+          "rounded-none border-0 border-t first:border-t-0 hover:bg-muted/50",
         // A list entry on its own card surface that highlights on hover. The
         // inset ring draws the edge without a border box, and its title reads
         // at body size.

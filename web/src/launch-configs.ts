@@ -83,6 +83,21 @@ export const LAUNCH_ICON_OPTIONS = [
   { value: "qoder", label: "Qoder" },
 ] as const;
 
+/** The one-line description of a saved launch config under its name. */
+export function launchConfigSummary(config: {
+  chat?: boolean;
+  envNames: readonly string[];
+  preview?: { lines: number; skip: number } | null;
+}) {
+  return [
+    config.chat ? "混合会话" : "终端",
+    config.envNames.length ? `${config.envNames.length} 个环境变量` : "",
+    config.preview ? `预览 ${config.preview.lines} 行` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** Old configs get a display default without rewriting their saved commands. */
 export function launchConfigIcon(config: {
   icon?: string;

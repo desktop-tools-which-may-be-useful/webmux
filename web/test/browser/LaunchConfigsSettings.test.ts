@@ -93,12 +93,14 @@ test("lists configs without env values and confirms deletion", async () => {
   await reloadSettings();
   render(Settings);
   const item = card().getByRole("button", { name: "编辑 Claude 恢复" });
-  await expect.element(item).toMatchTextContent(/claude --resume 'a b'/);
+  // The list shows a summary; the command itself is in the editor.
+  await expect.element(item).toMatchTextContent(/1 个环境变量/);
+  await expect.element(item).not.toMatchTextContent(/claude --resume/);
   expect(
     item.element().querySelector('[data-launch-icon="claudecode"] svg'),
   ).not.toBeNull();
-  await expect.element(card().getByText("1 个环境变量")).toBeVisible();
-  await card().getByRole("button", { name: "删除 Claude 恢复" }).click();
+  await card().getByRole("button", { name: "操作 Claude 恢复" }).click();
+  await page.getByRole("menuitem", { name: "删除 Claude 恢复" }).click();
   const confirm = page.getByRole("alertdialog");
   await expect.element(confirm).toMatchTextContent(/Claude 恢复/);
   await expect.element(confirm).toMatchTextContent(/claude --resume 'a b'/);
@@ -157,7 +159,9 @@ test("hybrid configs are marked in settings", async () => {
   stopSettings();
   await reloadSettings();
   render(Settings);
-  await expect.element(card().getByText("混合", { exact: true })).toBeVisible();
+  await expect
+    .element(card().getByRole("button", { name: "编辑 omp" }))
+    .toMatchTextContent(/混合会话/);
 });
 
 test("an unavailable presets endpoint explains why the menu is disabled", async () => {
@@ -313,5 +317,10 @@ test("preset menu marks existing configs and restores one or all missing presets
   // Existing customized Shell command was not overwritten.
   await expect
     .element(card().getByRole("button", { name: "编辑 Shell" }))
-    .toMatchTextContent(/\/bin\/zsh -l/);
+    .toBeVisible();
+  expect(configs.find((c) => c.name === "Shell")?.cmd).toEqual([
+    "/bin/zsh",
+    "-l",
+  ]);
+  expect(configs.filter((c) => c.name === "Shell")).toHaveLength(1);
 });
