@@ -496,8 +496,14 @@
   display: none !important;
 }
 .code-divider {
-  width: 5px !important;
+  width: 1px !important;
   touch-action: none;
+}
+/* The line is 1px; the handle's ::after is the grab area around it. */
+@media (pointer: coarse) {
+  .code-divider::after {
+    width: 1.5rem !important;
+  }
 }
 .terminal-workspace.compact .code-divider {
   display: none !important;

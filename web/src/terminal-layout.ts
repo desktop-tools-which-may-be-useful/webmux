@@ -128,7 +128,8 @@ export function resizeSplit(
 }
 
 export type PaneRect = { x: number; y: number; width: number; height: number };
-export const DIVIDER_SIZE = 5;
+/** The visible line; the pane divider widens its hit area around it. */
+export const DIVIDER_SIZE = 1;
 export type Divider = PaneRect & {
   id: string;
   direction: SplitDirection;
@@ -149,10 +150,7 @@ export function layoutGeometry(
       return;
     }
     const horizontal = node.direction === "horizontal";
-    const gap = Math.min(
-      DIVIDER_SIZE,
-      horizontal ? rect.width : rect.height,
-    );
+    const gap = Math.min(DIVIDER_SIZE, horizontal ? rect.width : rect.height);
     const extent = Math.max(0, (horizontal ? rect.width : rect.height) - gap);
     const first = extent * node.ratio;
     dividers.push({

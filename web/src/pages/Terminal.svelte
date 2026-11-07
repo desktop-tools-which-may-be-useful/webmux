@@ -673,6 +673,26 @@
   }
   .pane-divider.horizontal {
     cursor: col-resize;
+    /* Where a row line meets this column line, the column keeps its grab
+       area; the row's widened edge would otherwise cover its midpoint. */
+    z-index: 3;
+  }
+  /* The line stays 1px; this widens the grab area around it. */
+  .pane-divider::after {
+    content: "";
+    position: absolute;
+    inset: -4px 0;
+  }
+  .pane-divider.horizontal::after {
+    inset: 0 -4px;
+  }
+  @media (pointer: coarse) {
+    .pane-divider::after {
+      inset: -9px 0;
+    }
+    .pane-divider.horizontal::after {
+      inset: 0 -9px;
+    }
   }
   .pane-divider:hover,
   .pane-divider:focus-visible {

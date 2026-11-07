@@ -21,11 +21,11 @@ const nested = () =>
 
 describe("terminal pane layout", () => {
   it("tiles nested panes without overlap and preserves total dimensions", () => {
-    const geometry = layoutGeometry(nested(), 1006, 806);
+    const geometry = layoutGeometry(nested(), 1001, 801);
     expect(geometry.panes).toEqual([
-      { sessionId: "aaaaaaaa", x: 0, y: 0, width: 500.5, height: 806 },
-      { sessionId: "bbbbbbbb", x: 505.5, y: 0, width: 500.5, height: 400.5 },
-      { sessionId: "cccccccc", x: 505.5, y: 405.5, width: 500.5, height: 400.5 },
+      { sessionId: "aaaaaaaa", x: 0, y: 0, width: 500, height: 801 },
+      { sessionId: "bbbbbbbb", x: 501, y: 0, width: 500, height: 400 },
+      { sessionId: "cccccccc", x: 501, y: 401, width: 500, height: 400 },
     ]);
     expect(
       layoutGeometry(nested(), 0, 0).panes.every(
