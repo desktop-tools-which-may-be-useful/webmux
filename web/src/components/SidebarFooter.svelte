@@ -4,7 +4,10 @@
   import IconFolderPlus from "~icons/tabler/folder-plus";
   import IconSettings from "~icons/tabler/settings";
   import IconSun from "~icons/tabler/sun";
+  import { api } from "../api";
   import { Button } from "$lib/components/ui/button";
+  import * as Popover from "$lib/components/ui/popover";
+  import { HealthSchema } from "../schemas";
   import { toggleTheme } from "../theme";
   import type { Connection } from "../ws";
   import ForwardButton from "./ForwardButton.svelte";
@@ -35,6 +38,9 @@
   } = $props();
 
   let dark = $state(document.documentElement.classList.contains("dark"));
+  let detailsOpen = $state(false);
+  let latency = $state<number | null>(null);
+  let measuring = $state(false);
   const statusLabel = $derived(
     connection === "connected"
       ? hostname
@@ -44,6 +50,30 @@
         ? "连接已断开，重连中…"
         : "正在连接",
   );
+  const connectionLabel = $derived(
+    connection === "connected"
+      ? "已连接"
+      : connection === "reconnecting"
+        ? "重连中"
+        : "连接中",
+  );
+  async function measureLatency() {
+    if (measuring || connection !== "connected") return;
+    measuring = true;
+    const started = performance.now();
+    try {
+      await api("/health", HealthSchema);
+      latency = Math.max(0, Math.round(performance.now() - started));
+    } catch {
+      latency = null;
+    } finally {
+      measuring = false;
+    }
+  }
+  function detailsChanged(open: boolean) {
+    detailsOpen = open;
+    if (open) void measureLatency();
+  }
   onMount(() => {
     const theme = new MutationObserver(() => {
       dark = document.documentElement.classList.contains("dark");
@@ -61,21 +91,56 @@
     ? "flex flex-col items-center gap-1 border-t py-2"
     : "flex items-center gap-1 border-t px-3 py-1.5"}
 >
-  <span
-    class={rail
-      ? "flex size-8 items-center justify-center"
-      : "flex h-5 min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground"}
-    role="status"
-    title={statusLabel}
-    ><span
-      class={`status-dot shrink-0 ${connection === "connected" ? "status-running" : "status-waiting"}`}
-    ></span>{#if rail}<span class="sr-only">{statusLabel}</span
-      >{:else if connection === "reconnecting"}<span
-        class="truncate text-warning">连接已断开，重连中…</span
-      >{:else if connection === "connected" && setupSettled}<span
-        class="truncate">{hostname || "在线"}</span
-      >{:else}<span class="sr-only">{statusLabel}</span>{/if}</span
-  >
+  <Popover.Root open={detailsOpen} onOpenChange={detailsChanged}>
+    <Popover.Trigger
+      type="button"
+      aria-label={`查看主机状态：${statusLabel}`}
+      title={statusLabel}
+      class={rail
+        ? "flex size-8 cursor-pointer items-center justify-center rounded-sm hover:bg-muted/60"
+        : "flex h-5 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-sm text-xs text-muted-foreground hover:bg-muted/60"}
+    >
+      <span role="status" class="flex min-w-0 items-center gap-2">
+        <span
+          class={`status-dot shrink-0 ${connection === "connected" ? "status-running" : "status-waiting"}`}
+        ></span>{#if rail}<span class="sr-only">{statusLabel}</span
+          >{:else if connection === "reconnecting"}<span
+            class="truncate text-warning">连接已断开，重连中…</span
+          >{:else if connection === "connected" && setupSettled}<span
+            class="truncate">{hostname || "在线"}</span
+          >{:else}<span class="sr-only">{statusLabel}</span>{/if}
+      </span>
+    </Popover.Trigger>
+    <Popover.Content
+      side="top"
+      align="start"
+      role="dialog"
+      aria-label="主机状态详情"
+      class="w-[min(18rem,calc(100vw-2rem))] gap-3"
+    >
+      <Popover.Header>
+        <Popover.Title>主机状态</Popover.Title>
+        <Popover.Description>当前 WebMux 服务连接信息</Popover.Description>
+      </Popover.Header>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
+        <dt class="text-muted-foreground">主机名</dt>
+        <dd class="min-w-0 truncate font-medium" title={hostname}>
+          {hostname || "未获取"}
+        </dd>
+        <dt class="text-muted-foreground">连接状态</dt>
+        <dd
+          class={connection === "connected" ? "text-success" : "text-warning"}
+        >
+          {connectionLabel}
+        </dd>
+        <dt class="text-muted-foreground">网络延时</dt>
+        <dd>
+          {#if connection !== "connected"}不可用{:else if measuring}测量中…{:else if latency !== null}{latency}
+            ms{:else}不可用{/if}
+        </dd>
+      </dl>
+    </Popover.Content>
+  </Popover.Root>
   <Button
     variant="ghost"
     size="icon-touch"
