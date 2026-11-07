@@ -7,7 +7,12 @@ import type { Repositories } from "./hooks/repositories.svelte";
 import type { ServerSetup } from "./hooks/server-setup.svelte";
 import type { SessionList } from "./hooks/session-list.svelte";
 import type { LaunchEntry } from "./new-session-defaults";
-import type { Repository, SessionInfo, Worktree } from "./schemas";
+import type {
+  ArchivedSession,
+  Repository,
+  SessionInfo,
+  Worktree,
+} from "./schemas";
 import type { TerminalDrafts } from "./terminal-draft.svelte";
 
 // The app shell around the home page, quick start and session pages: which
@@ -111,8 +116,18 @@ export interface Shell {
   rename(session: SessionInfo): void;
   /** Opens the shared close, archive or remove dialog for a session. */
   close(session: SessionInfo): void;
-  /** Opens the shared worktree removal confirmation dialog. */
-  removeWorktree(worktree: Worktree): void;
+  /**
+   * Opens the shared worktree removal confirmation dialog. `forgetRecords`
+   * are archived records the caller deletes with the worktree; `onremoved`
+   * runs after a successful removal, before the dialog closes.
+   */
+  removeWorktree(
+    worktree: Worktree,
+    options?: {
+      onremoved?: () => void;
+      forgetRecords?: readonly ArchivedSession[];
+    },
+  ): void;
   /** Opens the batch worktree management dialog of a repository. */
   manageWorktrees(repository: Repository): void;
   /** Opens the shared release preview of an archived record's worktree. */

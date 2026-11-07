@@ -4,12 +4,12 @@
   import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import { errorMessage } from "../error";
-  import { recordTitle, removableRecordWorktree } from "../archived";
+  import { recordTitle } from "../archived";
   import { homeWorktrees } from "../home-worktrees.svelte";
   import { connectorMissingText } from "../hybrid";
   import { removeRecord, resumeSession } from "../recoverable";
   import type { Route } from "../route";
-  import type { ArchivedSession, HybridRelease } from "../schemas";
+  import type { ArchivedSession, HybridRelease, Worktree } from "../schemas";
   import {
     getShell,
     openPage,
@@ -62,13 +62,27 @@
   let removing = $state<ArchivedSession | null>(null);
   let removeOpen = $state(false);
   function askRemove(record: ArchivedSession) {
-    const worktree = removableRecordWorktree(record, shell.repositories.list);
-    if (worktree) {
-      shell.removeWorktree(worktree);
-      return;
-    }
     removing = record;
     removeOpen = true;
+  }
+  function askRemoveWithWorktree(record: ArchivedSession, worktree: Worktree) {
+    shell.removeWorktree(worktree, {
+      onremoved: () => void forgetAfterWorktree(record),
+      forgetRecords: [record],
+    });
+  }
+  // The worktree is already gone when this runs; a failed record deletion
+  // leaves a released record behind, which the user can delete again.
+  async function forgetAfterWorktree(record: ArchivedSession) {
+    resumeError = "";
+    try {
+      await removeRecord(record.id);
+      shell.drafts.remove(record.id);
+    } catch (err) {
+      resumeError = `工作树已删除，但无法删除“${recordTitle(record)}”的记录：${errorMessage(err)}`;
+    } finally {
+      await shell.archived.refresh();
+    }
   }
   async function confirmRemove() {
     const record = removing;
@@ -179,6 +193,7 @@
         onclose={shell.close}
         onrelease={shell.releaseWorktree}
         onremove={askRemove}
+        onremoveworktree={askRemoveWithWorktree}
       />
     {:else if !shell.sessions.loading && (shell.repositories.settled || shell.repositories.list.length)}
       <!-- Drawn once sessions and repositories are known, so rows never
@@ -230,7 +245,7 @@
   title={`删除“${removing ? recordTitle(removing) : ""}”的记录？`}
   onconfirm={() => void confirmRemove()}
 >
-  只删除 WebMux 的记录与本机草稿；agent 自己保存的会话不受影响。
+  只删除 WebMux 的记录与本机草稿；工作树与 agent 自己保存的会话不受影响。
 </ConfirmDialog>
 {#if rebuilding}
   {@const { record, released } = rebuilding}

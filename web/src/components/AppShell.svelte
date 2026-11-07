@@ -20,7 +20,12 @@
     type LaunchScope,
   } from "../new-session-defaults";
   import type { Route } from "../route";
-  import type { Repository, SessionInfo, Worktree } from "../schemas";
+  import type {
+    ArchivedSession,
+    Repository,
+    SessionInfo,
+    Worktree,
+  } from "../schemas";
   import { unknownWorkspaces } from "../session-list";
   import {
     openPage,
@@ -79,7 +84,11 @@
   } | null>(null);
   let renaming = $state<SessionInfo | null>(null);
   let closing = $state<SessionInfo | null>(null);
-  let removingWorktree = $state<Worktree | null>(null);
+  let removingWorktree = $state<{
+    worktree: Worktree;
+    onremoved?: () => void;
+    forgetRecords?: readonly ArchivedSession[];
+  } | null>(null);
   let managingWorktrees = $state<Repository | null>(null);
   let releasingWorktree = $state<Worktree | null>(null);
   let forwarding = $state(false);
@@ -126,9 +135,9 @@
       shellUi.drawerOpen = false;
       closing = session;
     },
-    removeWorktree(worktree) {
+    removeWorktree(worktree, options) {
       shellUi.drawerOpen = false;
-      removingWorktree = worktree;
+      removingWorktree = { worktree, ...options };
     },
     manageWorktrees(repository) {
       shellUi.drawerOpen = false;
@@ -412,7 +421,9 @@
     onclose={() => (removingWorktree = null)}
   >
     {#snippet children(page)}<page.default
-        worktree={target}
+        worktree={target.worktree}
+        forgetRecords={target.forgetRecords ?? []}
+        onremoved={target.onremoved}
         onchange={refreshWorktrees}
         onclose={() => (removingWorktree = null)}
       />{/snippet}

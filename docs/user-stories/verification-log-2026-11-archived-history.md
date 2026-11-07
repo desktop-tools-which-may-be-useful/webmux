@@ -47,3 +47,16 @@
   - 启动配置总大小超 4 MiB 返回 400 而非存储故障；仓库登记最多 500 个。
 - 依据：`internal/hybrid`（`bounds_test.go`）、`internal/launch`、`internal/workspace`（`limit_test.go`）新增用例，相关包 `go test -race` 通过。
 - 限制：未运行完整 `make test`/`make check`；未在真实磁盘写满环境观察重试。
+
+本次局部核对（2026-11-07）：已归档聊天的删除拆成“删除记录”和“删除记录和工作树”两个菜单项；更新 US-C15、US-C17、US-Q12 与覆盖索引，不新增故事。
+
+- 行为：
+  - “删除记录”始终只删除记录与本机草稿，不删除、释放或改动工作树；
+  - 关联的 linked worktree 可删除且未释放时，工作台首页已归档区和聊天历史侧栏另提供“删除记录和工作树”；打开删除 worktree 确认流程并列出将删除的聊天，成功删除工作树后再删除该记录，取消则两者都不改变；
+  - 已释放、主工作区、直接目录或工作树不可用时只提供“删除记录”。
+- 依据：
+  - `pnpm --dir web check:test`（0 errors）、`test/archived.test.ts` 单元用例（4 项）通过；
+  - `AppShell`、`ArchivedSessions`、`ChatHistory`、`WorktreeDialogs`、`SessionListArchived`、`WorkbenchTree` 浏览器组件测试（65 项）通过；
+  - Playwright `quick-start.spec.ts` 桌面（2 通过、1 跳过）与 Pixel 7（3 通过）通过；
+  - `make docs-check`、`openspec validate --all --strict --no-interactive`（本次涉及的 spec 与在途变更通过）、`git diff --check` 通过。
+- 限制：未运行完整 `make test`/`make check`；未在隔离演示服务上重新截取明暗主题与桌面/手机截图；未重新核验其余故事能力。

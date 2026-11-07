@@ -60,10 +60,15 @@ function serve(body: Preview) {
 const removeDialog = () => page.getByRole("dialog", { name: "删除 worktree" });
 const releaseDialog = () => page.getByRole("dialog", { name: "释放空间" });
 
-function showRemove(patch: Preview = {}, worktreePatch = {}) {
+function showRemove(
+  patch: Preview = {},
+  worktreePatch = {},
+  forgetRecords = [],
+) {
   const fetch = serve(preview(patch));
   render(RemoveWorktreeDialog, {
     worktree: { ...tree, ...worktreePatch },
+    forgetRecords,
     onclose: vi.fn(),
     onchange: vi.fn(),
   });
@@ -91,6 +96,19 @@ test("removal keeps archived records and warns, without blocking, when the commi
   expect(fetch.mock.calls.at(-1)?.[0]).toBe(
     "/api/repositories/repo1/worktrees/wt1/remove",
   );
+});
+
+test("removing a record with its worktree lists the record as deleted", async () => {
+  showRemove({}, {}, [kept]);
+  const dialog = removeDialog();
+  await expect.element(dialog).toMatchTextContent(/所选聊天记录会一并删除/);
+  await expect
+    .element(dialog)
+    .toMatchTextContent(/将删除的已归档聊天.*分支聊天/);
+  expect(dialog.getByText("保留的已归档会话").elements()).toEqual([]);
+  await expect
+    .element(dialog.getByRole("button", { name: "确认安全删除" }))
+    .toBeEnabled();
 });
 
 test("removal lists the pushed branches, and a missing remote or unknown check stays silent", async () => {

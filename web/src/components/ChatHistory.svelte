@@ -59,9 +59,9 @@
   // first, as the workbench tree), with archived
   // records folded below them. The current row carries aria-current and every
   // row ends in a status dot; the "⋯" menu offers a live chat's rename and
-  // archive, and an archived one's resume, space release and record
-  // deletion. Archived rows also resume when clicked; a released one is
-  // marked so.
+  // archive, and an archived one's resume, space release, record deletion
+  // and record-plus-worktree deletion. Archived rows also resume when
+  // clicked; a released one is marked so.
   let {
     sessions,
     records,
@@ -75,6 +75,7 @@
     onclose,
     onrelease,
     onremove,
+    onremoveworktree,
   }: {
     sessions: readonly SessionInfo[];
     records: readonly ArchivedSession[];
@@ -91,8 +92,10 @@
     onclose: (session: SessionInfo) => void;
     /** Asks to release the disk space of an archived record's worktree. */
     onrelease: (worktree: Worktree) => void;
-    /** Asks to delete an archived record. */
+    /** Asks to delete an archived record; its worktree stays. */
     onremove: (record: ArchivedSession) => void;
+    /** Asks to delete an archived record and its linked worktree. */
+    onremoveworktree?: (record: ArchivedSession, worktree: Worktree) => void;
   } = $props();
   // The archived list mounts a page at a time while the section is open: a
   // long history then costs nothing behind a closed section and never builds
@@ -221,6 +224,10 @@
                       ? () => onrelease(releasable)
                       : undefined,
                     onremove: () => onremove(record),
+                    onremoveworktree:
+                      releasable && onremoveworktree
+                        ? () => onremoveworktree(record, releasable)
+                        : undefined,
                   }}
                 />
               </li>

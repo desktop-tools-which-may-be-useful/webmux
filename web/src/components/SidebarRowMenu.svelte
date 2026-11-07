@@ -37,7 +37,7 @@
     {/snippet}
   </DropdownMenu.Trigger>
   {#if ready}
-    <DropdownMenu.Content align="end" class="min-w-40">
+    <DropdownMenu.Content align="end" class="min-w-48">
       {@render children()}
     </DropdownMenu.Content>
   {/if}

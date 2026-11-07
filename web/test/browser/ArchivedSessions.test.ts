@@ -294,33 +294,53 @@ test("hides the directory a group already names and pages long lists", async () 
   await expect.element(group().getByText("/repos/project/web")).toBeVisible();
 });
 
-test("removing a record in a linked worktree delegates to worktree removal", async () => {
-  const removeWorktree = vi.fn();
-  const linked: Worktree = {
-    id: "wt1",
-    repositoryId: "repo1",
-    path: "/repos/project-wt",
-    kind: "linked",
-    branch: "wt/fix",
-    head: "a".repeat(40),
-    detached: false,
-    locked: false,
-    lockReason: "",
-    prunable: false,
-    available: true,
-    dirty: false,
-    hasUntracked: false,
-    hasIgnored: false,
-    error: "",
-  };
+const linked: Worktree = {
+  id: "wt1",
+  repositoryId: "repo1",
+  path: "/repos/project-wt",
+  kind: "linked",
+  branch: "wt/fix",
+  head: "a".repeat(40),
+  detached: false,
+  locked: false,
+  lockReason: "",
+  prunable: false,
+  available: true,
+  dirty: false,
+  hasUntracked: false,
+  hasIgnored: false,
+  error: "",
+};
+
+test("deleting a linked worktree's record leaves the worktree alone", async () => {
+  const removeRecordAndWorktree = vi.fn();
   const { remove } = show([record], vi.fn(), {
     worktree: linked,
-    removeWorktree,
+    removeRecordAndWorktree,
   });
   await expand();
   await removeRecord();
-  expect(removeWorktree).toHaveBeenCalledWith(linked);
-  expect(remove).not.toHaveBeenCalled();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "确认" })
+    .click();
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledWith("hybrid22"));
+  expect(removeRecordAndWorktree).not.toHaveBeenCalled();
+});
+
+test("deleting a record and its worktree opens the worktree confirmation", async () => {
+  const removeRecordAndWorktree = vi.fn();
+  show([record], vi.fn(), { worktree: linked, removeRecordAndWorktree });
+  await expand();
+  await page.getByRole("button", { name: "更多操作 修复排序" }).click();
+  expect(
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((item) => item.textContent?.trim()),
+  ).toEqual(["删除记录", "删除记录和工作树"]);
+  await page.getByRole("menuitem", { name: "删除记录和工作树" }).click();
+  expect(removeRecordAndWorktree).toHaveBeenCalledWith(record, linked);
 });
 
 test("filters open the section on their own", async () => {
@@ -406,11 +426,11 @@ test("offers releasing a linked worktree's space between resuming and deleting",
 
 test("a released record is marked and deleting it removes only the record", async () => {
   const release = vi.fn();
-  const removeWorktree = vi.fn();
+  const removeRecordAndWorktree = vi.fn();
   const { remove } = show([released], vi.fn(), {
     worktree: feature,
     release,
-    removeWorktree,
+    removeRecordAndWorktree,
   });
   await expand();
   const badge = group().getByTitle(
@@ -426,7 +446,7 @@ test("a released record is marked and deleting it removes only the record", asyn
     .getByRole("button", { name: "确认" })
     .click();
   await vi.waitFor(() => expect(remove).toHaveBeenCalledWith("hybrid22"));
-  expect(removeWorktree).not.toHaveBeenCalled();
+  expect(removeRecordAndWorktree).not.toHaveBeenCalled();
   expect(release).not.toHaveBeenCalled();
 });
 

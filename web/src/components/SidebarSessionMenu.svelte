@@ -17,7 +17,13 @@
         onresume: () => void;
         /** Offered only while the record's worktree can be released. */
         onrelease?: () => void;
+        /** Deletes only the record. */
         onremove: () => void;
+        /**
+         * Offered while the record's linked worktree can be removed; deletes
+         * the worktree and this record after the worktree confirmation.
+         */
+        onremoveworktree?: () => void;
       };
   let {
     label,
@@ -62,5 +68,9 @@
     <DropdownMenu.Item variant="destructive" onSelect={target.onremove}
       >删除记录</DropdownMenu.Item
     >
+    {#if target.onremoveworktree}<DropdownMenu.Item
+        variant="destructive"
+        onSelect={target.onremoveworktree}>删除记录和工作树</DropdownMenu.Item
+      >{/if}
   {/if}
 </SidebarRowMenu>

@@ -301,52 +301,36 @@ test("the sidebar menu archives a live chat and deletes an archived record", asy
     .toBe(true);
 });
 
-test("deleting an archived record whose linked worktree still exists opens worktree removal confirmation", async () => {
-  shellUi.setMode("chat");
-  history.replaceState(null, "", "/s/otherabc");
-  const linked = worktree({
-    id: "wt1",
-    path: "/repos/webmux.worktrees/wt1",
-    kind: "linked",
-    branch: "wt/fix-sort",
-  });
+const linkedTree = worktree({
+  id: "wt1",
+  path: "/repos/webmux.worktrees/wt1",
+  kind: "linked",
+  branch: "wt/fix-sort",
+});
+const linkedChat = record({
+  id: "archivew",
+  title: "分支聊天",
+  cwd: linkedTree.path,
+  workspace: {
+    repositoryId: "repo1",
+    worktreeId: "wt1",
+    worktreePath: linkedTree.path,
+  },
+});
+function serveLinkedWorktreeChat() {
   respond(/^GET \/api\/repositories$/, () =>
-    Response.json([repository({ worktrees: [worktree(), linked] })]),
+    Response.json([repository({ worktrees: [worktree(), linkedTree] })]),
   );
-  respond(/^GET \/api\/sessions$/, () =>
-    Response.json([
-      record({
-        id: "archivew",
-        title: "分支聊天",
-        cwd: linked.path,
-        workspace: {
-          repositoryId: "repo1",
-          worktreeId: "wt1",
-          worktreePath: linked.path,
-        },
-      }),
-    ]),
-  );
+  respond(/^GET \/api\/sessions$/, () => Response.json([linkedChat]));
   respond(
     /^POST \/api\/repositories\/repo1\/worktrees\/wt1\/removal-preview$/,
     () =>
       Response.json({
         confirmationId: "conf1234",
         expiresAt: "2026-10-28T01:00:00Z",
-        worktree: linked,
+        worktree: linkedTree,
         sessions: [],
-        archived: [
-          record({
-            id: "archivew",
-            title: "分支聊天",
-            cwd: linked.path,
-            workspace: {
-              repositoryId: "repo1",
-              worktreeId: "wt1",
-              worktreePath: linked.path,
-            },
-          }),
-        ],
+        archived: [linkedChat],
         commit: "c".repeat(40),
         push: { state: "unpushed", branches: [], more: 0 },
         blockers: [],
@@ -358,6 +342,12 @@ test("deleting an archived record whose linked worktree still exists opens workt
     /^POST \/api\/repositories\/repo1\/worktrees\/wt1\/remove$/,
     () => new Response(null, { status: 204 }),
   );
+  respond(
+    /^DELETE \/api\/sessions\/archivew$/,
+    () => new Response(null, { status: 204 }),
+  );
+}
+async function openLinkedChatArchive() {
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await snapshot();
   await sidebar()
@@ -365,18 +355,54 @@ test("deleting an archived record whose linked worktree still exists opens workt
     .click();
   const archived = sidebar().getByRole("list", { name: "已归档聊天" });
   await archived.getByRole("button", { name: "会话操作：分支聊天" }).click();
+  return archived;
+}
+
+test("deleting an archived record leaves its linked worktree in place", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  serveLinkedWorktreeChat();
+  await openLinkedChatArchive();
   await page.getByRole("menuitem", { name: "删除记录" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect
+    .element(dialog)
+    .toMatchTextContent(/工作树与 agent 自己保存的会话不受影响/);
+  await dialog.getByRole("button", { name: "确认" }).click();
+  await expect
+    .poll(() =>
+      commands().some(
+        (c) =>
+          c.method === "DELETE" &&
+          c.path === "/api/sessions/archivew" &&
+          c.query === "?forget=1",
+      ),
+    )
+    .toBe(true);
+  expect(
+    commands().some(
+      (c) =>
+        c.method === "POST" &&
+        c.path === "/api/repositories/repo1/worktrees/wt1/removal-preview",
+    ),
+  ).toBe(false);
+});
+
+test("deleting an archived record and its linked worktree removes both", async () => {
+  shellUi.setMode("chat");
+  history.replaceState(null, "", "/s/otherabc");
+  serveLinkedWorktreeChat();
+  await openLinkedChatArchive();
+  await page.getByRole("menuitem", { name: "删除记录和工作树" }).click();
   const dialog = page.getByRole("dialog", { name: "删除 worktree" });
   await expect.element(dialog).toBeVisible();
   await expect.element(dialog).toMatchTextContent(/wt\/fix-sort/);
+  await expect.element(dialog).toMatchTextContent(/所选聊天记录会一并删除/);
   await expect
     .element(dialog)
-    .toMatchTextContent(/保留的已归档会话（之后可重建并恢复）.*分支聊天/);
-  await expect
-    .element(dialog)
-    .toMatchTextContent(/尚未推送到任何远程.*请先推送/);
-  expect(dialog.getByText("将删除的已归档会话").elements()).toEqual([]);
-  // An unpushed commit warns, never blocks.
+    .toMatchTextContent(/将删除的已归档聊天.*分支聊天/);
+  expect(dialog.getByText("保留的已归档会话").elements()).toEqual([]);
+  expect(dialog.getByText("尚未推送").elements()).toEqual([]);
   await dialog.getByRole("button", { name: "确认安全删除" }).click();
   await expect
     .poll(() =>
@@ -384,6 +410,16 @@ test("deleting an archived record whose linked worktree still exists opens workt
         (c) =>
           c.method === "POST" &&
           c.path === "/api/repositories/repo1/worktrees/wt1/remove",
+      ),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      commands().some(
+        (c) =>
+          c.method === "DELETE" &&
+          c.path === "/api/sessions/archivew" &&
+          c.query === "?forget=1",
       ),
     )
     .toBe(true);
@@ -461,7 +497,7 @@ test("the sidebar releases an archived chat's worktree after a preview and marks
   await archived.getByRole("button", { name: "会话操作：分支聊天" }).click();
   await expect
     .element(page.getByRole("menu"))
-    .toMatchTextContent(/恢复聊天\s*释放空间\s*删除记录/);
+    .toMatchTextContent(/恢复聊天\s*释放空间\s*删除记录\s*删除记录和工作树/);
   await page.getByRole("menuitem", { name: "释放空间" }).click();
   const dialog = page.getByRole("dialog", { name: "释放空间" });
   // Deleted ignored files are warned about, not listed.

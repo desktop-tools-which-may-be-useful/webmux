@@ -5,7 +5,8 @@
   import SessionViewControls from "../components/SessionViewControls.svelte";
   import WorkspaceToolbar from "../components/WorkspaceToolbar.svelte";
   import { store, stored } from "../api";
-  import type { Repository, Worktree } from "../schemas";
+  import type { ArchivedSession, Repository, Worktree } from "../schemas";
+  import { errorMessage } from "../error";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
   import {
     dismissUpdate,
@@ -57,6 +58,8 @@
     homeUpdate(setup.pendingUpdate, dismissedVersion),
   );
   let removing = $state<Worktree | null>(null);
+  let removingRecord = $state<ArchivedSession | null>(null);
+  let recordError = $state("");
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
   let now = $state(Date.now());
@@ -242,11 +245,14 @@
     filtering,
     resume: resumeSession,
     remove: async (id) => {
+      recordError = "";
       await removeRecord(id);
       drafts.remove(id);
       await shell.archived.refresh();
     },
-    removeWorktree: (tree) => {
+    removeRecordAndWorktree: (record, tree) => {
+      recordError = "";
+      removingRecord = record;
       removing = tree;
     },
     release: shell.releaseWorktree,
@@ -295,8 +301,25 @@
     if (repo)
       homeWorktrees.save(setPinned(homeWorktrees.value, repo, ids, pinned));
   }
-  // After a worktree change: a removal also forgets the archived records of
-  // sessions in the removed directory.
+  // A worktree removed with an archived chat deletes that chat afterwards;
+  // the removal already left it released, so a failure leaves a record the
+  // user can delete again.
+  async function removeAfterWorktree(record: ArchivedSession | null) {
+    if (!record) return;
+    recordError = "";
+    try {
+      await removeRecord(record.id);
+      drafts.remove(record.id);
+    } catch (err) {
+      recordError = `工作树已删除，但无法删除“${record.title}”的记录：${errorMessage(err)}`;
+    } finally {
+      removingRecord = null;
+      await shell.archived.refresh();
+    }
+  }
+  // After a worktree change: re-read repositories and archived records
+  // (a removal keeps them as released), then drop drafts that no longer
+  // belong to a live session or record.
   function refreshWorktrees() {
     void shell.repositories.refresh();
     void shell.archived.refresh().then((records) => {
@@ -421,6 +444,9 @@
         {#if rebuildFailure}<InlineNotice tone="danger" class="mb-4">
             {rebuildFailure}
           </InlineNotice>{/if}
+        {#if recordError}<InlineNotice tone="danger" class="mb-4">
+            {recordError}
+          </InlineNotice>{/if}
         {#if capabilityError}<InlineNotice tone="warning" class="mb-4">
             仓库管理部分不可用：{capabilityError}。仍可直接启动会话。
           </InlineNotice>{/if}
@@ -518,15 +544,24 @@
 </div>
 {#if removing}
   {@const target = removing}
+  {@const targetRecord = removingRecord}
   <LazyDialog
     load={() => import("../components/RemoveWorktreeDialog.svelte")}
     label="删除确认"
-    onclose={() => (removing = null)}
+    onclose={() => {
+      removing = null;
+      removingRecord = null;
+    }}
   >
     {#snippet children(page)}<page.default
         worktree={target}
+        forgetRecords={targetRecord ? [targetRecord] : []}
+        onremoved={() => void removeAfterWorktree(targetRecord)}
         onchange={refreshWorktrees}
-        onclose={() => (removing = null)}
+        onclose={() => {
+          removing = null;
+          removingRecord = null;
+        }}
       />{/snippet}
   </LazyDialog>
 {/if}

@@ -35,12 +35,17 @@ export interface ArchiveActions {
     view: SessionView,
     choice?: ResumeChoice,
   ) => Promise<ResumeOutcome>;
+  /** Deletes the record and its artifacts; the worktree is left alone. */
   remove: (id: string) => Promise<unknown>;
   /**
-   * Opens the worktree removal confirmation when the record's linked
-   * worktree still exists and was not released.
+   * Opens the worktree removal confirmation and deletes `record` once the
+   * worktree is gone. Absent when the record's linked worktree is not
+   * removable, so only the record itself can be deleted.
    */
-  removeWorktree?: (worktree: Worktree) => void;
+  removeRecordAndWorktree?: (
+    record: ArchivedSession,
+    worktree: Worktree,
+  ) => void;
   /** Opens the release preview of a record's linked worktree. */
   release?: (worktree: Worktree) => void;
   onresumed: (session: SessionInfo) => void;

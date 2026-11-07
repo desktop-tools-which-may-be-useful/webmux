@@ -167,10 +167,12 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   const history = navAfterArchive.getByRole("list", { name: "已归档聊天" });
   const archived = history.getByRole("button", { name: /（已结束）$/ });
   await expect(archived).toHaveCount(1);
-  // Deleting an archived record whose linked worktree still exists opens the
-  // worktree removal confirmation dialog.
+  // Deleting the record and its linked worktree opens the worktree
+  // confirmation dialog; deleting only the record would keep the worktree.
   await history.getByRole("button", { name: /^会话操作：/ }).click();
-  await page.getByRole("menuitem", { name: "删除记录", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "删除记录和工作树", exact: true })
+    .click();
   await expect(
     page.getByRole("dialog", { name: "删除 worktree" }),
   ).toBeVisible();

@@ -7,6 +7,7 @@
     NoContentSchema,
     RemovalPreviewSchema,
     RemoveWorktreeRequestSchema,
+    type ArchivedSession,
     type RemovalPreview,
     type Worktree,
   } from "../schemas";
@@ -21,11 +22,14 @@
   import WorktreeSessionList from "./WorktreeSessionList.svelte";
   let {
     worktree,
+    forgetRecords = [],
     onclose,
     onchange,
     onremoved,
   }: {
     worktree: Worktree;
+    /** Archived records the caller deletes after the worktree is gone. */
+    forgetRecords?: readonly ArchivedSession[];
     onclose: () => void;
     onchange: () => void;
     /** The worktree was removed; runs before `onclose`. */
@@ -37,19 +41,41 @@
   let force = $state(false);
   let closeSessions = $state(false);
   // The records a removal keeps are pinned to the commit, which needs a
-  // resolvable HEAD.
+  // resolvable HEAD. Records the caller deletes with the worktree are not
+  // kept.
+  const forgotten = $derived(new Set(forgetRecords.map((record) => record.id)));
+  const retainedRecords = $derived(
+    preview
+      ? preview.archived.filter((record) => !forgotten.has(record.id))
+      : [],
+  );
   const retained = $derived(
-    !!preview && preview.commit !== "" && preview.archived.length > 0,
+    !!preview && preview.commit !== "" && retainedRecords.length > 0,
   );
   // A force removal also keeps the records of the chat sessions it closes.
   const keepsRecords = $derived(
     !!preview &&
       preview.commit !== "" &&
-      (preview.archived.length > 0 ||
+      (retainedRecords.length > 0 ||
         preview.sessions.some((session) => session.agent !== null)),
   );
   const route = $derived(
     `/repositories/${worktree.repositoryId}/worktrees/${worktree.id}`,
+  );
+  const dialogDescription = $derived(
+    force
+      ? `危险操作：停止已确认的 WebMux 会话，永久丢弃删除时目录中的全部内容${
+          forgetRecords.length > 0
+            ? "，并删除所选聊天记录；其他已归档记录保留，只保存提交"
+            : "；已归档的混合会话记录保留，只保存提交"
+        }。`
+      : `先检查文件与会话。删除 worktree 不删除分支；${
+          forgetRecords.length > 0
+            ? retainedRecords.length > 0
+              ? "所选聊天记录会一并删除，其他已归档记录会保留，之后可重建并恢复"
+              : "所选聊天记录会一并删除"
+            : "该目录下已归档的混合会话记录会保留，之后可重建并恢复"
+        }。`,
   );
   async function load() {
     busy = true;
@@ -107,11 +133,19 @@
   }
 </script>
 
+{#snippet recordList(
+  records: readonly { id: string; title: string; state: string; cwd: string }[],
+)}
+  <ul class="space-y-1">
+    {#each records as record (record.id)}<li class="break-all">
+        {record.title} · {record.state === "closed" ? "已关闭" : "已中断"} · {record.cwd}
+      </li>{/each}
+  </ul>
+{/snippet}
+
 <ResponsiveDialog
   title={force ? "强制删除 worktree" : "删除 worktree"}
-  description={force
-    ? "危险操作：停止已确认的 WebMux 会话，永久丢弃删除时目录中的全部内容；已归档的混合会话记录保留，只保存提交。"
-    : "先检查文件与会话。删除 worktree 不删除分支；该目录下已归档的混合会话记录会保留，之后可重建并恢复。"}
+  description={dialogDescription}
   {onclose}
   {busy}
 >
@@ -159,20 +193,20 @@
           sessions={preview.sessions}
         />
       {/if}
-      {#if preview.archived.length}
+      {#if forgetRecords.length}
+        <div class="space-y-2 text-sm">
+          <p class="font-medium">将删除的已归档聊天</p>
+          {@render recordList(forgetRecords)}
+        </div>
+      {/if}
+      {#if retainedRecords.length}
         <div class="space-y-2 text-sm">
           <p class="font-medium">
             {retained
               ? "保留的已归档会话（之后可重建并恢复）"
               : "无法保存提交，已归档会话将原样保留（只能查看或手动删除，不能重建）"}
           </p>
-          <ul class="space-y-1">
-            {#each preview.archived as record (record.id)}<li class="break-all">
-                {record.title} · {record.state === "closed"
-                  ? "已关闭"
-                  : "已中断"} · {record.cwd}
-              </li>{/each}
-          </ul>
+          {@render recordList(retainedRecords)}
         </div>
       {/if}
       {#if keepsRecords}<PushCheckNotice push={preview.push} />{/if}

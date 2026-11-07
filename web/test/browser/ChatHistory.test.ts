@@ -283,6 +283,7 @@ test("archived rows offer releasing a linked worktree and mark released records"
     branch: "wt/fix-sort",
   });
   const onrelease = vi.fn();
+  const onremoveworktree = vi.fn();
   const onresume = vi.fn();
   const released = record({
     id: "archiver",
@@ -322,6 +323,7 @@ test("archived rows offer releasing a linked worktree and mark released records"
     onclose: vi.fn(),
     onrelease,
     onremove: vi.fn(),
+    onremoveworktree,
   });
   await page.getByRole("button", { name: /已归档/ }).click();
   const menuItems = async (title: string) => {
@@ -340,6 +342,7 @@ test("archived rows offer releasing a linked worktree and mark released records"
     "恢复聊天",
     "释放空间",
     "删除记录",
+    "删除记录和工作树",
   ]);
   expect(await menuItems("主工作区聊天")).toEqual(["恢复聊天", "删除记录"]);
   expect(await menuItems("已释放的聊天")).toEqual(["恢复聊天", "删除记录"]);
@@ -349,6 +352,15 @@ test("archived rows offer releasing a linked worktree and mark released records"
     .click();
   await page.getByRole("menuitem", { name: "释放空间" }).click();
   expect(onrelease).toHaveBeenCalledWith(linked);
+
+  await archivedList()
+    .getByRole("button", { name: "会话操作：分支聊天" })
+    .click();
+  await page.getByRole("menuitem", { name: "删除记录和工作树" }).click();
+  expect(onremoveworktree).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "archivew" }),
+    linked,
+  );
 
   // The released row carries no text badge: the hollow triangle marks it,
   // and its path and commit stay on the row's hover text. It still resumes

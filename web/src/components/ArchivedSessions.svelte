@@ -135,7 +135,7 @@
     >
       {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
       {#each shown as record (record.id)}
-        {@const target = record.released ? undefined : worktree}
+        {@const removableWorktree = record.released ? undefined : worktree}
         <Item.Root
           variant="muted"
           class="min-w-0 flex-col flex-nowrap items-stretch"
@@ -201,10 +201,10 @@
                   >
                 {/snippet}
               </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="end">
-                {#if target && archive.release}
+              <DropdownMenu.Content align="end" class="min-w-48">
+                {#if removableWorktree && archive.release}
                   {@const release = archive.release}
-                  <DropdownMenu.Item onSelect={() => release(target)}
+                  <DropdownMenu.Item onSelect={() => release(removableWorktree)}
                     >释放空间</DropdownMenu.Item
                   >
                   <DropdownMenu.Separator />
@@ -212,14 +212,20 @@
                 <DropdownMenu.Item
                   variant="destructive"
                   onSelect={() => {
-                    if (target && archive.removeWorktree) {
-                      archive.removeWorktree(target);
-                      return;
-                    }
                     removing = record;
                     removeOpen = true;
                   }}>删除记录</DropdownMenu.Item
                 >
+                {#if removableWorktree && archive.removeRecordAndWorktree}
+                  {@const removeRecordAndWorktree =
+                    archive.removeRecordAndWorktree}
+                  <DropdownMenu.Item
+                    variant="destructive"
+                    onSelect={() =>
+                      removeRecordAndWorktree(record, removableWorktree)}
+                    >删除记录和工作树</DropdownMenu.Item
+                  >
+                {/if}
               </DropdownMenu.Content>
             </DropdownMenu.Root>
           </Item.Actions>
@@ -240,5 +246,5 @@
   title={`删除“${removing ? recordTitle(removing) : ""}”的记录？`}
   onconfirm={confirmRemove}
 >
-  只删除 WebMux 的记录与本机草稿；agent 自己保存的会话不受影响。
+  只删除 WebMux 的记录与本机草稿；工作树与 agent 自己保存的会话不受影响。
 </ConfirmDialog>
