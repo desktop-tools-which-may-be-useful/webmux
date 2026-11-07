@@ -23,9 +23,9 @@ describe("terminal pane layout", () => {
   it("tiles nested panes without overlap and preserves total dimensions", () => {
     const geometry = layoutGeometry(nested(), 1006, 806);
     expect(geometry.panes).toEqual([
-      { sessionId: "aaaaaaaa", x: 0, y: 0, width: 500, height: 806 },
-      { sessionId: "bbbbbbbb", x: 506, y: 0, width: 500, height: 400 },
-      { sessionId: "cccccccc", x: 506, y: 406, width: 500, height: 400 },
+      { sessionId: "aaaaaaaa", x: 0, y: 0, width: 500.5, height: 806 },
+      { sessionId: "bbbbbbbb", x: 505.5, y: 0, width: 500.5, height: 400.5 },
+      { sessionId: "cccccccc", x: 505.5, y: 405.5, width: 500.5, height: 400.5 },
     ]);
     expect(
       layoutGeometry(nested(), 0, 0).panes.every(

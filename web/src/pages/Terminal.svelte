@@ -27,6 +27,7 @@
   import { setPinned } from "../home-worktrees";
   import {
     MAX_PANES,
+    DIVIDER_SIZE,
     layoutGeometry,
     paneIds,
     removePane,
@@ -328,9 +329,14 @@
       ? event.clientX - bounds.x - divider.parent.x
       : event.clientY - bounds.y - divider.parent.y;
     const extent =
-      (horizontal ? divider.parent.width : divider.parent.height) - 6;
+      (horizontal ? divider.parent.width : divider.parent.height) -
+      DIVIDER_SIZE;
     if (extent > 0)
-      layout = resizeSplit(layout, divider.id, (position - 3) / extent);
+      layout = resizeSplit(
+        layout,
+        divider.id,
+        (position - DIVIDER_SIZE / 2) / extent,
+      );
   }
   function resizeKey(event: KeyboardEvent, divider: Divider) {
     const horizontal = divider.direction === "horizontal";
