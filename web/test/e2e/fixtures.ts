@@ -422,14 +422,8 @@ export async function openPaneMenu(scope: Locator | Page) {
   await scope.getByRole("button", { name: /^(终端|会话)菜单$/ }).click();
 }
 
-// Below 640px "终端" and "代码" are tabs of the header's "会话视图" switch;
-// from 640px up "代码" is a header button that reads "终端" while code fills a
-// narrow pane. Returns whichever applies.
+// The header's code button: "代码" while the panel is closed, and "终端" while
+// it fills a narrow pane or a phone's screen (the name says where it goes).
 export function viewSwitch(scope: Locator | Page, name: "终端" | "代码") {
-  const page = "viewportSize" in scope ? scope : scope.page();
-  if ((page.viewportSize()?.width ?? 1280) >= 640)
-    return scope.getByRole("button", { name, exact: true });
-  return scope
-    .getByRole("tablist", { name: "会话视图", exact: true })
-    .getByRole("tab", { name, exact: true });
+  return scope.getByRole("button", { name, exact: true });
 }

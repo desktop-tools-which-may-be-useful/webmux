@@ -1,9 +1,12 @@
 <script lang="ts">
+  import IconNotes from "~icons/tabler/notes";
   import { Button } from "$lib/components/ui/button";
+  import { cn } from "$lib/utils.js";
   import type { TerminalDraft } from "../terminal-draft.svelte";
 
   // The draft-mode switch. Wide screens keep it in the header; phones keep it
-  // beside the soft keys, where input actions live.
+  // beside the soft keys, where input actions live. An icon like its
+  // neighbours; green while draft mode is on, a dot when scratch notes wait.
   let {
     draft,
     draftSaved,
@@ -22,9 +25,9 @@
 </script>
 
 <Button
-  variant="ghost"
-  size="sm"
-  class={className}
+  variant={draft.enabled ? "success" : "ghost"}
+  size="icon-sm"
+  class={cn("relative", className)}
   aria-label={draft.scratch.length
     ? `草稿模式，${draft.scratch.length} 条暂存`
     : "草稿模式"}
@@ -42,6 +45,11 @@
             ? `开启查看保留的草稿；${draftSaved}`
             : "开启草稿模式"}
   onclick={toggle}
-  >草稿{#if !draft.enabled && draft.scratch.length}
-    ·{draft.scratch.length}{/if}</Button
+  ><IconNotes
+    class="size-4"
+    aria-hidden="true"
+  />{#if !draft.enabled && draft.scratch.length}<span
+      class="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-warning"
+      aria-hidden="true"
+    ></span>{/if}</Button
 >

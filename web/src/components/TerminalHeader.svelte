@@ -227,7 +227,6 @@
           request: (to) => hybrid.request(to),
         }
       : undefined}
-    pane={terminalShown ? "终端" : "聊天"}
     code={{ shown: codeShown, set: (value) => (codeShown = value) }}
   />
   {#if terminalShown}
@@ -271,7 +270,6 @@
   <Button
     variant={codeShown ? "success" : "ghost"}
     size="icon-sm"
-    class="max-sm:hidden"
     aria-label={codeLabel}
     title={codeLabel}
     aria-pressed={codeShown}

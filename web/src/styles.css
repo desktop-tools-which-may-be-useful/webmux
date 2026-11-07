@@ -518,7 +518,7 @@
   flex: 1 !important;
 }
 .session-terminal:has(.terminal-workspace.mobile-code) .quick-commands-header {
-  display: flex;
+  display: none;
 }
 @container terminal-pane (max-width: 1023px) {
   .code-navigation {

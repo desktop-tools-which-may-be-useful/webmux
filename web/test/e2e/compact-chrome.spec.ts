@@ -79,22 +79,29 @@ test("narrow headers keep one row and move rare actions into the menu", async ({
         await expect(
           header(page).getByRole("button", { name, exact: true }),
         ).toBeHidden();
-      // The phone header keeps the sidebar button, title, the view switch
-      // and the menu.
+      // The phone header keeps the sidebar button, title, the code button
+      // and the menu; an ordinary session has no side tabs.
       await expect(
         header(page).getByRole("button", { name: /^草稿模式/ }),
       ).toBeHidden();
-      // An ordinary session's switch is the same tab control a hybrid one
-      // uses, with its terminal and code tabs.
-      const views = header(page).getByRole("tablist", { name: "会话视图" });
-      await expect(views.getByRole("tab")).toHaveText(["终端", "代码"]);
       await expect(
-        views.getByRole("tab", { name: "终端", exact: true }),
-      ).toHaveAttribute("aria-selected", view === "代码" ? "true" : "false");
+        header(page).getByRole("tablist", { name: "会话视图" }),
+      ).toHaveCount(0);
       await expect(
         header(page).getByRole("button", { name: "打开侧栏" }),
       ).toBeVisible();
-      await views.getByRole("tab", { name: view, exact: true }).click();
+      // Code open: the button turns green and offers the way back; the
+      // quick commands and voice stay out of the header.
+      const toggle = viewSwitch(header(page), view);
+      await expect(toggle).toHaveAttribute(
+        "aria-pressed",
+        view === "终端" ? "true" : "false",
+      );
+      if (view === "终端")
+        await expect(
+          header(page).getByRole("button", { name: "快捷指令" }),
+        ).toBeHidden();
+      await toggle.click();
     }
   }
   // Soft keys exist on touch devices; a narrow desktop window has the menu.
