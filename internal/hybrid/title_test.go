@@ -25,8 +25,8 @@ func TestPromptTitle(t *testing.T) {
 		{long, strings.Repeat("长", 79) + "…"},
 		{strings.Repeat("长", 80), strings.Repeat("长", 80)},
 	} {
-		if got := promptTitle(tc.give); got != tc.want {
-			t.Errorf("promptTitle(%q) = %q, want %q", tc.give, got, tc.want)
+		if got := PromptTitle(tc.give); got != tc.want {
+			t.Errorf("PromptTitle(%q) = %q, want %q", tc.give, got, tc.want)
 		}
 	}
 }

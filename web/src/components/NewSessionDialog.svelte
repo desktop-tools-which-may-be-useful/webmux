@@ -536,7 +536,7 @@
             ><Input
               id="session-name"
               bind:value={name}
-              placeholder="留空则跟随终端标题"
+              placeholder="留空则用首条提示，没有则跟随终端标题"
             />
           </div>
         </AdvancedSection>

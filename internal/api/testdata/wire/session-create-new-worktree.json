@@ -30,7 +30,7 @@
       "rows": 24,
       "state": "active",
       "status": "running",
-      "title": "先读 AGENTS.md 修复首页排序",
+      "title": "修复首页排序",
       "transition": null,
       "view": "chat",
       "views": [

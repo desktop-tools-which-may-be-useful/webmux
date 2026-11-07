@@ -740,6 +740,71 @@ func TestCreateSessionFirstMessage(t *testing.T) {
 	}
 }
 
+// A terminal start without a name, agent or plain shell, is titled by the
+// user's first prompt alone: never the initialization instruction,
+// placeholders or the directory; a given name wins.
+func TestCreateSessionTerminalPromptTitle(t *testing.T) {
+	h := newQuickHarness(t, "先读 AGENTS.md\n{{user}}")
+	folders := artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: t.TempDir(), Manager: h.manager})
+	t.Cleanup(folders.Close)
+	h.s.UseArtifacts(folders)
+	h.s.UseBrief(func(id, dir string) string { return "BRIEF" })
+	ref := &Reference{RepositoryID: h.repo.ID, WorktreeID: h.repo.Worktrees[0].ID}
+	dir := filepath.Base(h.root)
+	shell := h.config("shell", "/bin/cat", nil, false)
+	long := strings.Repeat("长", 100)
+	for _, tc := range []struct {
+		name string
+		in   CreateInput
+		want string
+	}{
+		{"prompt", CreateInput{Prompt: " 修复\n排序\t问题 "}, "修复 排序 问题"},
+		{"instruction not in title", CreateInput{Prompt: "修复排序", UseInitInstruction: true}, "修复排序"},
+		{"instruction only", CreateInput{UseInitInstruction: true}, dir},
+		{"explicit name", CreateInput{Name: "我的名字", Prompt: "修复排序"}, "我的名字"},
+		{"no prompt", CreateInput{}, dir},
+		{"long", CreateInput{Prompt: long}, strings.Repeat("长", 79) + "…"},
+		{"placeholder dropped", CreateInput{Prompt: "{{dir}} 修复排序 {{webmux}}", ExpandPrompt: true}, "修复排序"},
+		{"only placeholder", CreateInput{Prompt: "{{dir}}", ExpandPrompt: true}, dir},
+		{"plain shell", CreateInput{ConfigID: &shell, Prompt: " 修复\n排序 "}, "修复 排序"},
+		{"plain shell without prompt", CreateInput{ConfigID: &shell}, dir},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := tc.in
+			if in.ConfigID == nil {
+				in.ConfigID = &h.configID
+			}
+			in.Side = "tui"
+			in.Workspace = ref
+			item, err := h.s.CreateSession(context.Background(), in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := item.Info().Title; got != tc.want {
+				t.Fatalf("title %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The chat side's temporary title comes from the user's text, not from the
+// instruction prefixed to the first prompt.
+func TestCreateSessionChatTitleIgnoresInstruction(t *testing.T) {
+	h := newQuickHarness(t, "先读 AGENTS.md\n{{user}}")
+	ref := &Reference{RepositoryID: h.repo.ID, WorktreeID: h.repo.Worktrees[0].ID}
+	chat, err := h.s.CreateSession(context.Background(), CreateInput{ConfigID: &h.configID, Side: "acp", Workspace: ref, UseInitInstruction: true, Prompt: "修复排序"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for chat.Info().Title != "修复排序" && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := chat.Info().Title; got != "修复排序" {
+		t.Fatalf("title %q", got)
+	}
+}
+
 // A terminal quick start creates the worktree and the agent's TUI, adopts
 // staged attachments and appends their paths to the initial prompt (passed on
 // the command line for migrated agents without persisting it in SessionInfo.Cmd

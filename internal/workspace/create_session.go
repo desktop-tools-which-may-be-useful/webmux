@@ -212,7 +212,11 @@ func (s *Service) create(ctx context.Context, in CreateInput) (CreateResult, err
 	if plan.side != hybrid.SideACP && (plan.text != "" || plan.instruction != "") {
 		initialPrompt = prepareTerminalPrompt
 	}
-	item, promptSent, err := s.startSession(ctx, in.Cwd, in.Name, reference, plan.command, plan.side, initialPrompt)
+	name := in.Name
+	if name == "" && plan.side != hybrid.SideACP {
+		name = plan.title
+	}
+	item, promptSent, err := s.startSession(ctx, in.Cwd, name, reference, plan.command, plan.side, initialPrompt)
 	if err != nil {
 		return fail(StepSession, tree, "", err)
 	}
@@ -253,6 +257,9 @@ type createPlan struct {
 	instruction string
 	expand      bool
 	attachments []string
+	// title is the first-prompt title of the user's text alone (no
+	// instruction, no placeholders), "" for none.
+	title string
 }
 
 // createPlan makes the checks a create can make before it creates
@@ -262,6 +269,10 @@ type createPlan struct {
 // the hybrid store and the agent's connector.
 func (s *Service) createPlan(ctx context.Context, in CreateInput) (createPlan, error) {
 	plan := createPlan{text: strings.TrimSpace(in.Prompt), expand: in.ExpandPrompt}
+	plan.title = hybrid.PromptTitle(plan.text)
+	if in.ExpandPrompt {
+		plan.title = hybrid.PromptTitle(strings.NewReplacer(artifactsDirPlaceholder, "", webmuxPlaceholder, "").Replace(plan.text))
+	}
 	if in.NewWorktree != nil && (in.Cwd != "" || in.Workspace != nil) {
 		return plan, problemf(ErrInvalid, "cwd、workspace 与 newWorktree 只能选择一个")
 	}
@@ -613,7 +624,7 @@ func (s *Service) sendFirstMessage(ctx context.Context, item *session.Session, r
 	if requestID == "" {
 		requestID = "first-" + id
 	}
-	_, err = s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: requestID, Text: text, Attachments: attachments})
+	_, err = s.hybrids.Prompt(ctx, id, hybrid.PromptInput{ClientRequestID: requestID, Text: text, TitleSource: plan.title, Attachments: attachments})
 	return err
 }
 

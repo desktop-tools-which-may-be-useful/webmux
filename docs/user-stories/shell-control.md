@@ -54,7 +54,7 @@
       省略 `--branch` 时服务端自动生成 `wt/<日期>-<时间>` 形式的不冲突分支名；默认像 Web 端一样加入主页显示（`--no-pin` 不加入）；
     - `--` 之前出现位置参数时以 2 结束，与 `--new-worktree` 同用时提示改用 `--branch`（旧写法 `--new-worktree BRANCH` 不会被当作命令执行）；
     - 失败按服务端的 `step` 报告失败步骤，保留已创建的 worktree 与会话并给出路径与 ID，不回滚；
-  - 视图与首条消息：`--view terminal|chat`（取代 `--start-side`，`chat` 隐含 `--detach`）、`--prompt TEXT|-`、`--init`（需要工作区关联，含 `--new-worktree`）；
+  - 视图与首条消息：`--view terminal|chat`（取代 `--start-side`，`chat` 隐含 `--detach`）、`--prompt TEXT|-`（终端视图且未给 `--name` 时即会话名，US-B07）、`--init`（需要工作区关联，含 `--new-worktree`）；
     `--set ID=VALUE`、`--permission ask|auto`、`--attach-file PATH`（先经 `POST /api/uploads` 上传，要求 `--prompt`）只在 `--view chat` 时可用，否则在本地以 2 结束；
   - 输出与等待：`--json` 输出 `{session, link}`（新建 worktree 时另含 `worktree` 与 `configWarnings`），配置警告写到标准错误，`--wait STATE --timeout DUR` 等会话第一次进入该状态（超时 124），
     `--reply` 要求 `--view chat` 与 `--prompt` 并与 `--wait`、`--follow` 互斥，`--label` 设置标签，`--dry-run` 只打印请求且隐藏环境变量值、不上传附件；

@@ -296,7 +296,7 @@ func TestChatOversizeFieldTruncated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := call(context.Background(), a, func() (PromptResult, error) { return a.send(text, nil, "") }); err != nil {
+	if _, err := call(context.Background(), a, func() (PromptResult, error) { return a.send(text, nil, "", "") }); err != nil {
 		t.Fatal(err)
 	}
 	var user, reply *MessageChunk

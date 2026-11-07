@@ -436,9 +436,12 @@ type PromptResult struct {
 }
 
 // PromptInput is a chat prompt. Mode is ModeAuto (default) or ModeSteer.
+// TitleSource, when set, replaces Text as the source of the temporary
+// first-prompt title (Text may carry an instruction prefix).
 type PromptInput struct {
 	ClientRequestID string
 	Text            string
+	TitleSource     string
 	Mode            string
 	Attachments     []Attachment
 }
@@ -525,7 +528,7 @@ func (s *Service) Prompt(ctx context.Context, id string, in PromptInput) (Prompt
 				return PromptResult{}, err
 			}
 			return call(ctx, a, func() (PromptResult, error) {
-				return a.prompt(in.Text, attachments)
+				return a.prompt(in.Text, in.TitleSource, attachments)
 			})
 		})
 	case ModeSteer:

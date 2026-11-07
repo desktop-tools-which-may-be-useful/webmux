@@ -204,6 +204,11 @@
 - 验证：`internal/hybrid`（含 fake agent 回合内工作行断言）、`internal/wire`、`internal/api`、`internal/docguard` 的 Go 测试通过，wire 快照已重录；`SessionRow` 浏览器用例（15 项）、svelte-check、Oxlint、前端架构守卫、类型检查与格式检查通过。
 - 限制：未运行全量 E2E 与 Storybook Playwright；未重新核验其余故事能力；未做真机验收。
 
+本次局部核对（2026-11-07）：终端视图启动、未命名且带用户指令时以首条 prompt 为会话名（含普通 Shell 命令），聊天端勾选初始化指令时临时标题只取用户输入；更新 US-B01、US-B07、US-Q02、US-Q18、US-S07、US-C15，覆盖索引与故事数量不变。
+
+- 依据：`internal/workspace` 的 `TestCreateSessionTerminalPromptTitle`、`TestCreateSessionChatTitleIgnoresInstruction`，`internal/hybrid` 的 `TestPromptTitle`，使用 fake agent 与 `/bin/cat`。
+- 限制：未用真实 agent 验收；未重新核验其余故事能力。
+
 本次局部核对（2026-11-03）：聊天端首条消息临时标题对应 US-Q02，覆盖索引同步，不改变其他故事。
 
 - 依据：`internal/hybrid` 的 `TestPromptTitle`、`TestFirstPromptTitle` 与 `TestFirstPromptTitleSkipped`（已命名、只有附件、由终端切来的会话不设置），使用 fake agent；`hybrid.spec.ts` 新增的临时标题用例通过。

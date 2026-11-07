@@ -20,10 +20,10 @@ func dropControl(s string) string {
 	}, strings.ToValidUTF8(s, ""))
 }
 
-// promptTitle is the temporary title for a first prompt: control
+// PromptTitle is the title for a first prompt: control
 // characters dropped, whitespace runs folded to one space, and at most
 // maxPromptTitleRunes runes, the last an ellipsis when cut.
-func promptTitle(text string) string {
+func PromptTitle(text string) string {
 	s := strings.Join(strings.Fields(dropControl(strings.Map(func(r rune) rune {
 		// Line breaks and tabs separate words; strip only other controls.
 		if unicode.IsSpace(r) {

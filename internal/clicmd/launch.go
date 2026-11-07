@@ -158,7 +158,7 @@ var runCommand = &Command{
 		}
 		fs.Func("launch-config", "use a saved Web UI launch config by `NAME` (instead of -- COMMAND)", setLaunchConfig)
 		fs.Func("config-id", "alias for --launch-config", setLaunchConfig)
-		fs.StringVar(&o.name, "name", "", "session `NAME`")
+		fs.StringVar(&o.name, "name", "", "session `NAME` (default: the first --prompt on the terminal view, else the terminal title)")
 		fs.StringVar(&o.cwd, "cwd", "", "working `DIR` on the server (default: the current directory)")
 		fs.Var(o.env, "env", "set `NAME=VALUE` in the session, overriding the inherited environment")
 		fs.Var(o.labels, "label", "set label `KEY=VALUE` on the session")
