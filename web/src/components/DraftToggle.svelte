@@ -22,7 +22,7 @@
 </script>
 
 <Button
-  variant="outline"
+  variant="ghost"
   size="sm"
   class={className}
   aria-label={draft.scratch.length
