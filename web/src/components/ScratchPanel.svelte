@@ -10,6 +10,7 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import InlineNotice from "./InlineNotice.svelte";
   import { Button } from "$lib/components/ui/button";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import { Label } from "$lib/components/ui/label";
   import { Textarea } from "$lib/components/ui/textarea";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
@@ -311,11 +312,8 @@
                   rows={3}
                   maxlength={scratchEntryLimit}
                   variant="ghost"
-                  mono
+                  code
                   class="max-h-48 min-h-20 resize-y"
-                  autocapitalize="off"
-                  autocorrect="off"
-                  spellcheck={false}
                   oninput={(event) =>
                     edit(
                       item.id,
@@ -372,11 +370,8 @@
         rows={2}
         maxlength={scratchEntryLimit}
         placeholder="记下稍后要做的事…"
-        mono
+        code
         class="h-20 min-h-20 resize-none field-sizing-fixed"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck={false}
         aria-describedby="scratch-new-limits"
       />
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -428,23 +423,11 @@
   </AlertDialog.Content>
 </AlertDialog.Root>
 
-<AlertDialog.Root bind:open={clearOpen}>
-  <AlertDialog.Content>
-    <AlertDialog.Header>
-      <AlertDialog.Title>清空全部暂存？</AlertDialog.Title>
-      <AlertDialog.Description
-        >删除这个会话的全部暂存，不影响当前草稿、终端或已上传文件。此操作无法撤销。</AlertDialog.Description
-      >
-    </AlertDialog.Header>
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel>取消</AlertDialog.Cancel>
-      <AlertDialog.Action
-        variant="destructive"
-        onclick={() => {
-          drafts.clearScratch(draft);
-          clearOpen = false;
-        }}>确认清空</AlertDialog.Action
-      >
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
+<ConfirmDialog
+  bind:open={clearOpen}
+  title="清空全部暂存？"
+  confirmLabel="确认清空"
+  destructive
+  onconfirm={() => drafts.clearScratch(draft)}
+  >删除这个会话的全部暂存，不影响当前草稿、终端或已上传文件。此操作无法撤销。</ConfirmDialog
+>

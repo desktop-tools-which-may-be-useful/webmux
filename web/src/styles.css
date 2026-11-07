@@ -205,17 +205,6 @@
 .app-shell-main {
   padding-left: var(--app-sidebar-width);
 }
-.notice-warning {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0.6rem 1rem;
-  font-size: 0.8rem;
-  color: var(--warning);
-  background: color-mix(in oklab, var(--warning) 8%, var(--background));
-}
 /* env() is unreadable from script; menus read these to clear the status bar
    and home indicator. */
 :root {

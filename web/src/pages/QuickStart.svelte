@@ -2,7 +2,6 @@
   import { onMount, tick, untrack } from "svelte";
   import IconAlertCircle from "~icons/tabler/alert-circle";
   import IconBook2 from "~icons/tabler/book-2";
-  import IconChevronDown from "~icons/tabler/chevron-down";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconMessage from "~icons/tabler/message";
@@ -19,6 +18,7 @@
   import ChatConfig from "../components/chat/ChatConfig.svelte";
   import ChatPermissionMode from "../components/chat/ChatPermissionMode.svelte";
   import ChatSelect from "../components/chat/ChatSelect.svelte";
+  import QuietTrigger from "../components/chat/QuietTrigger.svelte";
   import ChatSessionOptions from "../components/chat/ChatSessionOptions.svelte";
   import ChatUploadButton from "../components/chat/ChatUploadButton.svelte";
   import ComposerCard from "../components/chat/ComposerCard.svelte";
@@ -58,6 +58,7 @@
     type SessionView,
   } from "../schemas";
   import { getShell, openSession } from "../shell.svelte";
+  import { enterSendIntent } from "../enter-send";
   import { hasTouchInput } from "../touch-input";
   import { z } from "zod";
 
@@ -365,7 +366,7 @@
     input?.setSelectionRange(result.caret, result.caret);
   }
   function keydown(event: KeyboardEvent) {
-    if (event.isComposing || event.key !== "Enter" || event.shiftKey) return;
+    if (!enterSendIntent(event)) return;
     event.preventDefault();
     void send();
   }
@@ -541,17 +542,16 @@
             <Popover.Root bind:open={() => basePickerOpen, setBasePickerOpen}>
               <Popover.Trigger disabled={sending || !baseBranches.length}>
                 {#snippet child({ props })}
-                  <Button
-                    {...props}
-                    variant="quiet"
-                    size="xs"
-                    class="max-w-48 min-w-0 shrink-0 [&_svg:not([class*='size-'])]:size-4"
-                    aria-label={`基准分支：${baseName}`}
+                  <QuietTrigger
+                    {props}
+                    label={`基准分支：${baseName}`}
                     title={baseName ? `基准分支：${baseName}` : "基准分支"}
-                    ><IconGitBranch aria-hidden="true" /><span
-                      class="min-w-0 truncate">{baseName}</span
-                    ><IconChevronDown aria-hidden="true" /></Button
+                    text={baseName}
                   >
+                    {#snippet icon()}<IconGitBranch
+                        aria-hidden="true"
+                      />{/snippet}
+                  </QuietTrigger>
                 {/snippet}
               </Popover.Trigger>
               <Popover.Content

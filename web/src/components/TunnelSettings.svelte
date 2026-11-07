@@ -1,43 +1,33 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import * as Card from "$lib/components/ui/card";
-  import TunnelStateBadge from "./TunnelStateBadge.svelte";
+  import AccessSummaryCard from "./AccessSummaryCard.svelte";
   import { useMountedRead } from "../hooks/remote-request.svelte";
   import { ConfigSchema } from "../schemas";
 
   const read = useMountedRead("/config", ConfigSchema);
   const tunnel = $derived(read.value?.tunnel);
-  const error = $derived(read.error);
 </script>
 
-<Card.Root flat id="access" class="scroll-mt-4">
-  <Card.Header>
-    <Card.Title>公网访问（Cloudflare Tunnel）</Card.Title>
-    <Card.Description
-      >通过 HTTPS 入口从其他网络访问
-      WebMux。配置和启停立即生效，无需重启；公网入口仍要求 WebMux Token。</Card.Description
+<AccessSummaryCard
+  id="access"
+  title="公网访问（Cloudflare Tunnel）"
+  description="通过 HTTPS 入口从其他网络访问 WebMux。配置和启停立即生效，无需重启；公网入口仍要求 WebMux Token。"
+  statusLabel="隧道状态"
+  state={tunnel?.state}
+  error={read.error}
+  loadingText="正在读取隧道状态…"
+  href="/settings/tunnel"
+  manageLabel="管理公网访问"
+>
+  {#snippet summary()}
+    <span class="text-sm"
+      >{tunnel?.named ? "Named Tunnel" : "Quick Tunnel"}</span
     >
-  </Card.Header>
-  <Card.Content class="space-y-4">
-    <section aria-label="隧道状态" class="min-w-0 space-y-2">
-      {#if error}
-        <p role="alert" class="text-sm text-destructive">{error}</p>
-      {:else if tunnel}
-        <div class="flex flex-wrap items-center gap-2" role="status">
-          <TunnelStateBadge state={tunnel.state} />
-          <span class="text-sm"
-            >{tunnel.named ? "Named Tunnel" : "Quick Tunnel"}</span
-          >
-        </div>
-        {#if tunnel.publicUrl || tunnel.hostname}
-          <p class="text-sm wrap-anywhere">
-            {tunnel.publicUrl || tunnel.hostname}
-          </p>
-        {/if}
-      {:else}
-        <p class="text-sm text-muted-foreground">正在读取隧道状态…</p>
-      {/if}
-    </section>
-    <Button href="/settings/tunnel" variant="outline">管理公网访问</Button>
-  </Card.Content>
-</Card.Root>
+  {/snippet}
+  {#snippet detail()}
+    {#if tunnel?.publicUrl || tunnel?.hostname}
+      <p class="text-sm wrap-anywhere">
+        {tunnel.publicUrl || tunnel.hostname}
+      </p>
+    {/if}
+  {/snippet}
+</AccessSummaryCard>

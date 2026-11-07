@@ -5,6 +5,7 @@
   import { previewRebuild, rebuildWorktree } from "../recoverable";
   import type { HybridRelease, RebuildPreview } from "../schemas";
   import BlockerList from "./BlockerList.svelte";
+  import KeyValueSummary from "./KeyValueSummary.svelte";
   import PreviewForm from "./PreviewForm.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
 
@@ -92,14 +93,16 @@
 >
   <PreviewForm {busy} {error} onsubmit={() => void rebuild()} {onclose}>
     {#snippet summary()}
-      <dl
-        class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-lg border bg-muted/40 p-3 text-sm"
-      >
-        <dt class="text-muted-foreground">原路径</dt>
-        <dd class="font-mono break-all">{preview?.path ?? released.path}</dd>
-        <dt class="text-muted-foreground">保存提交</dt>
-        <dd class="font-mono">{commit}</dd>
-      </dl>
+      <KeyValueSummary
+        rows={[
+          {
+            label: "原路径",
+            value: preview?.path ?? released.path,
+            mono: true,
+          },
+          { label: "保存提交", value: commit, mono: true, wrap: false },
+        ]}
+      />
     {/snippet}
     {#if preview}
       {#if preview.blockers.length}

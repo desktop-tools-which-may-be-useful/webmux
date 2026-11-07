@@ -6,6 +6,7 @@
   import type { ReleasePreview, Worktree } from "../schemas";
   import BlockerList from "./BlockerList.svelte";
   import InlineNotice from "./InlineNotice.svelte";
+  import KeyValueSummary from "./KeyValueSummary.svelte";
   import PreviewForm from "./PreviewForm.svelte";
   import PushCheckNotice from "./PushCheckNotice.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
@@ -78,16 +79,18 @@
 >
   <PreviewForm {busy} {error} onsubmit={() => void release()} {onclose}>
     {#snippet summary()}
-      <dl
-        class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-lg border bg-muted/40 p-3 text-sm"
-      >
-        <dt class="text-muted-foreground">路径</dt>
-        <dd class="font-mono break-all">{worktree.path}</dd>
-        <dt class="text-muted-foreground">分支</dt>
-        <dd class="break-all">{worktree.branch || "detached（无分支）"}</dd>
-        <dt class="text-muted-foreground">保存提交</dt>
-        <dd class="font-mono">{commit || "无法解析"}</dd>
-      </dl>
+      <KeyValueSummary
+        rows={[
+          { label: "路径", value: worktree.path, mono: true },
+          { label: "分支", value: worktree.branch || "detached（无分支）" },
+          {
+            label: "保存提交",
+            value: commit || "无法解析",
+            mono: true,
+            wrap: false,
+          },
+        ]}
+      />
     {/snippet}
     {#if preview}
       {#if preview.blockers.length}

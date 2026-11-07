@@ -16,7 +16,7 @@
     TerminalDraft,
     TerminalDrafts,
   } from "../../terminal-draft.svelte";
-  import { hasTouchInput } from "../../touch-input";
+  import { enterSendIntent } from "../../enter-send";
   import ChatConfig from "./ChatConfig.svelte";
   import ChatLocation from "./ChatLocation.svelte";
   import ChatPermissionMode from "./ChatPermissionMode.svelte";
@@ -143,12 +143,10 @@
         return;
       }
     }
-    if (event.key !== "Enter" || event.shiftKey) return;
-    const steer = event.ctrlKey || event.metaKey;
-    // On touch keyboards Enter starts a new line; the button sends.
-    if (!steer && hasTouchInput()) return;
+    const intent = enterSendIntent(event);
+    if (!intent) return;
     event.preventDefault();
-    void submit(steer && steerable ? "steer" : "auto");
+    void submit(intent === "steer" && steerable ? "steer" : "auto");
   }
   async function stop() {
     try {

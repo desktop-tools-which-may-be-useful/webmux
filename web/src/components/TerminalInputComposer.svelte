@@ -3,8 +3,8 @@
   import IconTrash from "~icons/tabler/trash";
   import { tick } from "svelte";
   import { Button } from "$lib/components/ui/button";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import { Textarea } from "$lib/components/ui/textarea";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { useTextareaDraft } from "../hooks/textarea-draft.svelte";
   import type { TerminalDraft, TerminalDrafts } from "../terminal-draft.svelte";
 
@@ -177,11 +177,8 @@
     value={draft.text}
     readonly={locked}
     aria-label="草稿内容"
-    mono
+    code
     class="min-h-0 flex-1 resize-none overflow-y-auto field-sizing-fixed"
-    autocapitalize="off"
-    autocorrect="off"
-    spellcheck={false}
     oninput={(event) =>
       drafts.edit(
         draft,
@@ -265,23 +262,11 @@
   </div>
 </section>
 
-<AlertDialog.Root bind:open={clearOpen}>
-  <AlertDialog.Content>
-    <AlertDialog.Header>
-      <AlertDialog.Title>清空草稿？</AlertDialog.Title>
-      <AlertDialog.Description
-        >清空当前草稿及其本机保存，不影响终端或已上传文件。此操作无法撤销。</AlertDialog.Description
-      >
-    </AlertDialog.Header>
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel>取消</AlertDialog.Cancel>
-      <AlertDialog.Action
-        variant="destructive"
-        onclick={() => {
-          drafts.clear(draft);
-          clearOpen = false;
-        }}>确认清空</AlertDialog.Action
-      >
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
+<ConfirmDialog
+  bind:open={clearOpen}
+  title="清空草稿？"
+  confirmLabel="确认清空"
+  destructive
+  onconfirm={() => drafts.clear(draft)}
+  >清空当前草稿及其本机保存，不影响终端或已上传文件。此操作无法撤销。</ConfirmDialog
+>

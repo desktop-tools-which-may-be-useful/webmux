@@ -5,6 +5,7 @@
   import type { HybridNotice } from "../hooks/hybrid.svelte";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import FileUploadProgress from "./FileUploadProgress.svelte";
+  import StripNotice from "./StripNotice.svelte";
   import TerminalPortPrompts from "./TerminalPortPrompts.svelte";
   import type { ControlState, ListeningPort } from "../schemas";
   import type { TerminalDraft } from "../terminal-draft.svelte";
@@ -87,58 +88,36 @@
   </p>
 {/if}
 {#if !draft.enabled && draft.scratchUpdatedWhileHidden}
-  <div
-    class="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted px-4 py-1.5 text-sm"
-    role="status"
-  >
-    <span class="min-w-0 flex-1"
-      >{#if draft.updatedWhileHidden}隐藏草稿已更新 ·
-      {/if}暂存已更新 · 共 {draft.scratch.length} 条，不会自动发送</span
-    >
-    <Button variant="outline" size="sm" onclick={showScratch}>查看暂存</Button>
-    <Button variant="ghost" size="sm" onclick={dismissScratch}>知道了</Button>
-  </div>
+  <StripNotice ondismiss={dismissScratch}>
+    {#if draft.updatedWhileHidden}隐藏草稿已更新 ·
+    {/if}暂存已更新 · 共 {draft.scratch.length} 条，不会自动发送
+    {#snippet actions()}
+      <Button variant="outline" size="sm" onclick={showScratch}>查看暂存</Button
+      >
+    {/snippet}
+  </StripNotice>
 {/if}
 {#if uploads.progress}<FileUploadProgress
     progress={uploads.progress}
     cancel={() => uploads.cancel()}
   />{/if}
 {#if pendingCopy}
-  <div
-    class="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted px-4 py-1.5 text-sm"
-    role="status"
-    aria-label="待处理的复制请求"
-  >
-    <span class="min-w-0 flex-1">此窗格有待复制的文字，仅保留最新请求。</span>
-    <Button variant="outline" size="sm" onclick={copyPending}
-      >复制待处理文字</Button
-    >
-    <Button variant="ghost" size="sm" onclick={dismissCopy}>忽略</Button>
-  </div>
+  <StripNotice label="待处理的复制请求">
+    此窗格有待复制的文字，仅保留最新请求。
+    {#snippet actions()}
+      <Button variant="outline" size="sm" onclick={copyPending}
+        >复制待处理文字</Button
+      >
+      <Button variant="ghost" size="sm" onclick={dismissCopy}>忽略</Button>
+    {/snippet}
+  </StripNotice>
 {/if}
-{#if notice}<div
-    class="flex shrink-0 items-center gap-2 border-b bg-muted px-4 py-1.5 text-sm"
-    role="status"
-  >
-    <span class="min-w-0 flex-1">{notice}</span>
-    <Button variant="ghost" size="sm" onclick={() => (notice = "")}
-      >知道了</Button
-    >
-  </div>{/if}
+{#if notice}<StripNotice ondismiss={() => (notice = "")}>{notice}</StripNotice
+  >{/if}
 {#each notices as item (item.key)}
-  <div
-    class={item.tone === "danger"
-      ? "flex shrink-0 items-center gap-2 bg-destructive/10 px-4 py-1.5 text-sm text-destructive"
-      : item.tone === "warning"
-        ? "flex shrink-0 items-center gap-2 border-b bg-muted px-4 py-1.5 text-sm text-warning"
-        : "flex shrink-0 items-center gap-2 border-b bg-muted px-4 py-1.5 text-sm"}
-    role={item.tone === "danger" ? "alert" : "status"}
+  <StripNotice tone={item.tone} ondismiss={() => dismiss(item.key)}
+    >{item.text}</StripNotice
   >
-    <span class="min-w-0 flex-1 wrap-anywhere">{item.text}</span>
-    <Button variant="ghost" size="sm" onclick={() => dismiss(item.key)}
-      >知道了</Button
-    >
-  </div>
 {/each}
 {#if session}<TerminalPortPrompts
     {session}
@@ -146,53 +125,53 @@
     onshowall={showForwards}
   />{/if}
 {#if t.control && !t.controlling && t.connection === "connected" && t.exitCode === null}
-  <div
-    class="flex shrink-0 items-center gap-2 border-b bg-muted px-3 py-1 text-xs"
-    role="status"
-    aria-label="终端控制"
-  >
-    <span class="min-w-0 flex-1 truncate"
-      >{t.control.controller
-        ? `观察中 · ${t.control.controller.label || "另一设备"}控制输入与尺寸`
-        : "观察中 · 当前没有控制端"}（{t.control.cols}×{t.control.rows}）</span
-    >
-    <Button variant="outline" size="sm" onclick={() => t.claim()}
-      >接管控制</Button
-    >
-  </div>
+  <StripNotice label="终端控制">
+    {t.control.controller
+      ? `观察中 · ${t.control.controller.label || "另一设备"}控制输入与尺寸`
+      : "观察中 · 当前没有控制端"}（{t.control.cols}×{t.control.rows}）
+    {#snippet actions()}
+      <Button variant="outline" size="sm" onclick={() => t.claim()}
+        >接管控制</Button
+      >
+    {/snippet}
+  </StripNotice>
 {/if}
-{#if alertText && alertText !== dismissedError}<div
-    role="alert"
-    class="flex shrink-0 items-start gap-2 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+{#if alertText && alertText !== dismissedError}<StripNotice tone="danger">
+    {alertText}
+    {#snippet actions()}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="关闭提示"
+        title="关闭提示"
+        onclick={() => (dismissedError = alertText)}
+        ><IconX aria-hidden="true" /></Button
+      >
+    {/snippet}
+  </StripNotice>{/if}
+{#if recovery}{@render recovery()}{:else if t.connection === "missing"}<StripNotice
+    tone="warning"
   >
-    <span class="min-w-0 flex-1 wrap-anywhere">{alertText}</span>
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="关闭提示"
-      title="关闭提示"
-      onclick={() => (dismissedError = alertText)}
-      ><IconX aria-hidden="true" /></Button
-    >
-  </div>{/if}
-{#if recovery}{@render recovery()}{:else if t.connection === "missing"}<div
-    class="notice-warning"
-  >
-    会话不存在或已被移除。<Button variant="outline" size="sm" onclick={leave}
-      >返回列表</Button
-    >
-  </div>{/if}
+    会话不存在或已被移除。
+    {#snippet actions()}
+      <Button variant="outline" size="sm" onclick={leave}
+        >返回列表</Button
+      >
+    {/snippet}
+  </StripNotice>{/if}
 {#if t.exitCode !== null && !recovery}
-  <div
-    class="flex shrink-0 items-center gap-2 border-b bg-muted px-3 py-2 text-sm sm:gap-3 sm:px-4"
-    role="status"
-  >
-    <span class="min-w-0 flex-1 truncate">进程已退出（code {t.exitCode}）</span>
-    <Button variant="outline" size="sm" class="shrink-0" onclick={leave}
-      >返回列表</Button
-    >
-    <Button variant="outline" size="sm" class="shrink-0" onclick={remove}
-      >移除会话</Button
-    >
-  </div>
+  <StripNotice>
+    进程已退出（code {t.exitCode}）
+    {#snippet actions()}
+      <Button
+        variant="outline"
+        size="sm"
+        class="shrink-0"
+        onclick={leave}>返回列表</Button
+      >
+      <Button variant="outline" size="sm" class="shrink-0" onclick={remove}
+        >移除会话</Button
+      >
+    {/snippet}
+  </StripNotice>
 {/if}

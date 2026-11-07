@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import IconChevronDown from "~icons/tabler/chevron-down";
   import IconSettings from "~icons/tabler/settings";
-  import { Button } from "$lib/components/ui/button";
+  import QuietTrigger from "./QuietTrigger.svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   // A compact select below the chat input: a quiet button showing the
@@ -20,7 +19,7 @@
     title,
     labeled = false,
     labelClass = "",
-    icon,
+    icon: props_icon,
     choiceIcon,
     onchange,
   }: {
@@ -46,28 +45,21 @@
 <DropdownMenu.Root>
   <DropdownMenu.Trigger {disabled}>
     {#snippet child({ props })}
-      <Button
-        {...props}
-        variant="quiet"
-        size="xs"
-        class={[
-          // Option icons read at the same 16px as the neighbouring icon buttons.
-          "[&_svg:not([class*='size-'])]:size-4",
-          labeled ? "max-w-48 min-w-0 shrink" : "shrink-0",
-        ]}
-        aria-label={label}
-        title={title ?? label}
+      <QuietTrigger
+        {props}
+        {label}
+        {title}
+        text={labeled ? current : undefined}
+        textClass={labelClass}
       >
-        {#if labeled && choiceIcon}{@render choiceIcon(
-            value,
-          )}{:else if icon}{@render icon()}{:else}<IconSettings
-            aria-hidden="true"
-          />{/if}
-        {#if labeled}<span class={["min-w-0 truncate", labelClass]}
-            >{current}</span
-          >{/if}
-        <IconChevronDown class="size-3" aria-hidden="true" />
-      </Button>
+        {#snippet icon()}
+          {#if labeled && choiceIcon}{@render choiceIcon(
+              value,
+            )}{:else if props_icon}{@render props_icon()}{:else}<IconSettings
+              aria-hidden="true"
+            />{/if}
+        {/snippet}
+      </QuietTrigger>
     {/snippet}
   </DropdownMenu.Trigger>
   <DropdownMenu.Content align="start" class="max-h-80 min-w-52">

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
   import IconExternalLink from "~icons/tabler/external-link";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -9,7 +8,7 @@
   import InlineNotice from "./InlineNotice.svelte";
   import TunnelStateBadge from "./TunnelStateBadge.svelte";
   import TunnelConfiguration from "./TunnelConfiguration.svelte";
-  import { copyText } from "../clipboard";
+  import { useCopied } from "../hooks/copied.svelte";
   import { useTunnelSettings } from "../hooks/tunnel-settings.svelte";
   import type { TunnelSettingsUpdate } from "../schemas";
 
@@ -17,10 +16,8 @@
   let confirmOpen = $state(false);
   let action = $state<"enable" | "disable" | "reset" | "save">();
   let pending = $state<TunnelSettingsUpdate>();
-  let copied = $state(false);
+  const link = useCopied();
   let copyFallback = $state("");
-  let copyTimer: ReturnType<typeof setTimeout> | undefined;
-  onDestroy(() => clearTimeout(copyTimer));
   const publicPage = $derived(
     !!tunnel.view &&
       (tunnel.view.publicUrl === location.origin ||
@@ -63,10 +60,7 @@
   async function copyLink() {
     const url = tunnel.view?.publicUrl;
     if (!url) return;
-    copied = await copyText(url);
-    copyFallback = copied ? "" : url;
-    clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => (copied = false), 2000);
+    copyFallback = (await link.copy(url)) ? "" : url;
   }
 </script>
 
@@ -112,7 +106,7 @@
             公网地址：<code>{current.publicUrl}</code>
           </p>
           <Button variant="outline" onclick={copyLink}
-            >{copied ? "已复制" : "复制访问链接"}</Button
+            >{link.copied ? "已复制" : "复制访问链接"}</Button
           >
           {#if copyFallback}
             <div class="grid gap-2">

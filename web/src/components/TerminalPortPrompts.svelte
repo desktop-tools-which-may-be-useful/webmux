@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StripNotice from "./StripNotice.svelte";
   import { untrack, type Snippet } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { Button } from "$lib/components/ui/button";
@@ -109,18 +110,7 @@
 </script>
 
 {#snippet strip(text: string, actions: Snippet, error = "")}
-  <div
-    class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted px-4 py-1.5 text-sm"
-    role="status"
-  >
-    <div class="min-w-0 flex-1 wrap-anywhere max-sm:basis-full">
-      <p>{text}</p>
-      {#if error}<p class="text-xs text-destructive" role="alert">
-          {error}
-        </p>{/if}
-    </div>
-    {@render actions()}
-  </div>
+  <StripNotice {error} {actions}>{text}</StripNotice>
 {/snippet}
 
 {#each announced as item (item.port)}

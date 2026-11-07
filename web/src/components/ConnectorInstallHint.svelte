@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { onDestroy, type Snippet } from "svelte";
+  import type { Snippet } from "svelte";
   import IconCheck from "~icons/tabler/check";
   import IconCopy from "~icons/tabler/copy";
   import IconExternalLink from "~icons/tabler/external-link";
   import IconX from "~icons/tabler/x";
   import { Button } from "$lib/components/ui/button";
   import InlineNotice from "./InlineNotice.svelte";
-  import { copyText } from "../clipboard";
+  import { useCopied } from "../hooks/copied.svelte";
   import { connectorMissingText } from "../hybrid";
   import type { AgentConnector } from "../schemas";
 
@@ -34,21 +34,12 @@
     class?: string;
   } = $props();
 
-  let copied = $state(false);
-  let copyFailed = $state(false);
-  let copyTimer: ReturnType<typeof setTimeout> | undefined;
-  onDestroy(() => clearTimeout(copyTimer));
-
-  async function copy() {
-    copied = await copyText(connector.installCommand);
-    copyFailed = !copied;
-    clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => (copied = false), 2000);
-  }
+  const install = useCopied();
+  const copy = () => install.copy(connector.installCommand);
   const copyLabel = $derived(
-    copied
+    install.copied
       ? "已复制安装命令"
-      : copyFailed
+      : install.failed
         ? "复制失败，请手动复制"
         : "复制安装命令",
   );
@@ -78,7 +69,7 @@
       aria-label={copyLabel}
       title={copyLabel}
       onclick={copy}
-      >{#if copied}<IconCheck aria-hidden="true" />{:else}<IconCopy
+      >{#if install.copied}<IconCheck aria-hidden="true" />{:else}<IconCopy
           aria-hidden="true"
         />{/if}</Button
     >

@@ -38,17 +38,23 @@
     class: className,
     variant = "default",
     mono = false,
+    code = false,
     "data-slot": dataSlot = "textarea",
     ...restProps
   }: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> & {
     variant?: TextareaVariant;
     mono?: boolean;
+    /** Commands and terminal text: mono, with autocorrection off. */
+    code?: boolean;
   } = $props();
 </script>
 
 <textarea
   bind:this={ref}
   data-slot={dataSlot}
-  class={cn(textareaVariants({ variant, mono }), className)}
+  class={cn(textareaVariants({ variant, mono: mono || code }), className)}
   bind:value
+  autocapitalize={code ? "off" : undefined}
+  autocorrect={code ? "off" : undefined}
+  spellcheck={code ? false : undefined}
   {...restProps}></textarea>

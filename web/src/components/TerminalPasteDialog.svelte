@@ -33,11 +33,8 @@
         if (filePaste(event)) open = false;
       }}
       bind:value={text}
-      mono
+      code
       class="max-h-[50dvh] min-h-40 overflow-y-auto"
-      autocapitalize="off"
-      autocorrect="off"
-      spellcheck={false}
     />
     <Dialog.Footer
       ><Button

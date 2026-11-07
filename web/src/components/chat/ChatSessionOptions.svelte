@@ -8,10 +8,10 @@
   import { Switch } from "$lib/components/ui/switch";
   import type { ConfigValue } from "../../chat-api";
   import {
-    ChatPermissionModeSchema,
-    type ChatConfig,
-    type ChatPermissionMode,
-  } from "../../schemas";
+    changedPermissionMode,
+    permissionChoices,
+  } from "../../chat-permission";
+  import type { ChatConfig, ChatPermissionMode } from "../../schemas";
 
   // Narrow screens keep the session options out of the bottom bar: one button
   // beside the attachment control opens them as a list. The set comes from the
@@ -33,10 +33,6 @@
     onmodechange: (mode: ChatPermissionMode) => void;
     onconfigchange: (configId: string, value: ConfigValue) => void;
   } = $props();
-  const modes = [
-    { value: "ask", name: "每次询问" },
-    { value: "auto", name: "全部接受" },
-  ];
 </script>
 
 <Popover.Root>
@@ -70,13 +66,14 @@
         disabled={modeDisabled}
         value={mode}
         onchange={(event) => {
-          const parsed = ChatPermissionModeSchema.safeParse(
+          const changed = changedPermissionMode(
             event.currentTarget.value,
+            mode,
           );
-          if (parsed.success && parsed.data !== mode) onmodechange(parsed.data);
+          if (changed) onmodechange(changed);
         }}
       >
-        {#each modes as choice (choice.value)}
+        {#each permissionChoices as choice (choice.value)}
           <NativeSelect.Option value={choice.value}
             >{choice.name}</NativeSelect.Option
           >
