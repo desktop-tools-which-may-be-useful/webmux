@@ -154,20 +154,15 @@
   >
     会话不存在或已被移除。
     {#snippet actions()}
-      <Button variant="outline" size="sm" onclick={leave}
-        >返回列表</Button
-      >
+      <Button variant="outline" size="sm" onclick={leave}>返回列表</Button>
     {/snippet}
   </StripNotice>{/if}
 {#if t.exitCode !== null && !recovery}
   <StripNotice>
     进程已退出（code {t.exitCode}）
     {#snippet actions()}
-      <Button
-        variant="outline"
-        size="sm"
-        class="shrink-0"
-        onclick={leave}>返回列表</Button
+      <Button variant="outline" size="sm" class="shrink-0" onclick={leave}
+        >返回列表</Button
       >
       <Button variant="outline" size="sm" class="shrink-0" onclick={remove}
         >移除会话</Button
