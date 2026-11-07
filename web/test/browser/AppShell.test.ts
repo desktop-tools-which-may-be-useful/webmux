@@ -104,7 +104,7 @@ test("on a session page switching mode only swaps the sidebar", async () => {
   ).toEqual([]);
 });
 
-test("the collapsed rail is remembered and keeps the mode and primary action", async () => {
+test("the collapsed rail keeps the expand and primary actions, not the mode switch", async () => {
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await snapshot();
   await page.getByRole("button", { name: "收起侧栏" }).click();
@@ -116,11 +116,18 @@ test("the collapsed rail is remembered and keeps the mode and primary action", a
   await expect
     .element(rail.getByRole("button", { name: "新建会话" }))
     .toBeVisible();
+  expect(rail.getByRole("button", { name: "聊天模式" }).elements()).toEqual([]);
+  expect(rail.getByRole("button", { name: "工作台模式" }).elements()).toEqual(
+    [],
+  );
   expect(
     document.querySelector(".app-shell")?.getAttribute("data-collapsed"),
   ).toBe("true");
   await rail.getByRole("button", { name: "展开侧栏" }).click();
   expect(localStorage.getItem("webmux.sidebarCollapsed")).toBe("false");
+  await expect
+    .element(sidebar().getByRole("button", { name: "聊天模式" }))
+    .toBeVisible();
 });
 
 test("the sidebar's new-session action opens the shared dialog", async () => {

@@ -36,7 +36,6 @@
   import AppSidebar from "./AppSidebar.svelte";
   import AttentionToasts from "./AttentionToasts.svelte";
   import LazyDialog from "./LazyDialog.svelte";
-  import ModeSwitch from "./ModeSwitch.svelte";
   import CloseSessionDialog from "./CloseSessionDialog.svelte";
   import RenameSessionDialog from "./RenameSessionDialog.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
@@ -270,7 +269,6 @@
         else shellUi.setCollapsed(false);
       }}><IconLayoutSidebarLeftExpand aria-hidden="true" /></Button
     >
-    <ModeSwitch mode={shellUi.mode} vertical onchange={changeMode} />
     <Button
       variant="ghost"
       size="icon-touch"

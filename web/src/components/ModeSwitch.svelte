@@ -8,20 +8,14 @@
   // and only toggles aria-pressed; focus stays on the pressed button.
   let {
     mode,
-    vertical = false,
     onchange,
   }: {
     mode: ShellMode;
-    vertical?: boolean;
     onchange: (mode: ShellMode) => void;
   } = $props();
 </script>
 
-<div
-  class={`flex shrink-0 items-center ${vertical ? "flex-col gap-1" : ""}`}
-  role="group"
-  aria-label="模式"
->
+<div class="flex shrink-0 items-center" role="group" aria-label="模式">
   <Button
     variant="ghost"
     size="icon-touch"
