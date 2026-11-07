@@ -127,7 +127,7 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 | ---------------- | ------ | ------------------------------------------------------------------------- |
 | `agent_pretrust` | `true` | 启动 agent 前把启动目录写入它自己的“信任此文件夹”记录，避免会话卡在对话框 |
 
-- 适用于 Claude Code、Codex、Copilot CLI、Antigravity CLI；见 [文件夹信任预写](../cli-agents.md#文件夹信任预写)。
+- 适用于 Claude Code、Codex、Copilot CLI、Antigravity CLI、Qoder、QoderCN；见 [文件夹信任预写](../cli-agents.md#文件夹信任预写)。
 
 ## 启动配置
 

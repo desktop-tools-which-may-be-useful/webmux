@@ -2,11 +2,11 @@
 // agents before WebMux starts them in a directory.
 //
 // A permission-bypass flag such as --dangerously-skip-permissions does not
-// skip the folder-trust dialog of Claude Code, Codex, Copilot CLI or
-// Antigravity CLI, and a session nobody is looking at waits on that dialog
-// forever. Each agent records an accepted dialog in its own config file, so
-// the same record is written ahead of the launch. This is the approach Orca
-// takes.
+// skip the folder-trust dialog of Claude Code, Codex, Copilot CLI,
+// Antigravity CLI, Qoder or QoderCN, and a session nobody is looking at waits
+// on that dialog forever. Each agent records an accepted dialog in its own
+// config file, so the same record is written ahead of the launch. This is the
+// approach Orca takes.
 //
 // Only a directory the user chose for a session is trusted. The home
 // directory, its ancestors and the filesystem root are refused because the
@@ -29,17 +29,30 @@ import (
 
 // agent is a CLI whose trust record WebMux knows how to write.
 type agent struct {
-	// executable is the program's base name in argv.
+	// executable is the canonical agent name and default executable base name.
 	executable string
+	// match reports whether a basename in argv invokes this agent; when nil,
+	// recognise compares base == executable.
+	match func(base string) bool
 	// write records dir as trusted in the agent's config.
 	write func(t *Trust, dir string, env map[string]string) error
 }
 
 var agents = []agent{
-	{"claude", (*Trust).trustClaude},
-	{"codex", (*Trust).trustCodex},
-	{"copilot", (*Trust).trustCopilot},
-	{"agy", (*Trust).trustAgy},
+	{executable: "claude", write: (*Trust).trustClaude},
+	{executable: "codex", write: (*Trust).trustCodex},
+	{executable: "copilot", write: (*Trust).trustCopilot},
+	{executable: "agy", write: (*Trust).trustAgy},
+	{
+		executable: "qodercn",
+		match:      func(base string) bool { return matchesQoder([]string{"qodercn", "qoderclicn", "qoder-cn"}, base) },
+		write:      (*Trust).trustQoderCN,
+	},
+	{
+		executable: "qoder",
+		match:      func(base string) bool { return matchesQoder([]string{"qoder", "qodercli"}, base) },
+		write:      (*Trust).trustQoder,
+	},
 }
 
 // Trust writes trust records for agents launched in a directory.
@@ -85,13 +98,20 @@ func recognise(argv []string) (agent, bool) {
 		for _, word := range strings.Fields(token) {
 			base := filepath.Base(word)
 			for _, a := range agents {
-				if base == a.executable {
+				if a.matches(base) {
 					return a, true
 				}
 			}
 		}
 	}
 	return agent{}, false
+}
+
+func (a agent) matches(base string) bool {
+	if a.match != nil {
+		return a.match(base)
+	}
+	return base == a.executable
 }
 
 // env returns a variable from the session's environment, falling back to the

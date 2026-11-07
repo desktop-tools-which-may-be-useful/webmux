@@ -437,6 +437,137 @@ func TestPrepareAgyLeavesMissingConfigAloneAndAddsListToExistingOne(t *testing.T
 	}
 }
 
+func TestPrepareQoderAndQoderCNAppendTrustDirectoriesKeepingOtherFields(t *testing.T) {
+	cases := []struct {
+		name   string
+		dotDir string
+		envVar string
+		argvs  [][]string
+	}{
+		{
+			name:   "qoder",
+			dotDir: ".qoder",
+			envVar: "QODER_CONFIG_DIR",
+			argvs: [][]string{
+				{"bash", "-ic", `exec -- "$@"`, "webmux", "qoder", "--dangerously-skip-permissions"},
+				{"/opt/qoder/bin/qodercli"},
+				{"/home/u/.qoder/bin/qodercli/qodercli-1.1.81"},
+				{"qoder-2.0.0"},
+			},
+		},
+		{
+			name:   "qodercn",
+			dotDir: ".qoder-cn",
+			envVar: "QODERCN_CONFIG_DIR",
+			argvs: [][]string{
+				{"bash", "-ic", `exec -- "$@"`, "webmux", "qodercn", "--dangerously-skip-permissions"},
+				{"qoderclicn"},
+				{"qoder-cn"},
+				{"/home/u/.qoder-cn/bin/qoderclicn/qoderclicn-1.1.84"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		for _, argv := range tc.argvs {
+			home := t.TempDir()
+			work := filepath.Join(home, "p")
+			dir := filepath.Join(home, tc.dotDir)
+			for _, d := range []string{work, dir} {
+				if err := os.MkdirAll(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			config := filepath.Join(dir, "settings.json")
+			seed := `{"model":{"name":"auto"},"permissions":{"allow":["Read"],"trustDirectories":["/old"]}}`
+			if err := os.WriteFile(config, []byte(seed), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			trust := newTrust(home, nil)
+			trust.Prepare(work, argv, nil)
+			first, err := os.ReadFile(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			trust.Prepare(work, argv, nil)
+			second, _ := os.ReadFile(config)
+			if string(second) != string(first) {
+				t.Fatalf("%s (%v): not idempotent:\n%s", tc.name, argv, second)
+			}
+
+			var doc struct {
+				Model       map[string]any `json:"model"`
+				Permissions struct {
+					Allow            []string `json:"allow"`
+					TrustDirectories []string `json:"trustDirectories"`
+				} `json:"permissions"`
+			}
+			if err := json.Unmarshal(first, &doc); err != nil {
+				t.Fatalf("%s (%v): invalid JSON %q: %v", tc.name, argv, first, err)
+			}
+			want := canonical(t, work)
+			if doc.Model["name"] != "auto" ||
+				len(doc.Permissions.Allow) != 1 || doc.Permissions.Allow[0] != "Read" ||
+				len(doc.Permissions.TrustDirectories) != 2 ||
+				doc.Permissions.TrustDirectories[0] != "/old" ||
+				doc.Permissions.TrustDirectories[1] != want {
+				t.Fatalf("%s (%v): config = %s", tc.name, argv, first)
+			}
+			if info, _ := os.Stat(config); info.Mode().Perm() != 0o600 {
+				t.Fatalf("%s (%v): mode = %v", tc.name, argv, info.Mode())
+			}
+		}
+
+		// Missing file is not created; invalid JSON or non-object permissions are left untouched;
+		// session and server environment variables override the default dotDir.
+		home := t.TempDir()
+		work := filepath.Join(home, "p")
+		fromEnv := filepath.Join(home, "envcfg")
+		fromServer := filepath.Join(home, "servercfg")
+		for _, d := range []string{work, fromEnv, fromServer} {
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		trust := newTrust(home, map[string]string{tc.envVar: fromServer})
+		trust.Prepare(work, tc.argvs[0], map[string]string{tc.envVar: fromEnv})
+		if _, err := os.Stat(filepath.Join(fromEnv, "settings.json")); !os.IsNotExist(err) {
+			t.Fatalf("%s: missing config created: %v", tc.name, err)
+		}
+		for _, cfgDir := range []string{fromEnv, fromServer} {
+			if err := os.WriteFile(filepath.Join(cfgDir, "settings.json"), []byte(`{"model":{"name":"auto"}}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		trust.Prepare(work, tc.argvs[0], map[string]string{tc.envVar: fromEnv})
+		trust.Prepare(work, tc.argvs[0], nil)
+		for _, cfgDir := range []string{fromEnv, fromServer} {
+			data, err := os.ReadFile(filepath.Join(cfgDir, "settings.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc struct {
+				Permissions struct {
+					TrustDirectories []string `json:"trustDirectories"`
+				} `json:"permissions"`
+			}
+			if err := json.Unmarshal(data, &doc); err != nil || len(doc.Permissions.TrustDirectories) != 1 || doc.Permissions.TrustDirectories[0] != canonical(t, work) {
+				t.Fatalf("%s (%s): config = %s, %v", tc.name, cfgDir, data, err)
+			}
+		}
+
+		badFile := filepath.Join(fromServer, "settings.json")
+		for _, bad := range []string{"// comment\n{}\n", `{"permissions": 3}`, `{"permissions": {"trustDirectories": "nope"}}`} {
+			if err := os.WriteFile(badFile, []byte(bad), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			trust.Prepare(work, tc.argvs[0], nil)
+			if got, _ := os.ReadFile(badFile); string(got) != bad {
+				t.Fatalf("%s: bad config %q rewritten to %q", tc.name, bad, got)
+			}
+		}
+	}
+}
+
 func TestPrepareWritesThroughSymlinkedConfig(t *testing.T) {
 	home := t.TempDir()
 	work := filepath.Join(home, "p")

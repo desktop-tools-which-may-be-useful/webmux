@@ -40,51 +40,51 @@ flowchart LR
 
 ## 模块划分
 
-| 包                                            | 职责                                                                                            |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `cmd/webmux`                                  | 子命令分发、配置加载、显式依赖注入、信号处理与优雅退出                                          |
-| `internal/settings`                           | 服务端偏好、修订号、原子订阅与有界事件队列                                                      |
-| `internal/jsonutil`                           | 无业务依赖的严格 JSON 与必需字段检查                                                            |
-| `internal/runtime`                            | 运行时记录、实例锁、进程身份、本机套接字与对端凭据                                              |
-| `internal/contract`                           | 只依赖标准库的线上类型：REST 请求与响应、WebSocket 事件与终端帧、本机控制面与 `/local/v1` 路径  |
-| `internal/wire`                               | Controller 层：Service 类型与 `contract` 线上类型之间的双向转换                                 |
-| `internal/pathutil`, `internal/attentionkind` | 共享的路径展开与注意力种类，供 Service、配置与客户端共用                                        |
-| `internal/localclient`                        | 经任意拨号器访问 HTTP/WS API 的客户端，可交叉编译到 Windows                                     |
-| `internal/client`                             | CLI 侧的实例定位、链接推导、`status`/`stop` 退回逻辑                                            |
-| `internal/config`                             | TOML 解析、默认值与校验                                                                         |
-| `internal/session`                            | PTY 生命周期、环形缓冲、OSC 标题、状态协调、进程组清理                                          |
-| `internal/vtpreview`                          | 纯无状态 ANSI/VT 终端预览模拟与安全回放快照提取                                                 |
-| `internal/procpeek`                           | 跨平台进程树追溯、进程事实检查与监听端口扫描                                                    |
-| `internal/hub`                                | 终端 WebSocket：快照与订阅、输出合并、JSON 控制帧编码、输入写入与取消                           |
-| `internal/api`                                | REST 路由、认证、Origin 检查、上传请求解析、错误到状态码的映射、静态资源与 SPA 回退             |
-| `internal/files`                              | 目录补全、创建目录、上传文件落盘（私有临时目录）                                                |
-| `internal/forward`                            | 端口转发：内存中的转发登记、上游可达性探测、一次性兑换码与转发凭据（网关在 `internal/api`）     |
-| `internal/workspace`                          | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
-| `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
-| `internal/agenttrust`                         | 启动 Claude / Codex / Copilot / Antigravity 前预写“信任此文件夹”记录（`agent_pretrust`）        |
-| `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                      |
-| `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测       |
-| `internal/tailscalesettings`                  | Tailscale 网页设置持久化、独立文件锁、校验与故障关闭                                            |
-| `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                              |
-| `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测；根内文件操作与目录 ZIP                          |
-| `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
-| `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R11                                                             |
-| `internal/docguard`                           | 只含测试：文档与 spec 的行数、体积、目录扇出与树状组织规则                                      |
-| `internal/wslclient`                          | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算 |
-| `internal/attach`                             | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                |
-| `internal/clicmd`, `cmd/webmux-windows`       | 跨平台客户端共享 CLI 命令实现集合（会话、工作区、聊天、启动等）；Windows 控制台客户端入口       |
-| `internal/tray`                               | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与菜单视图                    |
-| `internal/tray/traysys`                       | 托盘系统管理操作：防火墙规则、登录自启动项、单实例与进程管理、安装程序启动                      |
-| `internal/tray/forward`                       | 托盘转发：同源校验后把请求中转到 WebMux 的 TCP 监听                                             |
-| `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘通知区界面、菜单渲染、通知与剪贴板（`//go:build windows`）                          |
-| `internal/hybrid`                             | 混合会话：每会话一个 actor、记录持久化、聊天事件规范化、切换与恢复                              |
-| `internal/artifacts`                          | 会话交互产物目录（系统临时目录下的私有文件夹，含 `uploads/`）的创建与清理                       |
-| `internal/settingsstore`                      | 隧道与 Tailscale 设置共用的打开、读取、提交与 fail-closed 骨架                                  |
-| `internal/acp`                                | 只依赖标准库的 ACP v1 客户端与协议边界                                                          |
-| `internal/agentprofile`                       | agent 中立的档案核心与各 agent 适配器（`agents` 注册表）                                        |
-| `internal/tunnel`                             | Cloudflare 隧道：cloudflared 定位、下载与子进程管理                                             |
-| `internal/service`                            | 当前用户的 systemd --user / launchd 服务渲染与管理                                              |
-| `web/`                                        | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
+| 包                                            | 职责                                                                                                       |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `cmd/webmux`                                  | 子命令分发、配置加载、显式依赖注入、信号处理与优雅退出                                                     |
+| `internal/settings`                           | 服务端偏好、修订号、原子订阅与有界事件队列                                                                 |
+| `internal/jsonutil`                           | 无业务依赖的严格 JSON 与必需字段检查                                                                       |
+| `internal/runtime`                            | 运行时记录、实例锁、进程身份、本机套接字与对端凭据                                                         |
+| `internal/contract`                           | 只依赖标准库的线上类型：REST 请求与响应、WebSocket 事件与终端帧、本机控制面与 `/local/v1` 路径             |
+| `internal/wire`                               | Controller 层：Service 类型与 `contract` 线上类型之间的双向转换                                            |
+| `internal/pathutil`, `internal/attentionkind` | 共享的路径展开与注意力种类，供 Service、配置与客户端共用                                                   |
+| `internal/localclient`                        | 经任意拨号器访问 HTTP/WS API 的客户端，可交叉编译到 Windows                                                |
+| `internal/client`                             | CLI 侧的实例定位、链接推导、`status`/`stop` 退回逻辑                                                       |
+| `internal/config`                             | TOML 解析、默认值与校验                                                                                    |
+| `internal/session`                            | PTY 生命周期、环形缓冲、OSC 标题、状态协调、进程组清理                                                     |
+| `internal/vtpreview`                          | 纯无状态 ANSI/VT 终端预览模拟与安全回放快照提取                                                            |
+| `internal/procpeek`                           | 跨平台进程树追溯、进程事实检查与监听端口扫描                                                               |
+| `internal/hub`                                | 终端 WebSocket：快照与订阅、输出合并、JSON 控制帧编码、输入写入与取消                                      |
+| `internal/api`                                | REST 路由、认证、Origin 检查、上传请求解析、错误到状态码的映射、静态资源与 SPA 回退                        |
+| `internal/files`                              | 目录补全、创建目录、上传文件落盘（私有临时目录）                                                           |
+| `internal/forward`                            | 端口转发：内存中的转发登记、上游可达性探测、一次性兑换码与转发凭据（网关在 `internal/api`）                |
+| `internal/workspace`                          | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                              |
+| `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                                      |
+| `internal/agenttrust`                         | 启动 Claude / Codex / Copilot / Antigravity / Qoder / QoderCN 前预写“信任此文件夹”记录（`agent_pretrust`） |
+| `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                                 |
+| `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测                  |
+| `internal/tailscalesettings`                  | Tailscale 网页设置持久化、独立文件锁、校验与故障关闭                                                       |
+| `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                                         |
+| `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测；根内文件操作与目录 ZIP                                     |
+| `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                                    |
+| `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R11                                                                        |
+| `internal/docguard`                           | 只含测试：文档与 spec 的行数、体积、目录扇出与树状组织规则                                                 |
+| `internal/wslclient`                          | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算            |
+| `internal/attach`                             | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                           |
+| `internal/clicmd`, `cmd/webmux-windows`       | 跨平台客户端共享 CLI 命令实现集合（会话、工作区、聊天、启动等）；Windows 控制台客户端入口                  |
+| `internal/tray`                               | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与菜单视图                               |
+| `internal/tray/traysys`                       | 托盘系统管理操作：防火墙规则、登录自启动项、单实例与进程管理、安装程序启动                                 |
+| `internal/tray/forward`                       | 托盘转发：同源校验后把请求中转到 WebMux 的 TCP 监听                                                        |
+| `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘通知区界面、菜单渲染、通知与剪贴板（`//go:build windows`）                                     |
+| `internal/hybrid`                             | 混合会话：每会话一个 actor、记录持久化、聊天事件规范化、切换与恢复                                         |
+| `internal/artifacts`                          | 会话交互产物目录（系统临时目录下的私有文件夹，含 `uploads/`）的创建与清理                                  |
+| `internal/settingsstore`                      | 隧道与 Tailscale 设置共用的打开、读取、提交与 fail-closed 骨架                                             |
+| `internal/acp`                                | 只依赖标准库的 ACP v1 客户端与协议边界                                                                     |
+| `internal/agentprofile`                       | agent 中立的档案核心与各 agent 适配器（`agents` 注册表）                                                   |
+| `internal/tunnel`                             | Cloudflare 隧道：cloudflared 定位、下载与子进程管理                                                        |
+| `internal/service`                            | 当前用户的 systemd --user / launchd 服务渲染与管理                                                         |
+| `web/`                                        | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                            |
 
 `cmd/webmux` 负责依赖装配：各模块通过构造函数显式依赖，不使用全局状态，HTTP 控制器不直接访问状态文件。
 
