@@ -20,6 +20,15 @@ const (
 	// recently updated entry goes first. Deleting a launch config forgets
 	// its entry, so the bound only matters for configs deleted elsewhere.
 	maxAgentOptions = 256
+	// The cache is display-only, so one config's report is cut to a budget
+	// instead of letting a long model list fill the file: at most
+	// maxEntryOptions options sharing about maxEntryBytes of choice text,
+	// and bounded names and descriptions. Each option keeps its selected
+	// choice.
+	maxEntryOptions   = 32
+	maxEntryBytes     = 16 << 10
+	maxNameRunes      = 128
+	maxDescriptionRun = 256
 )
 
 // storedAgentOptions is agent-options.json: per launch config, the agent
@@ -86,10 +95,11 @@ type agentOptions struct {
 	list    []agentOptionEntry
 	pending *time.Timer
 	closed  bool
+	log     *slog.Logger
 }
 
 func openAgentOptions(stateDir string) *agentOptions {
-	o := &agentOptions{}
+	o := &agentOptions{log: slog.New(slog.DiscardHandler)}
 	dir, err := pathutil.Expand(stateDir)
 	if err == nil {
 		dir, err = filepath.Abs(dir)
@@ -167,6 +177,10 @@ func (o *agentOptions) remember(configID string, options []ConfigOption, now tim
 	if extra := len(next) - maxAgentOptions; extra > 0 {
 		next = next[extra:]
 	}
+	// Oldest first: drop reports until the file fits its byte limit.
+	for len(next) > 1 && !o.store.Fits(storedAgentOptions{V: optionsVersion, Configs: next}) {
+		next = next[1:]
+	}
 	o.list = next
 	o.scheduleLocked()
 }
@@ -191,6 +205,13 @@ func (o *agentOptions) forget(configID string) error {
 	return nil
 }
 
+// setLogger sets where failed coalesced writes are reported.
+func (o *agentOptions) setLogger(log *slog.Logger) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.log = log
+}
+
 func (o *agentOptions) scheduleLocked() {
 	if o.pending != nil {
 		return
@@ -199,10 +220,14 @@ func (o *agentOptions) scheduleLocked() {
 		o.mu.Lock()
 		defer o.mu.Unlock()
 		o.pending = nil
-		if o.unavailableLocked() == nil {
-			// A failed delayed write freezes the store inside statefile and
-			// surfaces through later operations.
-			_ = o.commitLocked(o.list)
+		if o.unavailableLocked() != nil {
+			return
+		}
+		if err := o.commitLocked(o.list); err != nil {
+			o.log.Error("hybrid agent options write failed; changes are not persisted", "error", err)
+			if retryable(err) {
+				o.pending = time.AfterFunc(retryDelay, func() { o.mu.Lock(); o.pending = nil; o.scheduleLocked(); o.mu.Unlock() })
+			}
 		}
 	})
 }
@@ -216,7 +241,7 @@ func (o *agentOptions) commitLocked(list []agentOptionEntry) error {
 		list = []agentOptionEntry{}
 	}
 	if err := o.store.Commit(storedAgentOptions{V: optionsVersion, Configs: list}); err != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	return nil
 }
@@ -235,20 +260,47 @@ func (o *agentOptions) close() {
 	o.store.Close()
 }
 
+// storeOptions converts a report for the cache within the entry budget.
 func storeOptions(in []ConfigOption) []storedOption {
-	out := make([]storedOption, 0, len(in))
+	n := min(len(in), maxEntryOptions)
+	out := make([]storedOption, 0, n)
+	// Each option gets an equal share, so one long model list cannot
+	// starve the others.
+	share := maxEntryBytes / max(n, 1)
 	for _, c := range in {
-		s := storedOption{ID: c.ID, Name: c.Name, Category: c.Category, Type: c.Type, Value: c.Value, Choices: make([]storedChoice, 0, len(c.Options))}
+		if len(out) >= maxEntryOptions {
+			break
+		}
+		used := 0
+		s := storedOption{ID: c.ID, Name: clipRunes(c.Name, maxNameRunes), Category: c.Category, Type: c.Type, Value: c.Value, Choices: []storedChoice{}}
+		used += len(s.ID) + len(s.Name) + len(s.Category) + len(s.Type) + len(s.Value)
 		if c.Enabled != nil {
 			enabled := *c.Enabled
 			s.Enabled = &enabled
 		}
 		for _, choice := range c.Options {
-			s.Choices = append(s.Choices, storedChoice(choice))
+			selected := choice.Value == c.Value
+			if used >= share && !selected {
+				continue
+			}
+			sc := storedChoice{Value: choice.Value, Name: clipRunes(choice.Name, maxNameRunes), Description: clipRunes(choice.Description, maxDescriptionRun)}
+			used += len(sc.Value) + len(sc.Name) + len(sc.Description)
+			s.Choices = append(s.Choices, sc)
 		}
 		out = append(out, s)
 	}
 	return out
+}
+
+// clipRunes cuts s to at most n runes.
+func clipRunes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }
 
 func loadOptions(in []storedOption) []ConfigOption {

@@ -24,6 +24,9 @@ import (
 // instruction may have.
 const MaxInitInstruction = 4000
 
+// MaxRepositories bounds repositories.json, like the other stores.
+const MaxRepositories = 500
+
 type registration struct {
 	ID          string `json:"id"`
 	CommonDir   string `json:"commonDir"`
@@ -161,6 +164,9 @@ func (s *Service) load() error {
 func validateRegistry(stored registry) error {
 	if stored.Version != 1 || stored.Repositories == nil {
 		return errors.New("不支持或损坏的仓库清单")
+	}
+	if len(stored.Repositories) > MaxRepositories {
+		return fmt.Errorf("仓库清单超过 %d 个仓库", MaxRepositories)
 	}
 	ids, paths := map[string]bool{}, map[string]bool{}
 	for _, entry := range stored.Repositories {
@@ -338,6 +344,11 @@ func (s *Service) Register(ctx context.Context, path string) (Repository, bool, 
 			s.reassociate(ctx)
 			return snapshot, false, err
 		}
+	}
+	if len(s.entries) >= MaxRepositories {
+		s.mu.Unlock()
+		s.saveMu.Unlock()
+		return Repository{}, false, problemf(ErrInvalid, "最多登记 %d 个仓库，请先移除不再使用的仓库", MaxRepositories)
 	}
 	id, err := randomID()
 	if err != nil {

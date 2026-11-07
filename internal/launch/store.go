@@ -337,7 +337,13 @@ func (s *Service) saveLocked(configs []Config) error {
 	if configs == nil {
 		configs = []Config{}
 	}
-	err := s.store.Commit(storedFile{V: fileVersion, Configs: configs})
+	stored := storedFile{V: fileVersion, Configs: configs}
+	// Commands and environments are bounded per config, not in total: a full
+	// file is the caller's invalid input, not an unavailable store.
+	if !s.store.Fits(stored) {
+		return invalidf("启动配置总大小超过 %d KiB 上限，请删除或精简部分配置", statefile.Describe(statefile.Launch).MaxBytes>>10)
+	}
+	err := s.store.Commit(stored)
 	if err != nil {
 		return fmt.Errorf("保存启动配置: %w", err)
 	}

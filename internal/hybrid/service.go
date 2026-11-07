@@ -137,6 +137,8 @@ func New(o Options) *Service {
 	if err := s.records.recoverAfterRestart(time.Now()); err != nil {
 		log.Warn("hybrid sessions unavailable", "error", err)
 	}
+	s.records.setLogger(log)
+	s.options.setLogger(log)
 	logAgentOptions(log, s.options)
 	o.Manager.SetIDReserver(s.records.reserved)
 	return s
@@ -340,20 +342,20 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	// The start runs to completion even if ctx ends, so a cancelled request
 	// never leaves a half-started session behind.
 	if err := awaitStarted(a, started); err != nil {
-		if evicted != nil {
-			// The failed start removed its own record, so the dropped one
-			// goes back rather than being lost for nothing.
-			if err := s.records.restore(*evicted); err != nil {
-				s.log.Warn("hybrid evicted record restore failed", "id", evicted.ID, "error", err)
+		// The failed start removed its own record, so the dropped ones
+		// go back rather than being lost for nothing.
+		for _, e := range evicted {
+			if err := s.records.restore(e); err != nil {
+				s.log.Warn("hybrid evicted record restore failed", "id", e.ID, "error", err)
 			}
 		}
 		return nil, err
 	}
-	if evicted != nil {
-		s.log.Info("hybrid record evicted", "id", evicted.ID)
-		s.evict(ctx, evicted.ID)
+	for _, e := range evicted {
+		s.log.Info("hybrid record evicted", "id", e.ID)
+		s.evict(ctx, e.ID)
 		if s.onEvicted != nil {
-			s.onEvicted(context.WithoutCancel(ctx), *evicted)
+			s.onEvicted(context.WithoutCancel(ctx), e)
 		}
 	}
 	if err := ctx.Err(); err != nil {

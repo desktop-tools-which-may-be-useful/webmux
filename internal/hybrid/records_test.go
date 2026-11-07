@@ -123,7 +123,7 @@ func TestRecordsLimitDropsOldestArchived(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add to a full store: %v", err)
 	}
-	if evicted == nil || evicted.ID != limitID(0) {
+	if len(evicted) != 1 || evicted[0].ID != limitID(0) {
 		t.Fatalf("evicted %+v, want %s", evicted, limitID(0))
 	}
 	if got := len(r.all()); got != MaxRecords {
@@ -146,20 +146,20 @@ func TestRecordsRestorePutsAnEvictedRecordBack(t *testing.T) {
 	}
 	seedRecords(t, r, seeded)
 	evicted, err := r.add(testRecord("zzzzzzzz"), nil)
-	if err != nil || evicted == nil {
+	if err != nil || len(evicted) != 1 {
 		t.Fatalf("add: %+v, %v", evicted, err)
 	}
 	// A failed start removed its own record, so the store has room again.
 	if err := r.remove("zzzzzzzz"); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.restore(*evicted); err != nil {
+	if err := r.restore(evicted[0]); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	if !r.reserved(evicted.ID) || len(r.all()) != MaxRecords {
+	if !r.reserved(evicted[0].ID) || len(r.all()) != MaxRecords {
 		t.Fatal("evicted record not restored")
 	}
-	if err := r.restore(*evicted); !errors.Is(err, ErrConflict) {
+	if err := r.restore(evicted[0]); !errors.Is(err, ErrConflict) {
 		t.Fatalf("restoring twice: %v", err)
 	}
 }
@@ -202,7 +202,7 @@ func TestRecordsLimitSkipsResumingRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if evicted == nil || evicted.ID != limitID(1) {
+	if len(evicted) != 1 || evicted[0].ID != limitID(1) {
 		t.Fatalf("evicted %+v, want %s", evicted, limitID(1))
 	}
 	// Nothing else may be dropped once the remaining records are skipped.
@@ -232,7 +232,7 @@ func TestRecordsLimitPrefersLeastRecentlyUpdated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if evicted == nil || evicted.ID != limitID(3) {
+	if len(evicted) != 1 || evicted[0].ID != limitID(3) {
 		t.Fatalf("evicted %+v, want %s", evicted, limitID(3))
 	}
 }

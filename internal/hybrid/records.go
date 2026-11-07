@@ -3,6 +3,7 @@ package hybrid
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -26,6 +27,8 @@ const (
 	maxPreviousIDs = 8
 	// persistDelay coalesces bursts of record changes into one write.
 	persistDelay = time.Second
+	// retryDelay spaces the retries of a coalesced write that failed.
+	retryDelay = 30 * time.Second
 )
 
 // Side is where a hybrid session runs: the terminal UI or the ACP chat.
@@ -197,10 +200,12 @@ type records struct {
 	list    []Record
 	pending *time.Timer
 	closed  bool
+	// log reports coalesced writes that failed; never nil after open.
+	log *slog.Logger
 }
 
 func openRecords(stateDir string) *records {
-	r := &records{}
+	r := &records{log: slog.New(slog.DiscardHandler)}
 	dir, err := pathutil.Expand(stateDir)
 	if err == nil {
 		dir, err = filepath.Abs(dir)
@@ -315,10 +320,11 @@ func oldestArchived(list []Record, skip func(string) bool) int {
 
 // add stores a new record and writes it immediately; creation must fail
 // rather than run a session the store cannot track. A full store drops its
-// least recently updated archived record in the same write and returns it,
-// so the caller can end what that record left behind. skip names records an
+// least recently updated archived records in the same write (more than one
+// when the byte limit, not the count, is what is full) and returns them,
+// so the caller can end what they left behind. skip names records an
 // eviction must leave alone; nil skips none.
-func (r *records) add(rec Record, skip func(string) bool) (evicted *Record, err error) {
+func (r *records) add(rec Record, skip func(string) bool) (evicted []Record, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.unavailableLocked(); err != nil {
@@ -327,17 +333,31 @@ func (r *records) add(rec Record, skip func(string) bool) (evicted *Record, err 
 	if r.index(rec.ID) >= 0 {
 		return nil, fmt.Errorf("%w: 记录 %s 已存在", ErrConflict, rec.ID)
 	}
-	next := slices.Clone(r.list)
-	if len(next) >= MaxRecords {
-		i := oldestArchived(next, skip)
+	base := slices.Clone(r.list)
+	evictOne := func() bool {
+		i := oldestArchived(base, skip)
 		if i < 0 {
+			return false
+		}
+		evicted = append(evicted, base[i].clone())
+		base = slices.Delete(base, i, i+1)
+		return true
+	}
+	for len(base) >= MaxRecords {
+		if !evictOne() {
 			return nil, ErrLimit
 		}
-		dropped := next[i].clone()
-		evicted = &dropped
-		next = slices.Delete(next, i, i+1)
 	}
-	next = append(next, rec.clone())
+	// The file is also bounded in bytes: long commands can fill it before
+	// MaxRecords, and a write the store refuses would make hybrid sessions
+	// unavailable although archived records could make room.
+	next := append(slices.Clone(base), rec.clone())
+	for !r.store.Fits(storedRecords{V: recordsVersion, Records: next}) {
+		if !evictOne() {
+			return nil, ErrLimit
+		}
+		next = append(slices.Clone(base), rec.clone())
+	}
 	if err := r.commitLocked(next); err != nil {
 		return nil, err
 	}
@@ -413,6 +433,19 @@ func (r *records) remove(id string) error {
 	return nil
 }
 
+// retryable reports whether a failed write may succeed later: an I/O or
+// permission failure can pass, an oversize or frozen store cannot.
+func retryable(err error) bool {
+	return statefile.IsKind(err, statefile.IO) || statefile.IsKind(err, statefile.Permission)
+}
+
+// setLogger sets where failed coalesced writes are reported.
+func (r *records) setLogger(log *slog.Logger) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.log = log
+}
+
 func (r *records) scheduleLocked() {
 	if r.pending != nil {
 		return
@@ -421,10 +454,17 @@ func (r *records) scheduleLocked() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		r.pending = nil
-		if r.unavailableLocked() == nil {
-			// A failed delayed write freezes the store inside statefile and
-			// surfaces through later operations.
-			_ = r.commitLocked(r.list)
+		if r.unavailableLocked() != nil {
+			return
+		}
+		if err := r.commitLocked(r.list); err != nil {
+			// Memory is now ahead of the disk. Say so, and keep trying while
+			// the failure can pass (a full disk); an uncertain commit
+			// already froze the store inside statefile.
+			r.log.Error("hybrid records write failed; changes are not persisted", "error", err)
+			if retryable(err) {
+				r.pending = time.AfterFunc(retryDelay, func() { r.mu.Lock(); r.pending = nil; r.scheduleLocked(); r.mu.Unlock() })
+			}
 		}
 	})
 }
@@ -435,7 +475,7 @@ func (r *records) commitLocked(list []Record) error {
 		r.pending = nil
 	}
 	if err := r.store.Commit(storedRecords{V: recordsVersion, Records: list}); err != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	return nil
 }

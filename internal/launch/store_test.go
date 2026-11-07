@@ -606,3 +606,34 @@ func TestDefensiveCopies(t *testing.T) {
 		t.Fatalf("shared state: %+v", again)
 	}
 }
+
+// Per-config limits allow about half a MiB each, so a handful of full
+// configs reach the file's byte limit before MaxConfigs. That is invalid
+// input, not an unavailable store, and nothing is half-written.
+func TestSaveRefusesBeyondFileSizeLimit(t *testing.T) {
+	s := open(t, t.TempDir())
+	env := map[string]string{}
+	for i := range MaxEnvEntries {
+		env[fmt.Sprintf("K%d", i)] = strings.Repeat("v", MaxItemBytes)
+	}
+	var created []Config
+	var failure error
+	for i := range 20 {
+		c, err := s.Create(Input{Name: fmt.Sprint("big", i), Cmd: []string{"a"}, Env: env})
+		if err != nil {
+			failure = err
+			break
+		}
+		created = append(created, c)
+	}
+	if len(created) < 2 || !errors.Is(failure, ErrInvalid) || errors.Is(failure, ErrUnavailable) {
+		t.Fatalf("created %d configs, then %v; want ErrInvalid after a few", len(created), failure)
+	}
+	if list, err := s.List(); err != nil || len(list) != len(created) {
+		t.Fatalf("list after refusal: %d, %v", len(list), err)
+	}
+	if err := s.Delete(created[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	mustCreate(t, s, Input{Name: "small", Cmd: []string{"a"}})
+}

@@ -208,6 +208,16 @@ func (h *Handle[T]) Commit(value T) error {
 	err = h.publish(h.path, data, Options{TempPattern: ".state-*", RequireDirSync: true})
 	return h.commitError("publish", err)
 }
+
+// Fits reports whether Commit would stay within the store's size limit, so a
+// caller can make room (or refuse) before a write fails with TooLarge.
+func (h *Handle[T]) Fits(value T) bool {
+	if h == nil {
+		return true
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	return err == nil && int64(len(data)) <= h.desc.MaxBytes
+}
 func (h *Handle[T]) Remove() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
