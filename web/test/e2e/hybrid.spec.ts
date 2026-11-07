@@ -531,8 +531,9 @@ test.describe("hybrid sessions with the fake agent", () => {
 
     await sendChat(page, "q-first");
     await expect(working(page)).toBeVisible();
+    // With nothing typed the send button is the stop button.
     await expect(
-      page.getByRole("button", { name: "加入排队", exact: true }),
+      page.getByRole("button", { name: "停止", exact: true }),
     ).toBeVisible();
     await sendChat(page, "q-second");
     await sendChat(page, "q-third");

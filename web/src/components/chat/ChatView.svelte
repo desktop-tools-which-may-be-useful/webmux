@@ -204,11 +204,19 @@
   $effect(() => {
     if (!scroller) return;
     const element = scroller;
+    let frame = 0;
+    // Scrolling in the callback itself can loop; wait for the next frame.
     const observer = new ResizeObserver(() => {
-      if (stick) element.scrollTop = element.scrollHeight;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (stick) element.scrollTop = element.scrollHeight;
+      });
     });
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   });
 
   function answer(requestId: string, reply: RequestAnswer) {
