@@ -22,10 +22,19 @@ description: Use for any WebMux UI change — components, layout, styling, icons
    2. `web/src/components/`
    3. shadcn-svelte registry（`pnpm --dir web exec shadcn-svelte add <name>`，生成后审查差异）
 
-   用户嫌外观“不精致”或要求替换时，先查 shadcn-svelte 是否有现成组件，给出 2–3 个方案并说明取舍，再动手。
+   用户嫌外观“不精致”、要求替换，或问“放在哪里更好”时，先查 shadcn-svelte 是否有现成组件，给出 2–3 个方案并说明取舍，再动手。移动、新增控件同样如此：位置没对齐就改代码，返工成本最高。
 3. **需要新外观时，在 `ui/` 组件的 `tv()` 中加 variant 或 size**，并登记到前端架构守卫的扩展表。使用处的 `class` 只能写布局（margin、宽高、grid/flex 位置）。不写原始调色板颜色、内联样式，也不写非布局的任意值。
 4. **同类问题全局统一。** 改一种控件的外观或用法时，搜索所有使用处并一起迁移，不留两种写法。
 5. **验证**，见下方 Verification。
+
+## Information architecture
+
+放控件、标题和信息之前先定归属，这是返工最多的地方：
+
+- **先写一句“它作用于哪个对象”**（页面、仓库、列表、单行），再放到对应层级。列表标题行只放作用于这份列表的东西（筛选、排序、列表内新增），不放上级对象的操作。例：仓库级的“新建工作树”“管理工作树”“仓库详情”放在工作树列表的标题行是错的，它们属于侧栏仓库行的“⋯”菜单。
+- **一个功能只有一个常驻入口。** 移动控件时删除旧位置，并迁移所有入口、测试和文档，不留两份。
+- **同一信息在一屏内只出现一次。** 仓库名、数量、状态不在顶栏、页面标题和分区标题里重复。手机顶栏承载页面标题和高频图标操作，页内不再重复标题。
+- **分组、折叠类功能先定边界**（什么会结束一组），写进 spec，并用交错的真实数据测试（思考、工具、回复交替），不能只用同类连续项。
 
 ## Design language
 
@@ -40,6 +49,7 @@ description: Use for any WebMux UI change — components, layout, styling, icons
   - `default`（绿色）：主要操作，每个任务区一个。
   - `outline`：独立的文字次要操作，以及需要明显可见的单个图标操作（如停止、取用）。
   - `ghost`：纯图标或低频工具按钮；需要弱化时用 `quiet`。
+  - `success`（绿色填充）：对话框里“更安全的替代操作”，如删除对话框的“仅从主页隐藏”。放在右下角，作为最醒目的操作。
   - `destructive`：危险操作，并配确认弹窗。
   - 浮在终端或代码上方的按钮用 `outline` 加 `raised`。
   - Button 没有 `secondary` 变体，不要重新加回。Badge 的 `secondary` 不受影响。
@@ -72,12 +82,19 @@ description: Use for any WebMux UI change — components, layout, styling, icons
 - **对齐要精确。** 并列的元数据、图标和文字按基线或网格对齐，桌面端和移动端都要检查。重复出现的元数据优先用 grid 布局，避免文字参差不齐。
 - **同排按钮尺寸一致。** 同一工具栏或按钮行里并排的图标按钮必须使用同一尺寸档位，桌面档与触屏档成对设置：宽松工具栏用 `size="icon-touch"`（即 `size-(--control-touch) sm:size-(--control-default)`），紧凑工具栏（如终端 32px 顶栏、工作区行）整体用 `icon-sm`，手机上需 44px 的个别按钮用 `icon-touch-sm`。同一行不得混用 `icon-sm` 与 `icon-touch`，也不手写 `size-8`、`min-h-*` 补尺寸。共用组件（如 `QuickCommandMenu`）接收 `size` 属性，由所在工具栏传入，不写死。验证时用 `getBoundingClientRect` 检查桌面与 390×844 下同排按钮的盒尺寸。
 - **工具栏按直觉排序。** 依次放高频主要操作、状态、次要工具、低频菜单。顺序在各页面间保持一致。
+- **更安全的替代操作用独立按钮，不用 checkbox。** 勾选后改变主操作含义会多一次点击，状态也隐蔽。替代操作已无意义时（例如已从主页隐藏）不显示。
+- **行尾操作：悬停才出现。** 沿用 `ListButton variant="file-tree-action"`：鼠标悬停或聚焦时出现在行尾，触屏常驻。新增行尾操作不另写显隐逻辑。
+- **图标按钮必须能互相区分。** 同屏的“新建会话”和“新建工作树”不能都是 `+`，用不同图标（如分支加加号）；纯图标按钮保留 `aria-label` 和 `title`。
+- **无障碍名称唯一。** 名称会被测试按 role 与名称匹配，新名称不要成为已有名称的子串（如 `仓库操作：x` 与 `仓库菜单 x`）。隐藏文字后改了名称，要同步更新用它定位的测试。
 - **点击显示详情。** 紧凑的指标（如 token 用量）点击后弹出 Popover 显示明细，不把所有信息常驻在界面上。
 - **加载时不闪现其他组件。** 首次渲染就是最终结构，不要先出现一个组件再替换成另一个；手机端尤其要检查。
 - **参考成熟产品。** 聊天界面以 Codex、Claude、Cursor 网页版的常见交互为参照，并在方案里说明借鉴了哪一点。
 
 ## Mobile
 
+- **空间预算：页头最多两行**：标题行（标题加图标操作）和一个主按钮行。小于 `sm` 时文字按钮优先变成图标（保留 `aria-label` 和 `title`），不要让一组按钮换成第二行再右对齐。
+- **固定槽位不随触控尺寸变化。** 重复行里的展开箭头、图标列宽度必须固定，否则带子项的行与普通行错位。全局 `.wm-control` 在触屏上有 44px 的 `min-width/min-height`，且未分层，`size-*` 压不住它。需要覆盖时给元素加 `data-*` 属性，在 `styles.css` 的同一媒体查询里写覆盖。
+- **浮层必须留在视口内。** Popover、Dropdown、Dialog、Drawer 都要设 `collisionPadding`（`ui/` 组件已默认 8），高度用 bits-ui 的 `--bits-*-available-height` 限制，内部滚动。
 - **内容优先，控件紧凑。** 手机上终端和代码要尽量多占空间。常规按钮触控高度 44px（`size="icon-touch"`、`size="sm-touch"`，或 `any-pointer-coarse:min-h-11`）。终端顶栏保持 32px 紧凑高度，不能把常用按钮做得过高。
 - **工具栏保持单行。** 小于 `sm` 时只常驻高频操作，低频功能（例如分屏）收进 ⋯ 菜单或直接在手机上隐藏。菜单项沿用原按钮的名称、处理函数和禁用条件。
 - **响应式只用断点。** 显隐靠 `max-sm:` 和 `sm:` 断点完成，不新增 JS 布局状态。
@@ -88,6 +105,7 @@ description: Use for any WebMux UI change — components, layout, styling, icons
 
 - `$state` 只用于参与渲染的状态。能算出来的值用 `$derived`。`$effect` 只做副作用，并且必须返回清理函数。
 - `$props()` 写明类型；事件用 `onclick`，不用 `on:`；可增删的列表用业务 ID 作 key。
+- 不对可能为 `undefined` 的 map 项使用 `bind:ref`：带 fallback 的 prop 会抛 `props_invalid_value` 并让整页空白。改用容器的 `bind:ref` 加 `querySelector`。
 - 运行时才能确定的尺寸，用 `style:--name` 配合 `h-(--name)` 这类类名实现，不写 `style:height`。
 
 ## Verification
@@ -100,12 +118,14 @@ description: Use for any WebMux UI change — components, layout, styling, icons
 
    遇到违规时修改代码。不加 `eslint-disable` 或 `jscpd:ignore`，也不扩大基线。
 2. 在真实页面或 Storybook（`pnpm --dir web storybook`，地址 `http://127.0.0.1:6006`）中查看改动。至少检查：
-   - 桌面视口（1280×720）和手机视口（390×844）；
+   - 桌面视口（1280×720）和手机视口 390×844、375×667、320×568（iPhone SE），改动涉及浮层或页头时再看横屏 667×375；
+   - 每个视口下 `document.documentElement.scrollWidth <= innerWidth`（没有页面级横向溢出），打开的浮层完整落在视口内；
    - 浅色和深色主题；
    - 键盘焦点和悬停状态；
    - 长文本。
-3. 改了 `ui/` 组件或设计系统场景时，更新 `web/stories/DesignSystem.svelte` 的示例，并运行 `pnpm --dir web exec vitest run --config vitest.config.ts` 中受影响的测试。交互行为有变化时，运行对应的 E2E spec。
-4. 用户要求查看效果时，提供可以直接打开的 Storybook 或应用 URL。
+3. Playwright 移动项目包含 Pixel 7 和 iPhone SE（320×568）。iPhone SE 用 iPhone UA，会触发 iOS 专属分支（例如推送要求安装到主屏幕），相关用例按项目名跳过并写明原因。移动控件或移动入口时，迁移所有 spec，重复流程抽成 helper（如 `repository-menu.ts`），不在多个 spec 里复制。
+4. 改了 `ui/` 组件或设计系统场景时，更新 `web/stories/DesignSystem.svelte` 的示例，并运行 `pnpm --dir web exec vitest run --config vitest.config.ts` 中受影响的测试。交互行为有变化时，运行对应的 E2E spec。
+5. 用户要求查看效果时，提供可以直接打开的 Storybook 或应用 URL。
 
 ## Delivery
 
@@ -115,4 +135,4 @@ description: Use for any WebMux UI change — components, layout, styling, icons
   - 标明视口，并使用隔离的演示数据；
   - 图片链接要求见 [UI PR 证据](../../../docs/agent-rules/testing.md#ui-pull-request-evidence)。
 - 行为或界面变化时，同步更新 `docs/user-stories/` 中受影响的故事，并在 PR 摘要中写明故事 ID。新增 variant 或契约时，同步更新设计系统或前端架构守卫文档。
-- 交付说明要写清实际做过的视觉检查和其局限，例如没有真机验证。
+- 交付说明要写清实际做过的视觉检查和其局限。无头浏览器的 `hover` 与 `any-pointer: coarse` 都为 false，悬停显示和触屏常驻无法验证，必须如实写“未验证”；同样要写没有真机验证。
