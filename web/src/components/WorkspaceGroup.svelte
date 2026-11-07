@@ -70,7 +70,7 @@
 
 <section
   class={separated
-    ? "min-w-0 space-y-3 border-t border-border pt-8"
+    ? "mt-8 min-w-0 space-y-3 border-t border-border pt-8"
     : "min-w-0 space-y-3"}
   data-worktree-id={worktree?.id}
   {hidden}
