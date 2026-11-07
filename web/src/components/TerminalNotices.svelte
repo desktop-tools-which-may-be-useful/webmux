@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { shellUi } from "../shell.svelte";
   import type { Snippet } from "svelte";
-  import { navigate } from "../api";
   import { Button } from "$lib/components/ui/button";
   import IconX from "~icons/tabler/x";
   import type { HybridNotice } from "../hooks/hybrid.svelte";
@@ -45,6 +43,7 @@
     session = "",
     listening,
     showForwards,
+    leave,
   }: {
     terminal: NoticeTerminal;
     uploads: NoticeUploads;
@@ -69,6 +68,8 @@
     listening?: readonly ListeningPort[];
     /** Opens the port-forwarding dialog. */
     showForwards?: () => void;
+    /** Leaves this session: the page returns home, a split closes its pane. */
+    leave: () => void;
   } = $props();
   const alertText = $derived([error, t.error].filter(Boolean).join(" "));
   let dismissedError = $state("");
@@ -177,10 +178,8 @@
 {#if recovery}{@render recovery()}{:else if t.connection === "missing"}<div
     class="notice-warning"
   >
-    会话不存在或已被移除。<Button
-      variant="outline"
-      size="sm"
-      onclick={() => navigate(shellUi.home)}>返回列表</Button
+    会话不存在或已被移除。<Button variant="outline" size="sm" onclick={leave}
+      >返回列表</Button
     >
   </div>{/if}
 {#if t.exitCode !== null && !recovery}
@@ -189,11 +188,8 @@
     role="status"
   >
     <span class="min-w-0 flex-1 truncate">进程已退出（code {t.exitCode}）</span>
-    <Button
-      variant="outline"
-      size="sm"
-      class="shrink-0"
-      onclick={() => navigate(shellUi.home)}>返回列表</Button
+    <Button variant="outline" size="sm" class="shrink-0" onclick={leave}
+      >返回列表</Button
     >
     <Button variant="outline" size="sm" class="shrink-0" onclick={remove}
       >移除会话</Button

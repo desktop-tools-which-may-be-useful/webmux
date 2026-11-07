@@ -27,7 +27,7 @@
   import { useChatUpload, useUpload } from "../hooks/upload.svelte";
   import { useFullscreen } from "../hooks/fullscreen.svelte";
   import { hasTouchInput, isIOS } from "../touch-input";
-  import { findShell } from "../shell.svelte";
+  import { findShell, shellUi } from "../shell.svelte";
   import type { ButtonSize, ButtonVariant } from "$lib/components/ui/button";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import VoiceButton from "../components/VoiceButton.svelte";
@@ -80,6 +80,7 @@
     oninfo,
     onremoved,
     onarchived,
+    onleave,
     showForwards,
     feedSession,
   }: {
@@ -99,6 +100,8 @@
       connection: string,
     ) => void;
     onremoved: () => void;
+    /** Closes this pane when others share the page; absent, a back button goes home. */
+    onleave?: () => void;
     // A live hybrid session was archived from this pane.
     onarchived: () => void;
     /** Opens the port-forwarding dialog from a port prompt. */
@@ -108,6 +111,7 @@
   } = $props();
   const draft = untrack(() => drafts.get(id));
   const shell = findShell();
+  const leave = () => (onleave ? onleave() : navigate(shellUi.home));
   const voiceEnabled = $derived(!!shell?.setup.value.voice);
   let composer = $state<TerminalInputComposer>();
   let chatView = $state<ChatView>();
@@ -732,6 +736,7 @@
   {#if hybrid.recoverable}<HybridRecovery
       record={hybrid.recoverable}
       onresumed={reopen}
+      {leave}
     />{/if}
 {/snippet}
 
@@ -768,6 +773,7 @@
     showFontSize={() => (settingsOpen = true)}
     {showFind}
     close={closeSession}
+    {leave}
     hybrid={hybrid.known ? hybrid : undefined}
   />
   <TerminalWorkspace
@@ -789,6 +795,7 @@
             : "absolute inset-x-0 top-0 z-30 flex flex-col bg-background"}
         >
           <TerminalNotices
+            {leave}
             terminal={t}
             {uploads}
             {draft}

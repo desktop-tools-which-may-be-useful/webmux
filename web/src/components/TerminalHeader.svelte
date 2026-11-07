@@ -3,12 +3,13 @@
   import { findShell, shellUi } from "../shell.svelte";
   import type { Snippet } from "svelte";
   import IconArrowLeft from "~icons/tabler/arrow-left";
+  import IconCode from "~icons/tabler/code";
   import IconArrowDown from "~icons/tabler/arrow-down";
   import IconMaximize from "~icons/tabler/maximize";
   import IconMinimize from "~icons/tabler/minimize";
   import IconUpload from "~icons/tabler/upload";
   import IconSearch from "~icons/tabler/search";
-  import { navigate, sessionStatusText } from "../api";
+  import { sessionStatusText } from "../api";
   import {
     Button,
     type ButtonSize,
@@ -70,6 +71,7 @@
     showScratch,
     showFontSize,
     close,
+    leave,
     showFind,
     hybrid,
     paneActions,
@@ -95,6 +97,8 @@
     showScratch: () => void;
     showFontSize: () => void;
     close: () => void;
+    /** Leaves this session: the page returns home, a split closes its pane. */
+    leave: () => void;
     showFind: () => void;
     hybrid?: HeaderHybrid;
     paneActions?: Snippet<[boolean]>;
@@ -114,6 +118,15 @@
   // Off the terminal view there is no PTY: terminal-only actions are hidden;
   // fullscreen, the code panel and closing the session stay.
   const terminalShown = $derived(!hybrid || hybrid.view === "terminal");
+  const codeLabel = $derived(
+    codeShown
+      ? desktop
+        ? "折叠代码"
+        : terminalShown
+          ? "终端"
+          : "聊天"
+      : "代码",
+  );
   // The chat view names the agent it talks to beside the session title.
   const chatAgent = $derived(
     hybrid?.view === "chat" ? (t.info?.agent ?? undefined) : undefined,
@@ -151,7 +164,7 @@
     size="icon-sm"
     aria-label={shellUi.mode === "chat" ? "返回新聊天" : "返回会话列表"}
     title={shellUi.mode === "chat" ? "返回新聊天" : "返回会话列表"}
-    onclick={() => navigate(shellUi.home)}
+    onclick={leave}
   >
     <IconArrowLeft class="size-4" aria-hidden="true" />
   </Button>
@@ -253,19 +266,17 @@
       toggle={toggleDraft}
     />
   {/if}
+  <!-- Green while the code panel is open; otherwise a plain icon button
+       like its neighbours. The name tells where the toggle goes next. -->
   <Button
-    variant="outline"
-    size="sm"
+    variant={codeShown ? "success" : "ghost"}
+    size="icon-sm"
     class="max-sm:hidden"
+    aria-label={codeLabel}
+    title={codeLabel}
     aria-pressed={codeShown}
     onclick={() => (codeShown = !codeShown)}
-    >{codeShown
-      ? desktop
-        ? "折叠代码"
-        : terminalShown
-          ? "终端"
-          : "聊天"
-      : "代码"}</Button
+    ><IconCode class="size-4" aria-hidden="true" /></Button
   >
   {#if fullscreen.offered}<Button
       variant="ghost"

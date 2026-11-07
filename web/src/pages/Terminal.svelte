@@ -444,6 +444,7 @@
             }}
             onremoved={() => close(pane.sessionId)}
             onarchived={() => close(pane.sessionId)}
+            onleave={ids.length > 1 ? () => close(pane.sessionId) : undefined}
             showForwards={() => (forwarding = true)}
             feedSession={feedById.get(pane.sessionId)}
             oninfo={(value, connection) => {

@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { findShell, shellUi } from "../shell.svelte";
+  import { findShell } from "../shell.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { navigate } from "../api";
   import { resumeSession } from "../recoverable";
   import type { ArchivedSession } from "../schemas";
   import HybridRecordHints from "./HybridRecordHints.svelte";
@@ -12,9 +11,12 @@
   let {
     record,
     onresumed,
+    leave,
   }: {
     record: ArchivedSession;
     onresumed: () => void;
+    /** Leaves this session: the page returns home, a split closes its pane. */
+    leave: () => void;
   } = $props();
   let busy = $state(false);
   let error = $state("");
@@ -51,8 +53,6 @@
       onbusy={(active) => (busy = active)}
       onerror={(message) => (error = message)}
     />
-    <Button variant="ghost" size="sm" onclick={() => navigate(shellUi.home)}
-      >返回列表</Button
-    >
+    <Button variant="ghost" size="sm" onclick={leave}>返回列表</Button>
   </div>
 </div>

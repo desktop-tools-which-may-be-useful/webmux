@@ -77,7 +77,9 @@ for (const initialization of ["connected", "font-pending"] as const) {
       // Phones keep the host in the drawer.
       if (!info.project.use.isMobile)
         await expect(
-          page.getByRole("complementary", { name: "侧栏" }).getByRole("status"),
+          page
+            .getByRole("complementary", { name: "侧栏" })
+            .getByRole("button", { name: /^查看主机状态：/ }),
         ).toHaveAttribute("title", `${hostname()} 在线`);
       await expect(
         page.getByLabel("正在加载会话", { exact: true }),

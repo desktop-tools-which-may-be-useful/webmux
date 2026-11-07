@@ -277,6 +277,47 @@ test("existing sessions can join a split and missing panes can be dismissed", as
   await expect(page.locator(`[data-session-id="${id}"]`)).toBeVisible();
 });
 
+test("返回列表 in a split leaves only its own pane", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  const id = await createShell(page, "Anchor", workDir);
+  const created = await request.post("/api/sessions", {
+    data: {
+      cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+      cwd: workDir,
+      name: "Gone soon",
+    },
+  });
+  const gone = (await created.json()).session;
+  await openPaneMenu(page);
+  await page.getByRole("menuitem", { name: "加入已有会话…" }).click();
+  await page.getByRole("radio", { name: "左右分屏", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Gone soon/ })
+    .click();
+  await expect(page.locator(".split-terminal")).toHaveCount(2);
+  const pane = page.locator(`[data-session-id="${gone.id}"]`);
+  await ready(pane);
+  await request.delete(`/api/sessions/${gone.id}`);
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/sessions/${gone.id}`)).json()).status,
+    )
+    .toBe("exited");
+  await request.delete(`/api/sessions/${gone.id}?remove=1`);
+  await page.reload();
+  await expect(pane).toContainText("会话不存在或已被移除");
+
+  await pane.getByRole("button", { name: "返回列表" }).click();
+  await expect(page.locator(".split-terminal")).toHaveCount(1);
+  await expect(page).toHaveURL(new RegExp(`/s/${id}`));
+  await expect(page.locator(`[data-session-id="${id}"]`)).toBeVisible();
+});
+
 test("failed split creation leaves the current terminal intact", async ({
   page,
   workDir,
