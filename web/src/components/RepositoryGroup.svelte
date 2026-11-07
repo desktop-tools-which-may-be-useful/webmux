@@ -134,9 +134,9 @@
   {#if contentReady}<Collapsible.Content
       forceMount
       hidden={!open}
-      class="space-y-8"
+      class="space-y-0"
     >
-      {#each renderLayout.shown as { tree, pinned } (tree.id)}
+      {#each renderLayout.shown as { tree, pinned }, index (tree.id)}
         {@const treeArchive = shownArchive(archived.worktrees.get(tree.id))}
         <WorkspaceGroup
           title={worktreeTitle(tree)}
@@ -145,6 +145,7 @@
           sessions={sessions.filter((s) => s.workspace?.worktreeId === tree.id)}
           {visibleIds}
           {compact}
+          separated={index > 0}
           hidden={hidden ||
             !open ||
             (!!worktree && worktree !== tree.id) ||
@@ -169,6 +170,7 @@
           sessions={missing}
           {visibleIds}
           {compact}
+          separated={renderLayout.shown.length > 0}
           hidden={hidden ||
             !open ||
             !!worktree ||

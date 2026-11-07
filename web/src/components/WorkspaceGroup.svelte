@@ -21,6 +21,7 @@
     sessions,
     visibleIds,
     hidden = false,
+    separated = false,
     compact = false,
     now,
     onclose,
@@ -37,6 +38,8 @@
     sessions: SessionInfo[];
     visibleIds?: ReadonlySet<string>;
     hidden?: boolean;
+    /** Adds a divider before this worktree when it follows another group. */
+    separated?: boolean;
     compact?: boolean;
     now: number;
     onclose: (session: SessionInfo) => void;
@@ -66,7 +69,9 @@
 </script>
 
 <section
-  class="min-w-0 space-y-3"
+  class={separated
+    ? "min-w-0 space-y-3 border-t border-border pt-8"
+    : "min-w-0 space-y-3"}
   data-worktree-id={worktree?.id}
   {hidden}
   aria-label={title}
