@@ -45,7 +45,7 @@
       <Button
         {...props}
         variant="ghost"
-        size="icon-touch"
+        size="icon"
         aria-label="会话选项"
         title="会话选项"><IconSettings aria-hidden="true" /></Button
       >

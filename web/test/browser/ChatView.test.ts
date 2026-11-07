@@ -644,33 +644,33 @@ test("a request answered on another device closes with the next state", async ()
   expect(commands()).toEqual([]);
 });
 
-test("steering is offered only while a turn runs on an agent that takes it", async () => {
+test("Ctrl+Enter steers only while a turn runs on an agent that takes it", async () => {
   respond(/^POST .*\/input$/, () =>
     Response.json({ view: "chat", queued: false }),
   );
   const socket = await open();
-  const steer = page.getByRole("button", { name: "插话" });
+  expect(page.getByRole("button", { name: "插话" }).elements()).toHaveLength(0);
   socket.frame(snapshot(chatState({ steering: true })));
   await page.getByRole("textbox", { name: "消息" }).fill("顺便检查空列表");
   await expect
     .element(page.getByRole("button", { name: "发送" }))
     .toBeVisible();
-  expect(steer.elements()).toHaveLength(0);
 
   socket.frame({
     type: "state",
     state: chatState({ steering: false, turn: { running: true } }),
   });
+  // With text typed the send button queues instead of stopping.
   await expect
-    .element(page.getByRole("button", { name: "停止" }))
+    .element(page.getByRole("button", { name: "加入排队" }))
     .toBeVisible();
-  expect(steer.elements()).toHaveLength(0);
 
   socket.frame({
     type: "state",
     state: chatState({ steering: true, turn: { running: true } }),
   });
-  await steer.click();
+  await page.getByRole("textbox", { name: "消息" }).click();
+  await userEvent.keyboard("{Control>}{Enter}{/Control}");
   await expect.poll(commands).toEqual([
     {
       method: "POST",
@@ -682,6 +682,72 @@ test("steering is offered only while a turn runs on an agent that takes it", asy
       },
     },
   ]);
+});
+
+test("the send button stops a running turn while there is nothing to send", async () => {
+  respond(/^POST .*\/interrupt$/, () => new Response(null, { status: 204 }));
+  const socket = await open();
+  socket.frame(snapshot(chatState({ turn: { running: true } })));
+  const input = page.getByRole("textbox", { name: "消息" });
+  await expect
+    .element(page.getByRole("button", { name: "停止" }))
+    .toBeVisible();
+  expect(
+    page.getByRole("button", { name: "加入排队" }).elements(),
+  ).toHaveLength(0);
+
+  await input.fill("下一步");
+  await expect
+    .element(page.getByRole("button", { name: "加入排队" }))
+    .toBeVisible();
+  expect(page.getByRole("button", { name: "停止" }).elements()).toHaveLength(0);
+
+  await input.fill("");
+  await page.getByRole("button", { name: "停止" }).click();
+  await expect.poll(commands).toEqual([
+    {
+      method: "POST",
+      path: `/api/sessions/${id}/interrupt`,
+      body: { clientRequestId: expect.any(String) },
+    },
+  ]);
+});
+
+test("the transcript stays at its end when the composer grows on a phone", async () => {
+  await page.viewport(390, 700);
+  try {
+    const socket = await open();
+    socket.frame(snapshot(chatState()));
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events(
+        ...Array.from({ length: 30 }, (_, index) => ({
+          kind: "message.append" as const,
+          message: {
+            messageId: `m${index}`,
+            role: "agent" as const,
+            text: `第 ${index} 条回复`,
+          },
+        })),
+      ),
+    });
+    const transcript = page.getByRole("list", { name: "对话" });
+    await expect.element(transcript.getByText("第 29 条回复")).toBeVisible();
+    const scroller = transcript.element().parentElement!.parentElement!;
+    const atEnd = () =>
+      Math.abs(
+        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
+      ) < 2;
+    expect(atEnd()).toBe(true);
+
+    // Typing expands the compact bar; the newest reply must stay in view.
+    await page.getByRole("textbox", { name: "消息" }).fill("a\nb\nc\nd");
+    await expect.poll(atEnd).toBe(true);
+    await expect.element(transcript.getByText("第 29 条回复")).toBeVisible();
+  } finally {
+    await page.viewport(1024, 900);
+  }
 });
 
 test("typing / lists and filters published commands without authentication flows", async () => {
@@ -938,6 +1004,10 @@ test("narrow screens move session options into a popover beside the upload butto
     (input.element() as HTMLTextAreaElement).blur();
     await expect.element(where).not.toBeVisible();
     await expect.element(optionsButton).not.toBeVisible();
+    // The resting bar stays one line of transcript-friendly height.
+    const card = document.querySelector("[data-chat-composer] > .rounded-lg")!;
+    // Sized in rem, so it grows with the mobile root font size.
+    expect(card.getBoundingClientRect().height).toBeLessThanOrEqual(46);
   } finally {
     await page.viewport(1024, 900);
   }
@@ -949,7 +1019,7 @@ async function composerButtonSizes() {
     snapshot(chatState({ steering: true, turn: { running: true } })),
   );
   await page.getByRole("textbox", { name: "消息" }).fill("下一步");
-  const names = ["上传文件", "插话", "停止", "快捷指令", "加入排队"];
+  const names = ["上传文件", "快捷指令", "加入排队"];
   const sizes: Record<string, string> = {};
   for (const name of names) {
     const button = page.getByRole("button", { name });

@@ -199,6 +199,17 @@
     void chat?.turn.running;
     if (stick && scroller) scroller.scrollTop = scroller.scrollHeight;
   });
+  // The composer growing (a tap on the compact bar) or the on-screen keyboard
+  // shrinks the transcript from below: a reader at the end stays at the end.
+  $effect(() => {
+    if (!scroller) return;
+    const element = scroller;
+    const observer = new ResizeObserver(() => {
+      if (stick) element.scrollTop = element.scrollHeight;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
 
   function answer(requestId: string, reply: RequestAnswer) {
     answering = true;
@@ -325,7 +336,7 @@
       >
     {/if}
   </div>
-  <div class="mx-auto w-full max-w-3xl space-y-2 px-3 pb-safe-4 sm:px-4">
+  <div class="mx-auto w-full max-w-3xl space-y-2 px-3 pb-safe-2 sm:px-4">
     {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
     {#if chat?.connectorMissing}
       <ConnectorInstallHint connector={chat.connectorMissing}>

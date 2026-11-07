@@ -50,21 +50,21 @@
 >
   {#if workspace}
     <span
-      class="flex h-(--control-xs) min-w-0 items-center gap-1 px-2"
+      class="flex h-6 min-w-0 items-center gap-1 px-2"
       title={`仓库：${repositoryName}（创建后不可更改）`}
       ><IconBook2 aria-hidden="true" /><span class="sr-only">仓库：</span><span
         class="truncate">{repositoryName}</span
       ></span
     >
     {#if branch}<span
-        class="flex h-(--control-xs) min-w-0 items-center gap-1 px-2"
+        class="flex h-6 min-w-0 items-center gap-1 px-2"
         title={`分支：${branch}（${workspace.worktreePath}）`}
         ><IconGitBranch aria-hidden="true" /><span class="sr-only">分支：</span
         ><span class="truncate">{branch}</span></span
       >{/if}
   {:else}
     <span
-      class="flex h-(--control-xs) min-w-0 items-center gap-1 px-2"
+      class="flex h-6 min-w-0 items-center gap-1 px-2"
       title={`目录：${cwd}（创建后不可更改）`}
       ><IconFolder aria-hidden="true" /><span class="sr-only">目录：</span><span
         class="truncate">{baseName(cwd)}</span

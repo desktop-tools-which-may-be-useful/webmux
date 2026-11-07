@@ -22,7 +22,7 @@
 
 <Button
   variant="ghost"
-  size="icon-touch"
+  size="icon"
   aria-label="上传文件"
   title={unavailable || "上传文件"}
   disabled={disabled || uploads.progress !== null || !!unavailable}

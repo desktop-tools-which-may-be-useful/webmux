@@ -60,9 +60,9 @@ agent 在回合进行中通常不能接受新的提示：OpenCode 会直接报�
 
 ### Requirement: 插话
 
-只有当档案声明了插话方法、agent 在初始化时声明支持、且有运行中的回合时，界面才 SHALL 显示“插话”。`steer` 模式的发送 SHALL 把文本注入当前回合，不进入队列。
+只有当档案声明了插话方法、agent 在初始化时声明支持、且有运行中的回合时，输入框才 SHALL 接受 Ctrl/Cmd+Enter 作为“插话”。界面 SHALL NOT 提供单独的插话按钮。`steer` 模式的发送 SHALL 把文本注入当前回合，不进入队列。
 
-不满足条件时，`steer` 请求 SHALL 返回 409，界面 SHALL NOT 显示插话入口。
+不满足条件时，`steer` 请求 SHALL 返回 409，Ctrl/Cmd+Enter SHALL 退化为普通发送。
 
 档案声明插话需要空闲行为参数时（Codex），插话请求 SHALL 带上 `_meta.steering.idleBehavior = "promptRequired"`，并按返回的 `outcome` 处理：
 
@@ -74,7 +74,12 @@ agent 在回合进行中通常不能接受新的提示：OpenCode 会直接报�
 #### Scenario: OpenCode 没有插话
 
 - **WHEN** 用户在 OpenCode 的混合会话中有回合运行
-- **THEN** 输入框旁只有发送与停止，没有插话按钮
+- **THEN** Ctrl/Cmd+Enter 与普通发送相同
+
+#### Scenario: 发送键兼作停止键
+
+- **WHEN** 回合运行中且输入框没有文字与附件
+- **THEN** 发送键显示为“停止”，点击停止当前回合；输入文字后恢复为“加入排队”
 
 #### Scenario: 插话时回合恰好结束
 

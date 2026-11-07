@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import IconArrowUp from "~icons/tabler/arrow-up";
-  import IconMessageBolt from "~icons/tabler/message-bolt";
   import IconPlayerStopFilled from "~icons/tabler/player-stop-filled";
   import { Button, type ButtonSize } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
@@ -33,7 +32,8 @@
 
   // The chat input. Its text is the session's draft, saved on this device
   // like the terminal draft. Sending while a turn runs queues on the server;
-  // "插话" appears only when the agent can take text into the running turn.
+  // Ctrl/Cmd+Enter injects into the running turn when the agent takes it, and
+  // the send button stops the turn while there is nothing to send.
   // "/" opens the agent's commands.
   let {
     draft,
@@ -94,6 +94,8 @@
   );
   const compact = $derived(compactState.compact);
   const steerable = $derived(running && chat.steering);
+  // With nothing to send the send button stops the running turn.
+  const stopping = $derived(running && !ready && !uploading && !sending);
   const queueing = $derived(running || chat.queue.paused);
   const query = $derived(
     /^\/\S*$/.test(draft.text) ? draft.text.slice(1).toLowerCase() : null,
@@ -208,7 +210,7 @@
   <div
     class={[
       "rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20",
-      compact && "max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:p-1",
+      compact && "max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:p-0.5",
     ]}
   >
     {#if menuOpen}
@@ -320,39 +322,27 @@
       {#if chat.usage}<span class={["contents", compact && "max-sm:hidden"]}
           ><UsageRing usage={chat.usage} /></span
         >{/if}
-      {#if steerable}
+      <span class={["flex items-center gap-1", compact && "max-sm:hidden"]}>
+        {@render quickMenu?.("top", "icon")}
+      </span>
+      {#if stopping}
         <Button
-          variant="outline"
-          size="icon-touch"
-          class={compact ? "max-sm:hidden" : ""}
-          aria-label="插话"
-          title="插话：注入当前回合（Ctrl+Enter）"
-          disabled={disabled || !ready || sending || uploading}
-          onclick={() => submit("steer")}
-          ><IconMessageBolt aria-hidden="true" /></Button
-        >
-      {/if}
-      {#if running}
-        <Button
-          variant="outline"
-          size="icon-touch"
+          size="icon"
           aria-label="停止"
           title="停止当前回合"
           disabled={!!unavailable}
           onclick={stop}><IconPlayerStopFilled aria-hidden="true" /></Button
         >
+      {:else}
+        <Button
+          size="icon"
+          aria-label={queueing ? "加入排队" : "发送"}
+          title={queueing ? "加入排队" : "发送"}
+          disabled={disabled || !ready || sending || uploading}
+          onclick={() => submit("auto")}
+          ><IconArrowUp aria-hidden="true" /></Button
+        >
       {/if}
-      <span class={["flex items-center gap-1", compact && "max-sm:hidden"]}>
-        {@render quickMenu?.("top", "icon-touch")}
-      </span>
-      <Button
-        size="icon-touch"
-        aria-label={queueing ? "加入排队" : "发送"}
-        title={queueing ? "加入排队" : "发送"}
-        disabled={disabled || !ready || sending || uploading}
-        onclick={() => submit("auto")}
-        ><IconArrowUp aria-hidden="true" /></Button
-      >
     </div>
   </div>
   <!-- Session options sit under the card as icon controls: the same quiet

@@ -11,6 +11,10 @@
   padding-bottom: max(--spacing(4), var(--safe-bottom));
 }
 
+@utility pb-safe-2 {
+  padding-bottom: max(--spacing(2), var(--safe-bottom));
+}
+
 /* Terminal preview of --preview-lines lines plus its padding. */
 @utility h-preview {
   height: calc(var(--preview-lines) * 1lh + 1rem);
@@ -586,6 +590,11 @@
   /* Information-dense pages trade some target size for visible content. */
   .workspace-page .wm-control,
   .code-panel .wm-control {
+    min-height: var(--control-touch-compact);
+    min-width: var(--control-touch-compact);
+  }
+  /* The composer trades target size for transcript space, resting or not. */
+  [data-chat-composer] .wm-control {
     min-height: var(--control-touch-compact);
     min-width: var(--control-touch-compact);
   }

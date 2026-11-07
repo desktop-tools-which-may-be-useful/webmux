@@ -46,7 +46,7 @@
       },
       // Floats above content, e.g. an overlay action on a terminal or code.
       raised: {
-        true: "border-border shadow-md",
+        true: "border-border bg-background shadow-md dark:bg-background dark:hover:bg-muted",
       },
     },
     defaultVariants: {

@@ -99,7 +99,8 @@
   - 队列可编辑、上移、删除、二次确认后立即发送；
   - 回合被停止、出错或拒绝时队列暂停并提示继续或清空；
   - 按 `clientRequestId` 去重，重试不重复发送；
-  - 只有档案与 agent 都声明支持（omp、Codex、Claude Code）且回合进行中时显示“插话”，OpenCode 与 Antigravity CLI 没有插话；
+  - 只有档案与 agent 都声明支持（omp、Codex、Claude Code）且回合进行中时，输入文字后按 Ctrl/Cmd+Enter 才会插话（界面没有插话按钮），OpenCode 与 Antigravity CLI 没有插话；
+  - 回合进行中且没有文字与附件时，发送键变为停止键（名称“停止”），点击停止当前回合；有内容时保持“加入排队”；
   - Codex 与 Claude 的插话在回合已结束时返回 `promptRequired`（Claude 可为 `noRunningTurn`），这条消息排到队首作为下一回合发送，不产生 webmux 不知道的回合。
 - **US-Q09 聊天端提醒**：作为离开页面的使用者，我希望聊天端的回合状态像终端会话一样提醒我，以便及时回来批准或继续。
   验收要点：

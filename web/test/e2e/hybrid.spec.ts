@@ -290,7 +290,7 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expect(working(page)).toBeVisible();
     await expect(working(page)).toContainText(/· \d+ 秒/);
     await composer(page).fill("steer-nudge");
-    await page.getByRole("button", { name: "插话", exact: true }).click();
+    await composer(page).press("Control+Enter");
     await expect(composer(page)).toHaveValue("");
     await expect(conversation(page)).toContainText("steer-nudge");
     await expect(conversation(page)).toContainText("echo: steer-first");
