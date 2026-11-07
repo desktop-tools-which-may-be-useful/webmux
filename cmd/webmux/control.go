@@ -10,11 +10,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
-	"github.com/rainchan/webmux/internal/sessioncmd"
 )
 
 // clientFlags creates a flag set with the shared --config flag.
@@ -58,7 +58,7 @@ func statusCommand(args []string, stdout, stderr io.Writer) int {
 	if *asJSON {
 		writeJSON(stdout, status)
 	} else {
-		sessioncmd.PrintStatus(stdout, status)
+		clicmd.PrintStatus(stdout, status)
 	}
 	if status.Config.Error != "" {
 		_, _ = fmt.Fprintln(stderr, "webmux: configuration:", status.Config.Error)

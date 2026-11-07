@@ -150,14 +150,14 @@
 
 ### 依据
 
-- [会话命令与命令表](../../internal/sessioncmd/command.go)、[帮助渲染](../../internal/sessioncmd/help.go)、[元数据命令](../../internal/sessioncmd/metadata.go)、[运维命令表](../../cmd/webmux/commands.go)
+- [会话命令与命令表](../../internal/clicmd/command.go)、[帮助渲染](../../internal/clicmd/help.go)、[元数据命令](../../internal/clicmd/metadata.go)、[运维命令表](../../cmd/webmux/commands.go)
 - [会话详情与标签接口](../../internal/api/sessionmeta.go)、[父会话与标签](../../internal/session/relations.go)、[进程所属会话](../../internal/session/peer.go)
 - [本机套接字定位](../../cmd/webmux/sessions.go)、[会话环境](../../internal/session/env.go)、[保留变量](../../internal/contract/env.go)
-- [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/sessioncmd/guide.go)
-- [会话控制命令](../../internal/sessioncmd/control.go)、[补全](../../internal/sessioncmd/completion.go)
-- [notify 命令](../../internal/sessioncmd/notify.go)、[脚本提醒](../../internal/session/notify.go)、[推送正文](../../internal/push/alert.go)
-- [worktree 与主页显示命令](../../internal/sessioncmd/worktree.go)、[仓库命令](../../internal/sessioncmd/repo.go)、[启动配置命令](../../internal/sessioncmd/launchconfig.go)、[转发命令](../../internal/sessioncmd/forward.go)
-- [聊天命令](../../internal/sessioncmd/chat.go)、[聊天历史、设置与队列命令](../../internal/sessioncmd/chat_more.go)、[聊天接口](../../internal/api/chat.go)
-- [启动命令](../../internal/sessioncmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/sessioncmd/streams.go)、[仓库与主页显示](../../internal/sessioncmd/workspace.go)
+- [手册与简述](../../internal/agentguide/agentguide.go)、[手册主题](../../internal/agentguide/llms/connect.md)、[手册路由与说明接口](../../internal/api/guide.go)、[guide 与 dir 命令](../../internal/clicmd/guide.go)
+- [会话控制命令](../../internal/clicmd/control.go)、[补全](../../internal/clicmd/completion.go)
+- [notify 命令](../../internal/clicmd/notify.go)、[脚本提醒](../../internal/session/notify.go)、[推送正文](../../internal/push/alert.go)
+- [worktree 与主页显示命令](../../internal/clicmd/worktree.go)、[仓库命令](../../internal/clicmd/repo.go)、[启动配置命令](../../internal/clicmd/launchconfig.go)、[转发命令](../../internal/clicmd/forward.go)
+- [聊天命令](../../internal/clicmd/chat.go)、[聊天历史、设置与队列命令](../../internal/clicmd/chat_more.go)、[聊天接口](../../internal/api/chat.go)
+- [启动命令](../../internal/clicmd/launch.go)、[会话列表订阅、跟随与回合跟踪](../../internal/clicmd/streams.go)、[仓库与主页显示](../../internal/clicmd/workspace.go)
 - [会话创建与初始化指令展开](../../internal/workspace/create_session.go)、[会话接口](../../internal/api/sessions.go)、[快捷指令运行](../../web/src/components/SessionTerminal.svelte)、[预设与内置变量](../../web/src/quickCommands.ts)
-- [脚本调整尺寸](../../internal/session/session.go)、[尺寸校验与创建尺寸](../../internal/session/manager.go)、[尺寸请求类型](../../internal/contract/sessions.go)、[resize 命令与 screen 滚动历史](../../internal/sessioncmd/control.go)
+- [脚本调整尺寸](../../internal/session/session.go)、[尺寸校验与创建尺寸](../../internal/session/manager.go)、[尺寸请求类型](../../internal/contract/sessions.go)、[resize 命令与 screen 滚动历史](../../internal/clicmd/control.go)

@@ -140,7 +140,7 @@
 - [更新命令](../../cmd/webmux/updatecmd.go)、[签名与更新](../../internal/update/)、[自动更新单元](../../deploy/linux/webmux-update.service)、[定时器](../../deploy/linux/webmux-update.timer)
 - [安装脚本](../../deploy/linux/postinstall.sh)、[自动更新说明](../deployment/updates.md)
 - [通道文件](../../internal/update/channel_unix.go)、[通道命令](../../cmd/webmux/updatecmd.go)
-- [已安装版本识别](../../internal/update/installed.go)、[状态输出](../../internal/sessioncmd/status.go)、[待生效提示组件](../../web/src/components/PendingUpdateNotice.svelte)
+- [已安装版本识别](../../internal/update/installed.go)、[状态输出](../../internal/clicmd/status.go)、[待生效提示组件](../../web/src/components/PendingUpdateNotice.svelte)
 - [提示逻辑](../../web/src/pendingUpdate.ts)、[提示用例](../../web/test/pendingUpdate.test.ts)
 - [部署指南](../deployment.md)、[设置页](../../web/src/pages/Settings.svelte)、[设置导航](../../web/src/components/SettingsNavigation.svelte)
 - [导航浏览器回归](../../web/test/browser/SettingsNavigation.test.ts)。

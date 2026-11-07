@@ -52,7 +52,9 @@ flowchart LR
 | `internal/localclient`                        | 经任意拨号器访问 HTTP/WS API 的客户端，可交叉编译到 Windows                                     |
 | `internal/client`                             | CLI 侧的实例定位、链接推导、`status`/`stop` 退回逻辑                                            |
 | `internal/config`                             | TOML 解析、默认值与校验                                                                         |
-| `internal/session`                            | PTY、环形缓冲、OSC 标题、屏幕预览、状态探测、进程树清理                                         |
+| `internal/session`                            | PTY 生命周期、环形缓冲、OSC 标题、状态协调、进程组清理                                          |
+| `internal/vtpreview`                          | 纯无状态 ANSI/VT 终端预览模拟与安全回放快照提取                                                 |
+| `internal/procpeek`                           | 跨平台进程树追溯、进程事实检查与监听端口扫描                                                    |
 | `internal/hub`                                | 终端 WebSocket：快照与订阅、输出合并、JSON 控制帧编码、输入写入与取消                           |
 | `internal/api`                                | REST 路由、认证、Origin 检查、上传请求解析、错误到状态码的映射、静态资源与 SPA 回退             |
 | `internal/files`                              | 目录补全、创建目录、上传文件落盘（私有临时目录）                                                |
@@ -70,10 +72,11 @@ flowchart LR
 | `internal/docguard`                           | 只含测试：文档与 spec 的行数、体积、目录扇出与树状组织规则                                      |
 | `internal/wslclient`                          | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算 |
 | `internal/attach`                             | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                |
-| `internal/sessioncmd`, `cmd/webmux-windows`   | `run`/`attach`/`ls`/`open` 共用实现；Windows 控制台客户端入口                                   |
-| `internal/tray`                               | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与日志                        |
+| `internal/clicmd`, `cmd/webmux-windows`       | 跨平台客户端共享 CLI 命令实现集合（会话、工作区、聊天、启动等）；Windows 控制台客户端入口       |
+| `internal/tray`                               | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与菜单视图                    |
+| `internal/tray/traysys`                       | 托盘系统管理操作：防火墙规则、登录自启动项、单实例与进程管理、安装程序启动                      |
 | `internal/tray/forward`                       | 托盘转发：同源校验后把请求中转到 WebMux 的 TCP 监听                                             |
-| `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
+| `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘通知区界面、菜单渲染、通知与剪贴板（`//go:build windows`）                          |
 | `internal/hybrid`                             | 混合会话：每会话一个 actor、记录持久化、聊天事件规范化、切换与恢复                              |
 | `internal/artifacts`                          | 会话交互产物目录（系统临时目录下的私有文件夹，含 `uploads/`）的创建与清理                       |
 | `internal/settingsstore`                      | 隧道与 Tailscale 设置共用的打开、读取、提交与 fail-closed 骨架                                  |
@@ -101,13 +104,13 @@ Tailscale 控制器的生命周期：
 
 后端分为五层，`internal/archtest` 用 `golang.org/x/tools/go/packages` 加载带类型信息的源码检查规则；违规让 `go test ./...` 失败，一次列出全部违规，每条形如 `文件:行 [Rn] 消息 — 修复提示`。规则基于类型解析，导入别名、点导入和函数值都绕不过。
 
-| 层             | 包                                                                                                                                                   | 职责                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 装配根         | `cmd/...`                                                                                                                                            | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
-| Controller     | `internal/api`、`internal/hub`、`internal/wire`                                                                                                      | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
-| Service        | `session`、`hybrid`、`workspace`、`settings`、`launch`、`push`、`codeview`、`files`、`artifacts`、`tunnelsettings`、`tailscale`、`tailscalesettings` | 业务规则、状态、文件系统与进程                                                     |
-| 共享           | `contract`、`config`、`runtime`、`jsonutil`、`statefile`、`settingsstore`、`fetch`、`pathutil`、`attentionkind`、`wsl`、`acp`、`agentprofile/...`    | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
-| 服务器外客户端 | `client`、`localclient`、`attach`、`sessioncmd`、`tray/...`、`wslclient`、`tunnel`、`service`                                                        | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
+| 层             | 包                                                                                                                                                                         | 职责                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 装配根         | `cmd/...`                                                                                                                                                                  | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
+| Controller     | `internal/api`、`internal/hub`、`internal/wire`                                                                                                                            | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
+| Service        | `session`、`hybrid`、`workspace`、`settings`、`launch`、`push`、`codeview`、`files`、`artifacts`、`tunnelsettings`、`tailscale`、`tailscalesettings`                       | 业务规则、状态、文件系统与进程                                                     |
+| 共享           | `contract`、`config`、`runtime`、`jsonutil`、`statefile`、`settingsstore`、`fetch`、`pathutil`、`attentionkind`、`procpeek`、`vtpreview`、`wsl`、`acp`、`agentprofile/...` | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
+| 服务器外客户端 | `client`、`localclient`、`attach`、`clicmd`、`tray/...`、`wslclient`、`tunnel`、`service`                                                                                  | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
 
 | 规则 | 检查                                                                                                                                                                                                                                                                                      |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -118,11 +118,11 @@
     "agent-trust": "internal/agenttrust 在启动 Claude Code、Codex、Copilot CLI、Antigravity CLI 前，以临时文件加改名的方式在它们自己的配置文件（.claude.json、config.toml、config.json、settings.json）里追加目标目录的信任记录；这些是外部 agent 的状态而非 WebMux 存储，已有文件保留其他内容与权限，缺失的 Claude/Copilot/Antigravity 配置不创建，由 agent_pretrust 开关控制。"
   },
   "references": {
-    "internal/sessioncmd/repo.go|Env.editText|os.CreateTemp": {
+    "internal/clicmd/repo.go|Env.editText|os.CreateTemp": {
       "count": 1,
       "owner": "editor-scratch"
     },
-    "internal/sessioncmd/repo.go|Env.editText|os.Remove": {
+    "internal/clicmd/repo.go|Env.editText|os.Remove": {
       "count": 1,
       "owner": "editor-scratch"
     },

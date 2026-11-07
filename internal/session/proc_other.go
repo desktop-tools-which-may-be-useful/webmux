@@ -4,25 +4,9 @@ package session
 
 import "github.com/creack/pty"
 
-type processTable struct{}
-type processSnapshot struct{}
-
-func processes() processTable                         { return processTable{} }
-func newProcessSnapshot(processTable) processSnapshot { return processSnapshot{} }
-func (processSnapshot) foregroundBlocked(int) bool    { return false }
-func (processSnapshot) awaitingInput(int) bool        { return false }
-func rootProcess(int) (exe, cwd string)               { return "", "" }
-func processFacts(int) (ProcessFacts, bool)           { return ProcessFacts{}, false }
-
 func (s *Session) resizePTYLocked(cols, rows uint16) error {
 	if s.run == nil {
 		return ErrNoRun
 	}
 	return pty.Setsize(s.run.terminal, &pty.Winsize{Cols: cols, Rows: rows})
 }
-
-func runChildren(int) []string  { return nil }
-func runOpenFiles(int) []string { return nil }
-
-// ProcessTree is unsupported on this platform and returns nil.
-func ProcessTree(int) []int { return nil }

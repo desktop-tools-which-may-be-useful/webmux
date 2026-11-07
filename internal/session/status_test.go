@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 func TestStatusBoundaries(t *testing.T) {
@@ -29,14 +31,34 @@ func TestPreviewSplitUnicodeAndANSI(t *testing.T) {
 	for _, b := range raw {
 		p.Feed([]byte{b})
 	}
-	if got := p.last; got != "Continue?" {
+	if got := p.LastLine(); got != "Continue?" {
 		t.Fatal(got)
+	}
+}
+
+func TestPreviewSnapshotsRemainIndependent(t *testing.T) {
+	var s Session
+	s.info.Preview = s.preview.Feed([]byte("one\r\ntwo\r\nthree"))
+	previous := s.Info()
+	s.info.Preview = s.preview.Feed([]byte(" more\r\nfour\r\nfive"))
+	current := s.Info()
+	if previous.Preview != "one\ntwo\nthree" {
+		t.Fatalf("previous snapshot changed: %q", previous.Preview)
+	}
+	if current.Preview != "one\ntwo\nthree more\nfour\nfive" {
+		t.Fatalf("current snapshot = %q", current.Preview)
+	}
+	if sameDisplay(previous, current) {
+		t.Fatal("preview change was invisible")
+	}
+	if !sameDisplay(current, s.Info()) {
+		t.Fatal("unchanged preview did not compare equal")
 	}
 }
 
 func TestStatusUsesLatestPreviewLine(t *testing.T) {
 	now := time.Now()
-	var snapshot processSnapshot
+	var snapshot procpeek.Snapshot
 	for _, row := range []struct {
 		name, output, pattern string
 		want                  Status
@@ -55,7 +77,7 @@ func TestStatusUsesLatestPreviewLine(t *testing.T) {
 			s.info.Preview = s.preview.Feed([]byte(row.output))
 			s.evaluate(now, snapshot, 30*time.Second, []*regexp.Regexp{regexp.MustCompile(row.pattern)})
 			if s.info.Status != row.want {
-				t.Fatalf("preview %q, latest %q: status = %s, want %s", s.info.Preview, s.preview.last, s.info.Status, row.want)
+				t.Fatalf("preview %q, latest %q: status = %s, want %s", s.info.Preview, s.preview.LastLine(), s.info.Status, row.want)
 			}
 		})
 	}
@@ -117,6 +139,22 @@ func TestHybridMetadataParticipatesInDisplayComparison(t *testing.T) {
 	b.Hybrid.AgentIcon = "opencode"
 	if sameDisplay(a, b) {
 		t.Fatal("hybrid agent icon change was invisible")
+	}
+}
+
+func TestListeningPortsParticipateInDisplayComparison(t *testing.T) {
+	a := Info{}
+	b := Info{ListeningPorts: []ListeningPort{{Port: 5173, Process: "node"}}}
+	if sameDisplay(a, b) {
+		t.Fatal("new listening port was invisible")
+	}
+	a.ListeningPorts = []ListeningPort{{Port: 5173, Process: "node"}}
+	if !sameDisplay(a, b) {
+		t.Fatal("equal listening ports were compared by identity")
+	}
+	b.ListeningPorts = []ListeningPort{{Port: 5173, Process: "bun"}}
+	if sameDisplay(a, b) {
+		t.Fatal("listening process change was invisible")
 	}
 }
 

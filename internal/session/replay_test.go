@@ -3,8 +3,6 @@ package session
 import (
 	"bytes"
 	"testing"
-
-	"github.com/0magnet/xterm-go/vt"
 )
 
 func TestTruncatedResetDiscardsRawSuffix(t *testing.T) {
@@ -122,22 +120,7 @@ func TestTruncatedResetPreservesModesWithoutScreenText(t *testing.T) {
 	if len(frame) < 2 || frame[0] != 1 || bytes.Contains(frame, []byte("do-not-replay")) {
 		t.Fatalf("mode-only snapshot: %q", frame)
 	}
-	restored := vt.NewTerminal(vt.NewOptions())
-	restored.Write(frame[1:])
-	core := restored.CoreService()
-	modes := core.DecPrivateModes
-	if restored.Buffer() != restored.Buffers().Alt() || !core.Modes.InsertMode || !modes.ApplicationCursorKeys || !modes.ApplicationKeypad || !modes.BracketedPasteMode || !modes.SendFocus || !modes.Origin || !modes.ReverseWraparound || modes.Wraparound || !core.IsCursorHidden {
-		t.Fatalf("persistent modes lost: core %+v, modes %+v", core, modes)
-	}
-	if mouse := restored.MouseService(); mouse.ActiveProtocol() != "ANY" || mouse.ActiveEncoding() != "SGR" {
-		t.Fatalf("mouse modes lost: %s/%s", mouse.ActiveProtocol(), mouse.ActiveEncoding())
-	}
-	preview := Preview{screen: restored}
-	if text := preview.snapshot(); text != "" {
-		t.Fatalf("retained screen text replayed: %q", text)
-	}
-	restored.Write([]byte("\x1b[?1049l"))
-	if restored.Buffer() != restored.Buffers().Normal() || preview.snapshot() != "" {
-		t.Fatal("alternate-buffer exit did not return to an empty normal buffer")
+	if !bytes.Equal(frame, s.preview.RecoveryFrame()) {
+		t.Fatalf("frame = %q, want %q", frame, s.preview.RecoveryFrame())
 	}
 }

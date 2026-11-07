@@ -2,7 +2,9 @@ package tray
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rainchan/webmux/internal/wslclient"
 )
@@ -139,6 +141,77 @@ func (t Target) Journal() Invocation {
 func ListQuiet() Invocation   { return Invocation{Argv: []string{wslExe, "--list", "--quiet"}} }
 func ListVerbose() Invocation { return Invocation{Argv: []string{wslExe, "--list", "--verbose"}} }
 func WSLVersion() Invocation  { return Invocation{Argv: []string{wslExe, "--version"}} }
+
+// Distros lists installed distributions: names from --list --quiet (exact,
+// including spaces) and the default from --list --verbose.
+func Distros(ctx context.Context, r Runner) ([]wslclient.Distro, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	verboseInv := ListVerbose()
+	res, err := r.Run(ctx, verboseInv.Argv, verboseInv.Env)
+	if err != nil {
+		return nil, err
+	}
+	if res.Code != 0 {
+		return nil, fmt.Errorf("wsl.exe --list --verbose: exit %d: %s", res.Code, strings.TrimSpace(wslclient.DecodeOutput(res.Stdout)))
+	}
+	verbose := wslclient.ParseListVerbose(res.Stdout)
+	quietInv := ListQuiet()
+	quiet, err := r.Run(ctx, quietInv.Argv, quietInv.Env)
+	if err != nil || quiet.Code != 0 {
+		return verbose, nil
+	}
+	defaults := map[string]bool{}
+	versions := map[string]int{}
+	for _, d := range verbose {
+		defaults[d.Name] = d.Default
+		versions[d.Name] = d.Version
+	}
+	var out []wslclient.Distro
+	for _, name := range wslclient.ParseListQuiet(quiet.Stdout) {
+		out = append(out, wslclient.Distro{Name: name, Default: defaults[name], Version: versions[name]})
+	}
+	return out, nil
+}
+
+// CheckWSL runs `wsl.exe --version`, which only the Microsoft Store WSL
+// supports, then lists the distributions.
+func CheckWSL(ctx context.Context, r Runner) ([]wslclient.Distro, error) {
+	versionCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	inv := WSLVersion()
+	res, err := r.Run(versionCtx, inv.Argv, inv.Env)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("%w：%v", ErrNoWSL, err)
+	}
+	if res.Code != 0 {
+		return nil, fmt.Errorf("%w（wsl.exe --version 失败，需要 Microsoft Store 版 WSL）", ErrNoWSL)
+	}
+	distros, err := Distros(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("%w：%v", ErrNoWSL, err)
+	}
+	if len(distros) == 0 {
+		return nil, ErrNoWSL
+	}
+	return distros, nil
+}
+
+// NetworkingMode reports `wslinfo --networking-mode`; failures count as NAT.
+func NetworkingMode(ctx context.Context, r Runner, t Target) string {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	inv := t.NetworkingMode()
+	res, err := r.Run(ctx, inv.Argv, inv.Env)
+	if err != nil || res.Code != 0 {
+		return "nat"
+	}
+	mode := strings.ToLower(strings.TrimSpace(wslclient.DecodeOutput(res.Stdout)))
+	if mode == "" {
+		return "nat"
+	}
+	return mode
+}
 
 func lookupEnv(environ []string, name string) string {
 	for _, entry := range environ {

@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/creack/pty"
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 var leaderMu sync.Mutex
@@ -34,11 +35,11 @@ func releaseLeader(pid int) {
 
 // A zombie has no usable environ. Reap adopted children regardless of terminal
 // SID or environment marker, but never take a managed leader's Wait result.
-func reapAdopted(table processTable) {
+func reapAdopted(table procpeek.Table) {
 	leaderMu.Lock()
 	defer leaderMu.Unlock()
 	for pid, state := range table {
-		if state.ppid != os.Getpid() || state.state != 'Z' {
+		if state.PPID != os.Getpid() || state.State != 'Z' {
 			continue
 		}
 		if _, managed := managedLeaders[pid]; managed {

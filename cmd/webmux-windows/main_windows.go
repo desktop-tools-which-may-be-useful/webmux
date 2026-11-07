@@ -24,9 +24,9 @@ import (
 	"golang.org/x/term"
 
 	"github.com/rainchan/webmux/internal/attach"
+	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
-	"github.com/rainchan/webmux/internal/sessioncmd"
 	"github.com/rainchan/webmux/internal/wslclient"
 )
 
@@ -35,42 +35,42 @@ var version = "dev"
 const usage = "usage: webmux [--distro NAME] [--webmux PATH] COMMAND [ARGS]\nRun 'webmux help' for the list of commands.\n"
 
 // windowsCommands are the commands only this client has; the session
-// commands come from sessioncmd.
-func windowsCommands() sessioncmd.Registry {
-	exits := []sessioncmd.ExitItem{{Code: 0, Text: "Done."}, {Code: 1, Text: "Failed."}, {Code: 3, Text: "WebMux in WSL is not running."}}
-	return sessioncmd.Registry{
+// commands come from clicmd.
+func windowsCommands() clicmd.Registry {
+	exits := []clicmd.ExitItem{{Code: 0, Text: "Done."}, {Code: 1, Text: "Failed."}, {Code: 3, Text: "WebMux in WSL is not running."}}
+	return clicmd.Registry{
 		{
-			Name: "status", Group: sessioncmd.GroupServer, Platform: "windows", NoGlobal: true,
+			Name: "status", Group: clicmd.GroupServer, Platform: "windows", NoGlobal: true,
 			Summary: "Show the status of WebMux inside WSL.",
-			Bind: func(fs *flag.FlagSet) sessioncmd.Action {
+			Bind: func(fs *flag.FlagSet) clicmd.Action {
 				fs.Bool("json", false, "print the status contract v1 as JSON")
 				return nil
 			},
 			Output: "A human-readable summary, or the StatusV1 object with --json.", Exit: exits,
-			Examples: []sessioncmd.Example{
+			Examples: []clicmd.Example{
 				{Command: "webmux status", Text: "Show whether WebMux runs in WSL."},
 				{Command: "webmux --distro Ubuntu status --json", Text: "Check another distribution."},
 			},
 		},
 		{
-			Name: "version", Group: sessioncmd.GroupServer, Platform: "windows", NoGlobal: true,
-			Bind:    func(*flag.FlagSet) sessioncmd.Action { return nil },
+			Name: "version", Group: clicmd.GroupServer, Platform: "windows", NoGlobal: true,
+			Bind:    func(*flag.FlagSet) clicmd.Action { return nil },
 			Summary: "Print the version of this Windows client.", Output: "webmux-windows VERSION.", Exit: exits[:1],
-			Examples: []sessioncmd.Example{
+			Examples: []clicmd.Example{
 				{Command: "webmux version", Text: "Print the client version."},
 				{Command: "webmux status", Text: "Show the server version instead."},
 			},
 		},
 		{
-			Name: "help", Group: sessioncmd.GroupHelp, Platform: "windows", NoGlobal: true, Args: "[COMMAND...]",
-			Bind: func(fs *flag.FlagSet) sessioncmd.Action {
+			Name: "help", Group: clicmd.GroupHelp, Platform: "windows", NoGlobal: true, Args: "[COMMAND...]",
+			Bind: func(fs *flag.FlagSet) clicmd.Action {
 				fs.Bool("json", false, "print the commands, options and examples as JSON")
 				return nil
 			},
 			Summary: "Show help for all commands or one command; --json prints the command tree.",
 			Output:  "Help text, or the HelpTree object with --json.",
-			Exit:    []sessioncmd.ExitItem{{Code: 0, Text: "Printed."}, {Code: 2, Text: "Unknown command."}},
-			Examples: []sessioncmd.Example{
+			Exit:    []clicmd.ExitItem{{Code: 0, Text: "Printed."}, {Code: 2, Text: "Unknown command."}},
+			Examples: []clicmd.Example{
 				{Command: "webmux help run", Text: "Show the help of webmux run."},
 				{Command: "webmux help --json", Text: "Print the command tree."},
 			},
@@ -103,8 +103,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	global.Usage = func() {}
 	distro := global.String("distro", "", "WSL distribution (default: WEBMUX_DISTRO, the tray setting, then WSL's default)")
 	webmux := global.String("webmux", "", "webmux inside WSL (default: WEBMUX_WSL_PATH, the tray setting, then ~/.local/bin/webmux)")
-	registry := append(windowsCommands(), sessioncmd.Commands()...)
-	help := sessioncmd.Env{Stdout: stdout, Stderr: stderr, Platform: "windows", Version: version, Commands: registry,
+	registry := append(windowsCommands(), clicmd.Commands()...)
+	help := clicmd.Env{Stdout: stdout, Stderr: stderr, Platform: "windows", Version: version, Commands: registry,
 		HelpFooter: "Global options before COMMAND: --distro NAME selects the WSL distribution, --webmux PATH the webmux inside it."}
 	// Help before any command (webmux --help, -h, -help) is the overview on
 	// standard output, as on Linux and macOS.
@@ -138,12 +138,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	c := &client{target: target, stdout: stdout, stderr: stderr}
-	e := sessioncmd.Env{
+	e := clicmd.Env{
 		Connect:        c.connect,
 		Stdin:          os.Stdin,
 		Stdout:         stdout,
 		Stderr:         stderr,
-		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
+		OpenConsole:    func() (clicmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
 		Interactive:    func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		OpenBrowser:    openBrowser,
 		ResolveCwd:     c.resolveCwd,
@@ -155,7 +155,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if command == "status" {
 		return c.status(ctx, rest)
 	}
-	if code, ok := e.Dispatch(ctx, sessioncmd.Commands(), global.Args()); ok {
+	if code, ok := e.Dispatch(ctx, clicmd.Commands(), global.Args()); ok {
 		return code
 	}
 	_, _ = fmt.Fprintf(stderr, "webmux: unknown command %q\n", command)
@@ -303,7 +303,7 @@ func (c *client) status(ctx context.Context, args []string) int {
 		_ = encoder.Encode(status)
 		return code
 	}
-	sessioncmd.PrintStatus(c.stdout, status)
+	clicmd.PrintStatus(c.stdout, status)
 	return code
 }
 

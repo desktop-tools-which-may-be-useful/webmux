@@ -21,14 +21,14 @@ func (a *App) openLocal() {
 		a.notifier.Show("WebMux", tooltip(snap))
 		return
 	}
-	if err := OpenURL(snap.Status.URLs.Local); err != nil {
+	if err := a.o.OpenURL(snap.Status.URLs.Local); err != nil {
 		a.fail("无法打开浏览器", err)
 	}
 }
 
 func (a *App) openTunnelSettings() {
 	if url := tray.TunnelEntry(a.snapshot()).SettingsURL; url != "" {
-		if err := OpenURL(url); err != nil {
+		if err := a.o.OpenURL(url); err != nil {
 			a.fail("无法打开 Cloudflare 设置", err)
 		}
 	}
@@ -228,7 +228,7 @@ func (a *App) openTailscaleSettings(url string) {
 	if url == "" {
 		return
 	}
-	if err := OpenURL(url); err != nil {
+	if err := a.o.OpenURL(url); err != nil {
 		a.fail("无法打开 Tailscale 设置", err)
 	}
 }

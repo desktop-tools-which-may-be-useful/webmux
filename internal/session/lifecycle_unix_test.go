@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 func TestLeaderExitWithInheritedPTY(t *testing.T) {
@@ -36,9 +38,9 @@ func TestLeaderExitWithInheritedPTY(t *testing.T) {
 
 func assertNoSessionProcesses(t *testing.T, s *Session) {
 	t.Helper()
-	for pid, state := range processes() {
-		if state.sid == s.run.cmd.Process.Pid {
-			t.Fatalf("session descendant still exists: pid %d state %c", pid, state.state)
+	for pid, state := range procpeek.Processes() {
+		if state.SID == s.run.cmd.Process.Pid {
+			t.Fatalf("session descendant still exists: pid %d state %c", pid, state.State)
 		}
 	}
 }
@@ -137,17 +139,17 @@ func TestUnattendedSleepIsNotUserWait(t *testing.T) {
 	waitForOutput(t, sleeper, "background timer")
 	waitForOutput(t, reader, "READY")
 	deadline := time.Now().Add(3 * time.Second)
-	var table processTable
-	var snapshot processSnapshot
+	var table procpeek.Table
+	var snapshot procpeek.Snapshot
 	for {
-		table = processes()
-		snapshot = newProcessSnapshot(table)
-		sleepQuiet := snapshot.foregroundBlocked(sleeper.run.cmd.Process.Pid) && !snapshot.awaitingInput(sleeper.run.cmd.Process.Pid)
-		if sleepQuiet && snapshot.awaitingInput(reader.run.cmd.Process.Pid) {
+		table = procpeek.Processes()
+		snapshot = procpeek.NewSnapshot(table)
+		sleepQuiet := snapshot.ForegroundBlocked(sleeper.run.cmd.Process.Pid) && !snapshot.AwaitingInput(sleeper.run.cmd.Process.Pid)
+		if sleepQuiet && snapshot.AwaitingInput(reader.run.cmd.Process.Pid) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("sleep/read wait not distinguished: sleep pid %d blocked=%t awaiting=%t %+v children=%v, read pid %d awaiting=%t %+v", sleeper.run.cmd.Process.Pid, snapshot.foregroundBlocked(sleeper.run.cmd.Process.Pid), snapshot.awaitingInput(sleeper.run.cmd.Process.Pid), table[sleeper.run.cmd.Process.Pid], directChildren(sleeper.run.cmd.Process.Pid, table), reader.run.cmd.Process.Pid, snapshot.awaitingInput(reader.run.cmd.Process.Pid), table[reader.run.cmd.Process.Pid])
+			t.Fatalf("sleep/read wait not distinguished: sleep pid %d blocked=%t awaiting=%t %+v children=%v, read pid %d awaiting=%t %+v", sleeper.run.cmd.Process.Pid, snapshot.ForegroundBlocked(sleeper.run.cmd.Process.Pid), snapshot.AwaitingInput(sleeper.run.cmd.Process.Pid), table[sleeper.run.cmd.Process.Pid], directChildren(sleeper.run.cmd.Process.Pid, table), reader.run.cmd.Process.Pid, snapshot.AwaitingInput(reader.run.cmd.Process.Pid), table[reader.run.cmd.Process.Pid])
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -164,10 +166,10 @@ func TestUnattendedSleepIsNotUserWait(t *testing.T) {
 	}
 }
 
-func directChildren(pid int, table processTable) map[int]processState {
-	kids := map[int]processState{}
+func directChildren(pid int, table procpeek.Table) map[int]procpeek.State {
+	kids := map[int]procpeek.State{}
 	for child, state := range table {
-		if state.ppid == pid {
+		if state.PPID == pid {
 			kids[child] = state
 		}
 	}
@@ -193,16 +195,51 @@ func TestRealProcessTreeWaiting(t *testing.T) {
 	waitForOutput(t, reader, "READY")
 	waitForOutput(t, busy, "READY")
 	deadline := time.Now().Add(2 * time.Second)
-	for !newProcessSnapshot(processes()).foregroundBlocked(reader.run.cmd.Process.Pid) {
+	for !procpeek.NewSnapshot(procpeek.Processes()).ForegroundBlocked(reader.run.cmd.Process.Pid) {
 		if time.Now().After(deadline) {
 			t.Fatal("shell blocked on terminal input was not detected as waiting")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	for range 5 {
-		if newProcessSnapshot(processes()).foregroundBlocked(busy.run.cmd.Process.Pid) {
+		if procpeek.NewSnapshot(procpeek.Processes()).ForegroundBlocked(busy.run.cmd.Process.Pid) {
 			t.Fatal("busy loop was classified as waiting")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestShutdownDuringRepeatedPreviewControls(t *testing.T) {
+	t.Parallel()
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	})
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/sh", "-c",
+		`while :; do printf '\033[100000Smarker\n'; sleep 0.01; done`,
+	}, Name: "", Env: nil, ConfigID: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The preview's count clamp must never rewrite the original PTY stream.
+	waitForOutput(t, s, "\x1b[100000Smarker")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	stopped := make(chan struct{})
+	go func() {
+		m.Shutdown(ctx)
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-ctx.Done():
+		t.Fatal("preview output prevented bounded shutdown")
+	}
+	select {
+	case <-s.Done():
+	default:
+		t.Fatal("session cleanup did not finish")
 	}
 }

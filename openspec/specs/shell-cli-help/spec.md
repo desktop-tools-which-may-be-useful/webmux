@@ -16,7 +16,7 @@
 - 运维命令（`serve`、`config`、`service`、`update` 等）保留各自的解析器；它们的 `--help` 由分发层统一按命令表输出，测试 SHALL 比对每个运维命令实现接受的选项与命令表一致。
 - 除 `run` 等以其他程序 argv 结尾的命令外，选项 SHALL 可以写在位置参数之后；`--` 之后的参数 SHALL 原样作为位置参数。
 - `--help` 输出、`help --json`、shell 补全，以及 llms 中的命令参考，SHALL 全部由这张表生成或经测试比对，不维护第二份手写副本。
-- 共享命令放在 `internal/sessioncmd`，Linux/macOS CLI 与 Windows 控制台客户端 SHALL 得到相同的帮助。
+- 共享命令放在 `internal/clicmd`，Linux/macOS CLI 与 Windows 控制台客户端 SHALL 得到相同的帮助。
   只属于某个平台的命令（例如 `service`）SHALL 只出现在该平台的帮助中。
 
 #### Scenario: 新增选项忘记写说明

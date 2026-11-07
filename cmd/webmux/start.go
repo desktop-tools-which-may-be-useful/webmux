@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/runtime"
-	"github.com/rainchan/webmux/internal/sessioncmd"
 )
 
 // startTimeout bounds how long `webmux start` waits for the child to publish
@@ -55,7 +55,7 @@ func startCommand(args []string, stdout, stderr io.Writer) int {
 	}
 	if target.Record != nil {
 		status, code := client.Status(context.Background(), target, false, client.NetInterfaces)
-		sessioncmd.PrintStatus(stdout, status)
+		clicmd.PrintStatus(stdout, status)
 		return code
 	}
 

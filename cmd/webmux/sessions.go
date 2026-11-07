@@ -17,19 +17,19 @@ import (
 	"golang.org/x/term"
 
 	"github.com/rainchan/webmux/internal/attach"
+	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/localclient"
-	"github.com/rainchan/webmux/internal/sessioncmd"
 )
 
 // sessionEnv connects the shared session commands to this machine's
 // server through its local socket.
-func sessionEnv(stdout, stderr io.Writer) sessioncmd.Env {
+func sessionEnv(stdout, stderr io.Writer) clicmd.Env {
 	path := config.DefaultPath()
 	explicit := false
 	socket := ""
-	return sessioncmd.Env{
+	return clicmd.Env{
 		Flags: func(flags *flag.FlagSet) {
 			flags.Func("config", "TOML configuration `PATH` (default "+path+")", func(value string) error {
 				path, explicit = value, true
@@ -46,7 +46,7 @@ func sessionEnv(stdout, stderr io.Writer) sessioncmd.Env {
 		Stdin:          os.Stdin,
 		Stdout:         stdout,
 		Stderr:         stderr,
-		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
+		OpenConsole:    func() (clicmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
 		Interactive:    func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		OpenBrowser:    openBrowser,
 		ResolveCwd:     resolveCwd,
@@ -65,7 +65,7 @@ func sessionEnv(stdout, stderr io.Writer) sessioncmd.Env {
 // back could reach another instance and act on the wrong sessions.
 func connectLocal(socket, configPath string, configExplicit bool, getenv func(string) string) (*localclient.Client, error) {
 	if socket != "" && configExplicit {
-		return nil, sessioncmd.UsageError("--socket and --config cannot be combined")
+		return nil, clicmd.UsageError("--socket and --config cannot be combined")
 	}
 	if socket != "" {
 		return localclient.New(localclient.UnixDialer{Path: socket}), nil
@@ -112,5 +112,5 @@ func sessionCommand(args []string, stdout, stderr io.Writer) (int, bool) {
 	e := sessionEnv(stdout, stderr)
 	// Help and completion see every command, the operations ones too.
 	e.Commands = commandRegistry()
-	return e.Dispatch(ctx, sessioncmd.Commands(), args)
+	return e.Dispatch(ctx, clicmd.Commands(), args)
 }

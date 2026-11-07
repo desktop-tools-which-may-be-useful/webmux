@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/vtpreview"
 )
+
+type Preview = vtpreview.Preview
 
 type Status = contract.SessionStatus
 
@@ -397,7 +400,7 @@ func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held []Mess
 			// this cut; a redraw is best-effort, not VT state serialization.
 			position.Start = end
 			s.sendLocked(sub, positionMessage(position))
-			s.sendLocked(sub, frameMessage(s.preview.recoveryFrame()))
+			s.sendLocked(sub, frameMessage(s.preview.RecoveryFrame()))
 		} else {
 			s.sendLocked(sub, positionMessage(position))
 			s.sendLocked(sub, frameMessage(ring.snapshotWithPrefix([]byte{1})))

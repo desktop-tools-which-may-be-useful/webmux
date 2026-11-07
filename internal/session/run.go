@@ -139,7 +139,7 @@ func (s *Session) read(r *run) {
 			s.mu.Lock()
 			r.ring.Write(p)
 			s.osc.Feed(p, s.signals)
-			reports := s.preview.colorSchemeReports
+			reports := s.preview.ColorSchemeReports()
 			s.info.Preview = s.preview.FeedThrottled(p)
 			s.info.LastActiveAt = time.Now()
 			// Latched attention and a program's own status outlive redraws
@@ -148,7 +148,7 @@ func (s *Session) read(r *run) {
 			if len(s.subs) > 0 {
 				s.broadcastLocked(outputMessage(p))
 				// After the output that toggled it, so the mode applies from there.
-				if s.preview.colorSchemeReports != reports {
+				if s.preview.ColorSchemeReports() != reports {
 					s.broadcastLocked(s.controlLocked())
 				}
 			}
@@ -210,8 +210,8 @@ func (s *Session) wait(r *run) {
 	s.info.Status = StatusExited
 	s.info.Attention = nil
 	// Publish the final screen, including output throttled before exit.
-	if s.preview.dirty {
-		s.info.Preview = s.preview.refresh(true)
+	if s.preview.Dirty() {
+		s.info.Preview = s.preview.Refresh(true)
 	}
 	s.program = nil
 	s.identity = Identity{}

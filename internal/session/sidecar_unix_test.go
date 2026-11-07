@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 func waitSidecarDone(t *testing.T, c *Sidecar) {
@@ -93,7 +95,7 @@ func TestShutdownKillsSidecars(t *testing.T) {
 			if time.Now().After(deadline) {
 				t.Fatalf("sidecar process %d survived shutdown", pid)
 			}
-			reapAdopted(processes())
+			reapAdopted(procpeek.Processes())
 			time.Sleep(20 * time.Millisecond)
 		}
 	}

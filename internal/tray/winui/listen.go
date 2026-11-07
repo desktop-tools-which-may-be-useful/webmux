@@ -30,7 +30,7 @@ func (a *App) listen() {
 	m := a.menu
 	on(m.logService, a.openServiceLog)
 	on(m.logTray, func() {
-		if err := OpenInNotepad(a.log.Path()); err != nil {
+		if err := a.o.OpenInNotepad(a.log.Path()); err != nil {
 			a.fail("无法打开托盘日志", err)
 		}
 	})

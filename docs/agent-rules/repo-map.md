@@ -6,17 +6,18 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. Read it when you nee
 
 - `cmd/webmux/`: CLI flags, dependency wiring, and server shutdown.
 - `cmd/webmux-windows/`, `cmd/webmux-tray/`: Windows console client and Windows tray (WSL). `cmd/baseline/`: product-contract measurement tool. `cmd/internal/assemble/`: shared configuration-to-service-options wiring for the `cmd/` roots.
-- `internal/session/`: session lifecycle and concurrency.
-  - Process tables and cleanup are platform-specific: `_linux.go` reads `/proc`, `_darwin.go` uses sysctl/`proc_pidinfo`, shared logic is in `_unix.go`.
+- `internal/session/`: PTY lifecycle, ring-buffer I/O pump, and session management.
+  - `internal/vtpreview/`: stateless VT emulation for terminal preview and replay snapshots.
+  - `internal/procpeek/`: cross-platform process tree traversal and listening port inspection (`_linux.go` reads `/proc`, `_darwin.go` uses sysctl/`proc_pidinfo`, shared logic in `_unix.go`).
 - `internal/hybrid/`: hybrid (TUI ↔ ACP chat) sessions, one actor per session, records in `hybrid-sessions.json`.
   - `internal/acp/`: stdlib-only ACP v1 client. `internal/agentprofile/` (adapters `opencode`, `omp`, `codex`, `claudecode`, `agy`, `qoder`, `qodercn`; list in `agentprofile/agents`): agent-neutral profiles and registry.
 - `internal/api/`, `internal/hub/`, `internal/wire/`: controllers.
   - HTTP/security boundaries, status mapping (`api/errors.go`), streaming transport, and service↔wire conversion.
   - No direct filesystem, process, or service package-level calls.
 - `internal/contract/`, `internal/config/`: stdlib-only wire types and frame constants; configuration parsing and validation.
-- Out-of-server clients: `internal/client/`, `internal/localclient/`, `internal/attach/`, `internal/sessioncmd/`, `internal/tray/`, `internal/wslclient/`. They reach the server only over the wire protocol.
-  - Local API client and instance location: `client`, `localclient`. Native terminal attach: `attach`. `run`/`attach`/`ls`/`open`: `sessioncmd`.
-  - Windows tray core and the WSL bridge dialer: `tray`, `wslclient`.
+- Out-of-server clients: `internal/client/`, `internal/localclient/`, `internal/attach/`, `internal/clicmd/`, `internal/tray/`, `internal/wslclient/`. They reach the server only over the wire protocol.
+  - Local API client and instance location: `client`, `localclient`. Native terminal attach: `attach`. Shared CLI commands (`run`/`attach`/`ls`/`open`/workspace/chat): `clicmd`.
+  - Windows tray core, system operations (`tray/traysys`), UI (`tray/winui`), and the WSL bridge dialer: `tray`, `wslclient`.
 - `internal/archtest/`: test-only layer manifest and architecture rules.
   - Classify every new `internal/` package in `layers_test.go`.
   - The fixture under `testdata/fixture` proves each rule.

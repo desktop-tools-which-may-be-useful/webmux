@@ -5,6 +5,8 @@ package session
 import (
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 // The subreaper reaps every zombie child that is not a managed leader. A
@@ -28,7 +30,7 @@ func TestSubreaperLeavesSidecarExitStatus(t *testing.T) {
 			case <-deadline:
 				t.Fatal("sidecar did not finish")
 			default:
-				reapAdopted(processes())
+				reapAdopted(procpeek.Processes())
 			}
 		}
 		if code := sidecar.ExitCode(); code != 17 {

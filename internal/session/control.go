@@ -35,7 +35,7 @@ func randomClientID() string {
 }
 
 func (s *Session) controlLocked() Message {
-	state := ControlState{Cols: s.info.Cols, Rows: s.info.Rows, ColorSchemeReports: s.preview.colorSchemeReports}
+	state := ControlState{Cols: s.info.Cols, Rows: s.info.Rows, ColorSchemeReports: s.preview.ColorSchemeReports()}
 	if s.control != nil {
 		controller := *s.control
 		state.Controller = &controller

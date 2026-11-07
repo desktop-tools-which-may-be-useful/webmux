@@ -62,7 +62,7 @@
 
 依据：
 
-- [会话命令](../../internal/sessioncmd/sessioncmd.go)、[会话环境](../../internal/session/env.go)、[会话管理](../../internal/session/manager.go)
+- [会话命令](../../internal/clicmd/clicmd.go)、[会话环境](../../internal/session/env.go)、[会话管理](../../internal/session/manager.go)
 - [服务启动](../../cmd/webmux/main.go)、[原生附着](../../internal/attach/)、[控制命令](../../cmd/webmux/control.go)
 - [本机 API](../../internal/api/local.go)、[运行时记录](../../internal/runtime/)、[环境与本机请求](../../cmd/webmux/sessions.go)。
 
@@ -264,9 +264,9 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
 依据：
 
 - [Windows CLI](../../cmd/webmux-windows/main_windows.go)、[WSL 桥接与路径](../../internal/wslclient/)、[托盘服务与安装](../../internal/tray/)
-- [托盘自更新](../../internal/tray/selfupdate.go)、[安装版识别与启动安装程序](../../internal/tray/winui/selfupdate.go)、[自动更新说明](../deployment/updates.md)
+- [托盘自更新](../../internal/tray/selfupdate.go)、[安装版识别与启动安装程序](../../internal/tray/traysys/install_windows.go)、[自动更新说明](../deployment/updates.md)
 - [兼容判定](../../internal/tray/compat.go)、[托盘菜单](../../internal/tray/winui/menu.go)、[转发](../../internal/tray/forward/)
-- [敏感剪贴板](../../internal/tray/winui/clipboard.go)、[退出请求](../../internal/tray/quit.go)、[单实例与退出事件](../../internal/tray/winui/singleinstance.go)
+- [敏感剪贴板](../../internal/tray/winui/clipboard.go)、[退出请求](../../internal/tray/traysys/quit.go)、[单实例与退出事件](../../internal/tray/traysys/instance_windows.go)
 - [安装程序脚本](../../deploy/windows/webmux.nsi)、[安装程序冒烟](../../.github/scripts/windows-installer-smoke.ps1)、[Windows 部署](../deployment/windows-wsl.md)。
 
 ## P. Tailscale Serve / Funnel

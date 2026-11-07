@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rainchan/webmux/internal/pathutil"
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 // Absorb list event bursts; slow subscribers disconnect rather than blocking sessions.
@@ -420,8 +421,8 @@ func (m *Manager) updates() {
 	defer timer.Stop()
 	previous := make(map[string]Info)
 	previewSent := make(map[string]time.Time)
-	var snapshot processSnapshot
-	var ports portScanner
+	var snapshot procpeek.Snapshot
+	var ports procpeek.PortScanner
 	probeTick, portTick := false, false
 	for {
 		select {
@@ -430,9 +431,9 @@ func (m *Manager) updates() {
 		case now := <-timer.C:
 			probeTick = !probeTick
 			if probeTick {
-				table := processes()
+				table := procpeek.Processes()
 				reapAdopted(table)
-				snapshot = newProcessSnapshot(table)
+				snapshot = procpeek.NewSnapshot(table)
 			}
 			m.mu.Lock()
 			list := make([]*Session, 0, len(m.sessions))
@@ -510,7 +511,7 @@ func (m *Manager) Shutdown(ctx context.Context) {
 			s.retire(true)
 		}
 	}
-	reapAdopted(processes())
+	reapAdopted(procpeek.Processes())
 	m.stopOnce.Do(func() { close(m.done) })
 	<-m.updatesDone
 }

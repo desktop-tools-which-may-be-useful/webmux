@@ -1,6 +1,10 @@
 package session
 
-import "os"
+import (
+	"os"
+
+	"github.com/rainchan/webmux/internal/procpeek"
+)
 
 // ContainsProcess reports whether pid runs inside a WebMux session: on Linux
 // it carries a WEBMUX_SESSION_ID marker, or one of its ancestors is a session
@@ -16,7 +20,7 @@ func (m *Manager) ContainsProcess(pid int) bool {
 // inside some session but its session cannot be named, such as an orphan the
 // server adopted, or when the marked session no longer exists.
 func (m *Manager) ProcessSession(pid int) (id string, inside bool) {
-	if marker := sessionMarker(pid); marker != "" {
+	if marker := procpeek.SessionMarker(pid); marker != "" {
 		if _, err := m.Get(marker); err == nil {
 			return marker, true
 		}
@@ -39,5 +43,5 @@ func (m *Manager) ProcessSession(pid int) (id string, inside bool) {
 		}
 		s.mu.Unlock()
 	}
-	return treeOwner(processes(), pid, os.Getpid(), leaders)
+	return procpeek.TreeOwner(procpeek.Processes(), pid, os.Getpid(), leaders)
 }

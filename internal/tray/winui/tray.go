@@ -51,9 +51,27 @@ type Options struct {
 	// NewService builds the WSL service for one set of settings.
 	NewService func(tray.Settings) *tray.WSLService
 	Reach      tray.Reacher
-	Instance   *Instance
+	// Instance signals wake and external quit requests from other tray processes.
+	Instance interface {
+		Wakes(func())
+		Quits(func())
+	}
 	// Executable is the absolute path of webmux-tray.exe.
 	Executable string
+	// Installed reports whether Executable runs from the installer's directory.
+	Installed bool
+	// LaunchInstaller starts a downloaded installer silently and waits for it.
+	LaunchInstaller func(path string) (wait func() (int, error), err error)
+	// AutostartEnabled reports whether login autostart is enabled for Executable.
+	AutostartEnabled func(exe string) bool
+	// SetAutostart enables or disables login autostart for Executable.
+	SetAutostart func(on bool, exe string) error
+	// OpenURL opens an http(s) URL in the default browser.
+	OpenURL func(url string) error
+	// OpenInNotepad opens a Windows path in Notepad.
+	OpenInNotepad func(path string) error
+	// WSLPath maps a WSL path inside a distribution to its \\wsl.localhost path.
+	WSLPath func(distro, path string) (string, error)
 	// UpdatesDir is %LOCALAPPDATA%\WebMux\updates, where the tray keeps
 	// the installer of its own update.
 	UpdatesDir string
@@ -124,7 +142,7 @@ func Run(o Options) {
 	a.settings = settings
 	a.svc = tray.NewTargetService(o.NewService, settings)
 	a.log.Printf("webmux-tray %s starting", o.Version)
-	installed := InstalledCopy(o.Executable)
+	installed := o.Installed
 	a.log.Printf("tray copy: installed %v, release build %v", installed, update.IsRelease())
 	a.updater = tray.NewSelfUpdater(tray.SelfUpdateOptions{
 		Version:       o.Version,
@@ -138,7 +156,7 @@ func Run(o Options) {
 		AutoUpdate:    a.autoUpdate,
 		Idle:          a.updateIdle,
 		RecordAttempt: a.recordAttempt,
-		Launch:        LaunchInstaller,
+		Launch:        o.LaunchInstaller,
 		Publish:       a.kickUI,
 		Logf:          a.log.Printf,
 		Updated:       updated,
@@ -216,7 +234,7 @@ func (a *App) onReady() {
 	}
 	a.menu = buildMenu()
 
-	distros, err := CheckWSL(context.Background(), a.o.Runner)
+	distros, err := tray.CheckWSL(context.Background(), a.o.Runner)
 	if err != nil {
 		a.log.Printf("WSL check failed: %v", err)
 		a.noWSL = err.Error()
@@ -340,7 +358,9 @@ func (a *App) update() {
 	}
 	a.reconcileForward(snap, v)
 	v.forwarding = a.relays.listening()
-	v.autostart = AutostartEnabled(a.o.Executable)
+	if a.o.AutostartEnabled != nil {
+		v.autostart = a.o.AutostartEnabled(a.o.Executable)
+	}
 	v.installSupported = a.svc.Current().Digests != nil
 	if a.sup != nil {
 		a.updater.Observe(snap)
@@ -405,11 +425,11 @@ func (a *App) probe(force bool) {
 	go func() {
 		ctx := context.Background()
 		target := tray.TargetOf(settings)
-		distros, err := Distros(ctx, a.o.Runner)
+		distros, err := tray.Distros(ctx, a.o.Runner)
 		if err != nil {
 			a.log.Printf("wsl.exe --list: %v", err)
 		}
-		mode := NetworkingMode(ctx, a.o.Runner, target)
+		mode := tray.NetworkingMode(ctx, a.o.Runner, target)
 		detectCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		detection := tray.DetectSystemd(detectCtx, a.o.Runner, target)
 		cancel()

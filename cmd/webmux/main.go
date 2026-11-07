@@ -23,6 +23,7 @@ import (
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/artifacts"
+	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
@@ -34,7 +35,6 @@ import (
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
-	"github.com/rainchan/webmux/internal/sessioncmd"
 	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
@@ -456,7 +456,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// The commands topic is the command directory, rendered once from this
 	// build's command table.
 	guide := &agentguide.Instance{
-		Guide:   agentguide.New(sessioncmd.Directory(commandRegistry())),
+		Guide:   agentguide.New(clicmd.Directory(commandRegistry())),
 		Version: version, LocalURL: localOrigin(listener.Addr()), Bin: serverExecutable(),
 	}
 	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)

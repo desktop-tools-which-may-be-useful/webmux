@@ -147,7 +147,7 @@ func (a *App) updateTray() {
 	case tray.UpdateSwitchToDev:
 		a.updater.SwitchToDev()
 	case tray.UpdateOpenRelease:
-		if err := OpenURL(entry.URL); err != nil {
+		if err := a.o.OpenURL(entry.URL); err != nil {
 			a.fail("无法打开浏览器", err)
 		}
 	}

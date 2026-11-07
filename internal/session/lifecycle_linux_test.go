@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 func TestAdoptedZombieReapedWhileLeaderLives(t *testing.T) {
@@ -73,8 +75,8 @@ func TestReaperLeavesServiceCommandExitForItsOwner(t *testing.T) {
 	defer releaseLeader(cmd.Process.Pid)
 	deadline := time.Now().Add(time.Second)
 	for {
-		table := processes()
-		if state, ok := table[cmd.Process.Pid]; ok && state.state == 'Z' {
+		table := procpeek.Processes()
+		if state, ok := table[cmd.Process.Pid]; ok && state.State == 'Z' {
 			reapAdopted(table)
 			break
 		}

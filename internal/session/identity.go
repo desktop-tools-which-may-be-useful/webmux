@@ -1,6 +1,10 @@
 package session
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/rainchan/webmux/internal/procpeek"
+)
 
 // Identity is what a session knows about the program in its current run:
 // bounded, printable identity fields from its terminal output and its PTY's
@@ -50,7 +54,7 @@ func (s *Session) Identity() Identity {
 	s.mu.Unlock()
 	if pid > 0 {
 		identity.PID = pid
-		identity.Executable, identity.Cwd = rootProcess(pid)
+		identity.Executable, identity.Cwd = procpeek.RootProcess(pid)
 	}
 	return identity
 }
@@ -93,7 +97,7 @@ func (s *Session) rootPIDs() []int {
 // table.
 func (s *Session) RunChildren() []string {
 	if pid := s.runPID(); pid > 0 {
-		return runChildren(pid)
+		return procpeek.RunChildren(pid)
 	}
 	return nil
 }
@@ -105,7 +109,7 @@ func (s *Session) RunChildren() []string {
 // paths are never logged or published.
 func (s *Session) RunOpenFiles() []string {
 	if pid := s.runPID(); pid > 0 {
-		return runOpenFiles(pid)
+		return procpeek.RunOpenFiles(pid)
 	}
 	return nil
 }

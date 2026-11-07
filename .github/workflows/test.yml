@@ -226,7 +226,7 @@ jobs:
             CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -o /dev/null ./cmd/webmux-windows
           done
       - name: Vet the Windows clients
-        run: GOOS=windows go vet -printf.funcs=problemf,invalidf,usagef,checkf ./cmd/webmux-tray ./cmd/webmux-windows ./internal/tray/... ./internal/wslclient/... ./internal/attach/... ./internal/sessioncmd/...
+        run: GOOS=windows go vet -printf.funcs=problemf,invalidf,usagef,checkf ./cmd/webmux-tray ./cmd/webmux-windows ./internal/tray/... ./internal/wslclient/... ./internal/attach/... ./internal/clicmd/...
       - name: Warm the E2E backend build cache
         run: go build -o /dev/null ./cmd/webmux
       - name: Save Go module cache

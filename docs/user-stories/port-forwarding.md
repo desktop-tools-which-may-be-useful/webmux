@@ -56,7 +56,7 @@
 - [转发登记、探测与凭据](../../internal/forward/forward.go)、[凭据与兑换码](../../internal/forward/credentials.go)、[服务用例](../../internal/forward/forward_test.go)
 - [网关与转发接口](../../internal/api/forward.go)、[网关用例](../../internal/api/forward_test.go)、[路由注册](../../internal/api/router.go)
 - [会话列表事件](../../internal/hub/hub.go)、[事件用例](../../internal/hub/list_test.go)、[线上类型](../../internal/contract/forward.go)
-- [监听端口检测](../../internal/session/listen.go)、[Linux 扫描](../../internal/session/listen_linux.go)、[macOS 扫描](../../internal/session/listen_darwin.go)、[真实监听用例](../../internal/session/listen_unix_test.go)
+- [监听端口检测](../../internal/session/listen.go)、[Linux 扫描](../../internal/procpeek/listen_linux.go)、[macOS 扫描](../../internal/procpeek/listen_darwin.go)、[真实监听用例](../../internal/session/listen_unix_test.go)
 - [前端契约](../../web/src/schemas.ts)、[转发状态与忽略集合](../../web/src/forwards.svelte.ts)、[转发状态用例](../../web/test/browser/forwards.test.ts)
 - [顶栏按钮](../../web/src/components/ForwardButton.svelte)、[转发对话框](../../web/src/components/ForwardDialog.svelte)、[对话框用例](../../web/test/browser/ForwardDialog.test.ts)
 - [终端端口提示](../../web/src/components/TerminalPortPrompts.svelte)、[提示用例](../../web/test/browser/TerminalNotices.test.ts)、[混合会话用例](../../web/test/browser/TerminalHybrid.test.ts)

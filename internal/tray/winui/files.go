@@ -22,9 +22,9 @@ func (a *App) openServiceLog() {
 		a.openJournal()
 		return
 	}
-	path, err := WSLPath(a.targetDistro(), snap.Status.LogFile)
+	path, err := a.o.WSLPath(a.targetDistro(), snap.Status.LogFile)
 	if err == nil {
-		err = OpenInNotepad(path)
+		err = a.o.OpenInNotepad(path)
 	}
 	if err != nil {
 		a.fail("无法打开 WebMux 日志", err)
@@ -64,16 +64,16 @@ func (a *App) openJournal() {
 	}
 	a.journal = f.Name()
 	a.mu.Unlock()
-	if err := OpenInNotepad(f.Name()); err != nil {
+	if err := a.o.OpenInNotepad(f.Name()); err != nil {
 		a.fail("无法打开 systemd 日志", err)
 	}
 }
 
 func (a *App) openConfig() {
 	snap := a.snapshot()
-	path, err := WSLPath(a.targetDistro(), snap.Status.Config.Path)
+	path, err := a.o.WSLPath(a.targetDistro(), snap.Status.Config.Path)
 	if err == nil {
-		err = OpenInNotepad(path)
+		err = a.o.OpenInNotepad(path)
 	}
 	if err != nil {
 		a.fail("无法打开 WebMux 配置文件", err)
@@ -92,14 +92,14 @@ func (a *App) editSettings() {
 		a.stamp = statFile(path)
 		a.mu.Unlock()
 	}
-	if err := OpenInNotepad(path); err != nil {
+	if err := a.o.OpenInNotepad(path); err != nil {
 		a.fail("无法打开托盘设置", err)
 	}
 }
 
 func (a *App) toggleAutostart() {
-	on := !AutostartEnabled(a.o.Executable)
-	if err := SetAutostart(on, a.o.Executable); err != nil {
+	on := !a.o.AutostartEnabled(a.o.Executable)
+	if err := a.o.SetAutostart(on, a.o.Executable); err != nil {
 		a.fail("无法修改登录启动项", err)
 	}
 	a.kickUI()

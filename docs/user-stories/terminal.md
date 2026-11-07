@@ -116,7 +116,7 @@
 - [会话选择](../../web/src/components/SplitSessionDialog.svelte)、[分屏验收](../../web/test/e2e/splits.spec.ts)、[后台交互验收](../../web/test/e2e/split-background.spec.ts)
 - [宽屏触控快捷指令验收](../../web/test/e2e/split-quick-commands.spec.ts)
 - [终端页面](../../web/src/pages/Terminal.svelte)、[终端连接](../../web/src/hooks/terminal.svelte.ts)、[终端回放](../../web/src/hooks/terminal-socket.svelte.ts)、[终端视口](../../web/src/components/TerminalViewport.svelte)
-- [回放浏览器回归](../../web/test/browser/TerminalReplay.test.ts)、[安全快照与重绘](../../internal/session/session.go)、[模式初始化](../../internal/session/strip.go)
+- [回放浏览器回归](../../web/test/browser/TerminalReplay.test.ts)、[安全快照与重绘](../../internal/session/session.go)、[模式初始化](../../internal/vtpreview/preview.go)
 - [快照回归](../../internal/session/replay_test.go)
 - [真实 PTY 重绘回归](../../internal/session/replay_unix_test.go)、[查找栏](../../web/src/components/TerminalFindBar.svelte)、[查找契约与范围](../../web/src/terminal-search.ts)
 - [查找单元用例](../../web/test/terminal-search.test.ts)、[终端浏览器验收用例](../../web/test/e2e/terminal.spec.ts)、[连接生命周期](../../web/src/ws.ts)

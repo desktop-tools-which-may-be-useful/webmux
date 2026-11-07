@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 // statusInput is everything status composition reads, in priority order:
@@ -74,17 +76,17 @@ func classify(in statusInput) Status {
 
 func (s *Session) statusInputLocked(now time.Time, idleAfter time.Duration, patterns []*regexp.Regexp) statusInput {
 	return statusInput{
-		now: now, last: s.info.LastActiveAt, line: s.preview.last,
+		now: now, last: s.info.LastActiveAt, line: s.preview.LastLine(),
 		exited: s.info.ExitCode != nil, program: s.program, attention: s.info.Attention != nil,
 		structured: s.structured, idleAfter: idleAfter, patterns: patterns,
 	}
 }
 
-func (s *Session) evaluate(now time.Time, snapshot processSnapshot, idleAfter time.Duration, patterns []*regexp.Regexp) {
+func (s *Session) evaluate(now time.Time, snapshot procpeek.Snapshot, idleAfter time.Duration, patterns []*regexp.Regexp) {
 	s.mu.Lock()
 	// Flush a throttled preview so the final chunk of a burst is not lost.
-	if s.preview.dirty {
-		s.info.Preview = s.preview.refresh(true)
+	if s.preview.Dirty() {
+		s.info.Preview = s.preview.Refresh(true)
 	}
 	if s.run == nil {
 		// The driver's overlay reports a shell without a run.
@@ -96,7 +98,7 @@ func (s *Session) evaluate(now time.Time, snapshot processSnapshot, idleAfter ti
 	s.mu.Unlock()
 	// Reading /proc must not hold the session lock while output is flowing.
 	if !in.exited && in.program == nil && !in.attention && !in.structured && now.Sub(in.last) >= 2*time.Second {
-		in.blocked = snapshot.awaitingInput(pid)
+		in.blocked = snapshot.AwaitingInput(pid)
 	}
 	s.mu.Lock()
 	switch {

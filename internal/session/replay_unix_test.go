@@ -172,7 +172,8 @@ func TestRepaintCoalescesAndRealResizeCancelsRestore(t *testing.T) {
 	s.repaintLocked()
 	timer := s.repaintTimer
 	s.repaintLocked()
-	coalesced := timer != nil && s.repaintTimer == timer && s.preview.screen.Cols() == 79
+	pCols, _, _ := s.preview.Size()
+	coalesced := timer != nil && s.repaintTimer == timer && pCols == 79
 	s.mu.Unlock()
 	if !coalesced {
 		t.Fatal("pending redraw request was not coalesced on the temporary grid")
@@ -186,7 +187,8 @@ func TestRepaintCoalescesAndRealResizeCancelsRestore(t *testing.T) {
 		t.Fatalf("recovery overwrote controller resize: %+v, error %v", size, err)
 	}
 	s.mu.Lock()
-	consistent := s.repaintTimer == nil && s.info.Cols == 91 && s.info.Rows == 31 && s.preview.screen.Cols() == 91 && s.preview.screen.Rows() == 31
+	pCols, pRows, _ := s.preview.Size()
+	consistent := s.repaintTimer == nil && s.info.Cols == 91 && s.info.Rows == 31 && pCols == 91 && pRows == 31
 	s.mu.Unlock()
 	if !consistent {
 		t.Fatal("logical grid and preview did not follow the controller resize")

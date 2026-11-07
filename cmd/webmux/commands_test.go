@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
-	"github.com/rainchan/webmux/internal/sessioncmd"
 )
 
 // TestOpsCommandFlagsMatchTable runs each operations command with an
@@ -210,7 +210,7 @@ func firstLine(s string) string {
 	return line
 }
 
-var _ = sessioncmd.GroupHelp
+var _ = clicmd.GroupHelp
 
 func TestConnectLocalPrefersSocketThenConfigThenEnvironment(t *testing.T) {
 	dir := t.TempDir()
@@ -221,7 +221,7 @@ func TestConnectLocalPrefersSocketThenConfigThenEnvironment(t *testing.T) {
 		}
 		return ""
 	}
-	var usage sessioncmd.UsageError
+	var usage clicmd.UsageError
 	if _, err := connectLocal(dir+"/a.sock", dir+"/config.toml", true, getenv); !errors.As(err, &usage) {
 		t.Fatalf("--socket with --config: %v, want a usage error", err)
 	}
@@ -309,7 +309,7 @@ func TestHelpReferencesResolve(t *testing.T) {
 		}
 	}
 	// The directory is rendered from the same table.
-	directory := sessioncmd.Directory(registry)
+	directory := clicmd.Directory(registry)
 	for _, c := range registry.Visible("unix") {
 		if c.Bind != nil && !strings.Contains(directory, "- `"+c.Usage()+"`: ") {
 			t.Errorf("the command directory lacks %s", c.Name)
@@ -358,7 +358,7 @@ var codeSpan = regexp.MustCompile("`([^`]+)`")
 
 // checkOptions reports each --option after a webmux command in line that
 // the command does not take.
-func checkOptions(t *testing.T, e sessioncmd.Env, registry sessioncmd.Registry, where, line string) {
+func checkOptions(t *testing.T, e clicmd.Env, registry clicmd.Registry, where, line string) {
 	t.Helper()
 	words := splitShell(strings.ReplaceAll(line, ";", " ; "))
 	for i := 0; i < len(words); i++ {
@@ -402,7 +402,7 @@ func checkOptions(t *testing.T, e sessioncmd.Env, registry sessioncmd.Registry, 
 var commandWord = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // bareCommand reports whether line is only "webmux" and a command path.
-func bareCommand(registry sessioncmd.Registry, line string) bool {
+func bareCommand(registry clicmd.Registry, line string) bool {
 	words := strings.Fields(line)
 	if len(words) < 2 || words[0] != "webmux" {
 		return false

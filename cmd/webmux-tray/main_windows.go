@@ -13,6 +13,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/localclient"
 	"github.com/rainchan/webmux/internal/tray"
+	"github.com/rainchan/webmux/internal/tray/traysys"
 	"github.com/rainchan/webmux/internal/tray/winui"
 	"github.com/rainchan/webmux/internal/update"
 	"github.com/rainchan/webmux/internal/wslclient"
@@ -27,9 +28,9 @@ func main() {
 			fmt.Println(version)
 			return
 		case "quit":
-			os.Exit(winui.QuitCommand(os.Args[2:]))
+			os.Exit(traysys.QuitCommand(os.Args[2:]))
 		case "firewall":
-			os.Exit(winui.FirewallCommand(os.Args[2:]))
+			os.Exit(traysys.FirewallCommand(os.Args[2:]))
 		}
 	}
 	if err := run(); err != nil {
@@ -39,7 +40,7 @@ func main() {
 }
 
 func run() error {
-	instance, err := winui.AcquireInstance()
+	instance, err := traysys.AcquireInstance()
 	if err != nil {
 		return err
 	}
@@ -75,8 +76,8 @@ func run() error {
 	keepalive := &tray.Keepalive{
 		Runner:   runner,
 		Path:     filepath.Join(localAppData, "WebMux", "keepalive.json"),
-		Identify: winui.Identify,
-		Kill:     winui.Kill,
+		Identify: traysys.Identify,
+		Kill:     traysys.Kill,
 	}
 	environ := os.Environ()
 	newService := func(s tray.Settings) *tray.WSLService {
@@ -103,16 +104,23 @@ func run() error {
 	}
 
 	winui.Run(winui.Options{
-		Version:      version,
-		SettingsPath: filepath.Join(appData, "WebMux", "tray.json"),
-		Log:          log,
-		Runner:       runner,
-		NewService:   newService,
-		Reach:        winui.NewReacher(),
-		Instance:     instance,
-		Executable:   exe,
-		UpdatesDir:   filepath.Join(localAppData, "WebMux", "updates"),
-		Releases:     func(ch update.Channel) tray.ReleaseClient { return update.Client{Channel: ch} },
+		Version:          version,
+		SettingsPath:     filepath.Join(appData, "WebMux", "tray.json"),
+		Log:              log,
+		Runner:           runner,
+		NewService:       newService,
+		Reach:            winui.NewReacher(),
+		Instance:         instance,
+		Executable:       exe,
+		Installed:        traysys.InstalledCopy(exe),
+		LaunchInstaller:  traysys.LaunchInstaller,
+		AutostartEnabled: traysys.AutostartEnabled,
+		SetAutostart:     traysys.SetAutostart,
+		OpenURL:          traysys.OpenURL,
+		OpenInNotepad:    traysys.OpenInNotepad,
+		WSLPath:          traysys.WSLPath,
+		UpdatesDir:       filepath.Join(localAppData, "WebMux", "updates"),
+		Releases:         func(ch update.Channel) tray.ReleaseClient { return update.Client{Channel: ch} },
 	})
 	return nil
 }

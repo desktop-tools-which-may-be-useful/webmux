@@ -5,6 +5,8 @@ package session
 import (
 	"syscall"
 	"time"
+
+	"github.com/rainchan/webmux/internal/procpeek"
 )
 
 // Find every session process by terminal session, process tree, and the
@@ -13,7 +15,7 @@ import (
 // PTY run, so stopping a sidecar must follow only its own process tree. A
 // run's cleanup does match the marker and so also ends the shell's sidecars.
 func cleanupProcesses(pid int, id string) {
-	table := processes()
+	table := procpeek.Processes()
 	reapAdopted(table)
 	targets := make(map[int]uint64)
 	var marker []byte
@@ -21,12 +23,12 @@ func cleanupProcesses(pid int, id string) {
 		marker = []byte("WEBMUX_SESSION_ID=" + id)
 	}
 	for child, state := range table {
-		owned := state.sid == pid
-		if !owned && marker != nil && state.state != 'Z' {
-			owned = sessionMarked(child, marker)
+		owned := state.SID == pid
+		if !owned && marker != nil && state.State != 'Z' {
+			owned = procpeek.SessionMarked(child, marker)
 		}
 		if owned {
-			targets[child] = state.start
+			targets[child] = state.Start
 		}
 	}
 	signalTargets(targets, table, syscall.SIGHUP)
@@ -34,12 +36,12 @@ func cleanupProcesses(pid int, id string) {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		table = processes()
+		table = procpeek.Processes()
 		reapAdopted(table)
 		// Shell job-control groups share a session ID; include new descendants too.
 		for child, state := range table {
-			if state.sid == pid {
-				targets[child] = state.start
+			if state.SID == pid {
+				targets[child] = state.Start
 			}
 		}
 		for changed := true; changed; {
@@ -48,15 +50,15 @@ func cleanupProcesses(pid int, id string) {
 				if _, known := targets[child]; known {
 					continue
 				}
-				if parentStart, owned := targets[state.ppid]; owned && table[state.ppid].start == parentStart {
-					targets[child] = state.start
+				if parentStart, owned := targets[state.PPID]; owned && table[state.PPID].Start == parentStart {
+					targets[child] = state.Start
 					changed = true
 				}
 			}
 		}
 		for child, born := range targets {
 			state, exists := table[child]
-			if !exists || state.start != born {
+			if !exists || state.Start != born {
 				delete(targets, child)
 				continue
 			}
@@ -73,19 +75,19 @@ func cleanupProcesses(pid int, id string) {
 		<-ticker.C
 	}
 }
-func signalTargets(targets map[int]uint64, table processTable, signal syscall.Signal) {
+func signalTargets(targets map[int]uint64, table procpeek.Table, signal syscall.Signal) {
 	for pid, born := range targets {
-		if state, exists := table[pid]; exists && state.start == born && state.state != 'Z' {
+		if state, exists := table[pid]; exists && state.Start == born && state.State != 'Z' {
 			_ = syscall.Kill(pid, signal)
 		}
 	}
 }
 func forceSession(pid int, _ string) {
-	table := processes()
+	table := procpeek.Processes()
 	targets := make(map[int]uint64)
 	for child, state := range table {
-		if state.sid == pid {
-			targets[child] = state.start
+		if state.SID == pid {
+			targets[child] = state.Start
 		}
 	}
 	signalTargets(targets, table, syscall.SIGKILL)

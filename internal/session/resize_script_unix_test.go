@@ -26,7 +26,7 @@ func ptySize(t *testing.T, s *Session) (cols, rows int) {
 	}
 	// The preview screen exists at once for a custom size, and lazily at
 	// the default one.
-	if screen := s.preview.screen; screen != nil && (screen.Cols() != int(size.Cols) || screen.Rows() != int(size.Rows)) {
+	if pCols, pRows, allocated := s.preview.Size(); allocated && (pCols != int(size.Cols) || pRows != int(size.Rows)) {
 		t.Fatalf("preview does not follow the pty size %dx%d", size.Cols, size.Rows)
 	}
 	return int(size.Cols), int(size.Rows)
