@@ -138,8 +138,10 @@
   {open}
   onOpenChange={onopenchange}
 >
-  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-    <h2 class="min-w-0 flex-1">
+  <div
+    class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3"
+  >
+    <h2 class="min-w-0 sm:flex-1">
       {#if focused}
         <span class="flex min-w-0 items-baseline gap-2 font-semibold">
           工作树
@@ -178,9 +180,13 @@
           size="sm"
           variant="outline"
           class="min-h-9 sm:min-h-8"
+          aria-label="管理工作树"
+          title="管理工作树"
           disabled={repo.availability !== "available" || !gitReady}
           onclick={onmanage}
-          ><IconListCheck class="size-4" aria-hidden="true" />管理工作树</Button
+          ><IconListCheck class="size-4" aria-hidden="true" /><span
+            class="hidden sm:inline">管理工作树</span
+          ></Button
         >
       {/if}
       <Button
