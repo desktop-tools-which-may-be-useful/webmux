@@ -122,7 +122,7 @@
 - [查找单元用例](../../web/test/terminal-search.test.ts)、[终端浏览器验收用例](../../web/test/e2e/terminal.spec.ts)、[连接生命周期](../../web/src/ws.ts)
 - [平台能力判断](../../web/src/capabilities.ts)
 - [回显延迟与连续输出回归](../../internal/api/continuity_test.go)
-- [WebSocket 桥接](../../internal/hub/hub.go)、[会话 IO](../../internal/session/io.go)、[控制权](../../internal/session/control.go)
+- [WebSocket 桥接](../../internal/hub/hub.go)、[会话 IO](../../internal/session/input_write.go)、[控制权](../../internal/session/control.go)
 - [会话管理](../../internal/session/manager.go)、[Kitty 图形协议](../../web/src/kitty-graphics.ts)、[图形渲染层](../../web/src/hooks/terminal-graphics.ts)
 - [协议单元用例](../../web/test/kitty-graphics.test.ts)
 - [图形浏览器用例](../../web/test/browser/TerminalGraphics.test.ts)。
@@ -175,7 +175,7 @@
   - 已上传但未插入时提示真实路径，保留已成功插入的结果；
   - 退出会话拒绝新上传。
 
-依据：[终端剪贴板操作](../../web/src/components/SessionTerminal.svelte)、[剪贴板处理](../../web/src/terminalClipboard.ts)、[上传交互](../../web/src/hooks/upload.svelte.ts)、[上传接口](../../internal/api/upload.go)、[临时文件夹](../../internal/artifacts/artifacts.go)。
+依据：[终端剪贴板操作](../../web/src/components/SessionTerminal.svelte)、[剪贴板处理](../../web/src/terminal-clipboard.ts)、[上传交互](../../web/src/hooks/upload.svelte.ts)、[上传接口](../../internal/api/upload.go)、[临时文件夹](../../internal/artifacts/artifacts.go)。
 
 ## F. 草稿编写、保存与发送确认
 
@@ -247,7 +247,7 @@
 依据：
 
 - [草稿面板](../../web/src/components/TerminalInputComposer.svelte)、[暂存面板](../../web/src/components/ScratchPanel.svelte)、[暂存交互测试](../../web/test/browser/ScratchPanel.test.ts)
-- [暂存演示](../../web/stories/ScratchNotes.stories.ts)、[草稿状态](../../web/src/terminal-draft.svelte.ts)、[本机存储](../../web/src/draftStorage.ts)
+- [暂存演示](../../web/stories/ScratchNotes.stories.ts)、[草稿状态](../../web/src/terminal-draft.svelte.ts)、[本机存储](../../web/src/draft-storage.ts)
 - [终端发送](../../web/src/pages/Terminal.svelte)、[提交确认](../../internal/session/control.go)。
 
 ## G. 快捷指令
@@ -294,7 +294,7 @@
 
 依据：
 
-- [快捷指令数据](../../web/src/quickCommands.ts)、[状态与同步](../../web/src/quickCommands.svelte.ts)、[菜单](../../web/src/components/QuickCommandMenu.svelte)、[编辑弹窗](../../web/src/components/QuickCommandDialog.svelte)
+- [快捷指令数据](../../web/src/quick-commands.ts)、[状态与同步](../../web/src/quick-commands.svelte.ts)、[菜单](../../web/src/components/QuickCommandMenu.svelte)、[编辑弹窗](../../web/src/components/QuickCommandDialog.svelte)
 - [聊天视图插入验收](../../web/test/e2e/hybrid.spec.ts)
 - [设置](../../web/src/pages/Settings.svelte)、[系统预设菜单](../../web/src/components/QuickCommandPresetMenu.svelte)、[预设菜单用例](../../web/test/browser/QuickCommandPresetMenu.test.ts)、[初始化指令展开](../../internal/workspace/instruction.go)。
 
@@ -380,7 +380,7 @@ US-H09 图标验收：应用图标与页头标志一致。maskable 版本为系�
 - [主屏幕图标](../../web/public/icon-512.png)、[maskable 图标](../../web/public/icon-maskable.svg)、[Apple 主屏幕图标](../../web/public/apple-touch-icon.png)
 - [Manifest](../../web/public/manifest.webmanifest)、[Manifest 与图标用例](../../internal/api/static_test.go)、[软键栏](../../web/src/components/SoftKeys.svelte)
 - [触摸手势](../../web/src/hooks/touch.ts)
-- [触摸检测](../../web/src/touchInput.ts)、[视口与键盘可见性](../../web/src/hooks/viewport.svelte.ts)、[终端输入与键盘切换](../../web/src/hooks/terminal.svelte.ts)
+- [触摸检测](../../web/src/touch-input.ts)、[视口与键盘可见性](../../web/src/hooks/viewport.svelte.ts)、[终端输入与键盘切换](../../web/src/hooks/terminal.svelte.ts)
 - [键盘按钮暂时保持尺寸](../../web/src/hooks/keyboard-size-hold.ts)、[保持状态机用例](../../web/test/keyboard-size-hold.test.ts)
 - [草稿输入框](../../web/src/components/TerminalInputComposer.svelte)、[终端页面](../../web/src/pages/Terminal.svelte)、[Web 应用清单](../../web/public/manifest.webmanifest)。
 

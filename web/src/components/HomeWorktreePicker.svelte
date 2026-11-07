@@ -4,7 +4,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Command from "$lib/components/ui/command";
   import * as Popover from "$lib/components/ui/popover";
-  import { worktreeTitle } from "../homeWorktrees";
+  import { worktreeTitle } from "../home-worktrees";
   import type { Worktree } from "../schemas";
 
   // Which of a repository's worktrees the home page lists. Every worktree is

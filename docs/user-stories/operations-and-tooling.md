@@ -141,7 +141,7 @@
 - [安装脚本](../../deploy/linux/postinstall.sh)、[自动更新说明](../deployment/updates.md)
 - [通道文件](../../internal/update/channel_unix.go)、[通道命令](../../cmd/webmux/updatecmd.go)
 - [已安装版本识别](../../internal/update/installed.go)、[状态输出](../../internal/clicmd/status.go)、[待生效提示组件](../../web/src/components/PendingUpdateNotice.svelte)
-- [提示逻辑](../../web/src/pendingUpdate.ts)、[提示用例](../../web/test/pendingUpdate.test.ts)
+- [提示逻辑](../../web/src/pending-update.ts)、[提示用例](../../web/test/pending-update.test.ts)
 - [部署指南](../deployment.md)、[设置页](../../web/src/pages/Settings.svelte)、[设置导航](../../web/src/components/SettingsNavigation.svelte)
 - [导航浏览器回归](../../web/test/browser/SettingsNavigation.test.ts)。
 
@@ -269,19 +269,25 @@
   - 签名 job 用独立的 `WEBMUX_DEV_SIGNING_KEY`，`releasesign` 按版本选择私钥与公钥组，sign 与 publish 不可取消；
   - 正式版发布说明从上一个 `v*` 标签生成，不以 `dev` 标签为起点；
   - 文档公布开发版公钥与轮换流程，说明正式标签须在 main 可达提交上、更新本地 `dev` 标签需 `git fetch --tags --force`。
+- **US-L15 文件命名约定与守卫**：作为贡献者或 coding agent，我希望仅凭职责就能预测源码文件名，以便不用全仓搜索就能定位或放置代码。
+  验收要点：
+  - [文件命名](../agent-rules/naming.md)规定前端非组件 TypeScript 用 kebab-case、组件与组件测试用 PascalCase、Go 文件用 snake_case 并按“名词/职责”命名；
+  - `TestGoFileNames` 在 `go test ./...` 中拒绝非 snake_case 的 Go 文件名，以及含 `util`、`helper`、`misc`、`more`、`common` 等空泛词的名字；
+  - `web/test/architecture.test.ts` 的 `file naming` 拒绝 camelCase 的 TypeScript 文件和非 PascalCase 的 Svelte 组件；
+  - 规则页登记在 [Agent 规则](../agent-rules.md)，`AGENTS.md` 只保留一行指针。
 
 依据：
 
 - [前端代码质量基线](../frontend-style.md)、[AGENTS.md](../../AGENTS.md)、[CONTRIBUTING.md](../../CONTRIBUTING.md)
 - [Go 质量基线](../go-style.md)、[Go lint 配置](../../.golangci.yml)、[数组契约 fixture](../../internal/wire/arrays_test.go)
-- [数组 Zod 用例](../../web/test/wireArrays.test.ts)、[推送 API 用例](../../internal/api/push_test.go)、[Node.js 版本](../../.nvmrc)
+- [数组 Zod 用例](../../web/test/wire-arrays.test.ts)、[推送 API 用例](../../internal/api/push_test.go)、[Node.js 版本](../../.nvmrc)
 - [CI 工具链](../../.github/actions/setup/action.yml)、[Makefile](../../Makefile)、[前端命令](../../web/package.json)、[Go 覆盖率汇总](../../.github/scripts/go-coverage-summary.sh)、[前端覆盖率合并](../../web/scripts/merge-coverage.mjs)
 - [贡献指南](../../CONTRIBUTING.md)、[Storybook](../storybook.md)、[评测说明](../../baseline/README.md)
 - [真实终端分配基准](../../internal/hub/hub_bench_test.go)、[CI](../../.github/workflows/test.yml)、[E2E 初始化](../../web/test/e2e/global-setup.mjs)
 - [分层清单](../../internal/archtest/layers_test.go)、[agent 名称守卫](../../internal/archtest/agentnames_test.go)、[架构规则](../../internal/archtest/arch_test.go)、[规则样例](../../internal/archtest/testdata/fixture)
 - [线上快照测试](../../internal/api/wire_snapshot_test.go)、[归一化回归测试](../../internal/api/wire_normalizer_test.go)、[分层说明](../architecture.md#分层与架构测试)
 - [前端架构守卫](../frontend-architecture.md)
-- [AGENTS.md 体积测试](../../internal/archtest/agents_size_test.go)、[Agent 规则索引](../agent-rules.md)
+- [AGENTS.md 体积测试](../../internal/archtest/agents_size_test.go)、[Agent 规则索引](../agent-rules.md)、[文件命名守卫](../../internal/archtest/filenames_test.go)、[文件命名约定](../agent-rules/naming.md)、[前端命名守卫](../../web/test/architecture.test.ts)
 - [文档导航守卫](../../internal/docguard/links_test.go)、[文档中心](../README.md)、[首页](../../README.md)
 - [ESLint 架构规则](../../web/eslint.config.mjs)、[前端分层规则](../../web/.dependency-cruiser.cjs)、[前端架构测试](../../web/test/architecture.test.ts)、[文档治理](../doc-governance.md)、[文档治理规则与样例](../../internal/docguard/doc_test.go)。
 

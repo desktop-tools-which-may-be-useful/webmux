@@ -105,7 +105,7 @@
   `SessionInfo` 新增 `parentId`、`labels`，`CreateSessionRequest` 新增 `labels`，`AttentionSource` 新增 `cli`；重新录制 `internal/api/testdata/wire`。
 - CLI：`internal/sessioncmd` 引入命令表与帮助生成；`screen` 引入一个纯 Go 终端模拟库，只允许客户端包引用（新增架构规则）。
   `cmd/webmux` 的运维命令迁入同一命令表。
-- 前端：`quickCommands.ts` 把 `{{webmux}}` 当作内置变量；`SessionTerminal` 与聊天草稿在插入前调用手册接口；
+- 前端：`quick-commands.ts` 把 `{{webmux}}` 当作内置变量；`SessionTerminal` 与聊天草稿在插入前调用手册接口；
   初始化指令字段和快速开始页去掉“保留变量”提示；更换预置指令。
 - 安全：不新增权限边界。会话内调用者已能经套接字做同样的事，现有四项禁止保持不变。
   控制指示器与提醒标明来源会话，手册写明操作守则。

@@ -35,9 +35,9 @@
   运行 `go test -race ./internal/launch ./internal/api ./internal/wire` 验证通过。
 - [x] 2.3 添加 `web/src/icons/lobehub/antigravity.svg`（来自固定提交
   `eb3e353a5cf3720ef83d52058966ed51b10f10fa` 的 `lobehub/lobe-icons`），更新
-  `web/src/components/LaunchConfigIcon.svelte` 与 `web/src/launchConfigs.ts`
+  `web/src/components/LaunchConfigIcon.svelte` 与 `web/src/launch-configs.ts`
   （图标选项 `Antigravity CLI`、`agy` 自动匹配 `antigravity`、保留 `gemini`/`geminicli` 兼容渲染）。
-- [x] 2.4 在 `web/test/launchConfigs.test.ts` 与 `web/test/browser/LaunchConfigDialog.test.ts`
+- [x] 2.4 在 `web/test/launch-configs.test.ts` 与 `web/test/browser/LaunchConfigDialog.test.ts`
   中更新图标与预设断言，运行 `pnpm --dir web check`、`pnpm --dir web check:test`、
   `pnpm --dir web lint`、`pnpm --dir web check:arch` 与定向 Vitest 用例验证通过。
 

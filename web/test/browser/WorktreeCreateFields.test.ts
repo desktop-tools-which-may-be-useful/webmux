@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
-import { suggestWorktreeBranch } from "../../src/branchName";
+import { suggestWorktreeBranch } from "../../src/branch-name";
 import type { Repository } from "../../src/schemas";
 import Harness from "./WorktreeCreateFieldsHarness.svelte";
 

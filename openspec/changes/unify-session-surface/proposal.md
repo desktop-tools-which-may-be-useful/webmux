@@ -60,11 +60,11 @@
 ## Impact
 
 - 契约与转换：`internal/contract`（`sessions.go`、`hybrid.go`、`chat.go`、`quickstart.go`、`launch.go`、`workspace.go`）、
-  `internal/wire`、`web/src/schemas.ts` 与 `chatSchemas.ts`，以及 `internal/api/testdata/wire` 快照。
+  `internal/wire`、`web/src/schemas.ts` 与 `chat-schemas.ts`，以及 `internal/api/testdata/wire` 快照。
 - 控制器：`internal/api`（`router.go`、`chat.go`、`quickstart.go`、`launch.go`、`errors.go`）、`internal/hub` 的移动通知与聊天帧。
 - 服务：`internal/workspace`（快速开始编排并入创建）、`internal/hybrid`（输入、中断、记录到会话信息的转换）、`internal/session`（服务端提交输入）、
   `internal/launch`（线上字段改名，存储键不变）。
-- Web 端：`api.ts`、`chat-api.ts`、`quickStart.ts`、`recoverable.ts`、`archived.ts`、`hooks/hybrid.svelte.ts` 及读取 `hybrid` 字段的组件。
+- Web 端：`api.ts`、`chat-api.ts`、`quick-start.ts`、`recoverable.ts`、`archived.ts`、`hooks/hybrid.svelte.ts` 及读取 `hybrid` 字段的组件。
 - CLI：所有调用旧接口的命令随 `unify-session-cli` 在同一 PR 中迁移；两个变更必须一起发布。
 - 文档：`docs/protocol` 中的会话与混合会话协议、`docs/hybrid-sessions.md`，以及 `docs/user-stories/hybrid-sessions.md` 与
   `docs/user-stories/shell-control.md`（US-S03）中引用旧接口的条目。

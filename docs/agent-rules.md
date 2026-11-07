@@ -8,6 +8,7 @@ When `AGENTS.md` outgrows the budget, move the least frequently needed rules int
 
 - [Repository Map](agent-rules/repo-map.md): key directories, important files, runtime and tooling versions.
 - [Code Conventions and Common Patterns](agent-rules/conventions.md): Go, command/launch security, wire contract, frontend rules, and development commands.
+- [File Naming](agent-rules/naming.md): predictable file names for the frontend and Go, with the guards that enforce them.
 - [Testing, QA, and UI Pull Requests](agent-rules/testing.md): test commands, coverage expectations, test runtime, CI layout, and screenshot evidence.
 - [User Stories Maintenance](agent-rules/user-stories-maintenance.md): when and how to keep `docs/user-stories*` in sync.
 

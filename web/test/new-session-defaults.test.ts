@@ -3,8 +3,8 @@ import {
   resolveInitialLaunch,
   resolveInitialTarget,
   resolveLaunchScope,
-} from "../src/newSessionDefaults";
-import type { LaunchConfigsState } from "../src/launchConfigs";
+} from "../src/new-session-defaults";
+import type { LaunchConfigsState } from "../src/launch-configs";
 import type { Repository, Worktree } from "../src/schemas";
 
 function tree(

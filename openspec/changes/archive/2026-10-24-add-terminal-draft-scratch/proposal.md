@@ -30,9 +30,9 @@
 ## Impact
 
 - 前端契约：`web/src/schemas.ts` 新增暂存记录 schema。
-- 本机存储：`web/src/draftStorage.ts` 增加暂存前缀、读取、保存、计数和清理。
+- 本机存储：`web/src/draft-storage.ts` 增加暂存前缀、读取、保存、计数和清理。
 - 状态模型：`web/src/terminal-draft.svelte.ts` 增加暂存列表和操作。
 - 界面：`web/src/components/TerminalInputComposer.svelte`、新增 `ScratchPanel.svelte`、`web/src/pages/Terminal.svelte`、`web/src/pages/Settings.svelte`。
 - 文档：`docs/usage.md`、`docs/user-stories.md`。
-- 测试：`web/test/draftStorage.test.ts`、`web/test/browser/TerminalDraft.test.ts`，以及暂存面板浏览器测试。
+- 测试：`web/test/draft-storage.test.ts`、`web/test/browser/TerminalDraft.test.ts`，以及暂存面板浏览器测试。
 - 不改变 Go 服务端、PTY 回放、发送确认、队列和认证边界。

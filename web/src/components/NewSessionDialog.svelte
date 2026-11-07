@@ -10,7 +10,7 @@
     store,
     stored,
   } from "../api";
-  import type { LaunchConfigsState } from "../launchConfigs";
+  import type { LaunchConfigsState } from "../launch-configs";
   import {
     resolveInitialLaunch,
     resolveInitialTarget,
@@ -19,7 +19,7 @@
     type LaunchEntry,
     type LaunchScope,
     type LaunchSource,
-  } from "../newSessionDefaults";
+  } from "../new-session-defaults";
   import { sessionConflict } from "../recoverable";
   import ConnectorInstallHint from "./ConnectorInstallHint.svelte";
   import {

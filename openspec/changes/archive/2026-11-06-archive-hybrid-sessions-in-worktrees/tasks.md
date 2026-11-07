@@ -11,7 +11,7 @@
 
 - [x] 2.1 在 `web/src/schemas.ts` 的混合记录 schema 增加可选 `workspace`（复用会话的工作区 schema），并验证契约测试与 `pnpm --dir web check` 通过
 - [x] 2.2 新增归位纯函数（D2：快照 → 规范化路径最长前缀 → 直接会话目录分组），用 Vitest 覆盖快照命中、工作树已不在清单（进“已不可用工作区”）、仓库已移除、旧记录子目录匹配、无匹配、每条记录只出现一次
-- [x] 2.3 `homeWorktrees.ts` 的 `homeLayout` 接收有已归档记录的工作树 ID 并视同有会话，迁移 `RepositoryGroup` 调用；Vitest 验证未置顶但有已归档记录的工作树显示、记录清空后隐藏
+- [x] 2.3 `home-worktrees.ts` 的 `homeLayout` 接收有已归档记录的工作树 ID 并视同有会话，迁移 `RepositoryGroup` 调用；Vitest 验证未置顶但有已归档记录的工作树显示、记录清空后隐藏
 
 ## 3. 工作树内的“已归档”区（UI）
 

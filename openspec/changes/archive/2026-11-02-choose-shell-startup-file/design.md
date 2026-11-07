@@ -8,7 +8,7 @@
 - `cmd/webmux/main.go:380` 把 `os.Getenv("SHELL")` 传给 `launch.Presets`；`deploy/com.webmux.plist` 设置 `SHELL=/bin/zsh`，`deploy/webmux.service` 没有设置 `SHELL`。
 - `internal/agentprofile/command.go` 用 `FormBashrc` 表示包装形式，`splitForm` 只匹配 Bash 前缀；`wrapExec`、`Lookup`、`ProtocolOnFD3`、`ACPArgv` 都按该形式分支。
 - `internal/hybrid/connector.go:78` 与 `:168` 只在 `FormBashrc` 时经 `bash -ic` 执行 `command -v` 并识别退出码 127。
-- `web/src/launchConfigs.ts:18` 的 `BASHRC_PREFIX` 只识别 Bash；`LaunchConfigDialog.svelte:323` 的复选框文案为“加载 ~/.bashrc”。
+- `web/src/launch-configs.ts:18` 的 `BASHRC_PREFIX` 只识别 Bash；`LaunchConfigDialog.svelte:323` 的复选框文案为“加载 ~/.bashrc”。
 - 既有 `launch-configs.json` 按设计不重写；`fileVersion` 保持 `2`。
 
 ## Goals / Non-Goals

@@ -8,7 +8,7 @@
 - `ui/` 下已有 `dropdown-menu`、`tabs`、`drawer`、`popover` 等 shadcn-svelte 组件。
 - `terminal.svelte.ts` 只暴露 `scrollToBottom()`，不暴露当前是否位于底部。观察者（非控制方）按控制方网格渲染，网格超出宿主时平移的是宿主 `.terminal-host.observing` 的 `scrollTop`，xterm 缓冲此时仍在底部（`touch.ts`）。
 - 已有的 iOS 与主屏幕 Web App 适配：`.terminal-page` 是固定定位容器，高度取 `visualViewport` 高度（`viewport.svelte.ts`），四边用 `env(safe-area-inset-*)` 留出安全区；`display-mode: standalone` 下给状态栏区域铺上顶栏背景色，以避开 iOS 26 起顶部约 40pt 的模糊层。`toggleFullscreen` 在 Fullscreen API 不可用时已经显示“添加到主屏幕”的提示。`popoutAvailable()` 的条件是“有 Document PiP，或有精细指针”。软键栏用 `onmousedown` 调 `preventDefault` 保住焦点，避免收起键盘。
-- 兼容基线为 iOS/iPadOS 27 上的 Safari（WebKit 27）及其主屏幕 Web App。按 firt.dev 的 iOS PWA 兼容表（2026-10-13 更新）：iPhone 不支持 Fullscreen API（只有 iPad 支持），manifest 的 `display: fullscreen` 会回退为 `standalone`，没有 Virtual Keyboard API。现有代码已按 WebKit 不支持 Document Picture-in-Picture 处理（`codePopout.ts` 走 `window.open` 回退）。
+- 兼容基线为 iOS/iPadOS 27 上的 Safari（WebKit 27）及其主屏幕 Web App。按 firt.dev 的 iOS PWA 兼容表（2026-10-13 更新）：iPhone 不支持 Fullscreen API（只有 iPad 支持），manifest 的 `display: fullscreen` 会回退为 `standalone`，没有 Virtual Keyboard API。现有代码已按 WebKit 不支持 Document Picture-in-Picture 处理（`code-popout.ts` 走 `window.open` 回退）。
 
 ## Goals / Non-Goals
 

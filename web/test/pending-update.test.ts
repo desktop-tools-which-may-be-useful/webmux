@@ -4,7 +4,7 @@ import {
   dismissedUpdate,
   homeUpdate,
   restartMethod,
-} from "../src/pendingUpdate";
+} from "../src/pending-update";
 import { ConfigSchema } from "../src/schemas";
 
 const baseConfig = {

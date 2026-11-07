@@ -4,7 +4,7 @@ import {
   scratchEntryLimit,
   scratchStorageLimit,
   type DraftStorage,
-} from "./draftStorage";
+} from "./draft-storage";
 import type {
   ChatAttachment,
   ScratchEntry,

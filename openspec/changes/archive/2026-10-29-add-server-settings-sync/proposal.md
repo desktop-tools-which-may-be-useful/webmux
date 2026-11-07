@@ -27,7 +27,7 @@ WebMux 的设置目前分散在三处：`config.toml` 是启动时读取的部�
 ## Impact
 
 - 后端：新增 `internal/settings`（文件锁、原子保存、校验、修订号、订阅）；`internal/contract` 与 `internal/wire` 增加设置快照、PATCH 与 WebSocket 事件类型；`internal/api` 增加 `/api/settings` 路由与错误映射；`internal/hub` 增加设置事件编码；`cmd/webmux` 打开服务并注入 `api.Deps`；`internal/archtest/layers_test.go` 登记新包。
-- 前端：新增 `web/src/settings.svelte.ts`（权威快照、缓存、WebSocket 与 PATCH）与对应 Zod schema；改造 `api.ts`、`schemas.ts`、`theme.ts`、`previewSettings.svelte.ts`、`quickCommands.svelte.ts`、`homeWorktrees.svelte.ts`、`CodeReader.svelte`、`CodeDiffReader.svelte`、`hooks/terminal.svelte.ts`、`TerminalHeader.svelte`、`Terminal.svelte`、`Settings.svelte` 与 `NewSessionSheet.svelte`（仅保留上次选择为本地）。
+- 前端：新增 `web/src/settings.svelte.ts`（权威快照、缓存、WebSocket 与 PATCH）与对应 Zod schema；改造 `api.ts`、`schemas.ts`、`theme.ts`、`preview-settings.svelte.ts`、`quick-commands.svelte.ts`、`home-worktrees.svelte.ts`、`CodeReader.svelte`、`CodeDiffReader.svelte`、`hooks/terminal.svelte.ts`、`TerminalHeader.svelte`、`Terminal.svelte`、`Settings.svelte` 与 `NewSessionSheet.svelte`（仅保留上次选择为本地）。
 - 状态文件：新增 `<state_dir>/settings.json` 与 `<state_dir>/settings.json.lock`；`README.md` 的 `state_dir` 说明、`docs/architecture.md` 的包表与状态目录说明、`docs/deployment.md` 的状态文件清单需要同步。
 - 文档：`docs/protocol.md` 增加设置 API 与 WebSocket 帧，`docs/usage.md` 说明跨设备同步与设备本地边界，`docs/user-stories.md` 更新 US-C07、US-C09、US-D08、US-G01–US-G04、US-H04、US-J03 并补充设置同步故事；`deploy/config.example.toml` 保持 TOML 边界说明。
 - 测试：Go 存储/API/WebSocket 与架构测试；Vitest schema、旧键隔离、冲突重试、降级；Playwright 双浏览器上下文跨客户端同步、旧键隔离与设置页故障；现有断言“仅保存在当前浏览器”的测试需要同步修改。

@@ -2,8 +2,8 @@
   import IconTerminal2 from "~icons/tabler/terminal-2";
   import { joinArgs } from "../api";
   import { connectorNoticeText } from "../hybrid";
-  import { launchConfigIcon, type LaunchConfigsState } from "../launchConfigs";
-  import type { LaunchSource } from "../newSessionDefaults";
+  import { launchConfigIcon, type LaunchConfigsState } from "../launch-configs";
+  import type { LaunchSource } from "../new-session-defaults";
   import type { SessionView } from "../schemas";
   import * as Command from "$lib/components/ui/command";
   import { Input } from "$lib/components/ui/input";

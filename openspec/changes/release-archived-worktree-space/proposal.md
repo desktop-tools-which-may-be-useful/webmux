@@ -33,7 +33,7 @@
   - `internal/api` 路由与错误映射；
   - `internal/contract`、`internal/wire`、wire 快照。
 - 前端：
-  - 代码：`chatSchemas.ts`、`recoverable.ts`、`archived.ts`、`SidebarSessionMenu.svelte`、`ArchivedSessions.svelte`、`AppSidebar.svelte`、`ChatHistory.svelte`；
+  - 代码：`chat-schemas.ts`、`recoverable.ts`、`archived.ts`、`SidebarSessionMenu.svelte`、`ArchivedSessions.svelte`、`AppSidebar.svelte`、`ChatHistory.svelte`；
   - 新增释放确认和重建确认对话框。
 - 持久化：`hybrid-sessions.json` 增加可选字段。旧记录没有该字段，视为未释放，不需要迁移。
 - 用户故事：US-Q12、US-Q19、US-C15、US-J08。

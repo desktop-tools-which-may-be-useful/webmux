@@ -5,7 +5,7 @@ import {
   scratchEntriesLimit,
   scratchEntryLimit,
   scratchStorageLimit,
-} from "../../src/draftStorage";
+} from "../../src/draft-storage";
 
 test("draft edits preserve Unicode, selections and session isolation across mode switches", () => {
   const drafts = createTerminalDrafts();

@@ -22,7 +22,7 @@
     filterWorktreeBatchEntries,
     groupBatchPreviewItems,
     type WorktreeBatchFilter,
-  } from "../worktreeBatch";
+  } from "../worktree-batch";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";

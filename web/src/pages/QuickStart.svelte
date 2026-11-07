@@ -16,7 +16,7 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import { api, navigate, store, stored, uploadQuickStartFile } from "../api";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
-  import { remoteBranchBases } from "../branchName";
+  import { remoteBranchBases } from "../branch-name";
   import type { ConfigValue } from "../chat-api";
   import ChatAttachmentList from "../components/chat/ChatAttachmentList.svelte";
   import ChatConfig from "../components/chat/ChatConfig.svelte";
@@ -39,14 +39,14 @@
     pickDefault,
     quickStartMemory,
     sendQuickStart,
-  } from "../quickStart";
+  } from "../quick-start";
   import {
     expandInitInstruction,
     insertAtSelection,
     usesArtifactDir,
     usesWebmuxBrief,
-  } from "../quickCommands";
-  import { quickCommands } from "../quickCommands.svelte";
+  } from "../quick-commands";
+  import { quickCommands } from "../quick-commands.svelte";
   import {
     BranchesSchema,
     LaunchOptionsRequestSchema,

@@ -11,8 +11,8 @@
 
 ## 2. 不改变 UI 的治理
 
-- [x] 2.1 删除 knip 报告的未使用导出（`api.ts` 的 `statusText`、`attentionText`，`code-diff-model.ts` 的 `DiffResultSchema`，`code-diff.ts` 的 `DIFF_BUDGET_MS`，`fonts.ts` 的 `terminalFontFamily`，`homeWorktrees.ts` 的 `pinnedIds`，`launchConfigs.ts` 的 `LAUNCH_NAME_MAX`、`LAUNCH_ARGS_MAX`、`LAUNCH_VALUE_BYTES`、`envNameError`，`terminal-draft.svelte.ts` 的 `DraftSubmission`），只用于模块内部的改为不导出
-- [x] 2.2 分层：`SearchSpec` 类型移入 `code-search.ts`；挂载 Svelte 组件的 `code-reader-panels.ts`、`codePopout.ts` 移到 `components/`；dependency-cruiser 基线清空，`code-search.test.ts` 仍在 Node 中运行
+- [x] 2.1 删除 knip 报告的未使用导出（`api.ts` 的 `statusText`、`attentionText`，`code-diff-model.ts` 的 `DiffResultSchema`，`code-diff.ts` 的 `DIFF_BUDGET_MS`，`fonts.ts` 的 `terminalFontFamily`，`home-worktrees.ts` 的 `pinnedIds`，`launch-configs.ts` 的 `LAUNCH_NAME_MAX`、`LAUNCH_ARGS_MAX`、`LAUNCH_VALUE_BYTES`、`envNameError`，`terminal-draft.svelte.ts` 的 `DraftSubmission`），只用于模块内部的改为不导出
+- [x] 2.2 分层：`SearchSpec` 类型移入 `code-search.ts`；挂载 Svelte 组件的 `code-reader-panels.ts`、`code-popout.ts` 移到 `components/`；dependency-cruiser 基线清空，`code-search.test.ts` 仍在 Node 中运行
 - [x] 2.3 Iconify 迁移：21 个业务文件从 `@tabler/icons-svelte` 改为 `~icons/tabler/*`，图标名逐个对照 `@iconify-json/tabler` 校验；未设尺寸类的图标都位于 Button、DropdownMenu.Item、Empty.Media 等以 `[&_svg:not([class*=size-])]` 设置尺寸的容器内，尺寸不变。`ui/` 中 6 个生成组件仍使用 `@tabler/icons-svelte`（`components.json` 的 `iconLibrary`），随生成器一并处理
 - [x] 2.4 未知类名：`code-goto-line`、`code-reader`、`code-search`、`session-link` 改为 `data-*` 属性，同步源码与 `test/e2e`、`test/browser`、`test/performance` 中的选择器；未被引用的 `workspace-header`、`workspace-toolbar` 删除
 - [x] 2.5 任意值（有完全等价内置工具类的部分，逐个编译确认 CSS 相同）：`[overflow-wrap:anywhere]` → `wrap-anywhere`、`[field-sizing:fixed]` → `field-sizing-fixed`、`[contain:strict]` → `contain-strict`、`[scrollbar-width:thin]` → `scrollbar-thin`、`flex-[2]` → `flex-2`、`focus-visible:ring-[3px]` → `focus-visible:ring-3`、`mt-[0.3125rem]` → `mt-1.25`（47 → 33 处）

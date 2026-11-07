@@ -33,7 +33,7 @@
 - 前端：
   - 契约：`web/src/schemas.ts`。
   - 首页：`RecoverableSessions.svelte`（改为工作树内的已归档区组件）、`WorkspaceGroup.svelte`、`RepositoryGroup.svelte`、`DirectSessions.svelte`、`SessionList.svelte`、`SessionFilters`。
-  - 布局：`homeWorktrees.ts`（`homeLayout` 计入已归档记录）。
+  - 布局：`home-worktrees.ts`（`homeLayout` 计入已归档记录）。
   - 归档入口：`CloseSessionDialog.svelte`、`TerminalHeader.svelte`、`SessionRow.svelte`、`Terminal.svelte`。
 - 测试：Go race（hybrid、api wire 快照）、Vitest 组件/布局测试、`web/test/e2e/hybrid.spec.ts`。
 - 文档与用户故事：US-C02、US-D10、US-Q12 及 `docs/hybrid-sessions.md` 等提到“可恢复”分组的说明。

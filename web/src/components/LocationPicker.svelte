@@ -18,7 +18,7 @@
     worktreeLabel,
     type LaunchScope,
     type TargetKind,
-  } from "../newSessionDefaults";
+  } from "../new-session-defaults";
   import type { Repository, Worktree } from "../schemas";
 
   // The "where" row of the new-session dialog: recent directories, worktrees

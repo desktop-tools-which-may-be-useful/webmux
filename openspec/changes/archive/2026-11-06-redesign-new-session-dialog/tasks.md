@@ -1,6 +1,6 @@
 ## 1. 默认值解析（纯逻辑）
 
-- [x] 1.1 在 `web/src/newSessionDefaults.ts` 实现 `resolveInitialTarget`，覆盖上下文入口、主页选中仓库、无可用工作树、最近目录与默认目录；Vitest 覆盖各分支（`test/newSessionDefaults.test.ts`）。
+- [x] 1.1 在 `web/src/new-session-defaults.ts` 实现 `resolveInitialTarget`，覆盖上下文入口、主页选中仓库、无可用工作树、最近目录与默认目录；Vitest 覆盖各分支（`test/new-session-defaults.test.ts`）。
 - [x] 1.2 实现 `resolveInitialLaunch`：记住的配置存在才选中、删除后为未选择、无记忆取第一个配置、记住自定义命令不等待加载；Vitest 覆盖。
 
 ## 2. 对话框组件重构

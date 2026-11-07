@@ -4,7 +4,7 @@
 
 - 混合会话关闭走 `DELETE /api/sessions/{id}`：`internal/hybrid/actor.go` 的 `finishClose` 把记录设为 `closed` 并 `manager.Remove` 外壳，会话从列表消失。会话页的 `CloseSessionDialog` 只在“移除已退出会话”时回调 `onremoved`，所以归档运行中的混合会话后页面停在已失效的会话上。
 - 记录（`internal/hybrid/records.go` 的 `Record`、`internal/contract.HybridRecord`）只有 `cwd`，没有仓库/工作树关联。会话的关联由 `internal/workspace` 用 Git 解析 `cwd` 后经 `session.Manager.SetWorkspace` 写入 `session.Info.Workspace`，可能在会话启动后异步到达。
-- 首页 `SessionList.svelte` 在底部渲染 `RecoverableSessions.svelte`；工作树分组由 `RepositoryGroup` → `WorkspaceGroup`，直接会话由 `DirectSessions`；主页工作树显隐由 `homeWorktrees.ts` 的 `homeLayout`（置顶或有会话）决定。
+- 首页 `SessionList.svelte` 在底部渲染 `RecoverableSessions.svelte`；工作树分组由 `RepositoryGroup` → `WorkspaceGroup`，直接会话由 `DirectSessions`；主页工作树显隐由 `home-worktrees.ts` 的 `homeLayout`（置顶或有会话）决定。
 
 ## Goals / Non-Goals
 

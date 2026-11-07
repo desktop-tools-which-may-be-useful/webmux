@@ -8,7 +8,7 @@
     initInstructionReferences,
     USER_REFERENCE_NAME,
     WEBMUX_REFERENCE_NAME,
-  } from "../quickCommands";
+  } from "../quick-commands";
   import { INIT_INSTRUCTION_MAX, type QuickCommand } from "../schemas";
   import InlineNotice from "./InlineNotice.svelte";
 

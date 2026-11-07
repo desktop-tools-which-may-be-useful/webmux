@@ -1,5 +1,5 @@
 import type { SettingsValues, QuickCommand } from "./schemas";
-import { parseQuickCommands } from "./quickCommands";
+import { parseQuickCommands } from "./quick-commands";
 
 export const defaultPreview = { lines: 10, skip: 1 };
 export const defaultCodeReader = {

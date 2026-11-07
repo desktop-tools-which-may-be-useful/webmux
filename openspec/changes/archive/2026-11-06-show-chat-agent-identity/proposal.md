@@ -29,6 +29,6 @@
   - `internal/agentprofile`：`Profile` 新增图标键，各适配器子包声明取值；`internal/launch` 的测试校验图标键属于启动配置图标目录。
   - `internal/session.HybridInfo` 与 `internal/hybrid/actor.go`：填充显示名与图标。
   - `internal/contract/hybrid.go`、`internal/wire/wire.go`：新增字段；重新录制 wire 快照 `internal/api/testdata/wire`。
-- 前端：`web/src/chatSchemas.ts`（`SessionHybridSchema`）、`web/src/components/SessionRow.svelte`、`web/src/components/TerminalHeader.svelte`、`web/src/components/LaunchConfigIcon.svelte`（新增尺寸选项以复用品牌图标）。
+- 前端：`web/src/chat-schemas.ts`（`SessionHybridSchema`）、`web/src/components/SessionRow.svelte`、`web/src/components/TerminalHeader.svelte`、`web/src/components/LaunchConfigIcon.svelte`（新增尺寸选项以复用品牌图标）。
 - 文档：`docs/protocol/http-sessions.md`、`docs/protocol/http-hybrid.md` 的 `hybrid` 字段说明；`docs/user-stories/hybrid-sessions.md` 与两份索引。
 - 兼容性：只新增字段，旧客户端忽略即可；`internal/archtest` 禁止 `web/src` 出现 agent 名称的约束保持不变。

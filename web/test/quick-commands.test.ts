@@ -13,7 +13,7 @@ import {
   renderWebmuxBrief,
   usesArtifactDir,
   usesWebmuxBrief,
-} from "../src/quickCommands";
+} from "../src/quick-commands";
 import { QuickCommandsSchema, type QuickCommand } from "../src/schemas";
 
 const command = (overrides: Partial<QuickCommand> = {}): QuickCommand => ({

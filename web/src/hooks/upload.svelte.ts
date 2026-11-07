@@ -4,7 +4,7 @@ import { SvelteMap } from "svelte/reactivity";
 import { uploadFile } from "../api";
 import type { ChatAttachment } from "../schemas";
 import type { Connection } from "../ws";
-import { hasTouchInput } from "../touchInput";
+import { hasTouchInput } from "../touch-input";
 import type {
   DraftOperation,
   InputDestination,

@@ -6,7 +6,7 @@ import {
   scratchEntriesLimit,
   scratchEntryLimit,
   scratchStorageLimit,
-} from "../src/draftStorage";
+} from "../src/draft-storage";
 import type { StoredDraft, StoredScratch } from "../src/schemas";
 
 class MemoryStorage implements Storage {

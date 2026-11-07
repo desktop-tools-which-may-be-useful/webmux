@@ -1,5 +1,5 @@
 import type { IDisposable, Terminal } from "@xterm/xterm";
-import { isIOS } from "../touchInput";
+import { isIOS } from "../touch-input";
 
 // Draft-mode routing supplied by the page: while `draftEnabled()` holds, user
 // keys, text and IME commits go to the draft instead of the PTY.

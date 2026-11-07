@@ -4,7 +4,7 @@
 
 - 软键栏 `web/src/components/SoftKeys.svelte` 为 `<aside aria-label="终端软键">` 内单个 `.soft-row`（`overflow-x: auto`、不换行），仅在 `any-pointer: coarse` 或 `.terminal-page.force-soft-keys` 时显示（`web/src/styles.css`）。软键按钮在 `pointerdown` 上 `preventDefault` 以保留终端焦点。E2E `softkeys.spec.ts` 断言所有按钮同一行、320 px 下“粘贴”“唤起或收起键盘”完整可见。
 - 终端顶栏（`Terminal.svelte`）依次为返回、标题、状态、全屏、上传、滚动到底、“草稿”、“代码”、“⋯”菜单；“强制显示底部工具栏”是“⋯”菜单中的 CheckboxItem，仅存于页面内存。
-- 浏览器本地设置的既有模式是 `web/src/previewSettings.svelte.ts`：模块级 `$state`，通过 `api.ts` 的 `stored`/`store`（`localStorage`，键前缀 `webmux.`，异常吞掉）读写，Zod 契约位于 `web/src/schemas.ts`。设置页 `Settings.svelte` 用 `Card` 分组，页面声明“设置仅保存在当前浏览器”。
+- 浏览器本地设置的既有模式是 `web/src/preview-settings.svelte.ts`：模块级 `$state`，通过 `api.ts` 的 `stored`/`store`（`localStorage`，键前缀 `webmux.`，异常吞掉）读写，Zod 契约位于 `web/src/schemas.ts`。设置页 `Settings.svelte` 用 `Card` 分组，页面声明“设置仅保存在当前浏览器”。
 - `Terminal.svelte` 已有统一文本入口 `insertText(text, operation)` → `drafts.insert(draft, text, operation, t.paste)`：草稿模式写入草稿光标处，否则走 `t.paste`（xterm `paste`，按程序状态包装 bracketed paste；未连接/恢复中/已退出返回 `false`，并清除锁定修饰键）。`sendDraft` 已确立“先粘贴、成功后单独 `t.send("\r")`、部分成功单独提示”的语义。
 - 弹出层焦点处理已有先例：粘贴对话框 `onCloseAutoFocus={focusTerminal}` 在触屏上不回焦，否则回焦到 `focusInput()`。
 - 路由：`App.svelte` 以 `location.pathname` 匹配 `/s/[a-z2-7]{8}` 与 `/settings`；`api.ts` 的 `navigate` 用 `pushState`，查询串与 hash 会保留。
@@ -57,7 +57,7 @@ QuickCommandsSchema = z.array(QuickCommandSchema).max(50);
 
 列表契约同时校验所有 `id` 唯一；重复 ID 属于损坏数据，读取时整体降级为空列表，避免传给 Svelte keyed-each 后渲染失败。
 
-新增 `web/src/quickCommands.svelte.ts`，结构对齐 `previewSettings.svelte.ts`：模块级 `quickCommands = $state({ list })`（导出的 `$state` 不能被重新赋值，因此包一层对象）；`saveQuickCommands(list)` 先 `parse` 再整体替换 `list` 并 `store`。不依赖 runes 的纯函数放在 `web/src/quickCommands.ts`：`parseQuickCommands(raw)`（下述三种读取情况）、`normalizeCommand(text)`（CRLF/CR→LF，去末尾换行）、`commandLabel(cmd)`（名称或正文首行）、`commandPreview(cmd)` 和 `newQuickCommandId()`，供设置页、菜单和 Node 环境的单元测试共用（Vitest Node 配置不编译 `.svelte.ts`）。
+新增 `web/src/quick-commands.svelte.ts`，结构对齐 `preview-settings.svelte.ts`：模块级 `quickCommands = $state({ list })`（导出的 `$state` 不能被重新赋值，因此包一层对象）；`saveQuickCommands(list)` 先 `parse` 再整体替换 `list` 并 `store`。不依赖 runes 的纯函数放在 `web/src/quick-commands.ts`：`parseQuickCommands(raw)`（下述三种读取情况）、`normalizeCommand(text)`（CRLF/CR→LF，去末尾换行）、`commandLabel(cmd)`（名称或正文首行）、`commandPreview(cmd)` 和 `newQuickCommandId()`，供设置页、菜单和 Node 环境的单元测试共用（Vitest Node 配置不编译 `.svelte.ts`）。
 
 `parseQuickCommands(stored("quickCommands"))` 区分三种情况：
 

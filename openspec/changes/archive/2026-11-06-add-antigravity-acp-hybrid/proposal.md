@@ -68,7 +68,7 @@
   `user_message_chunk`）、`internal/session`（`osc.go` 子记录段长常量）、
   `internal/launch`（`presets.go`、`types.go`）、`internal/acp/testdata/fakeagent`。
 - 前端与资源：`web/src/icons/lobehub/antigravity.svg`、
-  `web/src/components/LaunchConfigIcon.svelte`、`web/src/launchConfigs.ts`
+  `web/src/components/LaunchConfigIcon.svelte`、`web/src/launch-configs.ts`
   及相关单元/浏览器测试。
 - 文档与用户故事：`docs/user-stories.md`、`docs/user-stories/access-and-sessions.md`、
   `docs/user-stories/hybrid-sessions.md`、`docs/user-stories/coverage.md`、

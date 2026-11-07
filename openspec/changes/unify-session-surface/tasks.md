@@ -24,9 +24,9 @@
 
 ## 3. Web 端
 
-- [ ] 3.1 `schemas.ts`、`chatSchemas.ts`：以新的 `SessionInfo` 字段取代 `SessionHybridSchema` 与 `HybridRecordSchema`，同步启动配置与冲突体
+- [ ] 3.1 `schemas.ts`、`chat-schemas.ts`：以新的 `SessionInfo` 字段取代 `SessionHybridSchema` 与 `HybridRecordSchema`，同步启动配置与冲突体
 - [ ] 3.2 `chat-api.ts`、`api.ts`：发送改用 `/input`，取消改用 `/interrupt`，切换改用 `/view`，恢复使用 `view`
-- [ ] 3.3 `quickStart.ts`、`QuickStart.svelte`：改用 `POST /api/sessions`、`/api/uploads` 与 `/api/launch-configs/{id}/options`，失败按步骤显示不变
+- [ ] 3.3 `quick-start.ts`、`QuickStart.svelte`：改用 `POST /api/sessions`、`/api/uploads` 与 `/api/launch-configs/{id}/options`，失败按步骤显示不变
 - [ ] 3.4 `NewSessionDialog.svelte`：新建 worktree 改为随创建请求提交 `newWorktree`，重试时以 `workspace` 提交已建好的 worktree
 - [ ] 3.5 `hooks/hybrid.svelte.ts`、`archived.ts`、`recoverable.ts`、`ChatHistory`、`ArchivedSessions`、`SessionList`、`AppSidebar`、`WorkbenchTree`、`TerminalHeader`、`SessionViewTabs`、`Settings`：改读 `view`、`transition`、`state`、`agent` 与 `chat`
 - [ ] 3.6 更新受影响的 Vitest、浏览器与 Playwright 用例中的接口与字段，运行 `pnpm --dir web check:arch`

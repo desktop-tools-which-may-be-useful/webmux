@@ -19,8 +19,8 @@
     type ArchiveActions,
     type RepositoryArchive,
   } from "../archived";
-  import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { homeLayout, worktreeTitle } from "../homeWorktrees";
+  import { homeWorktrees } from "../home-worktrees.svelte";
+  import { homeLayout, worktreeTitle } from "../home-worktrees";
   import { statusSummary } from "../session-status";
   import { copyText } from "../clipboard";
   import HomeWorktreePicker from "./HomeWorktreePicker.svelte";

@@ -2,7 +2,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { joinArgs } from "../api";
-  import { LAUNCH_CONFIGS_LIMIT, launchConfigIcon } from "../launchConfigs";
+  import { LAUNCH_CONFIGS_LIMIT, launchConfigIcon } from "../launch-configs";
   import type { LaunchConfigSummary, LaunchPreset } from "../schemas";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import SystemPresetMenu from "./SystemPresetMenu.svelte";

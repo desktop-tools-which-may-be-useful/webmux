@@ -19,10 +19,10 @@
 
 ## 4. Web 编辑器
 
-- [x] 4.1 `web/src/launchConfigs.ts` 用带 shell 的包装前缀替换 `BASHRC_PREFIX`；`launchCommandDraft` 返回普通命令与所选 shell，新增统一包装函数，图标自动匹配复用同一识别
+- [x] 4.1 `web/src/launch-configs.ts` 用带 shell 的包装前缀替换 `BASHRC_PREFIX`；`launchCommandDraft` 返回普通命令与所选 shell，新增统一包装函数，图标自动匹配复用同一识别
 - [x] 4.2 `LaunchConfigDialog.svelte` 把复选框改为“加载 shell 启动文件”，勾选时显示 Bash（`~/.bashrc`）/ Zsh（`~/.zshrc`）选择；创建时用 `defaultShell || "bash"`，编辑时按 argv 还原
 - [x] 4.3 更新校验文案、参数上限提示与无障碍名称；取消勾选恢复直接命令，保存不重复包装
-- [x] 4.4 补 `web/test/launchConfigs.test.ts` 与 `web/test/browser/LaunchConfigDialog.test.ts` 的 Bash/Zsh 往返、默认值、切换与旧配置用例
+- [x] 4.4 补 `web/test/launch-configs.test.ts` 与 `web/test/browser/LaunchConfigDialog.test.ts` 的 Bash/Zsh 往返、默认值、切换与旧配置用例
 - [x] 4.5 运行 `pnpm --dir web check:arch`
 
 ## 5. 文档与用户故事

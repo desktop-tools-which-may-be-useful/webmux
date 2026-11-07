@@ -85,13 +85,13 @@
 - [x] 5.3a `repo settings`：显示全部设置与引用；`--init TEXT|-|@FILE`、`--clear-init`、`--edit`；超长本地拒绝；不存在的快捷指令引用只警告。
 - [x] 5.3b 主页显示：`worktree ls` 的“主页”列与 `--home/--hidden`、`worktree show`、`worktree pin|unpin|home [--set|--reset]`；
   只改本仓库条目的设置写入，409 时重读并重放（最多 3 次）；`worktree create` 与 `run --new-worktree` 默认加入（`--no-pin`），`--refresh-base`。
-  与 `web/src/homeWorktrees.ts` 的规则（默认只含主工作区、有会话即显示、清理失效 ID）做对照测试。
+  与 `web/src/home-worktrees.ts` 的规则（默认只含主工作区、有会话即显示、清理失效 ID）做对照测试。
 - [x] 5.4 `forward ls|add|rm`：输出转发地址，`--session self`，`--no-compat`。
 
 ## 6. shell 工具手册与 `{{webmux}}`
 
 - [x] 6.1 新建共享包 `internal/agentguide`（仅标准库）：用 `go:embed` 嵌入索引与各主题 Markdown，渲染 `/llms.txt`（可选版本行）、
-  主题、全文与简述。在 `internal/archtest/layers_test.go` 中登记为 Shared。临时文件夹说明从 `web/src/quickCommands.ts` 的预置正文移入 `artifacts` 主题。
+  主题、全文与简述。在 `internal/archtest/layers_test.go` 中登记为 Shared。临时文件夹说明从 `web/src/quick-commands.ts` 的预置正文移入 `artifacts` 主题。
 - [x] 6.2 一致性测试：会话类子命令都在某个主题中出现；索引链接都能解析；每个主题都在索引中；TCP 内容不含版本、路径或主机名，
   示例只用 `webmux` 与 `$WEBMUX_BIN`；索引含“命令前缀”说明，`connect` 含排错步骤。
 - [x] 6.3 `internal/api` 在 SPA 回退之前注册 `/llms.txt`、`/llms-full.txt`、`/llms/{topic}.md`：TCP 不要求 Token 但经过 Host 检查，
@@ -102,11 +102,11 @@
   更新 `instruction_test.go` 与 `quickstart_test.go`。
 - [x] 6.6 `webmux guide [TOPIC] [--full] [--path]`，服务未运行时退回内嵌副本，未知主题以 2 结束。
 - [x] 6.7 前端：
-  - `quickCommands.ts` 把 `{{webmux}}` 当作内置变量；
+  - `quick-commands.ts` 把 `{{webmux}}` 当作内置变量；
   - `SessionTerminal` 与聊天草稿在插入前调用手册接口，失败时提示“WebMux 工具说明不可用”；
   - 预置列表改为恢复会话、新会话、WebMux 工具；
   - `InitInstructionField` 与 `QuickStart` 去掉保留提示，在可引用列表中列出内置变量。
-  - 更新 `web/test/quickCommands.test.ts` 与相关组件测试，运行 `pnpm --dir web check:arch`。
+  - 更新 `web/test/quick-commands.test.ts` 与相关组件测试，运行 `pnpm --dir web check:arch`。
   - 按 `webmux-ui` skill 截图：设置页可引用列表、快捷指令菜单，包括亮色/暗色与桌面/手机。
 
 ## 7. 帮助与补全

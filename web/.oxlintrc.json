@@ -39,7 +39,10 @@
       }
     },
     {
-      "files": ["src/components/codePopout.ts", "src/hooks/terminal.svelte.ts"],
+      "files": [
+        "src/components/code-popout.ts",
+        "src/hooks/terminal.svelte.ts"
+      ],
       "rules": { "typescript/unbound-method": "off" }
     }
   ],

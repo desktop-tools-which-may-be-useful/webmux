@@ -5,7 +5,7 @@ import QuickCommandPresetMenu from "../../src/components/QuickCommandPresetMenu.
 import {
   QUICK_COMMANDS_LIMIT,
   QUICK_COMMAND_PRESETS,
-} from "../../src/quickCommands";
+} from "../../src/quick-commands";
 import type { QuickCommand } from "../../src/schemas";
 
 afterEach(async () => {

@@ -50,7 +50,7 @@ type Release struct {
 
 `resume` 在 `Released != nil` 时返回 `hybrid.ErrConflict`，并说明需要先重建工作树。字段可选，旧文件无需迁移。
 
-wire 层的 `contract.HybridRecord` 增加 `released?: {id, path, commit, branch?, releasedAt}`，`chatSchemas.ts` 同步修改。
+wire 层的 `contract.HybridRecord` 增加 `released?: {id, path, commit, branch?, releasedAt}`，`chat-schemas.ts` 同步修改。
 
 不考虑另建 `released-worktrees.json` 状态文件：它会多出一个持久化面，并且需要与记录做一致性维护。释放信息天然属于记录，删除记录时会一起消失。
 

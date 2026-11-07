@@ -22,7 +22,7 @@
 
 ## 4. 用 iframe 替换 DOM 搬移
 
-- [x] 4.1 重写 `codePopout.ts`：打开画中画或普通弹窗，写入最小壳文档与全屏 iframe，建立通道，普通弹窗随主页面 `pagehide` 关闭，窗口关闭时回调最新快照
+- [x] 4.1 重写 `code-popout.ts`：打开画中画或普通弹窗，写入最小壳文档与全屏 iframe，建立通道，普通弹窗随主页面 `pagehide` 关闭，窗口关闭时回调最新快照
 - [x] 4.2 `CodePanel` 弹出流程：采集快照 → 打开窗口 → 收到 `ready` 后卸载阅读视图与轮询并显示占位；“收回”先 `collect` 再关闭；关闭或失败时以最新快照原位恢复并提示失败原因
 - [x] 4.3 删除 `PopoutEventRoot.svelte`、样式复制与属性镜像、`adoptedStyleSheets` 补丁、CodeMirror `setRoot` 重绑、`CodeDiffReader` 跨文档 `relayPointer` 及 `ownerDocument` 判断；`matchMedia` 判断改用组件自身窗口
 - [x] 4.4 删除 `CodePanel.test.ts` 中只验证 DOM 搬移细节的模拟窗口用例，改写为通道协议用例（非同源或非法消息被丢弃、握手超时恢复、`paste` 应答与超时）

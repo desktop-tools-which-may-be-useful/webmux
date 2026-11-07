@@ -2,7 +2,7 @@
   import { untrack } from "svelte";
   import { errorMessage } from "../error";
   import { api } from "../api";
-  import { quickCommands } from "../quickCommands.svelte";
+  import { quickCommands } from "../quick-commands.svelte";
   import {
     INIT_INSTRUCTION_MAX,
     RepositorySchema,

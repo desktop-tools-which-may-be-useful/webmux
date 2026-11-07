@@ -186,3 +186,49 @@ describe("frontend architecture", () => {
     ).toEqual([]);
   });
 });
+
+// File naming (docs/agent-rules/naming.md): non-component TypeScript is
+// kebab-case. Svelte components are PascalCase; browser tests and stories
+// are PascalCase when named after a component, kebab-case for helpers.
+const KEBAB_FILE = /^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+)*\.ts$/;
+const PASCAL_FILE = /^[A-Z][A-Za-z0-9]*(\.[a-z0-9]+)*\.(svelte|ts)$/;
+
+describe("file naming", () => {
+  const sources = globSync("src/**/*.ts", { cwd: root })
+    .map((file) => file.replaceAll("\\", "/"))
+    .filter((file) => !file.startsWith(UI_DIR));
+  const unitTests = globSync("test/*.ts", { cwd: root });
+  const components = globSync("src/**/*.svelte", { cwd: root }).filter(
+    (file) => !file.replaceAll("\\", "/").startsWith(UI_DIR),
+  );
+  const componentTests = [
+    ...globSync("test/browser/*.ts", { cwd: root }),
+    ...globSync("stories/*.ts", { cwd: root }),
+  ];
+
+  test("non-component TypeScript files are kebab-case", () => {
+    expect(
+      [...sources, ...unitTests].filter(
+        (file) => !KEBAB_FILE.test(basename(file)),
+      ),
+      "Rename to kebab-case, e.g. quickCommands.ts → quick-commands.ts.",
+    ).toEqual([]);
+  });
+
+  test("Svelte components are PascalCase", () => {
+    expect(
+      components.filter((file) => !PASCAL_FILE.test(basename(file))),
+      "Name components in PascalCase.",
+    ).toEqual([]);
+  });
+
+  test("browser tests and stories are PascalCase or kebab-case", () => {
+    expect(
+      componentTests.filter((file) => {
+        const name = basename(file);
+        return !PASCAL_FILE.test(name) && !KEBAB_FILE.test(name);
+      }),
+      "Use <Component>.test.ts for components, kebab-case for helpers.",
+    ).toEqual([]);
+  });
+});

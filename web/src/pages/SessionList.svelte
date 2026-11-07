@@ -7,7 +7,11 @@
   import { store, stored } from "../api";
   import type { Repository, Worktree } from "../schemas";
   import PendingUpdateNotice from "../components/PendingUpdateNotice.svelte";
-  import { dismissUpdate, dismissedUpdate, homeUpdate } from "../pendingUpdate";
+  import {
+    dismissUpdate,
+    dismissedUpdate,
+    homeUpdate,
+  } from "../pending-update";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import UnregisterRepositoryDialog from "../components/UnregisterRepositoryDialog.svelte";
@@ -23,8 +27,8 @@
     type ArchiveActions,
   } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
-  import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { setPinned, worktreeTitle } from "../homeWorktrees";
+  import { homeWorktrees } from "../home-worktrees.svelte";
+  import { setPinned, worktreeTitle } from "../home-worktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";

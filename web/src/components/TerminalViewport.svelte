@@ -7,7 +7,7 @@
   import type { Modifiers } from "../input";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import type { Connection } from "../ws";
-  import { hasTouchInput } from "../touchInput";
+  import { hasTouchInput } from "../touch-input";
 
   interface ViewportTerminal {
     readonly selection: string;

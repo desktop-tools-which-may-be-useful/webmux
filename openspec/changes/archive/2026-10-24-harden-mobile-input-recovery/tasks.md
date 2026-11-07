@@ -12,13 +12,13 @@
 - [x] 2.1 `writeParts` 在一次 `inputGate` 持有期间写入多段并返回已写字节数，`WriteContext` 复用它
 - [x] 2.2 会话内有界提交记录（256 条 / 30 分钟），`Submit` 查重、校验代际、登记 `received`、写入并回报 `written`/`partial`/`failed`，状态发往同一客户端全部连接；`QuerySubmissions` 回报 `missing`
 - [x] 2.3 hub 解析 0x03 提交帧（JSON 头 + 原始字节）与 0x04 查询帧；已登记的提交写入与连接取消解耦
-- [x] 2.4 前端 `terminalProtocol.ts`（按 xterm 规则准备正文、编码提交帧、提交 ID），`useTerminal.submit/track/untrack`，断线标记“结果未知”并在重连后查询
+- [x] 2.4 前端 `terminal-protocol.ts`（按 xterm 规则准备正文、编码提交帧、提交 ID），`useTerminal.submit/track/untrack`，断线标记“结果未知”并在重连后查询
 - [x] 2.5 草稿发送改用提交：锁定正文、状态行、“按原提交重发”“转为草稿”，`failed`/`missing` 解锁并提示；带回车的快捷指令改用提交
 - [x] 2.6 Go 集成测试覆盖写入一次、重复 ID、查询、代际不符与格式错误；Vitest 覆盖编码
 
 ## 3. 草稿本机保存
 
-- [x] 3.1 `draftStorage.ts`：Zod 校验、7 天过期、损坏清理、`keep` 按会话列表清理、超限与存储不可用降级、开关
+- [x] 3.1 `draft-storage.ts`：Zod 校验、7 天过期、损坏清理、`keep` 按会话列表清理、超限与存储不可用降级、开关
 - [x] 3.2 `createTerminalDrafts` 注入存储：恢复正文与提交（未确认为“结果未知”）、绑定代际、变化即保存、移除时删除、认证失效只清内存
 - [x] 3.3 终端页恢复提示与目标会话、恢复后自动查询未确认提交；设置页“草稿”卡片（开关、数量、清除确认）
 - [x] 3.4 Node 单元测试与浏览器测试覆盖保存、恢复、过期、清理与提交状态流转

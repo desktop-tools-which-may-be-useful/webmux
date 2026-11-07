@@ -1,4 +1,4 @@
-import type { LaunchConfigsState } from "./launchConfigs";
+import type { LaunchConfigsState } from "./launch-configs";
 import type { Repository, SessionInfo, Worktree } from "./schemas";
 
 /** The contextual entry the new-session dialog was opened from, if any. */

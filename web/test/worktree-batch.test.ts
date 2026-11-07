@@ -11,7 +11,7 @@ import {
   countWorktreeBatchCategories,
   filterWorktreeBatchEntries,
   groupBatchPreviewItems,
-} from "../src/worktreeBatch";
+} from "../src/worktree-batch";
 
 const makeTree = (id: string, patch: Partial<Worktree> = {}): Worktree => ({
   id,

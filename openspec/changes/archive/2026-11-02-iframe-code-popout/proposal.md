@@ -31,7 +31,7 @@
 ## Impact
 
 - 前端：
-  - `web/src/components/codePopout.ts` 重写为窗口与 iframe 壳，删除 `PopoutEventRoot.svelte`；
+  - `web/src/components/code-popout.ts` 重写为窗口与 iframe 壳，删除 `PopoutEventRoot.svelte`；
   - `CodePanel.svelte` 及阅读组件（`CodeDocumentView`、`CodeReader`、`CodeDiffReader`、`CodeMarkdownPreview`、`CodeImageView`、`CodePdfView`、`CodeJsonPreview`）增加状态采集与恢复；
   - 导航组件（`CodeFileTree`、`CodeNavigator`、`CodeChangesList`、`CodeFileActions`）增加状态采集与恢复；
   - `App.svelte` 新增 `/code/<id>` 路由，`SessionTerminal.svelte` 改为通过宿主接口与代码区交互；

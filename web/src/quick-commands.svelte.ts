@@ -1,6 +1,6 @@
 import { settings, saveSettings } from "./settings.svelte";
 import { QuickCommandsSchema, type QuickCommand } from "./schemas";
-import { parseQuickCommands, quickCommandsNameError } from "./quickCommands";
+import { parseQuickCommands, quickCommandsNameError } from "./quick-commands";
 
 export const quickCommands = {
   get list() {

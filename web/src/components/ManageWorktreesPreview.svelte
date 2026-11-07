@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { worktreeTitle } from "../homeWorktrees";
+  import { worktreeTitle } from "../home-worktrees";
   import type { RemovalPreviewItem } from "../schemas";
-  import type { BatchPreviewGroups } from "../worktreeBatch";
+  import type { BatchPreviewGroups } from "../worktree-batch";
   import { Badge } from "$lib/components/ui/badge";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";

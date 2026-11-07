@@ -33,7 +33,7 @@
 
 ### 1. 上下文入口与默认值解析是纯函数
 
-`web/src/newSessionDefaults.ts` 定义入口类型 `LaunchEntry`：
+`web/src/new-session-defaults.ts` 定义入口类型 `LaunchEntry`：
 
 - `{ kind: "worktree", repositoryId, worktreeId }`：工作树的“新建会话”；
 - `{ kind: "new-worktree", repositoryId }`：仓库菜单的“新建工作树…”；

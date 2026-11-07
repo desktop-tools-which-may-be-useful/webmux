@@ -10,9 +10,9 @@ import {
   SessionStateSchema,
   SessionTransitionSchema,
   SessionViewSchema,
-} from "./chatSchemas";
+} from "./chat-schemas";
 
-export * from "./chatSchemas";
+export * from "./chat-schemas";
 
 export const WorkspaceLinkSchema = z.object({
   repositoryId: z.string(),

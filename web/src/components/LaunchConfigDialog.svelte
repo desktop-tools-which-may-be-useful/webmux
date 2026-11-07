@@ -26,7 +26,7 @@
   import {
     defaultPreviewSettings,
     previewSettings,
-  } from "../previewSettings.svelte";
+  } from "../preview-settings.svelte";
   import {
     LAUNCH_ENV_MAX,
     LAUNCH_ICON_OPTIONS,
@@ -39,7 +39,7 @@
     validateLaunchDraft,
     type EnvRow,
     type StartupShell,
-  } from "../launchConfigs";
+  } from "../launch-configs";
 
   let {
     open = $bindable(false),

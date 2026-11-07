@@ -31,6 +31,6 @@
 
 - 后端：`internal/session`（环形缓冲 offset、`Info.generation`、`AttachClient`、控制端、提交记录、`writeParts` 输入临界区）、`internal/hub`（查询参数解析、帧 0x03–0x05 处理、控制校验）、`internal/api/router.go`（传入附着参数）。
 - 协议：`/ws/s/{id}` 新增查询参数 `client`、`label`、`generation`、`offset`；服务端新增帧 0x04 位置、0x05 提交状态、0x06 控制状态，并在快照前先发位置帧；客户端新增帧 0x03 提交、0x04 查询、0x05 接管。旧帧语义不变。`SessionInfo` 新增 `generation`。
-- 前端：`web/src/schemas.ts`、`ws.ts`、`hooks/terminal.svelte.ts`、`hooks/touch.ts`、`terminal-draft.svelte.ts`、`pages/Terminal.svelte`、`pages/Settings.svelte`、`components/TerminalInputComposer.svelte`、`styles.css`；新增 `terminalProtocol.ts`、`draftStorage.ts`。
+- 前端：`web/src/schemas.ts`、`ws.ts`、`hooks/terminal.svelte.ts`、`hooks/touch.ts`、`terminal-draft.svelte.ts`、`pages/Terminal.svelte`、`pages/Settings.svelte`、`components/TerminalInputComposer.svelte`、`styles.css`；新增 `terminal-protocol.ts`、`draft-storage.ts`。
 - 测试：Go 单元与 WebSocket 集成测试、Vitest 单元与浏览器测试，调整依赖旧帧顺序的既有用例。
 - 不新增依赖，不持久化服务端会话。

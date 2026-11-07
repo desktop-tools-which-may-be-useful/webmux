@@ -1,5 +1,5 @@
 import { placeArchived } from "./archived";
-import { homeLayout, worktreeTitle } from "./homeWorktrees";
+import { homeLayout, worktreeTitle } from "./home-worktrees";
 import type {
   ArchivedSession,
   HomeWorktrees,

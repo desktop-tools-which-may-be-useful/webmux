@@ -6,7 +6,7 @@
   import { Button, type ButtonSize } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { QuickCommand } from "../schemas";
-  import { commandPreview } from "../quickCommands";
+  import { commandPreview } from "../quick-commands";
 
   let {
     commands,

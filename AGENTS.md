@@ -39,7 +39,7 @@ Run from the repository root; the full list is in [conventions](docs/agent-rules
 - UI: look first in `web/src/lib/components/ui/`, then `web/src/components/`, then the shadcn-svelte registry. Add a variant or size to a design-system component instead of restyling it with `class`. Fix `check:arch` violations; never add `eslint-disable`/`jscpd:ignore` or grow a baseline ([docs/frontend-architecture.md](docs/frontend-architecture.md)).
 - Any visible UI change: follow the `webmux-ui` skill (`.agents/skills/webmux-ui/SKILL.md`).
 - Icons: Iconify with the `tabler` collection, bundled locally. Icon-only controls need an accessible name and a visible tooltip; decorative icons use `aria-hidden="true"` ([docs/design-system.md](docs/design-system.md#icons)).
-- Names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune hooks, Go `*_test.go`, Playwright `*.spec.ts`.
+- Names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, Playwright `*.spec.ts`; files per [naming](docs/agent-rules/naming.md) (kebab-case TS, snake_case Go).
 - Use pnpm (never npm, Yarn, or Bun) with the frozen lockfile. Go 1.26+, Node 26.12.1 (`.nvmrc`), GNU Make. Release builds use `CGO_ENABLED=0`.
 
 ## Testing

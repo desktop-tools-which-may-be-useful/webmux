@@ -69,7 +69,7 @@
 
 ### D6 提示词模板与插入
 
-- 内置模板只在前端定义（`web/src/artifactPrompt.ts`，与 `quickCommands.ts` 预置指令同一惯例）；服务端只校验自定义字符串（非空、≤4096 UTF-16、含 `{dir}`、规范化换行）。`null` 与字符串的区分同 `quickCommands`。
+- 内置模板只在前端定义（`web/src/artifactPrompt.ts`，与 `quick-commands.ts` 预置指令同一惯例）；服务端只校验自定义字符串（非空、≤4096 UTF-16、含 `{dir}`、规范化换行）。`null` 与字符串的区分同 `quickCommands`。
 - `{dir}` 用 `replaceAll` 原样替换为确保接口返回的路径，不做 shell 引号（目标是自然语言提示，不是 shell 参数）。
 - `SessionTerminal.svelte` 新增 `insertArtifactPrompt()`：在入口处 `drafts.begin(draft)` 捕获操作并绑定会话，`await` 确保接口后用同一 operation 调用 `insertText`；从不调用 `t.submit`，因此不会回车。失败通过现有终端提示区显示。
 - `QuickCommandMenu.svelte` 新增 `artifact()` 回调 prop，固定项受与指令条目相同的 `blocked` 规则约束。

@@ -4,7 +4,7 @@
 
 能力都已存在，只是分散在三个接口里，由前端依次调用：
 
-- `POST /api/repositories/{id}/worktrees`（`workspace.CreateWorktree`）：`{path, mode, branch, base}`，由服务端用 `git check-ref-format` 校验分支；失败不回滚。分支建议来自 `GET …/branches`（`DefaultParent`、`DefaultBase`、`Bases`）和前端的 `branchName.ts` `suggestWorktreeBranch`。
+- `POST /api/repositories/{id}/worktrees`（`workspace.CreateWorktree`）：`{path, mode, branch, base}`，由服务端用 `git check-ref-format` 校验分支；失败不回滚。分支建议来自 `GET …/branches`（`DefaultParent`、`DefaultBase`、`Bases`）和前端的 `branch-name.ts` `suggestWorktreeBranch`。
 - `POST /api/sessions`（`workspace.CreateSession` → `hybrid.Service.Create`）：`configId` 加 `startSide: "acp"`，返回前已完成 ACP `initialize` 和 `session/new`。
 - `POST /api/sessions/{id}/chat/prompts`（`hybrid.Service.Prompt`）：按 `clientRequestId` 幂等。
 
@@ -166,7 +166,7 @@ agent 不接受的值记为 `configWarnings`，并作为聊天 notice 写入时�
 
 ### 9. 工作台导航树
 
-- 取代 `RepositorySidebar`，组件 `components/WorkbenchTree.svelte`。分组与排序复用 `homeWorktrees.ts`、`homeLayout` 现有的规则，保证树与主区域顺序一致。
+- 取代 `RepositorySidebar`，组件 `components/WorkbenchTree.svelte`。分组与排序复用 `home-worktrees.ts`、`homeLayout` 现有的规则，保证树与主区域顺序一致。
 - 选择视图：现在的仓库选择保存在 `localStorage` 的 `homeRepository`，只有 `SessionList` 读写。改为外壳中的共享状态（仍落在同一个键上，兼容已有取值），树和首页一起读写。
 - 工作树视图：点工作树把选择设为该仓库并记下工作树（`homeWorktree`），首页只显示该工作树的分组、会话和归档记录；工作树不存在时回到整个仓库。
 - 展开状态按节点 ID 存在 `localStorage`；当前会话所在路径自动展开，不写回存储。

@@ -7,7 +7,7 @@
   import type { TerminalUserInput } from "../../src/hooks/terminal-input";
   import TerminalFindBar from "../../src/components/TerminalFindBar.svelte";
   import { terminalFindShortcut } from "../../src/hooks/terminal-find-shortcut";
-  import { hasTouchInput } from "../../src/touchInput";
+  import { hasTouchInput } from "../../src/touch-input";
 
   type Props = {
     // Draft-mode routing, as Terminal.svelte passes it to the hook.

@@ -4,7 +4,7 @@
     QUICK_COMMANDS_LIMIT,
     QUICK_COMMAND_PRESETS,
     commandPreview,
-  } from "../quickCommands";
+  } from "../quick-commands";
   import type { QuickCommand } from "../schemas";
   import SystemPresetMenu from "./SystemPresetMenu.svelte";
 

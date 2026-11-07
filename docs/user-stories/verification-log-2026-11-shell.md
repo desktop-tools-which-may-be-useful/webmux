@@ -30,7 +30,7 @@
   - 前端：快捷指令支持 `{{webmux}}`，预设“临时文件夹”换为“WebMux 工具”，初始化指令“可插入”新增按钮，快速开始预览说明 `{{webmux}}`，移除保留变量提示。
 - 依据：
   - `go test -race` 覆盖 `internal/agentguide`（索引结构、链接、公开内容无实例信息、简述）、`internal/api`（手册路由与 Host 检查、说明接口；wire 快照新增 `session-agent-guide`）、`internal/workspace`（说明插入顺序与预检）、`internal/sessioncmd`（guide 与 dir）、`cmd/webmux`（命令参考与命令表同步）；
-  - 前端单元测试 `quickCommands.test.ts`，以及受影响的浏览器与 E2E 用例（预设菜单、快捷指令、临时文件夹）。
+  - 前端单元测试 `quick-commands.test.ts`，以及受影响的浏览器与 E2E 用例（预设菜单、快捷指令、临时文件夹）。
 - 限制：未在 macOS 与真机浏览器上核对；以前保存的“临时文件夹”预设不迁移。
 
 本次局部核对（2026-11-05）：实现 `add-agent-shell-control` 的第三部分（启动命令），新增 US-S07、US-S08，更新 US-M01 与覆盖索引。
@@ -74,7 +74,7 @@
   - `cmd/webmux` 端到端测试（真实服务进程）：仓库登记幂等、初始化指令的设置与引用警告、上限与互斥、worktree 的创建与主页状态（pinned、hidden、sessions）、
     `home --set`/`--reset`、`worktree show`、分支与提交、带会话时 `rm` 的阻止与 `--yes` 要求、`repo rm` 清理主页设置；
     启动配置的增删改（隐藏变量值、只改给出的字段、改名、混合模式检查）、预设恢复与端口转发；
-  - `internal/sessioncmd` 单元测试：主页状态与 `web/src/homeWorktrees.ts` 规则对照、设置冲突后的重放与放弃。
+  - `internal/sessioncmd` 单元测试：主页状态与 `web/src/home-worktrees.ts` 规则对照、设置冲突后的重放与放弃。
 - 限制：`repo settings --edit` 需要真实终端与编辑器，只做了代码审查；`repo base` 在没有上游的仓库中没有覆盖取回成功的路径；未在 macOS 上运行。
 
 本次局部核对（2026-11-06）：按在途变更 `unify-session-surface` 与 `unify-session-cli` 的规格更新协议文档与故事，不新增或退役故事。
@@ -143,7 +143,7 @@
     - `internal/workspace`：新增 `batch_remove_test.go`，覆盖未锁定 `prunable` 安全清理与重建冲突拦截、归档提交保留、批量安全/强制删除、确认凭证隔离、确认后外部写入的部分失败隔离、路径并发预留；
     - `internal/api`：新增 `TestWorkspaceBatchRemovalAPIAndAuthBoundaries` 并更新 wire 快照；
     - `internal/wire`、`internal/archtest`；
-  - 前端单测 `pnpm --dir web test:unit`（含 `worktreeBatch.test.ts`、`wire-contract.test.ts`、`wireArrays.test.ts`）；
+  - 前端单测 `pnpm --dir web test:unit`（含 `worktree-batch.test.ts`、`wire-contract.test.ts`、`wire-arrays.test.ts`）；
   - 浏览器组件测试：`ManageWorktreesDialog.test.ts`、`WorkbenchTree.test.ts`、`WorktreeDialogs.test.ts`；
   - Playwright E2E：`worktrees.spec.ts`（批量清理空闲与 `prunable` 工作树并跳过受阻项、保留分支）、`app-shell.spec.ts`（工作台侧栏仓库操作菜单）；
   - `make check`（含 `make docs-check`、`format-check`、`golangci-lint` v2.15.0、`pnpm --dir web check:arch`）。

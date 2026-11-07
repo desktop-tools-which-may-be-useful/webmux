@@ -19,7 +19,7 @@
     TerminalDraft,
     TerminalDrafts,
   } from "../../terminal-draft.svelte";
-  import { hasTouchInput } from "../../touchInput";
+  import { hasTouchInput } from "../../touch-input";
   import FileUploadProgress from "../FileUploadProgress.svelte";
   import ChatAttachmentList from "./ChatAttachmentList.svelte";
   import ChatConfig from "./ChatConfig.svelte";

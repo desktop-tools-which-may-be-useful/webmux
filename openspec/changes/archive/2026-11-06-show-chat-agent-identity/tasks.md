@@ -18,7 +18,7 @@
 
 ## 2. 前端：契约与图标组件
 
-- [x] 2.1 `web/src/chatSchemas.ts` 的 `SessionHybridSchema` 增加必填 `agentTitle`、`agentIcon`，并补齐夹具。
+- [x] 2.1 `web/src/chat-schemas.ts` 的 `SessionHybridSchema` 增加必填 `agentTitle`、`agentIcon`，并补齐夹具。
   - 补齐 `web/test` 与 Storybook 中所有构造 `hybrid` 对象的数据。
   - 验证：`pnpm --dir web check:test` 与 `test/wire-contract.test.ts` 通过。
 - [x] 2.2 `LaunchConfigIcon.svelte` 增加 `size` 选项并导出图标键判断函数。

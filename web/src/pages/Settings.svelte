@@ -35,20 +35,20 @@
     LAUNCH_CONFIGS_LIMIT,
     launchConfigIcon,
     type StartupShell,
-  } from "../launchConfigs";
+  } from "../launch-configs";
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
   import LaunchPresetMenu from "../components/LaunchPresetMenu.svelte";
   import {
     defaultPreviewSettings,
     previewSettings,
-  } from "../previewSettings.svelte";
+  } from "../preview-settings.svelte";
   import { selectPreview } from "../preview";
   import {
     QUICK_COMMANDS_LIMIT,
     commandLabel,
     commandPreview,
-  } from "../quickCommands";
-  import { quickCommands, saveQuickCommands } from "../quickCommands.svelte";
+  } from "../quick-commands";
+  import { quickCommands, saveQuickCommands } from "../quick-commands.svelte";
   import QuickCommandDialog from "../components/QuickCommandDialog.svelte";
   import QuickCommandPresetMenu from "../components/QuickCommandPresetMenu.svelte";
   import LaunchConfigDialog from "../components/LaunchConfigDialog.svelte";
@@ -62,7 +62,7 @@
   import SettingsNavigation from "../components/SettingsNavigation.svelte";
   import NetworkSettings from "../components/NetworkSettings.svelte";
   import { Switch } from "$lib/components/ui/switch";
-  import { browserDraftStorage } from "../draftStorage";
+  import { browserDraftStorage } from "../draft-storage";
 
   // Only a session ID is accepted as the return target, never an arbitrary path.
   const returnSession = new URLSearchParams(location.search).get("session");

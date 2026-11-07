@@ -3,7 +3,7 @@ import {
   suggestWorktreeBranch,
   worktreeBranchAdjectives,
   worktreeBranchNouns,
-} from "../src/branchName";
+} from "../src/branch-name";
 
 const random = () => 0;
 const bases = worktreeBranchAdjectives.flatMap((adjective) =>

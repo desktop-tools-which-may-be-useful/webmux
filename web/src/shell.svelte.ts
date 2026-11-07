@@ -6,7 +6,7 @@ import type { LaunchConfigs } from "./hooks/launch-configs.svelte";
 import type { Repositories } from "./hooks/repositories.svelte";
 import type { ServerSetup } from "./hooks/server-setup.svelte";
 import type { SessionList } from "./hooks/session-list.svelte";
-import type { LaunchEntry } from "./newSessionDefaults";
+import type { LaunchEntry } from "./new-session-defaults";
 import type { Repository, SessionInfo, Worktree } from "./schemas";
 import type { TerminalDrafts } from "./terminal-draft.svelte";
 

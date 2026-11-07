@@ -1,6 +1,6 @@
 ## Context
 
-独立代码窗口由 `web/src/components/codePopout.ts` 实现：`popOut()` 打开 Document Picture-in-Picture 窗口或 `window.open("")` 弹窗，把 `CodePanel.svelte` 的 `<section>` 节点移入新文档，原位置留注释标记，`pagehide` 时再移回。
+独立代码窗口由 `web/src/components/code-popout.ts` 实现：`popOut()` 打开 Document Picture-in-Picture 窗口或 `window.open("")` 弹窗，把 `CodePanel.svelte` 的 `<section>` 节点移入新文档，原位置留注释标记，`pagehide` 时再移回。
 
 组件状态因“同一批对象”而天然保留，但所有代码仍运行在主页面的 JS 环境，导致一系列只在独立窗口出现的缺陷与补丁：
 

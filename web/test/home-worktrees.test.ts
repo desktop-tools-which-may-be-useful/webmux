@@ -5,7 +5,7 @@ import {
   parseHomeWorktrees,
   pruneHomeWorktrees,
   setPinned,
-} from "../src/homeWorktrees";
+} from "../src/home-worktrees";
 import type { Repository, SessionInfo, Worktree } from "../src/schemas";
 
 const tree = (id: string, kind: Worktree["kind"] = "linked"): Worktree => ({

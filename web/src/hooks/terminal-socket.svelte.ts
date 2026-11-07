@@ -17,14 +17,14 @@ import {
   encodeSubmission,
   newSubmissionId,
   preparePaste,
-} from "../terminalProtocol";
+} from "../terminal-protocol";
 import {
   connect,
   wsCompression,
   type Connection,
   type SocketConnection,
 } from "../ws";
-import { osc52CopyText } from "../terminalClipboard";
+import { osc52CopyText } from "../terminal-clipboard";
 import { createOutputBudget } from "../terminal-output";
 import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
 import {

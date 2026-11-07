@@ -17,7 +17,7 @@
   import { matchRoute, type Route } from "./route";
   import { enterHome } from "./shell.svelte";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
-  import { browserDraftStorage } from "./draftStorage";
+  import { browserDraftStorage } from "./draft-storage";
   import { clearHomeCache } from "./home-cache";
   import { resetAttentionToasts } from "./attention-toast.svelte";
 

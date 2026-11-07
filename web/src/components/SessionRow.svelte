@@ -4,7 +4,7 @@
   import SessionStatus from "./SessionStatus.svelte";
   import RenameSessionDialog from "./RenameSessionDialog.svelte";
   import type { SessionInfo } from "../schemas";
-  import { previewFor } from "../launchPreviews.svelte";
+  import { previewFor } from "../launch-previews.svelte";
   import { selectPreview } from "../preview";
   import { copyText } from "../clipboard";
   import { locationHints } from "../session-location";

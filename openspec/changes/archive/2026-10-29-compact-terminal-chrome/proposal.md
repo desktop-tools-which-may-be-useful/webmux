@@ -34,7 +34,7 @@
 
 ## Impact
 
-- 前端：`web/src/pages/Terminal.svelte`、`web/src/hooks/terminal.svelte.ts`（暴露是否位于底部）、`web/src/capabilities.ts`（全屏与独立窗口能力判断）、`web/src/codePopout.ts`、`CodePanel.svelte`、`CodeNavigator.svelte`、`CodeDocumentView.svelte`、`CodeDiffReader.svelte`、`CodeReader.svelte`、`CodeImageView.svelte`、`web/src/styles.css`。
+- 前端：`web/src/pages/Terminal.svelte`、`web/src/hooks/terminal.svelte.ts`（暴露是否位于底部）、`web/src/capabilities.ts`（全屏与独立窗口能力判断）、`web/src/code-popout.ts`、`CodePanel.svelte`、`CodeNavigator.svelte`、`CodeDocumentView.svelte`、`CodeDiffReader.svelte`、`CodeReader.svelte`、`CodeImageView.svelte`、`web/src/styles.css`。
 - 测试：`web/test/e2e/` 中依赖已移入菜单的按钮（“上传文件”“滚动到最新位置”“完整文件”“查看 Diff”、SVG“源码”、预览来源）和“已连接”文字的用例改为新入口；补充 320/393 px 窄屏与 1440 px 宽屏的布局与可达性断言；浏览器组件测试覆盖“回到最新”状态（含观察者）。Chromium 模拟无法覆盖 iOS 行为，需要在 iOS 27 iPhone 的 Safari 标签页和主屏幕 Web App、iPadOS 27（含触控板）上真机检查。
 - 文档：`docs/user-stories.md`（US-D03、US-D07、US-D08、新增 US-H08、US-I01、US-I08、US-I09、US-I13、US-I15），`docs/design-system.md` 的紧凑工具栏规则。
 - 不涉及：后端、配置、宽屏终端顶栏的按钮布局、代码导航面板内部（搜索框、过滤控件）、新增复制路径等功能。

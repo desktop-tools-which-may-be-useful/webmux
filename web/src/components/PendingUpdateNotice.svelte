@@ -3,7 +3,7 @@
   import IconX from "~icons/tabler/x";
   import { Button } from "$lib/components/ui/button";
   import * as Item from "$lib/components/ui/item";
-  import { restartMethod } from "../pendingUpdate";
+  import { restartMethod } from "../pending-update";
   import type { PendingUpdate } from "../schemas";
 
   // Without ondismiss the notice cannot be closed (the settings page).

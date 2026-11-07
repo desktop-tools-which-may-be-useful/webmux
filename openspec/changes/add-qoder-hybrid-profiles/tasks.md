@@ -109,7 +109,7 @@
   并在 `web/src/icons/lobehub/README.md` 中注明
 - [x] 5.2 `web/src/components/LaunchConfigIcon.svelte`：
   以 `~icons/lobe/qoder` 导入并注册 `qoder` 图标
-- [x] 5.3 `web/src/launchConfigs.ts`：
+- [x] 5.3 `web/src/launch-configs.ts`：
   `LAUNCH_ICON_OPTIONS` 增加
   `{value: "qoder", label: "Qoder"}`；
   `launchConfigIcon()` 自动检测

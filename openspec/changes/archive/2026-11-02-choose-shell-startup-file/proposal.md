@@ -29,7 +29,7 @@
 ## Impact
 
 - 服务端：`internal/launch/presets.go`、`internal/agentprofile/command.go`、`internal/hybrid/connector.go`、`internal/contract/api.go`、`internal/api/router.go` 与相关测试；`cmd/webmux/main.go` 继续把 `SHELL` 传给预置。
-- Web：`web/src/launchConfigs.ts`、`web/src/components/LaunchConfigDialog.svelte`、`web/src/schemas.ts` 及启动配置的单元/浏览器测试。
+- Web：`web/src/launch-configs.ts`、`web/src/components/LaunchConfigDialog.svelte`、`web/src/schemas.ts` 及启动配置的单元/浏览器测试。
 - 文档与故事：`docs/cli-agents.md`、`docs/usage.md`、`docs/usage/terminal.md`、`docs/hybrid-sessions.md`、`docs/deployment.md`、`docs/protocol/http-sessions.md` 与 `docs/protocol/http-hybrid.md`（如有接口字段变化）；US-B01、US-B08。
 - 无新增依赖；不改变认证、Origin、会话生命周期、回放或环境变量契约。
 - 本次实现不迁移既有数据；评审通过后合入。

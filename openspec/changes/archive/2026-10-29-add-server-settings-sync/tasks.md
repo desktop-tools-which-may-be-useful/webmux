@@ -28,10 +28,10 @@
 
 ## 4. 各设置入口
 
-- [x] 4.1 `quickCommands.svelte.ts`：列表来自设置快照；首次 `null` 显示 `/resume`、`/new`，保存写 PATCH；移除 `storage` 事件依赖，保留上限与排序逻辑
-- [x] 4.2 `previewSettings.svelte.ts`、`CodeReader.svelte`、`CodeDiffReader.svelte`：预览、行号与 Diff 换行读写设置仓库，提交用户实际修改的子字段意图；控件在远端更新时无需刷新即反映，409 重试不覆盖未修改的兄弟字段
+- [x] 4.1 `quick-commands.svelte.ts`：列表来自设置快照；首次 `null` 显示 `/resume`、`/new`，保存写 PATCH；移除 `storage` 事件依赖，保留上限与排序逻辑
+- [x] 4.2 `preview-settings.svelte.ts`、`CodeReader.svelte`、`CodeDiffReader.svelte`：预览、行号与 Diff 换行读写设置仓库，提交用户实际修改的子字段意图；控件在远端更新时无需刷新即反映，409 重试不覆盖未修改的兄弟字段
 - [x] 4.3 `hooks/terminal.svelte.ts` 与 `TerminalHeader.svelte`：字体大小与主题切换写入设置仓库；乐观更新失败时回滚；`forceSoftKeys` 改为持久化设置并在刷新后恢复
-- [x] 4.4 `homeWorktrees.svelte.ts` 与 `SessionList.svelte`：固定工作树来自服务端设置；读取时只做展示过滤，不因加载自动 PATCH；显式添加或移除时按 ID 写入并处理 409
+- [x] 4.4 `home-worktrees.svelte.ts` 与 `SessionList.svelte`：固定工作树来自服务端设置；读取时只做展示过滤，不因加载自动 PATCH；显式添加或移除时按 ID 写入并处理 409
 - [x] 4.5 确认 `NewSessionSheet.svelte` 的 `lastLaunch`、`customCommand`、`recentDirs` 仍为设备本地；不把这些值上传为设置
 - [x] 4.6 更新现有浏览器/单元测试：删除“快捷指令仅保存在当前浏览器”“主题本地保存”等断言，新增跨客户端即时更新与失败回滚断言
 

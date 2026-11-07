@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import SessionRow from "../../src/components/SessionRow.svelte";
-import { setLaunchPreviews } from "../../src/launchPreviews.svelte";
+import { setLaunchPreviews } from "../../src/launch-previews.svelte";
 import type { SessionInfo } from "../../src/schemas";
 
 afterEach(async () => {

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { errorMessage } from "../error";
   import { api } from "../api";
-  import { remoteBranchBases, suggestWorktreeBranch } from "../branchName";
+  import { remoteBranchBases, suggestWorktreeBranch } from "../branch-name";
   import {
     commitChoiceLabel,
     commitChoices,
     type CommitChoice,
     type CommitTip,
-  } from "../commitChoices";
+  } from "../commit-choices";
   import { Badge } from "$lib/components/ui/badge";
   import {
     BranchesSchema,

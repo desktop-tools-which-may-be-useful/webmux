@@ -1,7 +1,7 @@
 ## 1. 存储与模型
 
 - [x] 1.1 在 `web/src/schemas.ts` 增加暂存条目与 `webmux.scratch.<sessionId>` v1 记录 schema，校验稳定 ID、重复 ID、会话 ID 和代际。
-- [x] 1.2 扩展 `web/src/draftStorage.ts`：独立暂存键、读取/保存/条数统计、7 天保留、20 条 / 20k 单条 / 100k 合计限制，以及 `keep`、`remove`、`clear` 同时处理两个前缀；保存失败时保留上一次成功记录。
+- [x] 1.2 扩展 `web/src/draft-storage.ts`：独立暂存键、读取/保存/条数统计、7 天保留、20 条 / 20k 单条 / 100k 合计限制，以及 `keep`、`remove`、`clear` 同时处理两个前缀；保存失败时保留上一次成功记录。
 - [x] 1.3 扩展 `web/src/terminal-draft.svelte.ts`：暂存列表、`addScratch`、`editScratch`、`removeScratch`、`moveScratch`、`stash`、`takeScratch`、`clearScratch`、持久化降级和隐藏更新状态。
 
 ## 2. 界面与设置

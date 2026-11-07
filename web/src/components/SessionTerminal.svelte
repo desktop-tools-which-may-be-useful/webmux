@@ -16,7 +16,7 @@
     renderWebmuxBrief,
     usesArtifactDir,
     usesWebmuxBrief,
-  } from "../quickCommands";
+  } from "../quick-commands";
   import { clipboardFiles, copyText as writeClipboard } from "../clipboard";
   import { useTerminal } from "../hooks/terminal.svelte";
   import { createKeyboardSizeHold } from "../hooks/keyboard-size-hold";
@@ -26,18 +26,18 @@
   import { useHybrid } from "../hooks/hybrid.svelte";
   import { useChatUpload, useUpload } from "../hooks/upload.svelte";
   import { useFullscreen } from "../hooks/fullscreen.svelte";
-  import { hasTouchInput, isIOS } from "../touchInput";
+  import { hasTouchInput, isIOS } from "../touch-input";
   import type { ButtonSize } from "$lib/components/ui/button";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
-  import { quickCommands } from "../quickCommands.svelte";
+  import { quickCommands } from "../quick-commands.svelte";
   import type { ChatCodeLink } from "../markdown-link";
   import type {
     CodeReveal,
     QuickCommand,
     SubmissionProgress,
   } from "../schemas";
-  import { newSubmissionId } from "../terminalProtocol";
-  import { browserDraftStorage } from "../draftStorage";
+  import { newSubmissionId } from "../terminal-protocol";
+  import { browserDraftStorage } from "../draft-storage";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import ConnectorInstallHint from "../components/ConnectorInstallHint.svelte";

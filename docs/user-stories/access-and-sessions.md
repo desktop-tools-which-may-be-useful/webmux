@@ -151,12 +151,12 @@
 依据：
 
 - [启动图标](../../web/src/components/LaunchConfigIcon.svelte)、[LobeHub 图标来源与许可](../../web/src/icons/lobehub/README.md)
-- [新建会话](../../web/src/components/NewSessionDialog.svelte)、[位置选择](../../web/src/components/LocationPicker.svelte)、[命令选择](../../web/src/components/LaunchPicker.svelte)、[默认值解析](../../web/src/newSessionDefaults.ts)
+- [新建会话](../../web/src/components/NewSessionDialog.svelte)、[位置选择](../../web/src/components/LocationPicker.svelte)、[命令选择](../../web/src/components/LaunchPicker.svelte)、[默认值解析](../../web/src/new-session-defaults.ts)
 - [启动配置编辑](../../web/src/components/LaunchConfigDialog.svelte)、[系统预设菜单](../../web/src/components/LaunchPresetMenu.svelte)、[启动配置存储](../../internal/launch/store.go)、[首次启动预设](../../internal/launch/presets.go)
 - [启动配置接口](../../internal/api/launch.go)、[CLI agent 接入](../cli-agents.md)
 - [信任预写](../../internal/agenttrust/agenttrust.go)、[会话钩子](../../internal/session/manager.go)
-- [会话标题来源](../../internal/hybrid/actor.go)、[会话覆盖层](../../internal/session/shell.go)、[聊天页头](../../web/src/hooks/hybrid.svelte.ts)
-- [目录选择](../../web/src/components/DirectoryPicker.svelte)、[命令解析](../../internal/session/command.go)、[工作区会话创建](../../internal/workspace/sessions.go)。
+- [会话标题来源](../../internal/hybrid/actor.go)、[会话覆盖层](../../internal/session/lifecycle.go)、[聊天页头](../../web/src/hooks/hybrid.svelte.ts)
+- [目录选择](../../web/src/components/DirectoryPicker.svelte)、[命令解析](../../internal/session/run_command.go)、[工作区会话创建](../../internal/workspace/sessions.go)。
 
 来源补充：[统一创建回归](../../web/test/e2e/session-creation.spec.ts)。
 
@@ -317,11 +317,11 @@
 - [应用外壳](../../web/src/components/AppShell.svelte)、[侧栏](../../web/src/components/AppSidebar.svelte)、[模式状态](../../web/src/shell.svelte.ts)、[外壳浏览器用例](../../web/test/browser/AppShell.test.ts)
 - [工作台导航树](../../web/src/components/WorkbenchTree.svelte)、[侧栏仓库菜单](../../web/src/components/SidebarRepositoryMenu.svelte)、[导航树浏览器用例](../../web/test/browser/WorkbenchTree.test.ts)、[侧栏底部](../../web/src/components/SidebarFooter.svelte)
 - [显示方式](../../web/src/components/SessionViewControls.svelte)、[范围端到端用例](../../web/test/e2e/repository-scope.spec.ts)
-- [会话首页](../../web/src/pages/SessionList.svelte)、[会话卡片](../../web/src/components/SessionRow.svelte)、[启动配置预览解析](../../web/src/launchPreviews.svelte.ts)
+- [会话首页](../../web/src/pages/SessionList.svelte)、[会话卡片](../../web/src/components/SessionRow.svelte)、[启动配置预览解析](../../web/src/launch-previews.svelte.ts)
 - [仓库分组](../../web/src/components/RepositoryGroup.svelte)、[工作区分组](../../web/src/components/WorkspaceGroup.svelte)、[列表事件更新](../../web/src/session-list.ts)
 - [表单按需加载](../../web/src/components/LazyDialog.svelte)
 - [目录线索与搜索](../../web/src/session-location.ts)、[OSC 7 解析](../../internal/session/osc.go)、[状态检测](../../internal/session/status.go)
-- [介入提醒](../../internal/session/attention.go)、[程序状态探测应答](../../internal/session/io.go)、[附着探测过滤](../../internal/attach/probe.go)
+- [介入提醒](../../internal/session/attention.go)、[程序状态探测应答](../../internal/session/input_write.go)、[附着探测过滤](../../internal/attach/probe.go)
 - [设置](../../web/src/pages/Settings.svelte)、[主题](../../web/src/theme.ts)
 - [标签页指示](../../web/src/browser-chrome.ts)、[终端状态接线](../../web/src/hooks/terminal-socket.svelte.ts)、[指示浏览器用例](../../web/test/browser/BrowserChrome.test.ts)
 - [指示端到端用例](../../web/test/e2e/browser-chrome.spec.ts)、[推送与设置卡片](../../web/src/push.ts)、[推送卡片](../../web/src/components/PushSettings.svelte)

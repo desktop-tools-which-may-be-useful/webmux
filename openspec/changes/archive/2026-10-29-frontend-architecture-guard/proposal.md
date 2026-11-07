@@ -8,7 +8,7 @@ WebMux 的前端大部分由 coding agent 编写。`docs/design-system.md` 与 `
 - 手写原生控件 23 处（`<button>` 9、`<input>` 6、`<select>` 4、`<label>` 4），其中 10 处在 `CodeNavigator.svelte`。
 - 任意值 47 处（如 `w-[3ch]`、`[overflow-wrap:anywhere]`、`max-h-[50dvh]`、`focus-visible:ring-[3px]`、`text-[11px]`）；`style:` 内联样式 10 处；Tailwind 不认识的类名 7 处（6 处用作测试或样式选择器，1 处是生成组件中未定义的 `cn-rtl-flip`）；无法静态检查的动态类名 11 处。
 - 21 个业务文件仍直接导入 `@tabler/icons-svelte`，违反 Iconify 约定。
-- 4 处分层违规：顶层领域模块 `code-search.ts`、`code-reader-panels.ts`、`codePopout.ts` 直接导入并挂载 `.svelte` 组件。
+- 4 处分层违规：顶层领域模块 `code-search.ts`、`code-reader-panels.ts`、`code-popout.ts` 直接导入并挂载 `.svelte` 组件。
 - 3 处重复代码块（`SoftKeys.svelte`、`Settings.svelte` 模板与 `design-tokens.css` 的明暗主题段；生成的字体 CSS 不计入）；10 个未使用的导出和 1 个未使用的类型。
 - 没有循环依赖、没有在 `ui/` 外直接使用 `bits-ui`/`tailwind-variants`、没有原始调色板颜色，也没有同名或重造 `ui/` 组件的业务组件。这些需要保持。
 

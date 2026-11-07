@@ -22,7 +22,7 @@ func homeRepo() contract.Repository {
 }
 
 // TestHomeStatusFollowsTheWebRules mirrors homeLayout in
-// web/src/homeWorktrees.ts: an uncurated repository shows its main
+// web/src/home-worktrees.ts: an uncurated repository shows its main
 // worktree, curated lists are taken as they are, and sessions or archived
 // records always show a worktree.
 func TestHomeStatusFollowsTheWebRules(t *testing.T) {

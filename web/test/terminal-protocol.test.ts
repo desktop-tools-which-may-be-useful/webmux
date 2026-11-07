@@ -5,7 +5,7 @@ import {
   newSubmissionId,
   preparePaste,
   resolveClientId,
-} from "../src/terminalProtocol";
+} from "../src/terminal-protocol";
 import { SubmissionIdSchema } from "../src/schemas";
 
 describe("submission wire format", () => {

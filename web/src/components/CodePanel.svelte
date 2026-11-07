@@ -12,7 +12,7 @@
     ReportedCwd,
   } from "../schemas";
   import type { TextInsertion } from "../terminal-draft.svelte";
-  import { popoutAvailable, popOut, type CodePopout } from "./codePopout";
+  import { popoutAvailable, popOut, type CodePopout } from "./code-popout";
   import { codePanelState } from "../hooks/code-panel-state";
 
   let {

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import NewSessionDialog from "../../src/components/NewSessionDialog.svelte";
-import type { LaunchConfigsState } from "../../src/launchConfigs";
-import type { LaunchEntry } from "../../src/newSessionDefaults";
+import type { LaunchConfigsState } from "../../src/launch-configs";
+import type { LaunchEntry } from "../../src/new-session-defaults";
 import type { Repository, SessionInfo, Worktree } from "../../src/schemas";
 
 const config = {

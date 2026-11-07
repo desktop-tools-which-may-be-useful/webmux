@@ -1,5 +1,5 @@
 import { SvelteMap } from "svelte/reactivity";
-import { previewSettings } from "./previewSettings.svelte";
+import { previewSettings } from "./preview-settings.svelte";
 import type { PreviewSettings } from "./schemas";
 
 // Launch config previews loaded with the session list. Sessions created from a

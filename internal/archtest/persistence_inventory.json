@@ -442,7 +442,7 @@
       "count": 1,
       "owner": "service-definition"
     },
-    "internal/session/io.go|pollablePTY|os.NewFile": {
+    "internal/session/input_write.go|pollablePTY|os.NewFile": {
       "count": 1,
       "owner": "pty-descriptor"
     },

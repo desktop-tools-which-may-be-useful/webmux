@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import { z } from "zod";
   import { placeArchived, recordTitle } from "../archived";
-  import { homeLayout, worktreeTitle } from "../homeWorktrees";
+  import { homeLayout, worktreeTitle } from "../home-worktrees";
   import type {
     ArchivedSession,
     HomeWorktrees,

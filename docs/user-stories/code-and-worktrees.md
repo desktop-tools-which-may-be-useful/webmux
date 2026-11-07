@@ -163,7 +163,7 @@
 
 依据：
 
-- [代码面板](../../web/src/components/CodePanel.svelte)、[独立窗口](../../web/src/components/codePopout.ts)、[平台能力判断](../../web/src/capabilities.ts)
+- [代码面板](../../web/src/components/CodePanel.svelte)、[独立窗口](../../web/src/components/code-popout.ts)、[平台能力判断](../../web/src/capabilities.ts)
 - [文件导航](../../web/src/components/CodeNavigator.svelte)、[文件树](../../web/src/components/CodeFileTree.svelte)、[文件操作菜单](../../web/src/components/CodeFileActions.svelte)
 - [文件与 Diff 切换](../../web/src/components/CodeDocumentView.svelte)、[文件阅读](../../web/src/components/CodeReader.svelte)
 - [Markdown 代码块语言匹配](../../web/src/code-language.ts)、[Pierre 阅读器配置](../../web/src/code-pierre.ts)、[高亮 worker](../../web/src/code-highlighter.ts)
@@ -280,12 +280,12 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
 
 依据：
 
-- [批量删除服务](../../internal/workspace/batch_remove.go)、[批量管理弹窗](../../web/src/components/ManageWorktreesDialog.svelte)、[批量预览视图](../../web/src/components/ManageWorktreesPreview.svelte)、[批量分类纯函数](../../web/src/worktreeBatch.ts)
-- [批量删除服务端测试](../../internal/workspace/batch_remove_test.go)、[批量分类单测](../../web/test/worktreeBatch.test.ts)、[批量弹窗浏览器用例](../../web/test/browser/ManageWorktreesDialog.test.ts)
+- [批量删除服务](../../internal/workspace/batch_remove.go)、[批量管理弹窗](../../web/src/components/ManageWorktreesDialog.svelte)、[批量预览视图](../../web/src/components/ManageWorktreesPreview.svelte)、[批量分类纯函数](../../web/src/worktree-batch.ts)
+- [批量删除服务端测试](../../internal/workspace/batch_remove_test.go)、[批量分类单测](../../web/test/worktree-batch.test.ts)、[批量弹窗浏览器用例](../../web/test/browser/ManageWorktreesDialog.test.ts)
 
 - [释放空间](../../internal/workspace/release.go)、[重建](../../internal/workspace/rebuild.go)、[推送检查](../../internal/workspace/pushcheck.go)、[释放确认](../../web/src/components/ReleaseWorktreeDialog.svelte)、[重建确认](../../web/src/components/RebuildWorktreeDialog.svelte)
 - [推送警告](../../web/src/components/PushCheckNotice.svelte)、[对话框浏览器用例](../../web/test/browser/WorktreeDialogs.test.ts)、[释放服务端测试](../../internal/workspace/release_test.go)、[删除保留记录测试](../../internal/workspace/remove_retain_test.go)
-- [工作区总览](../../web/src/components/WorkspaceGroup.svelte)、[主页选择](../../web/src/homeWorktrees.ts)、[分支与路径表单](../../web/src/components/WorktreeCreateFields.svelte)、[分支与提交信息](../../internal/workspace/git.go)、[删除确认](../../web/src/components/RemoveWorktreeDialog.svelte)
+- [工作区总览](../../web/src/components/WorkspaceGroup.svelte)、[主页选择](../../web/src/home-worktrees.ts)、[分支与路径表单](../../web/src/components/WorktreeCreateFields.svelte)、[分支与提交信息](../../internal/workspace/git.go)、[删除确认](../../web/src/components/RemoveWorktreeDialog.svelte)
 - [仓库清单](../../internal/workspace/registry.go)、[创建](../../internal/workspace/create.go)、[删除](../../internal/workspace/remove.go)、[工作区 API](../../internal/api/workspace.go)
 - [仓库设置弹窗](../../web/src/components/RepositorySettingsDialog.svelte)、[指令输入框](../../web/src/components/InitInstructionField.svelte)、[添加仓库弹窗](../../web/src/components/AddRepositoryDialog.svelte)
 - [指令浏览器用例](../../web/test/browser/RepositoryInstruction.test.ts)、[指令服务端测试](../../internal/workspace/instruction_test.go)。

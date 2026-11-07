@@ -18,7 +18,7 @@
     scratchEntriesLimit,
     scratchEntryLimit,
     scratchStorageLimit,
-  } from "../draftStorage";
+  } from "../draft-storage";
   import type {
     ScratchAddResult,
     ScratchTakeMode,

@@ -4,7 +4,7 @@ import {
   launchCommandDraft,
   launchConfigIcon,
   validateLaunchDraft,
-} from "../src/launchConfigs";
+} from "../src/launch-configs";
 import { LaunchConfigSchema, LaunchConfigsSchema } from "../src/schemas";
 
 describe("launch icons", () => {

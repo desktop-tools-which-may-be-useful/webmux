@@ -16,7 +16,7 @@ import {
 import type { Connection } from "../ws";
 import { modifiedInput, type Modifiers } from "../input";
 import { loadTerminalFont } from "../fonts";
-import { hasTouchInput } from "../touchInput";
+import { hasTouchInput } from "../touch-input";
 import { attachTouchGestures } from "./touch";
 import {
   createTerminalRenderer,

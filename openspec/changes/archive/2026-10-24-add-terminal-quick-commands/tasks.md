@@ -1,9 +1,9 @@
 ## 1. 数据契约与存储
 
 - [x] 1.1 在 `web/src/schemas.ts` 新增 `QuickCommandSchema`（`id`、`name` ≤40、`command` 1–4096、`enter`）与 `QuickCommandsSchema`（≤50 条），导出 `z.infer` 类型
-- [x] 1.2 新增 `web/src/quickCommands.svelte.ts`（`quickCommands` 状态、`saveQuickCommands`）与纯函数模块 `web/src/quickCommands.ts`（`parseQuickCommands`、`normalizeCommand`、`commandLabel`、`commandPreview`、`newQuickCommandId`）：基于 `api.ts` 的 `stored`/`store` 读写 `webmux.quickCommands`；键不存在时返回预置 `/resume`、`/new`（无名称、自动回车开启）且不写回；损坏数据视为空列表且不回写；正文规范化为 CRLF/CR→LF、去末尾换行；ID 用 `crypto.getRandomValues`
+- [x] 1.2 新增 `web/src/quick-commands.svelte.ts`（`quickCommands` 状态、`saveQuickCommands`）与纯函数模块 `web/src/quick-commands.ts`（`parseQuickCommands`、`normalizeCommand`、`commandLabel`、`commandPreview`、`newQuickCommandId`）：基于 `api.ts` 的 `stored`/`store` 读写 `webmux.quickCommands`；键不存在时返回预置 `/resume`、`/new`（无名称、自动回车开启）且不写回；损坏数据视为空列表且不回写；正文规范化为 CRLF/CR→LF、去末尾换行；ID 用 `crypto.getRandomValues`
 - [x] 1.3 在同一模块注册 `storage` 事件，键匹配时重新加载，实现多标签页同步
-- [x] 1.4 新增 `web/test/quickCommands.test.ts`：覆盖正文规范化（末尾多换行、CRLF、保留开头/中间空白）、超长与超数量拒绝、键不存在返回预置、保存空数组后不再返回预置、损坏 JSON 回退为空、`commandLabel` 无名称时取首行
+- [x] 1.4 新增 `web/test/quick-commands.test.ts`：覆盖正文规范化（末尾多换行、CRLF、保留开头/中间空白）、超长与超数量拒绝、键不存在返回预置、保存空数组后不再返回预置、损坏 JSON 回退为空、`commandLabel` 无名称时取首行
 
 ## 2. 设置页管理
 

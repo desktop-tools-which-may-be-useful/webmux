@@ -16,7 +16,7 @@
 - [x] 3.1 `CodePanel.svelte`：将导航开关、标签条（行内横向滚动）、刷新全部、独立窗口合并为一行，独立窗口加 `max-sm:hidden`
 - [x] 3.2 `CodeNavigator.svelte`：顶部显示代码根路径；`navStatus` 提示与“刷新导航”移入导航面板顶部；导航收起时导航开关显示提醒点；刷新全部按钮的提示包含根路径
 - [x] 3.3 `CodePanel.svelte`：标签行末尾新增 `sm:hidden` 的代码区菜单，菜单内容由激活的 `CodeDocumentView` 以 snippet 提供；`collisionPadding` 计入安全区（`styles.css` 定义 `--safe-top` / `--safe-bottom`），菜单高度受可用高度限制并可在内部滚动
-- [x] 3.4 `capabilities.ts` / `codePopout.ts`：`popoutAvailable()` 改为“有 Document PiP，或有精细指针且不是带触摸屏设备上的 `display-mode: standalone`”
+- [x] 3.4 `capabilities.ts` / `code-popout.ts`：`popoutAvailable()` 改为“有 Document PiP，或有精细指针且不是带触摸屏设备上的 `display-mode: standalone`”
 
 ## 4. 文档栏
 

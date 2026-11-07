@@ -14,7 +14,7 @@
     newQuickCommandId,
     normalizeCommand,
     quickCommandNameError,
-  } from "../quickCommands";
+  } from "../quick-commands";
 
   let {
     open = $bindable(false),

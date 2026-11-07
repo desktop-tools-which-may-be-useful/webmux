@@ -5,7 +5,7 @@
   import { Button } from "$lib/components/ui/button";
   import { errorMessage } from "../error";
   import { recordTitle, removableRecordWorktree } from "../archived";
-  import { homeWorktrees } from "../homeWorktrees.svelte";
+  import { homeWorktrees } from "../home-worktrees.svelte";
   import { connectorMissingText } from "../hybrid";
   import { removeRecord, resumeSession } from "../recoverable";
   import type { Route } from "../route";

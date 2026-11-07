@@ -11,20 +11,20 @@
     type SessionInfo,
   } from "../schemas";
   import { errorMessage } from "../error";
-  import { isIOS } from "../touchInput";
+  import { isIOS } from "../touch-input";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import TerminalSplitMenu from "../components/TerminalSplitMenu.svelte";
   import InlineNotice from "../components/InlineNotice.svelte";
-  import { hasTouchInput } from "../touchInput";
+  import { hasTouchInput } from "../touch-input";
   import { useViewport } from "../hooks/viewport.svelte";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
   import { Button } from "$lib/components/ui/button";
   import SessionTerminal from "../components/SessionTerminal.svelte";
   import SplitSessionDialog from "../components/SplitSessionDialog.svelte";
   import LazyDialog from "../components/LazyDialog.svelte";
-  import type { LaunchConfigsState } from "../launchConfigs";
-  import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { setPinned } from "../homeWorktrees";
+  import type { LaunchConfigsState } from "../launch-configs";
+  import { homeWorktrees } from "../home-worktrees.svelte";
+  import { setPinned } from "../home-worktrees";
   import {
     MAX_PANES,
     layoutGeometry,

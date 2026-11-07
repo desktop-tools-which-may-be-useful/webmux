@@ -1,7 +1,7 @@
 import { api } from "../api";
 import { errorMessage } from "../error";
-import type { LaunchConfigsState } from "../launchConfigs";
-import { setLaunchPreviews } from "../launchPreviews.svelte";
+import type { LaunchConfigsState } from "../launch-configs";
+import { setLaunchPreviews } from "../launch-previews.svelte";
 import { LaunchConfigsSchema } from "../schemas";
 
 /** The saved launch configs, shared by the new-session dialog and quick start. */

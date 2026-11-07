@@ -12,13 +12,13 @@
   import { createRepositories } from "../hooks/repositories.svelte";
   import { createServerSetup } from "../hooks/server-setup.svelte";
   import { createSessionList } from "../hooks/session-list.svelte";
-  import { homeWorktrees } from "../homeWorktrees.svelte";
-  import { setPinned } from "../homeWorktrees";
+  import { homeWorktrees } from "../home-worktrees.svelte";
+  import { setPinned } from "../home-worktrees";
   import {
     resolveLaunchScope,
     type LaunchEntry,
     type LaunchScope,
-  } from "../newSessionDefaults";
+  } from "../new-session-defaults";
   import type { Route } from "../route";
   import type { Repository, SessionInfo, Worktree } from "../schemas";
   import { unknownWorkspaces } from "../session-list";

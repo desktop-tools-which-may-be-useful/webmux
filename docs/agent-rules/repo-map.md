@@ -35,7 +35,7 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. Read it when you nee
 ## Important Files
 
 - `cmd/webmux/main.go`, `web/src/main.ts`, `web/src/App.svelte`: server/browser entry points and top-level lifecycle/routing.
-- `internal/session/manager.go`, `session.go`, `io.go`, `ring.go`: state ownership, PTY lifecycle, cancellable input, and replay.
+- `internal/session/manager.go`, `session.go`, `input_write.go`, `ring.go`: state ownership, PTY lifecycle, cancellable input, and replay.
 - `web/embed.go`: embeds `web/dist`. Rebuild the frontend before compiling Go to avoid missing or stale assets.
 - `Makefile`, `go.mod`, `web/package.json`, `web/pnpm-lock.yaml`, `web/pnpm-workspace.yaml`: build commands, tool/dependency versions, and permitted install scripts.
 - `web/vite.config.ts`, `web/tsconfig.json`, `web/components.json`, `.oxfmtrc.json`, `web/.oxlintrc.json`: proxy/alias, strict typing, UI generation, formatting, and lint configuration.
