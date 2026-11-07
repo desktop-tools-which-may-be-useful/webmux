@@ -14,7 +14,7 @@
 | 混合模式勾选（`chat`）、Claude Code 与 Antigravity CLI 默认混合、`chat-support` 判定、起始视图选择             | US-Q01–US-Q02；US-B01；US-B08                       |
 | 终端 ↔ 聊天切换、Claude 注册记录身份/候选/外部占用、中断等待、草稿退回与回滚                                   | US-Q03–US-Q04                                       |
 | 聊天视图时间线、代码链接打开代码浏览器、权限与表单、权限模式、配置项、命令菜单及 Claude 配置重应用             | US-Q05–US-Q07                                       |
-| 聊天端服务端队列、去重与 omp/Codex/Claude 插话                                                                 | US-Q08                                              |
+| 聊天端服务端队列、去重、排队位置、发送模式（auto/steer/refuse/now）与 omp/Codex/Claude 插话                    | US-Q08                                              |
 | 聊天附件能力块构造、降级、队列、路径安全与已发送图片小图预览                                                   | US-Q15                                              |
 | 第三方 ACP 连接器（Codex 的 codex-acp、Claude 的 claude-agent-acp）启动前检查与安装提示                        | US-Q16；US-Q01；US-Q03                              |
 | 聊天端关注、推送、首条消息临时标题与首页混合卡片                                                               | US-Q09；US-Q02；US-C02                              |
@@ -37,7 +37,7 @@
 | `resize` 命令与 `POST /api/sessions/{id}/resize`（脚本改终端尺寸，`--take` 接管控制权）                        | US-S19；US-D06                                      |
 | `api`、`kill`、`rm`（含 `--forget`）、`rename` 与 shell 补全                                                   | US-S11–US-S12                                       |
 | `notify` 提醒（来源 `cli`）与清除                                                                              | US-S13；US-C06、US-C12                              |
-| 聊天视图：`send --reply` 与插话、`chat status/watch/log/answer/set/permission/queue`                           | US-S14；US-Q01–US-Q19                               |
+| 聊天视图：`send --reply`、发送模式与排队提示、`chat status/watch/log/answer/set/permission/queue`              | US-S14；US-Q01–US-Q19                               |
 | `view` 切换视图、`ls --archived` 列出、`resume` 恢复与 `rm --forget` 删除记录                                  | US-S15                                              |
 | `worktree` 命令与主页显示（`homeWorktrees`）                                                                   | US-S16；US-J01–US-J12                               |
 | `repo` 命令与仓库设置（初始化指令）                                                                            | US-S17；US-J12                                      |

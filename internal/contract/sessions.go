@@ -243,9 +243,10 @@ var InputKeys = map[string]string{
 // terminal view Text (with Enter when Submit) is one acknowledged
 // submission, then each of Keys follows; Attachments and Mode are the chat
 // view's and fail there with wrong_view. On the chat view Text and
-// Attachments are a prompt and Mode is auto (send now or queue) or steer
-// (inject into the running turn); Submit is ignored and Keys fail with
-// wrong_view.
+// Attachments are a prompt and Mode is auto (send now or queue), steer
+// (inject into the running turn), refuse (fail with 409 busy instead of
+// queueing) or now (cancel the running turn and send next); Submit is
+// ignored and Keys fail with wrong_view.
 type SessionInputRequest struct {
 	ClientRequestID string           `json:"clientRequestId"`
 	Text            string           `json:"text"`
@@ -257,13 +258,14 @@ type SessionInputRequest struct {
 
 // SessionInputResult is the 200 body of POST /api/sessions/{id}/input. On
 // the chat view a sent prompt names its turn (TurnID, PromptID as in
-// turn.start) and a queued one its queue item, which the turn that sends it
-// names as queueItemId; steering names neither. The terminal view sets View
-// only.
+// turn.start) and a queued one its queue item and 1-based Position, which
+// the turn that sends it names as queueItemId; steering names neither. The
+// terminal view sets View only.
 type SessionInputResult struct {
 	View     SessionView `json:"view"`
 	Queued   *bool       `json:"queued,omitempty"`
 	ItemID   string      `json:"itemId,omitempty"`
+	Position int         `json:"position,omitempty"`
 	TurnID   string      `json:"turnId,omitempty"`
 	PromptID string      `json:"promptId,omitempty"`
 }

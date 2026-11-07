@@ -133,7 +133,7 @@ type AgentCandidate struct {
 // SessionConflict is the 409 body of every session, view, input,
 // interrupt, resume and chat command. Reason is a stable code: switching,
 // wrong_view, no_chat_view, not_active, not_archived, input_failed,
-// not_eligible, answered, sent, steering_unavailable, session_missing,
+// not_eligible, answered, sent, steering_unavailable, busy, session_missing,
 // session_ambiguous, connector_missing, occupied_external, config_missing or
 // limit. Eligibility carries the not_eligible cause; Candidates the
 // session_missing and session_ambiguous alternatives; Connector the

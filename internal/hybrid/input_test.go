@@ -24,8 +24,10 @@ func TestInputDispatchesBySide(t *testing.T) {
 
 	terminal := h.create(h.input(omp.Name, SideTUI))
 	id := terminal.Info().ID
-	if _, err := h.svc.Input(ctxT(t), id, InputRequest{ClientRequestID: rid(), Text: "x", Mode: ModeSteer}); !errors.Is(err, ErrWrongSide) {
-		t.Fatalf("mode on the terminal: %v", err)
+	for _, mode := range []string{ModeSteer, ModeRefuse, ModeNow} {
+		if _, err := h.svc.Input(ctxT(t), id, InputRequest{ClientRequestID: rid(), Text: "x", Mode: mode}); !errors.Is(err, ErrWrongSide) {
+			t.Fatalf("mode %s on the terminal: %v", mode, err)
+		}
 	}
 	result, err = h.svc.Input(ctxT(t), id, InputRequest{ClientRequestID: rid(), Label: "script", Text: "typed", Submit: true})
 	if err != nil || result.Side != SideTUI {

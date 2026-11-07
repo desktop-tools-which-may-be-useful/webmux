@@ -352,7 +352,7 @@ func TestChatCommands(t *testing.T) {
 	if err := json.Unmarshal(h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "later", Mode: "auto"}, 200), &queued); err != nil {
 		t.Fatal(err)
 	}
-	if queued.Queued == nil || !*queued.Queued || queued.ItemID == "" {
+	if queued.Queued == nil || !*queued.Queued || queued.ItemID == "" || queued.Position != 1 {
 		t.Fatalf("busy prompt %+v", queued)
 	}
 	item := base + "queue/" + queued.ItemID
@@ -442,6 +442,7 @@ func TestChatCommandConflicts(t *testing.T) {
 	id := fakeChat(t, h.hybrids, h.cwd, opencode.Name, "FAKEAGENT_PERMISSION=1")
 	h.expectCommand("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "busy"}, 200)
 	h.expectConflict("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "nudge", Mode: "steer"}, "steering_unavailable")
+	h.expectConflict("POST", "/api/sessions/"+id+"/input", contract.SessionInputRequest{ClientRequestID: chatRID(), Text: "later", Mode: "refuse"}, "busy")
 
 	// Every reason the chat commands report keeps its status and body.
 	for _, row := range []struct {
@@ -454,6 +455,7 @@ func TestChatCommandConflicts(t *testing.T) {
 		{hybrid.ErrSent, 409, "sent"},
 		{hybrid.ErrWrongSide, 409, "wrong_view"},
 		{hybrid.ErrSteeringUnavailable, 409, "steering_unavailable"},
+		{hybrid.ErrBusy, 409, "busy"},
 		{hybrid.ErrLimit, 409, "limit"},
 		{hybrid.ErrConflict, 409, ""},
 		{&hybrid.IneligibleError{Reason: hybrid.ReasonOccupied}, 409, "not_eligible"},

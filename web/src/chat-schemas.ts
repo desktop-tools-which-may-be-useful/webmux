@@ -436,12 +436,13 @@ export const ChatFrameSchema = z.discriminatedUnion("type", [
 export type ChatFrame = z.infer<typeof ChatFrameSchema>;
 
 // The 200 body of POST /sessions/:id/input. On the chat view a sent prompt
-// names its turn and a queued one its queue item; the terminal view sets
-// only `view`.
+// names its turn and a queued one its queue item and 1-based position; the
+// terminal view sets only `view`.
 export const SessionInputResultSchema = z.object({
   view: SessionViewSchema,
   queued: z.boolean().optional(),
   itemId: z.string().optional(),
+  position: z.number().int().positive().optional(),
   turnId: z.string().optional(),
   promptId: z.string().optional(),
 });

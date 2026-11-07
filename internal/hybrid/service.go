@@ -426,18 +426,20 @@ func (s *Service) Subscribe(id string, resume *ResumePoint) (*Subscription, erro
 }
 
 // PromptResult reports what a prompt did: Queued with the queue item's
-// ItemID, or sent as turn TurnID for prompt PromptID (steering sends
-// neither).
+// ItemID and 1-based Position, or sent as turn TurnID for prompt PromptID
+// (steering sends neither).
 type PromptResult struct {
 	Queued   bool
 	ItemID   string
+	Position int
 	TurnID   string
 	PromptID string
 }
 
-// PromptInput is a chat prompt. Mode is ModeAuto (default) or ModeSteer.
-// TitleSource, when set, replaces Text as the source of the temporary
-// first-prompt title (Text may carry an instruction prefix).
+// PromptInput is a chat prompt. Mode is ModeAuto (default), ModeSteer,
+// ModeRefuse or ModeNow. TitleSource, when set, replaces Text as the source
+// of the temporary first-prompt title (Text may carry an instruction
+// prefix).
 type PromptInput struct {
 	ClientRequestID string
 	Text            string
@@ -508,8 +510,9 @@ func agentCommand(ctx context.Context, s *Service, id, requestID, name string, p
 // and its queue empty and running, and queues the text otherwise; queued
 // prompts go out one by one as turns end normally. ModeSteer injects the
 // text into the running turn and fails with ErrSteeringUnavailable when
-// the agent cannot. The text is at most MaxPromptBytes and may be blank
-// when the prompt has attachments.
+// the agent cannot. ModeRefuse fails with ErrBusy instead of queueing.
+// ModeNow cancels the running turn and sends the prompt next. The text is
+// at most MaxPromptBytes and may be blank when the prompt has attachments.
 func (s *Service) Prompt(ctx context.Context, id string, in PromptInput) (PromptResult, error) {
 	a, err := s.actor(id)
 	if err != nil {
@@ -549,8 +552,34 @@ func (s *Service) Prompt(ctx context.Context, id string, in PromptInput) (Prompt
 			return struct{}{}, run(ctx)
 		})
 		return PromptResult{}, err
+	case ModeRefuse:
+		return once(ctx, &a.recent, in.ClientRequestID, "prompt-refuse", func(ctx context.Context) (PromptResult, error) {
+			attachments, err := resolveAttachments(s.uploadCheck(id), in.Attachments)
+			if err != nil {
+				return PromptResult{}, err
+			}
+			if err := validText(in.Text, len(attachments)); err != nil {
+				return PromptResult{}, err
+			}
+			return call(ctx, a, func() (PromptResult, error) {
+				return a.promptRefuse(in.Text, in.TitleSource, attachments)
+			})
+		})
+	case ModeNow:
+		return once(ctx, &a.recent, in.ClientRequestID, "prompt-now", func(ctx context.Context) (PromptResult, error) {
+			attachments, err := resolveAttachments(s.uploadCheck(id), in.Attachments)
+			if err != nil {
+				return PromptResult{}, err
+			}
+			if err := validText(in.Text, len(attachments)); err != nil {
+				return PromptResult{}, err
+			}
+			return call(ctx, a, func() (PromptResult, error) {
+				return a.promptNow(in.Text, in.TitleSource, attachments)
+			})
+		})
 	}
-	return PromptResult{}, fmt.Errorf("%w: mode 只能是 auto 或 steer", ErrInvalid)
+	return PromptResult{}, fmt.Errorf("%w: mode 只能是 auto、steer、refuse 或 now", ErrInvalid)
 }
 
 // EditQueued edits queued prompt itemID; ErrSent once it was sent or

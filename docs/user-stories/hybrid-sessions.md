@@ -93,8 +93,9 @@
   - 输入 `/` 打开随输入过滤的命令菜单。
 - **US-Q08 排队与插话**：作为使用者，我希望 agent 忙时继续发送消息并按顺序处理，以便不必等待也不会打断当前回合。
   验收要点：
-  - 发送经 `POST /api/sessions/{id}/input`（`mode` 为 `auto` 或 `steer`），停止回合经 `POST /api/sessions/{id}/interrupt`；会话在终端视图时带 `mode` 或附件的输入返回 409 `wrong_view`；
-  - 服务端队列多设备共享：空闲且未暂停时立即发送，否则排队，回合正常结束后逐条发送；
+  - 发送经 `POST /api/sessions/{id}/input`，`mode` 为 `auto`（默认）、`steer`、`refuse` 或 `now`，停止回合经 `POST /api/sessions/{id}/interrupt`；会话在终端视图时带 `mode` 或附件的输入返回 409 `wrong_view`，两个新模式同样不发送；
+  - 服务端队列多设备共享：空闲且未暂停时立即发送，否则排队，回合正常结束后逐条发送；排队结果带队列项 `itemId` 与从 1 开始的 `position`；
+  - `refuse` 在不能立即发送时返回 409 `busy` 且不入队；`now` 取消正在运行的回合后把这条提示排到队首并立即发送，不留队列项，语义同队列的立即发送；
   - 队列可编辑、上移、删除、二次确认后立即发送；
   - 回合被停止、出错或拒绝时队列暂停并提示继续或清空；
   - 按 `clientRequestId` 去重，重试不重复发送；

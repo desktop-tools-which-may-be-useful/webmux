@@ -28,7 +28,7 @@ export type ConfigValue = { value: string } | { enabled: boolean };
 export interface ChatActions {
   send(
     text: string,
-    mode: "auto" | "steer",
+    mode: "auto" | "steer" | "refuse" | "now",
     attachments?: ChatAttachment[],
   ): Promise<unknown>;
   cancel(): Promise<unknown>;

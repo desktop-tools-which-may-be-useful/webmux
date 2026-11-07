@@ -20,9 +20,13 @@ const (
 	MaxPromptBytes = 64 << 10
 	// maxQueueItems bounds the shared prompt queue of one session.
 	maxQueueItems = 64
-	// Prompt modes.
-	ModeAuto  = "auto"
-	ModeSteer = "steer"
+	// Prompt modes: auto sends now or queues, steer injects into the
+	// running turn, refuse fails instead of queueing, and now cancels the
+	// running turn and sends at once.
+	ModeAuto   = "auto"
+	ModeSteer  = "steer"
+	ModeRefuse = "refuse"
+	ModeNow    = "now"
 	// MoveUp moves a queued prompt one place towards the head.
 	MoveUp = "up"
 	// The chat-side card preview: the first lines of the latest agent
@@ -129,6 +133,13 @@ func (a *actor) drain() {
 	a.setQueue(slices.Clone(q.Items[1:]), false)
 }
 
+// canSendNow reports whether a new prompt would start a turn at once
+// instead of queueing.
+func (a *actor) canSendNow() bool {
+	q := a.chat.Queue
+	return a.turn == nil && !q.Paused && len(q.Items) == 0 && a.link != nil
+}
+
 // prompt sends text now when the session is idle, connected and the queue
 // is empty and running, and otherwise appends it to the queue.
 func (a *actor) prompt(text, titleSource string, attachments []Attachment) (PromptResult, error) {
@@ -137,17 +148,61 @@ func (a *actor) prompt(text, titleSource string, attachments []Attachment) (Prom
 	}
 	a.clearAttention()
 	q := a.chat.Queue
-	if a.turn == nil && !q.Paused && len(q.Items) == 0 && a.link != nil {
+	if a.canSendNow() {
 		return a.send(text, attachments, "", titleSource)
 	}
 	if len(q.Items) >= maxQueueItems {
 		return PromptResult{}, fmt.Errorf("%w: 队列最多 %d 条", ErrInvalid, maxQueueItems)
 	}
-	a.nextItem++
-	item := QueueItem{ID: "q" + strconv.Itoa(a.nextItem), Text: text, CreatedAt: time.Now().UTC(), Attachments: attachments}
+	item := a.newItem(text, attachments)
 	a.setQueue(append(slices.Clone(q.Items), item), q.Paused)
 	a.drain()
-	return PromptResult{Queued: true, ItemID: item.ID}, nil
+	return PromptResult{Queued: true, ItemID: item.ID, Position: a.queuePosition(item.ID)}, nil
+}
+
+// promptRefuse sends text when the session is idle and refuses to queue it
+// otherwise: a script that must not wait gets ErrBusy.
+func (a *actor) promptRefuse(text, titleSource string, attachments []Attachment) (PromptResult, error) {
+	if err := a.ready(); err != nil {
+		return PromptResult{}, err
+	}
+	a.clearAttention()
+	if !a.canSendNow() {
+		return PromptResult{}, fmt.Errorf("%w: 消息未发送", ErrBusy)
+	}
+	return a.send(text, attachments, "", titleSource)
+}
+
+// promptNow sends text at once: when no turn runs it starts a turn now,
+// otherwise the running turn is cancelled first and the prompt sent next,
+// like a queued prompt's send-now.
+func (a *actor) promptNow(text, titleSource string, attachments []Attachment) (PromptResult, error) {
+	if err := a.ready(); err != nil {
+		return PromptResult{}, err
+	}
+	a.clearAttention()
+	if a.turn == nil && a.link == nil {
+		return PromptResult{}, fmt.Errorf("%w: agent 尚未连接，消息未发送", ErrBusy)
+	}
+	if a.turn != nil && len(a.chat.Queue.Items) >= maxQueueItems {
+		return PromptResult{}, fmt.Errorf("%w: 队列最多 %d 条", ErrInvalid, maxQueueItems)
+	}
+	return a.sendItemNow(a.newItem(text, attachments), titleSource)
+}
+
+// newItem makes the next queued prompt.
+func (a *actor) newItem(text string, attachments []Attachment) QueueItem {
+	a.nextItem++
+	return QueueItem{ID: "q" + strconv.Itoa(a.nextItem), Text: text, CreatedAt: time.Now().UTC(), Attachments: attachments}
+}
+
+// queuePosition is item id's 1-based place in the queue, or 0 once it is
+// no longer queued.
+func (a *actor) queuePosition(id string) int {
+	if i := slices.IndexFunc(a.chat.Queue.Items, func(it QueueItem) bool { return it.ID == id }); i >= 0 {
+		return i + 1
+	}
+	return 0
 }
 
 // queued finds a queued prompt; ErrSent if it was sent or removed.
@@ -202,15 +257,23 @@ func (a *actor) sendQueuedNow(id string) error {
 	}
 	items := slices.Clone(a.chat.Queue.Items)
 	item := items[i]
-	items = slices.Insert(slices.Delete(items, i, i+1), 0, item)
-	a.setQueue(items, false)
-	if a.turn != nil {
-		a.sendAfterCancel = true
-		a.cancelTurn()
-		return nil
+	a.setQueue(slices.Delete(items, i, i+1), false)
+	_, err = a.sendItemNow(item, "")
+	return err
+}
+
+// sendItemNow sends item at once, ahead of anything already queued: when
+// no turn runs it starts a turn now, otherwise the item goes to the head
+// and the running turn is cancelled so the queue sends it next.
+func (a *actor) sendItemNow(item QueueItem, titleSource string) (PromptResult, error) {
+	if a.turn == nil {
+		a.setQueue(a.chat.Queue.Items, false)
+		return a.send(item.Text, item.Attachments, "", titleSource)
 	}
-	a.drain()
-	return nil
+	a.setQueue(append([]QueueItem{item}, a.chat.Queue.Items...), false)
+	a.sendAfterCancel = true
+	a.cancelTurn()
+	return PromptResult{Queued: true, ItemID: item.ID, Position: 1}, nil
 }
 
 // resumeQueue unpauses the queue and sends its head when idle.

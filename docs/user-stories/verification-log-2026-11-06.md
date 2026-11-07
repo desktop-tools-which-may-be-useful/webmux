@@ -19,6 +19,14 @@
 - 隔离实例（假 ACP agent、本地 bare 远程）：未推送时两个预览均为 `unpushed`，推送后为 `pushed`；删除后记录为已释放并出现在首页与侧栏树，点击后重建并恢复成功；无提交的 worktree 删除成功、记录原样保留。
 - 限制：完整套件与 E2E 交给 CI；未做真机核对。
 
+本次局部核对（2026-11-07）：`webmux send` 在聊天视图排队时向标准错误报告队列项与位置（`--json` 输出 `position`），并新增 `--mode refuse`（忙时 409 `busy`、不排队）与 `--mode now`（取消当前回合并立即发送）；对应更新 US-Q08、US-S14 与覆盖索引，不新增或重编号故事。
+
+- 依据：hybrid 的 `refuse`/`now`/位置与去重用例，clicmd 的排队提示、`--json` 静默与 `refuse` 退出码用例，api 的 `busy` 映射与端到端 `refuse` 冲突用例；重新录制 `internal/api/testdata/wire/chat-prompt-queued.json`。
+- 本地：`go test -race ./internal/hybrid ./internal/clicmd ./internal/api ./internal/contract ./internal/wire`、`make test-go`、`pnpm --dir web test:unit`、`make docs-check`、`make go-lint`、`pnpm --dir web check:arch` 与 `make check` 通过。
+- 环境：在宿主 WebMux 会话内运行完整 Go 测试需清除 `WEBMUX_*` 变量，否则两个既有的进程归属用例会被环境误判；清除后 `make test-go` 通过。
+- 隔离冒烟（独立 `state_dir`、`127.0.0.1:17681`、假 ACP agent）：`auto` 排队在标准错误显示 `q1 (position 1)` 且标准输出为空；`--json` 返回 `position: 2` 且无提示；`--mode refuse` 以 1 退出并报告 `busy`；`--mode now` 排队后取消当前回合并发送。
+- 限制：未连接真实第三方 agent，只使用假 ACP agent；未做浏览器界面与真机核对；未重新核验其余故事能力。
+
 本次局部核对（2026-11-07）：侧栏收起为窄栏时只保留展开按钮和当前模式的主要操作，聊天/工作台模式切换仅在展开的侧栏中显示，对应更新 US-C16 与 `app-shell` 主规格，不新增故事或改变覆盖索引。
 
 - 范围：桌面端与平板窄栏；展开后的侧栏、手机抽屉与模式记忆不变。

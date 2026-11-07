@@ -31,10 +31,13 @@ const sessionsJSON = `[{"id":"abcdefgh","title":"review","status":"running","cmd
 const archivedJSON = `[{"id":"old00001","title":"yesterday","status":"exited","cmd":["omp"],"cwd":"/w","exitCode":null,"state":"interrupted","views":["terminal","chat"],"view":"chat","transition":null,"agent":{"name":"omp","title":"omp","icon":"pi","sessionId":"01b"}}]`
 
 type fakeServer struct {
-	mu        sync.Mutex
-	bodies    []map[string]any
-	queries   []string
-	rejectEnv bool
+	mu          sync.Mutex
+	bodies      []map[string]any
+	inputBodies []map[string]any
+	queries     []string
+	rejectEnv   bool
+	inputStatus int
+	inputBody   string
 }
 
 func (f *fakeServer) handler() http.Handler {
@@ -84,6 +87,22 @@ func (f *fakeServer) handler() http.Handler {
 			return
 		}
 		_, _ = io.WriteString(w, `{"id":"abcdefgh"}`)
+	})
+	mux.HandleFunc("POST /api/sessions/{id}/input", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.inputBodies = append(f.inputBodies, body)
+		status, response := f.inputStatus, f.inputBody
+		f.mu.Unlock()
+		if status == 0 {
+			status = http.StatusOK
+		}
+		if response == "" {
+			response = `{"view":"chat"}`
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, response)
 	})
 	// Hybrid sessions: one on its chat side refuses the terminal at once,
 	// the other moves away after the replay. Other IDs have no endpoint.
@@ -187,6 +206,79 @@ func TestRunRejectsOldAndInvalidCombinations(t *testing.T) {
 	}
 	if len(f.bodies) != 0 {
 		t.Fatalf("refused runs sent %d requests", len(f.bodies))
+	}
+}
+
+// TestSendQueuedPromptNotices covers the script contract: a queued prompt
+// explains itself on standard error, --json keeps it quiet, refuse turns a
+// busy chat into exit 1, and now reaches the server as one request.
+func TestSendQueuedPromptNotices(t *testing.T) {
+	f := &fakeServer{inputBody: `{"view":"chat","queued":true,"itemId":"q1","position":2}`}
+	e, stdout, stderr, _ := env(t, f)
+	ctx := context.Background()
+	send := func(args ...string) int {
+		t.Helper()
+		code, ok := e.Dispatch(ctx, Commands(), append([]string{"send"}, args...))
+		if !ok {
+			t.Fatalf("send is not a command")
+		}
+		return code
+	}
+	if code := send("hybrid22", "later"); code != contract.ExitOK {
+		t.Fatalf("queued send exit %d: %s", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("queued send wrote standard output: %q", stdout.String())
+	}
+	want := "webmux: queued as q1 (position 2); the chat is busy. Use --mode steer to inject it now, or --mode now to cancel the turn\n"
+	if stderr.String() != want {
+		t.Fatalf("queued notice %q, want %q", stderr.String(), want)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := send("hybrid22", "later", "--json"); code != contract.ExitOK {
+		t.Fatalf("json send exit %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("--json wrote a notice: %q", stderr.String())
+	}
+	var result contract.SessionInputResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil || result.Position != 2 {
+		t.Fatalf("json result %q: %v", stdout.String(), err)
+	}
+
+	f.mu.Lock()
+	f.inputStatus, f.inputBody = http.StatusConflict, `{"error":"会话忙，消息未发送","reason":"busy"}`
+	f.mu.Unlock()
+	stdout.Reset()
+	stderr.Reset()
+	if code := send("hybrid22", "later", "--mode", "refuse"); code != contract.ExitError {
+		t.Fatalf("refused send exit %d: %s", code, stderr.String())
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "busy") {
+		t.Fatalf("refused send stdout %q stderr %q", stdout.String(), stderr.String())
+	}
+
+	f.mu.Lock()
+	f.inputStatus, f.inputBody = http.StatusOK, `{"view":"chat","queued":true,"itemId":"q2","position":1}`
+	f.mu.Unlock()
+	stdout.Reset()
+	stderr.Reset()
+	if code := send("hybrid22", "later", "--mode", "now"); code != contract.ExitOK {
+		t.Fatalf("now send exit %d: %s", code, stderr.String())
+	}
+	f.mu.Lock()
+	last := f.inputBodies[len(f.inputBodies)-1]
+	f.mu.Unlock()
+	if last["mode"] != "now" {
+		t.Fatalf("now sent mode %v", last["mode"])
+	}
+	if !strings.Contains(stderr.String(), "cancelling the running turn") {
+		t.Fatalf("now notice %q", stderr.String())
+	}
+	if code := send("hybrid22", "later", "--mode", "shout"); code != contract.ExitUsage {
+		t.Fatalf("unknown mode exit %d", code)
 	}
 }
 

@@ -46,6 +46,9 @@ var (
 	// ErrSteeringUnavailable: steering needs a profile and agent that
 	// support it and a running turn (409 steering_unavailable).
 	ErrSteeringUnavailable = errors.New("当前不能插话")
+	// ErrBusy: a prompt that must not queue arrived while the chat could
+	// not take it now (409 busy).
+	ErrBusy = errors.New("会话忙")
 	// ErrAgent: the agent failed to start or to open its session (502). The
 	// message may carry the agent's stderr tail, for the requesting user
 	// only: never log it.

@@ -200,7 +200,8 @@ func hybridStatus(err error) (status int, ok bool) {
 	case errors.Is(err, hybrid.ErrLimit), errors.Is(err, hybrid.ErrConflict),
 		errors.Is(err, hybrid.ErrWrongSide), errors.Is(err, hybrid.ErrAnswered),
 		errors.Is(err, hybrid.ErrSwitching), errors.Is(err, hybrid.ErrSent),
-		errors.Is(err, hybrid.ErrSteeringUnavailable), errors.Is(err, hybrid.ErrNotEligible),
+		errors.Is(err, hybrid.ErrSteeringUnavailable), errors.Is(err, hybrid.ErrBusy),
+		errors.Is(err, hybrid.ErrNotEligible),
 		errors.Is(err, hybrid.ErrSessionMissing), errors.Is(err, hybrid.ErrConfigMissing),
 		errors.Is(err, hybrid.ErrConnectorMissing), errors.Is(err, hybrid.ErrSessionAmbiguous),
 		errors.Is(err, hybrid.ErrExternalWriter), errors.Is(err, hybrid.ErrNoChatView),
@@ -239,6 +240,8 @@ func hybridReason(err error) string {
 		return "sent"
 	case errors.Is(err, hybrid.ErrSteeringUnavailable):
 		return "steering_unavailable"
+	case errors.Is(err, hybrid.ErrBusy):
+		return "busy"
 	case errors.Is(err, hybrid.ErrNotEligible):
 		return "not_eligible"
 	case errors.Is(err, hybrid.ErrSessionMissing):

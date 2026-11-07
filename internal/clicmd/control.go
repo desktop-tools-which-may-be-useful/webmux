@@ -411,24 +411,28 @@ var sendCommand = &Command{
 		"submission (with Enter when --enter is given) and each --key follows; the command exits 0 once the server reports " +
 		"everything written. Typing takes control of the terminal; the control indicator names this client \"script\" and, " +
 		"inside a session, that session. On the chat view TEXT is a prompt, sent at once or queued while a turn runs; " +
-		"--attach-file uploads files into the session and sends them with it, and --mode steer injects it into the running " +
-		"turn. Options of the other view are refused (wrong_view) and nothing is sent.\n\n" +
+		"--attach-file uploads files into the session and sends them with it, and --mode chooses how: auto (default) sends " +
+		"now or queues, steer injects into the running turn, refuse fails instead of queueing, and now cancels the running " +
+		"turn and sends next. A queued prompt reports its item and position on standard error. Options of the other view " +
+		"are refused (wrong_view) and nothing is sent.\n\n" +
 		"--wait STATE returns on the first change into STATE after the input (see webmux wait). --reply, for the chat view " +
 		"only, follows the turn this input starts and prints the agent's final reply; a stop for a permission request or " +
 		"question exits 1 unless --auto-wait-requests.",
 	Arguments: []Item{sessionArgument, {Name: "TEXT", Text: "The text to send; - reads standard input."}},
 	Env:       []Item{sessionIDEnv},
-	Output: "Nothing; with --json, the SessionInputResult (view, queued, itemId, turnId, promptId). With --wait --json, the " +
+	Output: "Nothing; with --json, the SessionInputResult (view, queued, itemId, position, turnId, promptId). With --wait --json, the " +
 		"SessionInfo that matched. With --reply, the reply text, or with --json {stopReason, error, reply, events, request}.",
 	Exit: exitsCommon(
 		ExitItem{Code: 1, Text: "No such session, it is not active or is changing views, an option belongs to the other view, " +
-			"the input was not (fully) written, an upload failed, or with --reply the turn did not end with end_turn or waits for an answer."},
+			"--mode refuse found the chat busy, the input was not (fully) written, an upload failed, or with --reply the turn " +
+			"did not end with end_turn or waits for an answer."},
 		ExitItem{Code: 124, Text: "--wait or --reply timed out; a turn goes on."},
 	),
 	Examples: []Example{
 		{Command: "webmux send abcd2345 'make test' --enter --wait waiting,idle --timeout 10m", Text: "Run a command in a shell session and wait until its prompt is back (an idle shell prompt reads as waiting)."},
 		{Command: `webmux send abcd2345 "fix the lint errors and summarize the change" --reply --timeout 20m`, Text: "Hand a task to an agent on its chat view and print its answer."},
-		{Command: "git diff | webmux send abcd2345 - --enter", Text: "Paste standard input into a terminal agent and submit it."},
+		{Command: "webmux send abcd2345 'run the tests' --mode refuse", Text: "Fail with exit 1 instead of queueing when another turn is running."},
+		{Command: "webmux send abcd2345 'stop and do this' --mode now", Text: "Cancel the running turn and send this prompt next."},
 		{Command: "webmux send abcd2345 'what does this show?' --attach-file screenshot.png", Text: "Send a prompt with an image."},
 	},
 	SeeAlso: []string{"webmux interrupt", "webmux wait", "webmux screen", "webmux view", "webmux guide sessions"},
@@ -443,7 +447,7 @@ var sendCommand = &Command{
 		fs.BoolVar(&o.enter, "enter", false, "terminal view: press Enter after the text, in the same submission")
 		fs.Var(&o.keys, "key", "terminal view: send the named `KEY` after the text: "+keyNames())
 		fs.Var(&o.attachments, "attach-file", "chat view: upload the file at `PATH` and send it with the prompt")
-		fs.StringVar(&o.mode, "mode", "", "chat view: `MODE` auto (send now or queue, the default) or steer (inject into the running turn)")
+		fs.StringVar(&o.mode, "mode", "", "chat view: `MODE` auto (send now or queue, the default), steer (inject into the running turn), refuse (fail instead of queueing) or now (cancel the turn and send next)")
 		fs.StringVar(&o.wait, "wait", "", "wait for the first change into `STATE` after sending (see webmux wait)")
 		fs.BoolVar(&o.reply, "reply", false, "chat view: follow the turn this input starts and print the agent's final reply")
 		fs.BoolVar(&o.autoWaitRequests, "auto-wait-requests", false, "with --reply, keep waiting while a permission request or question is open")
@@ -451,6 +455,23 @@ var sendCommand = &Command{
 		fs.BoolVar(&o.asJSON, "json", false, "print the result as JSON")
 		return func(ctx context.Context, e Env, args []string) int { return e.send(ctx, o, args) }
 	},
+}
+
+// queuedNotice explains where a queued prompt sits and how to send it
+// sooner; it goes to standard error so standard output stays script-safe.
+func queuedNotice(r contract.SessionInputResult, mode string) string {
+	item := ""
+	if r.ItemID != "" {
+		item = " as " + r.ItemID
+	}
+	position := ""
+	if r.Position > 0 {
+		position = fmt.Sprintf(" (position %d)", r.Position)
+	}
+	if mode == "now" {
+		return fmt.Sprintf("webmux: queued%s%s; cancelling the running turn before sending it\n", item, position)
+	}
+	return fmt.Sprintf("webmux: queued%s%s; the chat is busy. Use --mode steer to inject it now, or --mode now to cancel the turn\n", item, position)
 }
 
 func (e Env) send(ctx context.Context, o sendOptions, args []string) int {
@@ -466,8 +487,8 @@ func (e Env) send(ctx context.Context, o sendOptions, args []string) int {
 	switch {
 	case o.wait != "" && o.reply:
 		return e.Usagef("--wait and --reply cannot be combined")
-	case o.mode != "" && o.mode != "auto" && o.mode != "steer":
-		return e.Usagef("--mode is auto or steer")
+	case o.mode != "" && !slices.Contains([]string{"auto", "steer", "refuse", "now"}, o.mode):
+		return e.Usagef("--mode is auto, steer, refuse or now")
 	case o.autoWaitRequests && !o.reply:
 		return e.Usagef("--auto-wait-requests needs --reply")
 	case o.timeout != 0 && o.wait == "" && !o.reply:
@@ -553,6 +574,9 @@ func (e Env) send(ctx context.Context, o sendOptions, args []string) int {
 	if err := client.Do(ctx, http.MethodPost, base+"/input", request, &result); err != nil {
 		return e.sessionFail(err)
 	}
+	if !o.asJSON && result.Queued != nil && *result.Queued {
+		_, _ = fmt.Fprint(e.Stderr, queuedNotice(result, o.mode))
+	}
 	if watch == nil {
 		if o.asJSON {
 			writeJSON(e.Stdout, result)
@@ -594,7 +618,11 @@ func (e Env) sendReply(ctx, waitCtx context.Context, client *localclient.Client,
 	w := turnWatch{stopAtRequest: !o.autoWaitRequests}
 	switch {
 	case result.Queued != nil && *result.Queued:
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: the prompt is queued as %s; waiting for its turn\n", result.ItemID)
+		position := ""
+		if result.Position > 0 {
+			position = fmt.Sprintf(" (position %d)", result.Position)
+		}
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: the prompt is queued as %s%s; waiting for its turn\n", result.ItemID, position)
 		w.accept = func(t contract.ChatTurnStart) bool { return t.QueueItemID == result.ItemID }
 		w.gone = queuedGone(result.ItemID)
 	case result.PromptID != "":

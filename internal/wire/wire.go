@@ -238,7 +238,8 @@ func SessionInputResult(r hybrid.InputResult) contract.SessionInputResult {
 	out := contract.SessionInputResult{View: View(string(r.Side))}
 	if r.Side == hybrid.SideACP {
 		queued := r.Prompt.Queued
-		out.Queued, out.ItemID, out.TurnID, out.PromptID = &queued, r.Prompt.ItemID, r.Prompt.TurnID, r.Prompt.PromptID
+		out.Queued, out.ItemID, out.Position = &queued, r.Prompt.ItemID, r.Prompt.Position
+		out.TurnID, out.PromptID = r.Prompt.TurnID, r.Prompt.PromptID
 	}
 	return out
 }

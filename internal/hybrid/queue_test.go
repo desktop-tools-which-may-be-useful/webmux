@@ -97,6 +97,9 @@ func TestQueueRunWhileBusy(t *testing.T) {
 	if !a.Queued || !b.Queued || a.ItemID == b.ItemID || a.ItemID == "" {
 		t.Fatalf("busy prompts %+v %+v", a, b)
 	}
+	if a.Position != 1 || b.Position != 2 {
+		t.Fatalf("queue positions %+v %+v", a, b)
+	}
 	st.until("queue of two", func([]Event) bool { return strings.Join(queueTexts(st.state.Queue), ",") == "A,B" })
 	events := st.until("three turns", count(EventTurnEnd, 3))
 	if got := strings.Join(userTexts(events), ","); got != "first,A,B" {
@@ -157,6 +160,70 @@ func TestPromptRetryDedupe(t *testing.T) {
 		if _, err := h.svc.Prompt(ctx, id, PromptInput{ClientRequestID: rid(), Text: text}); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("text of %d bytes: %v", len(text), err)
 		}
+	}
+}
+
+// Refuse sends while idle and fails with ErrBusy while a turn runs, leaving
+// the queue unchanged.
+func TestPromptRefuse(t *testing.T) {
+	h := newHarness(t, 0)
+	id, st := slowChat(t, h, omp.Name, "FAKEAGENT_PERMISSION=1")
+	ctx := ctxT(t)
+	r, err := h.svc.Prompt(ctx, id, PromptInput{ClientRequestID: rid(), Text: "first", Mode: ModeRefuse})
+	if err != nil || r.Queued || r.TurnID == "" {
+		t.Fatalf("idle refuse %+v %v", r, err)
+	}
+	st.until("permission", hasKind(EventRequest))
+	if _, err := h.svc.Prompt(ctx, id, PromptInput{ClientRequestID: rid(), Text: "second", Mode: ModeRefuse}); !errors.Is(err, ErrBusy) {
+		t.Fatalf("busy refuse: %v", err)
+	}
+	st.settle(100 * time.Millisecond)
+	if len(st.state.Queue.Items) != 0 {
+		t.Fatalf("refused prompt was queued: %+v", st.state.Queue)
+	}
+	if got := strings.Join(userTexts(st.events), ","); got != "first" {
+		t.Fatalf("refused prompt was sent: %s", got)
+	}
+	if err := h.svc.Cancel(ctx, id, rid()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Now cancels the running turn, sends at once ahead of the queue and
+// replies to a retried client request ID without sending twice.
+func TestPromptNow(t *testing.T) {
+	h := newHarness(t, 0)
+	id, st := slowChat(t, h, omp.Name, "FAKEAGENT_PERMISSION=1")
+	ctx := ctxT(t)
+	prompt(t, h, id, "busy")
+	st.until("permission", hasKind(EventRequest))
+	in := PromptInput{ClientRequestID: rid(), Text: "now", Mode: ModeNow}
+	first, err := h.svc.Prompt(ctx, id, in)
+	if err != nil || !first.Queued || first.ItemID == "" || first.Position != 1 {
+		t.Fatalf("now %+v %v", first, err)
+	}
+	again, err := h.svc.Prompt(ctx, id, in)
+	if err != nil || again != first {
+		t.Fatalf("retry %+v %v, first %+v", again, err, first)
+	}
+	events := st.until("next turn", count(EventTurnStart, 2))
+	if got := strings.Join(userTexts(events), ","); got != "busy,now" {
+		t.Fatalf("sent %s", got)
+	}
+	var stops []string
+	for _, e := range events {
+		if e.Kind == EventTurnEnd {
+			stops = append(stops, e.TurnEnd.StopReason)
+		}
+	}
+	if len(stops) != 1 || stops[0] != acp.StopCancelled {
+		t.Fatalf("stops %v", stops)
+	}
+	st.until("queue empty", func([]Event) bool {
+		return len(st.state.Queue.Items) == 0 && st.state.Turn.Running
+	})
+	if err := h.svc.Cancel(ctx, id, rid()); err != nil {
+		t.Fatal(err)
 	}
 }
 
