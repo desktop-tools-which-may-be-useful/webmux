@@ -361,7 +361,7 @@
         onerror={(message) => (error = message)}
       />
     {/if}
-    {#if location}<ChatLocation
+    {#if location && (request?.kind === "permission" || request?.kind === "form")}<ChatLocation
         workspace={location.workspace}
         cwd={location.cwd}
       />{/if}
@@ -387,6 +387,7 @@
         {drafts}
         {chat}
         {uploads}
+        {location}
         unavailable={blocked}
         {uploadUnavailable}
         {actions}

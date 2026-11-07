@@ -618,3 +618,48 @@ test("without hybrid configs the send stays off and says why", async () => {
     .element(page.getByRole("link", { name: "新建启动配置" }))
     .toBeVisible();
 });
+
+test("narrow screens start compact and expand the composer when focused", async () => {
+  await page.viewport(390, 844);
+  try {
+    render(ShellHarness, { drafts: createTerminalDrafts() });
+    const socket = await socketAt("/ws/sessions");
+    socket.frame({ type: "snapshot", sessions: [], forwards: [] } as never);
+    const input = page.getByRole("textbox", { name: "任务描述" });
+    await expect.element(input).toBeVisible();
+    await expect.element(input).not.toHaveFocus();
+
+    const place = page.getByRole("toolbar", {
+      name: "仓库与分支",
+      includeHidden: true,
+    });
+    const initCheckbox = page.getByRole("checkbox", {
+      name: "使用初始化指令",
+      includeHidden: true,
+    });
+    const uploadButton = page.getByRole("button", {
+      name: "上传文件",
+      includeHidden: true,
+    });
+    await expect.element(place).not.toBeVisible();
+    await expect.element(initCheckbox).not.toBeVisible();
+    await expect.element(uploadButton).not.toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "发送", exact: true }))
+      .toBeVisible();
+
+    await input.click();
+    await expect
+      .element(place.getByRole("button", { name: "基准分支：main" }))
+      .toBeVisible();
+    await expect.element(initCheckbox).toBeVisible();
+    await expect.element(uploadButton).toBeVisible();
+
+    // Blurring while empty returns to the compact bar.
+    (input.element() as HTMLTextAreaElement).blur();
+    await expect.element(place).not.toBeVisible();
+    await expect.element(initCheckbox).not.toBeVisible();
+  } finally {
+    await page.viewport(1024, 900);
+  }
+});

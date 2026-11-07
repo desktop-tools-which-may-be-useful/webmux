@@ -8,12 +8,14 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import type { ChatActions, ConfigValue } from "../../chat-api";
   import { errorMessage } from "../../error";
+  import { useComposerCompact } from "../../hooks/composer-compact.svelte";
   import { useTextareaDraft } from "../../hooks/textarea-draft.svelte";
   import type { ChatUploads } from "../../hooks/upload.svelte";
   import type {
     ChatCommand,
     ChatPermissionMode as PermissionMode,
     ChatState,
+    SessionInfo,
   } from "../../schemas";
   import type {
     TerminalDraft,
@@ -23,6 +25,7 @@
   import FileUploadProgress from "../FileUploadProgress.svelte";
   import ChatAttachmentList from "./ChatAttachmentList.svelte";
   import ChatConfig from "./ChatConfig.svelte";
+  import ChatLocation from "./ChatLocation.svelte";
   import ChatPermissionMode from "./ChatPermissionMode.svelte";
   import ChatSessionOptions from "./ChatSessionOptions.svelte";
   import ChatUploadButton from "./ChatUploadButton.svelte";
@@ -39,6 +42,7 @@
     unavailable,
     uploads,
     uploadUnavailable,
+    location,
     actions,
     onerror,
     quickMenu,
@@ -51,12 +55,15 @@
     uploads: ChatUploads;
     /** Why uploads are refused (session gone or exited); "" otherwise. */
     uploadUnavailable: string;
+    /** Where the session runs, shown read-only above the input. */
+    location?: Pick<SessionInfo, "workspace" | "cwd">;
     actions: ChatActions;
     onerror: (message: string) => void;
     quickMenu?: Snippet<["top" | "bottom", ButtonSize?]>;
   } = $props();
 
   let textarea = $state<HTMLTextAreaElement | null>(null);
+  let container = $state<HTMLDivElement | null>(null);
   let sending = $state(false);
   const selection = useTextareaDraft(
     () => textarea,
@@ -78,6 +85,14 @@
   const locked = $derived(!!draft.submission);
   const disabled = $derived(!!unavailable || locked);
   const uploading = $derived(uploads.progress !== null);
+  const compactState = useComposerCompact(
+    () => container,
+    () =>
+      Boolean(
+        draft.text || uploads.attachments.length > 0 || uploading || sending,
+      ),
+  );
+  const compact = $derived(compactState.compact);
   const steerable = $derived(running && chat.steering);
   const queueing = $derived(running || chat.queue.paused);
   const query = $derived(
@@ -175,10 +190,26 @@
   }
 </script>
 
-<div class="sm:space-y-1.5" data-chat-composer>
+<div
+  bind:this={container}
+  class="space-y-2 sm:space-y-1.5"
+  data-chat-composer
+  data-compact={compact ? "" : undefined}
+  {...compactState.containerProps}
+>
+  {#if location}
+    <ChatLocation
+      workspace={location.workspace}
+      cwd={location.cwd}
+      class={compact ? "max-sm:hidden" : ""}
+    />
+  {/if}
   <!-- The card shows the message box's focus once; the box itself has none. -->
   <div
-    class="rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20"
+    class={[
+      "rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20",
+      compact && "max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:p-1",
+    ]}
   >
     {#if menuOpen}
       <div
@@ -214,13 +245,21 @@
         该 agent 不支持图片，图片将按服务器路径发送。
       </p>
     {/if}
-    <div class="px-2 pt-1">
+    <div
+      class={[
+        "px-2 pt-1",
+        compact && "max-sm:min-w-0 max-sm:flex-1 max-sm:px-1 max-sm:py-0",
+      ]}
+    >
       <Textarea
         bind:ref={textarea}
         variant="bare"
         onpaste={(event) => uploads.filePaste(event)}
-        rows={2}
-        class="max-h-48 min-h-14 resize-none"
+        rows={compact ? 1 : 2}
+        class={[
+          "max-h-48 min-h-14 resize-none",
+          compact && "max-sm:max-h-9 max-sm:min-h-9 max-sm:overflow-hidden",
+        ]}
         placeholder={unavailable ||
           (locked
             ? "草稿正在提交到终端，确认结果前不能编辑"
@@ -253,8 +292,15 @@
       />{/if}
     <!-- Only what acts on the message stays in the card: context use and the
        send controls (they wrap only at very large text). -->
-    <div class="flex flex-wrap items-center justify-end gap-1 px-2 pb-2">
-      <div class="mr-auto flex items-center gap-1">
+    <div
+      class={[
+        "flex flex-wrap items-center justify-end gap-1 px-2 pb-2",
+        compact && "max-sm:shrink-0 max-sm:p-0",
+      ]}
+    >
+      <div
+        class={["mr-auto flex items-center gap-1", compact && "max-sm:hidden"]}
+      >
         <ChatUploadButton
           {uploads}
           {disabled}
@@ -271,11 +317,14 @@
           />
         </span>
       </div>
-      {#if chat.usage}<UsageRing usage={chat.usage} />{/if}
+      {#if chat.usage}<span class={["contents", compact && "max-sm:hidden"]}
+          ><UsageRing usage={chat.usage} /></span
+        >{/if}
       {#if steerable}
         <Button
           variant="outline"
           size="icon-touch"
+          class={compact ? "max-sm:hidden" : ""}
           aria-label="插话"
           title="插话：注入当前回合（Ctrl+Enter）"
           disabled={disabled || !ready || sending || uploading}
@@ -293,7 +342,9 @@
           onclick={stop}><IconPlayerStopFilled aria-hidden="true" /></Button
         >
       {/if}
-      {@render quickMenu?.("top", "icon-touch")}
+      <span class={["flex items-center gap-1", compact && "max-sm:hidden"]}>
+        {@render quickMenu?.("top", "icon-touch")}
+      </span>
       <Button
         size="icon-touch"
         aria-label={queueing ? "加入排队" : "发送"}

@@ -100,6 +100,11 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   }
 
   const toolbar = page.getByRole("toolbar", { name: "仓库与分支" });
+  const input = page.getByRole("textbox", { name: "任务描述" });
+  if (phone(page)) {
+    await expect(toolbar).toBeHidden();
+    await input.click();
+  }
   await expect(
     toolbar.getByRole("button", { name: "仓库：qs-repo" }),
   ).toBeVisible();
@@ -109,7 +114,6 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   await expect(
     page.getByRole("checkbox", { name: "使用初始化指令" }),
   ).toBeChecked();
-  const input = page.getByRole("textbox", { name: "任务描述" });
   await input.fill("修复首页排序");
   await page.getByRole("button", { name: "发送", exact: true }).click();
 
@@ -127,8 +131,12 @@ test("one send creates a worktree and starts the chat; the result is an ordinary
   const session = await (await request.get(`/api/sessions/${id}`)).json();
   expect(session.view).toBe("chat");
   expect(session.workspace.worktreeId).not.toBe(listed.worktrees[0].id);
-  // The chat shows where it runs above the input, read-only.
+  // The chat shows where it runs above the input, read-only (expanded on focus on phones).
   const where = page.getByRole("group", { name: "会话位置" });
+  if (phone(page)) {
+    await expect(where).toBeHidden();
+    await page.getByRole("textbox", { name: "消息" }).click();
+  }
   await expect(where).toContainText("qs-repo");
   await expect(where).toContainText(/wt\//);
   await expect(where.getByRole("button")).toHaveCount(0);

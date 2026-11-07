@@ -8,6 +8,7 @@
   import { createChatSocket } from "../../src/hooks/chat-socket.svelte";
   import { useChatUpload } from "../../src/hooks/upload.svelte";
   import type { ChatCodeLink } from "../../src/markdown-link";
+  import type { SessionInfo } from "../../src/schemas";
   import {
     createTerminalDrafts,
     type TerminalDrafts,
@@ -15,8 +16,15 @@
 
   // The chat view on its real channel and commands, as the session page
   // wires it, without the terminal around it.
-  let { id, drafts: providedDrafts }: { id: string; drafts?: TerminalDrafts } =
-    $props();
+  let {
+    id,
+    drafts: providedDrafts,
+    location,
+  }: {
+    id: string;
+    drafts?: TerminalDrafts;
+    location?: Pick<SessionInfo, "workspace" | "cwd">;
+  } = $props();
   const session = untrack(() => id);
   const chat = createChatSocket(session);
   chat.open();
@@ -63,6 +71,7 @@
     {draft}
     {drafts}
     {uploads}
+    {location}
     {actions}
     {quickMenu}
     onreview={(path) => (reviewed = path)}

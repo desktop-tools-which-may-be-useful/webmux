@@ -2,7 +2,7 @@ import "../../src/styles.css";
 import { expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte/pure";
-import type { ChatRequest } from "../../src/schemas";
+import type { ChatRequest, SessionInfo } from "../../src/schemas";
 import Harness from "./ChatViewHarness.svelte";
 import {
   chatState,
@@ -19,8 +19,8 @@ installChatFixture();
 const id = "hybrid22";
 const base = `/api/sessions/${id}/chat`;
 
-async function open() {
-  render(Harness, { id });
+async function open(location?: Pick<SessionInfo, "workspace" | "cwd">) {
+  render(Harness, { id, location });
   return socketAt(`/ws/s/${id}/chat`);
 }
 
@@ -886,14 +886,57 @@ test("narrow screens move session options into a popover beside the upload butto
         ],
       },
     ];
-    const socket = await open();
+    const socket = await open({
+      workspace: {
+        repositoryId: "repo1",
+        repositoryName: "webmux",
+        worktreeId: "wt1",
+        worktreePath: "/repos/webmux",
+        branch: "main",
+        detached: false,
+      },
+      cwd: "/repos/webmux",
+    });
     socket.frame(snapshot(chatState({ config })));
     await expect
       .element(page.getByRole("toolbar", { name: "会话选项" }))
       .not.toBeInTheDocument();
+    // Idle on a narrow screen, the composer collapses into a single-line bar
+    // with only the message input and send button.
+    const where = page.getByRole("group", {
+      name: "会话位置",
+      includeHidden: true,
+    });
+    const optionsButton = page.getByRole("button", {
+      name: "会话选项",
+      includeHidden: true,
+    });
+    await expect.element(where).not.toBeVisible();
+    await expect.element(optionsButton).not.toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "发送", exact: true }))
+      .toBeVisible();
+
+    // Focusing the input expands the location row and composer toolbar.
+    const input = page.getByRole("textbox", { name: "消息" });
+    await input.click();
+    await expect.element(where).toBeVisible();
     await page.getByRole("button", { name: "会话选项" }).click();
     await expect.element(page.getByLabelText("权限")).toBeVisible();
     await expect.element(page.getByLabelText("Model")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+
+    // With draft text present, blurring keeps the composer expanded.
+    await input.fill("保留展开");
+    (input.element() as HTMLTextAreaElement).blur();
+    await expect.element(where).toBeVisible();
+    await expect.element(optionsButton).toBeVisible();
+
+    // Clearing the text and blurring returns to the compact bar.
+    await input.fill("");
+    (input.element() as HTMLTextAreaElement).blur();
+    await expect.element(where).not.toBeVisible();
+    await expect.element(optionsButton).not.toBeVisible();
   } finally {
     await page.viewport(1024, 900);
   }

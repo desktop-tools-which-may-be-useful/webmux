@@ -14,9 +14,11 @@
   let {
     workspace,
     cwd,
+    class: className = "",
   }: {
     workspace: SessionInfo["workspace"];
     cwd: string;
+    class?: string;
   } = $props();
   const repositories = findShell()?.repositories;
   onMount(() => void repositories?.refresh(true));
@@ -39,7 +41,10 @@
 </script>
 
 <div
-  class="flex min-w-0 items-center gap-0.5 px-1 text-xs text-muted-foreground [&_svg]:size-3 [&_svg]:shrink-0"
+  class={[
+    "flex min-w-0 items-center gap-0.5 px-1 text-xs text-muted-foreground [&_svg]:size-3 [&_svg]:shrink-0",
+    className,
+  ]}
   role="group"
   aria-label="会话位置"
 >

@@ -33,6 +33,7 @@
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
   import SidebarButton from "../components/SidebarButton.svelte";
   import { errorMessage } from "../error";
+  import { useComposerCompact } from "../hooks/composer-compact.svelte";
   import { useChatUpload } from "../hooks/upload.svelte";
   import {
     configValues,
@@ -61,6 +62,7 @@
     type SessionView,
   } from "../schemas";
   import { getShell, openSession } from "../shell.svelte";
+  import { hasTouchInput } from "../touch-input";
   import { z } from "zod";
 
   // Chat mode's home (openspec quick-start-chat): write the task, pick the
@@ -297,9 +299,16 @@
   );
 
   let input = $state<HTMLTextAreaElement | null>(null);
+  let footer = $state<HTMLElement | null>(null);
+  const compactState = useComposerCompact(
+    () => footer,
+    () =>
+      Boolean(text || attachments.length > 0 || uploads.progress || sending),
+  );
+  const compact = $derived(compactState.compact);
   onMount(() => {
     setBrowserChrome("新聊天 · WebMux", false);
-    input?.focus();
+    if (!hasTouchInput() && window.innerWidth >= 640) input?.focus();
     return resetBrowserChrome;
   });
 
@@ -400,7 +409,11 @@
     </div>
 
     <footer
+      bind:this={footer}
       class="mx-auto w-full max-w-3xl space-y-1.5 px-3 pb-safe-4 sm:px-4 sm:pb-6"
+      data-quick-start-composer
+      data-compact={compact ? "" : undefined}
+      {...compactState.containerProps}
     >
       {#if missing}
         <div
@@ -490,7 +503,10 @@
       <!-- The location sits above the input, where an open chat shows the
          same repository and branch, fixed once the session exists. -->
       <div
-        class="-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none]"
+        class={[
+          "-my-1 flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto px-1 py-1 [scrollbar-width:none]",
+          compact && "max-sm:hidden",
+        ]}
         role="toolbar"
         aria-label="仓库与分支"
       >
@@ -554,10 +570,18 @@
           {uploadError}
         </p>{/if}
       <div
-        class="rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20"
+        class={[
+          "rounded-lg border bg-card shadow-sm transition has-[textarea:focus]:border-ring has-[textarea:focus]:ring-3 has-[textarea:focus]:ring-ring/20",
+          compact && "max-sm:flex max-sm:items-center max-sm:gap-1 max-sm:p-1",
+        ]}
       >
         {#if repository?.initInstruction}
-          <div class="flex items-center gap-2 border-b px-3 py-1">
+          <div
+            class={[
+              "flex items-center gap-2 border-b px-3 py-1",
+              compact && "max-sm:hidden",
+            ]}
+          >
             <Checkbox
               id="use-init-instruction"
               disabled={sending}
@@ -624,11 +648,19 @@
           </div>
         {/if}
         <ChatAttachmentList {uploads} disabled={sending} />
-        <div class="px-2 pt-1">
+        <div
+          class={[
+            "px-2 pt-1",
+            compact && "max-sm:min-w-0 max-sm:flex-1 max-sm:px-1 max-sm:py-0",
+          ]}
+        >
           <Textarea
             variant="bare"
-            rows={2}
-            class="max-h-48 min-h-14 resize-none"
+            rows={compact ? 1 : 2}
+            class={[
+              "max-h-48 min-h-14 resize-none",
+              compact && "max-sm:max-h-9 max-sm:min-h-9 max-sm:overflow-hidden",
+            ]}
             placeholder="描述任务，发送后在新 worktree 中开始"
             aria-label="任务描述"
             disabled={sending}
@@ -654,9 +686,17 @@
             cancel={() => uploads.cancel()}
             variant="card"
           />{/if}
-        <div class="flex items-center justify-end gap-1 px-2 pb-2">
+        <div
+          class={[
+            "flex items-center justify-end gap-1 px-2 pb-2",
+            compact && "max-sm:shrink-0 max-sm:p-0",
+          ]}
+        >
           <div
-            class="mr-auto flex min-w-0 items-center gap-0.5 overflow-hidden"
+            class={[
+              "mr-auto flex min-w-0 items-center gap-0.5 overflow-hidden",
+              compact && "max-sm:hidden",
+            ]}
           >
             <ChatUploadButton {uploads} disabled={sending} />
             {#if sending}
@@ -692,28 +732,30 @@
               </span>
             {/if}
           </div>
-          {#if shell.setup.value.voice}
-            <VoiceButton
-              size="icon-touch"
+          <span class={["flex items-center gap-1", compact && "max-sm:hidden"]}>
+            {#if shell.setup.value.voice}
+              <VoiceButton
+                size="icon-touch"
+                disabled={sending}
+                onresult={(recognized) => void insertTextAtCursor(recognized)}
+                onerror={(message) => (uploadError = message)}
+              />
+            {/if}
+            <QuickCommandMenu
+              commands={quickCommands.list}
+              target="chat"
+              unavailable=""
               disabled={sending}
-              onresult={(recognized) => void insertTextAtCursor(recognized)}
-              onerror={(message) => (uploadError = message)}
+              side="top"
+              size="icon-touch"
+              run={insertQuickCommand}
+              manage={() => navigate("/settings#quick-commands")}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                input?.focus();
+              }}
             />
-          {/if}
-          <QuickCommandMenu
-            commands={quickCommands.list}
-            target="chat"
-            unavailable=""
-            disabled={sending}
-            side="top"
-            size="icon-touch"
-            run={insertQuickCommand}
-            manage={() => navigate("/settings#quick-commands")}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              input?.focus();
-            }}
-          />
+          </span>
           <Button
             size="icon-touch"
             aria-label="发送"
