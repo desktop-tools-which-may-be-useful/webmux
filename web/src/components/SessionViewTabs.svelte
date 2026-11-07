@@ -41,6 +41,7 @@
 
 {#if hybrid || phone.current}
   <Tabs.Root
+    activationMode="manual"
     bind:value={
       () => (inCode ? "code" : shown),
       (to) => {

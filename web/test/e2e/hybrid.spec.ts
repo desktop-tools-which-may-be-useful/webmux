@@ -334,6 +334,30 @@ test.describe("hybrid sessions with the fake agent", () => {
     await chatTurn(page, "after-mid");
   });
 
+  test("cancelling the interrupt confirmation does not reopen it", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const id = await createHybrid(request, workDir, "chat", {
+      agent: "claude",
+      env: { FAKEAGENT_TURN_DELAY: "2s" },
+    });
+    await openHybrid(page, id, "chat");
+
+    await sendChat(page, "cancel-mid");
+    await expect(working(page)).toBeVisible();
+    await sideTab(page, "terminal").click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("切换到终端？");
+    await dialog.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    // Focus returns to the tab; that must not count as choosing it.
+    await page.waitForTimeout(500);
+    await expect(dialog).toHaveCount(0);
+    await expectSide(page, "chat");
+  });
+
   test("a permission request is answered once for every device", async ({
     page,
     request,
