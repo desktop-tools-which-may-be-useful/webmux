@@ -295,7 +295,7 @@ describe("chat reducer", () => {
 });
 
 describe("timeline grouping", () => {
-  test("merges consecutive read-only calls, keeps single reads and edits", () => {
+  test("folds each run of consecutive tool calls into one group", () => {
     let m = connect();
     m = applyFrame(
       m,
@@ -306,11 +306,11 @@ describe("timeline grouping", () => {
         }),
         ev({
           kind: "tool.upsert",
-          tool: { toolCallId: "r2", kind: "search", title: "b" },
+          tool: { toolCallId: "e1", kind: "edit", title: "c" },
         }),
         ev({
-          kind: "tool.upsert",
-          tool: { toolCallId: "e1", kind: "edit", title: "c" },
+          kind: "message.append",
+          message: { messageId: "a1", role: "agent", text: "x" },
         }),
         ev({
           kind: "tool.upsert",
@@ -320,9 +320,9 @@ describe("timeline grouping", () => {
     );
     expect(
       groupTimeline(m.entries).map((e) =>
-        e.type === "reads" ? e.calls.map((c) => c.id) : e.id,
+        e.type === "tools" ? e.calls.map((c) => c.id) : e.id,
       ),
-    ).toEqual([["r1", "r2"], "e1", "r3"]);
+    ).toEqual([["r1", "e1"], "a1", ["r3"]]);
   });
 });
 

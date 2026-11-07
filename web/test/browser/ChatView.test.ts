@@ -93,10 +93,16 @@ test("renders the snapshot's timeline and updates a tool row in place", async ()
   await expect.element(transcript.getByText("先找排序函数")).not.toBeVisible();
   await thought.click();
   await expect.element(transcript.getByText("先找排序函数")).toBeVisible();
-  // Consecutive reads and searches are one "browsed" row.
-  const browsed = transcript.getByRole("button", { name: "已浏览 3 项" });
-  await expect.element(browsed).toBeVisible();
-  await browsed.click();
+  // Consecutive tool calls fold into one row that shows the latest call.
+  const folded = transcript.getByRole("button", { name: /共 3 步/ });
+  await expect.element(folded).toBeVisible();
+  await expect
+    .element(folded)
+    .toMatchTextContent(/web\/src\/homeWorktrees\.ts/);
+  await expect
+    .element(transcript.getByText("sortWorkspaces"))
+    .not.toBeVisible();
+  await folded.click();
   await expect.element(transcript.getByText("sortWorkspaces")).toBeVisible();
 
   const edit = transcript.getByRole("button", {
@@ -190,12 +196,19 @@ test("opens code links from agent messages, tool locations, resource links and r
   const opened = page.getByRole("status", { name: "Opened location" });
   const readOpened = () => JSON.parse(opened.element().textContent || "null");
 
-  await transcript.getByRole("button", { name: "已浏览 2 项" }).click();
-  await transcript.getByRole("button", { name: "读取 Home.svelte" }).click();
+  await transcript.getByRole("button", { name: /共 2 步/ }).click();
+  await transcript.getByRole("button", { name: /读取 Home.svelte/ }).click();
+  await transcript
+    .getByRole("button", { name: "web/src/pages/Home.svelte:48" })
+    .click();
   await expect.poll(readOpened).toEqual({
     path: "web/src/pages/Home.svelte",
     line: 48,
   });
+  await transcript
+    .getByRole("button", { name: /搜索 sortWorkspaces/ })
+    .last()
+    .click();
   await transcript
     .getByRole("button", { name: "web/src/pages/Home.svelte:60" })
     .click();

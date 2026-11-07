@@ -276,32 +276,21 @@ function replaceAt(model: ChatModel, at: number, entry: TimelineEntry) {
 
 export type DisplayEntry =
   | TimelineEntry
-  | { type: "reads"; id: string; calls: ToolEntry[] };
-
-const browsingKinds: Record<string, true> = {
-  read: true,
-  search: true,
-  fetch: true,
-};
+  | { type: "tools"; id: string; calls: ToolEntry[] };
 
 /**
- * Collapses consecutive read-only tool calls (read, search, fetch) into one
- * "browsed N items" row. A single read stays a normal tool row.
+ * Folds each run of consecutive tool calls into one "tools" entry, keyed by
+ * its first call so the group keeps its identity while the run grows.
  */
 export function groupTimeline(entries: readonly TimelineEntry[]) {
   const out: DisplayEntry[] = [];
   let run: ToolEntry[] = [];
   const flush = () => {
-    if (run.length > 1) out.push({ type: "reads", id: run[0]!.id, calls: run });
-    else out.push(...run);
+    if (run.length) out.push({ type: "tools", id: run[0]!.id, calls: run });
     run = [];
   };
   for (const entry of entries) {
-    if (
-      entry.type === "tool" &&
-      browsingKinds[entry.kind] &&
-      !entry.permission
-    ) {
+    if (entry.type === "tool") {
       run.push(entry);
       continue;
     }

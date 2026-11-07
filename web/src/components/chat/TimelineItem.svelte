@@ -1,18 +1,14 @@
 <script lang="ts">
-  import IconCheck from "~icons/tabler/check";
   import IconFile from "~icons/tabler/file";
   import IconHandStop from "~icons/tabler/hand-stop";
-  import IconLoader2 from "~icons/tabler/loader-2";
-  import IconX from "~icons/tabler/x";
   import CodeMarkdownPreview from "../CodeMarkdownPreview.svelte";
   import InlineNotice from "../InlineNotice.svelte";
-  import { ListButton } from "$lib/components/ui/list-button";
   import type { DisplayEntry } from "../../chat-model";
   import type { ChatCodeLink } from "../../markdown-link";
   import type { StopReason } from "../../schemas";
   import ChatAttachmentImage from "./ChatAttachmentImage.svelte";
   import ChatDisclosure from "./ChatDisclosure.svelte";
-  import ToolRow from "./ToolRow.svelte";
+  import ToolGroup from "./ToolGroup.svelte";
 
   // One transcript entry: the user's turn is a bubble, the agent's reply is
   // prose, and its work is a column of quiet one-line rows.
@@ -32,14 +28,6 @@
     onreview: (path: string) => void;
     onopenlocation?: (target: ChatCodeLink) => void;
   } = $props();
-
-  const toLocationLink = (item: {
-    path: string;
-    line?: number;
-  }): ChatCodeLink => ({
-    path: item.path,
-    ...(item.line !== undefined && item.line >= 1 ? { line: item.line } : {}),
-  });
 
   const turnEnds: Partial<
     Record<StopReason, { text: string; error: boolean }>
@@ -114,62 +102,8 @@
     {#snippet summary()}已思考{/snippet}
     <p class="break-words whitespace-pre-wrap">{entry.text}</p>
   </ChatDisclosure>
-{:else if entry.type === "reads"}
-  <ChatDisclosure>
-    {#snippet summary()}已浏览 {entry.calls.length} 项{/snippet}
-    {#each entry.calls as call (call.id)}
-      {@const firstLocation = call.locations[0]}
-      <div class="space-y-0.5">
-        <p class="flex min-w-0 items-center gap-1.5">
-          {#if call.status === "in_progress"}<IconLoader2
-              class="size-3.5 shrink-0 animate-spin text-info"
-              aria-label="进行中"
-            />{:else if call.status === "failed"}<IconX
-              class="size-3.5 shrink-0 text-destructive"
-              aria-label="失败"
-            />{:else}<IconCheck
-              class="size-3.5 shrink-0 text-success"
-              aria-hidden="true"
-            />{/if}
-          {#if onopenlocation && call.locations.length === 1 && firstLocation?.path}
-            <ListButton
-              variant="link"
-              class="min-w-0"
-              onclick={() => onopenlocation(toLocationLink(firstLocation))}
-              >{call.title ||
-                `${firstLocation.path}${firstLocation.line === undefined ? "" : `:${firstLocation.line}`}`}</ListButton
-            >
-          {:else}
-            <span class="min-w-0 break-all">{call.title || "工具调用"}</span>
-          {/if}
-        </p>
-        {#if onopenlocation && call.locations.length > 1}
-          <div class="space-y-0.5 pl-5">
-            {#each call.locations as item, i (i)}
-              {#if item.path}
-                <p>
-                  <ListButton
-                    variant="code-link"
-                    onclick={() => onopenlocation(toLocationLink(item))}
-                    >{item.path}{item.line === undefined
-                      ? ""
-                      : `:${item.line}`}</ListButton
-                  >
-                </p>
-              {/if}
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/each}
-  </ChatDisclosure>
-{:else if entry.type === "tool"}
-  <ToolRow
-    tool={entry}
-    waiting={waiting.includes(entry.id)}
-    {onreview}
-    {onopenlocation}
-  />
+{:else if entry.type === "tools"}
+  <ToolGroup calls={entry.calls} {waiting} {onreview} {onopenlocation} />
 {:else if entry.type === "compaction"}
   {#if entry.summary}
     <ChatDisclosure>
