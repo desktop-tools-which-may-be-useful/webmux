@@ -274,23 +274,36 @@ function replaceAt(model: ChatModel, at: number, entry: TimelineEntry) {
   return { ...model, entries };
 }
 
+export type WorkStep = ToolEntry | (MessageEntry & { role: "thought" });
 export type DisplayEntry =
   | TimelineEntry
-  | { type: "tools"; id: string; calls: ToolEntry[] };
+  | { type: "work"; id: string; steps: WorkStep[]; calls: ToolEntry[] };
+
+const isWorkStep = (entry: TimelineEntry): entry is WorkStep =>
+  entry.type === "tool" ||
+  (entry.type === "message" && entry.role === "thought");
 
 /**
- * Folds each run of consecutive tool calls into one "tools" entry, keyed by
- * its first call so the group keeps its identity while the run grows.
+ * Folds each run of the agent's work (thinking and tool calls) into one
+ * "work" entry, keyed by its first step so the group keeps its identity while
+ * the run grows. Anything else (an agent reply, a plan, a notice, the user's
+ * next message) ends the run, so the transcript order never changes.
  */
 export function groupTimeline(entries: readonly TimelineEntry[]) {
   const out: DisplayEntry[] = [];
-  let run: ToolEntry[] = [];
+  let run: WorkStep[] = [];
   const flush = () => {
-    if (run.length) out.push({ type: "tools", id: run[0]!.id, calls: run });
+    if (run.length)
+      out.push({
+        type: "work",
+        id: run[0]!.id,
+        steps: run,
+        calls: run.filter((step) => step.type === "tool"),
+      });
     run = [];
   };
   for (const entry of entries) {
-    if (entry.type === "tool") {
+    if (isWorkStep(entry)) {
       run.push(entry);
       continue;
     }

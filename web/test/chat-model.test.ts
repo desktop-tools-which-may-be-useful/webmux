@@ -295,14 +295,26 @@ describe("chat reducer", () => {
 });
 
 describe("timeline grouping", () => {
-  test("folds each run of consecutive tool calls into one group", () => {
+  test("folds thinking and tool calls between replies into one work group", () => {
     let m = connect();
     m = applyFrame(
       m,
       events([
         ev({
+          kind: "message.append",
+          message: { messageId: "u1", role: "user", text: "go" },
+        }),
+        ev({
+          kind: "message.append",
+          message: { messageId: "t1", role: "thought", text: "plan" },
+        }),
+        ev({
           kind: "tool.upsert",
           tool: { toolCallId: "r1", kind: "read", title: "a" },
+        }),
+        ev({
+          kind: "message.append",
+          message: { messageId: "t2", role: "thought", text: "more" },
         }),
         ev({
           kind: "tool.upsert",
@@ -316,13 +328,17 @@ describe("timeline grouping", () => {
           kind: "tool.upsert",
           tool: { toolCallId: "r3", kind: "read", title: "d" },
         }),
+        ev({
+          kind: "message.append",
+          message: { messageId: "u2", role: "user", text: "again" },
+        }),
       ]),
     );
     expect(
       groupTimeline(m.entries).map((e) =>
-        e.type === "tools" ? e.calls.map((c) => c.id) : e.id,
+        e.type === "work" ? e.steps.map((s) => s.id) : e.id,
       ),
-    ).toEqual([["r1", "e1"], "a1", ["r3"]]);
+    ).toEqual(["u1", ["t1", "r1", "t2", "e1"], "a1", ["r3"], "u2"]);
   });
 });
 

@@ -97,13 +97,8 @@
         （内容过长，已截断）
       </p>{/if}
   </div>
-{:else if entry.type === "message"}
-  <ChatDisclosure>
-    {#snippet summary()}已思考{/snippet}
-    <p class="break-words whitespace-pre-wrap">{entry.text}</p>
-  </ChatDisclosure>
-{:else if entry.type === "tools"}
-  <ToolGroup calls={entry.calls} {waiting} {onreview} {onopenlocation} />
+{:else if entry.type === "work"}
+  <ToolGroup steps={entry.steps} {waiting} {onreview} {onopenlocation} />
 {:else if entry.type === "compaction"}
   {#if entry.summary}
     <ChatDisclosure>

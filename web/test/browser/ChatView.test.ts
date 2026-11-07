@@ -87,23 +87,24 @@ test("renders the snapshot's timeline and updates a tool row in place", async ()
   await expect
     .element(transcript.getByText("排序只比较了最近活动时间。"))
     .toBeVisible();
-  // Thinking is folded to one row until opened.
-  const thought = transcript.getByRole("button", { name: "已思考" });
-  await expect.element(thought).toHaveAttribute("aria-expanded", "false");
-  await expect.element(transcript.getByText("先找排序函数")).not.toBeVisible();
-  await thought.click();
-  await expect.element(transcript.getByText("先找排序函数")).toBeVisible();
-  // Consecutive tool calls fold into one row that shows the latest call.
+  // Thinking and the tool calls after it fold into one row that shows the
+  // latest call; opening it lists the thought and every call in order.
   const folded = transcript.getByRole("button", { name: /共 3 步/ });
   await expect.element(folded).toBeVisible();
   await expect
     .element(folded)
     .toMatchTextContent(/web\/src\/homeWorktrees\.ts/);
+  await expect.element(transcript.getByText("先找排序函数")).not.toBeVisible();
   await expect
     .element(transcript.getByText("sortWorkspaces"))
     .not.toBeVisible();
   await folded.click();
   await expect.element(transcript.getByText("sortWorkspaces")).toBeVisible();
+  const thought = transcript.getByRole("button", { name: "已思考" });
+  await expect.element(thought).toHaveAttribute("aria-expanded", "false");
+  await expect.element(transcript.getByText("先找排序函数")).not.toBeVisible();
+  await thought.click();
+  await expect.element(transcript.getByText("先找排序函数")).toBeVisible();
 
   const edit = transcript.getByRole("button", {
     name: /编辑 web\/src\/homeWorktrees\.ts/,
