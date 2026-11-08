@@ -61,12 +61,10 @@ export default defineConfig({
       },
     },
     {
+      // The one phone baseline: the narrowest, shortest supported screen
+      // (iPhone SE, 320×568, DPR 2). If a layout fits here it fits wider
+      // phones, so no second phone project is kept.
       name: "chromium-mobile",
-      use: { ...devices["Pixel 7"], browserName: "chromium" },
-    },
-    {
-      // Narrowest supported phone (320×568, DPR 2): overlays must still fit.
-      name: "chromium-mobile-se",
       use: { ...devices["iPhone SE"], browserName: "chromium" },
     },
   ],

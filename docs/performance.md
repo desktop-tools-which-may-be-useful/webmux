@@ -4,7 +4,7 @@
 
 ## 判定条件
 
-- 桌面 Chromium 与 Pixel 7 Chromium 在首次导航前设置 CDP CPU rate=4。
+- 桌面 Chromium 与 iPhone SE Chromium 在首次导航前设置 CDP CPU rate=4。
 - 从文档启动记录 Layout Shift、Event Timing 和长任务。CLS 使用 1 秒间隔、最长 5 秒的会话窗口，并排除 `hadRecentInput`；同时要求所有非预期位移之和严格等于 0。
 - 已采集交互的最大 Event Timing 不超过 450 ms（4 倍 CPU 降速；GitHub Actions 的重绘比本机慢，新建会话选择器首次打开在 CI 上实测 320–376 ms，本机 128–184 ms）。该实验指标不是完整真实用户 INP。120 卡片场景仍要求 ≤300 ms。
 - 1000 行输出后的真实键盘输入回显不超过 1500 ms。
@@ -12,7 +12,7 @@
 
 ## 覆盖范围
 
-`playwright test --list` 列出 20 项：桌面与 Pixel 7 各 10 项，其中 2 项重绘风暴只在桌面运行，Pixel 7 上跳过，实际执行 18 项。覆盖：
+`playwright test --list` 列出 20 项：桌面与 iPhone SE 各 10 项，其中 2 项重绘风暴只在桌面运行，iPhone SE 上跳过，实际执行 18 项。覆盖：
 
 - 浅色/深色冷启动、后台输出和状态更新、新建 Shell、输入、刷新回放、真实 WebSocket 断开和重连、输出突发。
 - 草稿开关、弹窗、会话筛选和切换、延迟仓库发现和 Git 刷新、仓库读取挂起时进入已有终端。

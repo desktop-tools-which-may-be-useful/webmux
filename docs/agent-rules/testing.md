@@ -9,7 +9,7 @@ make test                         # Full gate: Go race + all frontend suites
 make test-fast                    # Go race + Vitest unit/browser (no Storybook/E2E/perf)
 make test-unit                    # Vitest in Node
 make test-browser                 # Vitest in headless Chromium
-make test-e2e                     # Playwright: desktop + Pixel 7 + iPhone SE (320×568) Chromium
+make test-e2e                     # Playwright: desktop + iPhone SE (320×568, the single phone baseline) Chromium
 make cover                        # Go race + Vitest unit/browser coverage reports
 make cover-go                     # Go race coverage (.cache/coverage/go.html)
 make cover-web                    # Merged Vitest unit + browser coverage
@@ -61,7 +61,7 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
 - CI builds the Linux E2E executable, fake agents and frontend output once in the `E2E runtime` job (`.github/scripts/package-e2e-runtime.mjs`).
   - Go race and every E2E shard depend on that job and reuse its same-run artifact, including the locked Playwright runtime.
 - `.github/workflows/test.yml` runs parallel jobs:
-  - Ubuntu: formatting/architecture guard/frontend build, Go race, Vitest, Storybook, single-worker 4x CPU performance, and four E2E shards (desktop, Pixel 7 and iPhone SE projects).
+  - Ubuntu: formatting/architecture guard/frontend build, Go race, Vitest, Storybook, single-worker 4x CPU performance, and four E2E shards (desktop and iPhone SE phone projects).
   - E2E shards reuse the executable and Playwright packages; they skip pnpm/frontend dependencies and Go setup.
   - No macOS runner: GitHub's macOS arm64 capacity left jobs queued until they failed. The Ubuntu Go job vets the darwin build (`GOOS=darwin go vet`); macOS runtime behaviour (process tree, `sysctl`, `/private/var` paths) is not tested in CI, so run `make test` on a Mac when changing it.
   - `Test result` aggregates every job, accepts intentionally `skipped` results, and cross-checks that every job the classifier selected actually succeeded.

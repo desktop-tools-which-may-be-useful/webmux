@@ -350,19 +350,22 @@
                 <Item.Root variant="divided" size="flush" class="min-h-14">
                   <ListButton
                     variant="content"
-                    class="flex min-w-0 flex-1 flex-col justify-center"
+                    class="flex min-w-0 flex-1 items-center"
                     aria-label={`编辑 ${label}`}
                     onclick={() => edit(cmd)}
                   >
-                    <span class="flex min-w-0 items-center gap-2">
-                      <span class="truncate text-sm font-medium">{label}</span>
-                      {#if cmd.enter}<Badge variant="secondary">回车</Badge
+                    <span class="flex min-w-0 flex-1 items-center gap-2">
+                      <span class="min-w-0 truncate text-sm font-medium"
+                        >{label}</span
+                      >
+                      {#if cmd.enter}<Badge variant="secondary" class="shrink-0"
+                          >回车</Badge
+                        >{/if}
+                      {#if cmd.name}<span
+                          class="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+                          >{commandPreview(cmd)}</span
                         >{/if}
                     </span>
-                    {#if cmd.name}<span
-                        class="truncate font-mono text-xs text-muted-foreground"
-                        >{commandPreview(cmd)}</span
-                      >{/if}
                   </ListButton>
                   <SettingsRowMenu {label} disabled={!settings.ready}>
                     <DropdownMenu.Item

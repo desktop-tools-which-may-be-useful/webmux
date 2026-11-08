@@ -10,11 +10,11 @@ import { expect, test } from "./fixtures";
 // after grantPermissions; new headless Chromium grants it.
 test.use({ channel: "chromium" });
 
-// The iPhone SE project sends an iOS user agent, and iOS only offers push
+// The phone project (iPhone SE) sends an iOS user agent, and iOS only offers push
 // from the home screen (the app shows that advice instead of the switch).
 function skipOnIPhone(info: TestInfo) {
   test.skip(
-    info.project.name === "chromium-mobile-se",
+    info.project.name === "chromium-mobile",
     "iOS push needs a home-screen install",
   );
 }
