@@ -58,7 +58,7 @@ pnpm --dir web dev    # http://127.0.0.1:5173
 
 ## 更新 README 截图
 
-`make build && pnpm --dir web screenshots` 会启动临时后端和演示仓库，用 Playwright 重新生成 `docs/images/` 下的截图。README 与 [项目介绍](docs/overview.md) 引用这些截图；README 还展示 `docs/images/<主题>/` 下的部分功能截图，替换时保持图片存在，`make docs-check` 会校验 README 的图片与链接。
+`make build && pnpm --dir web screenshots` 会启动临时后端和演示仓库，用 Playwright 重新生成 `docs/images/` 下的截图。README 与 [项目介绍](docs/overview.md) 引用这些截图；README“更多功能截图”折叠区的 `terminal-splits`、`kitty-graphics`、`file-explorer`、`cli-agents`（`after-desktop-{light,dark}`）也由该脚本生成；用 `WEBMUX_SCREENSHOTS_ONLY=features` 可只重拍这八张，不需要 omp。其余 `docs/images/<主题>/` 是各 PR 的界面证据，不再更新。`make docs-check` 会校验 README 的图片与链接。
 
 omp 的对话默认从 `web/scripts/screenshots/omp-session.jsonl` 回放，不调用模型、不需要 API key：
 

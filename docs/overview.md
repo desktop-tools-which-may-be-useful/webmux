@@ -109,7 +109,11 @@ OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN �
 
 ## 截图
 
-首页截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟），顶部合成主图由 `pnpm --dir web screenshots:hero` 从其中两张合成，重新生成方法见 [参与贡献](../CONTRIBUTING.md#更新-readme-截图)。其余功能截图来自各 PR 的界面证据，位于 `docs/images/<主题>/`。
+首页截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟）。重新生成方法见 [参与贡献](../CONTRIBUTING.md#更新-readme-截图)。
+
+- 顶部合成主图由 `pnpm --dir web screenshots:hero` 从其中两张合成。
+- README“更多功能截图”折叠区的四组图（`terminal-splits`、`kitty-graphics`、`file-explorer`、`cli-agents`，深浅色各一张）由同一脚本生成。
+- 其余 `docs/images/<主题>/` 下的图片是各 PR 的界面证据，记录当时的界面，不随版本更新。
 
 <table>
   <tr>

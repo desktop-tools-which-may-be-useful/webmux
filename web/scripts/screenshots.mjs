@@ -122,7 +122,7 @@ async function resumeOmpConfig(baseURL, sessionId) {
       cmd: [...full.cmd, "--resume", sessionId],
       env: full.env,
       preview: full.preview,
-      hybrid: full.hybrid,
+      chat: full.chat,
     }),
   });
   if (!response.ok)
@@ -382,8 +382,9 @@ async function chatIdle(page) {
   await working.first().waitFor({ state: "detached", timeout: 180_000 });
 }
 
-async function type(page, text, enter = true) {
-  await page.locator(".xterm-helper-textarea").focus();
+// Types into the terminal of `pane` (the whole page by default).
+async function type(page, text, enter = true, pane = page) {
+  await pane.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type(text, { delay: 8 });
   if (enter) await page.keyboard.press("Enter");
 }
@@ -394,10 +395,148 @@ async function shoot(page, name) {
   console.log("wrote", name);
 }
 
+// Draws the chart the Kitty graphics screenshot displays and returns it as
+// Kitty protocol escape sequences (direct PNG transfer, 4 KiB chunks).
+async function kittyChart(browser) {
+  const page = await browser.newPage({ viewport: { width: 640, height: 300 } });
+  await page.setContent(`<body style="margin:0;background:#0f172a;color:#e2e8f0;font:600 15px sans-serif">
+    <div style="padding:16px 20px">GET /books · p95 latency (ms)</div>
+    <div style="display:flex;align-items:flex-end;gap:18px;height:200px;padding:0 24px">${[
+      ["v1", 82],
+      ["v2", 64],
+      ["v3", 41],
+      ["v4", 23],
+    ]
+      .map(
+        ([label, ms]) =>
+          `<div style="flex:1;text-align:center"><div style="height:${ms * 2}px;background:linear-gradient(#34d399,#0d9488);border-radius:6px 6px 0 0"></div><div style="padding-top:6px">${label} · ${ms}</div></div>`,
+      )
+      .join("")}</div></body>`);
+  const png = (await page.screenshot()).toString("base64");
+  await page.close();
+  let out = "";
+  for (let i = 0; i < png.length; i += 4096) {
+    const chunk = png.slice(i, i + 4096);
+    const more = i + 4096 < png.length ? 1 : 0;
+    const control = i === 0 ? `a=T,f=100,q=2,m=${more}` : `m=${more}`;
+    out += `\x1b_G${control};${chunk}\x1b\\`;
+  }
+  return out;
+}
+
+// The "more screenshots" gallery of the README: split panes with a draft,
+// Kitty graphics, the file explorer and the seeded launch configurations,
+// each in a light and a dark desktop theme.
+async function featureShots(browser, baseURL) {
+  // Each screenshot starts from an empty sidebar: no sessions of earlier shots.
+  const closeSessions = async () => {
+    const sessions = await (await fetch(`${baseURL}/api/sessions`)).json();
+    for (const { id } of sessions)
+      for (const query of ["", "?remove=1"])
+        await fetch(`${baseURL}/api/sessions/${id}${query}`, {
+          method: "DELETE",
+          headers: { Origin: baseURL },
+        });
+  };
+  const chart = await kittyChart(browser);
+  const chartFile = "/tmp/webmux-demo-chart.kitty";
+  writeFileSync(chartFile, chart);
+  try {
+    for (const scheme of ["dark", "light"]) {
+      const context = await browser.newContext({
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 1.25,
+        baseURL,
+        colorScheme: scheme,
+      });
+      await context.route("**/api/config", async (route) => {
+        const response = await route.fetch();
+        const json = { ...(await response.json()), hostname: "dev" };
+        await route.fulfill({ response, json });
+      });
+      const page = await context.newPage();
+      const featureShot = async (dir, ext) => {
+        await delay(600);
+        const name = `${dir}/after-desktop-${scheme}.${ext}`;
+        mkdirSync(dirname(join(outDir, name)), { recursive: true });
+        await page.screenshot({
+          path: join(outDir, name),
+          ...(ext === "jpg" ? { type: "jpeg", quality: 88 } : {}),
+        });
+        console.log("wrote", name);
+      };
+
+      // Split panes with a draft.
+      await closeSessions();
+      await createSession(page, "/bin/bash --noprofile --norc -i", "api");
+      await type(page, PROMPT);
+      await delay(500);
+      await type(page, "go test ./...");
+      await delay(4000);
+      await page.getByRole("button", { name: "草稿模式" }).click();
+      await page
+        .locator(".terminal-composer textarea")
+        .fill("Add a POST /books endpoint that validates title and year");
+      await page.getByRole("button", { name: "分屏", exact: true }).click();
+      await page
+        .getByRole("menuitem", { name: "左右分屏 · 新建 Shell" })
+        .click();
+      const second = page.locator(".split-terminal").nth(1);
+      await second.locator(".xterm-helper-textarea").waitFor({
+        state: "attached",
+      });
+      // The split shell is the login shell; switch it to the demo's bash.
+      await type(page, "exec bash --noprofile --norc -i", true, second);
+      await delay(800);
+      await type(page, PROMPT, true, second);
+      await delay(500);
+      await type(page, "git diff --stat", true, second);
+      await delay(1000);
+      await featureShot("terminal-splits", "jpg");
+
+      // Kitty graphics.
+      await closeSessions();
+      await createSession(page, "/bin/bash --noprofile --norc -i", "chart");
+      await type(page, PROMPT);
+      await delay(500);
+      await type(page, "echo 'p95 latency per release:'; cat " + chartFile);
+      await delay(2500);
+      await featureShot("kitty-graphics", "png");
+
+      // File explorer in the code workspace.
+      await closeSessions();
+      await createSession(page, "/bin/bash --noprofile --norc -i", "files");
+      await type(page, PROMPT);
+      await delay(500);
+      await type(page, "git status -sb");
+      await page
+        .locator(".terminal-header")
+        .getByRole("button", { name: "代码", exact: true })
+        .click();
+      await page.getByRole("region", { name: "代码工作区" }).waitFor();
+      await page.getByRole("tab", { name: "文件", exact: true }).click();
+      await page.getByRole("button", { name: "books.go", exact: true }).click();
+      await page.locator("[data-code]").first().waitFor();
+      await featureShot("file-explorer", "png");
+
+      // Seeded launch configurations.
+      await page.goto("/settings#launch-configs");
+      await page.locator("#launch-configs").waitFor();
+      await page.locator("#launch-configs").scrollIntoViewIfNeeded();
+      await featureShot("cli-agents", "png");
+      await context.close();
+    }
+  } finally {
+    rmSync(chartFile, { force: true });
+  }
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   seedRepository();
-  const replay = record ? undefined : prepareReplay();
+  const featuresOnly = process.env.WEBMUX_SCREENSHOTS_ONLY === "features";
+  const replay = record || featuresOnly ? undefined : prepareReplay();
   const { child, baseURL } = await startBackend(replay?.env);
   if (replay) await resumeOmpConfig(baseURL, replay.sessionId);
   const browser = await chromium.launch({
@@ -406,6 +545,7 @@ async function main() {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
   });
   try {
+    if (featuresOnly) return await featureShots(browser, baseURL);
     const contexts = {
       desktop: await browser.newContext({
         ...devices["Desktop Chrome"],
@@ -551,10 +691,10 @@ async function main() {
       .waitFor();
     await delay(1500);
     await shoot(mobile, "mobile-terminal.png");
-    // Phones switch to code through the header's 会话视图 tabs.
+    // Phones toggle code with the header's code button, like desktop.
     await mobile
-      .getByRole("tablist", { name: "会话视图", exact: true })
-      .getByRole("tab", { name: "代码", exact: true })
+      .locator(".terminal-header")
+      .getByRole("button", { name: "代码", exact: true })
       .click();
     await mobile.getByRole("region", { name: "代码工作区" }).waitFor();
     await mobile.getByRole("tab", { name: "修改", exact: true }).click();
@@ -598,7 +738,13 @@ async function main() {
     await desktop
       .getByRole("textbox", { name: "任务描述", exact: true })
       .fill("Add a POST /books endpoint that validates the title and year");
+    // The agent options load asynchronously; capture them once loaded.
+    await desktop
+      .getByText("正在读取配置…")
+      .waitFor({ state: "detached", timeout: 30_000 })
+      .catch(() => {});
     await shoot(desktop, "desktop-quick-start.png");
+    await featureShots(browser, baseURL);
     if (record) exportSession();
   } finally {
     await browser.close();
