@@ -3,6 +3,7 @@
   import IconMessagePlus from "~icons/tabler/message-plus";
   import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { errorMessage } from "../error";
   import { recordTitle } from "../archived";
   import { homeWorktrees } from "../home-worktrees.svelte";
@@ -172,82 +173,87 @@
         />新聊天{:else}<IconPlus aria-hidden="true" />新建会话{/if}
     </Button>
   </div>
-  <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
-    {#if resumeError}<p
-        role="alert"
-        class="mb-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"
-      >
-        {resumeError}
-      </p>{/if}
-    {#if shellUi.mode === "chat"}
-      <ChatHistory
-        sessions={live}
-        records={shell.archived.records}
-        {configs}
-        repositories={shell.repositories.list}
-        {current}
-        {resuming}
-        onopen={openSession}
-        onresume={open}
-        onrename={shell.rename}
-        onclose={shell.close}
-        onrelease={shell.releaseWorktree}
-        onremove={askRemove}
-        onremoveworktree={askRemoveWithWorktree}
-      />
-    {:else if !shell.sessions.loading && (shell.repositories.settled || shell.repositories.list.length)}
-      <!-- Drawn once sessions and repositories are known, so rows never
+  <ScrollArea
+    type="hover"
+    class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overscroll-contain [&_[data-slot=scroll-area-viewport]>div]:!block"
+  >
+    <div class="px-2 py-2">
+      {#if resumeError}<p
+          role="alert"
+          class="mb-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"
+        >
+          {resumeError}
+        </p>{/if}
+      {#if shellUi.mode === "chat"}
+        <ChatHistory
+          sessions={live}
+          records={shell.archived.records}
+          {configs}
+          repositories={shell.repositories.list}
+          {current}
+          {resuming}
+          onopen={openSession}
+          onresume={open}
+          onrename={shell.rename}
+          onclose={shell.close}
+          onrelease={shell.releaseWorktree}
+          onremove={askRemove}
+          onremoveworktree={askRemoveWithWorktree}
+        />
+      {:else if !shell.sessions.loading && (shell.repositories.settled || shell.repositories.list.length)}
+        <!-- Drawn once sessions and repositories are known, so rows never
            appear between rows already on screen during startup. -->
-      <WorkbenchTree
-        repositories={shell.repositories.list}
-        sessions={live}
-        home={homeWorktrees.value}
-        scope={route.name === "sessions"
-          ? (shell.repositories.choice ?? "all")
-          : ""}
-        worktree={route.name === "sessions"
-          ? (shell.repositories.worktree ?? "")
-          : ""}
-        {current}
-        canCreate={setup.gitReady && setup.registryReady}
-        {configIcons}
-        onscope={scope}
-        onopen={openSession}
-        onnewworktree={(repositoryId) =>
-          shell.start({ kind: "new-worktree", repositoryId })}
-        onhomeworktrees={(repositoryId) => {
-          const repo = shell.repositories.list.find(
-            (r) => r.id === repositoryId,
-          );
-          if (repo) shell.chooseHomeWorktrees(repo);
-        }}
-        onmanageworktrees={(repositoryId) => {
-          const repo = shell.repositories.list.find(
-            (r) => r.id === repositoryId,
-          );
-          if (repo) shell.manageWorktrees(repo);
-        }}
-        onrepositorydetails={(repositoryId) => {
-          const repo = shell.repositories.list.find(
-            (r) => r.id === repositoryId,
-          );
-          if (repo) shell.repositoryDetails(repo);
-        }}
-        onremoveworktree={(repositoryId, worktreeId) => {
-          const tree = shell.repositories.list
-            .find((r) => r.id === repositoryId)
-            ?.worktrees.find((w) => w.id === worktreeId);
-          if (tree) shell.removeWorktree(tree);
-        }}
-        onrename={shell.rename}
-        onclose={shell.close}
-        records={shell.archived.records}
-        {resuming}
-        onresume={open}
-        onremove={askRemove}
-      />
-    {/if}
-  </div>
+        <WorkbenchTree
+          repositories={shell.repositories.list}
+          sessions={live}
+          home={homeWorktrees.value}
+          scope={route.name === "sessions"
+            ? (shell.repositories.choice ?? "all")
+            : ""}
+          worktree={route.name === "sessions"
+            ? (shell.repositories.worktree ?? "")
+            : ""}
+          {current}
+          canCreate={setup.gitReady && setup.registryReady}
+          {configIcons}
+          onscope={scope}
+          onopen={openSession}
+          onnewworktree={(repositoryId) =>
+            shell.start({ kind: "new-worktree", repositoryId })}
+          onhomeworktrees={(repositoryId) => {
+            const repo = shell.repositories.list.find(
+              (r) => r.id === repositoryId,
+            );
+            if (repo) shell.chooseHomeWorktrees(repo);
+          }}
+          onmanageworktrees={(repositoryId) => {
+            const repo = shell.repositories.list.find(
+              (r) => r.id === repositoryId,
+            );
+            if (repo) shell.manageWorktrees(repo);
+          }}
+          onrepositorydetails={(repositoryId) => {
+            const repo = shell.repositories.list.find(
+              (r) => r.id === repositoryId,
+            );
+            if (repo) shell.repositoryDetails(repo);
+          }}
+          onremoveworktree={(repositoryId, worktreeId) => {
+            const tree = shell.repositories.list
+              .find((r) => r.id === repositoryId)
+              ?.worktrees.find((w) => w.id === worktreeId);
+            if (tree) shell.removeWorktree(tree);
+          }}
+          onrename={shell.rename}
+          onclose={shell.close}
+          records={shell.archived.records}
+          {resuming}
+          onresume={open}
+          onremove={askRemove}
+        />
+      {/if}
+    </div>
+  </ScrollArea>
   <SidebarFooter
     connection={shell.sessions.connection}
     hostname={setup.hostname}
