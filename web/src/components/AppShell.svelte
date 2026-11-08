@@ -30,6 +30,7 @@
   import { unknownWorkspaces } from "../session-list";
   import {
     openPage,
+    openSession,
     setShell,
     shellUi,
     sidebarWidthMax,
@@ -46,6 +47,7 @@
   import RenameSessionDialog from "./RenameSessionDialog.svelte";
   import UnregisterRepositoryDialog from "./UnregisterRepositoryDialog.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
+  import SidebarRailSessions from "./SidebarRailSessions.svelte";
 
   // The layout around the home page, quick start and session pages: the
   // sidebar (a rail when collapsed on desktop, a left drawer on phones) and
@@ -321,6 +323,11 @@
           aria-hidden="true"
         />{:else}<IconPlus aria-hidden="true" />{/if}</Button
     >
+    <SidebarRailSessions
+      sessions={sessions.sessions.filter((item) => item.state === "active")}
+      current={route.name === "terminal" ? route.id : ""}
+      onopen={openSession}
+    />
     <div class="mt-auto w-full">
       <SidebarFooter
         rail

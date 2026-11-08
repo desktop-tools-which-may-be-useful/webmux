@@ -51,7 +51,11 @@
   import * as Collapsible from "$lib/components/ui/collapsible";
   import { ListButton } from "$lib/components/ui/list-button";
   import { releasableRecordWorktree } from "../archived";
-  import { rowStatus, rowStatusLabels } from "../session-status";
+  import {
+    rowStatus,
+    sessionRowLabel,
+    sessionRowTitle,
+  } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
@@ -133,8 +137,8 @@
           <ListButton
             variant="navigation-action"
             aria-current={session.id === current ? "page" : undefined}
-            aria-label={`${session.title}（${rowStatusLabels[status]}）`}
-            title={`${session.title}（${session.agent?.title ?? ""} · ${rowStatusLabels[status]}）`}
+            aria-label={sessionRowLabel(session)}
+            title={sessionRowTitle(session)}
             onclick={() => onopen(session)}
           >
             <LaunchConfigIcon icon={session.agent?.icon ?? ""} size="sm" />

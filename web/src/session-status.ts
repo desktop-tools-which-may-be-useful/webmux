@@ -103,3 +103,12 @@ export function rowStatus(
   if (session.agent?.work || session.status === "running") return "working";
   return "idle";
 }
+
+/** The accessible name of a live session's sidebar button. */
+export function sessionRowLabel(session: SessionInfo): string {
+  return `${session.title}（${rowStatusLabels[rowStatus(session)]}）`;
+}
+/** The tooltip of a live session's sidebar button. */
+export function sessionRowTitle(session: SessionInfo): string {
+  return `${session.title}（${session.agent?.title ?? ""} · ${rowStatusLabels[rowStatus(session)]}）`;
+}
