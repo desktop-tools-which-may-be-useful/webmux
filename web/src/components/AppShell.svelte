@@ -324,7 +324,9 @@
         />{:else}<IconPlus aria-hidden="true" />{/if}</Button
     >
     <SidebarRailSessions
-      sessions={sessions.sessions.filter((item) => item.state === "active")}
+      sessions={sessions.sessions.filter(
+        (item) => item.state === "active" && item.status !== "exited",
+      )}
       current={route.name === "terminal" ? route.id : ""}
       onopen={openSession}
     />
@@ -448,7 +450,9 @@
 {#if closing}<CloseSessionDialog
     session={closing}
     onremoved={() => {
-      if (closing) ownDrafts.remove(closing.id);
+      if (!closing) return;
+      ownDrafts.remove(closing.id);
+      archiveSignal.emit(closing.id);
     }}
     onarchived={(session) => {
       void archived.refresh();
