@@ -401,7 +401,7 @@
     {refreshing}
     onchange={setCompact}
     onrefresh={() => void shell.repositories.refresh(true)}
-    {menu}
+    menu={shell.settingsRepository ? menu : undefined}
   />
 {/snippet}
 

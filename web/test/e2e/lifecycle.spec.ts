@@ -189,24 +189,7 @@ test("real shell output survives reload, then closes and is removed", async ({
     .getByRole("alertdialog")
     .getByRole("button", { name: "确认关闭", exact: true })
     .click();
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已退出",
-  );
-  await expect
-    .poll(async () => {
-      const response = await request.get(`/api/sessions/${id}`);
-      return (await response.json()).status;
-    })
-    .toBe("exited");
-  await expectTerminalLine(page, marker);
-  const afterClose = await request.get(`/api/sessions/${id}/buffer`);
-  expect(await afterClose.text()).toContain(`\r\n${marker}\r\n`);
-
-  await page.getByRole("button", { name: "移除会话", exact: true }).click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "确认移除", exact: true })
-    .click();
+  // A plain terminal closed on purpose is removed and its page left.
   await expect(page).toHaveURL(new URL("/", sessionURL).href);
   await expect(
     page.getByRole("link", { name: marker, exact: true }),

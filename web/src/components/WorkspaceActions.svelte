@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import IconDots from "~icons/tabler/dots";
   import IconRefresh from "~icons/tabler/refresh";
   import { Button } from "$lib/components/ui/button";
   import SessionViewControls from "./SessionViewControls.svelte";
@@ -18,7 +19,8 @@
     refreshing: boolean;
     onchange: (compact: boolean) => void;
     onrefresh: () => void;
-    // The "⋯" menu of the repository in scope; absent when none is.
+    // The "⋯" menu of the repository in scope; a disabled button stands in
+    // while none is.
     menu?: Snippet;
   } = $props();
 </script>
@@ -37,4 +39,14 @@
     aria-hidden="true"
   /></Button
 >
-{#if menu}{@render menu()}{/if}
+{#if menu}{@render menu()}{:else}
+  <!-- Keeps the toolbar's width while repositories are still loading. -->
+  <Button
+    variant="ghost"
+    size="icon-sm"
+    class="min-h-9 min-w-9 sm:min-h-8 sm:min-w-8"
+    aria-label="仓库菜单"
+    title="仓库菜单"
+    disabled><IconDots aria-hidden="true" /></Button
+  >
+{/if}
