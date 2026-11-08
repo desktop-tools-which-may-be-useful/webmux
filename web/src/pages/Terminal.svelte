@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { shellUi } from "../shell.svelte";
+  import { findShell, shellUi } from "../shell.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import { api, navigate, store, stored } from "../api";
   import {
@@ -49,6 +49,7 @@
     drafts: TerminalDrafts;
     onUploadNotice: (message: string) => void;
   } = $props();
+  const shell = findShell();
   const key = untrack(() => `layout.${id}`);
   let layout = $state(untrack(() => restoreLayout(stored(key), id)));
   let active = $state(
@@ -198,6 +199,14 @@
       void focus(paneIds(next)[Math.max(0, previous - 1)]!);
     if (paneIds(next).length === 1) zoomed = false;
   }
+  // A session archived from the shell (sidebar or list) while open here:
+  // leave it like the pane's own stop does, rather than offering to resume
+  // what the user just ended.
+  $effect(() =>
+    shell?.archiveSignal.subscribe((archivedId) => {
+      if (ids.includes(archivedId)) close(archivedId);
+    }),
+  );
   async function add(
     sessionId: string,
     direction: SplitDirection,

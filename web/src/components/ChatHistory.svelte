@@ -45,6 +45,7 @@
 
 <script lang="ts">
   import IconChevronDown from "~icons/tabler/chevron-down";
+  import IconLoader2 from "~icons/tabler/loader-2";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Collapsible from "$lib/components/ui/collapsible";
@@ -208,8 +209,11 @@
                     >{title}</span
                   >
                   {#if resuming === record.id}<span
-                      class="shrink-0 text-xs font-normal text-muted-foreground"
-                      >恢复中…</span
+                      class="flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground"
+                      ><IconLoader2
+                        class="size-3.5 animate-spin motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />恢复中…</span
                     >{:else}<RowStatus
                       status={record.released ? "released" : "ended"}
                     />{/if}

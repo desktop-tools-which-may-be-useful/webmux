@@ -810,7 +810,7 @@
             remove={closeSession}
             notices={hybrid.notices}
             dismiss={(key) => hybrid.dismiss(key)}
-            recovery={hybrid.recoverable ? recovery : undefined}
+            recovery={hybrid.recoverable && !closing ? recovery : undefined}
             session={id}
             listening={hybrid.view === "chat"
               ? (feedSession?.listeningPorts ?? hybrid.info?.listeningPorts)

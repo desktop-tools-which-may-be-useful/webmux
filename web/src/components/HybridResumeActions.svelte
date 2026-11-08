@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IconLoader2 from "~icons/tabler/loader-2";
   import { Button } from "$lib/components/ui/button";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -62,8 +63,11 @@
 
   // Resumes in flight; the refresh after a rebuild waits for them.
   let running = 0;
+  // The side whose resume is in flight, for its button's spinner.
+  let resumingView = $state<SessionView | "">("");
   async function run(view: SessionView, choice: ResumeChoice = {}) {
     running++;
+    resumingView = view;
     onbusy(true);
     onerror("");
     try {
@@ -92,6 +96,7 @@
       else onerror(message);
     } finally {
       running--;
+      resumingView = "";
       onbusy(false);
       settle();
     }
@@ -154,9 +159,26 @@
   }
 </script>
 
-<Button size="sm" {disabled} onclick={() => start("chat")}>恢复到聊天</Button>
-<Button size="sm" variant="outline" {disabled} onclick={() => start("terminal")}
-  >恢复到终端</Button
+<Button
+  size="sm"
+  {disabled}
+  aria-busy={resumingView === "chat"}
+  onclick={() => start("chat")}
+  >{#if resumingView === "chat"}<IconLoader2
+      class="animate-spin motion-reduce:animate-none"
+      aria-hidden="true"
+    />{/if}恢复到聊天</Button
+>
+<Button
+  size="sm"
+  variant="outline"
+  {disabled}
+  aria-busy={resumingView === "terminal"}
+  onclick={() => start("terminal")}
+  >{#if resumingView === "terminal"}<IconLoader2
+      class="animate-spin motion-reduce:animate-none"
+      aria-hidden="true"
+    />{/if}恢复到终端</Button
 >
 
 {#if rebuildView && record.released}<RebuildWorktreeDialog

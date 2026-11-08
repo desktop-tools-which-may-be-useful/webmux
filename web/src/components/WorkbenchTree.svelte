@@ -216,6 +216,7 @@
   import IconFolderOff from "~icons/tabler/folder-off";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLayoutDashboard from "~icons/tabler/layout-dashboard";
+  import IconLoader2 from "~icons/tabler/loader-2";
   import IconTrash from "~icons/tabler/trash";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
@@ -538,8 +539,11 @@
             aria-hidden="true"
           />
         {:else if node.record && resuming === node.record.id}<span
-            class="shrink-0 text-xs font-normal text-muted-foreground"
-            >恢复中…</span
+            class="flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground"
+            ><IconLoader2
+              class="size-3.5 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />恢复中…</span
           >
         {:else if status}<RowStatus {status} />
         {:else}{@render counts(

@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Drawer from "$lib/components/ui/drawer";
   import { navigate } from "../api";
+  import { createArchiveSignal } from "../archive-signal";
   import { createArchived } from "../hooks/archived.svelte";
   import { createLaunchConfigs } from "../hooks/launch-configs.svelte";
   import { createRepositories } from "../hooks/repositories.svelte";
@@ -65,6 +66,7 @@
   // The drafts store lives as long as the app; the shell never swaps it.
   const ownDrafts = untrack(() => drafts);
   const archived = createArchived();
+  const archiveSignal = createArchiveSignal();
   const repositories = createRepositories();
   const setup = createServerSetup();
   const launchConfigs = createLaunchConfigs();
@@ -132,6 +134,7 @@
     sessions,
     repositories,
     archived,
+    archiveSignal,
     setup,
     launchConfigs,
     start(entry) {
@@ -440,7 +443,10 @@
     onremoved={() => {
       if (closing) ownDrafts.remove(closing.id);
     }}
-    onarchived={() => void archived.refresh()}
+    onarchived={(session) => {
+      void archived.refresh();
+      archiveSignal.emit(session.id);
+    }}
     onclose={() => (closing = null)}
   />{/if}
 {#if removingWorktree}

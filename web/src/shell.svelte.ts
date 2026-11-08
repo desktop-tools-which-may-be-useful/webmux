@@ -1,6 +1,7 @@
 import { getContext, setContext } from "svelte";
 import { z } from "zod";
 import { navigate, store, stored } from "./api";
+import type { ArchiveSignal } from "./archive-signal";
 import type { Archived } from "./hooks/archived.svelte";
 import type { LaunchConfigs } from "./hooks/launch-configs.svelte";
 import type { Repositories } from "./hooks/repositories.svelte";
@@ -108,6 +109,8 @@ export interface Shell {
   readonly sessions: SessionList;
   readonly repositories: Repositories;
   readonly archived: Archived;
+  /** The user archived a session from the shell; open pages may leave it. */
+  readonly archiveSignal: ArchiveSignal;
   readonly setup: ServerSetup;
   readonly launchConfigs: LaunchConfigs;
   /** Opens the new-session dialog, optionally at a contextual entry. */

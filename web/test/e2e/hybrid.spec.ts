@@ -795,6 +795,35 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expectTerminalLine(resumed, "> keep-this");
   });
 
+  test("stopping the open session from the sidebar leaves its page instead of offering to resume", async ({
+    page,
+    request,
+    workDir,
+  }) => {
+    const id = await createHybrid(request, workDir, "chat", {
+      name: "E2E sidebar stop",
+    });
+    await openHybrid(page, id, "chat");
+    await chatTurn(page, "stop-me");
+
+    const open = page.getByRole("button", { name: "打开侧栏" }).first();
+    if (await open.isVisible()) await open.click();
+    await page
+      .getByRole("button", { name: "会话操作：E2E sidebar stop" })
+      .first()
+      .click();
+    await page
+      .getByRole("menuitem", { name: "停止会话并归档", exact: true })
+      .click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "停止并归档", exact: true })
+      .click();
+
+    await expect(page).not.toHaveURL(new RegExp(`/s/${id}`));
+    await expect(page.getByRole("status", { name: "恢复会话" })).toHaveCount(0);
+  });
+
   test("releasing an archived chat's worktree keeps the record, and resuming rebuilds it first", async ({
     page,
     request,
@@ -971,34 +1000,19 @@ test.describe("hybrid sessions with the fake agent", () => {
 
     await server.restart();
     await page.goto("/");
-    const recoverable = page.getByRole("region", {
-      name: `${basename(workDir)} 的已归档会话`,
-    });
-    await recoverable.getByRole("button", { name: /^已归档/ }).click();
-    const records = recoverable.locator('[data-slot="item"]');
-    await expect(records).toHaveCount(2);
-    // From the home page, the chat session comes back on the chat side.
-    await records
-      .filter({ hasText: "E2E resume chat" })
-      .getByRole("button", { name: "恢复到聊天", exact: true })
-      .click();
-    await expect(records).toHaveCount(1);
-    const resumed = await openSessionLink(page, "E2E resume chat");
-    await expectSide(resumed, "chat");
-    await expect(conversation(resumed)).toContainText("kept-in-chat");
-    await expect(conversation(resumed)).toContainText("echo: kept-in-chat");
+    // A restart does not archive what the user left running: both sessions
+    // come back on their recorded side by themselves.
+    const resumedChat = await openSessionLink(page, "E2E resume chat");
+    await expectSide(resumedChat, "chat");
+    await expect(conversation(resumedChat)).toContainText("kept-in-chat");
+    await expect(conversation(resumedChat)).toContainText("echo: kept-in-chat");
 
-    // On its own page, the terminal session comes back in the terminal.
-    await page.goto(`/s/${terminal}`);
-    const recovery = page.getByRole("status", { name: "恢复会话" });
-    await expect(recovery).toContainText("该混合会话已中断");
-    await recovery
-      .getByRole("button", { name: "恢复到终端", exact: true })
-      .click();
-    await expectSide(page, "terminal");
-    await expectTerminalLine(page, "> kept-in-tui");
-    await expectTerminalLine(page, "< echo: kept-in-tui");
-    await tuiTurn(page, "after-restart");
+    await page.goto("/");
+    const resumedTerminal = await openSessionLink(page, "E2E resume terminal");
+    await expectSide(resumedTerminal, "terminal");
+    await expectTerminalLine(resumedTerminal, "> kept-in-tui");
+    await expectTerminalLine(resumedTerminal, "< echo: kept-in-tui");
+    await tuiTurn(resumedTerminal, "after-restart");
   });
 
   test("Claude falls back to candidates when its process record is unavailable", async ({
