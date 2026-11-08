@@ -182,6 +182,9 @@ func wireSchema(name string) wireRules {
 		worktreeFields("/worktree")
 		sessionFields("/sessions/*")
 		sessionFields("/archived/*")
+	case "worktree-usage":
+		// The linked worktree's .git file holds a temporary path.
+		add("", "measured", "bytes")
 	case "worktree-batch-removal-preview":
 		add("", "id", "confirmationId")
 		add("", "time", "expiresAt")
@@ -356,7 +359,7 @@ func (n *wireNormalizer) value(rules wireRules, path string, v any) any {
 		return out
 	case float64:
 		switch rules[path] {
-		case "hostStat":
+		case "hostStat", "measured":
 			return 0.0
 		case "hostCPUs":
 			return 1.0
@@ -1057,6 +1060,8 @@ func wireWorkspace(f *wireFixture) {
 	f.call("error-404-repository", "GET", "/api/repositories/missing/worktrees", nil, 404)
 	f.call("session-create-workspace", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "sleep 60"}, "workspace": map[string]string{"repositoryId": repositoryID, "worktreeId": treeID}}, 201)
 	treeURL := base + "/worktrees/" + treeID
+	f.call("worktree-usage", "POST", treeURL+"/usage", map[string]any{}, 200)
+	f.call("error-404-worktree-usage", "POST", base+"/worktrees/missing/usage", map[string]any{}, 404)
 	preview := f.call("worktree-removal-preview", "POST", treeURL+"/removal-preview", map[string]any{}, 200)
 	f.call("error-409-worktree-remove", "POST", treeURL+"/remove", map[string]any{"confirmationId": str(preview, "confirmationId"), "mode": "safe"}, 409)
 	linkedBatch := filepath.Join(filepath.Dir(f.root), "linked-batch")

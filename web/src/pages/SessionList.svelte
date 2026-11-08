@@ -19,6 +19,8 @@
   import RepositoryGroup from "../components/RepositoryGroup.svelte";
   import DirectSessions from "../components/DirectSessions.svelte";
   import SidebarButton from "../components/SidebarButton.svelte";
+  import WorktreeBadges from "../components/WorktreeBadges.svelte";
+  import WorkspaceMenu from "../components/WorkspaceMenu.svelte";
   import { removeRecord, resumeSession } from "../recoverable";
   import {
     repositoryRecords,
@@ -28,7 +30,7 @@
   } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../home-worktrees.svelte";
-  import { setPinned, worktreeTitle } from "../home-worktrees";
+  import { homeLayout, setPinned, worktreeTitle } from "../home-worktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
@@ -296,6 +298,23 @@
     if (repo)
       homeWorktrees.save(setPinned(homeWorktrees.value, repo, ids, pinned));
   }
+  let worktreeDetailsOpen = $state(false);
+  $effect(() => {
+    void selectedWorktree?.id;
+    worktreeDetailsOpen = false;
+  });
+  // Pinned state of the picked worktree, as the repository list shows it.
+  const selectedPinned = $derived.by(() => {
+    const repo = repositories.find((r) => r.id === selectedRepository);
+    const tree = selectedWorktree;
+    return Boolean(
+      repo &&
+      tree &&
+      homeLayout(homeWorktrees.value, repo, []).shown.some(
+        (entry) => entry.tree.id === tree.id,
+      ),
+    );
+  });
   // A worktree removed with an archived chat deletes that chat afterwards;
   // the removal already left it released, so a failure leaves a record the
   // user can delete again.
@@ -349,15 +368,40 @@
   });
 </script>
 
+{#snippet menu()}
+  {@const repo = shell.settingsRepository}
+  {#if repo}
+    {@const tree = selectedWorktree}
+    <WorkspaceMenu
+      repository={repo.name}
+      unavailable={repo.availability !== "available"}
+      onnewworktree={() =>
+        shell.start({ kind: "new-worktree", repositoryId: repo.id })}
+      onhome={() => shell.chooseHomeWorktrees(repo)}
+      onmanage={() => shell.manageWorktrees(repo)}
+      onsettings={shell.openRepositorySettings}
+      ondetails={() => shell.repositoryDetails(repo)}
+      worktree={tree
+        ? {
+            title: worktreeTitle(tree),
+            ondetails: () => (worktreeDetailsOpen = true),
+            pinned: selectedPinned,
+            ontogglepin: () => pin(repo.id, [tree.id], !selectedPinned),
+            onremove:
+              tree.kind === "linked" ? () => (removing = tree) : undefined,
+          }
+        : undefined}
+    />
+  {/if}
+{/snippet}
+
 {#snippet actions()}
   <WorkspaceActions
     {compact}
     {refreshing}
     onchange={setCompact}
-    onsettings={shell.settingsRepository
-      ? shell.openRepositorySettings
-      : undefined}
     onrefresh={() => void shell.repositories.refresh(true)}
+    {menu}
   />
 {/snippet}
 
@@ -416,8 +460,25 @@
               : 1}
           {refreshing}
           {actions}
-          onstart={() => shell.start()}
+          onstart={() =>
+            selectedWorktree
+              ? shell.start({
+                  kind: "worktree",
+                  repositoryId: selectedRepository,
+                  worktreeId: selectedWorktree.id,
+                })
+              : shell.start()}
+          startDisabled={Boolean(
+            selectedWorktree &&
+            (!selectedWorktree.available || selectedWorktree.kind === "bare"),
+          )}
         >
+          {#snippet meta()}
+            {#if selectedWorktree}<WorktreeBadges
+                worktree={selectedWorktree}
+                pinned={selectedPinned}
+              />{/if}
+          {/snippet}
           <SessionFilters
             sessions={scopedSessions}
             archivedCount={scopedArchiveCount}
@@ -511,6 +572,8 @@
               archived={placement.repositories.get(repo.id)}
               {visibleArchiveIds}
               {archive}
+              detailsOpen={worktreeDetailsOpen}
+              ondetailschange={(open) => (worktreeDetailsOpen = open)}
             />
           {/each}
           {#if direct.length || placement.direct.length}<DirectSessions

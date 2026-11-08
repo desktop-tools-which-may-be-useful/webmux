@@ -191,6 +191,7 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.BatchRemovalPreviewSchema, ["worktree-batch-removal-preview"]],
   [S.BatchRemoveResultSchema, ["worktree-batch-remove"]],
   [S.ReleasePreviewSchema, ["worktree-release-preview"]],
+  [S.WorktreeUsageSchema, ["worktree-usage"]],
   [S.ReleaseResultSchema, ["worktree-release"]],
   [S.RebuildPreviewSchema, ["hybrid-rebuild-preview"]],
   [

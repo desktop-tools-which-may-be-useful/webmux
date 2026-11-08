@@ -13,6 +13,7 @@ import {
   SessionConflictSchema,
   SessionInfoSchema,
   WorktreeSchema,
+  WorktreeUsageSchema,
   type AgentCandidate,
   type AgentConnector,
   type ArchivedSession,
@@ -125,6 +126,18 @@ export function removeRecord(id: string) {
 
 function worktreeRoute(worktree: Worktree) {
   return `/repositories/${worktree.repositoryId}/worktrees/${worktree.id}`;
+}
+
+/** Measures the disk space of `worktree`'s directory; walks it on demand. */
+export function measureWorktree(worktree: Worktree, signal?: AbortSignal) {
+  return api(
+    worktreeRoute(worktree) + "/usage",
+    WorktreeUsageSchema,
+    "POST",
+    {},
+    signal,
+    EmptyRequestSchema,
+  );
 }
 
 /**

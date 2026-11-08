@@ -12,6 +12,8 @@
     repositoryCount,
     refreshing,
     onstart,
+    startDisabled = false,
+    meta,
     children,
   }: {
     title?: string;
@@ -25,6 +27,9 @@
     refreshing: boolean;
     // Opens the new-session dialog; the old header's primary action.
     onstart: () => void;
+    startDisabled?: boolean;
+    /** Status line under the title, e.g. a worktree's badges. */
+    meta?: Snippet;
     // Search and status filters below the title row.
     children: Snippet;
   } = $props();
@@ -40,12 +45,15 @@
       {:else}{repositoryCount} 个仓库 · {sessionCount} 个会话{/if}{#if refreshing}
         · 正在读取 Git 状态…{/if}
     </p>
-    <!-- Phones already show the title in the top bar. -->
-    <h1
-      class="hidden min-w-0 text-lg font-semibold tracking-tight break-all sm:mr-3 sm:block"
-    >
-      {title}
-    </h1>
+    <div class="min-w-0 sm:mr-3">
+      <!-- Phones already show the title in the top bar. -->
+      <h1
+        class="hidden min-w-0 text-lg font-semibold tracking-tight break-all sm:block"
+      >
+        {title}
+      </h1>
+      {#if meta}<div class="sm:mt-1">{@render meta()}</div>{/if}
+    </div>
     <div
       class="ml-auto hidden max-w-full items-center justify-end gap-1 sm:flex"
     >
@@ -54,6 +62,7 @@
     <Button
       size="sm"
       class="order-last min-h-9 w-full sm:order-none sm:min-h-8 sm:w-auto"
+      disabled={startDisabled}
       onclick={() => onstart()}>＋ 新建会话</Button
     >
   </div>

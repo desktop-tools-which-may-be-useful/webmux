@@ -130,9 +130,10 @@ test("repository scope limits the home list, composes with filters and survives 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await repo.getByRole("button", { name: "工作树详情 main" }).click();
-  await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeVisible();
-  await repo.getByRole("button", { name: "工作树详情 main" }).click();
-  await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeHidden();
+  await expect(dialog).toContainText("已跟踪文件干净");
+  await expect(dialog.getByRole("button", { name: "计算容量" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
   await expect(page.locator('[aria-label="终端输出预览"]:visible')).toHaveCount(
     1,
   );

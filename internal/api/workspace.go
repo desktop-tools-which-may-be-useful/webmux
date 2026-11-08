@@ -73,6 +73,12 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		result, err := s.Workspace.BatchRemoveWorktrees(r.Context(), r.PathValue("id"), wire.BatchRemoveWorktrees(req))
 		return wire.BatchRemoveResult(result), err
 	})
+	// Walks the worktree directory only when asked: the size is not part of
+	// the repository snapshot.
+	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/usage", http.StatusOK, workspaceFailure, func(r *http.Request, _ contract.WorktreeUsageRequest) (contract.WorktreeUsage, error) {
+		usage, err := s.Workspace.MeasureWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"))
+		return wire.WorktreeUsage(usage), err
+	})
 	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/release-preview", http.StatusOK, sessionFailure, func(r *http.Request, _ contract.ReleasePreviewRequest) (contract.ReleasePreview, error) {
 		preview, err := s.Workspace.PreviewRelease(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"))
 		return wire.ReleasePreview(preview, s.archived), err

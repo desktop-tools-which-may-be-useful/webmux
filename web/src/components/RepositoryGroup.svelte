@@ -36,6 +36,8 @@
     archived = EMPTY_ARCHIVE,
     visibleArchiveIds,
     archive,
+    detailsOpen,
+    ondetailschange,
   }: {
     repo: Repository;
     // All sessions associated with this repository.
@@ -60,6 +62,9 @@
     // Archived records the filters keep; undefined while not filtering.
     visibleArchiveIds?: ReadonlySet<string>;
     archive?: ArchiveActions;
+    /** Details dialog of the focused worktree, opened from the page header. */
+    detailsOpen?: boolean;
+    ondetailschange?: (open: boolean) => void;
   } = $props();
 
   let contentReady = $state(false);
@@ -145,7 +150,10 @@
           sessions={sessions.filter((s) => s.workspace?.worktreeId === tree.id)}
           {visibleIds}
           {compact}
-          separated={index > 0}
+          separated={index > 0 && !worktree}
+          focused={!!worktree && worktree === tree.id}
+          detailsOpen={worktree === tree.id ? detailsOpen : undefined}
+          ondetailschange={worktree === tree.id ? ondetailschange : undefined}
           hidden={hidden ||
             !open ||
             (!!worktree && worktree !== tree.id) ||

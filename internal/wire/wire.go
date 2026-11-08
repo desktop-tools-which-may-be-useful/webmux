@@ -343,6 +343,10 @@ func ReleasePreview(p workspace.ReleasePreview, archived func(hybrid.Record) Arc
 	}
 }
 
+func WorktreeUsage(u workspace.Usage) contract.WorktreeUsage {
+	return contract.WorktreeUsage(u)
+}
+
 func ReleaseWorktree(r contract.ReleaseWorktreeRequest) workspace.ReleaseRequest {
 	return workspace.ReleaseRequest(r)
 }

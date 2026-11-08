@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import WorkspaceGroup from "../../src/components/WorkspaceGroup.svelte";
 import { session, now } from "../../stories/fixtures";
@@ -74,7 +74,7 @@ const healthy: Worktree = {
   error: "",
 };
 
-test("healthy worktrees keep paths, normal badges and status totals behind details", async () => {
+test("healthy worktrees keep paths, normal badges and status totals in the details dialog", async () => {
   render(WorkspaceGroup, {
     title: "main",
     path: healthy.path,
@@ -88,38 +88,29 @@ test("healthy worktrees keep paths, normal badges and status totals behind detai
   await expect
     .element(page.getByRole("link", { name: "Build agent" }))
     .toBeVisible();
+  expect(page.getByText(healthy.path, { exact: true }).elements()).toEqual([]);
+  await page.getByRole("button", { name: "工作树详情 main" }).click();
+  const dialog = page.getByRole("dialog");
   await expect
-    .element(page.getByText(healthy.path, { exact: true }))
-    .not.toBeVisible();
-  await expect
-    .element(page.getByText("主工作区", { exact: true }))
-    .not.toBeVisible();
-  await expect
-    .element(page.getByText("已跟踪文件干净", { exact: true }))
-    .not.toBeVisible();
-  const details = page.getByRole("button", { name: "工作树详情 main" });
-  await expect.element(details).toHaveAttribute("aria-expanded", "false");
-  await details.click();
-  await expect
-    .element(page.getByText(healthy.path, { exact: true }))
+    .element(dialog.getByText(healthy.path, { exact: true }))
     .toBeVisible();
   await expect
-    .element(page.getByText("主工作区", { exact: true }))
+    .element(dialog.getByText("主工作区", { exact: true }))
     .toBeVisible();
   await expect
-    .element(page.getByText("已跟踪文件干净", { exact: true }))
+    .element(dialog.getByText("已跟踪文件干净", { exact: true }))
     .toBeVisible();
   await expect
-    .element(page.getByText("共 1 个会话", { exact: true }))
+    .element(dialog.getByText("共 1 个会话", { exact: true }))
     .toBeVisible();
-  await details.click();
-  await expect.element(details).toHaveAttribute("aria-expanded", "false");
+  await userEvent.keyboard("{Escape}");
+  await expect.element(dialog).not.toBeInTheDocument();
   await expect
     .element(page.getByRole("link", { name: "Build agent" }))
     .toBeVisible();
 });
 
-test("dirty, untracked and locked warnings remain visible without expanding details", async () => {
+test("dirty, untracked and locked warnings stay visible without opening details", async () => {
   render(WorkspaceGroup, {
     title: "main",
     path: healthy.path,
@@ -135,7 +126,5 @@ test("dirty, untracked and locked warnings remain visible without expanding deta
     .element(page.getByText("未跟踪文件", { exact: true }))
     .toBeVisible();
   await expect.element(page.getByText("已锁定", { exact: true })).toBeVisible();
-  await expect
-    .element(page.getByRole("button", { name: "工作树详情 main" }))
-    .toHaveAttribute("aria-expanded", "false");
+  expect(page.getByRole("dialog").elements()).toEqual([]);
 });

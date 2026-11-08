@@ -816,6 +816,15 @@ export const ReleasePreviewSchema = z.object({
   blockers: z.array(z.string()),
 });
 export type ReleasePreview = z.infer<typeof ReleasePreviewSchema>;
+// The disk space of a worktree's directory. `complete` is false when the
+// count ran out of budget or skipped an unreadable directory, so `bytes` and
+// `entries` are lower bounds.
+export const WorktreeUsageSchema = z.object({
+  bytes: z.number().int().nonnegative(),
+  entries: z.number().int().nonnegative(),
+  complete: z.boolean(),
+});
+export type WorktreeUsage = z.infer<typeof WorktreeUsageSchema>;
 export const ReleaseWorktreeRequestSchema = z.object({
   confirmationId: z.string(),
 });

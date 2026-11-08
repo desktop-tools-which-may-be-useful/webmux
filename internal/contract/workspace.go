@@ -212,6 +212,19 @@ type IgnoredEntry struct {
 	Bytes *int64 `json:"bytes,omitempty"`
 }
 
+// WorktreeUsageRequest is the empty body of a worktree size measurement.
+type WorktreeUsageRequest struct{}
+
+// WorktreeUsage is the disk space of a worktree's directory: bytes of regular
+// files and the entry count, without following symbolic links. Complete is
+// false when the count ran out of budget or skipped an unreadable directory,
+// so both numbers are lower bounds.
+type WorktreeUsage struct {
+	Bytes    int64 `json:"bytes"`
+	Entries  int   `json:"entries"`
+	Complete bool  `json:"complete"`
+}
+
 // ReleaseWorktreeRequest confirms a previewed release.
 type ReleaseWorktreeRequest struct {
 	ConfirmationID string `json:"confirmationId"`

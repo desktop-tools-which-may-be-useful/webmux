@@ -652,7 +652,7 @@
                     </p>
                   {/if}
                   <p class="text-xs text-muted-foreground">
-                    取消勾选只影响这次发送。在首页侧栏底部的“仓库设置”中修改。
+                    取消勾选只影响这次发送。在首页工具栏“⋯”菜单的“仓库设置…”中修改。
                   </p>
                 </Popover.Content>
               </Popover.Root>

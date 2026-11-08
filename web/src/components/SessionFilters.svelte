@@ -115,7 +115,7 @@
         {filter.label}
         <span
           class="inline-block w-[3ch] text-right font-mono text-xs tabular-nums opacity-60"
-          >{filter.count > 0 ? filter.count : ""}</span
+          >{filter.count}</span
         >
       </SegmentedControl.Item>
     {/each}
