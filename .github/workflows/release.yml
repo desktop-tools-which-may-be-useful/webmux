@@ -188,3 +188,34 @@ jobs:
             webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe \
             webmux-setup-windows-amd64.exe webmux-setup-windows-arm64.exe \
             webmux_*-1_*.deb webmux-*-1.*.rpm install.sh SHA256SUMS SHA256SUMS.minisig
+
+  # Tell the docs site (mzdluo123/webmux-site) to re-sync and redeploy. Its Site
+  # workflow listens for repository_dispatch type `webmux-release` and mirrors
+  # the latest Release. GITHUB_TOKEN cannot dispatch to another repository, so
+  # this needs SITE_DISPATCH_TOKEN: a fine-grained PAT scoped to webmux-site
+  # with "Contents: Read and write". Without it the job only warns, and the
+  # site's daily schedule picks the Release up within a day. A failure here
+  # never affects the already published Release.
+  notify-site:
+    name: Trigger the site rebuild
+    needs: [build, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Dispatch webmux-release to webmux-site
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$SITE_DISPATCH_TOKEN" ]; then
+            echo "::warning::SITE_DISPATCH_TOKEN is not set; the site will pick up $GITHUB_REF_NAME at its next scheduled run."
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/mzdluo123/webmux-site/dispatches \
+            -d "{\"event_type\":\"webmux-release\",\"client_payload\":{\"ref\":\"$GITHUB_REF_NAME\"}}"
+          echo "Dispatched webmux-release ($GITHUB_REF_NAME) to mzdluo123/webmux-site."
