@@ -425,6 +425,7 @@
     showFontSize={() => {}}
     showFind={() => {}}
     close={() => {}}
+    leave={() => {}}
     {hybrid}
   />
   <TerminalNotices
@@ -437,6 +438,7 @@
     showScratch={() => {}}
     dismissScratch={() => {}}
     remove={() => {}}
+    leave={() => {}}
     {notices}
     dismiss={(key) => {
       if (key.startsWith("notice:")) notice = "";

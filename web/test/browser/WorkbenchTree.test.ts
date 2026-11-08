@@ -135,14 +135,19 @@ test("repositories hold the home page's worktrees and their sessions", async () 
     "make test（已结束）",
     "htop（空闲）",
   ]);
-  // The unavailable repository stays, marked, without worktrees or action menu.
+  // The unavailable repository stays, marked, without worktrees; its menu
+  // only offers the details, where it can be removed from the list.
   await expect.element(item("legacy-api（不可用）")).toBeVisible();
   expect(item("legacy-api（不可用）").element().getAttribute("title")).toBe(
     "legacy-api：路径不可用：/srv/legacy-api 不存在",
   );
+  await tree().getByRole("button", { name: "仓库操作：legacy-api" }).click();
   expect(
-    tree().getByRole("button", { name: "仓库操作：legacy-api" }).elements(),
-  ).toEqual([]);
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim()),
+  ).toEqual(["仓库详情…"]);
 });
 
 test("rows navigate: scopes, worktrees and sessions", async () => {

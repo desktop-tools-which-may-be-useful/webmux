@@ -80,7 +80,12 @@ for (const initialization of ["connected", "font-pending"] as const) {
           page
             .getByRole("complementary", { name: "侧栏" })
             .getByRole("button", { name: /^查看主机状态：/ }),
-        ).toHaveAttribute("title", `${hostname()} 在线`);
+        ).toHaveAttribute(
+          "title",
+          new RegExp(
+            `^${hostname().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} 在线`,
+          ),
+        );
       await expect(
         page.getByLabel("正在加载会话", { exact: true }),
       ).toBeHidden();

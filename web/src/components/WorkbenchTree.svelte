@@ -548,8 +548,9 @@
               !!node.removable,
           )}{/if}
       </ListButton>
-      {#if node.kind === "repository" && !node.reason && canCreate}
+      {#if node.kind === "repository" && canCreate}
         <SidebarRepositoryMenu
+          unavailable={!!node.reason}
           label={node.label}
           tabindex={tabStop === node.key ? 0 : -1}
           onnewworktree={() => onnewworktree(node.repositoryId ?? "")}

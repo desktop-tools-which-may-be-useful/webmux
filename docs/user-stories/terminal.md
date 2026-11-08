@@ -114,7 +114,6 @@
 
 - [分屏布局](../../web/src/terminal-layout.ts)、[终端窗格](../../web/src/components/SessionTerminal.svelte)、[分屏菜单](../../web/src/components/TerminalSplitMenu.svelte)
 - [会话选择](../../web/src/components/SplitSessionDialog.svelte)、[分屏验收](../../web/test/e2e/splits.spec.ts)、[后台交互验收](../../web/test/e2e/split-background.spec.ts)
-- [宽屏触控快捷指令验收](../../web/test/e2e/split-quick-commands.spec.ts)
 - [终端页面](../../web/src/pages/Terminal.svelte)、[终端连接](../../web/src/hooks/terminal.svelte.ts)、[终端回放](../../web/src/hooks/terminal-socket.svelte.ts)、[终端视口](../../web/src/components/TerminalViewport.svelte)
 - [回放浏览器回归](../../web/test/browser/TerminalReplay.test.ts)、[安全快照与重绘](../../internal/session/session.go)、[模式初始化](../../internal/vtpreview/preview.go)
 - [快照回归](../../internal/session/replay_test.go)
@@ -357,10 +356,10 @@
 - **US-H07 桌面启用底部工具栏**：作为使用鼠标或实体键盘的使用者，我希望也能显示软键工具栏，以便点击常用操作。
   验收要点：
   - 终端菜单可强制显示或关闭底部工具栏；
-  - 快捷指令入口随布局保持可达。
+  - 手机的代码视图不提供快捷指令入口；回到终端视图后由软键栏进入。
 - **US-H08 窄屏紧凑顶栏**：作为在手机或主屏幕 Web App 中查看 agent 的使用者，我希望顶栏只保留身份和视图切换，其余操作按用途归类，以便看清会话名称、把高度留给终端，并一眼知道自己在哪个视图。
   验收要点：
-  - 窄于 640px 时顶栏单行且不横向滚动，只常驻返回、状态点加标题、“会话视图”切换（普通会话“终端 | 代码”，混合会话“聊天 | 终端 | 代码”，带文字，不再另设代码按钮）、快捷指令入口（软键栏隐藏时）和终端菜单；分屏在手机上不常用，收入终端菜单“窗格”组（新建/加入会话、分屏、放大、关闭窗格）；
+  - 窄于 640px 时顶栏单行且不横向滚动，只常驻返回、状态点加标题、“会话视图”切换（普通会话“终端 | 代码”，混合会话“聊天 | 终端 | 代码”，带文字，不再另设代码按钮）和终端菜单；分屏在手机上不常用，收入终端菜单“窗格”组（新建/加入会话、分屏、放大、关闭窗格）；
   - 普通会话与混合会话的“会话视图”是同一个标签页控件（`tablist`），文案固定，选中项表示当前视图（`aria-selected`）；页面加载、会话信息到达和切换进行中不改换控件，混合会话确认后在前面加上“聊天”，切换目标未知时各项原位保留且不选中；
   - 状态点在标题之前；连接异常时点脉动（尊重减少动效设置），“重连中”等文字显示在标题下方小字，不挤掉标题；
   - 草稿开关在触屏软键栏快捷指令旁，软键栏隐藏（代码视图或非触屏窄屏）时在终端菜单首组；

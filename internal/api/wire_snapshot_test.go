@@ -144,7 +144,8 @@ func wireSchema(name string) wireRules {
 		}
 	case "health":
 		// Host measurements differ on every machine and call.
-		add("", "hostStat", "load/one", "load/five", "load/fifteen", "load/cpus", "memory/total", "memory/available")
+		add("", "hostStat", "load/one", "load/five", "load/fifteen", "memory/total", "memory/available")
+		add("", "hostCPUs", "load/cpus")
 	case "config":
 		add("", "path", "defaultCwd")
 		add("", "hostname", "hostname")
@@ -308,7 +309,26 @@ func (n *wireNormalizer) pathText(s string) string {
 }
 
 func (n *wireNormalizer) normalize(name string, v any) any {
+	if name == "health" {
+		v = withHostStats(v)
+	}
 	return n.value(wireSchema(name), "", v)
+}
+
+// withHostStats fills the host measurements the platform could not read, so
+// the snapshot is identical on Linux and macOS.
+func withHostStats(v any) any {
+	body, ok := v.(map[string]any)
+	if !ok {
+		return v
+	}
+	if body["load"] == nil {
+		body["load"] = map[string]any{"one": 0.0, "five": 0.0, "fifteen": 0.0, "cpus": 1.0}
+	}
+	if body["memory"] == nil {
+		body["memory"] = map[string]any{"total": 0.0, "available": 0.0}
+	}
+	return body
 }
 
 func (n *wireNormalizer) value(rules wireRules, path string, v any) any {
@@ -335,8 +355,11 @@ func (n *wireNormalizer) value(rules wireRules, path string, v any) any {
 		}
 		return out
 	case float64:
-		if rules[path] == "hostStat" {
+		switch rules[path] {
+		case "hostStat":
 			return 0.0
+		case "hostCPUs":
+			return 1.0
 		}
 	case string:
 		switch rules[path] {

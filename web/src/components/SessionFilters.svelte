@@ -113,10 +113,10 @@
     {#each filters as filter (filter.id)}
       <SegmentedControl.Item value={filter.id} class="min-h-9 shrink-0">
         {filter.label}
-        {#if filter.count > 0}<span
-            class="font-mono text-xs tabular-nums opacity-60"
-            >{filter.count}</span
-          >{/if}
+        <span
+          class="inline-block w-[3ch] text-right font-mono text-xs tabular-nums opacity-60"
+          >{filter.count > 0 ? filter.count : ""}</span
+        >
       </SegmentedControl.Item>
     {/each}
   </SegmentedControl.Root>

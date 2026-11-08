@@ -124,9 +124,11 @@ test("repository scope limits the home list, composes with filters and survives 
   await expect(repo.getByText("主工作区", { exact: true })).toBeHidden();
   await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeHidden();
   await repositoryMenu(page, "仓库详情…");
-  await expect(page.getByRole("dialog")).toContainText("读取于");
+  // A closed phone drawer stays in the DOM; only the open dialog counts.
+  const dialog = page.locator('[role="dialog"][data-state="open"]');
+  await expect(dialog).toContainText("读取于");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
   await repo.getByRole("button", { name: "工作树详情 main" }).click();
   await expect(repo.getByText("已跟踪文件干净", { exact: true })).toBeVisible();
   await repo.getByRole("button", { name: "工作树详情 main" }).click();

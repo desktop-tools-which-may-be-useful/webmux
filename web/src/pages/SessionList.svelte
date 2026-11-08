@@ -364,7 +364,7 @@
 <div class="workspace-page safe-area-page min-h-dvh">
   <!-- Phones reach the sidebar from this bar; wider screens show it. -->
   <header
-    class="app-header flex min-h-(--app-header-height) items-center gap-1 border-b bg-card px-1 sm:hidden"
+    class="app-header flex min-h-(--app-header-height) flex-wrap items-center gap-1 border-b bg-card px-1 sm:hidden"
   >
     <SidebarButton />
     <h1 class="min-w-0 truncate text-sm font-medium">
@@ -375,7 +375,9 @@
         role="status"
         class="shrink-0 text-xs text-warning">连接已断开，重连中…</span
       >{/if}
-    <div class="ml-auto flex shrink-0 items-center gap-1">
+    <div
+      class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
+    >
       {@render actions()}
     </div>
   </header>

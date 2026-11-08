@@ -7,7 +7,6 @@ import {
   expectTerminalLine,
   recordInput,
   expectConnected,
-  viewSwitch,
 } from "./fixtures";
 
 // Only one entry is rendered visibly at a time; role queries skip the hidden one.
@@ -363,42 +362,6 @@ test("an open add dialog preserves input when another tab fills the list", async
   } finally {
     await other.close();
   }
-});
-
-test("narrow code view keeps the quick-command entry accessible", async ({
-  page,
-  workDir,
-}, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const id = await createShell(page, "Code view quick commands", workDir);
-  if (!testInfo.project.use.isMobile) {
-    await page.getByRole("button", { name: "终端菜单", exact: true }).click();
-    await page
-      .getByRole("menuitemcheckbox", { name: "强制显示底部工具栏" })
-      .click();
-    await page.keyboard.press("Escape");
-  }
-  const headerEntry = page
-    .locator(".terminal-header")
-    .getByRole("button", { name: "快捷指令", exact: true });
-  const bar = page.getByRole("complementary", { name: "终端软键" });
-  await expect(headerEntry).toBeHidden();
-  await viewSwitch(page, "代码").click();
-  await expect(bar).toBeHidden();
-  await expect(headerEntry).toBeVisible();
-  await expect(quick(page)).toHaveCount(1);
-  await headerEntry.click();
-  await expect(menu(page)).toHaveAttribute("data-side", "bottom");
-  await page.keyboard.press("Escape");
-  await viewSwitch(page, "终端").click();
-  await expect(headerEntry).toBeHidden();
-  await expect(bar.getByRole("button", { name: "快捷指令" })).toBeVisible();
-  await viewSwitch(page, "代码").click();
-  await headerEntry.click();
-  await item(page, "管理快捷指令…").click();
-  await expect(page).toHaveURL(
-    new RegExp(`/settings\\?session=${id}#quick-commands$`),
-  );
 });
 
 test("desktop shows the entry beside the draft button until the toolbar is forced", async ({

@@ -274,7 +274,7 @@ interface SessionInfo {
 
 | 方法 | 路径                   | 说明                                                                                                                                                                                                           |
 | ---- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET  | `/api/health`          | `{ok: true, sessions: n, load?, memory?}`，见下方说明                                                                                                                                                                                      |
+| GET  | `/api/health`          | `{ok: true, sessions: n, load?, memory?}`，见下方说明                                                                                                                                                          |
 | GET  | `/api/config`          | `{defaultCwd, defaultShell, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel, pendingUpdate?, portDetection}`，不含 token；`portDetection` 表示本平台会话会报告监听端口 |
 | GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                                                                                                               |
 | POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                                                                                                                  |

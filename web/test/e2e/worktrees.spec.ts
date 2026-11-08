@@ -266,14 +266,18 @@ test("external changes refresh and restart retains registry but not sessions", a
   await repositoryMenu(page, "主页显示…");
   // The dialog (a drawer on phones) must stay inside the viewport, even on a
   // 320×568 phone.
-  const picker = page.getByRole("dialog");
+  // A closed phone drawer stays in the DOM, so pick the open dialog.
+  const picker = page.locator('[role="dialog"][data-state="open"]');
   await expect(picker).toBeVisible();
-  const pickerBox = await picker.boundingBox();
   const viewport = page.viewportSize()!;
-  expect(pickerBox!.y).toBeGreaterThanOrEqual(0);
-  expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(viewport.height);
-  expect(pickerBox!.x).toBeGreaterThanOrEqual(0);
-  expect(pickerBox!.x + pickerBox!.width).toBeLessThanOrEqual(viewport.width);
+  // Wait out the slide-in before measuring.
+  await expect(async () => {
+    const box = (await picker.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  }).toPass();
   await page.getByRole("option", { name: "external", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(repo.getByText("external", { exact: true })).toBeVisible();

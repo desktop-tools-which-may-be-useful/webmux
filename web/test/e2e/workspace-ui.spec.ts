@@ -116,7 +116,9 @@ test("the sidebar footer keeps the host beside its actions", async ({
         words.right,
         status.getBoundingClientRect().right,
       );
-      const action = status.nextElementSibling!.getBoundingClientRect();
+      // The status sits inside the host button; the actions follow that.
+      const action =
+        status.parentElement!.nextElementSibling!.getBoundingClientRect();
       return {
         gap: action.left - visibleEnd,
         offset: Math.abs(
@@ -131,7 +133,11 @@ test("the sidebar footer keeps the host beside its actions", async ({
   const footer = page
     .getByRole("complementary", { name: "侧栏" })
     .getByRole("status");
-  await expect(footer).toHaveAttribute("title", /在线$/);
+  await expect(
+    page
+      .getByRole("complementary", { name: "侧栏" })
+      .getByRole("button", { name: /^查看主机状态：/ }),
+  ).toHaveAttribute("title", /在线(（.+）)?$/);
   const short = await geometry();
   expect(short.gap).toBeGreaterThanOrEqual(0);
   expect(short.offset).toBeLessThanOrEqual(1);

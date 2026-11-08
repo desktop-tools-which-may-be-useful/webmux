@@ -121,7 +121,8 @@
         ? "flex size-8 cursor-pointer items-center justify-center rounded-sm hover:bg-muted/60"
         : "flex h-5 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-sm text-xs text-muted-foreground hover:bg-muted/60"}
     >
-      <span role="status" class="flex min-w-0 items-center gap-2">
+      <!-- min-h-4 is the text line: the hostname arriving later must not move the dot. -->
+      <span role="status" class="flex min-h-4 min-w-0 items-center gap-2">
         <span
           class={`status-dot shrink-0 ${connection === "connected" && !strain ? "status-running" : "status-waiting"}`}
         ></span>{#if rail}<span class="sr-only">{statusLabel}</span

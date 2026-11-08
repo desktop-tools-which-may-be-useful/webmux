@@ -101,12 +101,13 @@
     const answer = pending;
     pendingOpen = false;
     if (!answer) return;
-    void run(
-      answer.view,
+    const choice =
       answer.kind === "candidates"
         ? { ...answer.choice, agentSessionId: picked }
-        : { ...answer.choice, confirmWithoutEnv: true },
-    );
+        : { ...answer.choice, confirmWithoutEnv: true };
+    // ConfirmDialog closes itself right after this returns; a retry that asks
+    // a second question must reopen it only after that, never before.
+    setTimeout(() => void run(answer.view, choice));
   }
 
   // The chat view's connector is not installed; the terminal view still

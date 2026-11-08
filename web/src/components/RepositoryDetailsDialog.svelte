@@ -92,8 +92,9 @@
         variant="destructive"
         disabled={!registryReady}
         onclick={() => {
-          onclose();
+          // The parent reads the repository from the open dialog's target.
           onunregister();
+          onclose();
         }}>从列表移除仓库…</Button
       >
     </div>
