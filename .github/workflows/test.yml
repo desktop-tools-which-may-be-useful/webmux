@@ -32,7 +32,7 @@ jobs:
   # run, so a missing rule can only make CI slower, never skip coverage.
   changes:
     name: Classify changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       go: ${{ steps.classify.outputs.go }}
@@ -88,7 +88,7 @@ jobs:
   lint:
     name: Format, check and build
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -147,7 +147,7 @@ jobs:
     name: E2E runtime
     needs: changes
     if: needs.changes.result == 'success' && (needs.changes.outputs.go == 'true' || needs.changes.outputs.web == 'true')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -174,7 +174,7 @@ jobs:
     name: Go race (Ubuntu)
     needs: [changes, runtime]
     if: needs.changes.result == 'success' && needs.runtime.result == 'success' && needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -246,7 +246,7 @@ jobs:
     name: Vitest unit and browser
     needs: changes
     if: needs.changes.result == 'success' && needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -274,7 +274,7 @@ jobs:
     name: Storybook
     needs: changes
     if: needs.changes.result == 'success' && needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -297,7 +297,7 @@ jobs:
     name: E2E (Ubuntu ${{ matrix.shard }}/4)
     needs: [changes, runtime]
     if: needs.changes.result == 'success' && needs.runtime.result == 'success' && (needs.changes.outputs.go == 'true' || needs.changes.outputs.web == 'true')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -337,7 +337,7 @@ jobs:
     name: CLS and 4x CPU (Ubuntu)
     needs: changes
     if: needs.changes.result == 'success' && needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -409,7 +409,7 @@ jobs:
     name: Linux packages
     needs: changes
     if: needs.changes.result == 'success' && needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -447,7 +447,7 @@ jobs:
         windows-installer,
         linux-packages,
       ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       # The classifier and lint job are never optional: accepting `skipped`
