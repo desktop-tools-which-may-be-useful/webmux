@@ -17,7 +17,7 @@
 | POST       | `/api/repositories/{id}/worktrees/batch-removal-preview`        | 批量删除预览：`{worktreeIds}`（1–50 项去重），返回 `{confirmationId, expiresAt, items}`                                                                                   |
 | POST       | `/api/repositories/{id}/worktrees/batch-remove`                 | `{confirmationId, includeForce?, closeSessions?}`（`includeForce` 为 true 时 `closeSessions` 必须为 true），返回 `{results: [{worktreeId, path, branch, status, error}]}` |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/release-preview` | 释放空间预览：`{confirmationId, expiresAt, worktree, commit, push, archived, ignored, ignoredMore, ignoredBytes?, sizeComplete, blockers}`                                |
-| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/usage`           | 计算工作树目录占用：空 body，返回 `{bytes, entries, complete}`；只在请求时遍历，不随仓库快照返回                                                                         |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/usage`           | 计算工作树目录占用：空 body，返回 `{bytes, entries, complete}`；只在请求时遍历，不随仓库快照返回                                                                          |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/release`         | `{confirmationId}`；删除目录、保留分支与已归档记录并标为已释放，`{releaseId, recordIds}`                                                                                  |
 
 删除预览的 `sessions` 是该 worktree 中运行中的会话，`archived` 是其中已归档（`closed` 或 `interrupted`）的会话，二者都是 `SessionInfo`。
