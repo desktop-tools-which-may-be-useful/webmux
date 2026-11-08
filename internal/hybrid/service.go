@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -109,6 +110,8 @@ type Service struct {
 	closed bool
 	// recovering holds the record IDs a resume or removal is working on.
 	recovering map[string]bool
+	// restarted holds the sessions this start found active and interrupted.
+	restarted []string
 }
 
 // New opens the record store, marks sessions left active by an earlier
@@ -134,9 +137,11 @@ func New(o Options) *Service {
 		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
 		recovering: make(map[string]bool),
 	}
-	if err := s.records.recoverAfterRestart(time.Now()); err != nil {
+	restarted, err := s.records.recoverAfterRestart(time.Now())
+	if err != nil {
 		log.Warn("hybrid sessions unavailable", "error", err)
 	}
+	s.restarted = restarted
 	s.records.setLogger(log)
 	s.options.setLogger(log)
 	logAgentOptions(log, s.options)
@@ -146,6 +151,11 @@ func New(o Options) *Service {
 
 // Unavailable reports why hybrid sessions cannot be created, or nil.
 func (s *Service) Unavailable() error { return s.records.unavailable() }
+
+// Restarted returns the IDs of the sessions the previous server left
+// running: the ones this start marked interrupted. A server that wants them
+// back resumes each; sessions the user closed are not among them.
+func (s *Service) Restarted() []string { return slices.Clone(s.restarted) }
 
 // OnEvicted sets the cleanup of an auto-evicted record, called after its
 // actor and shell ended. The server removes the record's artifacts folder

@@ -538,6 +538,13 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	go func() { ended <- server.Serve(listener) }()
 	rt.serve()
 	slog.Info("webmux listening", "address", listener.Addr(), "version", version)
+	// Sessions the previous server left running come back on their own;
+	// only a close by the user archives a session.
+	resumed := make(chan struct{})
+	go func() {
+		defer close(resumed)
+		resumeRestarted(ctx, workspaces, hybrids.Restarted())
+	}()
 	printConfigNotice(out, c)
 	localLink := local
 	if c.Tunnel.Enabled || c.TokenGenerated {
@@ -556,6 +563,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	case err = <-ended:
 	}
 	cancel() // Cancel HTTP and hijacked WebSocket handlers before joining sessions.
+	<-resumed
 	tunnels.Close()
 	tsCtl.Close()
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
@@ -574,6 +582,28 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		return err
 	}
 	return nil
+}
+
+// restartResumeTimeout bounds resuming one session after a restart.
+const restartResumeTimeout = time.Minute
+
+// resumeRestarted resumes the hybrid sessions ids, one at a time, on their
+// recorded side. One that cannot come back (its worktree was released, its
+// launch config or agent session is gone) stays archived and is logged.
+func resumeRestarted(ctx context.Context, w *workspace.Service, ids []string) {
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
+		rctx, cancel := context.WithTimeout(ctx, restartResumeTimeout)
+		_, err := w.ResumeHybrid(rctx, id, workspace.HybridResumeInput{ClientRequestID: "restart-" + id})
+		cancel()
+		if err != nil {
+			slog.Warn("session not resumed after restart; it stays archived", "id", id, "error", err)
+			continue
+		}
+		slog.Info("session resumed after restart", "id", id)
+	}
 }
 
 // printConfigNotice names the configuration in use and points at the local

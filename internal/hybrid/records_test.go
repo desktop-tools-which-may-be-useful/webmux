@@ -315,7 +315,7 @@ func TestRecoverAfterRestart(t *testing.T) {
 	r.close()
 
 	r = openTestRecords(t, dir)
-	if err := r.recoverAfterRestart(time.Now()); err != nil {
+	if _, err := r.recoverAfterRestart(time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -380,7 +380,7 @@ func TestRecoverAfterRestartEndsUnconfirmedLeftovers(t *testing.T) {
 	r.close()
 
 	r = openTestRecords(t, dir)
-	if err := r.recoverAfterRestart(time.Now()); err != nil {
+	if _, err := r.recoverAfterRestart(time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	for id, exited := range exits {

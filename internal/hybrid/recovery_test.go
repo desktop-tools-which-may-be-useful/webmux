@@ -96,6 +96,24 @@ func noViolations(t *testing.T, store string) {
 	}
 }
 
+// A restart reports only the sessions it found running: one the user closed,
+// or one already interrupted, is not for the server to bring back.
+func TestRestartedListsOnlyRunningSessions(t *testing.T) {
+	h := newHarness(t, 0)
+	running := h.create(h.input(omp.Name, SideACP)).Info().ID
+	closed := h.create(h.input(omp.Name, SideACP)).Info().ID
+	h.closeSession(closed)
+
+	h.restart()
+	if got := h.svc.Restarted(); len(got) != 1 || got[0] != running {
+		t.Fatalf("restarted %v, want [%s]", got, running)
+	}
+	h.restart()
+	if got := h.svc.Restarted(); len(got) != 0 {
+		t.Fatalf("second restart reported already interrupted sessions: %v", got)
+	}
+}
+
 // A chat session goes through a restart; it can then be resumed on either
 // side under its ID, with its conversation and recorded options.
 func TestResumeAfterRestart(t *testing.T) {
