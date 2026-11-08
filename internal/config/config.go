@@ -38,33 +38,29 @@ type Config struct {
 }
 
 // VoiceConfig configures an optional external speech recognition command
-// driven over STDIN/STDOUT.
-//
-// Provider selects one of the cloud services bundled with WebMux instead of
-// a custom Cmd; the two are mutually exclusive.
+// driven over STDIN/STDOUT. WebMux ships no recognizer: Cmd is the user's
+// own program.
 type VoiceConfig struct {
-	Cmd      []string `toml:"cmd"`
-	Env      []string `toml:"env"`
-	Provider string   `toml:"provider"`
+	Cmd []string `toml:"cmd"`
+	Env []string `toml:"env"`
 }
-
-// VoiceProviders are the bundled recognition services, selected by name.
-var VoiceProviders = []string{"doubao", "wetype", "qwen", "baidu", "sogou", "ifly", "chatterfly"}
 
 // Enabled reports whether speech recognition is configured.
 func (v VoiceConfig) Enabled() bool {
-	return len(v.Cmd) > 0 || v.Provider != ""
+	return len(v.Cmd) > 0
+}
+
+// Validated returns a validated copy, leaving v untouched: the settings a
+// web update proposes get the same checks and `~` expansion as [voice].
+func (v VoiceConfig) Validated() (VoiceConfig, error) {
+	out := VoiceConfig{Cmd: slices.Clone(v.Cmd), Env: slices.Clone(v.Env)}
+	if err := out.validate(); err != nil {
+		return VoiceConfig{}, err
+	}
+	return out, nil
 }
 
 func (v *VoiceConfig) validate() error {
-	if v.Provider != "" {
-		if len(v.Cmd) > 0 {
-			return errors.New("voice.provider and voice.cmd are mutually exclusive")
-		}
-		if !slices.Contains(VoiceProviders, v.Provider) {
-			return fmt.Errorf("voice.provider %q must be one of %s", v.Provider, strings.Join(VoiceProviders, ", "))
-		}
-	}
 	for i, arg := range v.Cmd {
 		if i == 0 && strings.TrimSpace(arg) == "" {
 			return errors.New("voice.cmd[0] must not be empty")
@@ -313,6 +309,9 @@ func Load(path string, required bool) (Config, error) {
 		if required || !errors.Is(err, os.ErrNotExist) {
 			return c, err
 		}
+	}
+	if metadata.IsDefined("voice", "provider") {
+		return c, errors.New("voice.provider was removed: WebMux ships no recognizer; set voice.cmd to your own program")
 	}
 	for _, key := range metadata.Keys() {
 		c.SetSource(key.String(), "toml")

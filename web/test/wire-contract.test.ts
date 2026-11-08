@@ -175,6 +175,10 @@ const groups: Array<[z.ZodType, string[]]> = [
   ],
   [S.UploadSchema, ["upload"]],
   [
+    S.VoiceSettingsSchema,
+    ["voice-settings-get", "voice-settings-put", "voice-settings-reset"],
+  ],
+  [
     S.WorktreeSchema,
     [
       "worktree-create",

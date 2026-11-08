@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onDestroy, type Snippet } from "svelte";
+  import IconClipboard from "~icons/tabler/clipboard";
+  import IconKeyboard from "~icons/tabler/keyboard";
   import IconLock from "~icons/tabler/lock";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
@@ -95,7 +97,7 @@
 </script>
 
 {#snippet sendKey(label: string, input: string)}<Button
-    variant="outline"
+    variant="ghost"
     size="sm"
     onmousedown={keepFocus}
     onclick={() => send(input)}>{label}</Button
@@ -104,18 +106,24 @@
 <aside class="soft-keys shrink-0 border-t bg-card" aria-label="终端软键">
   <div class="soft-row">
     <Button
-      variant="outline"
+      variant="ghost"
       size="sm"
       aria-label="唤起或收起键盘"
+      title="唤起或收起键盘"
       onmousedown={keepFocus}
-      onclick={keyboard}>⌨</Button
+      onclick={keyboard}><IconKeyboard aria-hidden="true" /></Button
     >
-    <Button variant="outline" size="sm" onmousedown={keepFocus} onclick={paste}
-      >粘贴</Button
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label="粘贴"
+      title="粘贴"
+      onmousedown={keepFocus}
+      onclick={paste}><IconClipboard aria-hidden="true" /></Button
     >
     {#each symbols as symbol (symbol)}
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         onmousedown={keepFocus}
         onclick={() => send(symbol)}>{symbol}</Button
@@ -127,7 +135,7 @@
       )}{/each}
     {#each modifierKeys as [key, label] (key)}
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         aria-pressed={modifiers[key]}
         title={key === "shift" ? shiftTitle : undefined}

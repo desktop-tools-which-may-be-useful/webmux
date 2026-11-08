@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "cmd": [],
+    "enabled": false,
+    "env": {},
+    "source": "config",
+    "storageAvailable": true
+  }
+}

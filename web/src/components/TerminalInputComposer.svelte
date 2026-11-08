@@ -1,7 +1,7 @@
 <script lang="ts">
   import IconInbox from "~icons/tabler/inbox";
   import IconTrash from "~icons/tabler/trash";
-  import { tick } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import { Textarea } from "$lib/components/ui/textarea";
@@ -12,7 +12,6 @@
     draft,
     drafts,
     unavailable,
-    saved,
     target,
     openScratch,
     send,
@@ -21,12 +20,11 @@
     filePaste,
     controlNotice,
     keyboardDismissed = () => false,
+    voice,
   }: {
     draft: TerminalDraft;
     drafts: TerminalDrafts;
     unavailable: string;
-    // Where the draft is kept, e.g. "已保存在本机".
-    saved: string;
     // The session the draft will be sent to.
     target: string;
     openScratch: () => void;
@@ -40,6 +38,8 @@
     // True after the IME was open and then dismissed, e.g. by Android Back,
     // while an editable may still keep focus.
     keyboardDismissed?: () => boolean;
+    // The microphone, beside the draft's other actions.
+    voice?: Snippet;
   } = $props();
   const submissionText = {
     saved: "已保存在本机，正在发送…",
@@ -197,14 +197,14 @@
     }}
   />
   <div class="flex shrink-0 flex-wrap items-center gap-2">
-    <span
-      class="min-w-0 flex-[1_1_100%] wrap-anywhere sm:flex-[1_1_12rem] text-xs text-muted-foreground"
-      role="status"
-      aria-label="草稿提交状态"
-      >{draft.submission
-        ? submissionText[draft.submission.state]
-        : unavailable || `草稿模式 · ${saved}`}</span
-    >
+    {#if draft.submission || unavailable}<span
+        class="min-w-0 flex-[1_1_100%] wrap-anywhere sm:flex-[1_1_12rem] text-xs text-muted-foreground"
+        role="status"
+        aria-label="草稿提交状态"
+        >{draft.submission
+          ? submissionText[draft.submission.state]
+          : unavailable}</span
+      >{/if}
     <div
       class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2"
     >
@@ -225,6 +225,7 @@
           onclick={release}>转为草稿</Button
         >
       {/if}
+      {#if voice}{@render voice()}{/if}
       <Button
         variant="ghost"
         size="sm"

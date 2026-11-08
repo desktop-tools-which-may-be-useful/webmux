@@ -25,6 +25,7 @@
   import BranchCommandList from "../components/BranchCommandList.svelte";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import VoiceButton from "../components/VoiceButton.svelte";
+  import { voicePreference } from "../hooks/voice-preference.svelte";
   import ConnectorInstallHint from "../components/ConnectorInstallHint.svelte";
   import FileDropZone from "../components/FileDropZone.svelte";
   import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
@@ -706,7 +707,7 @@
           {/if}
         {/snippet}
         {#snippet accessories({ size, variant })}
-          {#if shell.setup.value.voice}
+          {#if shell.setup.value.voice && voicePreference.enabled}
             <VoiceButton
               {size}
               {variant}

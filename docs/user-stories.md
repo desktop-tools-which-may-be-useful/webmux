@@ -61,6 +61,7 @@
 | [原生客户端、隧道与托盘](user-stories/clients-network-tray.md)   | M–P                |
 | [终端分屏用户故事](user-stories/terminal-splits.md)              | D13–D14            |
 | [网络压缩用户故事](user-stories/terminal-network.md)             | H10–H11            |
+| [语音输入用户故事](user-stories/terminal-voice.md)               | G07                |
 | [混合会话](user-stories/hybrid-sessions.md)                      | Q                  |
 | [端口转发预览](user-stories/port-forwarding.md)                  | R                  |
 | [脚本与 agent 控制](user-stories/shell-control.md)               | S                  |

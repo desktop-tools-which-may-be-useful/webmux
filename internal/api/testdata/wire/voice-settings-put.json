@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "body": {
+    "cmd": [
+      "node",
+      "/opt/asr.js"
+    ],
+    "enabled": true,
+    "env": {
+      "DASHSCOPE_API_KEY": "sk-test"
+    },
+    "source": "web",
+    "storageAvailable": true
+  }
+}

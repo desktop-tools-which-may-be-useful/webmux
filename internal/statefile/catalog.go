@@ -8,6 +8,7 @@ const (
 	Repositories       ID = "repositories"
 	Tunnel             ID = "tunnel"
 	TailscaleSettings  ID = "tailscale-settings"
+	VoiceSettings      ID = "voice-settings"
 	TailscaleOwnership ID = "tailscale-ownership"
 	Push               ID = "push"
 	Runtime            ID = "runtime"
@@ -35,6 +36,7 @@ var catalog = []Descriptor{
 	{Repositories, "repositories.json", "internal/workspace", "unavailable", "paths", 1, "version", 4 << 20, true, ""},
 	{Tunnel, "tunnel-settings.json", "internal/tunnelsettings", "fail_closed", "token", 1, "v", 64 << 10, true, "tunnel.json"},
 	{TailscaleSettings, "tailscale-settings.json", "internal/tailscalesettings", "fail_closed", "none", 1, "v", 64 << 10, true, ""},
+	{VoiceSettings, "voice-settings.json", "internal/voicesettings", "fail_closed", "env", 1, "v", 64 << 10, true, ""},
 	{TailscaleOwnership, "tailscale-ownership.json", "cmd/webmux", "block_start", "target", 1, "v", 64 << 10, false, "tailscale.json"},
 	{Push, "push.json", "internal/push", "unavailable", "vapid/subscriptions", 1, "v", 1 << 20, true, ""},
 	{Runtime, "run/server.json", "internal/runtime", "local_api_unavailable", "fingerprint", 1, "v", 64 << 10, false, ""},

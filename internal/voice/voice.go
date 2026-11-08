@@ -56,6 +56,7 @@ type Event struct {
 
 // Service spawns speech recognition subprocesses per recording session.
 type Service struct {
+	mu            sync.RWMutex
 	cmd           []string
 	env           []string
 	cwd           string
@@ -65,10 +66,6 @@ type Service struct {
 
 // New constructs a Service from Options.
 func New(opts Options) *Service {
-	var cmd []string
-	if len(opts.Cmd) > 0 && strings.TrimSpace(opts.Cmd[0]) != "" {
-		cmd = append([]string(nil), opts.Cmd...)
-	}
 	readyDelay := opts.ReadyDelay
 	if readyDelay <= 0 {
 		readyDelay = DefaultReadyDelay
@@ -78,7 +75,7 @@ func New(opts Options) *Service {
 		finishTimeout = DefaultFinishTimeout
 	}
 	return &Service{
-		cmd:           cmd,
+		cmd:           normalizeCmd(opts.Cmd),
 		env:           append([]string(nil), opts.Env...),
 		cwd:           opts.Cwd,
 		readyDelay:    readyDelay,
@@ -88,7 +85,36 @@ func New(opts Options) *Service {
 
 // Enabled reports whether a voice recognition command is configured.
 func (s *Service) Enabled() bool {
-	return s != nil && len(s.cmd) > 0
+	if s == nil {
+		return false
+	}
+	argv, _, _ := s.snapshot()
+	return len(argv) > 0
+}
+
+// snapshot returns the command, environment and directory a new recording
+// uses; a running recording keeps the ones it started with.
+func (s *Service) snapshot() (argv, env []string, cwd string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cmd, s.env, s.cwd
+}
+
+// Reconfigure replaces the command, environment and directory that later
+// recordings use. Recordings in progress are not affected.
+func (s *Service) Reconfigure(opts Options) {
+	cmd := normalizeCmd(opts.Cmd)
+	env := append([]string(nil), opts.Env...)
+	s.mu.Lock()
+	s.cmd, s.env, s.cwd = cmd, env, opts.Cwd
+	s.mu.Unlock()
+}
+
+func normalizeCmd(cmd []string) []string {
+	if len(cmd) > 0 && strings.TrimSpace(cmd[0]) != "" {
+		return append([]string(nil), cmd...)
+	}
+	return nil
 }
 
 // Session is one active recording subprocess.
@@ -161,17 +187,18 @@ type stdoutMessage struct {
 
 // Start launches a new recognition subprocess bound to ctx.
 func (s *Service) Start(ctx context.Context) (*Session, error) {
-	if !s.Enabled() {
+	argv, env, cwd := s.snapshot()
+	if len(argv) == 0 {
 		return nil, ErrDisabled
 	}
 	runCtx, cancel := context.WithCancel(ctx)
-	// #nosec G204 -- cmd is the administrator-configured argv in config.toml, never shell-expanded.
-	cmd := exec.CommandContext(runCtx, s.cmd[0], s.cmd[1:]...)
-	if s.cwd != "" {
-		cmd.Dir = s.cwd
+	// #nosec G204 -- argv is the administrator-configured command, never shell-expanded.
+	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
+	if cwd != "" {
+		cmd.Dir = cwd
 	}
-	if len(s.env) > 0 {
-		cmd.Env = append(os.Environ(), s.env...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

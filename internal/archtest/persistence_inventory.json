@@ -46,6 +46,15 @@
       "source": "internal/tailscalesettings/store.go"
     },
     {
+      "id": "voice-settings",
+      "path": "voice-settings.json",
+      "lock": "voice-settings.json.lock",
+      "owner": "internal/voicesettings",
+      "failure": "fail_closed",
+      "web": "是",
+      "source": "internal/voicesettings/store.go"
+    },
+    {
       "id": "tailscale-ownership",
       "path": "tailscale-ownership.json",
       "lock": "tailscale-ownership.json.lock",
@@ -114,9 +123,8 @@
     "pty-descriptor": "将已有 PTY 描述符包装为可轮询文件；不是磁盘持久化。",
     "agent-state": "外部 agent 自己的状态文件名与注册记录（Codex 会话写锁、Claude 进程注册）；WebMux 只比较有界读取或已打开路径，从不创建、修改或写入这些状态。",
     "editor-scratch": "`webmux repo settings --edit` 在系统临时目录创建交给编辑器的临时文件，编辑器退出后读取并删除；不属于服务端状态目录。",
-    "entry-settings": "internal/settingsstore 是 tunnel 与 tailscale-settings 共用的 fail-closed 打开、读取与提交骨架；文件路径、所有者与失败策略仍由两个存储各自登记。",
-    "agent-trust": "internal/agenttrust 在启动 Claude Code、Codex、Copilot CLI、Antigravity CLI、Qoder、QoderCN 前，以临时文件加改名的方式在它们自己的配置文件（.claude.json、config.toml、config.json、settings.json）里追加目标目录的信任记录；这些是外部 agent 的状态而非 WebMux 存储，已有文件保留其他内容与权限，缺失的 Claude/Copilot/Antigravity/Qoder/QoderCN 配置不创建，由 agent_pretrust 开关控制。",
-    "voice-program": "内置语音识别程序按内容哈希释放到状态目录下的 voice/，可随时重新释放；是下载缓存式的派生文件，不是会话或设置状态。"
+    "entry-settings": "internal/settingsstore 是 tunnel、tailscale-settings 与 voice-settings 共用的 fail-closed 打开、读取与提交骨架；文件路径、所有者与失败策略仍由各存储各自登记。",
+    "agent-trust": "internal/agenttrust 在启动 Claude Code、Codex、Copilot CLI、Antigravity CLI、Qoder、QoderCN 前，以临时文件加改名的方式在它们自己的配置文件（.claude.json、config.toml、config.json、settings.json）里追加目标目录的信任记录；这些是外部 agent 的状态而非 WebMux 存储，已有文件保留其他内容与权限，缺失的 Claude/Copilot/Antigravity/Qoder/QoderCN 配置不创建，由 agent_pretrust 开关控制。"
   },
   "references": {
     "internal/clicmd/repo.go|Env.editText|os.CreateTemp": {
@@ -515,6 +523,10 @@
       "count": 1,
       "owner": "atomic-publisher"
     },
+    "internal/statefile/catalog.go|path|voice-settings.json": {
+      "count": 1,
+      "owner": "voice-settings"
+    },
     "internal/statefile/lock_unix.go|lockFile|syscall.Flock": {
       "count": 1,
       "owner": "atomic-publisher"
@@ -646,18 +658,6 @@
     "internal/agenttrust/qoder.go|path|settings.json": {
       "count": 1,
       "owner": "agent-trust"
-    },
-    "internal/voice/bundled.go|ExtractScript|os.CreateTemp": {
-      "count": 1,
-      "owner": "voice-program"
-    },
-    "internal/voice/bundled.go|ExtractScript|os.Remove": {
-      "count": 1,
-      "owner": "voice-program"
-    },
-    "internal/voice/bundled.go|ExtractScript|os.Rename": {
-      "count": 1,
-      "owner": "voice-program"
     }
   }
 }

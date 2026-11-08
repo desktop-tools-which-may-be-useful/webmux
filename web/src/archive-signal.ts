@@ -15,7 +15,7 @@ export function createArchiveSignal(): ArchiveSignal {
   const listeners = new Set<(id: string) => void>();
   return {
     emit(id) {
-      for (const listener of [...listeners]) listener(id);
+      for (const listener of listeners) listener(id);
     },
     subscribe(listener) {
       listeners.add(listener);

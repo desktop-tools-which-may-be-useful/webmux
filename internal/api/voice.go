@@ -10,6 +10,7 @@ import (
 
 func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ws/voice", s.voiceWS)
+	s.voiceSettingsRoutes(mux)
 }
 
 func (s *Server) voiceWS(w http.ResponseWriter, r *http.Request) {

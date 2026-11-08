@@ -23,6 +23,7 @@ description: Use for any WebMux UI change — components, layout, styling, icons
    3. shadcn-svelte registry（`pnpm --dir web exec shadcn-svelte add <name>`，生成后审查差异）
 
    用户嫌外观“不精致”、要求替换，或问“放在哪里更好”时，先查 shadcn-svelte 是否有现成组件，给出 2–3 个方案并说明取舍，再动手。移动、新增控件同样如此：位置没对齐就改代码，返工成本最高。
+
 3. **需要新外观时，在 `ui/` 组件的 `tv()` 中加 variant 或 size**，并登记到前端架构守卫的扩展表。使用处的 `class` 只能写布局（margin、宽高、grid/flex 位置）。不写原始调色板颜色、内联样式，也不写非布局的任意值。
 4. **同类问题全局统一。** 改一种控件的外观或用法时，搜索所有使用处并一起迁移，不留两种写法。
 5. **验证**，见下方 Verification。
@@ -96,7 +97,7 @@ description: Use for any WebMux UI change — components, layout, styling, icons
 - **空间预算：页头最多两行**：标题行（标题加图标操作）和一个主按钮行。小于 `sm` 时文字按钮优先变成图标（保留 `aria-label` 和 `title`），不要让一组按钮换成第二行再右对齐。
 - **固定槽位不随触控尺寸变化。** 重复行里的展开箭头、图标列宽度必须固定，否则带子项的行与普通行错位。全局 `.wm-control` 在触屏上有 44px 的 `min-width/min-height`，且未分层，`size-*` 压不住它。需要覆盖时给元素加 `data-*` 属性，在 `styles.css` 的同一媒体查询里写覆盖。
 - **浮层必须留在视口内。** Popover、Dropdown、Dialog、Drawer 都要设 `collisionPadding`（`ui/` 组件已默认 8），高度用 bits-ui 的 `--bits-*-available-height` 限制，内部滚动。
-- **内容优先，控件紧凑。** 手机上终端和代码要尽量多占空间。常规按钮触控高度 44px（`size="icon-touch"`、`size="sm-touch"`，或 `any-pointer-coarse:min-h-11`）。终端顶栏保持 32px 紧凑高度，不能把常用按钮做得过高。
+- **内容优先，控件紧凑。** 手机上终端和代码要尽量多占空间。主要导航（顶栏、抽屉）的触控高度 44px（`size="icon-touch"`、`size="sm-touch"`，或 `any-pointer-coarse:min-h-11`）；设置、工作区、代码等信息密集页面用 36px 紧凑触控高度，由 `.settings-layout`、`.workspace-page`、`.code-panel` 统一设置，页面内用 `size="icon"`/`default`，不要加 `icon-touch`。终端顶栏保持 32px 紧凑高度，不能把常用按钮做得过高。
 - **工具栏保持单行。** 小于 `sm` 时只常驻高频操作，低频功能（例如分屏）收进 ⋯ 菜单或直接在手机上隐藏。菜单项沿用原按钮的名称、处理函数和禁用条件。
 - **响应式只用断点。** 显隐靠 `max-sm:` 和 `sm:` 断点完成，不新增 JS 布局状态。
 - **处理溢出。** 方框装不下的信息可以移到容器外或下一行，不能挤压或截断关键文字。错误信息、标签和警告必须允许换行。长路径可以截断，但要保留 `title` 或可访问名称。
@@ -118,6 +119,7 @@ description: Use for any WebMux UI change — components, layout, styling, icons
    - `pnpm --dir web exec oxfmt --check src`
 
    遇到违规时修改代码。不加 `eslint-disable` 或 `jscpd:ignore`，也不扩大基线。
+
 2. 在真实页面或 Storybook（`pnpm --dir web storybook`，地址 `http://127.0.0.1:6006`）中查看改动。至少检查：
    - 桌面视口（1280×720）和手机视口 390×844、375×667、320×568（iPhone SE），改动涉及浮层或页头时再看横屏 667×375；
    - 每个视口下 `document.documentElement.scrollWidth <= innerWidth`（没有页面级横向溢出），打开的浮层完整落在视口内；

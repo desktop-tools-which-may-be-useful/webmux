@@ -260,8 +260,8 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
-  gap: 6px;
-  padding: 8px;
+  gap: 4px;
+  padding: 4px 8px;
   border-top: 1px solid var(--border);
   background: var(--card);
 }
@@ -397,7 +397,7 @@
 .soft-keys {
   display: none;
   align-items: center;
-  padding: 0.25rem 0.5rem 0.5rem;
+  padding: 0.125rem 0.5rem 0.25rem;
 }
 .terminal-page.force-soft-keys .soft-keys,
 .session-terminal.force-soft-keys .soft-keys {
@@ -588,6 +588,7 @@
   }
   /* Information-dense pages trade some target size for visible content. */
   .workspace-page .wm-control,
+  .settings-layout .wm-control,
   .code-panel .wm-control {
     min-height: var(--control-touch-compact);
     min-width: var(--control-touch-compact);

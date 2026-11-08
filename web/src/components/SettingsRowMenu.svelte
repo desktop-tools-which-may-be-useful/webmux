@@ -24,7 +24,7 @@
       <Button
         {...props}
         variant="ghost"
-        size="icon-touch"
+        size="icon"
         aria-label={`操作 ${label}`}
         title="操作"><IconDots aria-hidden="true" /></Button
       >

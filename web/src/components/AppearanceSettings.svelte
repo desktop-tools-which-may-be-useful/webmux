@@ -68,7 +68,7 @@
           请输入 {minFontSize}–{maxFontSize} 之间的整数。
         </p>{/if}
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         onclick={() => {
           fontDraft = undefined;
@@ -116,7 +116,7 @@
         />
       </div>
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         onclick={() => changeSettings({ codeReader: null })}
         >恢复默认阅读设置</Button
@@ -130,7 +130,7 @@
         />
       </div>
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         onclick={() => changeSettings({ forceSoftKeys: null })}
         >恢复默认工具栏</Button

@@ -31,6 +31,7 @@
   import type { ButtonSize, ButtonVariant } from "$lib/components/ui/button";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import VoiceButton from "../components/VoiceButton.svelte";
+  import { voicePreference } from "../hooks/voice-preference.svelte";
   import { quickCommands } from "../quick-commands.svelte";
   import type { ChatCodeLink } from "../markdown-link";
   import type {
@@ -112,7 +113,9 @@
   const draft = untrack(() => drafts.get(id));
   const shell = findShell();
   const leave = () => (onleave ? onleave() : navigate(shellUi.home));
-  const voiceEnabled = $derived(!!shell?.setup.value.voice);
+  const voiceEnabled = $derived(
+    !!shell?.setup.value.voice && voicePreference.enabled,
+  );
   let composer = $state<TerminalInputComposer>();
   let chatView = $state<ChatView>();
   let sending = false;
@@ -676,31 +679,42 @@
   }
 </script>
 
+{#snippet voiceButton(
+  side: "top" | "bottom",
+  size?: ButtonSize,
+  variant?: ButtonVariant,
+)}
+  <VoiceButton
+    {size}
+    {variant}
+    disabled={hybrid.view === "chat"
+      ? hybrid.missing || !!draft.submission
+      : t.connection === "missing" ||
+        (draft.enabled
+          ? !!draft.submission
+          : t.exitCode !== null || t.connection === "exited" || !t.ready)}
+    onmousedown={(event) => {
+      if (side === "top" && hybrid.view !== "chat") event.preventDefault();
+    }}
+    onresult={insertVoiceResult}
+    onerror={(message) => {
+      if (!mounted) return;
+      if (hybrid.view === "chat" && chatView) chatView.setVoiceError(message);
+      else error = message;
+    }}
+  />
+{/snippet}
+{#snippet draftVoice()}
+  {@render voiceButton("top", "icon-sm", "ghost")}
+{/snippet}
 {#snippet quickMenu(
   side: "top" | "bottom",
   size?: ButtonSize,
   variant?: ButtonVariant,
 )}
-  {#if voiceEnabled}
-    <VoiceButton
-      {size}
-      {variant}
-      disabled={hybrid.view === "chat"
-        ? hybrid.missing || !!draft.submission
-        : t.connection === "missing" ||
-          (draft.enabled
-            ? !!draft.submission
-            : t.exitCode !== null || t.connection === "exited" || !t.ready)}
-      onmousedown={(event) => {
-        if (side === "top" && hybrid.view !== "chat") event.preventDefault();
-      }}
-      onresult={insertVoiceResult}
-      onerror={(message) => {
-        if (!mounted) return;
-        if (hybrid.view === "chat" && chatView) chatView.setVoiceError(message);
-        else error = message;
-      }}
-    />
+  <!-- In the terminal view the microphone lives in the draft box only. -->
+  {#if voiceEnabled && hybrid.view === "chat"}
+    {@render voiceButton(side, size, variant)}
   {/if}
   <QuickCommandMenu
     commands={quickCommands.list}
@@ -905,7 +919,6 @@
         {drafts}
         {keyboardDismissed}
         unavailable={sendUnavailable}
-        saved={draftSaved}
         target={t.info?.title || id}
         openScratch={showScratch}
         send={() => sendDraft()}
@@ -913,6 +926,7 @@
         release={releaseDraftSubmission}
         filePaste={uploads.filePaste}
         {controlNotice}
+        voice={voiceEnabled ? draftVoice : undefined}
       />
     {/snippet}
     {#snippet codePane()}

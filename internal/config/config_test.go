@@ -203,9 +203,6 @@ func TestVoiceConfiguration(t *testing.T) {
 		{name: "absent", want: VoiceConfig{}},
 		{name: "valid cmd and env", body: "cmd = ['~/bin/asr', '--model', 'qwen']\nenv = ['ASR_KEY=secret', 'LANG_HINT=zh']\n",
 			want: VoiceConfig{Cmd: []string{filepath.Join(home, "bin", "asr"), "--model", "qwen"}, Env: []string{"ASR_KEY=secret", "LANG_HINT=zh"}}},
-		{name: "bundled provider", body: "provider = 'doubao'\n", want: VoiceConfig{Provider: "doubao"}},
-		{name: "unknown provider", body: "provider = 'nope'\n", err: "voice.provider"},
-		{name: "provider with cmd", body: "provider = 'qwen'\ncmd = ['node']\n", err: "mutually exclusive"},
 		{name: "empty executable", body: "cmd = ['   ']\n", err: "voice.cmd[0]"},
 		{name: "env without equals", body: "cmd = ['node']\nenv = ['BAD_ENV']\n", err: "voice.env"},
 		{name: "env invalid name", body: "cmd = ['node']\nenv = ['BAD-NAME=1']\n", err: "voice.env"},
@@ -234,5 +231,17 @@ func TestVoiceConfiguration(t *testing.T) {
 				t.Fatalf("voice = %#v, want %#v", c.Voice, row.want)
 			}
 		})
+	}
+}
+
+// The bundled recognizers are gone; a config that still names one must fail
+// loudly instead of silently turning speech recognition off.
+func TestVoiceProviderKeyIsRejected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "voice.toml")
+	if err := os.WriteFile(path, []byte("[voice]\nprovider = 'doubao'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path, true); err == nil || !strings.Contains(err.Error(), "voice.provider") {
+		t.Fatalf("Load() = %v, want a voice.provider error", err)
 	}
 }

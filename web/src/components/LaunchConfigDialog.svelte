@@ -1,10 +1,7 @@
 <script lang="ts">
   import { errorMessage } from "../error";
   import { untrack } from "svelte";
-  import IconEye from "~icons/tabler/eye";
-  import IconEyeOff from "~icons/tabler/eye-off";
-  import IconPlus from "~icons/tabler/plus";
-  import IconTrash from "~icons/tabler/trash";
+  import EnvRowsEditor from "./EnvRowsEditor.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { Input } from "$lib/components/ui/input";
@@ -61,7 +58,6 @@
   let loadStartup = $state(false);
   let startupShell = $state<StartupShell>("bash");
   let rows = $state<EnvRow[]>([]);
-  let revealed = $state<Record<number, boolean>>({});
   let defaultPreview = $state(true);
   let previewLines = $state<number | undefined>(defaultPreviewSettings.lines);
   let previewSkip = $state<number | undefined>(defaultPreviewSettings.skip);
@@ -137,7 +133,6 @@
       loadStartup = false;
       startupShell = defaultShell === "zsh" ? "zsh" : "bash";
       rows = [];
-      revealed = {};
       defaultPreview = true;
       previewLines = previewSettings.lines;
       previewSkip = previewSettings.skip;
@@ -403,93 +398,15 @@
               />
             {/if}
           </div>
-          <fieldset class="grid min-w-0 gap-2">
-            <legend class="mb-2 text-sm font-medium">
-              环境变量 <span class="font-normal text-muted-foreground"
-                >可选</span
-              >
-            </legend>
-            {#each rows as envRow, index (envRow.key)}
-              {@const rowErrors = draft.errors.rows[envRow.key]}
-              <div class="grid min-w-0 gap-1">
-                <div class="flex min-w-0 flex-wrap items-center gap-2">
-                  <Input
-                    mono
-                    class="min-w-0 flex-1 basis-32"
-                    aria-label={`变量名 ${index + 1}`}
-                    bind:value={envRow.name}
-                    placeholder="NAME"
-                    autocomplete="off"
-                    autocapitalize="off"
-                    autocorrect="off"
-                    spellcheck={false}
-                    aria-invalid={!!rowErrors?.name}
-                  />
-                  <div class="flex min-w-0 flex-2 basis-48 items-center gap-1">
-                    <Input
-                      mono
-                      class="min-w-0 flex-1"
-                      type={revealed[envRow.key] ? "text" : "password"}
-                      aria-label={`变量值 ${index + 1}`}
-                      bind:value={envRow.value}
-                      placeholder="值"
-                      autocomplete="off"
-                      autocapitalize="off"
-                      autocorrect="off"
-                      spellcheck={false}
-                      aria-invalid={!!rowErrors?.value}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`显示变量值 ${index + 1}`}
-                      aria-pressed={!!revealed[envRow.key]}
-                      title={revealed[envRow.key] ? "隐藏变量值" : "显示变量值"}
-                      onclick={() => {
-                        revealed[envRow.key] = !revealed[envRow.key];
-                      }}
-                      >{#if revealed[envRow.key]}<IconEyeOff
-                          aria-hidden="true"
-                        />{:else}<IconEye aria-hidden="true" />{/if}</Button
-                    >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`删除变量 ${index + 1}`}
-                      title="删除变量"
-                      onclick={() => {
-                        rows = rows.filter((item) => item.key !== envRow.key);
-                      }}><IconTrash aria-hidden="true" /></Button
-                    >
-                  </div>
-                </div>
-                {#if rowErrors}<p class="text-xs text-destructive">
-                    {[rowErrors.name, rowErrors.value]
-                      .filter(Boolean)
-                      .join("；")}
-                  </p>{/if}
-              </div>
-            {/each}
-            {#if draft.errors.env}<p class="text-xs text-destructive">
-                {draft.errors.env}
-              </p>{/if}
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={rows.length >= LAUNCH_ENV_MAX}
-                onclick={() => {
-                  rows = [...rows, row()];
-                }}><IconPlus aria-hidden="true" />添加环境变量</Button
-              >
-            </div>
-            <p class="text-xs text-muted-foreground">
-              变量值保存在服务端状态文件中，默认遮挡；列表与新建会话页只显示变量个数，不显示值。
-            </p>
-          </fieldset>
+          <EnvRowsEditor
+            bind:rows
+            errors={draft.errors.rows}
+            error={draft.errors.env}
+            max={LAUNCH_ENV_MAX}
+            makeRow={row}
+          >
+            {#snippet help()}变量值保存在服务端状态文件中，默认遮挡；列表与新建会话页只显示变量个数，不显示值。{/snippet}
+          </EnvRowsEditor>
           <fieldset class="grid min-w-0 gap-2">
             <legend class="mb-2 text-sm font-medium">
               输出预览 <span class="font-normal text-muted-foreground"

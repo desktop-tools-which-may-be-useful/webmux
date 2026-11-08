@@ -42,6 +42,7 @@ import (
 	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/update"
 	"github.com/rainchan/webmux/internal/voice"
+	"github.com/rainchan/webmux/internal/voicesettings"
 	"github.com/rainchan/webmux/internal/workspace"
 	"github.com/rainchan/webmux/internal/wsl"
 )
@@ -505,16 +506,23 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if c.TunnelWebManaged {
 		tunnels.enabledSource = "web"
 	}
-	voiceOptions, err := assemble.VoiceOptions(c.Config)
-	if err != nil {
-		return fmt.Errorf("voice: %w", err)
+	// The web override of [voice] wins over config.toml; a damaged store
+	// turns recognition off rather than guessing.
+	voiceStore := voicesettings.Open(c.StateDir, c.Voice)
+	defer voiceStore.Close()
+	if err := voiceStore.Unavailable(); err != nil {
+		slog.Warn("voice settings unavailable; speech recognition stays off", "error", err)
 	}
+	voiceConfig := c.Config
+	voiceConfig.Voice, _ = voiceStore.Effective()
+	voiceService := voice.New(assemble.VoiceOptions(voiceConfig))
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
-		Forward:      forwards,
-		Voice:        voice.New(voiceOptions),
-		DefaultShell: agentprofile.DefaultShell(os.Getenv("SHELL")),
+		Forward:       forwards,
+		Voice:         voiceService,
+		VoiceSettings: newVoiceController(voiceStore, voiceService, voiceConfig),
+		DefaultShell:  agentprofile.DefaultShell(os.Getenv("SHELL")),
 		// The executable's identity is recorded now; later status and
 		// configuration requests compare against it.
 		InstalledVersion: update.NewInstalledVersion(version).Pending,

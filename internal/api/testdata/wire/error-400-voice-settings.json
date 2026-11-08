@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "invalid voice settings: voice.cmd[0] must not be empty"
+  }
+}

@@ -145,6 +145,8 @@
   >
     {#snippet trailing()}{@render draftToggle()}{@render quickMenu(
         "top",
+        "icon-sm",
+        "ghost",
       )}{/snippet}
   </SoftKeys>
 </div>

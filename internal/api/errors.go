@@ -20,6 +20,7 @@ import (
 	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
+	"github.com/rainchan/webmux/internal/voicesettings"
 	"github.com/rainchan/webmux/internal/wire"
 	"github.com/rainchan/webmux/internal/workspace"
 )
@@ -377,6 +378,19 @@ func tailscaleStatus(err error) int {
 		return http.StatusServiceUnavailable
 	default:
 		return http.StatusConflict
+	}
+}
+
+// voiceSettingsStatus maps recognizer settings errors; an unreadable store
+// is 503, anything else a rejected value.
+func voiceSettingsStatus(err error) int {
+	switch {
+	case errors.Is(err, voicesettings.ErrInvalid):
+		return http.StatusBadRequest
+	case errors.Is(err, voicesettings.ErrUnavailable):
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusInternalServerError
 	}
 }
 

@@ -536,6 +536,24 @@ export const TailscaleSettingsUpdateSchema = z
 export type TailscaleSettingsUpdate = z.infer<
   typeof TailscaleSettingsUpdateSchema
 >;
+// The web-editable [voice] recognizer; env values are credentials for the
+// recognition service.
+export const VoiceSettingsSchema = z.object({
+  cmd: z.array(z.string()),
+  env: z.record(z.string(), z.string()),
+  enabled: z.boolean(),
+  source: z.enum(["config", "web"]),
+  storageAvailable: z.boolean(),
+  storageError: z.string().optional(),
+});
+export type VoiceSettings = z.infer<typeof VoiceSettingsSchema>;
+export const VoiceSettingsUpdateSchema = z
+  .object({
+    cmd: VoiceSettingsSchema.shape.cmd,
+    env: VoiceSettingsSchema.shape.env,
+  })
+  .strict();
+export type VoiceSettingsUpdate = z.infer<typeof VoiceSettingsUpdateSchema>;
 // An installed version that takes effect after a restart. An unknown future
 // launcher falls back to the manual restart method.
 const PendingUpdateSchema = z.object({

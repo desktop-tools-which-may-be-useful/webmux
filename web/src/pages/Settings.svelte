@@ -64,6 +64,7 @@
   import TailscaleSettings from "../components/TailscaleSettings.svelte";
   import PushSettings from "../components/PushSettings.svelte";
   import InstallSettings from "../components/InstallSettings.svelte";
+  import VoiceSettings from "../components/VoiceSettings.svelte";
   import SettingsNavigation from "../components/SettingsNavigation.svelte";
   import NetworkSettings from "../components/NetworkSettings.svelte";
   import { Switch } from "$lib/components/ui/switch";
@@ -344,7 +345,7 @@
               </Empty.Content>
             </Empty.Root>
           {:else}
-            <Item.Group aria-label="快捷指令列表">
+            <Item.Group variant="divided" aria-label="快捷指令列表">
               {#each quickCommands.list as cmd, index (cmd.id)}
                 {@const label = commandLabel(cmd)}
                 <Item.Root variant="divided" size="flush" class="min-h-14">
@@ -399,7 +400,7 @@
                 </Item.Root>
               {/each}
             </Item.Group>
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 disabled={!settings.ready || full}
@@ -419,14 +420,14 @@
           {/if}
           <div class="flex flex-wrap gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               disabled={!settings.ready}
               onclick={() => changeSettings({ quickCommands: null })}
               >恢复预置指令</Button
             >
             <Button
-              variant="ghost"
+              variant="destructive-outline"
               size="sm"
               disabled={!settings.ready || quickCommands.list.length === 0}
               onclick={() => {
@@ -436,6 +437,7 @@
           </div>
         </Card.Content>
       </Card.Root>
+      <VoiceSettings />
       <Card.Root
         flat
         role="region"
@@ -504,7 +506,7 @@
               </Empty.Content>
             </Empty.Root>
           {:else}
-            <Item.Group aria-label="启动配置列表">
+            <Item.Group variant="divided" aria-label="启动配置列表">
               {#each launchConfigs as config (config.id)}
                 <Item.Root variant="divided" size="flush" class="min-h-14">
                   <ListButton

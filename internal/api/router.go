@@ -72,6 +72,9 @@ type Deps struct {
 	// Voice runs the optional external speech recognition command; nil or
 	// disabled answers 404 on GET /ws/voice.
 	Voice *voice.Service
+	// VoiceSettings reads and replaces the recognizer from the settings
+	// page; nil answers 503.
+	VoiceSettings VoiceControl
 	// InstalledVersion returns the installed version awaiting a restart,
 	// or ""; nil never reports one.
 	InstalledVersion func() string
@@ -138,7 +141,7 @@ func (s *Server) routes() *http.ServeMux {
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
-		voiceEnabled := (s.Voice != nil && s.Voice.Enabled()) || c.Voice.Enabled()
+		voiceEnabled := s.Voice != nil && s.Voice.Enabled()
 		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported, Voice: voiceEnabled})
 	})
 	s.sessionRoutes(mux)
