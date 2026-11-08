@@ -6,7 +6,9 @@
   - `TunnelManager`（`/settings/tunnel`）：Quick 或 Named 隧道，配置、启停、状态与“复制带 Token 链接”。
   - `TailscaleSettingsPage`（`/settings/tailscale`）：Serve 或 Funnel，端口、provider、WSL 指引与“复制带 Token 链接”。
   - 设置页通过 `AccessSummaryCard` 各显示一张摘要卡片，数据由 `useMountedRead` 读取。
-- **现有接口足够。** `GET /api/tunnel`、`PUT /api/tunnel/settings`、`PUT /api/tunnel/enabled`、`GET /api/tailscale`、`PUT /api/tailscale/settings` 已经返回向导所需的全部信息，包括 `canEnable`、`enableBlockedReason`、`storageAvailable`、`tokenConfigured`、`state`、`publicUrl`，所以向导不需要后端改动。
+- **现有接口足够，向导不需要后端改动。**
+  - 已有接口：`GET /api/tunnel`、`PUT /api/tunnel/settings`、`PUT /api/tunnel/enabled`、`GET /api/tailscale`、`PUT /api/tailscale/settings`。
+  - 它们已经返回向导所需的全部信息：`canEnable`、`enableBlockedReason`、`storageAvailable`、`tokenConfigured`、`state`、`publicUrl`。
 - **Token 的存放和约束。**
   - 登录 Token 在浏览器里保存在 `localStorage`，前端通过 `stored("token")` 读取；
   - `access-link` 规定 `#token=` 片段不会发给服务器，认证后立刻从地址栏移除；
