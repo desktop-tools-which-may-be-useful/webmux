@@ -66,12 +66,21 @@
         ? "重连中"
         : "连接中",
   );
+  // A probe that never answers (a stalled path, e.g. over a VPN after a
+  // network change) must end, or `measuring` would block every later one.
+  const PROBE_TIMEOUT_MS = 10_000;
   async function measureLatency() {
     if (measuring || connection !== "connected") return;
     measuring = true;
     const started = performance.now();
     try {
-      const next = await api("/health", HealthSchema);
+      const next = await api(
+        "/health",
+        HealthSchema,
+        "GET",
+        undefined,
+        AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      );
       latency = Math.max(0, Math.round(performance.now() - started));
       health = next;
     } catch {

@@ -33,7 +33,6 @@
     <TerminalInputComposer
       {draft}
       {drafts}
-      {saved}
       unavailable=""
       target="演示会话"
       openScratch={() => (open = true)}

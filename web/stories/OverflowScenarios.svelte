@@ -101,7 +101,6 @@
         {draft}
         {drafts}
         unavailable={`连接暂不可用，请保留草稿：${longToken}`}
-        saved="已保存在本机"
         target={session.title}
         openScratch={() => (scratchOpen = true)}
         send={() => (notice = "发送操作仅作演示")}
