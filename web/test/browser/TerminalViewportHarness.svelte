@@ -6,10 +6,18 @@
     connection = "reconnecting" as Connection,
     restoring = false,
     atBottom = true,
+    controlling = true,
+    touchGamepad = false,
+    send = () => {},
+    toggle = () => {},
   }: {
     connection?: Connection;
     restoring?: boolean;
     atBottom?: boolean;
+    controlling?: boolean;
+    touchGamepad?: boolean;
+    send?: (input: string) => void;
+    toggle?: (key: "ctrl" | "alt" | "shift") => void;
   } = $props();
 
   const terminal = {
@@ -23,6 +31,10 @@
     get connection() {
       return connection;
     },
+    get controlling() {
+      return controlling;
+    },
+    exitCode: null,
     modifiers: { ctrl: false, alt: false, shift: false },
     shiftLocked: false,
     copySelection() {},
@@ -39,11 +51,12 @@
   <TerminalViewport
     {terminal}
     visible
+    {touchGamepad}
     {uploads}
     {quickMenu}
     {draftToggle}
-    send={() => {}}
-    toggle={() => {}}
+    {send}
+    {toggle}
     lock={() => {}}
     paste={async () => {}}
     keyboard={() => {}}

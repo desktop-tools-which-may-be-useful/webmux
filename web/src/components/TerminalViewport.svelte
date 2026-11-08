@@ -7,6 +7,7 @@
     type ButtonVariant,
   } from "$lib/components/ui/button";
   import SoftKeys from "./SoftKeys.svelte";
+  import TouchGamepad from "./TouchGamepad.svelte";
   import type { Modifiers } from "../input";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import type { Connection } from "../ws";
@@ -17,6 +18,8 @@
     readonly restoring: boolean;
     readonly atBottom: boolean;
     readonly connection: Connection;
+    readonly controlling?: boolean;
+    readonly exitCode?: number | null;
     readonly modifiers: Modifiers;
     readonly shiftLocked: boolean;
     copySelection(): void;
@@ -42,6 +45,7 @@
     lock,
     paste,
     keyboard,
+    touchGamepad = false,
     findOpen = false,
     findBar,
   }: {
@@ -60,9 +64,46 @@
     lock: (key: "shift") => void;
     paste: () => Promise<void>;
     keyboard: () => void;
+    touchGamepad?: boolean;
     findOpen?: boolean;
     findBar?: Snippet;
   } = $props();
+
+  const gamepadActive = $derived(
+    touchGamepad &&
+      t.controlling === true &&
+      t.connection !== "missing" &&
+      (t.exitCode === null || t.exitCode === undefined) &&
+      visible,
+  );
+  let gamepadFaded = $state(false);
+  $effect(() => {
+    const host = container;
+    if (!host || !gamepadActive) {
+      gamepadFaded = false;
+      return;
+    }
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+    const onHostPointerDown = () => {
+      clearTimeout(fadeTimer);
+      gamepadFaded = true;
+    };
+    const onHostPointerEnd = () => {
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(() => {
+        gamepadFaded = false;
+      }, 600);
+    };
+    host.addEventListener("pointerdown", onHostPointerDown, true);
+    host.addEventListener("pointerup", onHostPointerEnd, true);
+    host.addEventListener("pointercancel", onHostPointerEnd, true);
+    return () => {
+      clearTimeout(fadeTimer);
+      host.removeEventListener("pointerdown", onHostPointerDown, true);
+      host.removeEventListener("pointerup", onHostPointerEnd, true);
+      host.removeEventListener("pointercancel", onHostPointerEnd, true);
+    };
+  });
 
   // Keep the hint off touch screens, including hybrids whose secondary pointer
   // is coarse, and mirror the platform's actual copy shortcut.
@@ -125,17 +166,29 @@
         variant="outline"
         size="sm"
         raised
-        class="absolute right-3 bottom-3 z-10 sm:hidden"
+        class={gamepadActive
+          ? "absolute right-3 bottom-36 z-10 sm:hidden"
+          : "absolute right-3 bottom-3 z-10 sm:hidden"}
         aria-label="回到最新"
         onmousedown={(event) => event.preventDefault()}
         onclick={() => t.scrollToBottom()}
         ><IconArrowDown aria-hidden="true" />回到最新</Button
       >{/if}
+    {#if gamepadActive}
+      <TouchGamepad
+        {send}
+        faded={gamepadFaded}
+        oninteract={() => {
+          gamepadFaded = false;
+        }}
+      />
+    {/if}
   </div>
   <SoftKeys
     {send}
     modifiers={t.modifiers}
     locked={t.shiftLocked}
+    gamepad={gamepadActive}
     {toggle}
     {lock}
     paste={() => {

@@ -131,3 +131,62 @@ test("a locked Shift shows its state and unlock hint", async () => {
   expect(shift!.getAttribute("title")).toBe("已锁定，点按解除");
   expect(shift!.getAttribute("aria-pressed")).toBe("true");
 });
+
+test("soft keys include Enter and deduplicate gamepad keys when gamepad mode is active", async () => {
+  const send = vi.fn();
+  const view = await render(SoftKeys, {
+    send,
+    modifiers: { ctrl: false, alt: false, shift: false },
+    gamepad: false,
+    toggle: () => {},
+    paste: () => {},
+    keyboard: () => {},
+  });
+
+  const labels = () =>
+    [...view.container.querySelectorAll(".soft-row button")]
+      .map((button) => button.textContent?.trim())
+      .filter(Boolean);
+
+  expect(labels()).toContain("↵");
+  expect(labels()).toContain("Esc");
+  expect(labels()).toContain("Tab");
+  expect(labels()).toContain("Ctrl");
+  expect(labels()).toContain("↑");
+  expect(labels()).toContain("Ctrl+C");
+
+  const enterButton = [
+    ...view.container.querySelectorAll(".soft-row button"),
+  ].find((button) => button.textContent === "↵")!;
+  enterButton.click();
+  expect(send).toHaveBeenCalledWith("\r");
+
+  await view.rerender({
+    send,
+    modifiers: { ctrl: false, alt: false, shift: false },
+    gamepad: true,
+    toggle: () => {},
+    paste: () => {},
+    keyboard: () => {},
+  });
+
+  for (const removed of ["Esc", "Tab", "↵", "↑", "↓", "←", "→", "Ctrl+C"]) {
+    expect(labels()).not.toContain(removed);
+  }
+  for (const kept of [
+    "/",
+    "Ctrl",
+    "Alt",
+    "Shift",
+    "Home",
+    "End",
+    "PgUp",
+    "PgDn",
+    "Ctrl+D",
+    "Ctrl+Z",
+    "Ctrl+L",
+    "Ctrl+R",
+  ]) {
+    expect(labels()).toContain(kept);
+  }
+});

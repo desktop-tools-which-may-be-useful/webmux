@@ -434,3 +434,87 @@ test("desktop devices can force the soft-key toolbar on and off through the term
   await expect(override).not.toBeChecked();
   await page.keyboard.press("Escape");
 });
+
+test("touch gamepad mode toggles in menu, shows only when controlling, deduplicates bottom keys, and lets untouched terminal area scroll", async ({
+  page,
+  browser,
+  workDir,
+}, testInfo) => {
+  test.skip(
+    !testInfo.project.use.isMobile,
+    "Exercises mobile touch gamepad and touch scrolling",
+  );
+  const id = await createShell(page, "Touch gamepad", workDir);
+  const bar = page.getByRole("complementary", { name: "终端软键" });
+  const gamepad = page.getByRole("toolbar", { name: "终端浮动摇杆" });
+  const menu = page.getByRole("button", { name: "终端菜单", exact: true });
+  const toggleItem = page.getByRole("menuitemcheckbox", {
+    name: "软键盘摇杆模式",
+    exact: true,
+  });
+
+  // Initially off: bottom row has Esc, Tab, Enter, Ctrl, arrows, Ctrl+C.
+  await expect(gamepad).toBeHidden();
+  await expect(
+    bar.getByRole("button", { name: "Esc", exact: true }),
+  ).toBeVisible();
+  await expect(
+    bar.getByRole("button", { name: "↵", exact: true }),
+  ).toBeVisible();
+
+  // Enable touch gamepad mode via terminal menu.
+  await menu.tap();
+  await expect(toggleItem).not.toBeChecked();
+  await toggleItem.tap();
+  await expect(toggleItem).toBeChecked();
+  await page.keyboard.press("Escape");
+
+  // Controlling client sees the semi-transparent gamepad and deduplicated bottom row.
+  await expect(gamepad).toBeVisible();
+  for (const label of ["Esc", "Tab", "↵", "↑", "↓", "←", "→", "Ctrl+C"]) {
+    await expect(
+      bar
+        .locator(".soft-row")
+        .getByRole("button", { name: label, exact: true }),
+    ).toHaveCount(0);
+  }
+  await expect(
+    bar.locator(".soft-row").getByRole("button", { name: "Ctrl", exact: true }),
+  ).toBeVisible();
+  await expect(
+    bar.locator(".soft-row").getByRole("button", { name: "Alt", exact: true }),
+  ).toBeVisible();
+
+  // Open a second client that takes control, turning this mobile page into an observer.
+  const otherContext = await browser.newContext();
+  const otherPage = await otherContext.newPage();
+  try {
+    await otherPage.goto(`/s/${id}`);
+    await otherPage
+      .getByRole("button", { name: "接管控制", exact: true })
+      .click();
+    // Observer must not show the floating gamepad, and bottom row restores full keys.
+    await expect(
+      page.getByRole("button", { name: "接管控制", exact: true }),
+    ).toBeVisible();
+    await expect(gamepad).toBeHidden();
+    await expect(
+      bar
+        .locator(".soft-row")
+        .getByRole("button", { name: "Esc", exact: true }),
+    ).toBeVisible();
+
+    // Claiming control back restores the floating gamepad.
+    await page.getByRole("button", { name: "接管控制", exact: true }).tap();
+    await expect(gamepad).toBeVisible();
+  } finally {
+    await otherContext.close();
+  }
+
+  // Verify floating keys send input (including Enter and Space).
+  const received = await recordInput(page, workDir);
+  await gamepad.getByRole("button", { name: "Esc", exact: true }).tap();
+  await gamepad.getByRole("button", { name: "空格", exact: true }).tap();
+  await gamepad.getByRole("button", { name: "回车", exact: true }).tap();
+  await expect.poll(() => readFile(received, "utf8")).toBe("\x1b \r");
+});

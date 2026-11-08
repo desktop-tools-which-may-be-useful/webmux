@@ -11,6 +11,7 @@
     send,
     modifiers,
     locked = false,
+    gamepad = false,
     toggle,
     lock = () => {},
     paste,
@@ -20,6 +21,7 @@
     send: (input: string) => void;
     modifiers: Modifiers;
     locked?: boolean;
+    gamepad?: boolean;
     toggle: (key: keyof Modifiers) => void;
     lock?: (key: "shift") => void;
     paste: () => void;
@@ -27,13 +29,18 @@
     trailing?: Snippet;
   } = $props();
   const symbols = ["/", "@", "#", "!"] as const;
-  const keys: Array<[string, string]> = [
+  const leadingKeys: Array<[string, string]> = [
     ["Esc", "\x1b"],
     ["Tab", "\t"],
+    ["↵", "\r"],
+  ];
+  const arrowKeys: Array<[string, string]> = [
     ["↑", "\x1b[A"],
     ["↓", "\x1b[B"],
     ["←", "\x1b[D"],
     ["→", "\x1b[C"],
+  ];
+  const navigationKeys: Array<[string, string]> = [
     ["Home", "\x1b[H"],
     ["End", "\x1b[F"],
     ["PgUp", "\x1b[5~"],
@@ -51,6 +58,11 @@
     ["alt", "Alt"],
     ["shift", "Shift"],
   ];
+  const visibleCombinations = $derived(
+    gamepad
+      ? combinations.filter(([label]) => label !== "Ctrl+C")
+      : combinations,
+  );
   const shiftTitle = $derived(
     locked ? "已锁定，点按解除" : "点按一次性，长按锁定",
   );
@@ -129,10 +141,12 @@
         onclick={() => send(symbol)}>{symbol}</Button
       >
     {/each}
-    {#each keys.slice(0, 2) as [label, input] (label)}{@render sendKey(
-        label,
-        input,
-      )}{/each}
+    {#if !gamepad}
+      {#each leadingKeys as [label, input] (label)}{@render sendKey(
+          label,
+          input,
+        )}{/each}
+    {/if}
     {#each modifierKeys as [key, label] (key)}
       <Button
         variant="ghost"
@@ -157,11 +171,17 @@
           />{/if}</Button
       >
     {/each}
-    {#each keys.slice(2) as [label, input] (label)}{@render sendKey(
+    {#if !gamepad}
+      {#each arrowKeys as [label, input] (label)}{@render sendKey(
+          label,
+          input,
+        )}{/each}
+    {/if}
+    {#each navigationKeys as [label, input] (label)}{@render sendKey(
         label,
         input,
       )}{/each}
-    {#each combinations as [label, input] (label)}{@render sendKey(
+    {#each visibleCombinations as [label, input] (label)}{@render sendKey(
         label,
         input,
       )}{/each}

@@ -38,3 +38,8 @@
 - 范围：工具栏新增“缩放”按钮，点击在工具栏下方展开带滑块（10px–24px，默认 13px）与重置按钮的缩放条；桌面端支持 `Ctrl + 鼠标滚轮` 缩放，移动端支持双指捏合缩放，字号偏好持久保存在本机浏览器 `localStorage`（`webmux.codeFontSize`）。
 - 依据：`CodeReader` 与 `CodeDocument` 浏览器组件测试（覆盖缩放按钮与滑块、重置、`Ctrl + wheel`、双指捏合 `touchstart`/`touchmove`/`touchend`）通过；`make check` 通过。
 - 限制：未在 iOS/Android 真机核对双指手势；未重新核验其余故事能力。
+
+本次局部核对（2026-11-08）：实现 OpenSpec 变更 `add-terminal-touch-gamepad`（终端底部软键栏补充回车键 `↵`，并新增“软键盘摇杆模式”半透明浮动操控层、控制权门控、底栏去重与空白区滚动穿透），对应更新 US-H01 与覆盖索引，不新增故事。
+
+- 依据：`SoftKeys` 与 `TerminalViewport` 浏览器组件测试（覆盖回车键、软键盘摇杆开关、观察端/控制端显示门控、底栏重复键过滤、十字键滑动切向与退格按住连发）以及 Playwright `softkeys.spec.ts` 端到端用例（菜单开关、控制权门控、底栏去重与空白区触摸滚动穿透）通过；`make check` 通过。
+- 限制：未在 iOS/Android 真机核对握持手感；未重新核验其余故事能力。

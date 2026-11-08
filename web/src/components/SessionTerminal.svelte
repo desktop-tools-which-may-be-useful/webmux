@@ -21,6 +21,7 @@
   import { useTerminal } from "../hooks/terminal.svelte";
   import { createKeyboardSizeHold } from "../hooks/keyboard-size-hold";
   import { keyboardSizeHold } from "../hooks/keyboard-size-hold-preference.svelte";
+  import { touchGamepad } from "../hooks/touch-gamepad-preference.svelte";
   import { codePanelState } from "../hooks/code-panel-state";
   import type { KeyboardVisibility } from "../hooks/viewport.svelte";
   import { useHybrid } from "../hooks/hybrid.svelte";
@@ -417,6 +418,9 @@
   function setKeyboardSizeHold(value: boolean) {
     keyboardSizeHold.enabled = value;
   }
+  function setTouchGamepad(value: boolean) {
+    touchGamepad.enabled = value;
+  }
   const sendUnavailable = $derived(
     t.connection === "missing"
       ? "会话不存在，无法发送"
@@ -774,6 +778,8 @@
     {setSizeLocked}
     keyboardSizeHold={keyboardSizeHold.enabled}
     {setKeyboardSizeHold}
+    touchGamepad={touchGamepad.enabled}
+    {setTouchGamepad}
     bind:codeShown
     bind:forceSoftKeys={
       () => forceSoftKeys, (value) => changeSettings({ forceSoftKeys: value })
@@ -853,6 +859,7 @@
             terminal={t}
             visible={terminalVisible()}
             sizeLocked={sizeLocked || keyboardHeld}
+            touchGamepad={touchGamepad.enabled}
             {findOpen}
             {uploads}
             {quickMenu}

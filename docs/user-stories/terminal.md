@@ -300,14 +300,16 @@
 
 ## H. 手机、平板与触摸操作
 
-- **US-H01 使用软键栏**：作为手机或平板使用者，我希望直接点击终端特殊按键，以便不依赖实体键盘操控 CLI。
+- **US-H01 使用软键栏与软键盘摇杆**：作为手机或平板使用者，我希望直接点击终端特殊按键，或切换为半透明浮动摇杆，以便不依赖实体键盘高效操控 CLI 与 Agent。
   验收要点：
   - 触摸设备默认显示可横向滚动的软键栏；软键栏的按钮没有外边框：键盘、粘贴、草稿、语音与快捷指令只显示图标（保留可访问名称与提示），其余按键显示文字；
-  - 包含键盘、粘贴、快捷指令、`/`、`@`、`#`、`!`、Esc、Tab、Ctrl、Alt、Shift、方向、Home/End、翻页和常用 Ctrl 组合键；
+  - 包含键盘、粘贴、快捷指令、`/`、`@`、`#`、`!`、Esc、Tab、回车（`↵`）、Ctrl、Alt、Shift、方向、Home/End、翻页和常用 Ctrl 组合键；
   - Ctrl/Alt 为一次性修饰；
   - Shift 点按为一次性、长按约 0.5 秒锁定并在再次点按后解除，锁定时按钮显示锁图标；
   - 可与 Tab、方向键、Home/End、翻页组成带 Shift 的序列，点按或锁定后对虚拟与实体键盘的后续输入同样应用 Shift；
-  - 符号映射按 US 布局。
+  - 符号映射按 US 布局；
+  - 终端菜单“显示”分组提供“软键盘摇杆模式”开关（保存在本机浏览器）：开启且当前客户端已接管控制、连接正常、进程未退出时，在终端底部两侧显示毛玻璃浮动按键（左侧 Esc、Tab、Ctrl+C 与回车 `Enter`，右侧左上角空格与十字方向键），点击或滑动终端时自动变为半透明退让，观察模式或未接管时不显示；
+  - 浮动摇杆的方向键支持按住连发与不抬手滑动切向；摇杆激活时底部软键栏自动隐藏已上浮的重复按键（Esc、Tab、`↵`、方向键、Ctrl+C，保留 Ctrl/Alt/Shift），未触碰浮动键的终端空白区完全穿透，照常单指滑动滚动与长按选词。
 - **US-H02 主动开合键盘**：作为触摸设备使用者，我希望自己决定何时打开虚拟键盘，以便阅读和点选时保留屏幕空间。
   验收要点：
   - 只有点击键盘按钮才主动唤起或收起；
@@ -379,7 +381,7 @@ US-H09 图标验收：应用图标与页头标志一致。maskable 版本为系�
 
 - [安装状态](../../web/src/install.svelte.ts)、[安装卡片](../../web/src/components/InstallSettings.svelte)、[安装卡片用例](../../web/test/browser/InstallSettings.test.ts)
 - [主屏幕图标](../../web/public/icon-512.png)、[maskable 图标](../../web/public/icon-maskable.svg)、[Apple 主屏幕图标](../../web/public/apple-touch-icon.png)
-- [Manifest](../../web/public/manifest.webmanifest)、[Manifest 与图标用例](../../internal/api/static_test.go)、[软键栏](../../web/src/components/SoftKeys.svelte)
+- [Manifest](../../web/public/manifest.webmanifest)、[Manifest 与图标用例](../../internal/api/static_test.go)、[软键栏](../../web/src/components/SoftKeys.svelte)、[软键盘摇杆](../../web/src/components/TouchGamepad.svelte)、[摇杆偏好](../../web/src/hooks/touch-gamepad-preference.svelte.ts)
 - [触摸手势](../../web/src/hooks/touch.ts)
 - [触摸检测](../../web/src/touch-input.ts)、[视口与键盘可见性](../../web/src/hooks/viewport.svelte.ts)、[终端输入与键盘切换](../../web/src/hooks/terminal.svelte.ts)
 - [键盘按钮暂时保持尺寸](../../web/src/hooks/keyboard-size-hold.ts)、[保持状态机用例](../../web/test/keyboard-size-hold.test.ts)
