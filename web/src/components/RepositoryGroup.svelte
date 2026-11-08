@@ -14,7 +14,11 @@
     type RepositoryArchive,
   } from "../archived";
   import { homeWorktrees } from "../home-worktrees.svelte";
-  import { homeLayout, worktreeTitle } from "../home-worktrees";
+  import {
+    homeLayout,
+    occupiedWorktrees,
+    worktreeTitle,
+  } from "../home-worktrees";
   import WorkspaceGroup from "./WorkspaceGroup.svelte";
 
   let {
@@ -94,6 +98,9 @@
   const renderLayout = $derived(
     homeLayout(homeWorktrees.value, repo, sessions, archived.worktrees),
   );
+  const occupied = $derived(
+    occupiedWorktrees(repo, sessions, archived.worktrees),
+  );
   const layout = $derived(
     visibleIds
       ? homeLayout(homeWorktrees.value, repo, visible, archived.worktrees)
@@ -164,6 +171,7 @@
               ))}
           {now}
           {pinned}
+          occupied={occupied.has(tree.id)}
           ontogglepin={() => ontogglepin(tree.id, !pinned)}
           {onclose}
           onstart={() => onstart(tree.id)}

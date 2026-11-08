@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   homeLayout,
   type HomeLayout,
+  occupiedWorktrees,
   parseHomeWorktrees,
   pruneHomeWorktrees,
   setPinned,
@@ -74,6 +75,22 @@ describe("homeLayout", () => {
 
   test("an explicit empty choice hides the main worktree too", () => {
     expect(homeLayout({ r1: [] }, repo(trees), []).shown).toEqual([]);
+  });
+});
+
+describe("occupiedWorktrees", () => {
+  const trees = [tree("main", "main"), tree("a"), tree("b")];
+
+  test("collects worktrees holding sessions or archived records of this repository", () => {
+    const other = {
+      workspace: { repositoryId: "r2", worktreeId: "b", worktreePath: "" },
+    } as SessionInfo;
+    const occupied = occupiedWorktrees(
+      repo(trees),
+      [sessionIn("a"), other],
+      new Map([["main", [{}]]]),
+    );
+    expect(occupied).toEqual(new Set(["a", "main"]));
   });
 });
 

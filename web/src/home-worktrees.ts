@@ -60,6 +60,24 @@ function sortWorktrees(worktrees: readonly Worktree[]): Worktree[] {
   );
 }
 
+/**
+ * Worktrees of `repo` that hold sessions or archived records. They stay on
+ * the home page whether or not they are pinned, so unpinning one has no
+ * visible effect until the sessions and records are gone.
+ */
+export function occupiedWorktrees(
+  repo: Repository,
+  sessions: readonly SessionInfo[],
+  archived: ReadonlyMap<string, readonly unknown[]> = new Map(),
+): ReadonlySet<string | undefined> {
+  return new Set([
+    ...sessions
+      .filter((s) => s.workspace?.repositoryId === repo.id)
+      .map((s) => s.workspace?.worktreeId),
+    ...archived.keys(),
+  ]);
+}
+
 // Sessions are never hidden: a worktree with sessions or archived records
 // stays on the home page whether or not it is pinned, so curation only
 // removes idle clutter.
@@ -70,12 +88,7 @@ export function homeLayout(
   archived: ReadonlyMap<string, readonly unknown[]> = new Map(),
 ): HomeLayout {
   const pinned = pinnedIds(pruneHomeWorktrees(home, [repo]), repo);
-  const active = new Set([
-    ...sessions
-      .filter((s) => s.workspace?.repositoryId === repo.id)
-      .map((s) => s.workspace?.worktreeId),
-    ...archived.keys(),
-  ]);
+  const active = occupiedWorktrees(repo, sessions, archived);
   const trees = sortWorktrees(repo.worktrees);
   return {
     trees,

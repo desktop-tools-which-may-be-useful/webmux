@@ -12,6 +12,7 @@
     ondetails,
     hidden = false,
     pinned,
+    occupied,
     ontogglepin,
     onremove,
   }: {
@@ -21,6 +22,7 @@
     ondetails: () => void;
     hidden?: boolean;
     pinned?: boolean;
+    occupied?: boolean;
     ontogglepin?: () => void;
     onremove?: () => void;
   } = $props();
@@ -54,7 +56,7 @@
       {/snippet}
     </DropdownMenu.Trigger>
     <DropdownMenu.Content align="end">
-      <WorktreeMenuItems {pinned} {ontogglepin} {onremove} />
+      <WorktreeMenuItems {pinned} {occupied} {ontogglepin} {onremove} />
     </DropdownMenu.Content>
   </DropdownMenu.Root>
 {/if}

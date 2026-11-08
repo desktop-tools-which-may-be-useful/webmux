@@ -30,6 +30,7 @@
       title: string;
       ondetails: () => void;
       pinned: boolean;
+      occupied: boolean;
       ontogglepin: () => void;
       onremove?: () => void;
     };
@@ -67,6 +68,7 @@
       >
       <WorktreeMenuItems
         pinned={worktree.pinned}
+        occupied={worktree.occupied}
         ontogglepin={worktree.ontogglepin}
         onremove={worktree.onremove}
       />

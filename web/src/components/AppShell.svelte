@@ -14,7 +14,7 @@
   import { createServerSetup } from "../hooks/server-setup.svelte";
   import { createSessionList } from "../hooks/session-list.svelte";
   import { homeWorktrees } from "../home-worktrees.svelte";
-  import { homeLayout, setPinned } from "../home-worktrees";
+  import { setPinned } from "../home-worktrees";
   import {
     resolveLaunchScope,
     type LaunchEntry,
@@ -94,22 +94,6 @@
     onremoved?: () => void;
     forgetRecords?: readonly ArchivedSession[];
   } | null>(null);
-  // Unpins a worktree from the home page; absent when its repository is gone.
-  function hideFromHome(tree: Worktree) {
-    const repo = repositories.list.find((r) => r.id === tree.repositoryId);
-    // Already off the home page: nothing to hide.
-    const pinned = repo
-      ? homeLayout(homeWorktrees.value, repo, [], new Map()).shown.some(
-          (w) => w.tree.id === tree.id && w.pinned,
-        )
-      : false;
-    return repo && pinned
-      ? () =>
-          homeWorktrees.save(
-            setPinned(homeWorktrees.value, repo, [tree.id], false),
-          )
-      : undefined;
-  }
   let managingWorktrees = $state<Repository | null>(null);
   let choosingHome = $state<Repository | null>(null);
   let viewingRepository = $state<Repository | null>(null);
@@ -471,7 +455,6 @@
         worktree={target.worktree}
         forgetRecords={target.forgetRecords ?? []}
         onremoved={target.onremoved}
-        onhide={hideFromHome(target.worktree)}
         onchange={refreshWorktrees}
         onclose={() => (removingWorktree = null)}
       />{/snippet}

@@ -27,6 +27,7 @@
     onstart,
     onremove,
     pinned,
+    occupied,
     ontogglepin,
     archived = [],
     archive,
@@ -50,6 +51,8 @@
     onremove?: () => void;
     // Undefined outside curated repository lists.
     pinned?: boolean;
+    /** Sessions or archived records keep the group on the home page. */
+    occupied?: boolean;
     ontogglepin?: () => void;
     // Closed and interrupted hybrid sessions placed in this group; already
     // narrowed by the home page's filters.
@@ -113,7 +116,7 @@
             class="shrink-0 text-xs text-muted-foreground"
             >{visible.length}</span
           >{/if}
-        {#if worktree}<WorktreeBadges {worktree} {pinned} />{/if}
+        {#if worktree}<WorktreeBadges {worktree} />{/if}
       </div>
       <div
         class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
@@ -137,6 +140,7 @@
           ondetails={() => setDetails(true)}
           {hidden}
           {pinned}
+          {occupied}
           {ontogglepin}
           {onremove}
         />

@@ -2,11 +2,9 @@
   import type { Worktree } from "../schemas";
   import { Badge } from "$lib/components/ui/badge";
 
-  // Undefined `pinned` means the list is not curated (no pin badge).
-  let { worktree, pinned }: { worktree: Worktree; pinned?: boolean } = $props();
+  let { worktree }: { worktree: Worktree } = $props();
   const shown = $derived(
-    pinned === false ||
-      worktree.kind === "bare" ||
+    worktree.kind === "bare" ||
       worktree.locked ||
       worktree.prunable ||
       !worktree.available ||
@@ -17,7 +15,6 @@
 
 {#if shown}
   <div class="flex max-w-full flex-wrap items-center gap-1.5">
-    {#if pinned === false}<Badge variant="outline">未添加到主页</Badge>{/if}
     {#if worktree.kind === "bare"}<Badge variant="secondary"
         >bare · 不可启动</Badge
       >{/if}

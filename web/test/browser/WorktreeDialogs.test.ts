@@ -75,31 +75,12 @@ function showRemove(
   return fetch;
 }
 
-test("the green hide button unpins the worktree from the home page without removing it", async () => {
-  const fetch = serve(preview());
-  const onhide = vi.fn();
-  const onclose = vi.fn();
-  render(RemoveWorktreeDialog, {
-    worktree: tree,
-    onclose,
-    onchange: vi.fn(),
-    onhide,
-  });
-  // Offered beside the deletion actions, also when deletion is blocked.
+test("the removal dialog only deletes: it offers no hide-from-home action", async () => {
+  showRemove();
+  await expect.element(removeDialog()).toBeVisible();
   await expect
     .element(page.getByRole("button", { name: "确认安全删除" }))
     .toBeVisible();
-  await page.getByRole("button", { name: "仅从主页隐藏" }).click();
-  expect(onhide).toHaveBeenCalledOnce();
-  expect(onclose).toHaveBeenCalledOnce();
-  expect(
-    fetch.mock.calls.some(([url]) => String(url).endsWith("/remove")),
-  ).toBe(false);
-});
-
-test("the hide button is absent without a hide handler", async () => {
-  showRemove();
-  await expect.element(removeDialog()).toBeVisible();
   expect(page.getByRole("button", { name: "仅从主页隐藏" }).elements()).toEqual(
     [],
   );

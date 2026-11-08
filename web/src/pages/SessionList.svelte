@@ -30,7 +30,12 @@
   } from "../archived";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../home-worktrees.svelte";
-  import { homeLayout, setPinned, worktreeTitle } from "../home-worktrees";
+  import {
+    homeLayout,
+    occupiedWorktrees,
+    setPinned,
+    worktreeTitle,
+  } from "../home-worktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
@@ -386,6 +391,11 @@
             title: worktreeTitle(tree),
             ondetails: () => (worktreeDetailsOpen = true),
             pinned: selectedPinned,
+            occupied: occupiedWorktrees(
+              repo,
+              sessions,
+              placement.repositories.get(repo.id)?.worktrees,
+            ).has(tree.id),
             ontogglepin: () => pin(repo.id, [tree.id], !selectedPinned),
             onremove:
               tree.kind === "linked" ? () => (removing = tree) : undefined,
@@ -476,7 +486,6 @@
           {#snippet meta()}
             {#if selectedWorktree}<WorktreeBadges
                 worktree={selectedWorktree}
-                pinned={selectedPinned}
               />{/if}
           {/snippet}
           <SessionFilters
