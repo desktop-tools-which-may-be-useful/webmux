@@ -24,7 +24,7 @@ jobs:
   # the suite again. Nothing is signed or published without one of the two.
   verify:
     name: Find the main Test run
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -50,7 +50,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -111,7 +111,7 @@ jobs:
     name: Sign SHA256SUMS
     needs: [build, verify, checks]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.verify.result == 'success' && (needs.checks.result == 'success' || (needs.verify.outputs.reuse == 'true' && needs.checks.result == 'skipped')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -142,7 +142,7 @@ jobs:
     name: Publish the Release
     needs: [build, verify, checks, sign]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.sign.result == 'success' && needs.verify.result == 'success' && (needs.checks.result == 'success' || (needs.verify.outputs.reuse == 'true' && needs.checks.result == 'skipped')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: write
@@ -200,7 +200,7 @@ jobs:
     name: Trigger the site rebuild
     needs: [build, publish]
     if: ${{ !cancelled() && needs.publish.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions: {}
     steps:
