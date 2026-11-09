@@ -102,7 +102,7 @@
 ```
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 # ~/.claude/hooks/webmux-attention.sh — silent outside webmux sessions; needs jq.
 [ -n "$WEBMUX_SESSION_ID" ] || exit 0
 input=$(cat)

@@ -113,4 +113,4 @@ macOS 上：
 - 没有 subreaper，脱离父进程的后代由 launchd 回收。
 - 内核不公开其他进程的环境变量，`WEBMUX_SESSION_ID` 无法用于清理；关闭会话时按终端会话 ID 与进程树查找后代。先 `setsid` 再让父进程退出的自守护程序不会被清理。
 - 临时目录位于 `/var → /private/var` 符号链接下，WebMux 报告规范化后的真实路径。
-- Apple 自带的 `/bin/bash` 为 3.2 版本；如需 zsh，请在自定义启动命令中显式填写 `/bin/zsh -l -i`。
+- Apple 自带的系统 Bash 版本为 3.2；跨平台配置建议使用 `/usr/bin/env bash`。如需 zsh，请在自定义启动命令中显式填写 `/bin/zsh -l -i`。

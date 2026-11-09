@@ -32,7 +32,7 @@ Kimi 对应当前 Kimi Code CLI，旧 Kimi CLI 用户应先按官方说明迁移
 2. 在“新建会话”的“运行”列表中选择启动配置，在“位置”中指定目录或工作树，再创建会话。
 3. 在设置页编辑完整命令、参数、环境变量及图标。参数因 CLI 而异，请查看对应程序的 `--help`。
 
-预置 agent 命令使用“加载 shell 启动文件”包装，Bash 为 `bash -ic 'exec -- "$@"' webmux <程序> <参数>`，Zsh 为 `zsh -ic 'exec -- "$@"' webmux <程序> <参数>`。
+预置 agent 命令使用“加载 shell 启动文件”包装，Bash 为 `/usr/bin/env bash -ic 'exec -- "$@"' webmux <程序> <参数>`，Zsh 为 `zsh -ic 'exec -- "$@"' webmux <程序> <参数>`。
 这使 CLI 能读取 `~/.bashrc` 或 `~/.zshrc` 中的 PATH 和环境。新安装按服务端 `$SHELL` 的 basename 选择 Bash 或 Zsh；未设置时使用 Bash，fish、nu 等其他 shell 不包装。也可编辑配置为可执行文件的绝对路径，取消该包装。
 命令经 argv 传递，空参数、空格和字面量 `$HOME` 等字符不被当作脚本求值。
 

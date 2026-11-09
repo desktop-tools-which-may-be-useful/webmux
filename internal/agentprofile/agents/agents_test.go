@@ -32,7 +32,7 @@ const (
 )
 
 var wrapped = func(args ...string) []string {
-	return append([]string{"bash", "-ic", `exec -- "$@"`, "webmux"}, args...)
+	return append([]string{"/usr/bin/env", "bash", "-ic", `exec -- "$@"`, "webmux"}, args...)
 }
 
 var wrappedZsh = func(args ...string) []string {
@@ -57,9 +57,9 @@ func TestCheck(t *testing.T) {
 		{name: "custom shell wrapper", argv: []string{"sh", "-c", "omp"}, reason: ReasonUnsupportedForm},
 		{name: "custom zsh wrapper", argv: []string{"zsh", "-c", "omp"}, reason: ReasonUnsupportedForm},
 		{name: "env prefix", argv: []string{"env", "A=1", "opencode"}, reason: ReasonUnsupportedForm},
-		{name: "other bashrc script", argv: []string{"bash", "-ic", "exec omp", "webmux"}, reason: ReasonUnsupportedForm},
+		{name: "other bashrc script", argv: []string{"/usr/bin/env", "bash", "-ic", "exec omp", "webmux"}, reason: ReasonUnsupportedForm},
 		{name: "other zshrc script", argv: []string{"zsh", "-ic", "exec omp", "webmux"}, reason: ReasonUnsupportedForm},
-		{name: "plain shell", argv: []string{"/bin/bash", "-l"}, reason: ReasonUnknownAgent},
+		{name: "plain shell", argv: []string{"/usr/bin/env", "bash", "-l"}, reason: ReasonUnknownAgent},
 		{name: "other agent wrapped", argv: wrapped("gemini"), reason: ReasonUnknownAgent},
 		{name: "empty", argv: nil, reason: ReasonUnknownAgent},
 		{name: "opencode directory", argv: []string{"opencode", "/home/u/proj"}, reason: ReasonDirectoryArg, arg: "/home/u/proj"},
@@ -385,7 +385,7 @@ func TestACPArgv(t *testing.T) {
 		{
 			name: "bashrc writes protocol to fd 3",
 			argv: wrapped("omp", "--auto-approve"),
-			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "omp", "acp", "--auto-approve"},
+			want: []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "omp", "acp", "--auto-approve"},
 			fd3:  true,
 		},
 		{
@@ -403,7 +403,7 @@ func TestACPArgv(t *testing.T) {
 		{
 			name: "codex connector through bashrc",
 			argv: wrapped("codex", "--dangerously-bypass-approvals-and-sandbox"),
-			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "codex-acp"},
+			want: []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "codex-acp"},
 			fd3:  true,
 		},
 		{
@@ -420,7 +420,7 @@ func TestACPArgv(t *testing.T) {
 		{
 			name: "qoder bashrc uses --acp flag with fd 3",
 			argv: wrapped("qoder", "--dangerously-skip-permissions"),
-			want: []string{"bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "qoder", "--acp"},
+			want: []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@" 1>&3 3>&-`, "webmux", "qoder", "--acp"},
 			fd3:  true,
 		},
 		{

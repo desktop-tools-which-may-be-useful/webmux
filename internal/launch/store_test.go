@@ -264,7 +264,7 @@ func TestIconsPersistAndLegacyConfigsRemainReadable(t *testing.T) {
 func TestHybridFlag(t *testing.T) {
 	dir := t.TempDir()
 	s := Open(dir)
-	omp := []string{"bash", "-ic", `exec -- "$@"`, "webmux", "omp"}
+	omp := []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@"`, "webmux", "omp"}
 	plain := mustCreate(t, s, Input{Name: "omp", Cmd: omp})
 	raw, err := os.ReadFile(filepath.Join(dir, fileName))
 	if err != nil || strings.Contains(string(raw), "hybrid") {
@@ -287,7 +287,7 @@ func TestHybridFlag(t *testing.T) {
 			t.Fatalf("create hybrid with %q accepted: %v", cmd, err)
 		}
 	}
-	if got, _ := s.Get(plain.ID); !got.Hybrid || got.Cmd[4] != "omp" {
+	if got, _ := s.Get(plain.ID); !got.Hybrid || got.Cmd[len(got.Cmd)-1] != "omp" {
 		t.Fatalf("rejected update changed the config: %+v", got)
 	}
 	s.Close()
@@ -302,7 +302,7 @@ func TestHybridFlag(t *testing.T) {
 	if err := json.Unmarshal(raw, &stored); err != nil || !stored.Configs[0].Hybrid {
 		t.Fatalf("checked config not persisted: %s %v", raw, err)
 	}
-	stored.Configs[0].Cmd[4] = "gemini"
+	stored.Configs[0].Cmd[5] = "gemini"
 	if raw, err = json.Marshal(stored); err != nil {
 		t.Fatal(err)
 	}

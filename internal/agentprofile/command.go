@@ -140,6 +140,9 @@ func newCommand(agent Agent, form Form, shell, exe string, args []string) (Comma
 }
 
 func splitForm(argv []string) (Form, string, string, []string, bool) {
+	if len(argv) >= 6 && argv[0] == "/usr/bin/env" && argv[1] == ShellBash && argv[2] == "-ic" && argv[3] == startupScript && argv[4] == startupName {
+		return FormStartup, ShellBash, argv[5], argv[6:], true
+	}
 	if len(argv) >= 5 && argv[1] == "-ic" && argv[2] == startupScript && argv[3] == startupName && SupportedStartupShell(argv[0]) {
 		return FormStartup, argv[0], argv[4], argv[5:], true
 	}
@@ -246,7 +249,11 @@ func (c Command) wrap(script string, args ...string) []string {
 // wrapExec runs executable in the command's form.
 func (c Command) wrapExec(script, executable string, args ...string) []string {
 	if c.Form == FormStartup {
-		return append([]string{c.Shell, "-ic", script, startupName, executable}, args...)
+		prefix := []string{c.Shell, "-ic"}
+		if c.Shell == ShellBash {
+			prefix = []string{"/usr/bin/env", ShellBash, "-ic"}
+		}
+		return append(append(prefix, script, startupName, executable), args...)
 	}
 	return append([]string{executable}, args...)
 }

@@ -189,7 +189,7 @@
       ...base,
       id: "plainshl",
       title: "bash",
-      cmd: ["/bin/bash"],
+      cmd: ["/usr/bin/env bash"],
       status: "idle",
       attention: null,
       preview: "$ git status\nOn branch main\nnothing to commit",

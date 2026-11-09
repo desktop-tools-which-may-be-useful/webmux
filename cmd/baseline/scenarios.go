@@ -251,7 +251,7 @@ func (f *fixture) worktrees(n int) metric {
 		path := filepath.Join(f.root, fmt.Sprintf("tree-%d", i))
 		base := "/api/repositories/" + r.ID
 		w := decode[workspace.Worktree](f.request("POST", base+"/worktrees", workspace.CreateRequest{Path: path, Mode: "new", Branch: fmt.Sprintf("baseline-%d", i), Base: "main"}, 201))
-		s := created(f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/bash", "-c", "pwd; exit 7"}, "workspace": workspace.Reference{RepositoryID: r.ID, WorktreeID: w.ID}}, 201))
+		s := created(f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/usr/bin/env", "bash", "-c", "pwd; exit 7"}, "workspace": workspace.Reference{RepositoryID: r.ID, WorktreeID: w.ID}}, 201))
 		defer f.dispose(s.ID)
 		info := f.await(s.ID, func(v session.Info) bool { return v.Status == session.StatusExited })
 		checkf(info.Cwd == path && info.ExitCode != nil && *info.ExitCode == 7, "workspace cwd/exit mismatch")

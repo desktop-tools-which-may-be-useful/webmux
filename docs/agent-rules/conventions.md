@@ -19,7 +19,7 @@ Detail moved out of `AGENTS.md`, which has a 10 KiB budget. The short versions i
 - Execute commands as argv, not shell-expanded strings.
 - Session creation takes either a saved custom launch `configId` or an explicit full `cmd`/`env`. They are mutually exclusive.
 - A new install seeds ordinary, editable launch configs (`internal/launch/presets.go`, listed in [cli-agents](../cli-agents.md)). Nothing is wrapped implicitly at run time.
-  - Loading `.bashrc` requires an explicit command such as `bash -ic 'exec -- "$@"' webmux opencode`, the form the presets and hybrid mode accept.
+  - Loading `.bashrc` requires an explicit command such as `/usr/bin/env bash -ic 'exec -- "$@"' webmux opencode`, the form the presets and hybrid mode accept.
 - Preserve authentication and Origin checks on API/WebSocket paths.
 - Never log terminal input/output. Never expose tokens through configuration responses.
 

@@ -46,6 +46,7 @@
         ]
       },
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",

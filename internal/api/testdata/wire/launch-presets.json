@@ -15,6 +15,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -29,6 +30,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -43,6 +45,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -57,6 +60,7 @@
     {
       "chat": false,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -70,6 +74,7 @@
     {
       "chat": false,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -83,6 +88,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -97,6 +103,7 @@
     {
       "chat": false,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -110,6 +117,7 @@
     {
       "chat": false,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -123,6 +131,7 @@
     {
       "chat": false,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -136,6 +145,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -152,6 +162,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",
@@ -166,6 +177,7 @@
     {
       "chat": true,
       "cmd": [
+        "/usr/bin/env",
         "bash",
         "-ic",
         "exec -- \"$@\"",

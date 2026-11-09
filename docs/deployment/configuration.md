@@ -179,7 +179,7 @@ env = ["DASHSCOPE_API_KEY=sk-xxx"]
   - Shell：`$SHELL -l -i`，未设置 `$SHELL` 时为 `/bin/sh`。
   - 十一款 CLI agent 和 omp；完整列表见 [CLI agent 接入](../cli-agents.md)。
 - agent 预设按服务端 `$SHELL` 的 basename 选择启动文件包装：
-  - Bash：`bash -ic 'exec -- "$@"' webmux <程序>`，读取 `~/.bashrc`。
+  - Bash：`/usr/bin/env bash -ic 'exec -- "$@"' webmux <程序>`，读取 `~/.bashrc`。
   - Zsh：`zsh -ic 'exec -- "$@"' webmux <程序>`，读取 `~/.zshrc`。
   - 未设置 `$SHELL` 时使用 Bash；fish、nu 等其他 shell 直接执行。
 - 它们是普通配置，可编辑或删除。
@@ -207,7 +207,7 @@ which codex-acp claude-agent-acp  # 必须能在服务的 PATH 或“加载 shel
 ```
 
 - 没有连接器时对应会话照常在终端运行，页面提示安装命令；安装后 30 秒内自动重新检测。
-- 每次启动聊天端前都会检查连接器；“加载 shell 启动文件”的配置会多启动一次对应的 `bash -ic` 或 `zsh -ic`。
+- 每次启动聊天端前都会检查连接器；“加载 shell 启动文件”的配置会多启动一次对应的 `/usr/bin/env bash -ic` 或 `zsh -ic`。
 - 资格核对还会冷启动连接器。
 - 两条安装命令都跟随 npm `latest`。
 - Claude 的实测基线是 Claude Code 2.1.316 与 claude-agent-acp 0.99.1，不保证未来版本兼容；旧版只提示，新版需重新验证。

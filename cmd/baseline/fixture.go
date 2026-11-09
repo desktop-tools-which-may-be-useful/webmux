@@ -114,7 +114,7 @@ func created(data []byte) session.Info {
 	}](data).Session
 }
 func (f *fixture) create(script string) string {
-	v := created(f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/bash", "--noprofile", "--norc", "-c", script}}, 201))
+	v := created(f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/usr/bin/env", "bash", "--noprofile", "--norc", "-c", script}}, 201))
 	return v.ID
 }
 func (f *fixture) info(id string) session.Info {

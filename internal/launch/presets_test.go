@@ -21,7 +21,7 @@ func TestPresetsFollowDefaultShell(t *testing.T) {
 			name:      "bash",
 			shell:     "/bin/bash",
 			wantLogin: []string{"/bin/bash", "-l", "-i"},
-			wantOMP:   []string{"bash", "-ic", `exec -- "$@"`, "webmux", "omp", "--auto-approve"},
+			wantOMP:   []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@"`, "webmux", "omp", "--auto-approve"},
 		},
 		{
 			name:      "zsh",
@@ -33,7 +33,7 @@ func TestPresetsFollowDefaultShell(t *testing.T) {
 			name:      "unset falls back to bash",
 			shell:     "",
 			wantLogin: []string{"/bin/sh", "-l", "-i"},
-			wantOMP:   []string{"bash", "-ic", `exec -- "$@"`, "webmux", "omp", "--auto-approve"},
+			wantOMP:   []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@"`, "webmux", "omp", "--auto-approve"},
 		},
 		{
 			name:      "other shell runs directly",

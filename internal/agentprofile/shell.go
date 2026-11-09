@@ -38,5 +38,9 @@ func StartupArgv(shell, program string, args ...string) []string {
 	if !SupportedStartupShell(shell) {
 		return append([]string{program}, args...)
 	}
-	return append([]string{shell, "-ic", startupScript, startupName, program}, args...)
+	argv := []string{shell, "-ic", startupScript, startupName, program}
+	if shell == ShellBash {
+		argv = []string{"/usr/bin/env", shell, "-ic", startupScript, startupName, program}
+	}
+	return append(argv, args...)
 }

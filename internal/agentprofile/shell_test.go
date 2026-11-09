@@ -34,7 +34,7 @@ func TestStartupArgv(t *testing.T) {
 		{
 			name: "bash",
 			argv: StartupArgv(ShellBash, "omp", "--auto-approve"),
-			want: []string{"bash", "-ic", `exec -- "$@"`, "webmux", "omp", "--auto-approve"},
+			want: []string{"/usr/bin/env", "bash", "-ic", `exec -- "$@"`, "webmux", "omp", "--auto-approve"},
 		},
 		{
 			name: "zsh",

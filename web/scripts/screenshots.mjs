@@ -294,7 +294,7 @@ async function startBackend(extraEnv) {
   const child = spawn(binary, ["--config", config], {
     cwd: demo,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, ...extraEnv, SHELL: "/bin/bash" },
+    env: { ...process.env, ...extraEnv, SHELL: "/usr/bin/env bash" },
   });
   let output = "";
   child.stdout.on("data", (c) => (output += c));
@@ -469,7 +469,11 @@ async function featureShots(browser, baseURL) {
 
       // Split panes with a draft.
       await closeSessions();
-      await createSession(page, "/bin/bash --noprofile --norc -i", "api");
+      await createSession(
+        page,
+        "/usr/bin/env bash --noprofile --norc -i",
+        "api",
+      );
       await type(page, PROMPT);
       await delay(500);
       await type(page, "go test ./...");
@@ -497,7 +501,11 @@ async function featureShots(browser, baseURL) {
 
       // Kitty graphics.
       await closeSessions();
-      await createSession(page, "/bin/bash --noprofile --norc -i", "chart");
+      await createSession(
+        page,
+        "/usr/bin/env bash --noprofile --norc -i",
+        "chart",
+      );
       await type(page, PROMPT);
       await delay(500);
       await type(page, "echo 'p95 latency per release:'; cat " + chartFile);
@@ -506,7 +514,11 @@ async function featureShots(browser, baseURL) {
 
       // File explorer in the code workspace.
       await closeSessions();
-      await createSession(page, "/bin/bash --noprofile --norc -i", "files");
+      await createSession(
+        page,
+        "/usr/bin/env bash --noprofile --norc -i",
+        "files",
+      );
       await type(page, PROMPT);
       await delay(500);
       await type(page, "git status -sb");
@@ -572,7 +584,11 @@ async function main() {
     const mobile = await contexts.mobile.newPage();
 
     // Background sessions that make the overview interesting.
-    await createSession(desktop, "/bin/bash --noprofile --norc -i", "go test");
+    await createSession(
+      desktop,
+      "/usr/bin/env bash --noprofile --norc -i",
+      "go test",
+    );
     await type(desktop, PROMPT);
     await delay(500);
     await type(desktop, "go test ./... 2>&1 | head -5");
@@ -581,7 +597,11 @@ async function main() {
       desktop,
       "echo; echo 'Proceed with deploy? [y/N]' ; read -r answer",
     );
-    await createSession(desktop, "/bin/bash --noprofile --norc -i", "build");
+    await createSession(
+      desktop,
+      "/usr/bin/env bash --noprofile --norc -i",
+      "build",
+    );
     await type(desktop, PROMPT);
     await delay(500);
     await type(
@@ -604,7 +624,7 @@ async function main() {
     // Shell session.
     const shellId = await createSession(
       desktop,
-      "/bin/bash --noprofile --norc -i",
+      "/usr/bin/env bash --noprofile --norc -i",
       "shell",
     );
     await type(desktop, PROMPT);
@@ -709,7 +729,11 @@ async function main() {
 
     // Port forwarding: the demo API listens on :8080, which raises the
     // terminal's 检测到端口 banner.
-    await createSession(desktop, "/bin/bash --noprofile --norc -i", "api");
+    await createSession(
+      desktop,
+      "/usr/bin/env bash --noprofile --norc -i",
+      "api",
+    );
     // The code pane stays open from the diff view; give the terminal the width.
     const fold = desktop
       .locator(".terminal-header")

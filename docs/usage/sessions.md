@@ -215,7 +215,7 @@ omp、Codex CLI（0.164.0+）与 Claude Code（2.1.295+）无需配置即可自�
 
 - **图标**：自动匹配、通用终端、十一款 CLI 品牌图标或 Pi / omp。
 - **“输出预览”**：单独设置行数与跳过末尾行数；不设置时跟随服务端全局预览。
-- **“加载 shell 启动文件”**：可选 Bash（`~/.bashrc`）或 Zsh（`~/.zshrc`），保存为 `bash -ic 'exec -- "$@"' webmux …` 或 `zsh -ic 'exec -- "$@"' webmux …` 的完整 argv。
+- **“加载 shell 启动文件”**：可选 Bash（`~/.bashrc`）或 Zsh（`~/.zshrc`），保存为 `/usr/bin/env bash -ic 'exec -- "$@"' webmux …` 或 `zsh -ic 'exec -- "$@"' webmux …` 的完整 argv。
   - 命令与参数原样传给 `exec`，不展开 `$HOME`、管道或命令替换；
   - 再次编辑保持勾选与所选 shell，不重复包裹；
   - 新建配置按服务端 `$SHELL` 预选，其他 shell 回退 Bash。

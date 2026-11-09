@@ -31,7 +31,7 @@ systemd 和 launchd 不会自动加载你的交互 shell 配置（如 `~/.bashrc
 最简单的解决方式（按优先级选择）：
 
 1. 在“设置 → 启动配置”中编辑对应配置，勾选 **“加载 shell 启动文件”**（可选 Bash 或 Zsh，新安装的预置配置已默认开启 Bash）。
-2. 若使用一次性自定义命令，可显式写成 `bash -ic 'exec opencode "$@"' opencode`，或把程序目录加入服务的 `PATH`，参见 [agent 的 PATH](deployment/services.md#agent-的-path)。
+2. 若使用一次性自定义命令，可显式写成 `/usr/bin/env bash -ic 'exec opencode "$@"' opencode`，或把程序目录加入服务的 `PATH`，参见 [agent 的 PATH](deployment/services.md#agent-的-path)。
 
 </details>
 
