@@ -20,10 +20,12 @@
     id,
     drafts: providedDrafts,
     location,
+    allowDocumentScroll = false,
   }: {
     id: string;
     drafts?: TerminalDrafts;
     location?: Pick<SessionInfo, "workspace" | "cwd">;
+    allowDocumentScroll?: boolean;
   } = $props();
   const session = untrack(() => id);
   const chat = createChatSocket(session);
@@ -36,6 +38,8 @@
   let openedLocation = $state<ChatCodeLink | null>(null);
   let error = $state("");
   let terminalRequests = $state(0);
+  let editing = $state(false);
+  const documentScroll = $derived(allowDocumentScroll && !editing);
   const uploads = useChatUpload(
     (file, progress, signal) => uploadFile(session, file, progress, signal),
     (message) => {
@@ -62,7 +66,7 @@
   />
 {/snippet}
 
-<div style="height: 800px">
+<div style={documentScroll ? "min-height: 100dvh" : "height: 800px"}>
   <ChatView
     sessionId={session}
     model={chat.model}
@@ -74,6 +78,8 @@
     {location}
     {actions}
     {quickMenu}
+    {documentScroll}
+    oneditchange={(value) => (editing = value)}
     onreview={(path) => (reviewed = path)}
     onopenlocation={(target) => (openedLocation = target)}
     onterminal={() => (terminalRequests += 1)}
@@ -86,3 +92,4 @@
 <output aria-label="Draft">{draft.text}</output>
 <output aria-label="Upload error">{error}</output>
 <output aria-label="Terminal requests">{terminalRequests}</output>
+<output aria-label="Editing">{editing}</output>

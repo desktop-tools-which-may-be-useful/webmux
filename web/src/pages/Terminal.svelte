@@ -12,6 +12,7 @@
   } from "../schemas";
   import { errorMessage } from "../error";
   import { isIOS } from "../touch-input";
+  import { chatDocumentScroll, isStandalone } from "../capabilities";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import TerminalSplitMenu from "../components/TerminalSplitMenu.svelte";
   import InlineNotice from "../components/InlineNotice.svelte";
@@ -118,7 +119,29 @@
   let workspace: HTMLDivElement;
   let mounted = false;
   const terminals: Record<string, SessionTerminal | undefined> = {};
-  const viewport = useViewport();
+  let scrollStates = $state<
+    Record<
+      string,
+      {
+        chatView: boolean;
+        desktop: boolean;
+        codeShown: boolean;
+        editing: boolean;
+      }
+    >
+  >({});
+  const ids = $derived(paneIds(layout));
+  const documentScroll = $derived.by(() => {
+    const firstId = ids[0];
+    const current = firstId ? scrollStates[firstId] : undefined;
+    if (!current) return false;
+    return chatDocumentScroll({
+      ...current,
+      singlePane: ids.length === 1,
+      standalone: isStandalone(),
+    });
+  });
+  const viewport = useViewport(() => !documentScroll);
   const keyboardDismissed = () => hasTouchInput() && viewport.keyboardDismissed;
   onDestroy(resetBrowserChrome);
   $effect(() => {
@@ -129,7 +152,6 @@
         current.status === "running" && connections[active] === "connected",
       );
   });
-  const ids = $derived(paneIds(layout));
   const single = $derived(zoomed || width < 768);
   const geometry = $derived(layoutGeometry(layout, width, height));
   $effect(() => store(key, JSON.stringify(layout)));
@@ -189,6 +211,7 @@
     const next = removePane(layout, sessionId);
     delete terminals[sessionId];
     delete info[sessionId];
+    delete scrollStates[sessionId];
     if (!next) {
       navigate(shellUi.home);
       return;
@@ -371,6 +394,7 @@
 <main
   class="terminal-page"
   class:ios={isIOS()}
+  data-document-scroll={documentScroll ? "true" : undefined}
   style:--viewport-height={`${viewport.height}px`}
   onkeydowncapture={keydown}
 >
@@ -462,6 +486,10 @@
             onleave={ids.length > 1 ? () => close(pane.sessionId) : undefined}
             showForwards={() => (forwarding = true)}
             feedSession={feedById.get(pane.sessionId)}
+            documentScroll={documentScroll && ids.length === 1}
+            onscrollstate={(state) => {
+              scrollStates[pane.sessionId] = state;
+            }}
             oninfo={(value, connection) => {
               info[value.id] = value;
               connections[value.id] = connection;

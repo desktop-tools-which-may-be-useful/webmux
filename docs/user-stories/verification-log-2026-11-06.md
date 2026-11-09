@@ -58,6 +58,16 @@
 - 依据：`ws-retry.test.ts` 单元测试、`TerminalInput`、`TerminalReplay`、`TerminalTransport` 浏览器测试通过；`make check` 与 `pnpm --dir web check:arch` 通过。
 - 限制：事件序列在 Chromium 浏览器测试中重放验证，未在 iOS 真机核对；未重新核验其余故事能力。
 
+本次局部核对（2026-11-09）：修复手机浏览器标签页在混合会话聊天视图中滚动消息时浏览器地址栏与工具栏无法收起的问题（#386），对应更新 US-Q05、US-H06 与覆盖索引，不新增故事。
+
+- 范围：
+  - `capabilities.ts` 新增纯函数 `chatDocumentScroll(state)`，门控窄屏（`< 1024px`）、聊天视图、未打开代码栏、单窗格、非独立模式（PWA）且未处于输入或弹层交互态时的文档级滚动模式；
+  - `viewport.svelte.ts` 的 `useViewport(() => !documentScroll)` 在文档滚动阅读态下解除 `document.documentElement.style.overflow = "hidden"` 与 `window.scrollTo(0, 0)` 强制归位，并在切换锁状态时重置视口高度基线，防止浏览器工具栏高度变化被误判为软键盘；
+  - `styles.css`、`Terminal.svelte`、`SessionTerminal.svelte` 与 `ChatView.svelte` 在 `data-document-scroll="true"` 下改为自然流式高度，顶栏 `position: sticky; top: 0`、底部输入停靠区 `position: sticky; bottom: 0`，“回到最新”浮动在停靠区上方；
+  - 聚焦消息框或表单控件、打开底部工具栏弹层、打开代码栏、分屏、桌面宽度或切到终端视图时自动回退到固定壳层与内部容器滚动，并在焦点与失焦切换时同步 `window.scrollY` 与 `scroller.scrollTop` 以保持阅读位置，切回终端前先执行 `window.scrollTo(0, 0)` 再适配 `t.fit()`。
+- 依据：`capabilities.test.ts` 单元测试（18 项）、`ChatView.test.ts` 浏览器组件测试（25 项）与 Playwright `hybrid.spec.ts` 移动端端到端用例通过；`make check`、`pnpm --dir web check:arch` 与 `make docs-check` 通过；隔离演示数据下截取 390×844 手机与 1280×720 桌面、浅色与深色主题前后对比截图。
+- 限制：在 Chromium 移动模拟下验证文档滚动与焦点回退，iOS Safari / Android Chrome 原生工具栏收起动画仍需真机体验；未重新核验其余故事能力。
+
 本次局部核对（2026-11-09）：代码工作区的文件标签获得焦点时自动显示对应内容，更新 US-I04 与覆盖索引。34 项浏览器组件测试和 24 项代码工作区、独立窗口 E2E 通过。核对 3 种视口的浅色与深色截图，未在真机验证或重新核验其他故事。
 
 本次局部核对（2026-11-09）更新 US-L03 与覆盖索引。浏览器 UI 的 PR 须同时附桌面、平板和手机截图，修改已有界面时逐视口提供前后对比。

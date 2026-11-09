@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { tick, untrack, type Snippet } from "svelte";
   import IconArrowDown from "~icons/tabler/arrow-down";
   import IconCircleCheck from "~icons/tabler/circle-check";
   import IconHandStop from "~icons/tabler/hand-stop";
@@ -53,6 +53,8 @@
     onopenlocation,
     onterminal,
     quickMenu,
+    documentScroll = false,
+    oneditchange,
   }: {
     sessionId?: string;
     model: ChatModel;
@@ -77,10 +79,18 @@
     onterminal: () => void;
     /** The quick-command menu, shown beside the send button. */
     quickMenu?: Snippet<["top" | "bottom", ButtonSize?, ButtonVariant?]>;
+    /** Scrolls the document instead of the internal viewport while resting. */
+    documentScroll?: boolean;
+    /** Reports whether an editable control or composer portal inside is active. */
+    oneditchange?: (editing: boolean) => void;
   } = $props();
 
+  let root = $state<HTMLDivElement | null>(null);
   let scroller = $state<HTMLElement | null>(null);
+  let transcript = $state<HTMLDivElement | null>(null);
+  let dock = $state<HTMLDivElement | null>(null);
   let stick = $state(true);
+  let editing = $state(false);
   let error = $state("");
   let answering = $state(false);
   let now = $state(Date.now());
@@ -91,6 +101,55 @@
   export function setVoiceError(message: string) {
     error = message;
   }
+  const EDITABLE_SELECTOR =
+    'textarea, input, select, [contenteditable]:not([contenteditable="false"])';
+  const OPEN_PORTAL_SELECTOR =
+    '[data-slot="popover-content"][data-state="open"], [data-slot="dropdown-menu-content"][data-state="open"]';
+  function isEditableElement(node: Node | null): node is HTMLElement {
+    return node instanceof HTMLElement && node.matches(EDITABLE_SELECTOR);
+  }
+  function hasOpenPortal(): boolean {
+    return !!document.querySelector(OPEN_PORTAL_SELECTOR);
+  }
+  let lastScrollOffset = 0;
+  let pendingScrollOffset: number | null = null;
+  function setEditing(next: boolean) {
+    if (next === editing) return;
+    if (next && documentScroll) pendingScrollOffset = lastScrollOffset;
+    else if (!next && !documentScroll)
+      pendingScrollOffset = scroller?.scrollTop ?? lastScrollOffset;
+    editing = next;
+    oneditchange?.(next);
+  }
+  function syncEditing() {
+    const active = document.activeElement;
+    const focusedInside =
+      !!root && active instanceof Node && root.contains(active);
+    if (focusedInside && isEditableElement(active)) {
+      setEditing(true);
+      return;
+    }
+    if (editing && hasOpenPortal()) return;
+    setEditing(false);
+  }
+  export function releaseEditing() {
+    const active = document.activeElement;
+    if (root && active instanceof HTMLElement && root.contains(active))
+      active.blur();
+    setEditing(false);
+  }
+  $effect(() => {
+    if (!editing) return;
+    const check = () => {
+      requestAnimationFrame(syncEditing);
+    };
+    window.addEventListener("pointerdown", check, true);
+    window.addEventListener("keydown", check, true);
+    return () => {
+      window.removeEventListener("pointerdown", check, true);
+      window.removeEventListener("keydown", check, true);
+    };
+  });
   const entries = $derived(groupTimeline(model.entries));
   const request = $derived(chat?.requests[0]);
   const requestTool = $derived.by(() => {
@@ -188,20 +247,69 @@
     return () => window.clearInterval(timer);
   });
 
-  function follow() {
-    if (!scroller) return;
-    stick =
-      scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 32;
+  function scrollRoot(): HTMLElement | null {
+    return documentScroll
+      ? ((document.scrollingElement as HTMLElement | null) ??
+          document.documentElement)
+      : scroller;
   }
+  function scrollToBottom() {
+    const target = scrollRoot();
+    if (!target) return;
+    if (documentScroll) window.scrollTo(0, target.scrollHeight);
+    else target.scrollTop = target.scrollHeight;
+    lastScrollOffset = documentScroll ? window.scrollY : target.scrollTop;
+  }
+  function follow() {
+    const target = scrollRoot();
+    if (!target) return;
+    const top = documentScroll ? window.scrollY : target.scrollTop;
+    const height = documentScroll ? window.innerHeight : target.clientHeight;
+    lastScrollOffset = top;
+    stick = top + height >= target.scrollHeight - 32;
+  }
+  let previousDocumentScroll = untrack(() => documentScroll);
+  $effect.pre(() => {
+    if (documentScroll === previousDocumentScroll) return;
+    if (pendingScrollOffset === null) {
+      pendingScrollOffset = lastScrollOffset;
+    }
+    previousDocumentScroll = documentScroll;
+  });
+  $effect(() => {
+    void documentScroll;
+    if (pendingScrollOffset === null) return;
+    const saved = pendingScrollOffset;
+    const wasStick = untrack(() => stick);
+    pendingScrollOffset = null;
+    void tick().then(() => {
+      if (documentScroll) {
+        if (wasStick) scrollToBottom();
+        else window.scrollTo(0, saved);
+      } else {
+        window.scrollTo(0, 0);
+        if (scroller) {
+          scroller.scrollTop = wasStick ? scroller.scrollHeight : saved;
+        }
+      }
+      follow();
+    });
+  });
   // The viewport belongs to ScrollArea, which takes no scroll handler.
   $effect(() => {
+    if (documentScroll) {
+      window.addEventListener("scroll", follow, { passive: true });
+      return () => window.removeEventListener("scroll", follow);
+    }
     const element = scroller;
     if (!element) return;
     element.addEventListener("scroll", follow, { passive: true });
     return () => element.removeEventListener("scroll", follow);
   });
   function latest() {
-    scroller?.scrollTo({ top: scroller.scrollHeight });
+    const target = scrollRoot();
+    if (documentScroll) window.scrollTo({ top: target?.scrollHeight ?? 0 });
+    else target?.scrollTo({ top: target.scrollHeight });
     stick = true;
   }
   // New output keeps the newest entry in view unless the reader scrolled up.
@@ -209,22 +317,24 @@
     void entries;
     void request;
     void chat?.turn.running;
-    if (stick && scroller) scroller.scrollTop = scroller.scrollHeight;
+    if (untrack(() => stick)) scrollToBottom();
   });
   // The composer growing (a tap on the compact bar) or the on-screen keyboard
   // shrinks the transcript from below: a reader at the end stays at the end.
   $effect(() => {
-    if (!scroller) return;
     const element = scroller;
+    if (!element) return;
     let frame = 0;
     // Scrolling in the callback itself can loop; wait for the next frame.
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        if (stick) element.scrollTop = element.scrollHeight;
+        if (stick) scrollToBottom();
       });
     });
     observer.observe(element);
+    if (transcript) observer.observe(transcript);
+    if (dock) observer.observe(dock);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
@@ -244,13 +354,21 @@
 </script>
 
 <FileDropZone
+  bind:ref={root}
   class="@container relative flex h-full min-h-0 flex-col bg-background"
   data-chat-view
+  data-document-scroll={documentScroll ? "true" : undefined}
   role="region"
   aria-label="聊天"
   {uploads}
   blocked={!!uploadBlocked}
   label="松开以上传文件到聊天"
+  onfocusin={(event) => {
+    if (isEditableElement(event.target as Node | null)) setEditing(true);
+  }}
+  onfocusout={() => {
+    requestAnimationFrame(syncEditing);
+  }}
 >
   <div class="relative flex min-h-0 flex-1 flex-col">
     <ScrollArea
@@ -259,7 +377,10 @@
       class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block"
       scrollbarYClasses="[&_[data-slot=scroll-area-thumb]]:bg-foreground/25 hover:[&_[data-slot=scroll-area-thumb]]:bg-foreground/40"
     >
-      <div class="mx-auto flex max-w-3xl flex-col gap-2.5 px-4 py-6">
+      <div
+        bind:this={transcript}
+        class="mx-auto flex max-w-3xl flex-col gap-2.5 px-4 py-6"
+      >
         {#if model.truncated}
           <InlineNotice>更早的历史未缓存，可切到终端查看</InlineNotice>
         {/if}
@@ -346,7 +467,7 @@
         <ChatPlan plan={chat.plan} variant="panel" />
       </div>
     {/if}
-    {#if !stick}
+    {#if !stick && !documentScroll}
       <!-- Anchored to the message area, so a taller composer never covers it. -->
       <Button
         variant="outline"
@@ -358,8 +479,23 @@
     {/if}
   </div>
   <div
-    class="mx-auto w-full max-w-3xl space-y-2 px-3 pb-safe-2 sm:px-4 [@media(height<480px)]:max-h-full [@media(height<480px)]:overflow-y-auto"
+    bind:this={dock}
+    data-chat-dock
+    class="relative mx-auto w-full max-w-3xl space-y-2 px-3 pb-safe-2 sm:px-4 [@media(height<480px)]:max-h-full [@media(height<480px)]:overflow-y-auto"
   >
+    {#if !stick && documentScroll}
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-full pb-3 text-center"
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          raised
+          class="pointer-events-auto"
+          onclick={latest}><IconArrowDown aria-hidden="true" />回到最新</Button
+        >
+      </div>
+    {/if}
     {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
     {#if chat?.connectorMissing}
       <ConnectorInstallHint connector={chat.connectorMissing}>

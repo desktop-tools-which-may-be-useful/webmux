@@ -8,12 +8,14 @@
   // message (the chat view and quick start), with a dashed overlay while
   // files hover. Other drags pass through untouched.
   let {
+    ref = $bindable(null),
     uploads,
     blocked = false,
     label,
     children,
     ...rest
   }: {
+    ref?: HTMLDivElement | null;
     uploads: ChatUploads;
     /** Uploads are refused now; a drop does nothing. */
     blocked?: boolean;
@@ -25,6 +27,7 @@
 </script>
 
 <div
+  bind:this={ref}
   {...rest}
   {@attach (host) =>
     attachFileDrop(host, {

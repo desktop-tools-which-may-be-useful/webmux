@@ -39,3 +39,25 @@ export function popoutOffered(platform: {
     (platform.finePointer && !(platform.standalone && platform.touch))
   );
 }
+
+// A narrow single-pane chat view in a browser tab scrolls the document while
+// resting so mobile browsers collapse their URL and toolbar chrome. Focusing
+// an input or opening a composer portal falls back to the fixed shell so the
+// on-screen keyboard never pans the page.
+export function chatDocumentScroll(state: {
+  chatView: boolean;
+  desktop: boolean;
+  codeShown: boolean;
+  singlePane: boolean;
+  standalone: boolean;
+  editing: boolean;
+}) {
+  return (
+    state.chatView &&
+    !state.desktop &&
+    !state.codeShown &&
+    state.singlePane &&
+    !state.standalone &&
+    !state.editing
+  );
+}

@@ -9,18 +9,24 @@ const KEYBOARD_MIN_SHRINK = 120;
 const KEYBOARD_HIDE_SHRINK = 60;
 const WIDTH_TOLERANCE = 40;
 
-export function useViewport() {
+export function useViewport(locked: () => boolean = () => true) {
   let height = $state(
     Math.round(window.visualViewport?.height ?? window.innerHeight),
   );
   let keyboard = $state<KeyboardVisibility>("hidden");
   let keyboardDismissed = $state(false);
+  let previousOverflow = "";
+  let applyLock = $state<(lock: boolean) => void>();
+  $effect(() => {
+    applyLock?.(locked());
+  });
   onMount(() => {
     const viewport = window.visualViewport;
     const root = document.documentElement;
-    const previousOverflow = root.style.overflow;
+    previousOverflow = root.style.overflow;
+    let lockRoot = locked();
     // A scrollable document lets iOS pan the page to chase the focused caret.
-    root.style.overflow = "hidden";
+    if (lockRoot) root.style.overflow = "hidden";
     let composing = false;
     let frame = 0;
     let closedHeight = height;
@@ -34,7 +40,7 @@ export function useViewport() {
         // offset back on each of them is the shake. Height still follows the
         // keyboard: Android keyboards compose every word and may hide without
         // ending the composition.
-        if (!composing && (window.scrollX || window.scrollY))
+        if (lockRoot && !composing && (window.scrollX || window.scrollY))
           window.scrollTo(0, 0);
         const next = Math.round(viewport?.height ?? window.innerHeight);
         if (next !== height) height = next;
@@ -71,6 +77,23 @@ export function useViewport() {
         }
         if (keyboardState !== keyboard) keyboard = keyboardState;
       });
+    };
+    applyLock = (nextLock) => {
+      if (nextLock === lockRoot) return;
+      lockRoot = nextLock;
+      root.style.overflow = lockRoot ? "hidden" : previousOverflow;
+      // Browser chrome collapsing/expanding changes the viewport height; reset
+      // the baseline when switching modes so a 60–120px delta does not leave
+      // keyboard visibility stuck.
+      const current = Math.round(viewport?.height ?? window.innerHeight);
+      closedHeight = current;
+      if (!lockRoot) {
+        keyboardState = "hidden";
+        sawKeyboard = false;
+        keyboardDismissed = false;
+        keyboard = "hidden";
+      }
+      apply();
     };
     const start = () => {
       composing = true;

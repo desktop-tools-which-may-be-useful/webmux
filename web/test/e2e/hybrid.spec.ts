@@ -165,6 +165,153 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expect(page.getByRole("region", { name: "代码工作区" })).toBeHidden();
   });
 
+  test("mobile chat scrolls the document while resting and falls back to the fixed shell on focus, code, or terminal", async ({
+    page,
+    request,
+    workDir,
+  }, testInfo) => {
+    test.skip(!testInfo.project.use.isMobile, "A phone layout");
+    test.slow();
+    const id = await createHybrid(request, workDir, "chat", {
+      agent: "claude",
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openHybrid(page, id, "chat");
+
+    for (let i = 0; i < 6; i++) {
+      await chatTurn(
+        page,
+        `scroll-msg-${i} line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8`,
+      );
+    }
+    // sendChat fills the composer (focusing it); blur to return to resting reading mode.
+    await composer(page).evaluate((el: HTMLTextAreaElement) => el.blur());
+
+    const terminalPage = page.locator(".terminal-page");
+    await expect(terminalPage).toHaveAttribute("data-document-scroll", "true");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => getComputedStyle(document.documentElement).overflow,
+        ),
+      )
+      .not.toBe("hidden");
+    const initialMetrics = await page.evaluate(() => ({
+      scrollHeight: document.scrollingElement!.scrollHeight,
+      innerHeight: window.innerHeight,
+      scrollY: window.scrollY,
+      rootOverflow: getComputedStyle(document.documentElement).overflow,
+      headerTop: document
+        .querySelector(".terminal-header")!
+        .getBoundingClientRect().top,
+      dockBottom: document
+        .querySelector("[data-chat-dock]")!
+        .getBoundingClientRect().bottom,
+    }));
+    expect(initialMetrics.scrollHeight).toBeGreaterThan(
+      initialMetrics.innerHeight,
+    );
+    expect(initialMetrics.scrollY).toBeGreaterThan(0);
+    expect(initialMetrics.rootOverflow).not.toBe("hidden");
+    expect(Math.round(initialMetrics.headerTop)).toBe(0);
+    expect(Math.round(initialMetrics.dockBottom)).toBe(
+      initialMetrics.innerHeight,
+    );
+
+    // Scroll up to a reading offset and verify sticky header/dock and jump button.
+    await page.evaluate(() => {
+      window.scrollTo(0, 120);
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await expect
+      .poll(() => page.evaluate(() => Math.round(window.scrollY)))
+      .toBe(120);
+    const jump = page.getByRole("button", { name: "回到最新", exact: true });
+    await expect(jump).toBeVisible();
+    const stickyBounds = await page.evaluate(() => ({
+      headerTop: Math.round(
+        document.querySelector(".terminal-header")!.getBoundingClientRect().top,
+      ),
+      dockBottom: Math.round(
+        document.querySelector("[data-chat-dock]")!.getBoundingClientRect()
+          .bottom,
+      ),
+      innerHeight: window.innerHeight,
+    }));
+    expect(stickyBounds.headerTop).toBe(0);
+    expect(stickyBounds.dockBottom).toBe(stickyBounds.innerHeight);
+
+    // Simulating mobile browser toolbar collapse (viewport height grows) must not reset scrollY to 0.
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect
+      .poll(() => page.evaluate(() => Math.round(window.scrollY)))
+      .toBeGreaterThan(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    // Focusing the composer falls back to the fixed shell and preserves the reading offset.
+    await page.evaluate(() => {
+      window.scrollTo(0, 100);
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await expect
+      .poll(() => page.evaluate(() => Math.round(window.scrollY)))
+      .toBe(100);
+    await composer(page).focus();
+    await expect(terminalPage).not.toHaveAttribute(
+      "data-document-scroll",
+      "true",
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          scrollY: Math.round(window.scrollY),
+          scrollerTop: Math.round(
+            document.querySelector<HTMLElement>(
+              "[data-chat-view] [data-slot=scroll-area-viewport]",
+            )?.scrollTop ?? 0,
+          ),
+          rootOverflow: getComputedStyle(document.documentElement).overflow,
+        })),
+      )
+      .toEqual({ scrollY: 0, scrollerTop: 100, rootOverflow: "hidden" });
+
+    // Blurring returns to document scroll and restores window.scrollY.
+    await composer(page).evaluate((el: HTMLTextAreaElement) => el.blur());
+    await expect(terminalPage).toHaveAttribute("data-document-scroll", "true");
+    await expect
+      .poll(() => page.evaluate(() => Math.round(window.scrollY)))
+      .toBe(100);
+
+    // Desktop pane width (>= 1024px) uses the fixed shell.
+    await page.setViewportSize({ width: 1440, height: 720 });
+    await expect(terminalPage).not.toHaveAttribute(
+      "data-document-scroll",
+      "true",
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(terminalPage).toHaveAttribute("data-document-scroll", "true");
+
+    // Opening the code panel on mobile uses the fixed shell.
+    const code = page
+      .locator(".terminal-header")
+      .getByRole("button", { name: "代码", exact: true });
+    await code.click();
+    await expect(terminalPage).not.toHaveAttribute(
+      "data-document-scroll",
+      "true",
+    );
+    await sideTab(page, "chat").click();
+    await expect(terminalPage).toHaveAttribute("data-document-scroll", "true");
+
+    // Switching to the terminal resets window.scrollY to 0 and fits the PTY cleanly.
+    await switchTo(page, "terminal");
+    await expect(terminalPage).not.toHaveAttribute(
+      "data-document-scroll",
+      "true",
+    );
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+
   test("phones gain the side tabs when the session info arrives", async ({
     page,
     request,

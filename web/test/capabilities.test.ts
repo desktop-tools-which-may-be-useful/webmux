@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { fullscreenOffered, popoutOffered } from "../src/capabilities";
+import {
+  chatDocumentScroll,
+  fullscreenOffered,
+  popoutOffered,
+} from "../src/capabilities";
 
 describe("fullscreenOffered", () => {
   test.each([
@@ -79,4 +83,32 @@ describe("popoutOffered", () => {
       expect(popoutOffered(platform)).toBe(offered);
     },
   );
+});
+
+describe("chatDocumentScroll", () => {
+  const restingMobileChat = {
+    chatView: true,
+    desktop: false,
+    codeShown: false,
+    singlePane: true,
+    standalone: false,
+    editing: false,
+  };
+
+  test("enables document scroll only for a resting single-pane mobile chat tab", () => {
+    expect(chatDocumentScroll(restingMobileChat)).toBe(true);
+  });
+
+  test.each([
+    ["terminal or switching view", { chatView: false }],
+    ["desktop pane (>=1024px)", { desktop: true }],
+    ["code panel shown", { codeShown: true }],
+    ["multi-pane split", { singlePane: false }],
+    ["standalone Home Screen app", { standalone: true }],
+    ["focused input or open portal", { editing: true }],
+  ] as const)("disables document scroll on %s", (_, override) => {
+    expect(chatDocumentScroll({ ...restingMobileChat, ...override })).toBe(
+      false,
+    );
+  });
 });

@@ -233,6 +233,68 @@
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+/* A narrow single-pane chat view in a browser tab flows with the document so
+   mobile browsers collapse their URL and toolbar chrome as the transcript
+   scrolls; focusing an input removes this attribute and returns to the fixed
+   shell above. */
+.terminal-page[data-document-scroll="true"] {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.terminal-page[data-document-scroll="true"] .split-workspace,
+.terminal-page[data-document-scroll="true"] .split-terminal {
+  position: relative;
+  left: auto;
+  top: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+.terminal-page[data-document-scroll="true"] .terminal-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-top: env(safe-area-inset-top);
+  min-height: calc(var(--app-header-height) + env(safe-area-inset-top));
+}
+.terminal-page[data-document-scroll="true"] .session-terminal,
+.terminal-page[data-document-scroll="true"] .terminal-workspace,
+.terminal-page[data-document-scroll="true"] .terminal-column,
+.terminal-page[data-document-scroll="true"] [data-pane-group],
+.terminal-page[data-document-scroll="true"] [data-pane],
+[data-chat-view][data-document-scroll="true"] {
+  height: auto !important;
+  min-height: 0;
+  flex: 1 !important;
+  overflow: visible !important;
+}
+[data-chat-view][data-document-scroll="true"] [data-slot="scroll-area"],
+[data-chat-view][data-document-scroll="true"]
+  [data-slot="scroll-area-viewport"] {
+  height: auto !important;
+  overflow: visible !important;
+}
+[data-chat-view][data-document-scroll="true"]
+  [data-slot="scroll-area-scrollbar"] {
+  display: none !important;
+}
+[data-chat-view][data-document-scroll="true"] [data-chat-dock] {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: var(--background);
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
 /* iOS pans the visual viewport to keep a focused caret visible. xterm moves
    this textarea with the cursor and widens it as composition text grows, so
    each IME update shakes the page. A stable 16px box also avoids the <16px

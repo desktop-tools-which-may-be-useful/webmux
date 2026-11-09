@@ -86,6 +86,8 @@
     onleave,
     showForwards,
     feedSession,
+    documentScroll = false,
+    onscrollstate,
   }: {
     id: string;
     drafts: TerminalDrafts;
@@ -111,6 +113,15 @@
     showForwards: () => void;
     /** The session as reported by the `/ws/sessions` feed, if connected. */
     feedSession?: import("../schemas").SessionInfo;
+    /** Whether the page currently uses document scrolling for this chat view. */
+    documentScroll?: boolean;
+    /** Reports this pane's inputs into the page-level document-scroll gate. */
+    onscrollstate?: (state: {
+      chatView: boolean;
+      desktop: boolean;
+      codeShown: boolean;
+      editing: boolean;
+    }) => void;
   } = $props();
   const draft = untrack(() => drafts.get(id));
   const shell = findShell();
@@ -142,6 +153,7 @@
   let codeTarget = $state<CodeReveal>();
   let paneWidth = $state(0);
   const desktop = $derived(paneWidth >= 1024);
+  let chatEditing = $state(false);
   let choiceClosed = $state(false);
   let findOpen = $state(false);
   let findPanel = $state<TerminalFindBar>();
@@ -196,7 +208,10 @@
         .finally(() => (loadingCode = false));
     }
     const showing = terminalVisible();
-    if (showing) void tick().then(() => t.fit());
+    if (showing) {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+      void tick().then(() => t.fit());
+    }
   });
   // The chat input is the session's draft text: input begun on the chat side
   // goes there whether or not the terminal draft pane is open.
@@ -447,6 +462,24 @@
     const connection =
       hybrid.view === "chat" ? hybrid.chat.connection : t.connection;
     if (current) untrack(() => oninfo(current, connection));
+  });
+  $effect(() => {
+    if (hybrid.view !== "chat") chatEditing = false;
+  });
+  $effect(() => {
+    if (keyboardDismissed() && chatEditing) {
+      chatEditing = false;
+      chatView?.releaseEditing();
+    }
+  });
+  $effect(() => {
+    const state = {
+      chatView: hybrid.view === "chat",
+      desktop,
+      codeShown,
+      editing: chatEditing || keyboardVisibility() === "visible",
+    };
+    untrack(() => onscrollstate?.(state));
   });
   // Chat uploads live on this page (not in ChatView) so switching sides does
   // not abort an upload; pending attachments live on the session draft so
@@ -799,7 +832,12 @@
     onfind={showFind}
   >
     {#snippet terminalPane()}
-      <div class="relative flex h-full flex-col">
+      <div
+        class={[
+          "relative flex flex-col",
+          documentScroll ? "min-h-0 flex-1" : "h-full",
+        ]}
+      >
         <!-- Notices float over the terminal view (not the chat view or the code
            pane beside it): showing or dismissing one must not resize the
            terminal, which would redraw the PTY. On the chat view, notices stay
@@ -888,7 +926,13 @@
           </TerminalViewport>
         </div>
         {#if hybrid.view === "chat"}
-          <div class="min-h-0 flex-1" use:paneEnter={true}>
+          <div
+            class={[
+              "flex min-h-0 flex-1 flex-col",
+              !documentScroll && "h-full overflow-hidden",
+            ]}
+            use:paneEnter={true}
+          >
             <ChatView
               bind:this={chatView}
               {sessionId}
@@ -905,6 +949,10 @@
               onopenlocation={openCodeLocation}
               onterminal={() => hybrid.request("terminal")}
               {quickMenu}
+              {documentScroll}
+              oneditchange={(value) => {
+                chatEditing = value;
+              }}
             />
           </div>
         {:else if hybrid.view === "switching"}
