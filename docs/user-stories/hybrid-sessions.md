@@ -77,17 +77,19 @@
   - 权限请求以红色边框与图标的卡片及编号选项显示在输入框位置，并在对应工具调用上以红色标注“等待授权”；
   - 表单请求以红色边框与图标显示在输入框位置，渲染字符串、枚举、多选数组与布尔字段，其他字段提示需在终端完成且只能拒绝或取消；
   - 多设备同时作答时第一个生效，其余返回 409 `answered` 并随即看到请求关闭；
-  - 切换或停止回合时挂起请求被取消。输入框下方的权限按钮在图标旁显示“全部接受”（默认）或“每次询问”，提示和可访问名说明这是权限设置；手机上也可直接点开该按钮修改；
+  - 切换或停止回合时挂起请求被取消。桌面输入框下方的权限按钮在图标旁显示“全部接受”（默认）或“每次询问”，提示和可访问名说明这是权限设置；手机在输入框内的“会话选项”底部面板中显示当前权限并修改；
   - 选择经 `PUT .../chat/permission-mode` 保存在服务端并在所有设备同步：全部接受时 webmux 直接选择第一个“允许一次”、其次“始终允许”的选项，不打开请求、不产生提醒，时间线不显示批准提示；
   - 切到全部接受时挂起的权限请求随即批准；
   - 没有允许选项的请求与表单仍交给用户；
   - Claude 的工具权限请求与拒绝使用同一管线，agent 的 `default`/`auto`/`bypassPermissions` 等模式与这里的 webmux 全部接受设置各自显示，运行条件回退时采用连接器实际配置与通知；
   - 模式写入混合会话记录，切换、重连与恢复后保持；
-  - 保存期间选择禁用，失败在输入框上方提示。
+  - 保存期间权限选择禁用；失败后保持服务端已确认的值，在输入框上方及已打开的手机面板内提示。
 - **US-Q07 调整配置与使用命令**：作为使用者，我希望在聊天视图切换模型等配置并使用 agent 的斜杠命令，以便不切回终端也能调整 agent。
   验收要点：
-  - 输入框下方显示 agent 提供的配置项（选择类为下拉、布尔类为开关）。两者都按 `category` 显示图标，未知类别使用通用图标；下拉按钮显示服务端确认的当前值，长值可在菜单中查看全文。手机也能直接点开各选项，宽度不足时这一行横向滚动；
-  - 变更经 `session/set_config_option` 生效并在所有设备同步，取值被记录用于切换与恢复后补齐；
+  - 桌面输入框下方显示 agent 提供的配置项（选择类为下拉、布尔类为开关）。两者都按 `category` 显示图标，未知类别使用通用图标；下拉按钮显示服务端确认的当前值，长值可在菜单中查看全文。桌面宽度不足时这一行横向滚动；手机仅在输入卡片内提供一个“会话选项”入口；
+  - 手机打开“会话选项”后，底部面板按行显示名称和当前值，选择后提交；关闭、点击遮罩或下滑可收起，关闭后焦点回到入口；短屏或更多配置时面板内部滚动，不遮住关闭按钮；
+  - 打开面板时从齿轮位置展开轮廓，文字与控件不缩放；系统启用“减少动态效果”时直接显示，快速关闭再打开也不残留裁切；
+  - 变更经 `session/set_config_option` 生效并在所有设备同步，取值被记录用于切换与恢复后补齐；手机面板的下拉与开关只显示已确认的值，保存失败时保留原值并在面板内提示；
   - Claude 首次从 `--model`、`--effort` 与权限 argv 播种，`manual` 映射为 ACP `default`、危险跳过权限优先映射 `bypassPermissions`，不支持的值列入不生效参数；
   - 冷 `session/load` 与 `session/resume` 后重应用记录的 model/effort，mode 以 transcript 恢复值为准，不回写过期 argv，回退显示实际值与通知；
   - 输入 `/` 打开随输入过滤的命令菜单。
@@ -185,9 +187,12 @@
   - 标识只用于展示，不可聚焦或点击；切到终端视图后隐藏；浏览器不认识的图标键只显示名称，不用其他图标代替。
 - **US-Q18 快速开始聊天**：作为想直接把任务交给 agent 的使用者，我希望在一个输入框写下任务、选好仓库和 agent 后按一次发送，就在新 worktree 里以聊天方式开工，以便省去建 worktree、选配置和等待聊天就绪这几步。
   验收要点：
-  - 快速开始页 `/new` 是聊天模式的主区域：底部输入框，上方一行是仓库与基准分支，下方一行是 agent、该 agent 的配置项与权限模式。下拉按钮显示当前选项，空间不足时可横向滚动到两端；
-  - 窄屏（小于 640px）在快速开始页 `/new` 与聊天视图中的紧凑输入状态：
-    - 输入框未聚焦且无草稿文字、待发送附件、上传进度或发送中状态时，输入卡片收起为单行输入框与发送/停止按钮。下方选项仍可直接操作；仓库与分支位置行、初始化指令勾选栏及卡片内的辅助按钮隐藏；
+  - 桌面快速开始页 `/new` 是聊天模式的主区域：底部输入框，上方一行是仓库与基准分支，下方一行是 agent、该 agent 的配置项与权限模式。下拉按钮显示当前选项，空间不足时可横向滚动到两端；
+  - 窄屏（小于 640px）或高度小于 480px 的触屏设备，在快速开始页 `/new` 与聊天视图中共用紧凑输入状态：
+    - 输入框未聚焦且无草稿文字、待发送附件、上传进度或发送中状态时，输入卡片收起为单行输入框与发送/停止按钮。下方不常驻选项行，仓库与分支位置行、初始化指令勾选栏及卡片内包括设置齿轮在内的辅助按钮隐藏；
+    - 展开输入框后才显示会话选项入口；agent 与启动方式位于卡片内，权限与 agent 配置统一收进“会话选项”底部面板，显示当前值，读取期间保留加载提示与禁用状态；
+    - 单行输入框与完整卡片之间平滑改变高度，发送按钮随之移动且文字不缩放；动画可以打断，窗口尺寸变化后不残留固定高度；
+    - 会话选项面板使用与聊天视图相同的入口展开动画，系统开启“减少动态效果”时直接显示；
     - 点击或聚焦输入框（或打开其弹出菜单）时展开完整输入卡片，失焦且为空时自动收起；进入 `/new` 在窄屏或触屏设备上不自动抢占焦点；
   - 进入任一聊天视图时，输入框上方以同样的位置只读显示该会话的仓库与 worktree 分支（分离时为短提交号，无仓库的会话显示目录名），创建后不可更改；每次进入都重新读取仓库状态，读取完成前显示上次已知的值；
   - agent 旁的“启动方式”可选聊天或终端，本设备记住上次的选择；选终端时在 agent 的终端里启动（有附件时移入新会话上传目录并附上 `附件路径：`），不显示权限和配置项：
@@ -235,6 +240,8 @@
 
 依据：
 
+- [输入卡片变形动画](../../web/src/hooks/composer-morph.svelte.ts)、[抽屉入口动画](../../web/src/lib/components/ui/drawer/drawer-content.svelte)。
+
 - [混合会话服务](../../internal/hybrid/)、[连接器检查](../../internal/hybrid/connector.go)、[agent 适配器核心](../../internal/agentprofile/)、[ACP 客户端](../../internal/acp/)
 - [agent 注册表](../../internal/agentprofile/agents/agents.go)、[Codex 适配器](../../internal/agentprofile/codex/codex.go)、[适配器契约测试](../../internal/agentprofile/agenttest/agenttest.go)
 - [Claude Code 适配器](../../internal/agentprofile/claudecode/claudecode.go)、[Claude 注册记录](../../internal/agentprofile/claudecode/registry.go)、[Antigravity CLI 适配器](../../internal/agentprofile/agy/agy.go)
@@ -245,3 +252,5 @@
 - [会话卡片](../../web/src/components/SessionRow.svelte)、[会话页头部](../../web/src/components/TerminalHeader.svelte)、[品牌图标](../../web/src/components/LaunchConfigIcon.svelte)、[图标一致性测试](../../internal/launch/presets_test.go)
 - [快速开始页](../../web/src/pages/QuickStart.svelte)、[快速开始状态](../../web/src/quick-start.ts)、[创建编排](../../internal/workspace/create_session.go)、[会话接口](../../internal/api/sessions.go)、[按视图输入](../../internal/hybrid/input.go)、[配置项清单](../../internal/hybrid/options.go)
 - [聊天历史](../../web/src/components/ChatHistory.svelte)、[快速开始浏览器用例](../../web/test/browser/QuickStart.test.ts)、[聊天历史浏览器用例](../../web/test/browser/ChatHistory.test.ts)、[快速开始端到端用例](../../web/test/e2e/quick-start.spec.ts)。
+
+- [手机会话选项面板](../../web/src/components/chat/ChatSessionOptions.svelte)、[共用输入卡片](../../web/src/components/chat/ComposerCard.svelte)、[聊天浏览器用例](../../web/test/browser/ChatView.test.ts)、[布局验收](../../web/test/storybook/acp-chat.spec.ts)。
