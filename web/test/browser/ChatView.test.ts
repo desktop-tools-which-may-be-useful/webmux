@@ -816,6 +816,9 @@ test("the permission select sets the session's mode and shows the server's", asy
   socket.frame(snapshot(chatState({ permissionMode: "ask" })));
   const select = page.getByRole("button", { name: "权限：每次询问" });
   await expect
+    .element(select.getByText("每次询问", { exact: true }))
+    .toBeVisible();
+  await expect
     .element(select)
     .toHaveAttribute("title", "权限：每次工具调用都询问");
   await select.click();
@@ -836,6 +839,9 @@ test("the permission select sets the session's mode and shows the server's", asy
   });
   const auto = page.getByRole("button", { name: "权限：全部接受" });
   await expect.element(auto).toBeEnabled();
+  await expect
+    .element(auto.getByText("全部接受", { exact: true }))
+    .toBeVisible();
   await expect
     .element(auto)
     .toHaveAttribute(
@@ -910,7 +916,11 @@ test("config options expose the actual fallback mode and adapter notice", async 
   const model = page.getByRole("button", { name: "模型：Smart" });
   await expect.element(model).toHaveAttribute("title", "模型：Smart");
   await expect
-    .element(page.getByRole("button", { name: "模式：acceptEdits" }))
+    .element(
+      page
+        .getByRole("button", { name: "模式：acceptEdits" })
+        .getByText("acceptEdits", { exact: true }),
+    )
     .toBeVisible();
   expect(page.getByRole("button", { name: "模式：auto" }).elements()).toEqual(
     [],
@@ -920,8 +930,7 @@ test("config options expose the actual fallback mode and adapter notice", async 
       page.getByText("当前模型不支持 auto，实际权限模式已回退到 acceptEdits"),
     )
     .toBeVisible();
-  // The control is icon-only; the name and value stay in its label/tooltip.
-  expect(model.element().textContent?.trim()).toBe("");
+  await expect.element(model.getByText("Smart", { exact: true })).toBeVisible();
   await expect
     .element(page.getByRole("switch", { name: "记忆：已开启" }))
     .toBeChecked();
@@ -940,7 +949,7 @@ test("config options expose the actual fallback mode and adapter notice", async 
   ]);
 });
 
-test("narrow screens move session options into a popover beside the upload button", async () => {
+test("narrow screens can change a session option from the resting composer", async () => {
   await page.viewport(320, 800);
   try {
     const config = [
@@ -967,45 +976,46 @@ test("narrow screens move session options into a popover beside the upload butto
       cwd: "/repos/webmux",
     });
     socket.frame(snapshot(chatState({ config })));
-    await expect
-      .element(page.getByRole("toolbar", { name: "会话选项" }))
-      .not.toBeInTheDocument();
-    // Idle on a narrow screen, the composer collapses into a single-line bar
-    // with only the message input and send button.
+    const options = page.getByRole("toolbar", { name: "会话选项" });
+    const model = options.getByRole("button", { name: "Model：A" });
+    const input = page.getByRole("textbox", { name: "消息" });
     const where = page.getByRole("group", {
       name: "会话位置",
       includeHidden: true,
     });
-    const optionsButton = page.getByRole("button", {
-      name: "会话选项",
-      includeHidden: true,
-    });
     await expect.element(where).not.toBeVisible();
-    await expect.element(optionsButton).not.toBeVisible();
+    await expect.element(input).not.toHaveFocus();
+    await expect.element(model.getByText("A", { exact: true })).toBeVisible();
+    await model.click();
+    await expect
+      .element(page.getByRole("menuitemradio", { name: "A" }))
+      .toHaveAttribute("aria-checked", "true");
+    await page.getByRole("menuitemradio", { name: "B" }).click();
+    await expect.poll(commands).toEqual([
+      {
+        method: "PUT",
+        path: `${base}/config/model`,
+        body: { clientRequestId: expect.stringMatching(/\S/), value: "b" },
+      },
+    ]);
+    await userEvent.keyboard("{Escape}");
     await expect
       .element(page.getByRole("button", { name: "发送", exact: true }))
       .toBeVisible();
 
-    // Focusing the input expands the location row and composer toolbar.
-    const input = page.getByRole("textbox", { name: "消息" });
     await input.click();
     await expect.element(where).toBeVisible();
-    await page.getByRole("button", { name: "会话选项" }).click();
-    await expect.element(page.getByLabelText("权限")).toBeVisible();
-    await expect.element(page.getByLabelText("Model")).toBeVisible();
-    await userEvent.keyboard("{Escape}");
 
     // With draft text present, blurring keeps the composer expanded.
     await input.fill("保留展开");
     (input.element() as HTMLTextAreaElement).blur();
     await expect.element(where).toBeVisible();
-    await expect.element(optionsButton).toBeVisible();
 
     // Clearing the text and blurring returns to the compact bar.
     await input.fill("");
     (input.element() as HTMLTextAreaElement).blur();
     await expect.element(where).not.toBeVisible();
-    await expect.element(optionsButton).not.toBeVisible();
+    await expect.element(options).toBeVisible();
     // The resting bar stays one line of transcript-friendly height.
     const card = document.querySelector("[data-chat-composer] > .rounded-lg")!;
     // Sized in rem, so it grows with the mobile root font size.
