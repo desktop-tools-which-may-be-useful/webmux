@@ -76,7 +76,7 @@
     "@vitest/coverage-v8": "5.1.0",
     "bits-ui": "^2.20.6",
     "cn": "^0.5.2",
-    "dependency-cruiser": "^18.7.0",
+    "dependency-cruiser": "^18.7.2",
     "eslint": "^10.14.0",
     "eslint-plugin-svelte": "^3.24.1",
     "fflate": "0.8.3",
