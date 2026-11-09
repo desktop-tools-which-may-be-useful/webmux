@@ -15,6 +15,7 @@ import {
   installTerminalFixture,
   observeGlyphPixels,
   openTerminal,
+  openTerminalApi,
   prompt,
   reconnected,
   snapshot,
@@ -432,6 +433,20 @@ test("a foregrounded socket that stays silent is replaced", async () => {
   second.open();
   second.receive(1, "after zombie\r\n");
   await expectDomText("after zombie");
+});
+
+test("typing on a silent OPEN socket probes it and replaces a zombie connection", async () => {
+  observeGlyphPixels(true);
+  const { socket, api } = await openTerminalApi();
+  expect(api.send("ls\r")).toBe(true);
+  await expect
+    .poll(() => sockets.length, { timeout: resumeTimeout + 2000 })
+    .toBe(2);
+  const second = sockets[1]!;
+  expect(socket.closeCount).toBe(1);
+  second.open();
+  second.receive(1, "recovered after silent input\r\n");
+  await expectDomText("recovered after silent input");
 });
 
 test("manual resync after exit clears unsafe history using the final safe replay", async () => {

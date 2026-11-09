@@ -43,3 +43,12 @@
 
 - 依据：`SoftKeys` 与 `TerminalViewport` 浏览器组件测试（覆盖回车键、软键盘摇杆开关、观察端/控制端显示门控、底栏重复键过滤、十字键滑动切向与退格按住连发）以及 Playwright `softkeys.spec.ts` 端到端用例（菜单开关、控制权门控、底栏去重与空白区触摸滚动穿透）通过；`make check` 通过。
 - 限制：未在 iOS/Android 真机核对握持手感；未重新核验其余故事能力。
+
+本次局部核对（2026-11-09）：修复 iOS 终端偶发输入无回显、回车后无刷新的问题，对应更新 US-D03、US-H06，不新增故事或改变覆盖索引。
+
+- 范围：
+  - `terminal-input.ts` 输入法状态重置：失焦或页面隐藏时清空辅助 `textarea` 并结束未完成的输入法组合，避免 `composing` 与 xterm `CompositionHelper._isComposing` 卡死；
+  - `terminal-input.ts` 直接输入与回车：同轮 `input` 后清除 `keypress` 标记，避免软键盘吞掉 `keyup` 阻塞后续输入；支持无 `compositionstart` 的 `insertFromComposition` 候选词提交，以及 `keyCode=229` 下以 `insertLineBreak`/`insertParagraph` 到达的回车（转换为 `\r`）；
+  - `ws.ts` 与 `terminal-socket.svelte.ts`：在 `OPEN` 连接上发送终端输入时按需触发一次无副作用提交查询探测，3 秒内无任何服务端帧响应则判定为静默半开连接并自动重连恢复快照。
+- 依据：`ws-retry.test.ts` 单元测试、`TerminalInput`、`TerminalReplay`、`TerminalTransport` 浏览器测试通过；`make check` 与 `pnpm --dir web check:arch` 通过。
+- 限制：事件序列在 Chromium 浏览器测试中重放验证，未在 iOS 真机核对；未重新核验其余故事能力。

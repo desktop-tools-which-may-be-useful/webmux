@@ -485,7 +485,10 @@ export function createTerminalSocket(id: string, manageChrome = true) {
     sendInput(input: string) {
       const sent = socket?.send(0, encoder.encode(input)) ?? false;
       if (!sent) error = inputSendError;
-      else if (error === inputSendError) error = "";
+      else {
+        if (error === inputSendError) error = "";
+        socket?.probe();
+      }
       return sent;
     },
     // Sends one of xterm's automatic replies to a device query.

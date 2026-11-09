@@ -256,3 +256,20 @@ it("reattaches immediately when the caller declines to probe", () => {
   document.dispatchEvent(new Event("visibilitychange"));
   expect(Socket.instances.at(-1)).not.toBe(socket);
 });
+
+it("probes an OPEN socket on demand once per in-flight window and replaces it if silent", () => {
+  connection.close();
+  const resume = vi.fn(() => true);
+  connection = connect("/ws/s/example", vi.fn(), vi.fn(), vi.fn(), {
+    resume,
+  });
+  const socket = Socket.instances.at(-1)!;
+  socket.onopen?.();
+  connection.probe();
+  connection.probe();
+  expect(resume).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(resumeTimeout - 1);
+  expect(Socket.instances.at(-1)).toBe(socket);
+  vi.advanceTimersByTime(1);
+  expect(Socket.instances.at(-1)).not.toBe(socket);
+});

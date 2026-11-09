@@ -69,6 +69,9 @@ export interface SocketConnection {
   close(): void;
   // Explicit recovery may reopen an exited or moved session, not a missing one.
   reconnect(): void;
+  // Probes an OPEN socket via `resume` when none is in flight, replacing a
+  // silent mobile connection after resumeTimeout.
+  probe(): void;
 }
 // How long a foregrounded OPEN socket may stay silent after `resume` before
 // it is treated as a dead mobile connection and replaced.
@@ -129,6 +132,7 @@ export function connect(
     clearTimeout(timer);
     clearTimeout(stableTimer);
     clearTimeout(resumeTimer);
+    resumeTimer = undefined;
     clearControls();
     const previous = socket;
     socket = undefined;
@@ -152,6 +156,7 @@ export function connect(
     next.onmessage = (event) => {
       if (socket !== next || closed) return;
       clearTimeout(resumeTimer);
+      resumeTimer = undefined;
       try {
         onMessage(event.data);
       } catch (error) {
@@ -164,6 +169,7 @@ export function connect(
       closed = true;
       clearTimeout(stableTimer);
       clearTimeout(resumeTimer);
+      resumeTimer = undefined;
       clearControls();
       if (event.code === 4410 || event.code === 4404 || event.code === 4409) {
         finished =
@@ -186,6 +192,7 @@ export function connect(
     // A probe left by a foreground that was hidden again must not replace
     // the socket in the background.
     clearTimeout(resumeTimer);
+    resumeTimer = undefined;
     if (document.hidden || finished) return;
     // A suspended mobile socket may still claim OPEN after the network died.
     // Callers that can probe it keep a healthy connection.
@@ -198,6 +205,7 @@ export function connect(
       return;
     }
     resumeTimer = window.setTimeout(() => {
+      resumeTimer = undefined;
       if (socket === current) open();
     }, resumeTimeout);
   };
@@ -232,6 +240,7 @@ export function connect(
       clearTimeout(timer);
       clearTimeout(stableTimer);
       clearTimeout(resumeTimer);
+      resumeTimer = undefined;
       clearControls();
       const previous = socket;
       socket = undefined;
@@ -244,6 +253,22 @@ export function connect(
       if (disposed || finished === "missing") return;
       finished = undefined;
       open();
+    },
+    probe() {
+      if (
+        disposed ||
+        finished ||
+        document.hidden ||
+        resumeTimer !== undefined ||
+        socket?.readyState !== WebSocket.OPEN
+      )
+        return;
+      const current = socket;
+      if (!options.resume?.((kind, payload) => api.send(kind, payload))) return;
+      resumeTimer = window.setTimeout(() => {
+        resumeTimer = undefined;
+        if (socket === current) open();
+      }, resumeTimeout);
     },
   };
   const reopen = () => {

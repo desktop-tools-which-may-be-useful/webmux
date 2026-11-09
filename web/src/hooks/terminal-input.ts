@@ -129,21 +129,55 @@ export function attachTerminalInput(
     if (event.type === "compositionend")
       compositionTimer = window.setTimeout(() => (composing = false));
   };
+  const resetComposition = () => {
+    clearTimeout(compositionTimer);
+    keypressed = false;
+    const textarea = term.textarea;
+    if (!composing) return;
+    if (textarea) {
+      textarea.value = "";
+      textarea.dispatchEvent(
+        new CompositionEvent("compositionend", {
+          data: "",
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+    clearTimeout(compositionTimer);
+    composing = false;
+  };
+  const visible = () => {
+    if (document.hidden) resetComposition();
+  };
   const directInput = (event: InputEvent) => {
+    const lineBreak =
+      event.inputType === "insertLineBreak" ||
+      event.inputType === "insertParagraph";
+    const text = lineBreak
+      ? "\r"
+      : event.inputType === "insertText" ||
+          event.inputType === "insertFromComposition"
+        ? event.data
+        : null;
     if (
       userInput?.draftEnabled() ||
       event.target !== term.textarea ||
-      event.inputType !== "insertText" ||
-      !event.data ||
+      !text ||
       event.isComposing ||
       composing ||
       keypressed ||
       !event.cancelable
-    )
+    ) {
+      if (event.target === term.textarea) keypressed = false;
       return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
-    term.input(event.data, true);
+    term.input(text, true);
+  };
+  const clearKeypressed = (event: InputEvent) => {
+    if (event.target === term.textarea) keypressed = false;
   };
   // A keyboard extension (Typeless, other dictation keyboards) commits text
   // with one insertText call, which WebKit reports as one key: keydown and
@@ -167,6 +201,7 @@ export function attachTerminalInput(
       key.length <= String.fromCodePoint(charCode).length
     )
       return;
+    keypressed = false;
     event.preventDefault();
     event.stopImmediatePropagation();
     term.input(key, true);
@@ -175,8 +210,11 @@ export function attachTerminalInput(
     parent.addEventListener(type, trackKey, true);
   parent.addEventListener("keypress", wholeStringKey, true);
   parent.addEventListener("beforeinput", directInput as EventListener, true);
+  parent.addEventListener("input", clearKeypressed as EventListener, true);
   parent.addEventListener("compositionstart", trackComposition, true);
   parent.addEventListener("compositionend", trackComposition, true);
+  term.textarea?.addEventListener("blur", resetComposition);
+  document.addEventListener("visibilitychange", visible);
 
   // xterm emits keypresses and its own answers to device queries through
   // the same event, sometimes as identical bytes (Shift+F3 and a cursor
@@ -302,11 +340,14 @@ export function attachTerminalInput(
       directInput as EventListener,
       true,
     );
+    parent.removeEventListener("input", clearKeypressed as EventListener, true);
     for (const type of ["keydown", "keypress", "keyup"] as const)
       parent.removeEventListener(type, trackKey, true);
     parent.removeEventListener("keypress", wholeStringKey, true);
     parent.removeEventListener("compositionstart", trackComposition, true);
     parent.removeEventListener("compositionend", trackComposition, true);
+    term.textarea?.removeEventListener("blur", resetComposition);
+    document.removeEventListener("visibilitychange", visible);
     clearTimeout(compositionTimer);
     parent.classList.remove("ios-ime");
     input.dispose();

@@ -97,13 +97,21 @@ test("IME-committed spaces, digits and punctuation reach the terminal exactly on
   // Composition still commits once through xterm's composition handling.
   imeKey(textarea, "keydown");
   textarea.dispatchEvent(
-    new CompositionEvent("compositionstart", { data: "" }),
+    new CompositionEvent("compositionstart", {
+      data: "",
+      bubbles: true,
+      composed: true,
+    }),
   );
   imeInsert(textarea, "ni", "insertCompositionText", true);
   textarea.value = textarea.value.slice(0, -2);
   imeInsert(textarea, "你", "insertCompositionText", true);
   textarea.dispatchEvent(
-    new CompositionEvent("compositionend", { data: "你" }),
+    new CompositionEvent("compositionend", {
+      data: "你",
+      bubbles: true,
+      composed: true,
+    }),
   );
   imeKey(textarea, "keyup");
   await settle();
@@ -112,12 +120,20 @@ test("IME-committed spaces, digits and punctuation reach the terminal exactly on
   // Safari may commit with insertText just after compositionend.
   imeKey(textarea, "keydown");
   textarea.dispatchEvent(
-    new CompositionEvent("compositionstart", { data: "" }),
+    new CompositionEvent("compositionstart", {
+      data: "",
+      bubbles: true,
+      composed: true,
+    }),
   );
   imeInsert(textarea, "hao", "insertCompositionText", true);
   textarea.value = textarea.value.slice(0, -3);
   textarea.dispatchEvent(
-    new CompositionEvent("compositionend", { data: "好" }),
+    new CompositionEvent("compositionend", {
+      data: "好",
+      bubbles: true,
+      composed: true,
+    }),
   );
   imeInsert(textarea, "好");
   imeKey(textarea, "keyup");
@@ -129,6 +145,107 @@ test("IME-committed spaces, digits and punctuation reach the terminal exactly on
   await userEvent.keyboard(" 2");
   await settle();
   expect(inputText(socket)).toBe(" 1， 你好 2");
+});
+
+test("aborted iOS composition, missing keyups and IME line breaks still reach the terminal", async () => {
+  const { socket } = await openTerminal();
+  await page.getByRole("button", { name: "Focus terminal input" }).click();
+  const textarea = host().querySelector<HTMLTextAreaElement>(
+    ".xterm-helper-textarea",
+  )!;
+  expect(document.activeElement).toBe(textarea);
+
+  // An IME composition abandoned when the keyboard hides on blur must not
+  // leave xterm or directInput stuck in composing state.
+  imeKey(textarea, "keydown");
+  textarea.dispatchEvent(
+    new CompositionEvent("compositionstart", {
+      data: "",
+      bubbles: true,
+      composed: true,
+    }),
+  );
+  imeInsert(textarea, "ni", "insertCompositionText", true);
+  textarea.blur();
+  await settle();
+  expect(inputText(socket)).toBe("");
+
+  textarea.focus();
+  imeKey(textarea, "keydown");
+  imeInsert(textarea, "a");
+  imeKey(textarea, "keyup");
+  await settle();
+  expect(inputText(socket)).toBe("a");
+
+  // A composition abandoned when the page is hidden also resets cleanly,
+  // immediately without waiting for a macrotask timer.
+  const hidden = vi.spyOn(Document.prototype, "hidden", "get");
+  imeKey(textarea, "keydown");
+  textarea.dispatchEvent(
+    new CompositionEvent("compositionstart", {
+      data: "",
+      bubbles: true,
+      composed: true,
+    }),
+  );
+  imeInsert(textarea, "hao", "insertCompositionText", true);
+  hidden.mockReturnValue(true);
+  document.dispatchEvent(new Event("visibilitychange"));
+  hidden.mockReturnValue(false);
+  document.dispatchEvent(new Event("visibilitychange"));
+  const queries = () => socket.sent.filter((frame) => frame[0] === 4);
+  await expect.poll(() => queries().length).toBeGreaterThanOrEqual(1);
+  for (const frame of queries()) {
+    const query = JSON.parse(new TextDecoder().decode(frame.slice(1)));
+    socket.receive(5, JSON.stringify({ id: query.ids[0], state: "missing" }));
+  }
+  expect(inputText(socket)).toBe("a");
+
+  // Candidate-bar commits that arrive as insertFromComposition without
+  // compositionstart, and Return arriving as insertLineBreak after a 229
+  // keydown, both reach the PTY once.
+  imeInsert(textarea, "好", "insertFromComposition");
+  await settle();
+  expect(inputText(socket)).toBe("a好");
+  imeKey(textarea, "keydown");
+  const enterBefore = new InputEvent("beforeinput", {
+    inputType: "insertLineBreak",
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  });
+  expect(textarea.dispatchEvent(enterBefore)).toBe(false);
+  imeKey(textarea, "keyup");
+  await settle();
+  expect(inputText(socket)).toBe("a好\r");
+
+  // A printable keypress whose keyup is swallowed by the soft keyboard must
+  // not block a subsequent direct insertText that arrives without keydown.
+  const down = new KeyboardEvent("keydown", {
+    key: "b",
+    code: "KeyB",
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  });
+  Object.defineProperty(down, "keyCode", { value: 66 });
+  if (textarea.dispatchEvent(down)) {
+    const press = new KeyboardEvent("keypress", {
+      key: "b",
+      code: "KeyB",
+      charCode: 98,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    Object.defineProperty(press, "keyCode", { value: 98 });
+    Object.defineProperty(press, "which", { value: 98 });
+    if (textarea.dispatchEvent(press)) imeInsert(textarea, "b");
+  }
+  await settle();
+  imeInsert(textarea, "！");
+  await settle();
+  expect(inputText(socket)).toBe("a好\rb！");
 });
 
 test("iOS IME composition keeps the helper caret fixed without dropping commits", async () => {
