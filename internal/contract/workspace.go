@@ -105,6 +105,26 @@ type Remotes struct {
 	Remotes []Remote `json:"remotes"`
 }
 
+// FetchRemotesRequest is the empty body of POST
+// /api/repositories/{id}/fetch.
+type FetchRemotesRequest struct{}
+
+// FetchResult is the outcome of fetching one remote. Status is "ok",
+// "auth", "network", "timeout", "rejected" or "error"; Message is empty for
+// "ok" and otherwise explains the failure with credentials redacted.
+type FetchResult struct {
+	Remote  string `json:"remote"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// FetchRemotesResponse answers POST /api/repositories/{id}/fetch: one
+// result per remote, sorted by name, and the repository after the fetch.
+type FetchRemotesResponse struct {
+	Results    []FetchResult `json:"results"`
+	Repository Repository    `json:"repository"`
+}
+
 // Branches is the body of GET /api/repositories/{id}/branches.
 type Branches struct {
 	Branches           []Branch     `json:"branches"`

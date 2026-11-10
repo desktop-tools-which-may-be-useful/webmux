@@ -308,6 +308,13 @@ func Remotes(r workspace.Remotes) contract.Remotes {
 	return contract.Remotes{Remotes: each(r.Remotes, func(v workspace.Remote) contract.Remote { return contract.Remote(v) })}
 }
 
+func FetchRemotes(r workspace.FetchRemotesResult) contract.FetchRemotesResponse {
+	return contract.FetchRemotesResponse{
+		Results:    each(r.Results, func(v workspace.FetchResult) contract.FetchResult { return contract.FetchResult(v) }),
+		Repository: Repository(r.Repository),
+	}
+}
+
 func Commits(in []workspace.Commit) contract.Commits {
 	return contract.Commits{Commits: each(in, func(v workspace.Commit) contract.Commit { return contract.Commit(v) })}
 }

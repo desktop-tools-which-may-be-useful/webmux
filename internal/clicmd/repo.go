@@ -390,6 +390,59 @@ var repoRemotesCommand = &Command{
 	},
 }
 
+var repoFetchCommand = &Command{
+	Name: "repo fetch", Group: GroupWorkspace, Args: "REPO",
+	Summary: "Fetch every remote of a repository, pruning deleted branches, like the Web UI's fetch button.",
+	Description: "Remotes are fetched one by one in name order; one failing does not stop the others, and the repository " +
+		"is checked again afterwards, so repo show and worktree show report the new ahead/behind counts. Git runs without " +
+		"prompts: a remote that needs a password, a token or an ssh key or host key confirmation fails at once as auth; " +
+		"authenticate in a terminal and retry. A failure's message ends with Git's first output line, credentials " +
+		"redacted. A fetch of the repository already running is joined, and it goes on when the command is interrupted.",
+	Arguments: []Item{repoArgument},
+	Output: "Lines \"REMOTE<TAB>STATUS<TAB>MESSAGE\", status ok, auth, network, timeout, rejected or error. With --json, " +
+		"the FetchRemotesResponse object: results and the refreshed Repository.",
+	Exit: exitsCommon(
+		ExitItem{Code: 1, Text: "Also: a remote failed, or the repository has no remotes."},
+		ExitItem{Code: 2, Text: "Also: REPO names nothing."},
+	),
+	Examples: []Example{
+		{Command: "webmux repo fetch .", Text: "Bring every remote-tracking branch of the current repository up to date."},
+		{Command: "webmux repo fetch . && webmux worktree show . main --json | jq .behind", Text: "Count the commits main is behind after fetching."},
+	},
+	SeeAlso: []string{"webmux repo remotes", "webmux worktree show", "webmux repo branches"},
+	Bind: func(fs *flag.FlagSet) Action {
+		asJSON := fs.Bool("json", false, "print the FetchRemotesResponse object")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 1 {
+				return e.Usagef("exactly one repository is required")
+			}
+			client, repo, code := e.repoAndClient(ctx, args[0])
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			var fetched contract.FetchRemotesResponse
+			if err := client.Do(ctx, http.MethodPost, "/api/repositories/"+url.PathEscape(repo.ID)+"/fetch", contract.FetchRemotesRequest{}, &fetched); err != nil {
+				return e.Fail(err)
+			}
+			code = contract.ExitOK
+			for _, r := range fetched.Results {
+				if r.Status != "ok" {
+					code = contract.ExitError
+				}
+			}
+			if *asJSON {
+				writeJSON(e.Stdout, fetched)
+				return code
+			}
+			for _, r := range fetched.Results {
+				_, _ = fmt.Fprintf(e.Stdout, "%s\t%s\t%s\n", r.Remote, r.Status, r.Message)
+			}
+			return code
+		}
+	},
+}
+
 func shortHash(hash string) string {
 	if len(hash) > 12 {
 		return hash[:12]

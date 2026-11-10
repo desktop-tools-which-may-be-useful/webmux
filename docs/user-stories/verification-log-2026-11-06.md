@@ -196,3 +196,14 @@
   - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 缺少 `Uint8Array.prototype.toBase64` 失败；浏览器套件中 `RepositoryPanel.test.ts` 一项因前一个菜单仍在退出动画而偶发失败，已改为等待菜单关闭，之后连续 3 次通过；
   - E2E `worktree-switch`、`worktrees`、`repository-scope`、`workspace-discovery` 共 48 项通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与切换流程 GIF。
 - 限制：未运行全量 E2E 与 Storybook 构建（交给 CI）；未在真机上验证；无头浏览器无法验证悬停与触屏常驻。
+
+本次局部核对（2026-11-11，获取远程与清理失效登记）：实现 OpenSpec 变更 `add-repository-maintenance`，并把仓库与 worktree 故事从 `code-and-worktrees.md` 原文迁到 `code-and-worktrees/worktrees.md`（原文件超过 48 KiB）。
+
+- 更新的故事：新增 US-J17；更新 US-J14 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/shell-control.md`、`docs/protocol/http-workspace.md`。
+- 依据：
+  - `remoteGit` 单测覆盖 `GIT_SSH_COMMAND`、`core.sshCommand`、`GIT_SSH` 三种情况下不注入 `BatchMode`、都未设置时注入，以及 `auth`/`network`/`timeout`/`rejected`/`error` 分类与令牌脱敏；日志断言不含 URL；
+  - `FetchRemotes` 用本地 bare 远程验证清除远端已删分支、`lastFetchedAt` 前进、单个远程失败不影响其他远程、请求取消后仍完成、并发两次只执行一次 fetch，且获取期间 `CreateWorktree` 不被阻塞；
+  - `make format`、`make check`（含 `golangci-lint` v2.15.0）通过；`make test-go` 全部通过；
+  - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 失败；浏览器套件中 `TerminalGraphics`、`TerminalSyncOutput` 各 1 项在整套并发运行时失败，单独重跑 24 项全部通过；
+  - Playwright E2E `repository-maintenance.spec.ts`、`worktrees.spec.ts`、`worktree-switch.spec.ts` 通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与获取、清理流程 GIF。
+- 限制：未在真机上验证；全量 E2E 与 Storybook 构建交给 CI。

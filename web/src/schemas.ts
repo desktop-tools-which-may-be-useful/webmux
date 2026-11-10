@@ -765,6 +765,20 @@ export const RemoteSchema = z.object({
 export type Remote = z.infer<typeof RemoteSchema>;
 export const RemotesSchema = z.object({ remotes: z.array(RemoteSchema) });
 export type Remotes = z.infer<typeof RemotesSchema>;
+// POST /repositories/:id/fetch: one result per remote, sorted by name, and
+// the repository read again afterwards. `message` is "" for "ok" and
+// otherwise explains the failure with credentials redacted.
+export const FetchResultSchema = z.object({
+  remote: z.string(),
+  status: z.enum(["ok", "auth", "network", "timeout", "rejected", "error"]),
+  message: z.string(),
+});
+export type FetchResult = z.infer<typeof FetchResultSchema>;
+export const FetchRemotesResponseSchema = z.object({
+  results: z.array(FetchResultSchema),
+  repository: RepositorySchema,
+});
+export type FetchRemotesResponse = z.infer<typeof FetchRemotesResponseSchema>;
 export const RefreshBranchBaseRequestSchema = z.object({
   branch: z.string().min(1),
 });

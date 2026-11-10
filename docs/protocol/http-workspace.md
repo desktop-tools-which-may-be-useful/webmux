@@ -12,6 +12,7 @@
 | GET        | `/api/repositories/{id}/commits?from=<oid>[&from=<oid>]`        | `{commits: [{hash, subject, author, committedAt}]}`：自 1–2 个完整提交 ID（本地与上游尖端）合并最近 50 条，新到旧，超出上限的起始提交仍会列出；非法 ID 400                |
 | POST       | `/api/repositories/{id}/branches/refresh`                       | `{branch}`；fetch 已配置上游并返回远程基线或本地回退；`upstreamHead` 为 fetch 到的上游尖端（本地分叉时也返回），未成功时为空                                              |
 | GET        | `/api/repositories/{id}/remotes`                                | `{remotes: [{name, fetchUrl, pushUrl}]}`，按名称排序；URL 已去除凭据（见下），不联网                                                                                      |
+| POST       | `/api/repositories/{id}/fetch`                                  | 空 body `{}`；获取全部远程，返回 `{results: [{remote, status, message}], repository}`（见下）；没有远程 409                                                               |
 | POST       | `/api/repositories/{id}/worktrees`                              | `{path, mode: "new", branch, base}` 或 `{path, mode: "existing", branch}`，201                                                                                            |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, archived, commit, push, blockers, warnings, forceAllowed}`                                                     |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204                                                                                |
@@ -84,6 +85,17 @@
 错误码：400 输入错误，404 不存在，409 冲突或确认过期，503 Git / 清单不可用，504 超时，500 存储或非预期错误。JSON 结构见 `internal/contract/workspace.go`。
 
 仓库快照带 `initInstruction`（未设置时为空字符串），保存在 `repositories.json` 的登记记录中；旧清单缺字段视为没有指令。它是一段模板：`{{名称}}` 在创建会话带 `useInitInstruction` 时展开为同名快捷指令的正文（见 [创建会话](http-session-create.md#首条提示与初始化指令)），其余文字原样发送，不会被执行。
+
+### 获取远程
+
+`POST /api/repositories/{id}/fetch` 按名称逐个执行 `git fetch --prune --recurse-submodules=no --end-of-options <remote>`（不加 `--no-tags`），不持有仓库门闩，不阻塞创建、删除、切换与快照读取：
+
+- 时限：每个远程 60 秒，整体最多 3 分钟；客户端断开不会中断获取。同一仓库同时只获取一次，重复请求等待并得到同一结果。
+- `results` 按远程名排序，每项 `status` 为 `ok`、`auth`、`network`、`timeout`、`rejected` 或 `error`；`ok` 时 `message` 为空，否则为中文说明加脱敏后的 Git 输出首行，最多 200 字符。
+- 非交互：设置 `GIT_TERMINAL_PROMPT=0` 与 `SSH_ASKPASS_REQUIRE=never`；`GIT_SSH_COMMAND`、`core.sshCommand` 与 `GIT_SSH` 都未设置时才注入 `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`。不修改 Git 或凭据配置。
+- `repository` 是全部远程结束后重新读取的仓库快照（`lastFetchedAt` 与领先/落后随之更新）。服务日志只记录仓库 ID、远程名与分类，不记录 URL 与 Git 输出原文。
+
+清理失效登记没有独立接口：Web 端与 `webmux worktree prune` 选出未锁定、目录已缺失的 `prunable` linked worktree，走上表的批量删除预览与执行，从不执行 `git worktree prune`。
 
 ## 从快速开始创建会话
 

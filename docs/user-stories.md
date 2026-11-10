@@ -37,7 +37,7 @@
 | G    | 快捷指令与语音输入                     | US-G01–US-G07 |
 | H    | 手机、平板与触摸操作、慢速网络         | US-H01–US-H11 |
 | I    | 代码工作区、Diff、引用与文件操作       | US-I01–US-I19 |
-| J    | 仓库登记与 worktree 管理               | US-J01–US-J16 |
+| J    | 仓库登记与 worktree 管理               | US-J01–US-J17 |
 | K    | 配置、运行与服务管理                   | US-K01–US-K17 |
 | L    | 开发、验证与发布支持                   | US-L01–US-L15 |
 | M    | 原生终端、CLI 与本机控制面             | US-M01–US-M08 |
@@ -58,7 +58,8 @@
 | [会话总览、搜索与提醒](user-stories/access-and-sessions/workspace.md)             | C                  |
 | [终端、输入与移动端](user-stories/terminal.md)                                    | D–E、G–H           |
 | [草稿编写、保存与发送确认](user-stories/terminal/drafts.md)                       | F                  |
-| [代码工作区与工作树](user-stories/code-and-worktrees.md)                          | I–J                |
+| [代码工作区与工作树](user-stories/code-and-worktrees.md)                          | I                  |
+| [仓库登记与 worktree 管理](user-stories/code-and-worktrees/worktrees.md)          | J                  |
 | [配置、运行与贡献者工具](user-stories/operations-and-tooling.md)                  | K–L                |
 | [原生客户端、隧道与托盘](user-stories/clients-network-tray.md)                    | M–P                |
 | [终端分屏用户故事](user-stories/terminal-splits.md)                               | D13–D14            |

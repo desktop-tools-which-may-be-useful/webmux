@@ -14,3 +14,5 @@ export const Worktrees: Story = { args: { tab: "worktrees" } };
 export const Branches: Story = { args: { tab: "branches" } };
 export const Remotes: Story = { args: { tab: "remotes" } };
 export const WorktreeSync: Story = { args: { sync: true } };
+export const Fetching: Story = { args: { fetchReply: "pending" } };
+export const FetchPartial: Story = { args: { fetchReply: "partial" } };

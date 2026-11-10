@@ -19,6 +19,7 @@
     class: className,
     pinDrawerHeader = false,
     truncateDrawerTitle = false,
+    actions,
   }: {
     title: string;
     description: string;
@@ -36,6 +37,11 @@
      * the full title remains the accessible name and the hover hint.
      */
     truncateDrawerTitle?: boolean;
+    /**
+     * Controls acting on the dialog's whole subject, beside the title; they
+     * stay put while the body changes. Keep them icon-sized below `sm`.
+     */
+    actions?: Snippet;
   } = $props();
   const desktop = new MediaQuery("(min-width: 640px)");
   let open = $state(true);
@@ -51,7 +57,7 @@
   </div>
 {/snippet}
 
-{#snippet drawerHeader()}
+{#snippet drawerTitle()}
   <Drawer.Header>
     <Drawer.Title
       >{#if truncateDrawerTitle}<span class="block truncate" {title}
@@ -60,6 +66,18 @@
     >
     <Drawer.Description>{drawerDescription ?? description}</Drawer.Description>
   </Drawer.Header>
+{/snippet}
+
+{#snippet drawerHeader()}
+  {#if actions}
+    <!-- Equal side room keeps the centered title clear of the actions. -->
+    <div class="relative px-12">
+      {@render drawerTitle()}
+      <div class="absolute top-2 right-2">{@render actions()}</div>
+    </div>
+  {:else}
+    {@render drawerTitle()}
+  {/if}
 {/snippet}
 
 {#if desktop.current}
@@ -73,10 +91,20 @@
         if (busy) event.preventDefault();
       }}
     >
-      <Dialog.Header>
-        <Dialog.Title>{title}</Dialog.Title>
-        <Dialog.Description>{description}</Dialog.Description>
-      </Dialog.Header>
+      {#if actions}
+        <div class="flex min-w-0 items-start gap-3 pr-8">
+          <Dialog.Header class="min-w-0 flex-1 pr-0">
+            <Dialog.Title>{title}</Dialog.Title>
+            <Dialog.Description>{description}</Dialog.Description>
+          </Dialog.Header>
+          {@render actions()}
+        </div>
+      {:else}
+        <Dialog.Header>
+          <Dialog.Title>{title}</Dialog.Title>
+          <Dialog.Description>{description}</Dialog.Description>
+        </Dialog.Header>
+      {/if}
       {@render children()}
     </Dialog.Content>
   </Dialog.Root>

@@ -167,6 +167,8 @@ func wireSchema(name string) wireRules {
 		add("/*", "path", "cmd/*")
 	case "repository-register", "repository-register-release", "repository-register-again", "repository-worktrees", "repository-update", "repository-register-instruction", "repository-update-instruction":
 		repositoryFields("")
+	case "repository-fetch":
+		repositoryFields("/repository")
 	case "repositories", "repositories-empty":
 		repositoryFields("/*")
 	case "error-409-session-create-worktree":
@@ -1097,6 +1099,21 @@ func wireWorkspace(f *wireFixture) {
 	f.git("remote", "set-url", "--push", "origin", "https://token@example.invalid/app.git")
 	f.call("repository-remotes", "GET", base+"/remotes", nil, 200)
 	f.git("remote", "remove", "origin")
+	// One remote fetches from a local bare clone; the other fails like ssh
+	// refusing the key.
+	bare := filepath.Join(f.t.TempDir(), "origin.git")
+	f.git("clone", "--bare", f.root, bare)
+	f.git("remote", "add", "origin", bare)
+	ssh := filepath.Join(f.t.TempDir(), "ssh")
+	if err := os.WriteFile(ssh, []byte("#!/bin/sh\necho 'git@fork.invalid: Permission denied (publickey).' >&2\nexit 255\n"), 0o700); err != nil {
+		f.t.Fatal(err)
+	}
+	f.git("config", "core.sshCommand", ssh)
+	f.git("remote", "add", "fork", "ssh://git@fork.invalid/app.git")
+	f.call("repository-fetch", "POST", base+"/fetch", contract.FetchRemotesRequest{}, 200)
+	f.git("remote", "remove", "fork")
+	f.git("remote", "remove", "origin")
+	f.git("config", "--unset", "core.sshCommand")
 	f.call("error-404-repository-remotes", "GET", "/api/repositories/missing/remotes", nil, 404)
 	f.call("repository-unregister", "DELETE", base, nil, 204)
 }

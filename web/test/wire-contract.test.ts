@@ -131,6 +131,8 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.BranchesSchema, ["repository-branches"]],
   [S.CommitsSchema, ["repository-commits"]],
   [S.RemotesSchema, ["repository-remotes", "repository-remotes-empty"]],
+  [S.FetchRemotesResponseSchema, ["repository-fetch"]],
+  [S.SwitchPreviewSchema, ["worktree-switch-preview"]],
   [S.RefreshBranchBaseResponseSchema, ["repository-branch-refresh"]],
   [
     S.RepositorySchema,

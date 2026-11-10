@@ -21,6 +21,8 @@
     countWorktreeBatchCategories,
     filterWorktreeBatchEntries,
     groupBatchPreviewItems,
+    LOCKED_STALE_REASON,
+    staleRegistrations,
     type WorktreeBatchEntry,
     type WorktreeBatchFilter,
   } from "../worktree-batch";
@@ -41,8 +43,9 @@
   // The repository panel's worktrees: every worktree of the repository,
   // searchable and filtered by how safely it can be removed. Browsing opens
   // a worktree's details; "批量清理" turns the list into a selection, then
-  // a server preview, then per-item results. Removal happens only here in the
-  // panel, so the rows' menus carry no delete entry.
+  // a server preview, then per-item results. "清理失效登记" preselects the
+  // stale registrations and goes straight to that preview. Removal happens
+  // only here in the panel, so the rows' menus carry no delete entry.
   let {
     repository,
     sessions,
@@ -83,6 +86,11 @@
     buildWorktreeBatchEntries(repository, home, sessions, archived),
   );
   const counts = $derived(countWorktreeBatchCategories(entries));
+  const stale = $derived(
+    staleRegistrations(entries)
+      .slice(0, MAX_BATCH_WORKTREES)
+      .map((entry) => entry.tree.id),
+  );
   const filteredEntries = $derived(
     filterWorktreeBatchEntries(entries, statusFilter, query),
   );
@@ -178,6 +186,16 @@
     error = "";
     selected.clear();
     stage = "browse";
+  }
+
+  // Selects exactly the stale registrations and previews them; a failed
+  // preview leaves the selection to review.
+  async function pruneStale() {
+    done = "";
+    selected.clear();
+    for (const id of stale) selected.add(id);
+    await loadPreview(stale);
+    if (stage !== "preview") stage = "select";
   }
 
   async function loadPreview(ids: readonly string[] = selectedIds) {
@@ -297,6 +315,9 @@
     {entry.tree.path}
   </p>
   <WorktreeSyncSummary worktree={entry.tree} />
+  {#if entry.reason === LOCKED_STALE_REASON}
+    <p class="text-xs text-muted-foreground">{LOCKED_STALE_REASON}</p>
+  {/if}
 {/snippet}
 
 <div class="space-y-4">
@@ -371,12 +392,24 @@
               退出批量清理
             </Button>
           {:else}
+            {#if stale.length > 0}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="min-h-9 sm:min-h-8"
+                disabled={busy}
+                onclick={() => void pruneStale()}
+              >
+                {busy ? "正在读取预览…" : `清理失效登记（${stale.length}）`}
+              </Button>
+            {/if}
             <Button
               type="button"
               variant="outline"
               size="sm"
               class="min-h-9 sm:min-h-8"
-              disabled={entries.length === 0}
+              disabled={busy || entries.length === 0}
               onclick={startSelecting}
             >
               批量清理
@@ -421,7 +454,7 @@
                 />
                 <div class="min-w-0 flex-1 space-y-1">
                   {@render badges(entry)}
-                  {#if isProtected}
+                  {#if isProtected && entry.reason !== LOCKED_STALE_REASON}
                     <p class="text-xs break-all text-muted-foreground">
                       {entry.reason}
                     </p>

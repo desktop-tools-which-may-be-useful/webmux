@@ -4,6 +4,7 @@
   import { Button } from "../src/lib/components/ui/button";
   import type {
     Branches,
+    FetchRemotesResponse,
     Repository,
     SessionInfo,
     Worktree,
@@ -13,10 +14,17 @@
 
   // The repository panel at each section, and the worktree sync summary's
   // forms and states, with long names that must wrap instead of overflowing.
+  // `fetchReply` picks how "获取远程" answers: never ("pending") or with one
+  // remote fetched and one failed ("partial").
   let {
     tab = "overview",
     sync = false,
-  }: { tab?: RepositoryTab; sync?: boolean } = $props();
+    fetchReply = "partial",
+  }: {
+    tab?: RepositoryTab;
+    sync?: boolean;
+    fetchReply?: "pending" | "partial";
+  } = $props();
   let open = $state(true);
 
   const at = "2026-01-01T09:00:00Z";
@@ -61,6 +69,21 @@
     }),
     tree("untracked", { upstream: null, ahead: null, behind: null }),
     tree("unknown", { dirty: null, changes: null, error: "git status 超时" }),
+    // Directories deleted outside WebMux; the locked one stays registered.
+    tree("stale", {
+      prunable: true,
+      available: false,
+      dirty: null,
+      changes: null,
+    }),
+    tree("locked-stale", {
+      prunable: true,
+      available: false,
+      locked: true,
+      lockReason: `移动硬盘 ${longToken}`,
+      dirty: null,
+      changes: null,
+    }),
   ];
   const repository: Repository = {
     id: "storybook-repository",
@@ -110,6 +133,8 @@
     defaultBranch: "main",
     defaultParent: longPath,
   };
+  let shown = $state.raw(repository);
+  const forkName = `fork-${longToken}`;
   const source = {
     branches: async () => branches,
     remotes: async () => ({
@@ -120,12 +145,31 @@
           pushUrl: `https://user:***@github.com/${longToken}/repo.git`,
         },
         {
-          name: `fork-${longToken}`,
+          name: forkName,
           fetchUrl: `https://***@github.com/${longToken}/fork.git`,
           pushUrl: `git@github.com:${longToken}/fork.git`,
         },
       ],
     }),
+    fetch: (): Promise<FetchRemotesResponse> =>
+      fetchReply === "pending"
+        ? new Promise(() => {})
+        : Promise.resolve({
+            results: [
+              {
+                remote: forkName,
+                status: "auth",
+                message: `认证失败，请在终端完成认证后重试：fatal: could not read Username for 'https://github.com/${longToken}/fork.git': terminal prompts disabled`,
+              },
+              { remote: "origin", status: "ok", message: "" },
+            ],
+            repository: {
+              ...repository,
+              worktrees: repository.worktrees.map((item) =>
+                item.kind === "main" ? { ...item, behind: 3 } : item,
+              ),
+            },
+          }),
   };
 </script>
 
@@ -150,7 +194,8 @@
     <Button onclick={() => (open = true)}>打开仓库面板</Button>
     {#if open}
       <RepositoryPanel
-        {repository}
+        repository={shown}
+        onrepository={(next) => (shown = next)}
         {sessions}
         records={[]}
         home={{}}

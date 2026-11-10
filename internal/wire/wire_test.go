@@ -42,6 +42,7 @@ func TestRequiredArraysAndNullableCollections(t *testing.T) {
 		{"nil preset arrays", LaunchPresets([]launch.Preset{{}}), []string{`"envNames":[]`, `"cmd":[]`}},
 		{"nil branches", Branches(workspace.Branches{Branches: []workspace.Branch{{}}}), []string{`"worktreePaths":[]`, `"bases":[]`}},
 		{"nil remotes", Remotes(workspace.Remotes{}), []string{`"remotes":[]`}},
+		{"nil fetch results", FetchRemotes(workspace.FetchRemotesResult{}), []string{`"results":[]`, `"worktrees":[]`}},
 		{"unknown worktree details", Worktree(workspace.Worktree{}), []string{`"upstream":null`, `"ahead":null`, `"behind":null`, `"upstreamGone":false`, `"lastCommit":null`, `"changes":null`, `"operation":null`}},
 		{"unfetched repository", Repository(workspace.Repository{}), []string{`"lastFetchedAt":null`}},
 		{"nil preview arrays", Preview(workspace.Preview{}, nil), []string{`"sessions":[]`, `"archived":[]`, `"blockers":[]`}},

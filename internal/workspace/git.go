@@ -23,6 +23,10 @@ const (
 	maxWorkspaceGitError  = 64 << 10
 )
 
+// gitEnv keeps every workspace Git call noninteractive and its output in
+// the fixed English the callers parse.
+var gitEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "LC_ALL=C"}
+
 func (s *Service) git(ctx context.Context, cwd string, args ...string) ([]byte, error) {
 	out, _, err := s.gitOutput(ctx, cwd, args...)
 	return out, err
@@ -34,16 +38,7 @@ func (s *Service) gitOutput(ctx context.Context, cwd string, args ...string) ([]
 	if s.gitPath == "" {
 		return nil, "", problemf(ErrUnavailable, "%s", s.Capability().GitError)
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	stdout := &boundedOutput{limit: maxWorkspaceGitOutput, cancel: cancel}
-	run := runGitProcess(ctx, gitProcess{
-		path:        s.gitPath,
-		args:        append([]string{"-C", cwd}, args...),
-		env:         []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "LC_ALL=C"},
-		stdout:      stdout,
-		stderrLimit: maxWorkspaceGitError,
-	})
+	stdout, run := s.runGit(ctx, cwd, nil, args...)
 	if err := run.err; err != nil {
 		if stdout.exceeded || run.stderrExceeded {
 			return nil, run.stderr, problemf(ErrTooLarge, "Git 输出超过限制，实际状态可能已变化；请刷新")
@@ -58,6 +53,22 @@ func (s *Service) gitOutput(ctx context.Context, cwd string, args ...string) ([]
 		return nil, run.stderr, problemf(ErrInternal, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(run.stderr), err)
 	}
 	return stdout.Bytes(), run.stderr, nil
+}
+
+// runGit runs `git -C cwd args...` with gitEnv plus extra and bounded
+// output; callers map the exit themselves. s.gitPath must be set.
+func (s *Service) runGit(ctx context.Context, cwd string, extra []string, args ...string) (*boundedOutput, gitExit) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stdout := &boundedOutput{limit: maxWorkspaceGitOutput, cancel: cancel}
+	run := runGitProcess(ctx, gitProcess{
+		path:        s.gitPath,
+		args:        append([]string{"-C", cwd}, args...),
+		env:         append(append([]string{}, gitEnv...), extra...),
+		stdout:      stdout,
+		stderrLimit: maxWorkspaceGitError,
+	})
+	return stdout, run
 }
 func canonical(path string) (string, error) {
 	path, err := pathutil.Expand(path)

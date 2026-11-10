@@ -175,6 +175,49 @@ func gitWorkspaceAPI(t *testing.T, cwd string, args ...string) {
 	}
 }
 
+func TestWorkspaceFetchRemotesAPI(t *testing.T) {
+	handler, _, _, root := workspaceAPI(t)
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)
+	var repository contract.Repository
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	fetchURL := "/api/repositories/" + repository.ID + "/fetch"
+	for _, status := range []int{401, 403} {
+		request := httptest.NewRequest("POST", fetchURL, strings.NewReader(`{}`))
+		if status == 403 {
+			request.Header.Set("Authorization", "Bearer secret")
+			request.Header.Set("Origin", "https://evil.example")
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != status {
+			t.Fatalf("fetch auth boundary: got %d want %d", recorder.Code, status)
+		}
+	}
+	workspaceRequest(t, handler, "POST", "/api/repositories/missing/fetch", struct{}{}, 404)
+	if none := workspaceRequest(t, handler, "POST", fetchURL, struct{}{}, 409); !strings.Contains(none.Body.String(), "没有配置远程") {
+		t.Fatalf("no remotes: %s", none.Body.String())
+	}
+
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	gitWorkspaceAPI(t, root, "clone", "--bare", root, remote)
+	gitWorkspaceAPI(t, root, "remote", "add", "origin", remote)
+	gitWorkspaceAPI(t, root, "remote", "add", "gone", filepath.Join(t.TempDir(), "missing.git"))
+	fetched := workspaceRequest(t, handler, "POST", fetchURL, struct{}{}, 200)
+	var response contract.FetchRemotesResponse
+	if err := json.Unmarshal(fetched.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Results) != 2 || response.Results[0].Remote != "gone" || response.Results[0].Status != "rejected" || response.Results[0].Message == "" ||
+		response.Results[1] != (contract.FetchResult{Remote: "origin", Status: "ok"}) {
+		t.Fatalf("fetch results: %+v", response.Results)
+	}
+	if response.Repository.ID != repository.ID || response.Repository.Availability != "available" || response.Repository.LastFetchedAt == nil {
+		t.Fatalf("fetched repository: %+v", response.Repository)
+	}
+}
+
 func TestWorkspaceBranchRefreshAPI(t *testing.T) {
 	handler, _, _, root := workspaceAPI(t)
 	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)

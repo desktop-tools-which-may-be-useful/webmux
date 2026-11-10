@@ -31,6 +31,11 @@ export interface Repositories {
    * and every later refresh start a new read and discard older replies.
    */
   refresh(force?: boolean): Promise<void>;
+  /**
+   * Puts a repository another request just read (such as a fetch's reply)
+   * in place of its listed snapshot; unknown repositories are ignored.
+   */
+  replace(repository: Repository): void;
   dispose(): void;
 }
 
@@ -114,6 +119,13 @@ export function createRepositories(): Repositories {
         });
       }
       return pending;
+    },
+    replace(repository) {
+      if (!list.some((item) => item.id === repository.id)) return;
+      list = list.map((item) =>
+        item.id === repository.id ? repository : item,
+      );
+      homeCache.rememberRepositories(list);
     },
     dispose() {
       disposed = true;

@@ -49,6 +49,12 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		remotes, err := s.Workspace.Remotes(r.Context(), r.PathValue("id"))
 		return wire.Remotes(remotes), err
 	})
+	// Fetching holds no repository gate and outlives a disconnected client;
+	// failures are per remote, with Git output redacted by the service.
+	serveIn(mux, "POST "+repo+"/fetch", http.StatusOK, workspaceFailure, func(r *http.Request, _ contract.FetchRemotesRequest) (contract.FetchRemotesResponse, error) {
+		result, err := s.Workspace.FetchRemotes(r.Context(), r.PathValue("id"))
+		return wire.FetchRemotes(result), err
+	})
 	serve(mux, "GET "+repo+"/commits", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Commits, error) {
 		commits, err := s.Workspace.RecentCommits(r.Context(), r.PathValue("id"), r.URL.Query()["from"])
 		return wire.Commits(commits), err

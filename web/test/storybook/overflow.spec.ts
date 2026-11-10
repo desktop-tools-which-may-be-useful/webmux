@@ -130,13 +130,16 @@ for (const story of stories) {
 
 // The repository panel's sections and the worktree sync summary, with names
 // and URLs long enough to wrap; a worktree's details open in the same
-// dialog (drawer on phones) instead of a second one.
+// dialog (drawer on phones) instead of a second one. The fetch stories keep
+// "获取远程" running or show its per-remote results in every layout.
 for (const story of [
   "overview",
   "worktrees",
   "branches",
   "remotes",
   "worktree-sync",
+  "fetching",
+  "fetch-partial",
 ]) {
   test(`repository panel ${story} fits every layout`, async ({ page }) => {
     // Twelve layouts, and the worktrees story also opens a subview in each.
@@ -149,8 +152,20 @@ for (const story of [
     );
     await expect(page.getByTestId("repository-story")).toBeVisible();
     const dialog = page.getByRole("dialog");
+    const fetchButton = dialog.getByRole("button", { name: /获取远程$/ });
+    if (story.startsWith("fetch")) await fetchButton.click();
 
     await checkEachLayout(page, async ({ name }) => {
+      if (story === "fetching")
+        await expect
+          .soft(fetchButton, name)
+          .toHaveAccessibleName("正在获取远程");
+      if (story === "fetch-partial")
+        await expect
+          .soft(dialog.getByRole("list", { name: "获取结果" }), name)
+          .toBeVisible();
+      if (story.startsWith("fetch"))
+        await expect.soft(fetchButton, name).toBeInViewport();
       if (story === "branches")
         await expect
           .soft(page.getByRole("region", { name: "本地分支" }), name)

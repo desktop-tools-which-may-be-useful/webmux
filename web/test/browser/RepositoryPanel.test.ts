@@ -9,6 +9,7 @@ import type { SwitchSource } from "../../src/components/SwitchBranch.svelte";
 import type {
   ArchivedSession,
   Branches,
+  FetchRemotesResponse,
   PushCheck,
   Remote,
   Repository,
@@ -133,7 +134,11 @@ const origin: Remote = {
 };
 
 function source(
-  patch: Partial<{ remotes: Remote[]; branches: Branches }> = {},
+  patch: Partial<{
+    remotes: Remote[];
+    branches: Branches;
+    fetch: RepositorySource["fetch"];
+  }> = {},
 ): RepositorySource {
   return {
     remotes: vi.fn(async () => ({ remotes: patch.remotes ?? [origin] })),
@@ -149,6 +154,12 @@ function source(
             defaultParent: "/repos/webmux.worktrees",
           },
     ),
+    fetch:
+      patch.fetch ??
+      vi.fn(async (): Promise<FetchRemotesResponse> => ({
+        results: [{ remote: "origin", status: "ok", message: "" }],
+        repository: repo,
+      })),
   };
 }
 
@@ -169,6 +180,7 @@ function renderPanel(
     onchange: vi.fn(),
     onrefresh: vi.fn(),
     onnewworktree: vi.fn(),
+    onrepository: vi.fn(),
     onremoved: vi.fn(),
     onclose: vi.fn(),
   };
@@ -911,4 +923,231 @@ test("the home worktree dialog's footer hands over to batch management", async (
   await page.getByRole("button", { name: "批量管理…" }).click();
   expect(onmanage).toHaveBeenCalledOnce();
   expect(onclose).toHaveBeenCalledOnce();
+});
+
+const fork: Remote = {
+  name: "fork",
+  fetchUrl: "https://***@github.com/me/r.git",
+  pushUrl: "https://***@github.com/me/r.git",
+};
+const fetchButton = () => dialog().getByRole("button", { name: /获取远程$/ });
+
+test("获取远程 sits in the title bar of every section and replaces the repository with the reply", async () => {
+  const fetched = repository({
+    ...repo,
+    lastFetchedAt: "2026-11-01T00:00:00Z",
+    worktrees: [{ ...mainTree, behind: 2 }, unpinnedClean],
+  });
+  const fetch = vi.fn(async (): Promise<FetchRemotesResponse> => ({
+    results: [{ remote: "origin", status: "ok", message: "" }],
+    repository: fetched,
+  }));
+  const handlers = renderPanel({
+    initialTab: "worktrees",
+    source: source({ fetch }),
+  });
+  await expect.element(fetchButton()).toBeEnabled();
+  await tab("分支").click();
+  await expect.element(fetchButton()).toBeEnabled();
+  await fetchButton().click();
+
+  expect(fetch).toHaveBeenCalledExactlyOnceWith("repo1");
+  const results = dialog().getByRole("list", { name: "获取结果" });
+  await expect.element(results).toHaveTextContent("origin：已获取");
+  await expect
+    .element(dialog().getByRole("status").filter({ hasText: "已获取" }))
+    .toHaveAttribute("data-tone", "success");
+  expect(handlers.onrepository).toHaveBeenCalledExactlyOnceWith(fetched);
+  // The results stay while switching sections.
+  await tab("远程").click();
+  await expect.element(results).toBeVisible();
+});
+
+test("a partly failed fetch lists each remote's result", async () => {
+  const fetch = vi.fn(async (): Promise<FetchRemotesResponse> => ({
+    results: [
+      {
+        remote: "fork",
+        status: "auth",
+        message: "认证失败，请在终端完成认证后重试：Permission denied",
+      },
+      { remote: "origin", status: "ok", message: "" },
+    ],
+    repository: repo,
+  }));
+  const handlers = renderPanel({
+    source: source({ remotes: [fork, origin], fetch }),
+  });
+  await fetchButton().click();
+  const results = dialog().getByRole("list", { name: "获取结果" });
+  await expect
+    .element(results.getByRole("listitem").nth(0))
+    .toHaveTextContent(
+      "fork：认证失败，请在终端完成认证后重试：Permission denied",
+    );
+  await expect
+    .element(results.getByRole("listitem").nth(1))
+    .toHaveTextContent("origin：已获取");
+  await expect
+    .element(dialog().getByRole("status").filter({ hasText: "已获取" }))
+    .toHaveAttribute("data-tone", "warning");
+  expect(handlers.onrepository).toHaveBeenCalledOnce();
+});
+
+test("获取远程 is disabled with its reason when the repository has no remotes", async () => {
+  const fetch = vi.fn();
+  renderPanel({ source: source({ remotes: [], fetch }) });
+  await expect.element(fetchButton()).toBeDisabled();
+  await expect
+    .element(fetchButton())
+    .toHaveAccessibleDescription("这个仓库没有配置远程，无法获取");
+  expect(fetchButton().element().parentElement?.title).toBe(
+    "这个仓库没有配置远程，无法获取",
+  );
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test("a running fetch shows progress and another click sends no second request", async () => {
+  let finish: (reply: FetchRemotesResponse) => void = () => {};
+  const fetch = vi.fn(
+    () =>
+      new Promise<FetchRemotesResponse>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  renderPanel({ source: source({ fetch }) });
+  await fetchButton().click();
+  await expect.element(fetchButton()).toHaveAccessibleName("正在获取远程");
+  await expect.element(fetchButton()).toBeDisabled();
+  (fetchButton().element() as HTMLButtonElement).click();
+  expect(fetch).toHaveBeenCalledOnce();
+
+  finish({
+    results: [{ remote: "origin", status: "ok", message: "" }],
+    repository: repo,
+  });
+  await expect.element(fetchButton()).toHaveAccessibleName("获取远程");
+  expect(fetch).toHaveBeenCalledOnce();
+});
+
+const staleTree = worktree({
+  id: "gone2",
+  repositoryId: "repo1",
+  kind: "linked",
+  branch: "wt/stale-two",
+  path: "/repos/webmux.worktrees/stale-two",
+  prunable: true,
+  available: false,
+  dirty: null,
+  changes: null,
+});
+const lockedStale = worktree({
+  id: "lockgone",
+  repositoryId: "repo1",
+  kind: "linked",
+  branch: "wt/locked-gone",
+  path: "/repos/webmux.worktrees/locked-gone",
+  locked: true,
+  lockReason: "usb",
+  prunable: true,
+  available: false,
+  dirty: null,
+  changes: null,
+});
+// Git marks it prunable, but its directory is still there.
+const prunablePresent = worktree({
+  id: "present",
+  repositoryId: "repo1",
+  kind: "linked",
+  branch: "wt/present",
+  path: "/repos/webmux.worktrees/present",
+  prunable: true,
+  available: true,
+});
+
+test("清理失效登记 counts only unlocked stale registrations and previews exactly them", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+    Response.json({
+      confirmationId: "staleconf",
+      expiresAt: "2099-01-01T00:00:00Z",
+      items: [prunableTree, staleTree].map((tree) => ({
+        worktree: tree,
+        sessions: [],
+        archived: [],
+        commit: tree.head,
+        push: noRemote,
+        blockers: [],
+        warnings: [],
+        forceAllowed: true,
+      })),
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  renderPanel({
+    initialTab: "worktrees",
+    repository: repository({
+      ...repo,
+      worktrees: [
+        mainTree,
+        unpinnedClean,
+        prunableTree,
+        staleTree,
+        lockedStale,
+        prunablePresent,
+      ],
+    }),
+  });
+  const list = dialog().getByRole("list", { name: "仓库工作树列表" });
+  await expect
+    .element(
+      list
+        .getByRole("listitem")
+        .filter({ hasText: "wt/locked-gone" })
+        .getByText("已锁定，需在终端解锁后清理"),
+    )
+    .toBeVisible();
+  await dialog().getByRole("button", { name: "清理失效登记（2）" }).click();
+
+  await expect
+    .element(dialog().getByRole("heading", { name: "确认批量清理" }))
+    .toBeVisible();
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(fetch.mock.calls[0]?.[0]).toBe(
+    "/api/repositories/repo1/worktrees/batch-removal-preview",
+  );
+  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+    worktreeIds: ["gone1", "gone2"],
+  });
+  // Going back shows the preselection to adjust.
+  await dialog().getByRole("button", { name: "返回重选" }).click();
+  await expect
+    .element(dialog().getByRole("checkbox", { name: "wt/stale-reg" }))
+    .toBeChecked();
+  await expect
+    .element(dialog().getByRole("checkbox", { name: "wt/stale-two" }))
+    .toBeChecked();
+  await expect
+    .element(dialog().getByRole("checkbox", { name: "wt/clean-feature" }))
+    .not.toBeChecked();
+  await expect
+    .element(dialog().getByRole("checkbox", { name: "wt/locked-gone" }))
+    .toBeDisabled();
+});
+
+test("清理失效登记 is hidden without stale registrations", async () => {
+  renderPanel({
+    initialTab: "worktrees",
+    repository: repository({
+      ...repo,
+      worktrees: [mainTree, unpinnedClean, lockedStale, prunablePresent],
+    }),
+  });
+  await expect
+    .element(dialog().getByRole("button", { name: "批量清理" }))
+    .toBeVisible();
+  expect(
+    dialog()
+      .getByRole("button", { name: /清理失效登记/ })
+      .elements(),
+  ).toEqual([]);
 });

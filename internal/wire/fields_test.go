@@ -26,6 +26,7 @@ func TestDirectConversionsKeepFieldOrder(t *testing.T) {
 		{"Commit", workspace.Commit{}, contract.Commit{}},
 		{"Base", workspace.Base{}, contract.BranchBase{}},
 		{"Remote", workspace.Remote{}, contract.Remote{}},
+		{"FetchResult", workspace.FetchResult{}, contract.FetchResult{}},
 		{"Reference", workspace.Reference{}, contract.WorkspaceReference{}},
 		{"CreateRequest", workspace.CreateRequest{}, contract.CreateWorktreeRequest{}},
 		{"RemoveRequest", workspace.RemoveRequest{}, contract.RemoveWorktreeRequest{}},

@@ -1,25 +1,33 @@
 <script lang="ts" module>
-  import type { Branches, Remotes } from "../schemas";
+  import type { Branches, FetchRemotesResponse, Remotes } from "../schemas";
 
-  /** Where the panel reads branches and remotes; stories pass fixtures. */
+  /** Where the panel reads and fetches; stories pass fixtures. */
   export interface RepositorySource {
     branches(id: string, signal: AbortSignal): Promise<Branches>;
     remotes(id: string, signal: AbortSignal): Promise<Remotes>;
+    fetch(id: string): Promise<FetchRemotesResponse>;
   }
 </script>
 
 <script lang="ts">
   import { onDestroy, tick, untrack } from "svelte";
   import IconArrowLeft from "~icons/tabler/arrow-left";
+  import IconCloudDownload from "~icons/tabler/cloud-download";
+  import IconLoader2 from "~icons/tabler/loader-2";
   import { Button } from "$lib/components/ui/button";
   import * as Tabs from "$lib/components/ui/tabs";
-  import { repositoryBranches, repositoryRemotes } from "../api";
+  import {
+    fetchRepositoryRemotes,
+    repositoryBranches,
+    repositoryRemotes,
+  } from "../api";
   import { errorMessage } from "../error";
   import { LatestRequest } from "../hooks/remote-request.svelte";
   import { worktreeTitle } from "../home-worktrees";
   import type { WorktreePreset } from "../new-session-defaults";
   import type {
     ArchivedSession,
+    FetchResult,
     HomeWorktrees,
     Remote,
     Repository,
@@ -42,7 +50,9 @@
   // "返回" instead of a second dialog; the tabs stay mounted underneath, so
   // their search, filters and scroll survive. While a section's request or
   // a switch is in flight (`busy`), going back, switching sections and
-  // closing are all blocked.
+  // closing are all blocked. "获取远程" in the title bar acts on the whole
+  // repository from every section; its per-remote results stay below the
+  // title until the panel closes or the next fetch.
   let {
     repository,
     sessions,
@@ -52,12 +62,17 @@
     refreshError,
     registryReady,
     initialTab = "overview",
-    source = { branches: repositoryBranches, remotes: repositoryRemotes },
+    source = {
+      branches: repositoryBranches,
+      remotes: repositoryRemotes,
+      fetch: fetchRepositoryRemotes,
+    },
     switchSource,
     onunregister,
     onchange,
     onrefresh,
     onnewworktree,
+    onrepository,
     onremoved,
     onclose,
   }: {
@@ -80,6 +95,8 @@
     onrefresh: () => void;
     /** Closes the panel and opens the new-worktree dialog with a preset. */
     onnewworktree: (preset: WorktreePreset) => void;
+    /** A fetch read the repository again; replaces the listed snapshot. */
+    onrepository?: (repository: Repository) => void;
     onremoved?: (removedIds: string[]) => void;
     onclose: () => void;
   } = $props();
@@ -108,8 +125,8 @@
     remotes: "远程名称与地址；地址中的密码与令牌已隐藏。",
   };
 
-  // Remotes are read once when the overview (their count) or their section
-  // is first shown.
+  // Remotes are read once when the panel opens: the overview shows their
+  // count and "获取远程" needs at least one.
   let remotes = $state<Remote[] | undefined>();
   let remotesError = $state("");
   const remoteRequests = new LatestRequest();
@@ -127,10 +144,45 @@
   let remotesAsked = false;
   $effect(() => {
     if (!available || remotesAsked) return;
-    if (tab !== "overview" && tab !== "remotes") return;
     remotesAsked = true;
     untrack(() => void readRemotes());
   });
+
+  // The server finishes a fetch even if this panel closes, so its reply
+  // still replaces the repository snapshot then.
+  let fetching = $state(false);
+  let fetchResults = $state.raw<FetchResult[] | null>(null);
+  let fetchError = $state("");
+  // Bumped after a fetch so the branches section reads its upstreams again.
+  let branchesRead = $state(0);
+  const fetchBlocked = $derived(
+    remotes === undefined && !remotesError
+      ? "正在读取远程…"
+      : remotes?.length === 0
+        ? "这个仓库没有配置远程，无法获取"
+        : "",
+  );
+  const failedFetches = $derived(
+    fetchResults?.filter((result) => result.status !== "ok").length ?? 0,
+  );
+  async function fetchRemotes() {
+    if (fetching || fetchBlocked) return;
+    fetching = true;
+    fetchResults = null;
+    fetchError = "";
+    try {
+      const response = await source.fetch(repository.id);
+      fetchResults = response.results;
+      onrepository?.(response.repository);
+      branchesRead++;
+    } catch (err) {
+      fetchError = errorMessage(err);
+      // A conflict may mean the remotes changed since they were read.
+      void readRemotes();
+    } finally {
+      fetching = false;
+    }
+  }
 
   // Scroll offsets of the tabs and the dialog body, restored on "返回".
   let body = $state<HTMLElement>();
@@ -189,7 +241,39 @@
   const worktreePaths = $derived(
     new Set(repository.worktrees.map((tree) => tree.path)),
   );
+  const fetchReasonId = $props.id();
+  const fetchLabel = $derived(fetching ? "正在获取远程" : "获取远程");
 </script>
+
+{#snippet fetchAction()}
+  <!-- A disabled button shows no hint, so the wrapper carries the reason. -->
+  <span class="inline-flex" title={fetchBlocked || fetchLabel}>
+    <Button
+      variant="outline"
+      size="sm"
+      class="max-sm:size-(--control-default)"
+      aria-label={fetchLabel}
+      aria-describedby={fetchBlocked ? fetchReasonId : undefined}
+      aria-busy={fetching}
+      disabled={fetching || !!fetchBlocked}
+      onclick={() => void fetchRemotes()}
+    >
+      {#if fetching}
+        <IconLoader2
+          aria-hidden="true"
+          class="animate-spin motion-reduce:animate-none"
+        />
+      {:else}
+        <IconCloudDownload aria-hidden="true" />
+      {/if}
+      <span class="hidden sm:inline">{fetching ? "正在获取…" : "获取远程"}</span
+      >
+    </Button>
+    {#if fetchBlocked}
+      <span id={fetchReasonId} class="sr-only">{fetchBlocked}</span>
+    {/if}
+  </span>
+{/snippet}
 
 <ResponsiveDialog
   title={repository.name}
@@ -198,6 +282,7 @@
   drawerDescription="概览、工作树、分支与远程"
   pinDrawerHeader
   truncateDrawerTitle
+  actions={available ? fetchAction : undefined}
   {busy}
   {onclose}
 >
@@ -212,6 +297,28 @@
           repository.checkedAt,
         ).toLocaleString()} 读取的状态，可能已过时。</InlineNotice
       >
+    {/if}
+    {#if fetchError}
+      <InlineNotice tone="danger">获取远程失败：{fetchError}</InlineNotice>
+    {:else if fetchResults}
+      <InlineNotice
+        tone={failedFetches === 0
+          ? "success"
+          : failedFetches === fetchResults.length
+            ? "danger"
+            : "warning"}
+      >
+        <ul class="space-y-1" aria-label="获取结果">
+          {#each fetchResults as result (result.remote)}
+            <li class="wrap-anywhere">
+              <span class="font-medium">{result.remote}</span
+              >：{result.status === "ok"
+                ? "已获取"
+                : result.message || "获取失败"}
+            </li>
+          {/each}
+        </ul>
+      </InlineNotice>
     {/if}
     <div bind:this={tabsView} hidden={!!top}>
       {#if available}
@@ -259,13 +366,15 @@
             />
           </Tabs.Content>
           <Tabs.Content value="branches" class="pt-2">
-            <RepositoryBranches
-              active={tab === "branches"}
-              load={(signal) => source.branches(repository.id, signal)}
-              {worktreePaths}
-              onopen={openPath}
-              {onnewworktree}
-            />
+            {#key branchesRead}
+              <RepositoryBranches
+                active={tab === "branches"}
+                load={(signal) => source.branches(repository.id, signal)}
+                {worktreePaths}
+                onopen={openPath}
+                {onnewworktree}
+              />
+            {/key}
           </Tabs.Content>
           <Tabs.Content value="remotes" class="pt-2">
             <RepositoryRemotes

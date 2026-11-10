@@ -13,6 +13,7 @@
 - `webmux worktree create` 与 `run` 的新建 worktree 默认加入主页显示，可以选择不加入；`webmux worktree pin`、`unpin`、`home` 调整显示，只改该仓库的条目，冲突时自动重放。
 - `webmux worktree rm` 先预览其中的会话、已归档会话与阻止原因；强制删除会关闭其中的会话，分支保留。非交互环境下需要明确确认。
 - `webmux worktree switch` 原地切换 worktree 的分支（已有本地分支、`--track` 远程分支、`--create` 新分支或 `--detach` 提交），先在标准错误输出预览。有未提交修改、进行中的 merge/rebase 或目标分支已在别处检出时不切换并以 1 结束；修改不会被贮藏或丢弃。其中的会话不会被关闭，会看到切换后的文件；有运行会话时非交互环境需要 `--yes`，否则以 2 结束。需要并行处理时改用 `worktree create`。
+- `webmux worktree prune` 只清理目录已不存在、未锁定的 linked worktree 登记，不执行 `git worktree prune`：先把预览写到标准错误，确认规则与 `worktree rm` 相同，分支保留；逐项输出 `removed`、`skipped`、`failed`，有 `failed` 时以 1 结束，没有可清理项时以 0 结束。锁定的条目需先在终端解锁。
 - 在 WebMux 之外改动 worktree（`git worktree add/remove`）后，用 `webmux repo refresh` 让服务端重新检查。
 
 ## 仓库
@@ -21,6 +22,7 @@
 `webmux repo branches`、`commits` 与 `base` 帮助选择新 worktree 的基点；`base` 会先取回上游，取回失败只警告。
 `webmux repo show`、`worktree ls/show` 与 `repo branches` 显示与上游的领先/落后（`+A/-B`，上游已删除为 `gone`，未计算为 `+?/-?`）、修改统计和最近提交；`repo show` 的上次获取时间是近似值。
 `webmux repo remotes` 列出远程及其 fetch/push 地址，凭据由服务端脱敏。
+`webmux repo fetch` 按名称逐个获取全部远程并清理远端已删除的分支，之后重新检查仓库，领先/落后随之更新。获取不会等待输入：需要密码、令牌或确认 ssh 主机密钥的远程直接报告 `auth`，在终端完成认证后重试；错误信息中的凭据已脱敏。任一远程失败或仓库没有远程时以 1 结束。
 
 ## 仓库设置（初始化指令）
 

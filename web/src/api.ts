@@ -4,7 +4,9 @@ import {
   ArtifactsFolderSchema,
   BranchesSchema,
   CommitsSchema,
+  EmptyRequestSchema,
   ErrorSchema,
+  FetchRemotesResponseSchema,
   ForwardRequestSchema,
   ForwardSchema,
   ForwardTicketSchema,
@@ -329,6 +331,18 @@ export function switchWorktree(tree: Worktree, request: SwitchRequest) {
     request,
     undefined,
     SwitchRequestSchema,
+  );
+}
+// Fetches every remote of a repository; the server finishes the fetch even
+// when this request is abandoned, and answers with the repository read again.
+export function fetchRepositoryRemotes(id: string) {
+  return api(
+    `/repositories/${id}/fetch`,
+    FetchRemotesResponseSchema,
+    "POST",
+    {},
+    undefined,
+    EmptyRequestSchema,
   );
 }
 export function navigate(path: string) {

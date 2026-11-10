@@ -558,6 +558,7 @@
           });
           viewingRepository = null;
         }}
+        onrepository={(repo) => repositories.replace(repo)}
         onclose={() => (viewingRepository = null)}
       />{/snippet}
   </LazyDialog>
