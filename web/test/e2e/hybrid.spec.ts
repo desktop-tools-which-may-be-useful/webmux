@@ -185,6 +185,21 @@ test.describe("hybrid sessions with the fake agent", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openHybrid(page, id, "chat");
 
+    const terminalPage = page.locator(".terminal-page");
+    await expect(terminalPage).toHaveAttribute("data-document-scroll", "true");
+    await expect(conversation(page).locator("li")).toHaveCount(0);
+    await expect(composer(page)).toBeInViewport();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Math.round(
+            document.querySelector("[data-chat-dock]")!.getBoundingClientRect()
+              .bottom - window.innerHeight,
+          ),
+        ),
+      )
+      .toBe(0);
+
     for (let i = 0; i < 6; i++) {
       await chatTurn(
         page,
@@ -194,7 +209,6 @@ test.describe("hybrid sessions with the fake agent", () => {
     // sendChat fills the composer (focusing it); blur to return to resting reading mode.
     await composer(page).evaluate((el: HTMLTextAreaElement) => el.blur());
 
-    const terminalPage = page.locator(".terminal-page");
     await expect(terminalPage).toHaveAttribute("data-document-scroll", "true");
     await expect
       .poll(() =>
