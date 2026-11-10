@@ -16,7 +16,11 @@
   import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
   import { outdatedText } from "../../hybrid";
   import type { ChatActions, RequestAnswer } from "../../chat-api";
-  import { groupTimeline, type ChatModel } from "../../chat-model";
+  import {
+    conversationTurns,
+    groupTimeline,
+    type ChatModel,
+  } from "../../chat-model";
   import { errorMessage } from "../../error";
   import type { ChatUploads } from "../../hooks/upload.svelte";
   import type { ChatCodeLink } from "../../markdown-link";
@@ -30,6 +34,7 @@
   import ChatLocation from "./ChatLocation.svelte";
   import ChatPlan from "./ChatPlan.svelte";
   import ChatQueue from "./ChatQueue.svelte";
+  import ConversationTurns from "./ConversationTurns.svelte";
   import FormPrompt from "./FormPrompt.svelte";
   import PermissionPrompt from "./PermissionPrompt.svelte";
   import TimelineItem from "./TimelineItem.svelte";
@@ -90,6 +95,7 @@
   let transcript = $state<HTMLDivElement | null>(null);
   let dock = $state<HTMLDivElement | null>(null);
   let stick = $state(true);
+  let activeTurnId = $state("");
   let editing = $state(false);
   let error = $state("");
   let answering = $state(false);
@@ -151,6 +157,7 @@
     };
   });
   const entries = $derived(groupTimeline(model.entries));
+  const turns = $derived(conversationTurns(model.entries));
   const request = $derived(chat?.requests[0]);
   const requestTool = $derived.by(() => {
     const at = request?.toolCallId
@@ -260,13 +267,72 @@
     else target.scrollTop = target.scrollHeight;
     lastScrollOffset = documentScroll ? window.scrollY : target.scrollTop;
   }
+  let activeTurnFrame = 0;
+  let turnJumpFrame = 0;
+  let jumpingToTurn = false;
+  $effect(() => () => cancelAnimationFrame(turnJumpFrame));
+  function updateActiveTurn() {
+    const target = scrollRoot();
+    if (!target || !transcript || !turns.length) {
+      activeTurnId = "";
+      return;
+    }
+    const viewportTop = documentScroll ? 0 : target.getBoundingClientRect().top;
+    const readingLine = viewportTop + (documentScroll ? 64 : 16);
+    const elements = transcript.querySelectorAll<HTMLElement>(
+      "[data-conversation-message]",
+    );
+    let current = elements[0]?.dataset.conversationMessage ?? "";
+    for (const element of elements) {
+      if (element.getBoundingClientRect().top > readingLine) break;
+      current = element.dataset.conversationMessage ?? current;
+    }
+    activeTurnId = current;
+  }
+  function scheduleActiveTurn() {
+    if (activeTurnFrame) return;
+    activeTurnFrame = requestAnimationFrame(() => {
+      activeTurnFrame = 0;
+      updateActiveTurn();
+    });
+  }
   function follow() {
     const target = scrollRoot();
     if (!target) return;
     const top = documentScroll ? window.scrollY : target.scrollTop;
     const height = documentScroll ? window.innerHeight : target.clientHeight;
     lastScrollOffset = top;
-    stick = top + height >= target.scrollHeight - 32;
+    stick = jumpingToTurn ? false : top + height >= target.scrollHeight - 32;
+    scheduleActiveTurn();
+  }
+  $effect(() => {
+    void turns;
+    scheduleActiveTurn();
+    return () => {
+      cancelAnimationFrame(activeTurnFrame);
+      activeTurnFrame = 0;
+    };
+  });
+  function jumpToTurn(id: string) {
+    const message = transcript?.querySelector<HTMLElement>(
+      `[data-conversation-message="${CSS.escape(id)}"]`,
+    );
+    if (!message) return;
+    // Historical reading must not be undone by the next streaming update.
+    // Keep the pause through the scroll event emitted by scrollIntoView,
+    // including when the target is clamped to the maximum scroll offset.
+    cancelAnimationFrame(turnJumpFrame);
+    jumpingToTurn = true;
+    stick = false;
+    activeTurnId = id;
+    message.scrollIntoView({ block: "start", inline: "nearest" });
+    follow();
+    turnJumpFrame = requestAnimationFrame(() => {
+      turnJumpFrame = requestAnimationFrame(() => {
+        turnJumpFrame = 0;
+        jumpingToTurn = false;
+      });
+    });
   }
   let previousDocumentScroll = untrack(() => documentScroll);
   $effect.pre(() => {
@@ -307,6 +373,9 @@
     return () => element.removeEventListener("scroll", follow);
   });
   function latest() {
+    cancelAnimationFrame(turnJumpFrame);
+    turnJumpFrame = 0;
+    jumpingToTurn = false;
     const target = scrollRoot();
     if (documentScroll) window.scrollTo({ top: target?.scrollHeight ?? 0 });
     else target?.scrollTo({ top: target.scrollHeight });
@@ -330,6 +399,7 @@
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         if (stick) scrollToBottom();
+        scheduleActiveTurn();
       });
     });
     observer.observe(element);
@@ -394,7 +464,15 @@
         {/if}
         <ol class="flex flex-col gap-2.5" aria-label="对话">
           {#each entries as entry (`${entry.type}:${entry.id}`)}
-            <li class="min-w-0">
+            <li
+              class={documentScroll
+                ? "min-w-0 scroll-mt-16"
+                : "min-w-0 scroll-mt-4"}
+              data-conversation-message={entry.type === "message" &&
+              entry.role !== "thought"
+                ? entry.id
+                : undefined}
+            >
               <TimelineItem
                 {entry}
                 {sessionId}
@@ -458,6 +536,14 @@
         {/if}
       </div>
     </ScrollArea>
+    {#if turns.length > 1}
+      <ConversationTurns
+        items={turns}
+        activeId={activeTurnId}
+        {documentScroll}
+        onselect={jumpToTurn}
+      />
+    {/if}
     {#if chat?.plan?.entries.length}
       <!-- Wide panes leave empty space right of the centred transcript: pin
            the plan there instead of stacking it above the input. -->

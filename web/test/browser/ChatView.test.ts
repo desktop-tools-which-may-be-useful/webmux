@@ -759,6 +759,159 @@ test("the transcript stays at its end when the composer grows on a phone", async
   }
 });
 
+test("conversation ticks distinguish roles, jump to history and preserve reading position", async () => {
+  await page.viewport(1280, 900);
+  try {
+    const socket = await open();
+    socket.frame(snapshot(chatState()));
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events(
+        ...Array.from({ length: 10 }, (_, index) => [
+          {
+            kind: "message.append" as const,
+            message: {
+              messageId: `nav-u${index}`,
+              role: "user" as const,
+              text: `第 ${index + 1} 轮请求`,
+            },
+          },
+          {
+            kind: "message.append" as const,
+            message: {
+              messageId: `nav-a${index}`,
+              role: "agent" as const,
+              text: Array.from(
+                { length: 8 },
+                (_, line) => `第 ${index + 1} 轮回复，段落 ${line + 1}`,
+              ).join("\n\n"),
+            },
+          },
+        ]).flat(),
+      ),
+    });
+
+    const navigation = page.getByRole("navigation", { name: "对话轮次" });
+    await expect.element(navigation).toBeVisible();
+    const first = navigation.getByRole("button", {
+      name: "第 1 轮 · 你：第 1 轮请求",
+    });
+    const firstAgent = navigation.getByRole("button", {
+      name: /^第 1 轮 · AI：第 1 轮回复，段落 1/,
+    });
+    await expect.element(first).toBeVisible();
+    await expect.element(firstAgent).toBeVisible();
+    expect(navigation.getByRole("button").elements()).toHaveLength(20);
+    expect(
+      getComputedStyle(first.element().querySelector("span")!).backgroundColor,
+    ).not.toBe(
+      getComputedStyle(firstAgent.element().querySelector("span")!)
+        .backgroundColor,
+    );
+
+    const transcript = page.getByRole("list", { name: "对话" });
+    const scroller = transcript
+      .element()
+      .closest("[data-slot=scroll-area-viewport]") as HTMLElement;
+    await expect.poll(() => scroller.scrollTop).toBeGreaterThan(0);
+    await first.click();
+    await expect.element(first).toHaveAttribute("aria-current", "location");
+    await expect.poll(() => scroller.scrollTop).toBeLessThan(100);
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(firstAgent).toHaveFocus();
+    await expect
+      .element(firstAgent)
+      .toHaveAttribute("aria-current", "location");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect.element(first).toHaveFocus();
+
+    const readingOffset = scroller.scrollTop;
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events({
+        kind: "message.append",
+        message: {
+          messageId: "nav-new-1",
+          role: "agent",
+          text: "历史阅读期间的新回复",
+        },
+      }),
+    });
+    await expect
+      .element(transcript.getByText("历史阅读期间的新回复"))
+      .toBeVisible();
+    expect(scroller.scrollTop).toBe(readingOffset);
+
+    await page.getByRole("button", { name: "回到最新" }).click();
+    await expect
+      .poll(
+        () =>
+          scroller.scrollTop + scroller.clientHeight >=
+          scroller.scrollHeight - 2,
+      )
+      .toBe(true);
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events({
+        kind: "message.append",
+        message: {
+          messageId: "nav-new-2",
+          role: "agent",
+          text: "回到最新后的新回复",
+        },
+      }),
+    });
+    await expect
+      .element(transcript.getByText("回到最新后的新回复"))
+      .toBeVisible();
+    await expect
+      .poll(
+        () =>
+          scroller.scrollTop + scroller.clientHeight >=
+          scroller.scrollHeight - 2,
+      )
+      .toBe(true);
+
+    const nearEnd = navigation.getByRole("button", {
+      name: /^第 10 轮 · AI：历史阅读期间的新回复/,
+    });
+    await nearEnd.click();
+    const nearEndOffset = scroller.scrollTop;
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events({
+        kind: "message.append",
+        message: {
+          messageId: "nav-new-3",
+          role: "agent",
+          text: Array.from(
+            { length: 8 },
+            (_, line) => `末尾历史跳转后的新段落 ${line + 1}`,
+          ).join("\n\n"),
+        },
+      }),
+    });
+    await expect
+      .element(transcript.getByText("末尾历史跳转后的新段落 8"))
+      .toBeVisible();
+    expect(scroller.scrollTop).toBe(nearEndOffset);
+
+    await page.viewport(390, 844);
+    await expect
+      .poll(() =>
+        getComputedStyle(document.querySelector('nav[aria-label="对话轮次"]')!),
+      )
+      .toHaveProperty("display", "none");
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+  } finally {
+    await page.viewport(1024, 900);
+  }
+});
+
 test("typing / lists and filters published commands without authentication flows", async () => {
   const socket = await open();
   socket.frame(
@@ -1469,6 +1622,65 @@ test("pins the plan beside the transcript on wide panes and above the input othe
     expect(list!.scrollHeight).toBeGreaterThan(list!.clientHeight);
   } finally {
     await page.viewport(1024, 768);
+  }
+});
+
+test("document scroll keeps wide conversation ticks in the viewport and preserves history reading", async () => {
+  await page.viewport(900, 900);
+  try {
+    const socket = await open(undefined, true);
+    socket.frame(snapshot(chatState()));
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events(
+        ...Array.from({ length: 20 }, (_, index) => ({
+          kind: "message.append" as const,
+          message: {
+            messageId: `doc-nav-${index}`,
+            role: "agent" as const,
+            text: Array.from(
+              { length: 8 },
+              (_, line) => `第 ${index + 1} 条回复，段落 ${line + 1}`,
+            ).join("\n\n"),
+          },
+        })),
+      ),
+    });
+    const navigation = page.getByRole("navigation", { name: "对话轮次" });
+    await expect.element(navigation).toBeVisible();
+    expect(getComputedStyle(navigation.element()).position).toBe("fixed");
+    const bounds = navigation.element().getBoundingClientRect();
+    expect(bounds.top).toBeGreaterThanOrEqual(0);
+    expect(bounds.bottom).toBeLessThanOrEqual(window.innerHeight);
+    await expect.poll(() => window.scrollY).toBeGreaterThan(0);
+
+    const first = navigation.getByRole("button", {
+      name: /^此前 · AI：第 1 条回复/,
+    });
+    await first.click();
+    await expect.element(first).toHaveAttribute("aria-current", "location");
+    await expect.poll(() => window.scrollY).toBeLessThan(100);
+    const readingOffset = window.scrollY;
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events({
+        kind: "message.append",
+        message: {
+          messageId: "doc-nav-new",
+          role: "agent",
+          text: "文档滚动阅读期间的新回复",
+        },
+      }),
+    });
+    await expect
+      .element(page.getByText("文档滚动阅读期间的新回复"))
+      .toBeVisible();
+    expect(window.scrollY).toBe(readingOffset);
+  } finally {
+    window.scrollTo(0, 0);
+    await page.viewport(1024, 900);
   }
 });
 

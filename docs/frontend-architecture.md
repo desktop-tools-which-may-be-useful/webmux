@@ -92,6 +92,8 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 
 `ItemGroup variant="panel"` 统一提供紧凑列表的边框与分隔线；`Item variant="row"` 提供无独立卡片边框的行；`ListButton variant="navigation"` 提供侧栏导航行的选中与键盘焦点样式。
 
+`ListButton variant="turn"` 用于宽聊天窗格的对话轮次刻度：`data-turn-role="user"` 使用前景色，`agent` 使用信息蓝，`aria-current="location"` 加长并提高当前刻度的不透明度；角色与消息摘要同时写入可访问名称和悬停提示。
+
 粗指针设备的最小触控高度用 Tailwind 的 `any-pointer-coarse:` 变体（如 `any-pointer-coarse:min-h-11`）。
 
 ### 任意值与运行时尺寸
