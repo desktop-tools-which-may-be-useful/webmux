@@ -6,7 +6,7 @@
   - 并发上限是服务级的 `worktreeGate`（4）。
 - `parseStatus` 只产出 `dirty`、`untracked`、`ignored` 三个布尔值，删除、释放和批量删除的判定都依赖这三个值。
 - 分支接口（`GET /branches`）只执行一次 `for-each-ref`，格式为 `refname/objectname/subject`，同时供新建工作树弹窗和 CLI 使用。
-- Git 进程统一由 `Service.git` 启动：带 `-C`，环境变量设置 `LC_ALL=C` 和 `GIT_TERMINAL_PROMPT=0`，输出有大小上限，超时由 `readTimeout`（10s）控制。
+- Git 进程统一由 `Service.git` 启动：带 `-C`，环境变量设置 `LC_ALL=C`、`GIT_TERMINAL_PROMPT=0` 和 `GCM_INTERACTIVE=never`，输出有大小上限，超时由 `readTimeout`（10s）控制。
 - 前端现状：
   - 单工作树详情 `WorktreeDetailsDialog` 只在首页分组可用；
   - `RepositoryDetailsDialog` 只有四行文字；
@@ -14,6 +14,7 @@
   - 这三个弹窗都由 `AppShell` 以 `LazyDialog` 挂载。
 - 现有仓库与工作树状态没有推送通道，刷新只由生命周期、重连或显式操作触发。
 - `batch-worktree-management` 已完成但未归档，本变更的增量规格修改了它引入的需求。
+- 当前代码中，“管理工作树…”只在仓库菜单里，仓库分组标题栏并没有 `batch-worktree-management` 规格里写的“管理工作树”按钮。本变更的增量规格去掉这句，是纠正规格与实现的不一致，不是删除功能。
 
 ## Goals / Non-Goals
 
@@ -28,6 +29,7 @@
 - 不推送状态变更（不加 WebSocket 事件）。
 - 不展示逐文件的修改清单（代码视图和 diff review 已经覆盖）。
 - 不展示子模块状态。
+- 不把“仓库设置”（`RepositorySettingsDialog`，目前只有初始化指令）并入仓库面板。仓库设置是编辑表单，与面板的只读概览和工作树操作性质不同；入口只在首页工具栏，CLI 也有独立的 `repo settings`。并入会让面板同时承担编辑表单的保存与脏状态，本变更不做。
 
 ## Decisions
 
@@ -47,9 +49,23 @@
 
 上游判定：有 `branch.upstream` 但没有 `branch.ab`，表示上游引用已不存在，记为 `upstreamGone`；没有 `branch.upstream` 表示无上游。
 
+`branch.ab` 的取值有三种：
+- `+A -B`：精确计数；
+- `+? -?`：使用 `--no-ahead-behind` 且两端不同（本机 Git 2.47.3 实测），记为“未计算”：`upstream` 非空、`upstreamGone` 为 false、`ahead`/`behind` 为 null；
+- 缺失：见上一段的上游判定。
+
+界面和 CLI 按这条规则区分“无上游”“上游已删除”“未计算”，不另设字段。
+
 - 备选方案：保留 v1，另外为每个工作树执行 `rev-list --left-right --count`。这会让每个工作树多一个进程，被否决。
 - 备选方案：`for-each-ref %(ahead-behind:...)` 需要 Git 2.41，当前隐含的最低版本（`--path-format=absolute` 要求 2.31）不满足，被否决。
 - 注意：`-z` 模式下重命名条目（`2`）后面跟一个额外的 NUL 路径，解析器必须跳过它，否则后续记录会错位。
+
+**进行中的 Git 操作。** 同一步还判定 `operation`（`merge`、`rebase`、`cherry-pick`、`revert`、`bisect` 之一，没有时为 null），供详情展示，并供 `switch-worktree-branch` 和 `add-branch-sync-actions` 作为阻止条件复用：
+- 工作树的 git 目录不启动 Git 进程取得：`<path>/.git` 是目录时就是它；是文件时读取其中的 `gitdir:` 行，相对路径按工作树路径解析（Git 2.48 起可能写相对路径）；
+- 在 git 目录下用 `os.Lstat` 检查 `MERGE_HEAD`、`rebase-merge`、`rebase-apply`、`CHERRY_PICK_HEAD`、`REVERT_HEAD`、`BISECT_LOG`，按此顺序取第一个存在的项；
+- 这些文件都按工作树存放，各工作树互不干扰；读取失败时 `operation` 为 null，并不把工作树标为不可用。
+
+- 备选方案：每个工作树执行一次 `rev-parse --git-path`。这会让每个工作树多一个进程，违背本变更的目标，被否决。
 
 ### 2. 最近提交按仓库批量读取
 
@@ -61,10 +77,11 @@
 
 - `Worktree` 新增以下字段：
   - `upstream *string`；
-  - `ahead *int`、`behind *int`：无上游或上游已删除时为 null；
+  - `ahead *int`、`behind *int`：无上游、上游已删除或未计算时为 null；
   - `upstreamGone bool`；
   - `lastCommit *Commit`：复用现有 `Commit` 类型；
-  - `changes *WorktreeChanges{staged, unstaged, untracked, conflicted}`：状态读取失败时为 null。
+  - `changes *WorktreeChanges{staged, unstaged, untracked, conflicted}`：状态读取失败时为 null；
+  - `operation *string`：进行中的 Git 操作，取值见第 1 节。
 - `Repository` 新增 `lastFetchedAt *time.Time`。
 - `Branch` 新增 `subject`、`committedAt`、`upstream`、`ahead`、`behind`、`upstreamGone`。
 - `BranchBase` 新增 `kind`（`local` | `remote`）和 `committedAt`。分支分区的远程组由此筛选，不另设一份远程分支列表。
@@ -105,9 +122,17 @@
 
 新增 `WorktreeSyncSummary.svelte`，统一渲染上游、领先/落后、修改统计和最近提交，提供 `compact` 与 `full` 两种形态：
 - 面板行和首页标题使用 `compact`；
-- `WorktreeDetailsDialog` 使用 `full`。
+- 工作树详情使用 `full`。
 
 领先/落后指示使用 tabler `arrow-up` / `arrow-down` 图标加数字，再加 `aria-label`。现有 `Badge` 变体不够时，在 `ui/badge` 中增加变体并登记到前端架构守卫，调用处不写 `class` 改样式。
+
+**面板内子视图，不叠弹窗。** 面板外壳维护一个视图栈：底层是分区 Tabs，上层是子视图，子视图标题栏左侧有“返回”。工作树详情的内容从 `WorktreeDetailsDialog` 拆成 `WorktreeDetails.svelte`，再由两种外壳使用：
+- 从首页或侧栏打开时，`WorktreeDetailsDialog` 作为独立弹窗承载它；
+- 在面板中点击工作树行或分支的占用路径时，作为面板子视图承载它，不再打开第二层弹窗。
+
+后续变更中的切换、快进、推送和删除分支流程沿用同一约定：流程内容是独立组件，由面板子视图或独立弹窗承载。子视图 `busy` 时，“返回”、Tabs 切换与面板关闭都被阻止。
+
+**面板工作树行的“⋯”菜单。** 面板的工作树行与侧栏、首页共用 `WorktreeMenuItems`。本变更中面板只传 `ondetails`；删除在面板中统一通过“批量清理”选择模式完成，不再提供第二条单个删除入口。后续变更向 `WorktreeMenuItems` 增加的条目，在三处同时出现。
 
 `shell.svelte.ts` 的调整：
 - `repositoryDetails(repository, tab?)` 成为唯一的面板入口；
@@ -117,7 +142,8 @@
 批量预览或执行处于 `busy` 时，Tabs 禁用。
 
 - 备选方案：保留独立的批量弹窗，只共用行组件。这样仍有两份工作树列表和两个常驻入口，违反“同一种界面只有一个组件”，被否决。
-- 备选方案：做成独立路由页 `/repositories/{id}`。现有导航模型是首页视图加弹层，新路由要连带改动侧栏和返回逻辑，本变更不做。
+- 备选方案：做成独立路由页 `/repositories/{id}`。现有导航模型是首页视图加弹层，新路由要连带改动侧栏和返回逻辑；面板内子视图已解决多层弹窗问题，本变更不做。
+- 备选方案：在面板上再叠一层工作树详情弹窗。窄屏上会出现多层底部抽屉，后续的切换、推送流程还会叠出第三层，被否决。
 
 ### 8. 侧栏工作树行菜单
 
@@ -131,7 +157,8 @@
 
 - [风险] 分支差距很大时，`--branch` 计算 ahead/behind 较慢，可能让单个工作树的状态读取超时 → 超时只影响该工作树，现有行为已显示“状态未知”。实现时在测试仓库中构造约 10k 提交的差距并测量，超过 2s 时为该调用加 `--no-ahead-behind`，并把领先/落后显示为“未计算”。
 - [风险] 本地分支很多时，`for-each-ref` 的 track 计算拖慢新建工作树弹窗 → 在 500 个分支的夹具上测量，`GET /branches` 应保持在 1s 内。超出时把 track 改为面板专用的查询参数，这一处属于实现细节，不改变规格。
-- [风险] porcelain v2 解析错误会让删除保护判定出错 → 解析器保留 v1 的 `dirty/untracked/ignored` 语义，并为重命名、冲突、子模块条目（`1 .M S...`）、尚无提交（`# branch.oid (initial)`）补充表驱动单测。删除相关的现有测试必须全部通过。
+- [风险] porcelain v2 解析错误会让删除保护判定出错 → 解析器保留 v1 的 `dirty/untracked/ignored` 语义，并为重命名、冲突、子模块条目（`1 .M S...`）、尚无提交（`# branch.oid (initial)`）和 `branch.ab +? -?` 补充表驱动单测。删除相关的现有测试必须全部通过。
+- [风险] `.git` 文件中的 `gitdir:` 指向不存在的目录（外部移动过目录） → `operation` 为 null，工作树按现有规则显示为不可用或待清理，不因此报错。
 - [取舍] 上次获取时间是近似值 → 文案标“近似”，不用它做任何判定。
 - [取舍] 合并弹窗是界面结构上的 BREAKING 改动 → 菜单文字“管理工作树…”保留，e2e helper `repository-menu.ts` 集中迁移。
 

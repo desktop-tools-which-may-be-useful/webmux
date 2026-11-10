@@ -20,9 +20,9 @@
 - 新增“在新工作树打开”：
   - 仓库面板“分支”分区中，未被占用的本地分支和远程分支提供该行操作，打开预填好的新建工作树弹窗；
   - 切换弹窗因修改或会话受阻时，提供同名的更安全替代按钮。
-- 工作树“⋯”菜单（首页、侧栏、仓库面板的工作树行共用）新增“切换分支…”。
+- 工作树“⋯”菜单（首页、侧栏、仓库面板的工作树行共用）新增“切换分支…”。从仓库面板发起时，切换流程作为面板内子视图展示，不叠弹窗。
 - CLI 新增 `webmux worktree switch`，语义与 Web 端一致。
-- 依赖 `enrich-repository-details` 提供的修改统计、仓库面板和工作树菜单。
+- 依赖 `enrich-repository-details` 提供的修改统计、进行中操作（`operation`）、仓库面板与面板内子视图约定，以及工作树菜单。
 
 ## Capabilities
 
@@ -39,15 +39,15 @@
 - 后端：
   - `internal/workspace` 新增 `PreviewSwitch` / `SwitchWorktree`，以及确认用途 `purposeSwitch`；
   - 复用 `targetSessions`、`confirm`/`takeConfirmation` 和仓库门闩；
-  - 新增进行中操作的检测；
+  - 进行中操作的阻止直接复用 `enrich-repository-details` 的 `operation`，不另做检测；
   - `internal/api/workspace.go` 新增 `POST .../worktrees/{wid}/switch-preview` 与 `POST .../worktrees/{wid}/switch`；
   - 契约、wire 与快照随之更新。
 - 前端：
-  - 新增 `SwitchBranchDialog.svelte`；
+  - 新增切换流程组件 `SwitchBranch.svelte`，由独立弹窗 `SwitchBranchDialog.svelte` 或仓库面板子视图承载；
   - `WorktreeMenuItems` 增加入口；
   - `RepositoryBranches` 增加行操作；
   - `NewSessionDialog` / `WorktreeCreateFields` 支持预填分支与起点；
   - 切换成功后刷新仓库状态。
 - CLI：`internal/clicmd/worktree.go`。
-- 用户故事：新增 US-J16（切换已有工作树的分支），更新 US-J05。
+- 用户故事：新增一个故事（按计划为 US-J16，切换已有工作树的分支），更新 US-J05。
 - 不涉及：stash 管理、合并/变基、子模块更新、为新建工作树设置上游。

@@ -12,7 +12,8 @@
   - `git switch --no-guess --end-of-options <name>` 能正确拒绝 `-x` 这类名称；
   - 切到已被其他工作树检出的分支时，Git 自身会报错；
   - `--end-of-options` 从 Git 2.24 开始支持，低于当前隐含的最低版本 2.31。
-- 依赖 `enrich-repository-details` 提供的 `changes` 计数、仓库面板“分支”分区，以及共享的 `WorktreeMenuItems`。
+- 依赖 `enrich-repository-details` 提供的 `changes` 计数、`operation`（进行中的 Git 操作）、仓库面板“分支”分区与面板内子视图约定，以及共享的 `WorktreeMenuItems`。
+- 代码视图已有外部变化检测：`CodeWorkspace.svelte` 在可见时每 5s 调用一次 `POST …/check`；`internal/codeview/check.go` 按各标签页的来源重新读取文件版本、比对变更列表版本和目录版本，返回 `updated`/`missing`。内容快照以随机 sid 保存且不可变，不按路径缓存。
 
 ## Goals / Non-Goals
 
@@ -66,9 +67,7 @@
 ### 3. 阻止条件与检测
 
 - 已跟踪修改：使用 `enrich-repository-details` 的 porcelain v2 计数，`staged + unstaged + conflicted > 0` 即阻止。
-- 进行中的操作：通过一次 `rev-parse --git-path` 取得 `MERGE_HEAD`、`CHERRY_PICK_HEAD`、`REVERT_HEAD`、`rebase-merge`、`rebase-apply`、`BISECT_LOG` 的路径，再用 `os.Lstat` 判断是否存在。
-  - Git 返回的可能是相对于工作树目录的路径（实测主工作区输出 `.git/MERGE_HEAD`），需要先与工作树路径拼接；
-  - 路径按工作树解析，各工作树互不干扰。
+- 进行中的操作：直接使用 `enrich-repository-details` 的 `operation` 字段，非空即阻止。它在快照读取时不启动 Git 进程判定，执行阶段重读单个工作树时同样得到最新值。
 - 分支占用：`worktree list` 中其他条目的 `branch` 与目标相同即阻止，并在 `blocker.path` 中返回占用者的路径，供前端提供“转到该工作树”。
 - 同一目标：本地目标与当前分支相同，或 detach 目标与当前 HEAD 相同且当前已是 detached。
 - 警告（不阻止）：
@@ -105,7 +104,11 @@
 
 ### 6. 前端
 
-`SwitchBranchDialog.svelte` 基于 `ResponsiveDialog`，结构如下：
+切换流程的内容是 `SwitchBranch.svelte`，按 `enrich-repository-details` 的约定由两种外壳承载：
+- 从首页或侧栏发起时，由 `SwitchBranchDialog.svelte`（基于 `ResponsiveDialog`）承载；
+- 从仓库面板的工作树行或工作树详情子视图发起时，作为面板子视图承载，带“返回”，不叠第二层弹窗。
+
+内容结构如下：
 
 - 顶部用 `SegmentedControl`（`size="form" wrap`）选择三种模式：已有分支 / 新建分支 / 分离到提交；
 - 已有分支模式复用 `PickerField` 加 `BranchCommandList`，分“本地”“远程”两组，当前分支和已被占用的分支标记后禁用；
@@ -118,11 +121,11 @@
 
 - 主按钮“切换”使用 `default` 样式；
 - 受阻（修改或会话）时，右下角提供 `success` 样式的“改为在新工作树打开”；
-- 分支被占用时，提供“转到该工作树”。
+- 分支被占用时，提供“转到该工作树”：在面板中切换到该工作树的详情子视图，在独立弹窗中则关闭弹窗并打开该工作树的详情。
 
-“在新工作树打开”通过 `shell.start({kind: "new-worktree", repositoryId, preset})` 打开现有弹窗。`NewSessionDialog` / `WorktreeCreateFields` 新增 `preset = {mode, branch?, startBranch?, name?}`，只用于设置初始值，后续交互与现有流程相同。
+“在新工作树打开”通过 `shell.start({kind: "new-worktree", repositoryId, preset})` 打开现有弹窗；从面板发起时先关闭面板，再打开新建弹窗，屏幕上仍只有一层。`NewSessionDialog` / `WorktreeCreateFields` 新增 `preset = {mode, branch?, startBranch?, name?}`，只用于设置初始值，后续交互与现有流程相同。
 
-切换成功后调用 `repositories.refresh(true)` 并关闭弹窗。当前首页正收窄在该工作树时保持收窄（ID 不变），标题随新分支更新。
+切换成功后调用 `repositories.refresh(true)`：独立弹窗关闭，面板子视图回到工作树详情。当前首页正收窄在该工作树时保持收窄（ID 不变），标题随新分支更新。已打开的代码视图由现有的 5s 变化检测把受影响的标签页标为已更新或已删除，不需要额外通知。
 
 ### 7. CLI
 
@@ -131,7 +134,12 @@
 ## Risks / Trade-offs
 
 - [风险] agent 正在写文件时切换分支，会让它的后续写入落在新分支上 → 预览中对“工作中”状态的会话单独高亮并要求确认。系统不替用户做决定，也不中断会话，这与“会话关闭不会自行触发 worktree 删除”的分离原则一致。
-- [风险] 代码视图的快照缓存（`internal/codeview`，`Lifetime=10min`）可能在切换后仍展示旧内容 → 实现时核查快照键：如果只按路径缓存，切换成功后由前端让该工作树下已打开的代码视图重新读取；如果键中包含内容标识，则不需要处理。
+- [结论] 代码视图会不会在切换后显示旧内容：不会长期停留。见 Context 中的变化检测，它就是 agent 在终端改文件时使用的同一机制，代码视图可见时切换后最多约 5s 标出变化，页面隐藏后重新可见时立即检查。本变更只在 E2E 中断言这一点，不新增刷新通道。
+- [风险] 切换会执行 smudge/process 过滤器（如 Git LFS）和 `post-checkout` 钩子，它们可能访问网络、需要凭据或长时间运行：
+  - LFS 下载失败时，Git 可能已更新部分文件；
+  - `post-checkout` 失败时检出已经完成，但 `git switch` 仍以非零退出。
+
+  → 执行沿用 3 分钟上限；失败或超时后以 `Background` 重读实际状态返回，错误信息附带脱敏后的 Git 输出首行，提示在终端完成。新建工作树（`worktree add`）已有同样的暴露面。本变更不禁用过滤器或钩子，因为那会检出错误的文件内容或跳过用户的仓库约定。
 - [风险] `--track` 依赖 `remote.<name>.fetch` 映射；映射不规范时可能推导不出上游 → 执行后读取 `branch.<name>.merge`，未设置时在结果中给出警告，不回滚。
 - [取舍] 不支持携带修改切换，而这恰好是 Git 默认允许的行为 → 这是保守选择。用户可以在终端自行切换，WebMux 刷新后如实展示结果；需要并行处理时可改用“在新工作树打开”。
 

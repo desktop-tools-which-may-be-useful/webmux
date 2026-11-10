@@ -17,6 +17,7 @@
   - 不使用无差别的 `git worktree prune`，被锁定或目录仍存在的条目不受影响。
 - CLI 新增 `webmux repo fetch REPO` 和 `webmux worktree prune REPO [--yes]`。
 - 依赖 `enrich-repository-details` 提供的仓库面板、`lastFetchedAt` 和 URL 脱敏函数。
+- 访问远程的非交互执行、错误分类与脱敏实现为共用的 `remoteGit`，供 `add-branch-sync-actions` 的推送复用。
 
 ## Capabilities
 
@@ -31,7 +32,7 @@
 ## Impact
 
 - 后端：
-  - `internal/workspace` 新增 `FetchRemotes`，按仓库合并并发请求，执行时不持有仓库门闩，错误输出经分类和脱敏；
+  - `internal/workspace` 新增共用的 `remoteGit`（非交互环境、错误分类、脱敏）和 `FetchRemotes`，按仓库合并并发请求，执行时不持有仓库门闩；
   - `internal/api/workspace.go` 新增 `POST /api/repositories/{id}/fetch`；
   - 契约、wire 与快照随之更新。
   - 清理失效登记不新增服务端接口，直接复用 `batch-removal-preview` / `batch-remove`。
@@ -39,5 +40,5 @@
   - `RepositoryPanel` 标题栏增加“获取远程”按钮，并展示逐个远程的结果；
   - `RepositoryWorktrees` 增加“清理失效登记（N）”快捷入口。
 - CLI：修改 `internal/clicmd/repo.go`、`worktree.go`。
-- 用户故事：新增 US-J17（获取远程并清理失效登记），更新 US-J14。
-- 不涉及：pull、push、定时自动获取、删除本地分支。
+- 用户故事：新增一个故事（按计划为 US-J17，获取远程并清理失效登记），更新 US-J14。
+- 不涉及：定时自动获取。快进、推送与删除本地分支由 `add-branch-sync-actions` 负责。

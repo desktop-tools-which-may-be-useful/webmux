@@ -4,7 +4,12 @@
 
 ## 1. 获取服务（`internal/workspace`）
 
-- [ ] 1.1 让 `Service.git` 能为单次调用追加环境变量（不影响其他调用），用于设置 `SSH_ASKPASS_REQUIRE=never`；当 `GIT_SSH_COMMAND` 与 `core.sshCommand` 都未设置时，再设置 `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`。完成标准：单测断言已有 `core.sshCommand` 时不注入，未设置时注入。
+- [ ] 1.1 新增共用的 `Service.remoteGit`（design 第 3 节），在 `Service.git` 之上为单次调用追加环境变量，不影响其他调用：
+  - 设置 `SSH_ASKPASS_REQUIRE=never`；
+  - 只有 `GIT_SSH_COMMAND`、`core.sshCommand` 与 `GIT_SSH` 都未设置时，才设置 `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`；
+  - 失败转成 `RemoteFailure{status, message}`。
+
+  完成标准：单测分别断言三者之一已设置时不注入、都未设置时注入，以及本地 bare 远程上调用的返回值。
 - [ ] 1.2 实现 `FetchRemotes`：
   - 读取远程清单，按名称排序后逐个执行 `fetch --prune --recurse-submodules=no --end-of-options <remote>`；
   - 每个远程有独立时限，整体上限 3 分钟，执行使用 `WithoutCancel`；
@@ -15,7 +20,7 @@
   - 一个远程不可达时，另一个远程仍然成功；
   - 请求 ctx 取消后获取仍然完成。
 - [ ] 1.3 实现按仓库的 `fetchFlight` 合并。完成标准：并发两次调用的测试断言 git fetch 只执行一次（用 hook 计数），两个调用方收到相同结果；同时进行的 `CreateWorktree` 不需要等待获取完成。
-- [ ] 1.4 实现错误分类与消息脱敏（`auth`/`network`/`timeout`/`rejected`/`error`，消息最多 200 字符）。完成标准：表驱动单测覆盖每种关键字，以及包含 `https://u:tok@` 的输出，所有输出中都不含原始令牌；日志断言不含 URL。
+- [ ] 1.4 在 `remoteGit` 中实现错误分类与消息脱敏（`auth`/`network`/`timeout`/`rejected`/`error`，消息最多 200 字符）。完成标准：表驱动单测覆盖每种关键字（含 `Host key verification failed` 归为 `auth`），以及包含 `https://u:tok@` 的输出，所有输出中都不含原始令牌；日志断言不含 URL。
 
 ## 2. 契约、路由与快照
 
@@ -42,9 +47,9 @@
 
 ## 5. 用户故事与集成验证
 
-- [ ] 5.1 新增 US-J17（获取远程并清理失效登记），更新 US-J14（清理失效登记的快捷入口），并把 `docs/user-stories.md` 的区间改为 US-J01–US-J17。完成标准：`make docs-check` 通过。
+- [ ] 5.1 新增用户故事（按计划为 US-J17：获取远程并清理失效登记），更新 US-J14（清理失效登记的快捷入口），并把 `docs/user-stories.md` 的区间更新到当时的最大编号。`switch-worktree-branch` 与本变更可并行实施，编号以实施时下一个空闲编号为准，不预留空号。完成标准：`make docs-check` 通过。
 - [ ] 5.2 集成验证：依次运行 `make format`、`make check`、`pnpm --dir web check:arch`、`make test-fast`，再运行 4.3 中的 E2E。完成标准：全部通过。另外采集三种视口的截图供 PR 使用。
 
 ## Workflow follow-up
 
-- 经评审合并后归档本变更。
+- 经评审合并后归档本变更；之后再开始 `add-branch-sync-actions`，它复用这里的 `remoteGit`。
