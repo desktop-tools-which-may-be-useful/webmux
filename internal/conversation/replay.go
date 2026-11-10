@@ -42,7 +42,7 @@ func replayItems(ctx context.Context, tx *sql.Tx, thread, run string, committed 
 		return nil, storageError(ctx, closeErr)
 	}
 	for i := range items {
-		rows, err := tx.QueryContext(ctx, "SELECT text FROM activity_chunk WHERE activity_id=? ORDER BY byte_offset", items[i].id)
+		rows, err := tx.QueryContext(ctx, "SELECT text FROM (SELECT 0 section,byte_offset,text FROM activity_heading_chunk WHERE activity_id=? UNION ALL SELECT 1,byte_offset,text FROM activity_chunk WHERE activity_id=?) ORDER BY section,byte_offset", items[i].id, items[i].id)
 		if err != nil {
 			return nil, storageError(ctx, err)
 		}

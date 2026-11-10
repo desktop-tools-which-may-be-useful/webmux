@@ -96,6 +96,8 @@ type ActivityAttachment struct {
 }
 
 type ActivityInput struct {
+	// Heading patches normalized tool metadata independently of accumulated output.
+	Heading                                           *string
 	ProviderThreadID, RunID, LocalKey, ProviderItemID string
 	Kind, Role, Status, Source, Text                  string
 	// Replace is for ACP snapshots (tool content, plans, compaction summaries).

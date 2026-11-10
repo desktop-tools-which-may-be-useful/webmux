@@ -14,7 +14,7 @@ var activityKinds = map[string]bool{"message": true, "command": true, "tool": tr
 // Only IDs and normalized fields cross this boundary; no raw ACP or reasoning.
 // A message delta writes one chunk, never the prefix accumulated so far.
 func (s *Service) WriteActivity(ctx context.Context, in ActivityInput) (string, error) {
-	if in.ProviderThreadID == "" || in.LocalKey == "" || len(in.LocalKey) > 8192 || len(in.ProviderItemID) > 4096 || !activityKinds[in.Kind] || !utf8.ValidString(in.Text) {
+	if in.ProviderThreadID == "" || in.LocalKey == "" || len(in.LocalKey) > 8192 || len(in.ProviderItemID) > 4096 || !activityKinds[in.Kind] || (!utf8.ValidString(in.Text) || (in.Heading != nil && !utf8.ValidString(*in.Heading))) {
 		return "", ErrInvalid
 	}
 	if in.Role != "" && in.Role != "user" && in.Role != "agent" && in.Role != "system" {
@@ -60,7 +60,7 @@ func (s *Service) WriteActivity(ctx context.Context, in ActivityInput) (string, 
 			return ErrConflict
 		}
 		if in.Replace {
-			prefix, err := snapshotPrefix(ctx, tx, id, in.Text)
+			prefix, err := snapshotPrefix(ctx, tx, "activity_chunk", id, in.Text)
 			if err != nil {
 				return err
 			}
@@ -80,6 +80,24 @@ func (s *Service) WriteActivity(ctx context.Context, in ActivityInput) (string, 
 		}
 		if _, err := tx.ExecContext(ctx, "UPDATE activity SET byte_length=?,kind=?,status=CASE WHEN ?='' THEN status ELSE ? END WHERE id=?", bytes+int64(len(in.Text)), in.Kind, in.Status, in.Status, id); err != nil {
 			return storageError(ctx, err)
+		}
+		if in.Heading != nil {
+			prefix, err := snapshotPrefix(ctx, tx, "activity_heading_chunk", id, *in.Heading)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "DELETE FROM activity_heading_chunk WHERE activity_id=? AND byte_offset>=?", id, prefix); err != nil {
+				return storageError(ctx, err)
+			}
+			for start := int(prefix); start < len(*in.Heading); start += MaxActivityBytes {
+				end := min(len(*in.Heading), start+MaxActivityBytes)
+				if _, err := tx.ExecContext(ctx, "INSERT INTO activity_heading_chunk VALUES(?,?,?,?)", id, start, end-start, []byte((*in.Heading)[start:end])); err != nil {
+					return storageError(ctx, err)
+				}
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE activity SET heading_length=? WHERE id=?", len(*in.Heading), id); err != nil {
+				return storageError(ctx, err)
+			}
 		}
 		if len(in.Attachments) > 0 {
 			var start, metadataBytes int
@@ -229,8 +247,8 @@ func (s *Service) recoverActivity(ctx context.Context) error {
 // ACP snapshot patches often repeat the entire output so far. Preserve every
 // identical stored chunk and write only the changed suffix, keeping disk write
 // amplification bounded by new content rather than accumulated output size.
-func snapshotPrefix(ctx context.Context, tx *sql.Tx, id, text string) (int64, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT byte_offset,text FROM activity_chunk WHERE activity_id=? ORDER BY byte_offset", id)
+func snapshotPrefix(ctx context.Context, tx *sql.Tx, table, id, text string) (int64, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT byte_offset,text FROM "+table+" WHERE activity_id=? ORDER BY byte_offset", id)
 	if err != nil {
 		return 0, storageError(ctx, err)
 	}

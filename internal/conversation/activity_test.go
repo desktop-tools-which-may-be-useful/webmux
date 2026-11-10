@@ -362,3 +362,40 @@ func TestVersionOneUpgradeKeepsIdentityAndOrdinals(t *testing.T) {
 		t.Fatalf("schema version: %d %v", version, err)
 	}
 }
+
+func TestHeadingPatchDoesNotRewriteAccumulatedOutput(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t, t.TempDir())
+	b := bindTest(t, s, "runtime")
+	r := runTest(t, s, b, "heading")
+	heading := "original\n"
+	in := ActivityInput{ProviderThreadID: b.ProviderThreadID, RunID: r.ID, LocalKey: "tool", Kind: "tool", Role: "agent", Source: "live", Status: "in_progress", Text: strings.Repeat("x", MaxActivityBytes*5), Heading: &heading}
+	id, err := s.WriteActivity(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec("CREATE TEMP TABLE changed_output(n INTEGER); CREATE TEMP TRIGGER output_deleted AFTER DELETE ON activity_chunk BEGIN INSERT INTO changed_output VALUES(1); END; CREATE TEMP TRIGGER output_inserted AFTER INSERT ON activity_chunk BEGIN INSERT INTO changed_output VALUES(1); END;"); err != nil {
+		t.Fatal(err)
+	}
+	heading = "updated command\n"
+	in.Text = ""
+	in.Status = "completed"
+	if _, err := s.WriteActivity(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	var changes int
+	if err := s.db.QueryRow("SELECT count(*) FROM changed_output").Scan(&changes); err != nil || changes != 0 {
+		t.Fatalf("metadata rewrote output: %d %v", changes, err)
+	}
+	if err := s.FinishRun(ctx, r.ID, "end_turn"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := s.Activity(ctx, b.ConversationID, id, 0, 4000)
+	if err != nil || !strings.HasPrefix(part.Activity.Text, heading) {
+		t.Fatalf("updated heading missing: %+v %v", part, err)
+	}
+	part, err = s.Activity(ctx, b.ConversationID, id, int64(len(heading)+MaxActivityBytes*5-1), 4000)
+	if err != nil || part.Activity.Text != "x" || part.Truncated {
+		t.Fatalf("output corrupted: %+v %v", part, err)
+	}
+}
