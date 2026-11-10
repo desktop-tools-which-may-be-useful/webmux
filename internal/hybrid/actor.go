@@ -655,7 +655,7 @@ func (a *actor) spawnACP(epoch int) startResult {
 	}
 	res := startResult{link: link, init: init}
 	var err error
-	res.session, err = link.conn.NewSession(context.Background(), acp.NewSessionRequest{Cwd: a.cwd})
+	res.session, err = link.conn.NewSession(context.Background(), acp.NewSessionRequest{Cwd: a.cwd, MCPServers: a.historyServers(context.Background())})
 	if err == nil && res.session.SessionID == "" {
 		err = errors.New("agent 未返回会话 ID")
 	}
