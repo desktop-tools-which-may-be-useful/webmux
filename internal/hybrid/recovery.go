@@ -57,6 +57,7 @@ type ResumeInput struct {
 	Side            Side
 	AgentSessionID  string
 	Env             map[string]string
+	Attention       *session.AttentionPolicy
 }
 
 // Records lists the hybrid session records, most recently updated first;
@@ -280,7 +281,7 @@ func (s *Service) resume(id string, in ResumeInput) (*session.Session, error) {
 	if in.AgentSessionID != "" {
 		sid = in.AgentSessionID
 	}
-	a := newActor(s, cmd, rec.Cwd, rec.ConfigID, side)
+	a := newActor(s, cmd, rec.Cwd, rec.ConfigID, side, in.Attention)
 	a.agentSessionID = sid
 	a.title, a.titleSession = rec.Title, sid
 	a.recordTitle = rec.Title
@@ -291,9 +292,12 @@ func (s *Service) resume(id string, in ResumeInput) (*session.Session, error) {
 		a.chat.PermissionMode = PermissionAsk
 	}
 	shell, err := s.manager.CreateShell(session.ShellInput{
-		CreateInput: session.CreateInput{Cwd: rec.Cwd, Cmd: cmd.TUIArgv(), Name: rec.Name, Env: in.Env, ConfigID: rec.ConfigID},
-		ID:          id,
-		Overlay:     a.overlay(),
+		CreateInput: session.CreateInput{
+			Cwd: rec.Cwd, Cmd: cmd.TUIArgv(), Name: rec.Name, Env: in.Env, ConfigID: rec.ConfigID,
+			Attention: in.Attention,
+		},
+		ID:      id,
+		Overlay: a.overlay(),
 	}, a)
 	if err != nil {
 		return nil, shellError(err)

@@ -129,3 +129,19 @@
   - `make check`、`make docs-check` 与 `pnpm --dir web check:arch` 通过。
 - 限制：
   - 未在真机上验证触屏与软键盘交互，无头浏览器未验证 hover 与 `any-pointer: coarse` 触屏常驻；未重新核验其余故事能力。
+
+本次局部核对（2026-11-10）：启动配置新增“完成与介入提醒”设置（提醒范围、四层信号源独立开关与优先级说明、最短回合耗时、完成确认延迟）与 Warp 子代理 `session_id` 完成信号过滤，更新 US-B08、US-C06、US-Q09 与覆盖索引，不新增故事。
+
+- 范围：
+  - `internal/launch`、`internal/contract`、`internal/wire` 与 `web/src/schemas.ts` 新增可选 `attention` 配置（`mode` 为 `all`/`urgent`/`off`，`programStatus`/`agentProtocol`/`notify`/`bell` 布尔开关，`minTurnSeconds` `0..300`，`doneDelaySeconds` `0..60`），`null` 或省略时跟随服务端全局默认；
+  - `internal/session` 按会话应用 `AttentionPolicy`：
+    - 支持独立开关四类信号源并在关闭高优先级源时自动回退下一层；
+    - 支持 `urgent`（仅保留提问、授权、错误）与 `off`（关闭自动提醒但保留 `webmux notify`），并对非紧急完成信号执行最短回合耗时与完成确认延迟防抖；
+    - 按主会话 `session_id` 过滤 Warp 子代理的 `stop`/`idle_prompt`/`stop_failure`/`subagent_start`；
+  - `internal/hybrid` 与 `internal/workspace` 将启动配置的提醒策略传入普通终端会话与混合会话（终端端与聊天端同步遵循提醒范围、最短回合耗时与完成确认延迟）；
+  - `LaunchConfigDialog.svelte` 新增“完成与介入提醒”分组，提供“跟随全局默认”复选框、提醒范围 `SegmentedControl`、带四层优先级说明的信号源复选框与防误报阈值输入框。
+- 依据：
+  - `internal/launch`、`internal/session`、`internal/hybrid`、`internal/workspace`、`internal/wire`、`internal/api` 新增单元测试与 wire 快照验证通过；
+  - `web/test/launch-configs.test.ts`、`svelte-check`、Oxlint、`pnpm --dir web check:arch` 与 `make docs-check` 通过。
+- 限制：
+  - 未在 iOS/Android 真机上核对触控体验，无头浏览器未验证 hover 与 `any-pointer: coarse`；未重新核验其余故事能力。

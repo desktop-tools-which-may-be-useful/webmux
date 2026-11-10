@@ -136,6 +136,9 @@
   - 新建时按服务端只读 `defaultShell` 预选，空值回退 Bash；
   - 包装参数计入 argv 上限；
   - 可为每条配置选择跟随全局默认或单独设置输出预览行数与跳过末尾行数；
+  - 可为每条配置选择跟随全局默认或单独设置“完成与介入提醒”：
+    - 支持设置提醒范围（`all`/`urgent`/`off`）、四类信号源开关（`OSC 7501`、Warp Agent 事件、`OSC 9·777` 通知、BEL 响铃）、最短回合耗时（`0–300` 秒）与完成确认延迟（`0–60` 秒）；
+    - 编辑器显式说明信号源优先级（`OSC 7501 > Agent 事件 > 桌面通知 > 终端响铃`），配置列表摘要显示“仅需介入”“提醒已关闭”或“自定义提醒”；
   - 新安装首次启动时自动写入 Shell、十一款 CLI agent 与 omp 共 13 条带图标的启动配置（完整列表见 [接入说明](../../cli-agents.md)），其中 omp 附带 `PI_FORCE_IMAGE_PROTOCOL=kitty` 以启用 US-D12 图片显示；
     - Shell 为通用终端，agent 使用本地打包的 LobeHub 图标（Antigravity CLI 为 `antigravity`，同时保留旧 `geminicli` 兼容渲染），omp 使用 Pi；
     - agent 预设按服务端 `$SHELL` 经“加载 shell 启动文件”包裹（Bash 或 Zsh，未设置时 Bash，其他 shell 直接执行）；

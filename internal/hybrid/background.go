@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -101,6 +100,5 @@ func (a *actor) backgroundDone(link *acpLink) {
 	if a.link != link || a.turn != nil || a.attention != nil {
 		return
 	}
-	a.attention = &session.Attention{Kind: attentionkind.Done, Source: session.SourceAgent, Since: time.Now().UTC()}
-	a.dirty = true
+	a.scheduleOrLatchDone(a.chat.Turn.StartedAt, time.Now().UTC())
 }

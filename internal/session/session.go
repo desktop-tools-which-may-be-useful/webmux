@@ -152,9 +152,15 @@ type Session struct {
 	// cliAttention is attention a script raised while a driver's overlay
 	// reports the shell (no run); it is owned by mu and replaces the
 	// overlay's attention until the driver reports a new state.
-	cliAttention  *Attention
-	programStatus bool
-	replies       [][]byte
+	cliAttention       *Attention
+	programStatus      bool
+	attentionPolicy    AttentionPolicy
+	warpRootSessionID  string
+	lastEventSessionID string
+	turnStartedAt      time.Time
+	pendingAttention   *Attention
+	doneDelayTimer     *time.Timer
+	replies            [][]byte
 	// identity holds the current run's identity signals, owned by mu.
 	identity Identity
 	preview  Preview
@@ -178,6 +184,7 @@ type startOptions struct {
 	agentProtocol   bool
 	bellAttention   bool
 	programStatus   bool
+	attentionPolicy AttentionPolicy
 	terminalVersion string
 	submitDelay     time.Duration
 	// serverEnv holds WEBMUX_SOCKET and WEBMUX_BIN entries ("NAME=value")
@@ -206,6 +213,16 @@ func (o startOptions) size() (cols, rows uint16) {
 func newSession(id, cwd, name string, options startOptions) *Session {
 	cols, rows := options.size()
 	now := time.Now()
+	policy := options.attentionPolicy
+	if policy.Mode == "" {
+		policy = AttentionPolicy{
+			Mode:          AttentionModeAll,
+			ProgramStatus: options.programStatus,
+			AgentProtocol: options.agentProtocol,
+			Notify:        true,
+			Bell:          options.bellAttention,
+		}
+	}
 	s := &Session{
 		info: Info{
 			ID:               id,
@@ -218,12 +235,14 @@ func newSession(id, cwd, name string, options startOptions) *Session {
 			Rows:             rows,
 			ConfigID:         options.configID,
 		},
-		userTitle:     name,
-		subs:          make(map[*Subscriber]struct{}),
-		done:          make(chan struct{}),
-		bellAttention: options.bellAttention,
-		programStatus: options.programStatus,
-		options:       options,
+		userTitle:       name,
+		subs:            make(map[*Subscriber]struct{}),
+		done:            make(chan struct{}),
+		bellAttention:   policy.Bell,
+		programStatus:   policy.ProgramStatus,
+		attentionPolicy: policy,
+		turnStartedAt:   now,
+		options:         options,
 	}
 	s.signals = s.signalHandler()
 	if cols != DefaultCols || rows != DefaultRows {

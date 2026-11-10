@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/hybrid"
+	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -457,13 +458,29 @@ func generatedBranch(now time.Time, free func(string) bool) string {
 
 // resolvedCommand is the command a session start runs.
 type resolvedCommand struct {
-	cmd      []string
-	env      map[string]string
-	configID string // empty for an explicit command
-	hybrid   bool
+	cmd       []string
+	env       map[string]string
+	configID  string // empty for an explicit command
+	hybrid    bool
+	attention *session.AttentionPolicy
 	// cols and rows are the terminal's requested initial size, zero for the
 	// default.
 	cols, rows int
+}
+
+func attentionPolicy(a *launch.AttentionSettings) *session.AttentionPolicy {
+	if a == nil {
+		return nil
+	}
+	return &session.AttentionPolicy{
+		Mode:          session.AttentionMode(a.Mode),
+		ProgramStatus: a.ProgramStatus,
+		AgentProtocol: a.AgentProtocol,
+		Notify:        a.Notify,
+		Bell:          a.Bell,
+		MinTurn:       time.Duration(a.MinTurnSeconds) * time.Second,
+		DoneDelay:     time.Duration(a.DoneDelaySeconds) * time.Second,
+	}
 }
 
 // resolveCommand applies a saved launch config and validates the explicit
@@ -482,7 +499,10 @@ func (s *Service) resolveCommand(in CreateInput) (resolvedCommand, error) {
 		if err != nil {
 			return resolvedCommand{}, err
 		}
-		out = resolvedCommand{cmd: saved.Cmd, env: saved.Env, configID: saved.ID, hybrid: saved.Hybrid}
+		out = resolvedCommand{
+			cmd: saved.Cmd, env: saved.Env, configID: saved.ID, hybrid: saved.Hybrid,
+			attention: attentionPolicy(saved.Attention),
+		}
 	}
 	switch in.Side {
 	case "", string(hybrid.SideTUI):
@@ -566,7 +586,7 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 	if command.hybrid {
 		item, err = s.hybrids.Create(requestCtx, hybrid.CreateInput{
 			Cwd: path, Name: name, ConfigID: command.configID, Cmd: command.cmd, Env: command.env, StartSide: side,
-			Cols: command.cols, Rows: command.rows,
+			Cols: command.cols, Rows: command.rows, Attention: command.attention,
 			InitialPrompt: initialPrompt, InitialPromptSent: &promptSent,
 		})
 		if err != nil {
@@ -575,7 +595,7 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 	} else {
 		item, err = s.manager.Create(session.CreateInput{
 			Cwd: path, Cmd: command.cmd, Name: name, Env: command.env, ConfigID: command.configID,
-			Cols: command.cols, Rows: command.rows,
+			Cols: command.cols, Rows: command.rows, Attention: command.attention,
 		})
 		if err != nil {
 			return nil, false, sessionCreateError(err)

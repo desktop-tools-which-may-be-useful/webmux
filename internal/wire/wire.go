@@ -400,10 +400,40 @@ func launchPreview(p *contract.PreviewSettings) *launch.PreviewSettings {
 	return &launch.PreviewSettings{Lines: p.Lines, Skip: p.Skip}
 }
 
+func attentionSettings(a *launch.AttentionSettings) *contract.AttentionSettings {
+	if a == nil {
+		return nil
+	}
+	return &contract.AttentionSettings{
+		Mode:             string(a.Mode),
+		ProgramStatus:    a.ProgramStatus,
+		AgentProtocol:    a.AgentProtocol,
+		Notify:           a.Notify,
+		Bell:             a.Bell,
+		MinTurnSeconds:   a.MinTurnSeconds,
+		DoneDelaySeconds: a.DoneDelaySeconds,
+	}
+}
+
+func launchAttention(a *contract.AttentionSettings) *launch.AttentionSettings {
+	if a == nil {
+		return nil
+	}
+	return &launch.AttentionSettings{
+		Mode:             launch.AttentionMode(a.Mode),
+		ProgramStatus:    a.ProgramStatus,
+		AgentProtocol:    a.AgentProtocol,
+		Notify:           a.Notify,
+		Bell:             a.Bell,
+		MinTurnSeconds:   a.MinTurnSeconds,
+		DoneDelaySeconds: a.DoneDelaySeconds,
+	}
+}
+
 func LaunchConfig(c launch.Config) contract.LaunchConfig {
 	return contract.LaunchConfig{
 		ID: c.ID, Name: c.Name, Icon: c.Icon, Cmd: required(c.Cmd), Env: requiredMap(c.Env), Preview: previewSettings(c.Preview),
-		Chat: c.Hybrid, ChatSupport: ChatSupport(c.HybridSupport()),
+		Attention: attentionSettings(c.Attention), Chat: c.Hybrid, ChatSupport: ChatSupport(c.HybridSupport()),
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -418,14 +448,14 @@ func LaunchSummaries(in []launch.Summary, chatOptions func(configID string) []hy
 		}
 		return contract.LaunchConfigSummary{
 			ID: s.ID, Name: s.Name, Icon: s.Icon, Cmd: required(s.Cmd), EnvNames: required(s.EnvNames), Preview: previewSettings(s.Preview),
-			Chat: s.Hybrid, ChatSupport: ChatSupport(s.HybridSupport), ChatOptions: each(options, chatConfig),
+			Attention: attentionSettings(s.Attention), Chat: s.Hybrid, ChatSupport: ChatSupport(s.HybridSupport), ChatOptions: each(options, chatConfig),
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		}
 	})
 }
 
 func LaunchInput(r contract.LaunchConfigInput) launch.Input {
-	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview), Hybrid: r.Chat}
+	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview), Attention: launchAttention(r.Attention), Hybrid: r.Chat}
 }
 
 func LaunchPresets(in []launch.Preset) []contract.LaunchPreset {

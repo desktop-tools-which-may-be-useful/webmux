@@ -169,6 +169,9 @@ type CreateInput struct {
 	Name     string
 	Env      map[string]string
 	ConfigID string
+	// Attention overrides the manager's global attention settings for this
+	// session; nil inherits the manager's defaults.
+	Attention *AttentionPolicy
 	// Cols and Rows are the PTY's initial size, both zero for the default;
 	// setting only one is invalid.
 	Cols, Rows int
@@ -248,10 +251,24 @@ func (m *Manager) startOptions(in CreateInput) startOptions {
 	if m.options.SubmitDelay != nil {
 		submitDelay = m.options.SubmitDelay(in.Cmd)
 	}
+	policy := AttentionPolicy{
+		Mode:          AttentionModeAll,
+		ProgramStatus: !m.options.DisableProgramStatus,
+		AgentProtocol: !m.options.DisableAgentProtocol,
+		Notify:        true,
+		Bell:          !m.options.DisableBellAttention,
+	}
+	if in.Attention != nil {
+		policy = *in.Attention
+		if policy.Mode == "" {
+			policy.Mode = AttentionModeAll
+		}
+	}
 	return startOptions{
-		agentProtocol:   !m.options.DisableAgentProtocol,
-		bellAttention:   !m.options.DisableBellAttention,
-		programStatus:   !m.options.DisableProgramStatus,
+		agentProtocol:   policy.AgentProtocol,
+		bellAttention:   policy.Bell,
+		programStatus:   policy.ProgramStatus,
+		attentionPolicy: policy,
 		capacity:        m.options.ScrollbackBytes,
 		env:             in.Env,
 		configID:        in.ConfigID,

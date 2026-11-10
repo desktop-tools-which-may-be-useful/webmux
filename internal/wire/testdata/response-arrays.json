@@ -227,6 +227,7 @@
       ],
       "envNames": [],
       "preview": null,
+      "attention": null,
       "chat": false,
       "chatSupport": {
         "supported": false,
@@ -245,6 +246,7 @@
     ],
     "env": {},
     "preview": null,
+    "attention": null,
     "chat": false,
     "chatSupport": {
       "supported": false,

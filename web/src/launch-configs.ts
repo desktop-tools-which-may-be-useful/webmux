@@ -1,6 +1,11 @@
 import { errorMessage } from "./error";
 import { joinArgs, parseArgs } from "./api";
-import type { LaunchConfigSummary, PreviewSettings } from "./schemas";
+import type {
+  AttentionMode,
+  AttentionSettings,
+  LaunchConfigSummary,
+  PreviewSettings,
+} from "./schemas";
 
 // Client-side mirror of the server limits; the server stays authoritative.
 export const LAUNCH_CONFIGS_LIMIT = 100;
@@ -12,6 +17,44 @@ export const LAUNCH_PREVIEW_LINES_MIN = 1;
 export const LAUNCH_PREVIEW_LINES_MAX = 50;
 export const LAUNCH_PREVIEW_SKIP_MIN = 0;
 export const LAUNCH_PREVIEW_SKIP_MAX = 50;
+export const LAUNCH_ATTENTION_MIN_TURN_MIN = 0;
+export const LAUNCH_ATTENTION_MIN_TURN_MAX = 300;
+export const LAUNCH_ATTENTION_DONE_DELAY_MIN = 0;
+export const LAUNCH_ATTENTION_DONE_DELAY_MAX = 60;
+
+export const defaultLaunchAttentionSettings: AttentionSettings = {
+  mode: "all",
+  programStatus: true,
+  agentProtocol: true,
+  notify: true,
+  bell: true,
+  minTurnSeconds: 0,
+  doneDelaySeconds: 0,
+};
+
+export const LAUNCH_ATTENTION_MODE_OPTIONS: readonly {
+  value: AttentionMode;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "all",
+    label: "全部提醒",
+    description: "包含任务完成、桌面通知、终端响铃以及需要介入的紧急提醒。",
+  },
+  {
+    value: "urgent",
+    label: "仅需介入",
+    description:
+      "仅保留提问、权限确认与失败提醒，抑制完成、普通通知与终端响铃。",
+  },
+  {
+    value: "off",
+    label: "关闭",
+    description:
+      "关闭此会话的一切自动提醒（显式调用 webmux notify 仍可触发）。",
+  },
+];
 const envName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const encoder = new TextEncoder();
 const bytes = (value: string) => encoder.encode(value).length;
@@ -30,12 +73,14 @@ export type LaunchConfigInput = {
   cmd: string[];
   env: Record<string, string>;
   preview: PreviewSettings | null;
+  attention: AttentionSettings | null;
 };
 export type LaunchDraftErrors = {
   name?: string;
   command?: string;
   env?: string;
   preview?: string;
+  attention?: string;
   rows: Record<number, { name?: string; value?: string }>;
 };
 /** Summaries as seen by the new-session sheet; values are never loaded. */
@@ -88,11 +133,20 @@ export function launchConfigSummary(config: {
   chat?: boolean;
   envNames: readonly string[];
   preview?: { lines: number; skip: number } | null;
+  attention?: AttentionSettings | null;
 }) {
+  const attentionLabel = !config.attention
+    ? ""
+    : config.attention.mode === "urgent"
+      ? "仅需介入"
+      : config.attention.mode === "off"
+        ? "提醒已关闭"
+        : "自定义提醒";
   return [
     config.chat ? "混合会话" : "终端",
     config.envNames.length ? `${config.envNames.length} 个环境变量` : "",
     config.preview ? `预览 ${config.preview.lines} 行` : "",
+    attentionLabel,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -164,6 +218,7 @@ export function validateLaunchDraft(
   rows: readonly EnvRow[],
   startupShell: StartupShell | null = null,
   preview: PreviewSettings | null = null,
+  attention: AttentionSettings | null = null,
 ):
   | { ok: true; value: LaunchConfigInput; errors: LaunchDraftErrors }
   | { ok: false; errors: LaunchDraftErrors } {
@@ -182,6 +237,28 @@ export function validateLaunchDraft(
       preview.skip > LAUNCH_PREVIEW_SKIP_MAX)
   )
     errors.preview = `跳过末尾行数须为 ${LAUNCH_PREVIEW_SKIP_MIN}–${LAUNCH_PREVIEW_SKIP_MAX} 的整数`;
+
+  if (
+    attention &&
+    attention.mode !== "all" &&
+    attention.mode !== "urgent" &&
+    attention.mode !== "off"
+  )
+    errors.attention = "提醒范围无效";
+  else if (
+    attention &&
+    (!Number.isInteger(attention.minTurnSeconds) ||
+      attention.minTurnSeconds < LAUNCH_ATTENTION_MIN_TURN_MIN ||
+      attention.minTurnSeconds > LAUNCH_ATTENTION_MIN_TURN_MAX)
+  )
+    errors.attention = `最短回合耗时须为 ${LAUNCH_ATTENTION_MIN_TURN_MIN}–${LAUNCH_ATTENTION_MIN_TURN_MAX} 秒的整数`;
+  else if (
+    attention &&
+    (!Number.isInteger(attention.doneDelaySeconds) ||
+      attention.doneDelaySeconds < LAUNCH_ATTENTION_DONE_DELAY_MIN ||
+      attention.doneDelaySeconds > LAUNCH_ATTENTION_DONE_DELAY_MAX)
+  )
+    errors.attention = `完成确认延迟须为 ${LAUNCH_ATTENTION_DONE_DELAY_MIN}–${LAUNCH_ATTENTION_DONE_DELAY_MAX} 秒的整数`;
   const trimmed = name.trim();
   if (!trimmed) errors.name = "请输入名称";
   else if (Array.from(trimmed).length > LAUNCH_NAME_MAX)
@@ -225,8 +302,13 @@ export function validateLaunchDraft(
     errors.command ||
     errors.env ||
     errors.preview ||
+    errors.attention ||
     Object.keys(errors.rows).length
   )
     return { ok: false, errors };
-  return { ok: true, value: { name: trimmed, cmd, env, preview }, errors };
+  return {
+    ok: true,
+    value: { name: trimmed, cmd, env, preview, attention },
+    errors,
+  };
 }

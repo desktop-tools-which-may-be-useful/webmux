@@ -1,6 +1,6 @@
 <script lang="ts">
   import { errorMessage } from "../error";
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import EnvRowsEditor from "./EnvRowsEditor.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
@@ -8,6 +8,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Textarea } from "$lib/components/ui/textarea";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import * as Select from "$lib/components/ui/select";
   import ConnectorInstallHint from "./ConnectorInstallHint.svelte";
   import InlineNotice from "./InlineNotice.svelte";
@@ -16,6 +17,7 @@
   import {
     ChatSupportSchema,
     LaunchConfigSchema,
+    type AttentionMode,
     type ChatSupport,
     type LaunchConfig,
   } from "../schemas";
@@ -25,6 +27,12 @@
     previewSettings,
   } from "../preview-settings.svelte";
   import {
+    defaultLaunchAttentionSettings,
+    LAUNCH_ATTENTION_DONE_DELAY_MAX,
+    LAUNCH_ATTENTION_DONE_DELAY_MIN,
+    LAUNCH_ATTENTION_MIN_TURN_MAX,
+    LAUNCH_ATTENTION_MIN_TURN_MIN,
+    LAUNCH_ATTENTION_MODE_OPTIONS,
     LAUNCH_ENV_MAX,
     LAUNCH_ICON_OPTIONS,
     LAUNCH_PREVIEW_LINES_MAX,
@@ -61,6 +69,24 @@
   let defaultPreview = $state(true);
   let previewLines = $state<number | undefined>(defaultPreviewSettings.lines);
   let previewSkip = $state<number | undefined>(defaultPreviewSettings.skip);
+  let defaultAttention = $state(true);
+  let attentionMode = $state<AttentionMode>(
+    defaultLaunchAttentionSettings.mode,
+  );
+  let attentionProgramStatus = $state(
+    defaultLaunchAttentionSettings.programStatus,
+  );
+  let attentionAgentProtocol = $state(
+    defaultLaunchAttentionSettings.agentProtocol,
+  );
+  let attentionNotify = $state(defaultLaunchAttentionSettings.notify);
+  let attentionBell = $state(defaultLaunchAttentionSettings.bell);
+  let attentionMinTurnSeconds = $state<number | undefined>(
+    defaultLaunchAttentionSettings.minTurnSeconds,
+  );
+  let attentionDoneDelaySeconds = $state<number | undefined>(
+    defaultLaunchAttentionSettings.doneDelaySeconds,
+  );
   let nextKey = 0;
   let loading = $state(false);
   let loadError = $state("");
@@ -81,6 +107,29 @@
           skip: typeof previewSkip === "number" ? previewSkip : Number.NaN,
         },
   );
+  const attention = $derived(
+    defaultAttention
+      ? null
+      : {
+          mode: attentionMode,
+          programStatus: attentionProgramStatus,
+          agentProtocol: attentionAgentProtocol,
+          notify: attentionNotify,
+          bell: attentionBell,
+          minTurnSeconds:
+            attentionMode === "all"
+              ? typeof attentionMinTurnSeconds === "number"
+                ? attentionMinTurnSeconds
+                : Number.NaN
+              : 0,
+          doneDelaySeconds:
+            attentionMode === "all"
+              ? typeof attentionDoneDelaySeconds === "number"
+                ? attentionDoneDelaySeconds
+                : Number.NaN
+              : 0,
+        },
+  );
   const draft = $derived(
     validateLaunchDraft(
       name,
@@ -88,6 +137,7 @@
       rows,
       loadStartup ? startupShell : null,
       preview,
+      attention,
     ),
   );
   const previewLinesInvalid = $derived(
@@ -103,6 +153,27 @@
         !Number.isInteger(previewSkip) ||
         previewSkip < LAUNCH_PREVIEW_SKIP_MIN ||
         previewSkip > LAUNCH_PREVIEW_SKIP_MAX),
+  );
+  const attentionMinTurnInvalid = $derived(
+    !defaultAttention &&
+      attentionMode === "all" &&
+      (typeof attentionMinTurnSeconds !== "number" ||
+        !Number.isInteger(attentionMinTurnSeconds) ||
+        attentionMinTurnSeconds < LAUNCH_ATTENTION_MIN_TURN_MIN ||
+        attentionMinTurnSeconds > LAUNCH_ATTENTION_MIN_TURN_MAX),
+  );
+  const attentionDoneDelayInvalid = $derived(
+    !defaultAttention &&
+      attentionMode === "all" &&
+      (typeof attentionDoneDelaySeconds !== "number" ||
+        !Number.isInteger(attentionDoneDelaySeconds) ||
+        attentionDoneDelaySeconds < LAUNCH_ATTENTION_DONE_DELAY_MIN ||
+        attentionDoneDelaySeconds > LAUNCH_ATTENTION_DONE_DELAY_MAX),
+  );
+  const attentionModeDescription = $derived(
+    LAUNCH_ATTENTION_MODE_OPTIONS.find(
+      (option) => option.value === attentionMode,
+    )?.description ?? "",
   );
   const iconOptions = [
     { value: "auto", label: "自动匹配" },
@@ -136,6 +207,15 @@
       defaultPreview = true;
       previewLines = previewSettings.lines;
       previewSkip = previewSettings.skip;
+      defaultAttention = true;
+      attentionMode = defaultLaunchAttentionSettings.mode;
+      attentionProgramStatus = defaultLaunchAttentionSettings.programStatus;
+      attentionAgentProtocol = defaultLaunchAttentionSettings.agentProtocol;
+      attentionNotify = defaultLaunchAttentionSettings.notify;
+      attentionBell = defaultLaunchAttentionSettings.bell;
+      attentionMinTurnSeconds = defaultLaunchAttentionSettings.minTurnSeconds;
+      attentionDoneDelaySeconds =
+        defaultLaunchAttentionSettings.doneDelaySeconds;
       error = "";
       loadError = "";
       busy = false;
@@ -163,6 +243,25 @@
             defaultPreview = !config.preview;
             previewLines = config.preview?.lines ?? previewSettings.lines;
             previewSkip = config.preview?.skip ?? previewSettings.skip;
+            defaultAttention = !config.attention;
+            attentionMode =
+              config.attention?.mode ?? defaultLaunchAttentionSettings.mode;
+            attentionProgramStatus =
+              config.attention?.programStatus ??
+              defaultLaunchAttentionSettings.programStatus;
+            attentionAgentProtocol =
+              config.attention?.agentProtocol ??
+              defaultLaunchAttentionSettings.agentProtocol;
+            attentionNotify =
+              config.attention?.notify ?? defaultLaunchAttentionSettings.notify;
+            attentionBell =
+              config.attention?.bell ?? defaultLaunchAttentionSettings.bell;
+            attentionMinTurnSeconds =
+              config.attention?.minTurnSeconds ??
+              defaultLaunchAttentionSettings.minTurnSeconds;
+            attentionDoneDelaySeconds =
+              config.attention?.doneDelaySeconds ??
+              defaultLaunchAttentionSettings.doneDelaySeconds;
             rows = Object.entries(config.env).map(([key, value]) =>
               row(key, value),
             );
@@ -240,260 +339,447 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
-    <form class="grid min-w-0 gap-4" onsubmit={submit}>
-      <Dialog.Header>
-        <Dialog.Title>{configId ? "编辑启动配置" : "新建启动配置"}</Dialog.Title
-        >
-        <Dialog.Description
-          >保存在服务端，所有设备的新建会话页都能选用。</Dialog.Description
-        >
-      </Dialog.Header>
-      {#if loading}
-        <p role="status" class="text-sm text-muted-foreground">
-          正在读取启动配置…
-        </p>
-      {:else if loadError}
-        <InlineNotice tone="danger">{loadError}</InlineNotice>
-      {:else}
-        <fieldset disabled={busy} class="grid min-w-0 gap-4">
-          <div class="grid gap-2">
-            <Label for="launch-config-name">名称</Label>
-            <Input
-              id="launch-config-name"
-              bind:value={name}
-              placeholder="例如：Claude 恢复"
-              autocomplete="off"
-              aria-invalid={!!name && !!draft.errors.name}
-              aria-describedby={name && draft.errors.name
-                ? "launch-config-name-error"
-                : undefined}
-            />
-            {#if name && draft.errors.name}<p
-                id="launch-config-name-error"
-                class="text-xs text-destructive"
-              >
-                {draft.errors.name}
-              </p>{/if}
-          </div>
-          <div class="grid gap-2">
-            <Label for="launch-config-icon">图标</Label>
-            <Select.Root type="single" bind:value={icon} items={iconOptions}>
-              <Select.Trigger id="launch-config-icon" aria-label="图标">
-                <span class="flex items-center gap-2">
-                  <LaunchConfigIcon icon={icon === "auto" ? autoIcon : icon} />
-                  {iconOptions.find((option) => option.value === icon)?.label ??
-                    "终端"}
-                </span>
-              </Select.Trigger>
-              <Select.Content>
-                {#each iconOptions as option (option.value)}
-                  <Select.Item value={option.value} label={option.label}>
-                    <LaunchConfigIcon
-                      icon={option.value === "auto" ? autoIcon : option.value}
-                    />
-                    {option.label}
-                  </Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
-            <p class="text-xs text-muted-foreground">
-              自动匹配启动程序，也可指定图标。品牌图标来自 LobeHub。
-            </p>
-          </div>
-          <div class="grid gap-2">
-            <Label for="launch-config-command">启动命令</Label>
-            <Textarea
-              id="launch-config-command"
-              bind:value={command}
-              rows={3}
-              placeholder="claude --resume 或 bash -lc 'npm run dev'"
-              mono
-              class="max-h-[30dvh]"
-              autocapitalize="off"
-              autocorrect="off"
-              spellcheck={false}
-              aria-invalid={!!command.trim() && !!draft.errors.command}
-              aria-describedby="launch-config-command-help"
-            />
-            {#if command.trim() && draft.errors.command}<p
-                class="text-xs text-destructive"
-              >
-                {draft.errors.command}
-              </p>{/if}
-            <p
-              id="launch-config-command-help"
-              class="text-xs text-muted-foreground"
-            >
-              支持引号和转义；直接执行程序，不展开 shell 变量或管道。需要 shell
-              语法时，请显式使用 bash -lc '命令'。
-            </p>
-            <div class="flex items-center gap-2">
-              <Checkbox
-                id="launch-config-startup"
-                bind:checked={loadStartup}
-                aria-describedby="launch-config-startup-help"
-              />
-              <Label for="launch-config-startup">加载 shell 启动文件</Label>
-            </div>
-            {#if loadStartup}
-              <div class="grid gap-2">
-                <Label for="launch-config-startup-shell">启动文件</Label>
-                <Select.Root
-                  type="single"
-                  value={startupShell}
-                  onValueChange={(value) => {
-                    if (value === "bash" || value === "zsh")
-                      startupShell = value;
-                  }}
-                  items={startupShellOptions}
-                >
-                  <Select.Trigger
-                    id="launch-config-startup-shell"
-                    aria-label="启动文件 shell"
-                  >
-                    {startupShellOptions.find(
-                      (option) => option.value === startupShell,
-                    )?.label}
-                  </Select.Trigger>
-                  <Select.Content>
-                    {#each startupShellOptions as option (option.value)}
-                      <Select.Item value={option.value} label={option.label}>
-                        {option.label}
-                      </Select.Item>
-                    {/each}
-                  </Select.Content>
-                </Select.Root>
-              </div>
-            {/if}
-            <p
-              id="launch-config-startup-help"
-              class="text-xs text-muted-foreground"
-            >
-              使用交互式 Bash（~/.bashrc）或 Zsh（~/.zshrc）读取 PATH
-              和环境变量；只需填写普通命令，参数仍原样传递，不展开变量或管道。
-            </p>
-            <div class="flex items-center gap-2">
-              <Checkbox
-                id="launch-config-hybrid"
-                bind:checked={hybrid}
-                disabled={!hybrid && !hybridSupport?.supported}
-                aria-describedby="launch-config-hybrid-help"
-              />
-              <Label for="launch-config-hybrid">混合模式（聊天 ↔ 终端）</Label>
-            </div>
-            <p
-              id="launch-config-hybrid-help"
-              class="text-xs text-muted-foreground"
-            >
-              {#if hybridReason}{hybridReason}{:else}从这个配置启动的会话可以在网页聊天视图与终端之间切换{hybridSupport
-                  ? `，适用于 ${hybridSupport.supportedAgents.join("、")}`
-                  : ""}。{/if}
-            </p>
-            {#if hybridSupport?.supported && hybridSupport.connector}
-              <ConnectorInstallHint
-                connector={hybridSupport.connector}
-                message={connectorNoticeText(hybridSupport.connector)}
-                tone="info"
-              />
-            {/if}
-          </div>
-          <EnvRowsEditor
-            bind:rows
-            errors={draft.errors.rows}
-            error={draft.errors.env}
-            max={LAUNCH_ENV_MAX}
-            makeRow={row}
+  <Dialog.Content
+    class="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+  >
+    <form class="flex min-h-0 flex-1 flex-col" onsubmit={submit}>
+      <div class="shrink-0 border-b px-5 py-4 pr-12">
+        <Dialog.Header>
+          <Dialog.Title
+            >{configId ? "编辑启动配置" : "新建启动配置"}</Dialog.Title
           >
-            {#snippet help()}变量值保存在服务端状态文件中，默认遮挡；列表与新建会话页只显示变量个数，不显示值。{/snippet}
-          </EnvRowsEditor>
-          <fieldset class="grid min-w-0 gap-2">
-            <legend class="mb-2 text-sm font-medium">
-              输出预览 <span class="font-normal text-muted-foreground"
-                >可选</span
-              >
-            </legend>
-            <div class="flex items-center gap-2">
-              <Checkbox
-                id="launch-config-preview-default"
-                bind:checked={defaultPreview}
-                aria-describedby="launch-config-preview-help"
+          <Dialog.Description
+            >保存在服务端，所有设备的新建会话页都能选用。</Dialog.Description
+          >
+        </Dialog.Header>
+      </div>
+      <div
+        class="grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-5"
+        data-testid="launch-config-scroll"
+      >
+        {#if loading}
+          <p role="status" class="text-sm text-muted-foreground">
+            正在读取启动配置…
+          </p>
+        {:else if loadError}
+          <InlineNotice tone="danger">{loadError}</InlineNotice>
+        {:else}
+          <fieldset disabled={busy} class="grid min-w-0 gap-4">
+            <div class="grid gap-2">
+              <Label for="launch-config-name">名称</Label>
+              <Input
+                id="launch-config-name"
+                bind:value={name}
+                placeholder="例如：Claude 恢复"
+                autocomplete="off"
+                aria-invalid={!!name && !!draft.errors.name}
+                aria-describedby={name && draft.errors.name
+                  ? "launch-config-name-error"
+                  : undefined}
               />
-              <Label for="launch-config-preview-default">跟随全局默认</Label>
-            </div>
-            {#if defaultPreview}
-              <p
-                id="launch-config-preview-help"
-                class="text-xs text-muted-foreground"
-              >
-                使用设置页「会话输出预览」中的行数与跳过末尾行数。
-              </p>
-            {:else}
-              <div class="grid min-w-0 gap-4 sm:grid-cols-2">
-                <div class="grid gap-2">
-                  <Label for="launch-config-preview-lines">显示行数</Label>
-                  <Input
-                    id="launch-config-preview-lines"
-                    type="number"
-                    min={LAUNCH_PREVIEW_LINES_MIN}
-                    max={LAUNCH_PREVIEW_LINES_MAX}
-                    step={1}
-                    bind:value={previewLines}
-                    aria-invalid={previewLinesInvalid}
-                    aria-describedby={draft.errors.preview
-                      ? "launch-config-preview-help launch-config-preview-error"
-                      : "launch-config-preview-help"}
-                  />
-                </div>
-                <div class="grid gap-2">
-                  <Label for="launch-config-preview-skip">跳过末尾行数</Label>
-                  <Input
-                    id="launch-config-preview-skip"
-                    type="number"
-                    min={LAUNCH_PREVIEW_SKIP_MIN}
-                    max={LAUNCH_PREVIEW_SKIP_MAX}
-                    step={1}
-                    bind:value={previewSkip}
-                    aria-invalid={previewSkipInvalid}
-                    aria-describedby={draft.errors.preview
-                      ? "launch-config-preview-help launch-config-preview-error"
-                      : "launch-config-preview-help"}
-                  />
-                </div>
-              </div>
-              {#if draft.errors.preview}<p
-                  id="launch-config-preview-error"
-                  role="alert"
+              {#if name && draft.errors.name}<p
+                  id="launch-config-name-error"
                   class="text-xs text-destructive"
                 >
-                  {draft.errors.preview}
+                  {draft.errors.name}
+                </p>{/if}
+            </div>
+            <div class="grid gap-2">
+              <Label for="launch-config-icon">图标</Label>
+              <Select.Root type="single" bind:value={icon} items={iconOptions}>
+                <Select.Trigger id="launch-config-icon" aria-label="图标">
+                  <span class="flex items-center gap-2">
+                    <LaunchConfigIcon
+                      icon={icon === "auto" ? autoIcon : icon}
+                    />
+                    {iconOptions.find((option) => option.value === icon)
+                      ?.label ?? "终端"}
+                  </span>
+                </Select.Trigger>
+                <Select.Content>
+                  {#each iconOptions as option (option.value)}
+                    <Select.Item value={option.value} label={option.label}>
+                      <LaunchConfigIcon
+                        icon={option.value === "auto" ? autoIcon : option.value}
+                      />
+                      {option.label}
+                    </Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+              <p class="text-xs text-muted-foreground">
+                自动匹配启动程序，也可指定图标。品牌图标来自 LobeHub。
+              </p>
+            </div>
+            <div class="grid gap-2">
+              <Label for="launch-config-command">启动命令</Label>
+              <Textarea
+                id="launch-config-command"
+                bind:value={command}
+                rows={3}
+                placeholder="claude --resume 或 bash -lc 'npm run dev'"
+                mono
+                class="max-h-[30dvh]"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck={false}
+                aria-invalid={!!command.trim() && !!draft.errors.command}
+                aria-describedby="launch-config-command-help"
+              />
+              {#if command.trim() && draft.errors.command}<p
+                  class="text-xs text-destructive"
+                >
+                  {draft.errors.command}
                 </p>{/if}
               <p
-                id="launch-config-preview-help"
+                id="launch-config-command-help"
                 class="text-xs text-muted-foreground"
               >
-                不同 agent
-                的底部状态栏高度不同；按此配置启动的会话在首页使用这些值。修改配置后回到首页生效。
+                支持引号和转义；直接执行程序，不展开 shell 变量或管道。需要
+                shell 语法时，请显式使用 bash -lc '命令'。
               </p>
-            {/if}
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  id="launch-config-startup"
+                  bind:checked={loadStartup}
+                  aria-describedby="launch-config-startup-help"
+                />
+                <Label for="launch-config-startup">加载 shell 启动文件</Label>
+              </div>
+              {#if loadStartup}
+                <div class="grid gap-2">
+                  <Label for="launch-config-startup-shell">启动文件</Label>
+                  <Select.Root
+                    type="single"
+                    value={startupShell}
+                    onValueChange={(value) => {
+                      if (value === "bash" || value === "zsh")
+                        startupShell = value;
+                    }}
+                    items={startupShellOptions}
+                  >
+                    <Select.Trigger
+                      id="launch-config-startup-shell"
+                      aria-label="启动文件 shell"
+                    >
+                      {startupShellOptions.find(
+                        (option) => option.value === startupShell,
+                      )?.label}
+                    </Select.Trigger>
+                    <Select.Content>
+                      {#each startupShellOptions as option (option.value)}
+                        <Select.Item value={option.value} label={option.label}>
+                          {option.label}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                </div>
+              {/if}
+              <p
+                id="launch-config-startup-help"
+                class="text-xs text-muted-foreground"
+              >
+                使用交互式 Bash（~/.bashrc）或 Zsh（~/.zshrc）读取 PATH
+                和环境变量；只需填写普通命令，参数仍原样传递，不展开变量或管道。
+              </p>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  id="launch-config-hybrid"
+                  bind:checked={hybrid}
+                  disabled={!hybrid && !hybridSupport?.supported}
+                  aria-describedby="launch-config-hybrid-help"
+                />
+                <Label for="launch-config-hybrid">混合模式（聊天 ↔ 终端）</Label
+                >
+              </div>
+              <p
+                id="launch-config-hybrid-help"
+                class="text-xs text-muted-foreground"
+              >
+                {#if hybridReason}{hybridReason}{:else}从这个配置启动的会话可以在网页聊天视图与终端之间切换{hybridSupport
+                    ? `，适用于 ${hybridSupport.supportedAgents.join("、")}`
+                    : ""}。{/if}
+              </p>
+              {#if hybridSupport?.supported && hybridSupport.connector}
+                <ConnectorInstallHint
+                  connector={hybridSupport.connector}
+                  message={connectorNoticeText(hybridSupport.connector)}
+                  tone="info"
+                />
+              {/if}
+            </div>
+            <EnvRowsEditor
+              bind:rows
+              errors={draft.errors.rows}
+              error={draft.errors.env}
+              max={LAUNCH_ENV_MAX}
+              makeRow={row}
+            >
+              {#snippet help()}变量值保存在服务端状态文件中，默认遮挡；列表与新建会话页只显示变量个数，不显示值。{/snippet}
+            </EnvRowsEditor>
+            <fieldset class="grid min-w-0 gap-2">
+              <legend class="mb-2 text-sm font-medium">
+                输出预览 <span class="font-normal text-muted-foreground"
+                  >可选</span
+                >
+              </legend>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  id="launch-config-preview-default"
+                  bind:checked={defaultPreview}
+                  aria-describedby="launch-config-preview-help"
+                />
+                <Label for="launch-config-preview-default"
+                  >跟随全局默认<span class="sr-only">（输出预览）</span></Label
+                >
+              </div>
+              {#if defaultPreview}
+                <p
+                  id="launch-config-preview-help"
+                  class="text-xs text-muted-foreground"
+                >
+                  使用设置页「会话输出预览」中的行数与跳过末尾行数。
+                </p>
+              {:else}
+                <div class="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <div class="grid gap-2">
+                    <Label for="launch-config-preview-lines">显示行数</Label>
+                    <Input
+                      id="launch-config-preview-lines"
+                      type="number"
+                      min={LAUNCH_PREVIEW_LINES_MIN}
+                      max={LAUNCH_PREVIEW_LINES_MAX}
+                      step={1}
+                      bind:value={previewLines}
+                      aria-invalid={previewLinesInvalid}
+                      aria-describedby={draft.errors.preview
+                        ? "launch-config-preview-help launch-config-preview-error"
+                        : "launch-config-preview-help"}
+                    />
+                  </div>
+                  <div class="grid gap-2">
+                    <Label for="launch-config-preview-skip">跳过末尾行数</Label>
+                    <Input
+                      id="launch-config-preview-skip"
+                      type="number"
+                      min={LAUNCH_PREVIEW_SKIP_MIN}
+                      max={LAUNCH_PREVIEW_SKIP_MAX}
+                      step={1}
+                      bind:value={previewSkip}
+                      aria-invalid={previewSkipInvalid}
+                      aria-describedby={draft.errors.preview
+                        ? "launch-config-preview-help launch-config-preview-error"
+                        : "launch-config-preview-help"}
+                    />
+                  </div>
+                </div>
+                {#if draft.errors.preview}<p
+                    id="launch-config-preview-error"
+                    role="alert"
+                    class="text-xs text-destructive"
+                  >
+                    {draft.errors.preview}
+                  </p>{/if}
+                <p
+                  id="launch-config-preview-help"
+                  class="text-xs text-muted-foreground"
+                >
+                  不同 agent
+                  的底部状态栏高度不同；按此配置启动的会话在首页使用这些值。修改配置后回到首页生效。
+                </p>
+              {/if}
+            </fieldset>
+            <fieldset
+              id="launch-config-attention-fieldset"
+              class="grid min-w-0 gap-2"
+            >
+              <legend class="mb-2 text-sm font-medium">
+                完成与介入提醒 <span class="font-normal text-muted-foreground"
+                  >可选</span
+                >
+              </legend>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  id="launch-config-attention-default"
+                  bind:checked={defaultAttention}
+                  onCheckedChange={(checked) => {
+                    if (!checked) {
+                      void tick().then(() => {
+                        document
+                          .getElementById("launch-config-attention-fieldset")
+                          ?.scrollIntoView({
+                            block: "nearest",
+                            behavior: "smooth",
+                          });
+                      });
+                    }
+                  }}
+                  aria-describedby="launch-config-attention-help"
+                />
+                <Label for="launch-config-attention-default"
+                  >跟随全局默认<span class="sr-only">（完成与介入提醒）</span
+                  ></Label
+                >
+              </div>
+              {#if defaultAttention}
+                <p
+                  id="launch-config-attention-help"
+                  class="text-xs text-muted-foreground"
+                >
+                  使用服务端全局提醒配置；新建会话按「状态协议 (OSC 7501) &gt;
+                  Agent 事件 &gt; 桌面通知 &gt;
+                  终端响铃」优先级触发完成与介入提醒。
+                </p>
+              {:else}
+                <div class="grid min-w-0 gap-3 pt-1">
+                  <div class="grid gap-1.5">
+                    <Label for="launch-config-attention-mode">提醒范围</Label>
+                    <SegmentedControl.Root
+                      id="launch-config-attention-mode"
+                      aria-label="提醒范围"
+                      size="form"
+                      wrap
+                      bind:value={attentionMode}
+                    >
+                      {#each LAUNCH_ATTENTION_MODE_OPTIONS as option (option.value)}
+                        <SegmentedControl.Item value={option.value}>
+                          {option.label}
+                        </SegmentedControl.Item>
+                      {/each}
+                    </SegmentedControl.Root>
+                    <p class="text-xs text-muted-foreground">
+                      {attentionModeDescription}
+                    </p>
+                  </div>
+                  {#if attentionMode !== "off"}
+                    <div class="grid gap-2">
+                      <span class="text-xs font-medium text-foreground"
+                        >信号来源</span
+                      >
+                      <div class="grid gap-2 sm:grid-cols-2">
+                        <div class="flex items-center gap-2">
+                          <Checkbox
+                            id="launch-config-attention-program-status"
+                            bind:checked={attentionProgramStatus}
+                          />
+                          <Label for="launch-config-attention-program-status"
+                            >状态协议 (OSC 7501)</Label
+                          >
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <Checkbox
+                            id="launch-config-attention-agent-protocol"
+                            bind:checked={attentionAgentProtocol}
+                          />
+                          <Label for="launch-config-attention-agent-protocol"
+                            >Agent 事件 (Warp 协议)</Label
+                          >
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <Checkbox
+                            id="launch-config-attention-notify"
+                            bind:checked={attentionNotify}
+                          />
+                          <Label for="launch-config-attention-notify"
+                            >桌面通知 (OSC 9 / 777)</Label
+                          >
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <Checkbox
+                            id="launch-config-attention-bell"
+                            bind:checked={attentionBell}
+                          />
+                          <Label for="launch-config-attention-bell"
+                            >终端响铃 (BEL)</Label
+                          >
+                        </div>
+                      </div>
+                      <p
+                        id="launch-config-attention-help"
+                        class="text-xs text-muted-foreground"
+                      >
+                        优先级：状态协议 (OSC 7501) &gt; Agent 事件 &gt;
+                        桌面通知 &gt;
+                        终端响铃。高优先级信号生效时自动忽略低优先级信号；若某工具的
+                        OSC 7501 存在子任务误报，可关闭该项以回退到 Agent 事件。
+                      </p>
+                    </div>
+                  {/if}
+                  {#if attentionMode === "all"}
+                    <div class="grid min-w-0 gap-4 sm:grid-cols-2">
+                      <div class="grid gap-2">
+                        <Label for="launch-config-attention-min-turn"
+                          >最短回合耗时（秒）</Label
+                        >
+                        <Input
+                          id="launch-config-attention-min-turn"
+                          type="number"
+                          min={LAUNCH_ATTENTION_MIN_TURN_MIN}
+                          max={LAUNCH_ATTENTION_MIN_TURN_MAX}
+                          step={1}
+                          bind:value={attentionMinTurnSeconds}
+                          aria-invalid={attentionMinTurnInvalid}
+                          aria-describedby={draft.errors.attention
+                            ? "launch-config-attention-threshold-help launch-config-attention-error"
+                            : "launch-config-attention-threshold-help"}
+                        />
+                      </div>
+                      <div class="grid gap-2">
+                        <Label for="launch-config-attention-done-delay"
+                          >完成确认延迟（秒）</Label
+                        >
+                        <Input
+                          id="launch-config-attention-done-delay"
+                          type="number"
+                          min={LAUNCH_ATTENTION_DONE_DELAY_MIN}
+                          max={LAUNCH_ATTENTION_DONE_DELAY_MAX}
+                          step={1}
+                          bind:value={attentionDoneDelaySeconds}
+                          aria-invalid={attentionDoneDelayInvalid}
+                          aria-describedby={draft.errors.attention
+                            ? "launch-config-attention-threshold-help launch-config-attention-error"
+                            : "launch-config-attention-threshold-help"}
+                        />
+                      </div>
+                    </div>
+                    {#if draft.errors.attention}<p
+                        id="launch-config-attention-error"
+                        role="alert"
+                        class="text-xs text-destructive"
+                      >
+                        {draft.errors.attention}
+                      </p>{/if}
+                    <p
+                      id="launch-config-attention-threshold-help"
+                      class="text-xs text-muted-foreground"
+                    >
+                      忽略过短的回合，或在完成状态保持稳定后再提醒，减少子任务与后台命令造成的抢跑误报。
+                    </p>
+                  {/if}
+                </div>
+              {/if}
+            </fieldset>
+            {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
           </fieldset>
-          {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
-        </fieldset>
-      {/if}
-      <Dialog.Footer>
-        <Button
-          type="button"
-          variant="outline"
-          onclick={() => {
-            open = false;
-          }}>取消</Button
-        >
-        {#if !loadError}<Button
-            type="submit"
-            disabled={loading || busy || !draft.ok}
-            >{busy ? "正在保存…" : "保存"}</Button
-          >{/if}
-      </Dialog.Footer>
+        {/if}
+      </div>
+      <div class="shrink-0 border-t bg-muted/30 px-5 py-3">
+        <Dialog.Footer>
+          <Button
+            type="button"
+            variant="outline"
+            onclick={() => {
+              open = false;
+            }}>取消</Button
+          >
+          {#if !loadError}<Button
+              type="submit"
+              disabled={loading || busy || !draft.ok}
+              >{busy ? "正在保存…" : "保存"}</Button
+            >{/if}
+        </Dialog.Footer>
+      </div>
     </form>
   </Dialog.Content>
 </Dialog.Root>

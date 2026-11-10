@@ -90,6 +90,10 @@ type actor struct {
 	// sendAfterCancel makes the end of a turn cancelled by send-now send
 	// the queue's head instead of pausing.
 	sendAfterCancel bool
+	// attentionPolicy configures notification behavior on the chat side.
+	attentionPolicy session.AttentionPolicy
+	// doneDelayTimer delays latching done attention when DoneDelay > 0.
+	doneDelayTimer *time.Timer
 	// attention is the latched turn-end attention (done or error); pending
 	// requests take precedence over it.
 	attention *session.Attention
@@ -170,7 +174,7 @@ type pending struct {
 	answer chan Answer
 }
 
-func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side Side) *actor {
+func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side Side, policy *session.AttentionPolicy) *actor {
 	_, unsupported := cmd.ACPArgv()
 	if unsupported == nil {
 		unsupported = []string{}
@@ -179,6 +183,10 @@ func newActor(s *Service, cmd agentprofile.Command, cwd, configID string, side S
 		svc: s, cmd: cmd, cwd: cwd, configID: configID,
 		inbox: make(chan func(), inboxSize), quit: make(chan struct{}),
 		side: side, state: StateActive, agentCwd: cwd,
+		attentionPolicy: session.DefaultAttentionPolicy(),
+	}
+	if policy != nil {
+		a.attentionPolicy = *policy
 	}
 	a.probeCtx, a.probeCancel = context.WithCancel(context.Background())
 	a.chat = ChatState{
@@ -202,8 +210,16 @@ func (a *actor) run() {
 	}
 }
 
+func (a *actor) stopDoneDelayTimer() {
+	if a.doneDelayTimer != nil {
+		a.doneDelayTimer.Stop()
+		a.doneDelayTimer = nil
+	}
+}
+
 // stopTimers stops the probe timers and the running probes.
 func (a *actor) stopTimers() {
+	a.stopDoneDelayTimer()
 	if a.probe.timer != nil {
 		a.probe.timer.Stop()
 		a.probe.timer = nil
@@ -298,6 +314,7 @@ func (a *actor) flush() {
 	}
 	a.dirty = false
 	if a.side != SideACP {
+		a.stopDoneDelayTimer()
 		a.attention = nil
 	}
 	if a.side != SideTUI || a.state != StateActive {
@@ -364,6 +381,9 @@ func (a *actor) overlay() *session.Overlay {
 // request (permission, or question for a form), else the latched turn-end
 // attention.
 func (a *actor) currentAttention() *session.Attention {
+	if a.attentionPolicy.Mode == session.AttentionModeOff {
+		return nil
+	}
 	if len(a.requests) > 0 {
 		p := a.requests[0]
 		kind := attentionkind.Permission
@@ -378,10 +398,44 @@ func (a *actor) currentAttention() *session.Attention {
 // clearAttention drops the latched turn-end attention: the user sent a
 // prompt or answered a request.
 func (a *actor) clearAttention() {
+	a.stopDoneDelayTimer()
 	if a.attention != nil {
 		a.attention = nil
 		a.dirty = true
 	}
+}
+
+// scheduleOrLatchDone latches done attention when allowed by attentionPolicy
+// (Mode == all and elapsed turn duration >= MinTurn), applying DoneDelay when
+// configured.
+func (a *actor) scheduleOrLatchDone(startedAt *time.Time, now time.Time) {
+	a.stopDoneDelayTimer()
+	if a.attentionPolicy.Mode == session.AttentionModeUrgent || a.attentionPolicy.Mode == session.AttentionModeOff {
+		return
+	}
+	if a.attentionPolicy.MinTurn > 0 && startedAt != nil && now.Sub(*startedAt) < a.attentionPolicy.MinTurn {
+		return
+	}
+	if a.attentionPolicy.DoneDelay <= 0 {
+		a.attention = &session.Attention{Kind: attentionkind.Done, Source: session.SourceAgent, Since: now}
+		a.dirty = true
+		return
+	}
+	var timer *time.Timer
+	timer = time.AfterFunc(a.attentionPolicy.DoneDelay, func() {
+		a.post(func() {
+			if a.doneDelayTimer != timer {
+				return
+			}
+			a.doneDelayTimer = nil
+			if a.side != SideACP || a.state != StateActive || a.turn != nil || len(a.requests) > 0 || a.attention != nil {
+				return
+			}
+			a.attention = &session.Attention{Kind: attentionkind.Done, Source: session.SourceAgent, Since: time.Now().UTC()}
+			a.dirty = true
+		})
+	})
+	a.doneDelayTimer = timer
 }
 
 // emit stores events in the log, keeping the replaceable state they carry.
@@ -760,6 +814,7 @@ func (a *actor) openRequest(p *pending) {
 		return
 	}
 	a.requests = append(a.requests, p)
+	a.stopDoneDelayTimer()
 	a.syncRequests()
 	a.tr.breakMessage()
 	req := p.req
@@ -987,10 +1042,13 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 		if running {
 			a.watchBackground()
 		} else {
-			a.attention = &session.Attention{Kind: attentionkind.Done, Source: session.SourceAgent, Since: now}
+			a.scheduleOrLatchDone(a.chat.Turn.StartedAt, now)
 		}
 	case acp.StopRefusal, StopError, StopAuthRequired:
-		a.attention = &session.Attention{Kind: attentionkind.Error, Source: session.SourceAgent, Since: now}
+		a.stopDoneDelayTimer()
+		if a.attentionPolicy.Mode != session.AttentionModeOff {
+			a.attention = &session.Attention{Kind: attentionkind.Error, Source: session.SourceAgent, Since: now}
+		}
 	}
 	switch {
 	case a.sendAfterCancel:

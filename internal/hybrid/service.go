@@ -236,6 +236,9 @@ type CreateInput struct {
 	// not also type the message into the PTY.
 	InitialPrompt     func(id string) (string, error)
 	InitialPromptSent *bool
+	// Attention configures completion and intervention notifications for both
+	// sides of the hybrid session. Nil uses the global default policy.
+	Attention *session.AttentionPolicy
 }
 
 // CheckCreate makes the checks of a Create of in before anything exists:
@@ -309,12 +312,15 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	if err != nil {
 		return nil, err
 	}
-	a := newActor(s, cmd, cwd, in.ConfigID, side)
+	a := newActor(s, cmd, cwd, in.ConfigID, side, in.Attention)
 	// The shell shows the terminal command, with the options the profile
 	// injects (OpenCode's --standalone); the record keeps the config's argv.
 	shell, err := s.manager.CreateShell(session.ShellInput{
-		CreateInput: session.CreateInput{Cwd: cwd, Cmd: cmd.TUIArgv(), Name: in.Name, Env: in.Env, ConfigID: in.ConfigID, Cols: in.Cols, Rows: in.Rows},
-		Overlay:     a.overlay(),
+		CreateInput: session.CreateInput{
+			Cwd: cwd, Cmd: cmd.TUIArgv(), Name: in.Name, Env: in.Env, ConfigID: in.ConfigID,
+			Cols: in.Cols, Rows: in.Rows, Attention: in.Attention,
+		},
+		Overlay: a.overlay(),
 	}, a)
 	if err != nil {
 		return nil, shellError(err)

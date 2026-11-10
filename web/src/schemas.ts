@@ -257,6 +257,20 @@ export const PreviewSettingsSchema = z.object({
 });
 export type PreviewSettings = z.infer<typeof PreviewSettingsSchema>;
 
+export const AttentionModeSchema = z.enum(["all", "urgent", "off"]);
+export type AttentionMode = z.infer<typeof AttentionModeSchema>;
+
+export const AttentionSettingsSchema = z.object({
+  mode: AttentionModeSchema,
+  programStatus: z.boolean(),
+  agentProtocol: z.boolean(),
+  notify: z.boolean(),
+  bell: z.boolean(),
+  minTurnSeconds: z.number().int().min(0).max(300),
+  doneDelaySeconds: z.number().int().min(0).max(60),
+});
+export type AttentionSettings = z.infer<typeof AttentionSettingsSchema>;
+
 // Whether a command can have a chat view, computed by the server from its
 // built-in agent profiles; reason is a stable code.
 export const ChatSupportSchema = z.object({
@@ -290,6 +304,7 @@ const launchConfigFields = {
     .optional(),
   cmd: z.array(z.string()).min(1),
   preview: PreviewSettingsSchema.nullable().optional(),
+  attention: AttentionSettingsSchema.nullable().optional(),
   chat: z.boolean(),
   chatSupport: ChatSupportSchema,
   createdAt: z.iso.datetime({ offset: true }),
