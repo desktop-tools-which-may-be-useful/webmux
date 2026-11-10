@@ -2,9 +2,9 @@
 
 ## Q. 混合会话（聊天 ↔ 终端）
 
-- **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 或 QoderCN 会话能在聊天视图与终端之间切换。
+- **US-Q01 开启混合模式**：作为使用者，我希望在启动配置上勾选混合模式，以便之后用这条配置启动的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder、QoderCN 或 Kimi 会话能在聊天视图与终端之间切换。
   验收要点：
-  - 新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder 与 QoderCN 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
+  - 新安装预置的 OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder、QoderCN 与 Kimi 配置已勾选混合模式，已有 `launch-configs.json` 不被改写；
   - 设置页编辑器提供“混合模式（聊天 ↔ 终端）”勾选框，可用性只取服务端判定（打开时用配置的 `chatSupport`，改命令后去抖查询 `POST /api/launch-configs/chat-support`）；线上字段为 `chat`/`chatSupport`，请求体中的旧字段 `hybrid`/`hybridSupport` 返回 400；
   - 不可用时禁用并显示原因：
     - 未识别的 agent、命令写法、会话库或目录参数、非交互参数；
@@ -34,15 +34,17 @@
     - 已有 agent 会话 ID：
       - Codex 取自写锁；Antigravity CLI 由注入的会话级 `--settings` `title` 钩子经 `OSC 7501` 子记录上报 36 字符 UUID；
       - Claude 取自 `<CLAUDE_CONFIG_DIR>/sessions/<pid>.json`，采用前核对 PID、UUID、规范化 cwd、进程启动标识与 PID domain，失效时退回 cwd + 启动时间的 `session/list` 候选，多个候选时让用户选择；
+      - Kimi 不把 OSC 7501 子记录当作会话 ID，使用 cwd + 启动时间的 `session/list` 候选，`session_` 前缀 ID 原样保留，多个候选时让用户选择；
       - 首条消息前即使已有注册 UUID，list 不含可加载会话仍不可切换；
     - 会话列表能查到；
     - 未被其他会话占用；
   - “聊天 | 终端”的下划线平滑移向当前选择，切换中仍显示真实进度；目标内容准备好后短暂淡入，减少动态效果时直接显示，不以动画结束代替连接就绪；
-  - TUI 在回合中时先发中断键并等待空闲（Claude Code 与 Antigravity CLI 为一次 Esc；Codex 启动阶段的“工作中”不算回合，Claude 无启动静默期），10 秒后可选继续等待、强制切换或取消（强制切换的损失说明取自服务端 `forceSwitchNote`，由各 agent 适配器提供）；
+  - TUI 在回合中时先发中断键并等待空闲（Claude Code、Antigravity CLI 与 Kimi 为一次 Esc；Codex 启动阶段的“工作中”不算回合，Claude 无启动静默期），10 秒后可选继续等待、强制切换或取消（强制切换的损失说明取自服务端 `forceSwitchNote`，由各 agent 适配器提供）；
   - 进入目标端前确认 TUI 进程组已退出；
   - 聊天视图回放完整历史，模型等配置与切换前一致：
     - 按档案补齐 omp 的 mode、Antigravity CLI 的 model 与 thought_level，以及 Codex 的模式、模型、推理强度；Antigravity CLI 与 Codex 首次切换按启动参数推导配置；
     - Claude 首次从 argv 推导 model/effort/mode，冷 load 与 resume 后重应用 model/effort，mode 保留连接器从 transcript 恢复的实际值，回退显示实际配置与通知；
+    - Kimi 首次从 argv 推导 model/mode，冷 load 与 resume 后只重应用 mode，model 与 thinking 由 Kimi 保留；
   - 会话被 webmux 之外的 Codex 客户端或被有效注册记录识别的 Claude 进程占用时回到终端并提示 `occupied_external`，当前/退出/陈旧 Claude 记录不误报，来源不可读时仅保留内部检测且不保证发现所有外部写者；
   - Claude 注册读取有频率/大小/条目上限，普通会话不扫描，路径、PID、启动标识、记录正文与凭据不进入客户端负载、混合记录或日志；
   - 已附着的终端以 4409 断开。
@@ -50,7 +52,7 @@
   验收要点：
   - 回合进行中先确认，再取消回合并把挂起的请求答复为取消；
   - 排队中未发送的消息合并后退回发起设备的草稿，其他设备只收到提示，不自动发给 TUI；
-  - agent 支持时 `session/close` 后结束 ACP 进程并等待退出，再以恢复命令在同一会话 ID 下启动新运行代际（Claude 为 `--resume <id>`，Antigravity CLI 为 `--conversation <id>`）；
+  - agent 支持时 `session/close` 后结束 ACP 进程并等待退出，再以恢复命令在同一会话 ID 下启动新运行代际（Claude 为 `--resume <id>`，Antigravity CLI 为 `--conversation <id>`，Kimi 为 `kimi --session <id>`）；
   - Claude 的 cancel 只中断当前回合，后台 Bash 或子任务可能存活，切换须终止连接器并等待受管后代退出，不保证任意自行 daemonize 的进程已清理；
   - 切换期间显示“中断、退出、启动、连接终端”进度，直到新运行在本页输出首屏（最多 10 秒）才淡入终端，不显示空白终端；
   - 页面列出恢复时未保留的参数；
@@ -98,6 +100,7 @@
   - 打开面板时从齿轮位置展开轮廓，文字与控件不缩放；系统启用“减少动态效果”时直接显示，快速关闭再打开也不残留裁切；
   - 变更经 `session/set_config_option` 生效并在所有设备同步，取值被记录用于切换与恢复后补齐；手机面板的下拉与开关只显示已确认的值，保存失败时保留原值并在面板内提示；
   - Claude 首次从 `--model`、`--effort` 与权限 argv 播种，`manual` 映射为 ACP `default`、危险跳过权限优先映射 `bypassPermissions`，不支持的值列入不生效参数；
+  - Kimi 首次从 `--model`、`--auto`、`--yolo` 与 `--plan` 播种 model/mode，plan 优先；`--skills-dir` 与 `--add-dir` 列入不生效参数，冷恢复只重应用 mode；冷恢复或手动选择已生效模式时的 `Already in <mode> mode` 按幂等成功处理；
   - 冷 `session/load` 与 `session/resume` 后重应用记录的 model/effort，mode 以 transcript 恢复值为准，不回写过期 argv，回退显示实际值与通知；
   - 输入 `/` 打开随输入过滤的命令菜单。
   - 消息框为空且没有附件时，用 ↑ 找回本会话已发送的提示词文字。光标在文字开头时按 ↑ 查看更早的提示词，在末尾按 ↓ 查看更新的提示词，越过最新一条时清空。浏览时收起斜杠命令菜单，编辑后按正常草稿处理，保留光标方向键与输入法行为。
@@ -109,8 +112,8 @@
   - `refuse` 在不能立即发送时返回 409 `busy` 且不入队；`now` 取消正在运行的回合后把这条提示排到队首并立即发送，不留队列项，语义同队列的立即发送；
   - 队列可编辑、上移、删除、二次确认后立即发送；展开与收起平滑改变高度，上移和删除在服务端确认后让其余行平滑就位；减少动态效果时直接更新，关闭中的内容不可聚焦；
   - 回合被停止、出错或拒绝时队列暂停并提示继续或清空；
-  - 按 `clientRequestId` 去重，重试不重复发送；
-  - 只有档案与 agent 都声明支持（omp、Codex、Claude Code）且回合进行中时，输入文字后按 Ctrl/Cmd+Enter 才会插话（界面没有插话按钮），OpenCode 与 Antigravity CLI 没有插话；
+  - 按 `clientRequestId` 去重，重试不重复发送；浏览器草稿和 API 向混合或普通 Kimi TUI 提交文本与 Enter 时在同一回执内分隔 200ms，空正文不等待，延迟期间保持输入锁；
+  - 只有档案与 agent 都声明支持（omp、Codex、Claude Code）且回合进行中时，输入文字后按 Ctrl/Cmd+Enter 才会插话（界面没有插话按钮），OpenCode、Antigravity CLI 与 Kimi 没有插话；
   - 回合进行中且没有文字与附件时，发送键变为停止键（名称“停止”），点击停止当前回合；有内容时保持“加入排队”；
   - Codex 与 Claude 的插话在回合已结束时返回 `promptRequired`（Claude 可为 `noRunningTurn`），这条消息排到队首作为下一回合发送，不产生 webmux 不知道的回合。
 - **US-Q09 聊天端提醒**：作为离开页面的使用者，我希望聊天端的回合状态像终端会话一样提醒我，以便及时回来批准或继续。
