@@ -1530,3 +1530,58 @@ test("document scroll mode scrolls the document, pins the dock, and preserves re
     await page.viewport(1024, 900);
   }
 });
+
+test("recalls sent text and slash commands without taking over the caret", async () => {
+  const socket = await open();
+  socket.frame(
+    snapshot(
+      chatState({
+        commands: [{ name: "compact", description: "压缩上下文" }],
+      }),
+    ),
+  );
+  const wrapped = "检查测试 ".repeat(240).trim();
+  socket.frame({
+    type: "events",
+    generation: "g1",
+    items: events(
+      {
+        kind: "message.append",
+        message: { messageId: "u1", role: "user", text: wrapped },
+      },
+      {
+        kind: "message.append",
+        message: { messageId: "a1", role: "agent", text: "测试通过" },
+      },
+      {
+        kind: "message.append",
+        message: { messageId: "u2", role: "user", text: "/compact" },
+      },
+    ),
+  });
+  const input = page.getByRole("textbox", { name: "消息" });
+  await expect
+    .element(page.getByText("/compact", { exact: false }))
+    .toBeVisible();
+  await input.click();
+  await userEvent.keyboard("{ArrowUp}");
+  await expect.element(input).toHaveValue("/compact");
+  await expect
+    .element(page.getByRole("listbox", { name: "命令" }))
+    .not.toBeInTheDocument();
+  await userEvent.keyboard("{ArrowUp}");
+  await expect.element(input).toHaveValue(wrapped);
+  (input.element() as HTMLTextAreaElement).setSelectionRange(200, 200);
+  await userEvent.keyboard("{ArrowUp}");
+  await expect.element(input).toHaveValue(wrapped);
+  (input.element() as HTMLTextAreaElement).setSelectionRange(
+    wrapped.length,
+    wrapped.length,
+  );
+  await userEvent.keyboard("{ArrowDown}{ArrowDown}");
+  await expect.element(input).toHaveValue("");
+  await userEvent.keyboard("{ArrowUp}");
+  await input.fill("未发送的草稿");
+  await userEvent.keyboard("{ArrowUp}{ArrowDown}");
+  await expect.element(input).toHaveValue("未发送的草稿");
+});
