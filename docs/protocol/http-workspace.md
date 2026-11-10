@@ -58,9 +58,10 @@
 
 仓库快照带 `initInstruction`（未设置时为空字符串），保存在 `repositories.json` 的登记记录中；旧清单缺字段视为没有指令。它是一段模板：`{{名称}}` 在创建会话带 `useInitInstruction` 时展开为同名快捷指令的正文（见 [创建会话](http-session-create.md#首条提示与初始化指令)），其余文字原样发送，不会被执行。
 
-## 在新 worktree 中创建会话
+## 从快速开始创建会话
 
-快速开始没有独立接口：新建 worktree、以聊天视图启动 agent、应用配置与权限模式并发送首条提示，都由一次 `POST /api/sessions`（请求体带 `newWorktree`、`view`、`prompt` 等）完成。
+快速开始没有独立接口：新建 worktree 或选择已有工作树、以聊天视图启动 agent、应用配置与权限模式并发送首条提示，都由一次 `POST /api/sessions` 完成。
+新建 worktree 时请求体带 `newWorktree`；选择已有工作树时带 `workspace`（另有 `view`、`prompt` 等字段）。
 请求与失败步骤、初始化指令展开、`POST /api/uploads` 与 `POST /api/launch-configs/{id}/options` 见 [创建会话](http-session-create.md)。
 
 ## 代码工作区

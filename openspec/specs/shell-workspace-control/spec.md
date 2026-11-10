@@ -161,13 +161,13 @@ Web 端主页按服务端设置 `homeWorktrees` 决定显示哪些 worktree（�
 
 ### Requirement: 端口转发命令
 
-- `webmux forward ls [--json]` SHALL 列出转发：端口、标签、状态、来源会话，以及本机可打开的转发地址。
+- `webmux forward ls [--json]` SHALL 列出转发：端口、标签、状态与来源会话。
 - `webmux forward add PORT [--label TEXT] [--session SESSION] [--no-compat]` SHALL 调用新增接口。
-  `--session` 接受 `self`，`--no-compat` 关闭全部开发服务器兼容选项。成功后 SHALL 输出转发地址。
+  `--session` 接受 `self`，`--no-compat` 关闭全部开发服务器兼容选项。成功后 SHALL 输出转发端口。
 - `webmux forward rm PORT` SHALL 移除转发。
 - 端口非法、指向 WebMux 自己的端口或已经转发时，SHALL 输出服务端原因并以 1 结束。
 
 #### Scenario: agent 启动开发服务器后开转发
 
 - **WHEN** 会话内的 agent 启动 Vite 后执行 `webmux forward add 5173 --session self --label web`
-- **THEN** 所有浏览器的转发列表出现 5173，CLI 输出 `/forward/5173/` 的完整地址
+- **THEN** 所有浏览器的转发列表出现 5173，CLI 输出端口 5173

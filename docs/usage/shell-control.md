@@ -50,7 +50,7 @@ webmux get abcd2345 --json               # 另一个会话的完整详情（Sess
 branch=$(webmux get --field worktree.branch)   # 不用 jq 取单个字段
 ```
 
-详情不包含 Token 或启动环境变量的值；临时文件夹只在已经存在时报告，`get` 不会创建它。
+详情不包含 Token 或启动环境变量的值；临时文件夹只在已经存在时报告，`get` 不会创建它。文本输出不显示会话链接，需要链接时用 `webmux open <ID>`；`--json` 仍按 `SessionDetails` 返回服务端的 `link` 字段。
 
 ## 父会话与标签
 
