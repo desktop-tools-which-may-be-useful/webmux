@@ -712,10 +712,11 @@ func (a *agent) prompt(p acp.PromptRequest) (any, error) {
 		return nil, err
 	}
 	sid := p.SessionID
-	reply, stop := a.turn(ctx, sid, text)
+	replyID := newMessageID()
+	reply, stop := a.turn(ctx, sid, text, replyID)
 	if reply != "" {
 		a.mu.Lock()
-		ls.data.Messages = append(ls.data.Messages, message{ID: newMessageID(), Role: "agent", Text: reply})
+		ls.data.Messages = append(ls.data.Messages, message{ID: replyID, Role: "agent", Text: reply})
 		err = a.st.save(ls.data)
 		a.mu.Unlock()
 	}
@@ -733,7 +734,7 @@ func (a *agent) pause(ctx context.Context) bool {
 	}
 }
 
-func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string) {
+func (a *agent) turn(ctx context.Context, sid, text, id string) (reply, stop string) {
 	if a.cfg.profile == "agy" {
 		// Like real agy acp, echo the user's prompt as a user_message_chunk
 		// without a messageId at the start of the active turn.
@@ -882,7 +883,6 @@ func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string)
 	}
 
 	reply = "echo: " + text + extra
-	id := newMessageID()
 	half := len(reply) / 2
 	for _, piece := range []string{reply[:half], reply[half:]} {
 		if !a.pause(ctx) {

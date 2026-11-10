@@ -576,6 +576,7 @@ func (a *actor) returnQueue(op *switchOp) string {
 // switchedToTUI finishes a switch to the terminal; every device is told
 // the queued prompts went back to the device that switched.
 func (a *actor) switchedToTUI(op *switchOp, sid, draft string, dropped []string) {
+	a.recordTUIGap()
 	a.side = SideTUI
 	if n := len(op.queued); n > 0 {
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeInfo, Text: strconv.Itoa(n) + " 条排队消息已退回发起切换的设备的输入框"}})

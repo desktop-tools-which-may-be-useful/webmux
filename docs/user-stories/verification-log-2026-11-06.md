@@ -228,3 +228,12 @@
 - 兼容：Go 1.26.10 / modernc.org/sqlite v1.62.0；Linux amd64 与 macOS arm64 均以 `CGO_ENABLED=0` 交叉编译通过。
 - 体积：相同前端与 `-trimpath -ldflags='-s -w'` 下，Linux amd64 从 50,610,338 到 54,853,794 字节，增加 4,243,456 字节（约 4.05 MiB）。
 - 限制：未在原生 macOS 运行 SQLite；完整端到端交接尚未实现；本机继承的 `CODEX_PATH` 会覆盖 fake agent，回归测试需清除此变量。
+
+## 2026-11-11：Handoff 02 完整 Activity 与 replay 对账（US-Q05、US-Q12）
+
+- 范围：UI 截断前的规范化消息、命令输入/退出码/输出、文件修改、计划、压缩、权限结果、错误、回合与切换；附件只存元数据和来源引用。
+- 存储：64 KiB 分块追加，快照保留相同前缀；完成后事务发布 position；长项按 UTF-8 字节分页；半条崩溃尾部保持未提交并标 gap。
+- 对账：ProviderThread + provider item ID，以及无 ID 的完整项有序前缀；native ID 改变、乱序、缺失或未知无 ID 内容保持 reconcile_required，TUI 缺口不被猜测性删除。
+- 验证：存储与 recorder 的针对性 Go race 测试通过，含大于 256 KiB 的消息/工具、重复文本、快照尾部、后台工具跨回合归属、v1 升级和实际 fake-agent 冷 load 去重。
+- 基准：Linux amd64 / Go 1.26.10，128 次 4 KiB 追加约 67.9 μs/op、60.31 MB/s、7,279 B/op；这是临时目录中的单次样本，不代表生产磁盘或全套性能验收。
+- 限制：当前提供服务层读取，REST 与浏览器历史查询在下一层接入；未在原生 macOS 执行本层测试，未验证真实 provider 的完整回放能力。

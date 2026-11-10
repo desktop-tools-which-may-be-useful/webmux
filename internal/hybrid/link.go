@@ -201,7 +201,10 @@ func (a *actor) openACP(epoch int, sid, cwd string, resume bool, beforeLoad func
 		r, err = link.conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionID: sid, Cwd: cwd})
 		res.config, res.resumed = r.ConfigOptions, true
 	} else {
-		if beforeLoad != nil && !beforeLoad() {
+		if beforeLoad == nil {
+			beforeLoad = func() bool { return a.sync(a.beginActivityReplay) }
+		}
+		if !beforeLoad() {
 			_ = link.stop()
 			return openResult{fail: &failure{err: errStopped, public: errStopped.Error()}}
 		}
@@ -318,6 +321,7 @@ func offers(o acp.ConfigOption, value string) bool {
 // installLink makes an opened connection the session's: versions,
 // steering and the agent's options.
 func (a *actor) installLink(link *acpLink, init acp.InitializeResponse, config []acp.ConfigOption, notes []string) {
+	a.finishActivityReplay()
 	a.link = link
 	a.agentSessionID = link.sessionID
 	a.chat.ConnectorMissing = nil
@@ -365,6 +369,7 @@ func (a *actor) outdated(reported, agentVersion string) []Outdated {
 
 // restartLog begins a new log generation for a session/load replay.
 func (a *actor) restartLog() {
+	a.beginActivityReplay()
 	a.log.restart()
 	a.tr = translator{modelChoiceValues: a.cmd.Profile.ModelChoiceValues}
 	a.chat.Plan, a.chat.Usage = nil, nil

@@ -14,6 +14,7 @@ import (
 	"github.com/rainchan/webmux/internal/acp"
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/attentionkind"
+	"github.com/rainchan/webmux/internal/conversation"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -78,6 +79,7 @@ type actor struct {
 	agentCwd string
 	chat     ChatState
 	tr       translator
+	activity activityRecorder
 	// epoch numbers ACP connections; updates and requests of an older one
 	// are ignored.
 	epoch       int
@@ -441,6 +443,16 @@ func (a *actor) scheduleOrLatchDone(startedAt *time.Time, now time.Time) {
 // emit stores events in the log, keeping the replaceable state they carry.
 func (a *actor) emit(events ...Event) {
 	for _, e := range events {
+		if e.Kind == EventResolved && e.Resolved != nil {
+			if err := a.writeActivity(conversation.ActivityInput{LocalKey: a.activityKey("permission"), Kind: "permission", Status: e.Resolved.Outcome, Text: e.Resolved.OptionID}); err != nil {
+				a.activityFailure()
+			}
+		}
+		if e.Kind == EventMarker && e.Marker != nil {
+			if err := a.writeActivity(conversation.ActivityInput{LocalKey: a.activityKey("marker"), Kind: "marker", Status: e.Marker.Kind}); err != nil {
+				a.activityFailure()
+			}
+		}
 		toolsOnly := false
 		switch e.Kind {
 		case EventPlan:
@@ -667,6 +679,7 @@ func (a *actor) started(started chan<- error, res startResult) {
 	a.dirty = true
 	pid, process := res.pid, res.process
 	if res.link == nil {
+		a.recordTUIGap()
 		// A terminal that already exited left the session interrupted.
 		if a.state == StateActive {
 			a.record(true, func(r *Record) { r.PID, r.Process = pid, process })
@@ -783,6 +796,7 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 			return
 		}
 	}
+	a.recordUpdate(n.Update)
 	events := a.tr.update(n.Update)
 	if hidden := a.cmd.Profile.HiddenCommands; len(hidden) > 0 {
 		for i := range events {
@@ -966,6 +980,9 @@ func (a *actor) send(text string, attachments []Attachment, queueItem, titleSour
 	if err != nil {
 		return PromptResult{}, err
 	}
+	if err := a.beginActivityRun(text, attachments); err != nil {
+		return PromptResult{}, err
+	}
 	a.nextTurn++
 	if a.promptTitle {
 		a.promptTitle = false
@@ -1018,6 +1035,7 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	a.work.endTurn()
 	t.cancel()
 	stop, text := stopReason(resp, err)
+	a.finishActivityRun(stop)
 	var rpc *acp.RPCError
 	code := 0
 	if errors.As(err, &rpc) {
