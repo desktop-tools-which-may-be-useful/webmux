@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { observeDevicePixelRatio } from "./terminal-dpr";
 import { holdRepaintsDuringSync } from "./terminal-sync";
 import {
+  onTerminalFontLoad,
   terminalFontFamilyAlt,
   terminalFontFamilyCss,
   terminalLineHeight,
@@ -138,31 +139,7 @@ export function createTerminalRenderer(
   });
   observeSize();
   let remeasureFrame = 0;
-  // Chromium repeats loadingdone for faces that loaded long ago, e.g. on every
-  // window resize. Remeasuring clears the glyph atlas and re-renders the grid
-  // twice, so only a face this terminal has not been measured with counts.
-  // FontFace wrappers are not stable across events; key faces by descriptors.
-  const faceKey = (face: FontFace) =>
-    [
-      face.family,
-      face.style,
-      face.weight,
-      face.stretch,
-      face.unicodeRange,
-    ].join("|");
-  const measured = new Set<string>();
-  document.fonts.forEach((face) => {
-    if (face.status === "loaded") measured.add(faceKey(face));
-  });
-  const remeasure = (event: FontFaceSetLoadEvent) => {
-    let fresh = false;
-    for (const face of event.fontfaces) {
-      const key = faceKey(face);
-      if (measured.has(key)) continue;
-      measured.add(key);
-      fresh = true;
-    }
-    if (!fresh) return;
+  const stopFontLoads = onTerminalFontLoad(() => {
     cancelAnimationFrame(remeasureFrame);
     remeasureFrame = requestAnimationFrame(() => {
       if (disposed) return;
@@ -176,9 +153,14 @@ export function createTerminalRenderer(
           : terminalFontFamilyCss;
       term.options.fontFamily = current ?? terminalFontFamilyCss;
       events.layout();
+      // Rasterizing the late glyphs can add an atlas page during that redraw,
+      // and WebGL shows it only from a later frame. A terminal without focus
+      // (no cursor blink, as on touch devices) may never draw one.
+      remeasureFrame = requestAnimationFrame(() => {
+        if (!disposed) term.refresh(0, term.rows - 1);
+      });
     });
-  };
-  document.fonts.addEventListener("loadingdone", remeasure);
+  });
 
   return {
     term,
@@ -188,7 +170,7 @@ export function createTerminalRenderer(
     dispose() {
       disposed = true;
       cancelAnimationFrame(remeasureFrame);
-      document.fonts.removeEventListener("loadingdone", remeasure);
+      stopFontLoads();
       clearTimeout(timer);
       observer.disconnect();
       stopDpr();

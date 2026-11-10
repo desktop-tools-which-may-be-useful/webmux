@@ -142,3 +142,21 @@
   - 当某文件夹下的运行中会话集合变化时清除该节点的手动折叠覆盖以恢复按内容展开/收起，内容未变化的节点保留用户的手动展开/收起状态。
 - 依据：`WorkbenchTree.test.ts`（11 项）与 `AppShell.test.ts`（17 项）浏览器组件测试通过；`make check`、`pnpm --dir web check:arch` 与 `make docs-check` 通过，并截取桌面（1280×900）、平板（768×800）、手机（390×844）前后对比截图与交互 GIF。
 - 限制：未在移动真机核对；未重新核验其余故事能力。
+
+本次局部核对（2026-11-10）：修复 WebKit（Safari、iPadOS）终端中 omp 等程序的 Nerd Font 图标显示为空白的问题，对应更新 US-D08，不新增故事或改变覆盖索引。
+
+- 原因：图标、制表符与中文切片在终端首次绘制后才按需加载，`font-display: block` 期间 WebGL 字形图集缓存了不可见字形；重绘依赖 `loadingdone` 事件，而 WebKit 没有 `FontFaceSetLoadEvent`，切片加载完成也未派发 `loadingdone`，图集从不重建。桌面 Chromium 正常派发，故只在平板上出现。
+- 范围：
+  - `web/src/fonts.ts` 新增 `onTerminalFontLoad`：每个页面对 `Maple Mono NF CN` 的待加载切片各订阅一次 `FontFace.loaded`，并通知已打开的终端；未加载的切片不持有已关闭的终端；
+  - `terminal-renderer.ts` 以此替换 `loadingdone` 监听，仍清空图集、重新测量并适配；
+  - 重绘后再补一帧 `term.refresh`：重绘大量迟到字形时图集会新增页面，WebGL 要到之后的帧才显示，而触摸设备上终端默认无焦点，没有光标闪烁带来的后续帧。
+- 依据：
+  - omp 18.18.6 Nerd 预设的 217 个私有区码位全部在内置图标与 Powerline 切片的 `unicode-range` 内，排除缺字；
+  - 隔离实例（main 与修复版）+ Playwright WebKit（WPE，WebGL 渲染）输出上述全部码位：
+    - 修复前除前几个字形外全部空白、无 `loadingdone`，轻点终端后仍空白；
+    - 只订阅 `FontFace.loaded` 时非触摸视口正常，触摸视口（`hasTouch`）要等一次交互才显示；
+    - 补一帧刷新后，平板（768×1024）与手机（390×844）触摸视口在明暗主题下无需交互即全部显示，连续 3 次一致；
+  - `TerminalRenderer.test.ts` 新增吞掉 `loadingdone` 后加载未加载切片的回归用例（修复前图集清空 0 次而失败）；终端相关 13 个浏览器测试文件 153 项通过；
+  - `make build`（含 `pnpm --dir web check`）、`check:test`、`lint`、`check:arch`、`make format-check` 与 `make docs-check` 通过。
+  - 使用者在真实 iPad 上打开修复版独立实例（未含补一帧刷新），确认 omp 的 Nerd Font 图标正常显示。
+- 限制：真机只核对了 iPad 上的 omp 图标（该构建尚未补一帧刷新），未覆盖 iPhone 与中文切片的真机表现；未运行全量 E2E 与完整 `make test`。

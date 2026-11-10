@@ -24,3 +24,29 @@ export async function loadTerminalFont(size: number): Promise<void> {
     }),
   ]);
 }
+
+// Icon, box-drawing and CJK slices load on first use, after xterm has already
+// rasterized those cells. WebKit has no FontFaceSetLoadEvent and may never
+// dispatch loadingdone, so each pending terminal face reports its own load.
+// Faces are watched once per page and notify the open terminals, so a slice
+// that never loads does not retain a closed terminal.
+const fontLoadListeners = new Set<() => void>();
+const watchedFaces = new WeakSet<FontFace>();
+const notifyFontLoad = () => {
+  for (const listener of fontLoadListeners) listener();
+};
+
+// Calls `listener` whenever another terminal face finishes loading; returns
+// the unsubscribe function.
+export function onTerminalFontLoad(listener: () => void): () => void {
+  document.fonts.forEach((face) => {
+    if (face.family !== terminalFontFamily || watchedFaces.has(face)) return;
+    watchedFaces.add(face);
+    if (face.status === "loaded" || face.status === "error") return;
+    face.loaded.then(notifyFontLoad, () => {});
+  });
+  fontLoadListeners.add(listener);
+  return () => {
+    fontLoadListeners.delete(listener);
+  };
+}
