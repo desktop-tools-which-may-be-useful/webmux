@@ -349,6 +349,7 @@
             : {}),
         });
         if (outcome.ok) {
+          uploads.commit(attachments);
           store("quickStartSide", startSide);
           quickStartMemory.rememberChoice({
             repositoryId: repository.id,
@@ -367,7 +368,8 @@
           failure = outcome.failure;
           // Before the first prompt the files are still staged and can go
           // again; from then on they belong to the created session.
-          if (outcome.failure.step !== "prompt") uploads.restore(attachments);
+          if (outcome.failure.step === "prompt") uploads.commit(attachments);
+          else uploads.restore(attachments);
           return;
         }
         taken.push(branch);

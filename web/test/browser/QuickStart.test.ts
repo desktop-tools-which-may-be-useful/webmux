@@ -769,9 +769,12 @@ test("narrow screens start compact and expand the composer when focused", async 
     await expect.element(place).not.toBeVisible();
     await expect.element(initCheckbox).not.toBeVisible();
 
-    // Tapping the compact card's outer shell focuses the input and expands it.
+    // The input itself is the pointer and keyboard target; the card is not a
+    // second, non-semantic button containing other interactive controls.
     const card = document.querySelector<HTMLElement>("[data-composer-card]")!;
-    card.click();
+    await input.click();
+    await userEvent.keyboard("键盘");
+    await expect.element(input).toHaveValue("键盘");
     await expect.element(input).toHaveFocus();
     await expect.element(place).toBeVisible();
 

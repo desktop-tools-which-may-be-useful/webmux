@@ -94,7 +94,7 @@ JSON 输出契约见 [控制面 JSON 契约](../protocol/control-json.md#控制�
 - `listen` 用于局域网或 VPN 直连时可设为 `0.0.0.0:7681`。
 - 已持久化的 `token` 可用 `webmux status --json --reveal-token` 查看。
 - 已有配置监听 loopback 且未启用隧道时，`token` 为空表示不认证。
-- 其他监听地址或启用隧道且 `token` 为空时，每次启动临时生成 token，并打印带 `#token=` 的链接。
+- 其他监听地址或启用隧道且 `token` 为空时，每次启动临时生成 token；启动链接与二维码不携带 token，可用 `webmux status --json --reveal-token` 查看。
 - 隧道模式下显式设置的 token 至少 43 字符。
 - `allowed_origins` 的每一项须全小写，不能带路径、末尾斜杠或默认端口（http 的 `:80`、https 的 `:443`），否则启动失败。
 

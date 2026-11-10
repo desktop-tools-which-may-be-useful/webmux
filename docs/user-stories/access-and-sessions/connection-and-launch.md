@@ -24,9 +24,9 @@
   验收要点：
   - 默认仅监听本机回环（127.0.0.1:7681），局域网或可信 VPN 访问可改为 0.0.0.0:7681；
   - 未显式指定配置且默认文件缺失时，首次启动生成并保存 256 位随机 token，非隧道启动不打印该 token，可经本机状态显式查询；
-  - 已有配置的 token 为空且监听地址不是 loopback 时，每次启动生成临时随机 token 并打印带 `#token=` 的本地链接；
+  - 已有配置的 token 为空且监听地址不是 loopback 时，每次启动生成临时随机 token；启动链接与二维码不携带 token，通过 `webmux status --json --reveal-token` 查看；
   - 只有 loopback 且未启用隧道时允许无 token；
-  - 隧道启动仍输出含 token 的链接，持久 token 不因重启失效；
+  - 隧道启动链接与二维码同样不含 token，持久 token 不因重启失效；
   - 监听 loopback 时校验请求 Host（防止无 token 下的 DNS 重绑定），非 loopback 监听（强制要求 token）接受任意合法 Host（如局域网主机名或 Tailscale MagicDNS），并始终校验 Origin（同源、allowed_origins 或受控公网来源）；
   - 认证和来源检查同时覆盖终端与文件、仓库、代码接口。
 - **US-A04 查看服务与能力**：作为部署者，我希望知道服务是否在线、会话数量及 Git/仓库能力是否可用，以便定位连接或环境问题。

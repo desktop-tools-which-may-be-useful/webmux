@@ -76,6 +76,14 @@ type failure struct {
 	public string
 }
 
+type agentCallError struct {
+	text  string
+	cause error
+}
+
+func (e *agentCallError) Error() string   { return e.text }
+func (e *agentCallError) Unwrap() []error { return []error{ErrAgent, e.cause} }
+
 // agentFailure describes a failed ACP call: the requester's error carries
 // the agent's stderr tail, the public text does not.
 func agentFailure(method string, err error, sidecar *session.Sidecar) failure {
@@ -99,7 +107,7 @@ func agentFailure(method string, err error, sidecar *session.Sidecar) failure {
 	if tail := stderrTail(sidecar.Stderr()); tail != "" {
 		full += "\n" + tail
 	}
-	return failure{err: fmt.Errorf("%w: %s: %s", ErrAgent, method, full), public: public}
+	return failure{err: &agentCallError{text: method + ": " + full, cause: err}, public: public}
 }
 
 // connect checks the profile's connector, starts the ACP process under

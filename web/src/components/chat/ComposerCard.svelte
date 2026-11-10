@@ -117,9 +117,7 @@
   {...compactState.containerProps}
 >
   {@render location?.(context)}
-  <!-- The card shows the message box's focus once; the box itself has none.
-       Tapping the resting bar's padding focuses the text box inside. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <!-- The card shows the message box's focus once; the box itself has none. -->
   <div
     bind:this={card}
     data-composer-card
@@ -128,15 +126,6 @@
       compact &&
         "composer-mobile:flex composer-mobile:items-center composer-mobile:gap-1 composer-mobile:p-0.5",
     ]}
-    onclick={(event) => {
-      if (
-        compact &&
-        !disabled &&
-        !(event.target instanceof Element && event.target.closest("button"))
-      ) {
-        textarea?.focus();
-      }
-    }}
   >
     {@render menu?.(context)}
     <ChatAttachmentList {uploads} disabled={uploadsDisabled} />

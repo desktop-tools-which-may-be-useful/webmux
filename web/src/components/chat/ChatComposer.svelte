@@ -113,10 +113,14 @@
     const sent = uploads.take();
     try {
       await actions.send(text, mode, sent);
+      uploads.commit(sent);
       onerror("");
     } catch (err) {
-      // Give the text and attachments back; keep anything typed since.
-      if (!draft.text) drafts.edit(draft, text, text.length);
+      // Keep both the failed message and anything typed while it was sent.
+      const current = draft.text;
+      const restored =
+        text && current ? `${text}\n${current}` : text || current;
+      drafts.edit(draft, restored, text.length);
       uploads.restore(sent);
       onerror(errorMessage(err));
     } finally {

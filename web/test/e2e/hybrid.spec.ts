@@ -17,8 +17,8 @@ import {
 import type { E2EServer } from "./server.mjs";
 
 // Hybrid sessions run the fake agent (internal/acp/testdata/fakeagent), which
-// global-setup puts first on every backend's PATH as omp, opencode, codex,
-// codex-acp, claude, claude-agent-acp and kimi. Its TUI does not echo typing: a line
+// global-setup puts every supported fake agent and connector first on each
+// backend's PATH. Its TUI does not echo typing: a line
 // later run replays the stored conversation, and replies stream as
 // "< echo: text". Its ACP side answers "echo: text" after a thought and a
 // "Read file" tool call. FAKEAGENT_TURN_DELAY paces every streamed piece
@@ -27,7 +27,14 @@ import type { E2EServer } from "./server.mjs";
 type Side = "terminal" | "chat";
 type Options = {
   name?: string;
-  agent?: "omp" | "opencode" | "codex" | "claude" | "kimi";
+  agent?:
+    | "omp"
+    | "opencode"
+    | "codex"
+    | "claude"
+    | "kimi"
+    | "qoder"
+    | "qodercn";
   env?: Record<string, string>;
 };
 
@@ -348,6 +355,8 @@ test.describe("hybrid sessions with the fake agent", () => {
     { start: "chat", agent: "claude" },
     { start: "terminal", agent: "claude" },
     { start: "terminal", agent: "kimi" },
+    { start: "chat", agent: "qoder" },
+    { start: "terminal", agent: "qodercn" },
   ] as const) {
     test(`an ${agent} conversation started on ${start === "chat" ? "chat" : "the terminal"} round-trips with its history on both sides`, async ({
       page,
