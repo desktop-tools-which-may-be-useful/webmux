@@ -113,9 +113,12 @@ func TestKimiResumePatchFailureRollsBack(t *testing.T) {
 	}
 	if _, err := h.switchTo(id, SideTUI); err == nil {
 		t.Fatal("switch with an invalid session event log succeeded")
+	} else if strings.Contains(err.Error(), home) {
+		t.Fatalf("switch error exposed local path: %v", err)
 	}
-	if got := h.chatState(id).Side; got != SideACP {
-		t.Fatalf("side after rollback %s", got)
+	state := h.chatState(id)
+	if state.Side != SideACP || strings.Contains(state.SwitchError, home) || !strings.Contains(state.SwitchError, "准备终端会话失败") {
+		t.Fatalf("state after rollback %+v", state)
 	}
 	chatTurn(t, h, id, "after rollback")
 }

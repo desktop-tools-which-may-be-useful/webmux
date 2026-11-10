@@ -15,8 +15,8 @@ import (
 
 // Agent is one CLI agent that hybrid sessions can move between a terminal
 // UI and an ACP connection. Behaviour that only some agents have is an
-// optional interface (Resumer, ConfigReapplier, Steerer, LockTracker,
-// ForceSwitchNoter); callers type-assert for it.
+// optional interface (Resumer, TUIResumePreparer, ConfigReapplier, Steerer,
+// LockTracker, ProcessRegistry, ForceSwitchNoter); callers type-assert for it.
 type Agent interface {
 	// Profile is the agent's static description; it is read-only.
 	Profile() *Profile

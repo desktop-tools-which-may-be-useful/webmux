@@ -380,7 +380,8 @@ func (a *actor) resumeSide(epoch int, side Side, sid string) resumeResult {
 		argv := a.cmd.TUIArgv()
 		if sid != "" {
 			if err := a.prepareTUIResume(sid); err != nil {
-				return resumeResult{err: fmt.Errorf("%w: %w", ErrAgent, err)}
+				a.svc.log.Warn("hybrid terminal resume preparation failed", "id", a.id, "error", err)
+				return resumeResult{err: fmt.Errorf("%w: 准备终端会话失败", ErrAgent)}
 			}
 			argv, _ = a.cmd.ResumeArgv(sid)
 		}

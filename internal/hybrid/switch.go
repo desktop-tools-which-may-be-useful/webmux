@@ -555,7 +555,7 @@ func (a *actor) runToTUI(op *switchOp, link *acpLink, turnDone chan struct{}, si
 	}
 	if err := a.prepareTUIResume(sid); err != nil {
 		a.svc.log.Warn("hybrid terminal resume preparation failed", "id", a.id, "error", err)
-		a.rollbackToACP(op, sid, failure{err: fmt.Errorf("%w: %w", ErrAgent, err), public: err.Error()})
+		a.rollbackToACP(op, sid, failure{err: fmt.Errorf("%w: 准备终端会话失败", ErrAgent), public: "准备终端会话失败"})
 		return
 	}
 	argv, dropped := a.cmd.ResumeArgv(sid)

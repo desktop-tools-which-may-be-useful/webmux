@@ -2,15 +2,20 @@ package kimi
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+
+	ap "github.com/rainchan/webmux/internal/agentprofile"
 )
 
 const maxSessionWireLine = 32 << 20
+
+var _ ap.TUIResumePreparer = adapter{}
 
 // PrepareTUIResume changes the persisted ACP environment binding to local.
 // Kimi 2.5.2 otherwise restores only the ACP-facing tool registry in the TUI.
@@ -18,8 +23,14 @@ func (adapter) PrepareTUIResume(sessionID string, getenv func(string) string, us
 	if sessionID == "" || sessionID != filepath.Base(sessionID) {
 		return false, fmt.Errorf("invalid Kimi session ID %q", sessionID)
 	}
-	home := getenv("KIMI_CODE_HOME")
+	home := ""
+	if getenv != nil {
+		home = getenv("KIMI_CODE_HOME")
+	}
 	if home == "" {
+		if userHome == "" {
+			return false, errors.New("missing Kimi home directory")
+		}
 		home = filepath.Join(userHome, ".kimi-code")
 	}
 	wire, err := sessionWire(home, sessionID)
@@ -75,9 +86,12 @@ func localizeBinding(wire, sessionID string) (bool, error) {
 		return false, err
 	}
 	temporaryName := temporary.Name()
+	published := false
 	defer func() {
-		_ = temporary.Close()
-		_ = os.Remove(temporaryName)
+		if !published {
+			_ = temporary.Close()
+			_ = os.Remove(temporaryName)
+		}
 	}()
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 64<<10), maxSessionWireLine)
@@ -93,14 +107,9 @@ func localizeBinding(wire, sessionID string) (bool, error) {
 			return false, fmt.Errorf("decode event log: %w", err)
 		}
 		if event.Type == "environment.set_binding" && event.EnvironmentID == "acp:"+sessionID {
-			var fields map[string]any
-			if err := json.Unmarshal(line, &fields); err != nil {
-				return false, fmt.Errorf("decode environment binding: %w", err)
-			}
-			fields["environmentId"] = "local"
-			line, err = json.Marshal(fields)
+			line, err = encodeLocalBinding(line)
 			if err != nil {
-				return false, fmt.Errorf("encode environment binding: %w", err)
+				return false, err
 			}
 			changed = true
 		}
@@ -120,13 +129,13 @@ func localizeBinding(wire, sessionID string) (bool, error) {
 	if !changed {
 		return false, nil
 	}
+	if err := temporary.Chmod(info.Mode().Perm()); err != nil {
+		return false, err
+	}
 	if err := temporary.Sync(); err != nil {
 		return false, err
 	}
 	if err := temporary.Close(); err != nil {
-		return false, err
-	}
-	if err := os.Chmod(temporaryName, info.Mode().Perm()); err != nil {
 		return false, err
 	}
 	if err := backupWire(wire, info.Mode().Perm()); err != nil {
@@ -135,36 +144,60 @@ func localizeBinding(wire, sessionID string) (bool, error) {
 	if err := os.Rename(temporaryName, wire); err != nil {
 		return false, err
 	}
+	published = true
 	return true, nil
+}
+
+func encodeLocalBinding(line []byte) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(line, &fields); err != nil {
+		return nil, fmt.Errorf("decode environment binding: %w", err)
+	}
+	fields["environmentId"] = json.RawMessage(`"local"`)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(fields); err != nil {
+		return nil, fmt.Errorf("encode environment binding: %w", err)
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 func backupWire(wire string, mode os.FileMode) error {
 	backup := wire + ".before-local-binding"
-	output, err := os.OpenFile(backup, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-	if errors.Is(err, os.ErrExist) {
+	if _, err := os.Lstat(backup); err == nil {
 		return nil
-	}
-	if err != nil {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	input, err := os.Open(wire)
 	if err != nil {
-		_ = output.Close()
 		return err
 	}
-	_, copyErr := io.Copy(output, input)
-	syncErr := output.Sync()
-	closeErr := output.Close()
-	inputCloseErr := input.Close()
-	switch {
-	case copyErr != nil:
-		return copyErr
-	case syncErr != nil:
-		return syncErr
-	case closeErr != nil:
-		return closeErr
-	case inputCloseErr != nil:
-		return inputCloseErr
+	defer func() { _ = input.Close() }()
+	temporary, err := os.CreateTemp(filepath.Dir(wire), ".wire-backup-*")
+	if err != nil {
+		return err
+	}
+	temporaryName := temporary.Name()
+	defer func() {
+		_ = temporary.Close()
+		_ = os.Remove(temporaryName)
+	}()
+	if _, err := io.Copy(temporary, input); err != nil {
+		return err
+	}
+	if err := temporary.Chmod(mode); err != nil {
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(temporaryName, backup); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
 	}
 	return nil
 }

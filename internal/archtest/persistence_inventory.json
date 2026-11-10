@@ -641,7 +641,15 @@
       "count": 1,
       "owner": "tray-local"
     },
-    "internal/agentprofile/kimi/resume.go|backupWire|os.OpenFile": {
+    "internal/agentprofile/kimi/resume.go|backupWire|os.CreateTemp": {
+      "count": 1,
+      "owner": "kimi-resume"
+    },
+    "internal/agentprofile/kimi/resume.go|backupWire|os.Link": {
+      "count": 1,
+      "owner": "kimi-resume"
+    },
+    "internal/agentprofile/kimi/resume.go|backupWire|os.Remove": {
       "count": 1,
       "owner": "kimi-resume"
     },

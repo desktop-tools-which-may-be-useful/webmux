@@ -14,7 +14,7 @@ func TestPrepareTUIResumeLocalizesACPBinding(t *testing.T) {
 	const sessionID = "session_test"
 	wire := writeSessionWire(t, home, "work", sessionID, strings.Join([]string{
 		`{"type":"environment.set_binding","environmentId":"local","agentId":"main"}`,
-		`{"type":"environment.set_binding","environmentId":"acp:session_test","cwd":"/work","agentId":"main"}`,
+		`{"type":"environment.set_binding","environmentId":"acp:session_test","cwd":"/work/a&b","agentId":"main"}`,
 		`{"type":"environment.set_binding","environmentId":"acp:session_other","agentId":"main"}`,
 		`{"type":"context.append_message","message":{"role":"user","content":"unchanged"}}`,
 	}, "\n")+"\n")
@@ -38,6 +38,9 @@ func TestPrepareTUIResumeLocalizesACPBinding(t *testing.T) {
 	text := string(after)
 	if strings.Contains(text, `"environmentId":"acp:session_test"`) || !strings.Contains(text, `"environmentId":"local"`) {
 		t.Fatal("ACP binding was not replaced with local")
+	}
+	if !strings.Contains(text, `"/work/a&b"`) {
+		t.Fatal("cwd was escaped or altered")
 	}
 	if !strings.Contains(text, "acp:session_other") {
 		t.Fatal("another session's binding changed")
@@ -88,6 +91,9 @@ func TestPrepareTUIResumeRejectsInvalidOrDuplicateWire(t *testing.T) {
 	}
 	if _, err := ap.PrepareTUIResume(Agent, "../escape", func(string) string { return home }, ""); err == nil {
 		t.Fatal("invalid session ID succeeded")
+	}
+	if _, err := ap.PrepareTUIResume(Agent, "session_bad", nil, ""); err == nil {
+		t.Fatal("missing home succeeded")
 	}
 }
 
