@@ -280,7 +280,7 @@ test("bare, missing and prunable worktrees offer no branch switch", async () => 
   }
 });
 
-test("a worktree row shows commits ahead of its upstream, named as on the home page", async () => {
+test("a worktree row shows commits ahead of and behind its upstream, clear of its menu", async () => {
   renderTree([], {
     repositories: [
       repository({
@@ -293,7 +293,7 @@ test("a worktree row shows commits ahead of its upstream, named as on the home p
             path: "/repos/webmux.worktrees/brisk-otter",
             upstream: "origin/wt/brisk-otter",
             ahead: 3,
-            behind: 0,
+            behind: 1,
           }),
         ],
       }),
@@ -302,9 +302,20 @@ test("a worktree row shows commits ahead of its upstream, named as on the home p
   await tree().getByRole("button", { name: "展开webmux" }).click();
   await expect
     .element(tree().getByRole("img", { name: "领先上游 3 个提交" }))
-    .toBeVisible();
+    .toHaveTextContent("3");
+  const behind = tree().getByRole("img", { name: "落后上游 1 个提交" });
+  await expect.element(behind).toHaveTextContent("1");
   // The synced main worktree shows no indicator.
-  expect(tree().getByRole("img").elements()).toHaveLength(1);
+  expect(tree().getByRole("img").elements()).toHaveLength(2);
+  // Without sessions the counts are the row's last marks; the "⋯" shown on
+  // hover must not cover them.
+  const menu = tree().getByRole("button", {
+    name: "工作树操作：wt/brisk-otter",
+  });
+  await menu.hover();
+  expect(behind.element().getBoundingClientRect().right).toBeLessThanOrEqual(
+    menu.element().getBoundingClientRect().left,
+  );
 });
 
 test("folded nodes keep waiting counts, and folds survive a remount", async () => {

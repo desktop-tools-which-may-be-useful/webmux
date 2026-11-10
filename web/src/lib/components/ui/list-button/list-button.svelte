@@ -41,9 +41,10 @@
           "flex min-h-8 w-full touch-manipulation items-center gap-1.5 rounded-sm py-1 pr-7 pl-1.5 text-left text-xs font-semibold outline-none select-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring data-[drop-target=true]:bg-primary/10 data-[drop-target=true]:ring-1 data-[drop-target=true]:ring-inset data-[drop-target=true]:ring-primary max-sm:min-h-(--control-touch-compact) max-sm:pr-(--control-touch-compact) max-sm:text-sm any-pointer-coarse:min-h-(--control-touch-compact) any-pointer-coarse:pr-(--control-touch-compact) [-webkit-touch-callout:none]",
         // The actions button over the end of a file-tree row: shown while
         // its row is hovered or focused or its menu is open, always on
-        // touch screens.
+        // touch screens. Inset by 1px so its hover fill leaves the row's
+        // current/focus ring visible.
         "file-tree-action":
-          "absolute inset-y-0 right-0 flex w-7 items-center justify-center rounded-sm text-muted-foreground opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring aria-expanded:bg-muted aria-expanded:opacity-100 max-sm:w-(--control-touch-compact) any-pointer-coarse:w-(--control-touch-compact) any-pointer-coarse:opacity-100 [&_svg]:size-4",
+          "absolute inset-y-px right-px flex w-7 items-center justify-center rounded-sm text-muted-foreground opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring aria-expanded:bg-muted aria-expanded:opacity-100 max-sm:w-(--control-touch-compact) any-pointer-coarse:w-(--control-touch-compact) any-pointer-coarse:opacity-100 [&_svg]:size-4",
         // One action of a bottom action sheet; data-destructive marks
         // actions that discard data.
         "action-sheet":

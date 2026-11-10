@@ -532,6 +532,14 @@
       ""
     );
   }
+  // A worktree's ahead/behind counts or deleted upstream; nothing when synced.
+  function notableUpstream(node: TreeNode) {
+    const upstream = node.worktree && worktreeUpstream(node.worktree);
+    return upstream?.kind === "gone" ||
+      (upstream?.kind === "tracked" && (upstream.ahead || upstream.behind))
+      ? upstream
+      : undefined;
+  }
   function recordTitleText(record: ArchivedSession) {
     return record.released
       ? `${recordTitle(record)}（${record.agent.name} · 已释放空间：${record.released.path} · ${record.released.commit.slice(0, 12)}，点击重建并恢复）`
@@ -539,16 +547,20 @@
   }
 </script>
 
-{#snippet counts(node: TreeNode, actioned: boolean)}
+{#snippet counts(node: TreeNode, actioned: boolean, reserve: boolean)}
   <!-- Right-aligned, so counts end where session rows' status dots do; a
-       row's "⋯" menu takes their place on hover. -->
+       row's "⋯" menu takes their place on hover. `reserve` keeps the slot
+       empty so the menu never covers the marks before it. -->
   {#if node.waiting}<span
       class={`w-12 shrink-0 truncate text-right text-xs text-warning ${actioned ? underRowAction : ""}`}
       title={`${node.waiting} 个会话在等待`}>{node.waiting} 等待</span
     >{:else if node.count}<span
       class={`w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums ${actioned ? underRowAction : ""}`}
       >{node.count}</span
-    >{/if}
+    >{:else if reserve}<span
+      class="w-12 shrink-0 any-pointer-coarse:hidden"
+      aria-hidden="true"
+    ></span>{/if}
 {/snippet}
 
 {#snippet chevron(node: TreeNode)}
@@ -588,6 +600,7 @@
       ? rowStatusLabels[status]
       : undefined}
   {@const open = isOpen(node)}
+  {@const upstream = notableUpstream(node)}
   <li
     role="none"
     class={`flex items-center ${node.level === 3 ? "pl-8" : node.level === 2 ? "pl-4" : ""}`}
@@ -647,13 +660,9 @@
           class={`min-w-0 flex-1 truncate ${node.kind === "repository" ? "font-medium" : ""} ${node.reason || status === "ended" ? "text-muted-foreground" : ""}`}
           >{node.label}</span
         >
-        {#if node.worktree}
-          {@const upstream = worktreeUpstream(node.worktree)}
-          {#if upstream?.kind === "gone" || (upstream?.kind === "tracked" && (upstream.ahead || upstream.behind))}<span
-              class="flex shrink-0 items-center gap-1"
-              ><UpstreamStatus state={upstream} indicator /></span
-            >{/if}
-        {/if}
+        {#if upstream}<span class="flex shrink-0 items-center gap-1"
+            ><UpstreamStatus state={upstream} indicator /></span
+          >{/if}
         {#if node.record?.released}<IconFolderOff
             class="text-muted-foreground"
             aria-hidden="true"
@@ -674,6 +683,7 @@
             node,
             (node.kind === "repository" && !node.reason && canCreate) ||
               node.kind === "worktree",
+            !!upstream,
           )}{/if}
       </ListButton>
       {#if node.kind === "repository" && canCreate}
