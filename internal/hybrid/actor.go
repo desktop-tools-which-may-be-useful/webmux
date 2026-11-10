@@ -3,6 +3,8 @@ package hybrid
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -46,14 +48,16 @@ var errMissingCapability = errors.New("agent 未声明 session/load 或 session/
 // on the actor to preserve completed operations' recovery contract, but never
 // hold the record state lock during filesystem I/O.
 type actor struct {
-	replayUser replayUserBuffer
-	svc        *Service
-	cmd        agentprofile.Command
-	cwd        string
-	configID   string
-	log        *chatLog
-	inbox      chan func()
-	quit       chan struct{}
+	replayOwnedMessageID string
+	replayOwnedMessage   bool
+	replayUser           replayUserBuffer
+	svc                  *Service
+	cmd                  agentprofile.Command
+	cwd                  string
+	configID             string
+	log                  *chatLog
+	inbox                chan func()
+	quit                 chan struct{}
 	// id and shell are set before run starts and never change.
 	id    string
 	shell *session.Session
@@ -990,7 +994,18 @@ func (a *actor) sendContext(text, wireText string, attachments []Attachment, que
 		if a.svc.conversations == nil {
 			return PromptResult{}, ErrUnavailable
 		}
-		if err := a.svc.conversations.ClaimExecution(context.Background(), executionID); err != nil {
+		base := sha256.Sum256([]byte(wireText))
+		actualText := ""
+		for _, block := range blocks {
+			if block.Type == acp.ContentText {
+				actualText += block.Text
+			}
+		}
+		actual := sha256.Sum256([]byte(actualText))
+		if len(actualText) > MaxPromptBytes {
+			return PromptResult{}, ErrTooLarge
+		}
+		if err := a.svc.conversations.ClaimExecutionText(context.Background(), executionID, hex.EncodeToString(base[:]), hex.EncodeToString(actual[:])); err != nil {
 			return PromptResult{}, err
 		}
 	}
