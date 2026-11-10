@@ -38,9 +38,13 @@
       <div class="grid gap-0.5">
         <Label for="use-init-instruction">使用初始化指令</Label>
         <p class="text-xs text-muted-foreground">
-          创建后先发送{repositoryName
-            ? `“${repositoryName}”`
-            : "仓库"}的初始化指令，可在仓库设置中修改。
+          {#if chat}
+            创建后先发送{repositoryName
+              ? `“${repositoryName}”`
+              : "仓库"}的初始化指令，可在仓库设置中修改。
+          {:else}
+            初始化指令通常是自然语言，从终端开始时默认不勾选；勾选后会随首条消息一起发送。可在仓库设置中修改。
+          {/if}
         </p>
       </div>
     </div>

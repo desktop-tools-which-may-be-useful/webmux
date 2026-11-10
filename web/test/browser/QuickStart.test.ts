@@ -307,11 +307,16 @@ test("starting in the terminal drops chat-only controls, keeps attachments and i
   await expect
     .element(toolbar.getByRole("button", { name: "思考：中" }))
     .toBeVisible();
+  const box = page.getByRole("checkbox", { name: "使用初始化指令" });
+  await expect.element(box).toBeChecked();
   await toolbar.getByRole("button", { name: "启动方式：聊天" }).click();
   await page.getByRole("menuitemradio", { name: "终端" }).click();
   await expect
     .element(toolbar.getByRole("button", { name: "启动方式：终端" }))
     .toBeVisible();
+  // The instruction is usually natural language, so a terminal start leaves
+  // it off unless the user asks for it.
+  await expect.element(box).not.toBeChecked();
   expect(
     toolbar.getByRole("button", { name: "思考：中" }).elements(),
   ).toHaveLength(0);
@@ -340,10 +345,31 @@ test("starting in the terminal drops chat-only controls, keeps attachments and i
   expect(sent?.body).toMatchObject({
     view: "terminal",
     attachments: [{ path: "/tmp/staging/shot.png" }],
+    useInitInstruction: false,
   });
   expect(sent?.body).not.toHaveProperty("agentConfig");
   expect(sent?.body).not.toHaveProperty("permissionMode");
   expect(localStorage.getItem("webmux.quickStartSide")).toBe("terminal");
+});
+
+test("a terminal start can still send the init instruction when ticked", async () => {
+  respond(/^POST \/api\/sessions$/, created);
+  const { input, toolbar } = await open();
+  await toolbar.getByRole("button", { name: "启动方式：聊天" }).click();
+  await page.getByRole("menuitemradio", { name: "终端" }).click();
+  await userEvent.keyboard("{Escape}");
+  const box = page.getByRole("checkbox", { name: "使用初始化指令" });
+  await expect.element(box).not.toBeChecked();
+  await box.click();
+  await expect.element(box).toBeChecked();
+  await input.fill("修复首页排序");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  const sent = commands().find((c) => c.path === "/api/sessions");
+  expect(sent?.body).toMatchObject({
+    view: "terminal",
+    useInitInstruction: true,
+  });
 });
 
 test("unticking the init instruction applies to that send only", async () => {

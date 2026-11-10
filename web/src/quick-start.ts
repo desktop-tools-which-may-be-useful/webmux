@@ -48,7 +48,12 @@ const DraftSchema = z.object({
   edits: z
     .record(z.string(), z.record(z.string(), ConfigValueSchema))
     .optional(),
-  unticked: z.string().min(1).max(256).optional(),
+  instructionChoice: z
+    .object({
+      repositoryId: z.string().min(1).max(256),
+      use: z.boolean(),
+    })
+    .optional(),
 });
 export type QuickStartDraft = {
   text: string;
@@ -58,7 +63,7 @@ export type QuickStartDraft = {
   baseChoice?: { repositoryId: string; name: string };
   permissionMode?: ChatPermissionMode;
   edits?: Record<string, Record<string, ConfigValue>>;
-  unticked?: string;
+  instructionChoice?: { repositoryId: string; use: boolean };
 };
 
 let memoryDraft: QuickStartDraft | undefined;
@@ -80,7 +85,7 @@ function emptyDraft(draft: QuickStartDraft) {
     !draft.baseChoice &&
     (!draft.permissionMode || draft.permissionMode === "auto") &&
     (!draft.edits || Object.keys(draft.edits).length === 0) &&
-    !draft.unticked
+    !draft.instructionChoice
   );
 }
 

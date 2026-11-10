@@ -126,7 +126,6 @@
   let startSide = $state<SessionView>(storedView(stored("hybridStartSide")));
   let name = $state("");
   let prompt = $state("");
-  let useInstruction = $state(true);
   let error = $state("");
   // Starting on the chat view failed: its connector is not installed.
   let missingConnector = $state.raw<AgentConnector>();
@@ -177,6 +176,10 @@
   });
   const hasInstruction = $derived(!!instructionRepository?.initInstruction);
   const startsOnChat = $derived(!!chosenConfig?.chat && startSide === "chat");
+  // The instruction is a natural-language prompt for the agent, so only a
+  // chat start sends it unless the user ticks it here.
+  let instructionChoice = $state<boolean | undefined>();
+  const useInstruction = $derived(instructionChoice ?? startsOnChat);
   const hybridConfigId = $derived(chosenConfig?.chat ? chosenConfig.id : "");
   $effect(() => {
     if (!hybridConfigId) return;
@@ -523,7 +526,12 @@
         <FirstMessageFields
           repositoryName={instructionRepository?.name}
           {hasInstruction}
-          bind:useInstruction
+          bind:useInstruction={
+            () => useInstruction,
+            (next) => {
+              instructionChoice = next;
+            }
+          }
           bind:prompt
           chat={startsOnChat}
           disabled={busy}

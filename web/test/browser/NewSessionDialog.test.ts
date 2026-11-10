@@ -1117,6 +1117,31 @@ test.each(["/repos/project/subdir", "/other-project"])(
 );
 
 test("a first message and the repository instruction go with the new session", async () => {
+  const chatConfig = { ...otherConfig, chat: true };
+  const withInstruction = { ...repository, initInstruction: "先读 AGENTS.md" };
+  open(
+    { status: "ready", configs: [chatConfig] },
+    {
+      repositories: [withInstruction],
+      entry: { kind: "worktree", repositoryId: "repo-1", worktreeId: "main" },
+    },
+  );
+  await page.getByRole("radio", { name: "从聊天开始", exact: true }).click();
+  await expect.element(page.getByLabelText("使用初始化指令")).toBeChecked();
+  await page.getByLabelText("用户指令", { exact: false }).fill("  修复排序 ");
+  await submit().click();
+  await vi.waitFor(() => expect(created).toHaveLength(1));
+  expect(created[0]).toEqual({
+    workspace: { repositoryId: "repo-1", worktreeId: "main" },
+    configId: "hijklm23",
+    name: "",
+    view: "chat",
+    prompt: "修复排序",
+    useInitInstruction: true,
+  });
+});
+
+test("a terminal start leaves the instruction unticked by default", async () => {
   const withInstruction = { ...repository, initInstruction: "先读 AGENTS.md" };
   open(
     { status: "ready", configs: [config] },
@@ -1125,17 +1150,10 @@ test("a first message and the repository instruction go with the new session", a
       entry: { kind: "worktree", repositoryId: "repo-1", worktreeId: "main" },
     },
   );
-  await expect.element(page.getByLabelText("使用初始化指令")).toBeChecked();
-  await page.getByLabelText("用户指令", { exact: false }).fill("  修复排序 ");
+  await expect.element(page.getByLabelText("使用初始化指令")).not.toBeChecked();
   await submit().click();
   await vi.waitFor(() => expect(created).toHaveLength(1));
-  expect(created[0]).toEqual({
-    workspace: { repositoryId: "repo-1", worktreeId: "main" },
-    configId: "abcdefg2",
-    name: "",
-    prompt: "修复排序",
-    useInitInstruction: true,
-  });
+  expect(created[0]).not.toHaveProperty("useInitInstruction");
 });
 
 test("the instruction is offered only where the repository has one and can be left out", async () => {
@@ -1151,14 +1169,16 @@ test("the instruction is offered only where the repository has one and can be le
 });
 
 test("an unticked instruction is not sent", async () => {
+  const chatConfig = { ...otherConfig, chat: true };
   const withInstruction = { ...repository, initInstruction: "先读 AGENTS.md" };
   open(
-    { status: "ready", configs: [config] },
+    { status: "ready", configs: [chatConfig] },
     {
       repositories: [withInstruction],
       entry: { kind: "worktree", repositoryId: "repo-1", worktreeId: "main" },
     },
   );
+  await page.getByRole("radio", { name: "从聊天开始", exact: true }).click();
   await page.getByLabelText("使用初始化指令").click();
   await submit().click();
   await vi.waitFor(() => expect(created).toHaveLength(1));

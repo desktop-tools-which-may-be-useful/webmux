@@ -114,9 +114,12 @@
   let baseChoice = $state<{ repositoryId: string; name: string } | undefined>(
     initialDraft.baseChoice,
   );
-  // The repository whose init instruction the user unticked for this send; a
-  // repository change or sending ticks it again.
-  let unticked = $state<string | undefined>(initialDraft.unticked);
+  // The init instruction choice the user made for one repository and send;
+  // without it the default depends on the side: chat starts include the
+  // instruction, terminal starts do not, since the text is usually natural
+  // language meant for an agent rather than a shell. A repository change or
+  // sending returns to that default.
+  let instructionChoice = $state(initialDraft.instructionChoice);
 
   function persistDraft() {
     const edited = Object.keys(edits).length ? edits : undefined;
@@ -132,7 +135,7 @@
       ...(baseChoice ? { baseChoice } : {}),
       ...(permissionMode !== "auto" ? { permissionMode } : {}),
       ...(edited ? { edits: edited } : {}),
-      ...(unticked ? { unticked } : {}),
+      ...(instructionChoice ? { instructionChoice } : {}),
     });
   }
   $effect(() => {
@@ -264,7 +267,11 @@
         ? "repository"
         : "",
   );
-  const useInstruction = $derived(unticked !== repository?.id);
+  const useInstruction = $derived(
+    instructionChoice && instructionChoice.repositoryId === repository?.id
+      ? instructionChoice.use
+      : chat,
+  );
   const instructionPreview = $derived(
     expandInitInstruction(
       repository?.initInstruction ?? "",
@@ -356,7 +363,7 @@
             configId: agent.id,
           });
           text = "";
-          unticked = undefined;
+          instructionChoice = undefined;
           quickStartMemory.clearDraft();
           openSession({ id: outcome.sessionId });
           return;
@@ -571,7 +578,7 @@
               disabled={sending}
               onchange={(id) => {
                 repositoryChoice = id;
-                unticked = undefined;
+                instructionChoice = undefined;
                 persistDraft();
               }}
             >
@@ -636,7 +643,9 @@
                 bind:checked={
                   () => useInstruction,
                   (next) => {
-                    unticked = next ? undefined : repository?.id;
+                    instructionChoice = repository
+                      ? { repositoryId: repository.id, use: next }
+                      : undefined;
                     persistDraft();
                   }
                 }
@@ -689,7 +698,7 @@
                     </p>
                   {/if}
                   <p class="text-xs text-muted-foreground">
-                    取消勾选只影响这次发送。在首页工具栏“⋯”菜单的“仓库设置…”中修改。
+                    从终端开始时默认不勾选；这次的选择只影响本次发送。在首页工具栏“⋯”菜单的“仓库设置…”中修改。
                   </p>
                 </Popover.Content>
               </Popover.Root>
