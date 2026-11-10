@@ -3,12 +3,12 @@ package hybrid
 import (
 	"context"
 	"errors"
-	"sync"
-	"time"
-
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/attentionkind"
+	"github.com/rainchan/webmux/internal/conversation"
 	"github.com/rainchan/webmux/internal/session"
+	"sync"
+	"time"
 )
 
 const (
@@ -71,6 +71,7 @@ type actor struct {
 	agentCwd string
 	chat     ChatState
 	tr       translator
+	activity activityRecorder
 	// epoch numbers ACP connections; updates and requests of an older one
 	// are ignored.
 	epoch       int
@@ -435,6 +436,16 @@ func (a *actor) scheduleOrLatchDone(startedAt *time.Time, now time.Time) {
 // emit stores events in the log, keeping the replaceable state they carry.
 func (a *actor) emit(events ...Event) {
 	for _, e := range events {
+		if e.Kind == EventResolved && e.Resolved != nil {
+			if err := a.writeActivity(conversation.ActivityInput{LocalKey: a.activityKey("permission"), Kind: "permission", Status: e.Resolved.Outcome, Text: e.Resolved.OptionID}); err != nil {
+				a.activityFailure()
+			}
+		}
+		if e.Kind == EventMarker && e.Marker != nil {
+			if err := a.writeActivity(conversation.ActivityInput{LocalKey: a.activityKey("marker"), Kind: "marker", Status: e.Marker.Kind}); err != nil {
+				a.activityFailure()
+			}
+		}
 		toolsOnly := false
 		switch e.Kind {
 		case EventPlan:

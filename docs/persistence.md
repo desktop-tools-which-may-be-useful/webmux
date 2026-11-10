@@ -33,16 +33,20 @@
 ## 对话事务存储
 
 `conversations.sqlite` 保存 Conversation、ProviderThread、单调 Run 序号，以及 handoff、delivery 和幂等 receipt 的事务基础。
-当前阶段尚未记录消息正文或开放交接入口；完整活动写入与可靠投递后续接入。
+ACP 聊天的规范化消息与工具内容在 UI 截断前保存为完整 Activity；交接入口与可靠投递后续接入。
 现有混合会话一对一迁移为稳定身份，旧记录标记 `historyOrigin=unknown`，不猜测升级前历史。
 
 - 纯 Go SQLite（modernc.org/sqlite），支持 `CGO_ENABLED=0`；schema 迁移与版本号在同一事务提交。
 - 数据库、生命周期锁与崩溃恢复 sidecar 均为 0600，状态目录 0700；拒绝文件自身的符号链接。
 - SQLite 使用 FULL 同步和默认 DELETE rollback journal；不使用长期保留正文的 WAL；删除启用 `secure_delete`。
 - 损坏、未知未来版本和锁冲突只禁用依赖对话存储的混合创建与恢复；普通终端仍可运行，原数据库不重建。
-- 删除记录（`forget=1`）与成功淘汰归档记录同时清理关联身份、Run、handoff、delivery 和 receipt。
+- 删除记录（`forget=1`）与成功淘汰归档记录同时清理关联身份、Run、Activity 分块、handoff、delivery 和 receipt。
 - JSON 记录与 SQLite 不共享事务；中断于记录删除与数据库清理之间时，下次成功读取记录清单后继续清理孤立身份。
 - worktree 释放与重建保留身份，配置删除不隐式删除对话。备份时先停服务，并备份整个状态目录；不得只复制活跃数据库。
+- 流式消息追加分块；重复前缀的工具快照只改写变化尾部，读取按 UTF-8 字节分页，不把整条历史装入内存。
+- 完成后才发布持久 position；崩溃尾部保持不可见并标 gap，服务重启不把半条内容视为已提交。
+- replay 按 ProviderThread + item ID 或有序完整项对账；无法判定时保留 `reconcile_required`，相同文本不会被全局 hash 合并。
+- TUI 时段只记录缺口，不解析 PTY 伪造历史；不保存 reasoning、raw ACP、环境、原生工具状态或附件 blob，只保留附件元数据和引用。
 - 数据库错误不把 SQL 值或正文交给应用日志；当前版本不可用时保留原文件供人工诊断。
 
 ## 统一行为与故障隔离

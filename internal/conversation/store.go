@@ -37,6 +37,9 @@ func Open(o Options) *Service {
 	if err == nil {
 		s.db = s.storage.SQL
 		err = migrate(context.Background(), s.db)
+		if err == nil {
+			err = s.recoverActivity(context.Background())
+		}
 	}
 	if err != nil {
 		if s.storage != nil {

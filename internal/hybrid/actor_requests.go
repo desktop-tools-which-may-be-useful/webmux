@@ -3,13 +3,12 @@ package hybrid
 import (
 	"context"
 	"fmt"
+	"github.com/rainchan/webmux/internal/acp"
 	"github.com/rainchan/webmux/internal/session"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/rainchan/webmux/internal/acp"
 )
 
 // handler receives one ACP connection's updates and requests and forwards
@@ -89,6 +88,7 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 		}
 		a.work.noteBackground(n.Update)
 	}
+	a.recordUpdate(n.Update)
 	events := a.tr.update(n.Update)
 	if hidden := a.cmd.Profile.HiddenCommands; len(hidden) > 0 {
 		for i := range events {

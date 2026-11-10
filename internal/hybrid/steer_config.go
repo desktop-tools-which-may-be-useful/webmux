@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/conversation"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/rainchan/webmux/internal/acp"
-	"github.com/rainchan/webmux/internal/agentprofile"
 )
 
 // agentCall is a command's ACP call, run outside the actor.
@@ -42,6 +42,14 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	key, run, thread := a.activityKey("steer"), a.activity.run, a.activity.thread
+	if a.svc.conversations != nil {
+		if err := a.writeActivity(conversation.ActivityInput{LocalKey: key, RunID: run, Kind: "message", Role: "user", Status: "pending", Text: text, Attachments: activityAttachments(attachments)}); err != nil {
+			return nil, err
+		}
+		thread = a.activity.thread
+	}
 	a.clearAttention()
 	conn, sid, epoch := a.link.conn, a.link.sessionID, a.epoch
 	req := acp.PromptRequest{SessionID: sid, Prompt: blocks}
@@ -58,6 +66,11 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 	method := steerer.SteeringMethod()
 	return func(ctx context.Context) error {
 		err := conn.CallExtension(ctx, method, req, result)
+		if err != nil && a.svc.conversations != nil {
+			if gapErr := a.svc.conversations.AddGap(context.Background(), thread, "unconfirmed_prompt"); gapErr != nil {
+				a.svc.log.Warn("steering uncertainty could not be persisted", "id", a.id)
+			}
+		}
 		if err != nil {
 			return a.agentCallFailed(method, err)
 		}
@@ -71,11 +84,19 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 			}
 			switch resp.Outcome {
 			case steerPromptRequired:
+				if a.svc.conversations != nil {
+					if err := a.svc.conversations.DiscardDraftActivity(context.Background(), thread, key); err != nil {
+						a.activityFailure()
+					}
+				}
 				a.requeue(text, attachments)
 				return struct{}{}, nil
 			case steerStartedNewTurn:
 				a.svc.log.Warn("hybrid steering started a turn", "id", a.id, "method", method, "outcome", resp.Outcome)
 				a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: "agent 自行开始了一个回合，该回合不受 WebMux 跟踪"}})
+			}
+			if err := a.writeActivity(conversation.ActivityInput{LocalKey: key, RunID: run, Kind: "message", Role: "user", Status: "completed"}); err != nil {
+				a.activityFailure()
 			}
 			a.emit(a.tr.userMessage(text, attachments))
 			a.tr.breakMessage()

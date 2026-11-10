@@ -44,9 +44,8 @@ func (s *Service) ensureConversation(ctx context.Context, r Record) error {
 	if s.conversations == nil {
 		return nil
 	}
-	_, err := s.conversations.EnsureRuntime(ctx, conversationInput(r, "unknown"))
-	// Activity capture begins in the next layer. Until then even a new session
-	// must not claim to possess a complete portable history.
+	_, err := s.conversations.EnsureRuntime(ctx, conversationInput(r, "complete"))
+	// New sessions are captured from creation; TUI intervals record explicit gaps.
 	if err != nil {
 		return fmt.Errorf("%w: conversation identity unavailable", ErrUnavailable)
 	}

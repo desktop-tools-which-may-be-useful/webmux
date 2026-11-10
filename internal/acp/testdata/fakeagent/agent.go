@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rainchan/webmux/internal/acp"
 	"io"
 	"io/fs"
 	"maps"
@@ -15,8 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/rainchan/webmux/internal/acp"
 )
 
 const methodSteering = "_session/steering"
@@ -712,10 +711,11 @@ func (a *agent) prompt(p acp.PromptRequest) (any, error) {
 		return nil, err
 	}
 	sid := p.SessionID
-	reply, stop := a.turn(ctx, sid, text)
+	replyID := newMessageID()
+	reply, stop := a.turn(ctx, sid, text, replyID)
 	if reply != "" {
 		a.mu.Lock()
-		ls.data.Messages = append(ls.data.Messages, message{ID: newMessageID(), Role: "agent", Text: reply})
+		ls.data.Messages = append(ls.data.Messages, message{ID: replyID, Role: "agent", Text: reply})
 		err = a.st.save(ls.data)
 		a.mu.Unlock()
 	}
@@ -733,7 +733,7 @@ func (a *agent) pause(ctx context.Context) bool {
 	}
 }
 
-func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string) {
+func (a *agent) turn(ctx context.Context, sid, text, id string) (reply, stop string) {
 	if strings.HasPrefix(text, "The background processes from the previous turn have exited.") {
 		done := acp.ToolCompleted
 		a.update(sid, &acp.ToolCallUpdate{ToolCallID: "bg_1", Status: &done, RawInput: json.RawMessage(`{"IsDaemon":true}`)})
@@ -897,7 +897,6 @@ func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string)
 	}
 
 	reply = "echo: " + text + extra
-	id := newMessageID()
 	half := len(reply) / 2
 	for _, piece := range []string{reply[:half], reply[half:]} {
 		if !a.pause(ctx) {

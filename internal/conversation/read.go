@@ -12,7 +12,7 @@ func (s *Service) Conversation(ctx context.Context, id string) (Conversation, er
 	}
 	var parent *string
 	var created, updated int64
-	err := s.db.QueryRowContext(ctx, `SELECT id,parent_id,relationship,cwd,repository_id,worktree_id,active_provider_thread_id,next_run_ordinal,history_origin,created_at,updated_at FROM conversation WHERE id=?`, id).Scan(&c.ID, &parent, &c.Relationship, &c.Cwd, &c.RepositoryID, &c.WorktreeID, &c.ActiveProviderThreadID, &c.NextRunOrdinal, &c.HistoryOrigin, &created, &updated)
+	err := s.db.QueryRowContext(ctx, `SELECT id,parent_id,relationship,cwd,repository_id,worktree_id,active_provider_thread_id,next_run_ordinal,history_origin,reconcile_required,created_at,updated_at FROM conversation WHERE id=?`, id).Scan(&c.ID, &parent, &c.Relationship, &c.Cwd, &c.RepositoryID, &c.WorktreeID, &c.ActiveProviderThreadID, &c.NextRunOrdinal, &c.HistoryOrigin, &c.ReconcileRequired, &created, &updated)
 	if parent != nil {
 		c.ParentID = *parent
 	}
