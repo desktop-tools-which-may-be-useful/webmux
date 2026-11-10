@@ -74,3 +74,14 @@
 
 - 核对三种截图尺寸与 Storybook 的现有视口设置一致，并检查故事编号唯一、两份索引引用和来源链接。
 - 文档门禁、`TestAgents`、修改文档的格式及空白检查通过。验证范围为文档规范与故事引用。
+
+本次局部核对（2026-11-10）：修复移动端快速开始页 `/new` 展开输入卡片时软键盘遮挡与单行紧凑输入框底部多余内边距问题，对应更新 US-Q18，不新增故事或改变覆盖索引。
+
+- 范围：
+  - `QuickStart.svelte` 接入 `useViewport()` 并将 `<main>` 高度绑定至 `--viewport-height`（`visualViewport.height`），软键盘弹起时收缩页面可视高度并固定底部展开后的 `ComposerCard` 在软键盘上方；
+  - `ComposerCard.svelte` 在紧凑单行态下点击卡片外框非按钮区域时自动聚焦 `textarea`；
+  - 外层 `space-y-2` 改为 `flex flex-col gap-2` 以消除隐藏的底部选项行在紧凑卡片下留下的 `margin-bottom`，紧凑态内边距工具类改为 `composer-mobile:pt-0`、`composer-mobile:px-0 composer-mobile:pb-0` 以覆盖 `pt-1`、`px-2 pb-2`，使单行输入框上下间距对称。
+- 依据：
+  - `QuickStart.test.ts` 与 `ChatView.test.ts` 浏览器组件测试通过，覆盖单行卡片对称内边距、外框点击聚焦展开、可视视口收缩后展开卡片保持在视口底部上方；
+  - `make check`、`pnpm --dir web check:arch` 与 `make docs-check` 通过，并截取桌面（1280×900）、平板（768×800）、手机（390×844）前后对比截图与交互 GIF。
+- 限制：在 Chromium 视口收缩模拟下验证软键盘避让，未在 iOS Safari 真机核对；未重新核验其余故事能力。

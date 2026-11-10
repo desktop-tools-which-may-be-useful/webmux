@@ -729,6 +729,20 @@ test("narrow screens start compact and expand the composer when focused", async 
     (input.element() as HTMLTextAreaElement).blur();
     await expect.element(place).not.toBeVisible();
     await expect.element(initCheckbox).not.toBeVisible();
+
+    // Tapping the compact card's outer shell focuses the input and expands it.
+    const card = document.querySelector<HTMLElement>("[data-composer-card]")!;
+    card.click();
+    await expect.element(input).toHaveFocus();
+    await expect.element(place).toBeVisible();
+
+    // Shrinking the visual viewport for an on-screen keyboard keeps the
+    // expanded composer card above the bottom of the visible viewport.
+    await page.viewport(390, 480);
+    await expect
+      .poll(() => Math.round(card.getBoundingClientRect().bottom))
+      .toBeLessThanOrEqual(480);
+    await expect.element(input).toHaveFocus();
   } finally {
     await page.viewport(1024, 900);
   }

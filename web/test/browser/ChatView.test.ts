@@ -1035,12 +1035,26 @@ test("narrow screens move session options into a sheet beside the upload button"
     (input.element() as HTMLTextAreaElement).blur();
     await expect.element(where).not.toBeVisible();
     await expect.element(optionsButton).not.toBeVisible();
-    // The resting bar stays one line of transcript-friendly height.
-    const card = document.querySelector("[data-chat-composer] > .rounded-lg")!;
+    // The resting bar stays one line of transcript-friendly height with
+    // symmetric vertical inset and no residual bottom margin from hidden rows.
+    const card = document.querySelector("[data-composer-card]")!;
     // Sized in rem, so it grows with the mobile root font size.
     await expect
       .poll(() => card.getBoundingClientRect().height)
       .toBeLessThanOrEqual(46);
+    expect(getComputedStyle(card).marginBottom).toBe("0px");
+    const action = card.querySelector("[data-composer-action]")!;
+    await expect
+      .poll(() => {
+        const cardBounds = card.getBoundingClientRect();
+        const actionBounds = action.getBoundingClientRect();
+        return Math.abs(
+          actionBounds.top -
+            cardBounds.top -
+            (cardBounds.bottom - actionBounds.bottom),
+        );
+      })
+      .toBeLessThanOrEqual(1);
   } finally {
     await page.viewport(1024, 900);
   }
