@@ -75,6 +75,11 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 			return a.agentCallFailed(method, err)
 		}
 		if resp.Outcome == steerFailed {
+			if a.svc.conversations != nil {
+				if err := a.svc.conversations.DiscardDraftActivity(context.Background(), thread, key); err != nil {
+					a.svc.log.Warn("failed steering draft cleanup failed", "id", a.id)
+				}
+			}
 			a.svc.log.Warn("hybrid steering failed", "id", a.id, "method", method, "outcome", resp.Outcome)
 			return fmt.Errorf("%w: agent 未能插话", ErrAgentCall)
 		}
@@ -98,6 +103,7 @@ func (a *actor) steer(text string, attachments []Attachment) (agentCall, error) 
 			if err := a.writeActivity(conversation.ActivityInput{LocalKey: key, RunID: run, Kind: "message", Role: "user", Status: "completed"}); err != nil {
 				a.activityFailure()
 			}
+			a.activity.message.open = false
 			a.emit(a.tr.userMessage(text, attachments))
 			a.tr.breakMessage()
 			for _, note := range notes {

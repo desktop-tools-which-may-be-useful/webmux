@@ -547,6 +547,9 @@ type steeringResult struct {
 // one unless promptRequired was requested, while Claude always requires the
 // client to submit a fresh prompt.
 func (a *agent) steer(p acp.PromptRequest) (any, error) {
+	if a.cfg.steerOutcome != "" {
+		return steeringResult{Outcome: a.cfg.steerOutcome}, nil
+	}
 	ls := a.session(p.SessionID)
 	if ls == nil {
 		return nil, &acp.RPCError{Code: acp.CodeResourceNotFound, Message: "session not open"}

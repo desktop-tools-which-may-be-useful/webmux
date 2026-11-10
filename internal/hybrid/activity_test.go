@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -335,5 +336,73 @@ func TestActivityOmittedToolStatusStaysPendingAcrossTurns(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("tool duplicated or lost: %d", count)
+	}
+}
+
+func TestActivitySteeringCreatesMessageBoundaryAndDiscardsExplicitFailure(t *testing.T) {
+	for _, outcome := range []string{"injected", "failed"} {
+		t.Run(outcome, func(t *testing.T) {
+			ctx := context.Background()
+			h, db := historyHarness(t)
+			in := h.codexInput(SideACP, "")
+			in.Env["FAKEAGENT_TURN_DELAY"] = "2s"
+			in.Env["FAKEAGENT_STEER_OUTCOME"] = outcome
+			id := h.create(in).Info().ID
+			a, err := h.svc.actor(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prompt(t, h, id, "task")
+			if !a.sync(func() { a.recordUpdate(&acp.AgentMessageChunk{Content: acp.TextBlock("before")}) }) {
+				t.Fatal("actor stopped")
+			}
+			_, err = h.svc.Prompt(ctx, id, PromptInput{ClientRequestID: rid(), Text: "nudge", Mode: ModeSteer})
+			if outcome == "failed" && !errors.Is(err, ErrAgentCall) {
+				t.Fatalf("steering failed: %v", err)
+			}
+			if outcome == "injected" && err != nil {
+				t.Fatal(err)
+			}
+			if !a.sync(func() { a.recordUpdate(&acp.AgentMessageChunk{Content: acp.TextBlock("after")}) }) {
+				t.Fatal("actor stopped")
+			}
+			if err := h.manager.Close(id); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "closed", func() bool { r, err := h.svc.Record(id); return err == nil && r.State == StateClosed })
+			binding, err := db.Binding(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.svc.Close()
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+			reopened := conversation.Open(conversation.Options{StateDir: h.state})
+			defer func() { _ = reopened.Close() }()
+			if err := reopened.Unavailable(); err != nil {
+				t.Fatal(err)
+			}
+			page, err := reopened.Activities(ctx, binding.ConversationID, 0, 0, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var texts []string
+			for _, part := range page.Items {
+				if part.Activity.Kind == "message" {
+					texts = append(texts, part.Activity.Text)
+				}
+			}
+			want := "task,before,nudge,after"
+			if outcome == "failed" {
+				want = "task,beforeafter"
+			}
+			if strings.Join(texts, ",") != want {
+				t.Fatalf("steering order/draft: %v want %s", texts, want)
+			}
+			if page.ReconcileRequired || len(page.Gaps) != 0 {
+				t.Fatalf("explicit outcome created crash gap: %+v", page.Gaps)
+			}
+		})
 	}
 }
