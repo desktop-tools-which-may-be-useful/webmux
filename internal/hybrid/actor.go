@@ -258,7 +258,11 @@ func call[T any](ctx context.Context, a *actor, fn func() (T, error)) (T, error)
 	}
 	var zero T
 	reply := make(chan result, 1)
-	if !a.post(func() { v, err := fn(); reply <- result{v, err} }) {
+	if !a.post(func() {
+		v, err := fn()
+		a.flush()
+		reply <- result{v, err}
+	}) {
 		return zero, ErrNotFound
 	}
 	select {

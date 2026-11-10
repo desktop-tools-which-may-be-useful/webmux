@@ -476,7 +476,11 @@ func (a *actor) afterTransition() {
 // before running it.
 func (a *actor) sync(fn func()) bool {
 	done := make(chan struct{})
-	if !a.post(func() { fn(); close(done) }) {
+	if !a.post(func() {
+		fn()
+		a.flush()
+		close(done)
+	}) {
 		return false
 	}
 	select {
