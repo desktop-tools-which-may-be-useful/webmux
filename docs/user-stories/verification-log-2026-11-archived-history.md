@@ -116,3 +116,16 @@
   - 隔离 `KIMI_CODE_HOME` 对照中无 trust 变量出现 `blocked/permission`，设置后进入 `idle`。
 - 视觉依据：基线与当前实现的 Kimi 预置在 1280×900、768×800、390×844 浅色页面均有前后截图，卡片与编辑对话框无横向溢出；未验证真机、触屏常驻与 hover 行为。
 - 完整门禁：`make test` 全量通过，覆盖 Go race、Vitest、Storybook、桌面与手机 E2E 及性能测试；性能套件 18 项通过、2 项按既有条件跳过。测试生成的 Playwright 临时报告不纳入交付。
+
+本次局部核对（2026-11-10，快速开始支持选择已有工作树）：快速开始页 `/new` 的分支选择器弹出面板顶部新增“新建 worktree | 已有工作树”分段切换，支持不新建 worktree 而直接在已有工作树中启动会话，对应更新 US-Q18 与覆盖索引，不新增故事。
+
+- 范围：
+  - 弹出面板顶部提供 `SegmentedControl`（`新建 worktree` 与 `已有工作树`），选择“已有工作树”时下方展示可搜索的工作树列表（显示工作树名称与路径，不可用的禁用并显示原因），触发器图标与文字切换为 `工作树：<名称>`；
+  - 发送时构造 `workspace: { repositoryId, worktreeId }` 而非 `newWorktree`，直接在该工作树中启动；
+  - 本设备草稿与上次成功选择（`quickStart`）记住工作树方式及所选工作树，所选工作树被移除或不可用时回退到仓库主工作区。
+- 依据：
+  - `QuickStart.test.ts` 浏览器测试（21 项，含切换到已有工作树、搜索工作树、直接启动、记住选择及工作树移除后回退到主工作区）通过；
+  - Playwright `quick-start.spec.ts` 端到端测试（桌面与手机共 7 项通过、1 项按项目跳过）通过，覆盖选择已有工作树直接启动且不新增 worktree；
+  - `make check`、`make docs-check` 与 `pnpm --dir web check:arch` 通过。
+- 限制：
+  - 未在真机上验证触屏与软键盘交互，无头浏览器未验证 hover 与 `any-pointer: coarse` 触屏常驻；未重新核验其余故事能力。

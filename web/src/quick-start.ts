@@ -19,9 +19,19 @@ import {
 // successful start, and the unsent composer state. Both are validated on read
 // and degrade to nothing when unreadable.
 
+const TargetModeSchema = z.enum(["new", "existing"]);
+export type QuickStartTargetMode = z.infer<typeof TargetModeSchema>;
+
+const WorktreeChoiceSchema = z.object({
+  repositoryId: z.string().min(1).max(256),
+  worktreeId: z.string().min(1).max(256),
+});
+
 const ChoiceSchema = z.object({
   repositoryId: z.string().min(1).max(256),
   configId: z.string().regex(/^[a-z2-7]{8}$/),
+  targetMode: TargetModeSchema.optional(),
+  worktreeChoice: WorktreeChoiceSchema.optional(),
 });
 export type QuickStartChoice = z.infer<typeof ChoiceSchema>;
 
@@ -43,7 +53,9 @@ const DraftSchema = z.object({
     .string()
     .regex(/^[a-z2-7]{8}$/)
     .optional(),
+  targetMode: TargetModeSchema.optional(),
   baseChoice: BaseChoiceSchema.optional(),
+  worktreeChoice: WorktreeChoiceSchema.optional(),
   permissionMode: ChatPermissionModeSchema.optional(),
   edits: z
     .record(z.string(), z.record(z.string(), ConfigValueSchema))
@@ -60,7 +72,9 @@ export type QuickStartDraft = {
   attachments?: ChatAttachment[];
   repositoryId?: string;
   configId?: string;
+  targetMode?: QuickStartTargetMode;
   baseChoice?: { repositoryId: string; name: string };
+  worktreeChoice?: { repositoryId: string; worktreeId: string };
   permissionMode?: ChatPermissionMode;
   edits?: Record<string, Record<string, ConfigValue>>;
   instructionChoice?: { repositoryId: string; use: boolean };
@@ -82,7 +96,9 @@ function emptyDraft(draft: QuickStartDraft) {
     !draft.attachments?.length &&
     !draft.repositoryId &&
     !draft.configId &&
+    !draft.targetMode &&
     !draft.baseChoice &&
+    !draft.worktreeChoice &&
     (!draft.permissionMode || draft.permissionMode === "auto") &&
     (!draft.edits || Object.keys(draft.edits).length === 0) &&
     !draft.instructionChoice

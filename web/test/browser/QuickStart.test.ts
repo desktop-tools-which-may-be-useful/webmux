@@ -515,6 +515,110 @@ test("the base branch is searched and picked by name", async () => {
   });
 });
 
+test("switching to an existing worktree starts directly in it, remembers the choice and falls back when gone", async () => {
+  respond(/^GET \/api\/repositories$/, () =>
+    Response.json([
+      repository({
+        worktrees: [
+          worktree(),
+          worktree({
+            id: "feat-tree",
+            kind: "linked",
+            branch: "feature",
+            path: "/repos/webmux.worktrees/feature",
+          }),
+          worktree({
+            id: "broken-tree",
+            kind: "linked",
+            branch: "broken",
+            path: "/repos/webmux.worktrees/broken",
+            available: false,
+            error: "目录不存在",
+          }),
+        ],
+      }),
+    ]),
+  );
+  respond(/^POST \/api\/sessions$/, () =>
+    Response.json(
+      {
+        session: chat({ id: "chataaaa" }),
+        configWarnings: [],
+      },
+      { status: 201 },
+    ),
+  );
+  const { input, place } = await open();
+  await place.getByRole("button", { name: "基准分支：main" }).click();
+  const modeGroup = page.getByRole("radiogroup", { name: "工作树方式" });
+  await expect
+    .element(modeGroup.getByRole("radio", { name: "新建 worktree" }))
+    .toHaveAttribute("aria-checked", "true");
+  await modeGroup.getByRole("radio", { name: "已有工作树" }).click();
+  await expect
+    .element(place.getByRole("button", { name: "工作树：主工作区 · main" }))
+    .toBeVisible();
+  const list = page.getByRole("listbox", { name: "工作树列表" });
+  await expect.poll(() => list.getByRole("option").elements()).toHaveLength(3);
+  await expect
+    .element(list.getByRole("option", { name: /broken/ }))
+    .toHaveAttribute("aria-disabled", "true");
+  await page.getByRole("combobox", { name: "工作树" }).fill("feat");
+  await list.getByRole("option", { name: /feature/ }).click();
+  await expect
+    .element(place.getByRole("button", { name: "工作树：feature" }))
+    .toBeVisible();
+  await expect
+    .element(input)
+    .toHaveAttribute("placeholder", "描述任务，发送后在所选工作树中开始");
+
+  await input.fill("直接在当前分支修改");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => location.pathname).toBe("/s/chataaaa");
+  const sent = commands().find((c) => c.path === "/api/sessions");
+  expect(sent?.body).toMatchObject({
+    workspace: {
+      repositoryId: "repo1",
+      worktreeId: "feat-tree",
+    },
+    configId: "cfgclaud",
+    view: "chat",
+    prompt: "直接在当前分支修改",
+  });
+  expect(sent?.body).not.toHaveProperty("newWorktree");
+  expect(JSON.parse(localStorage.getItem("webmux.quickStart")!)).toEqual({
+    repositoryId: "repo1",
+    configId: "cfgclaud",
+    targetMode: "existing",
+    worktreeChoice: {
+      repositoryId: "repo1",
+      worktreeId: "feat-tree",
+    },
+  });
+});
+
+test("a remembered worktree that is gone falls back to the repository's main worktree", async () => {
+  localStorage.setItem(
+    "webmux.quickStart",
+    JSON.stringify({
+      repositoryId: "repo1",
+      configId: "cfgclaud",
+      targetMode: "existing",
+      worktreeChoice: {
+        repositoryId: "repo1",
+        worktreeId: "removed-tree",
+      },
+    }),
+  );
+  render(ShellHarness, { drafts: createTerminalDrafts() });
+  const socket = await socketAt("/ws/sessions");
+  socket.frame({ type: "snapshot", sessions: [], forwards: [] } as never);
+  const place = page.getByRole("toolbar", { name: "仓库与分支" });
+  await expect
+    .element(place.getByRole("button", { name: "工作树：主工作区 · main" }))
+    .toBeVisible();
+});
+
 test("choosing an agent reads its options and holds the row until done", async () => {
   const pending = Promise.withResolvers<Response>();
   respond(/^POST \/api\/launch-configs\/\w+\/options$/, (request) =>

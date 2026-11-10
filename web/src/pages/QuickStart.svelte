@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from "svelte";
   import IconAlertCircle from "~icons/tabler/alert-circle";
   import IconBook2 from "~icons/tabler/book-2";
+  import IconCirclePlus from "~icons/tabler/circle-plus";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconMessage from "~icons/tabler/message";
@@ -9,12 +10,15 @@
   import IconTerminal2 from "~icons/tabler/terminal-2";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
+  import * as Command from "$lib/components/ui/command";
   import { Label } from "$lib/components/ui/label";
   import * as Popover from "$lib/components/ui/popover";
+  import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import { api, navigate, store, stored, uploadQuickStartFile } from "../api";
   import { setBrowserChrome, resetBrowserChrome } from "../browser-chrome";
   import { remoteBranchBases, suggestWorktreeBranch } from "../branch-name";
   import type { ConfigValue } from "../chat-api";
+  import ChoiceDetails from "../components/ChoiceDetails.svelte";
   import ChatConfig from "../components/chat/ChatConfig.svelte";
   import ChatPermissionMode from "../components/chat/ChatPermissionMode.svelte";
   import ChatSelect from "../components/chat/ChatSelect.svelte";
@@ -34,12 +38,14 @@
   import { errorMessage } from "../error";
   import { useChatUpload } from "../hooks/upload.svelte";
   import { useViewport } from "../hooks/viewport.svelte";
+  import { selectableWorktree, worktreeLabel } from "../new-session-defaults";
   import {
     configValues,
     failedStep,
     pickDefault,
     quickStartMemory,
     sendQuickStart,
+    type QuickStartTargetMode,
   } from "../quick-start";
   import {
     expandInitInstruction,
@@ -114,6 +120,12 @@
   let baseChoice = $state<{ repositoryId: string; name: string } | undefined>(
     initialDraft.baseChoice,
   );
+  let targetModeChoice = $state<QuickStartTargetMode | undefined>(
+    initialDraft.targetMode ?? remembered?.targetMode,
+  );
+  let worktreeChoice = $state<
+    { repositoryId: string; worktreeId: string } | undefined
+  >(initialDraft.worktreeChoice ?? remembered?.worktreeChoice);
   // The init instruction choice the user made for one repository and send;
   // without it the default depends on the side: chat starts include the
   // instruction, terminal starts do not, since the text is usually natural
@@ -123,6 +135,7 @@
 
   function persistDraft() {
     const edited = Object.keys(edits).length ? edits : undefined;
+    const rememberedMode = remembered?.targetMode ?? "new";
     quickStartMemory.saveDraftState({
       text,
       ...(attachments.length ? { attachments } : {}),
@@ -132,7 +145,16 @@
       ...(agentChoice && agentChoice !== remembered?.configId
         ? { configId: agentChoice }
         : {}),
+      ...(targetModeChoice && targetModeChoice !== rememberedMode
+        ? { targetMode: targetModeChoice }
+        : {}),
       ...(baseChoice ? { baseChoice } : {}),
+      ...(worktreeChoice &&
+      (worktreeChoice.repositoryId !==
+        remembered?.worktreeChoice?.repositoryId ||
+        worktreeChoice.worktreeId !== remembered?.worktreeChoice?.worktreeId)
+        ? { worktreeChoice }
+        : {}),
       ...(permissionMode !== "auto" ? { permissionMode } : {}),
       ...(edited ? { edits: edited } : {}),
       ...(instructionChoice ? { instructionChoice } : {}),
@@ -255,9 +277,32 @@
   const base = $derived(
     baseBranches.find((b) => b.name === baseName)?.head ?? "",
   );
+  const worktrees = $derived(repository?.worktrees ?? []);
+  const defaultWorktree = $derived(
+    worktrees.find(
+      (item) => item.kind === "main" && selectableWorktree(item),
+    ) ?? worktrees.find(selectableWorktree),
+  );
+  const selectedWorktree = $derived.by(() => {
+    if (worktreeChoice?.repositoryId === repository?.id) {
+      const kept = worktrees.find(
+        (item) =>
+          item.id === worktreeChoice?.worktreeId && selectableWorktree(item),
+      );
+      if (kept) return kept;
+    }
+    return defaultWorktree;
+  });
+  const targetMode = $derived<QuickStartTargetMode>(
+    targetModeChoice === "existing" && selectedWorktree ? "existing" : "new",
+  );
+  let worktreeSearch = $state("");
   function setBasePickerOpen(next: boolean) {
     basePickerOpen = next;
-    if (!next) baseSearch = "";
+    if (!next) {
+      baseSearch = "";
+      worktreeSearch = "";
+    }
   }
 
   const missing = $derived(
@@ -296,12 +341,15 @@
   );
   // Reading the agent's options holds the agent row and sending.
   const locked = $derived(sending || (chat && probing));
+  const hasTarget = $derived(
+    targetMode === "existing" ? !!selectedWorktree : !!base,
+  );
   const canSend = $derived(
     !locked &&
       !uploads.progress &&
       !!repository &&
       !!agent &&
-      !!base &&
+      hasTarget &&
       text.trim() !== "",
   );
 
@@ -314,15 +362,66 @@
   });
 
   async function send() {
-    if (!canSend || !repository || !agent || !branches?.data) return;
+    if (!canSend || !repository || !agent) return;
+    if (targetMode === "new" && !branches?.data) return;
+    if (targetMode === "existing" && !selectedWorktree) return;
     sending = true;
     failure = undefined;
-    const data = branches.data;
     const attachments = uploads.take();
-    const taken = data.branches.map((branch) => branch.name);
-    const paths = repository.worktrees.map((tree) => tree.path);
-    let avoid: string | undefined;
+    const sharedRequest = {
+      configId: agent.id,
+      view: startSide,
+      prompt: text,
+      useInitInstruction: !!repository.initInstruction && useInstruction,
+      // The server fills {{dir}} and {{webmux}} in the message once the
+      // session exists, as the quick command menu inserts them.
+      expandPrompt: true,
+      ...(attachments.length ? { attachments } : {}),
+      // A terminal start takes no agent options or permission mode.
+      ...(chat
+        ? {
+            agentConfig: configValues(options),
+            permissionMode,
+          }
+        : {}),
+    };
     try {
+      if (targetMode === "existing" && selectedWorktree) {
+        const outcome = await sendQuickStart({
+          workspace: {
+            repositoryId: repository.id,
+            worktreeId: selectedWorktree.id,
+          },
+          ...sharedRequest,
+        });
+        if (outcome.ok) {
+          uploads.commit(attachments);
+          store("quickStartSide", startSide);
+          quickStartMemory.rememberChoice({
+            repositoryId: repository.id,
+            configId: agent.id,
+            targetMode: "existing",
+            worktreeChoice: {
+              repositoryId: repository.id,
+              worktreeId: selectedWorktree.id,
+            },
+          });
+          text = "";
+          instructionChoice = undefined;
+          quickStartMemory.clearDraft();
+          openSession({ id: outcome.sessionId });
+          return;
+        }
+        failure = outcome.failure;
+        if (outcome.failure.step === "prompt") uploads.commit(attachments);
+        else uploads.restore(attachments);
+        return;
+      }
+
+      const data = branches!.data!;
+      const taken = data.branches.map((branch) => branch.name);
+      const paths = repository.worktrees.map((tree) => tree.path);
+      let avoid: string | undefined;
       // A branch or directory that appeared since the list was read is a
       // conflict; draw another name and send again under a new request ID.
       let lastFailure: CreateSessionFailure | undefined;
@@ -339,21 +438,7 @@
             base,
             branch,
           },
-          configId: agent.id,
-          view: startSide,
-          prompt: text,
-          useInitInstruction: !!repository.initInstruction && useInstruction,
-          // The server fills {{dir}} and {{webmux}} in the message once the
-          // session exists, as the quick command menu inserts them.
-          expandPrompt: true,
-          ...(attachments.length ? { attachments } : {}),
-          // A terminal start takes no agent options or permission mode.
-          ...(chat
-            ? {
-                agentConfig: configValues(options),
-                permissionMode,
-              }
-            : {}),
+          ...sharedRequest,
         });
         if (outcome.ok) {
           uploads.commit(attachments);
@@ -437,7 +522,9 @@
     >
       <h2 class="text-2xl font-medium">要让 agent 做什么？</h2>
       <p class="max-w-md text-sm text-muted-foreground">
-        发送后会在所选仓库新建 worktree，{chat
+        发送后会在{targetMode === "existing"
+          ? "所选工作树中"
+          : "所选仓库新建 worktree，"}{chat
           ? "以聊天方式启动 agent 并发出这条消息"
           : "在终端中启动 agent，待它就绪后输入这条消息并回车"}。
       </p>
@@ -473,7 +560,7 @@
           {/if}
         </div>
       {/if}
-      {#if branches?.error && branches.id === repository?.id}
+      {#if targetMode === "new" && branches?.error && branches.id === repository?.id}
         <p role="alert" class="px-1 text-sm text-destructive">
           读取 {repository?.name} 的分支失败：{branches.error}
         </p>
@@ -539,7 +626,9 @@
           text = event.currentTarget.value;
           persistDraft();
         }}
-        placeholder="描述任务，发送后在新 worktree 中开始"
+        placeholder={targetMode === "existing"
+          ? "描述任务，发送后在所选工作树中开始"
+          : "描述任务，发送后在新 worktree 中开始"}
         label="任务描述"
         disabled={sending}
         {uploads}
@@ -585,17 +674,32 @@
               {#snippet icon()}<IconBook2 aria-hidden="true" />{/snippet}
             </ChatSelect>
             <Popover.Root bind:open={() => basePickerOpen, setBasePickerOpen}>
-              <Popover.Trigger disabled={sending || !baseBranches.length}>
+              <Popover.Trigger
+                disabled={sending || (!baseBranches.length && !defaultWorktree)}
+              >
                 {#snippet child({ props })}
+                  {@const treeLabel = selectedWorktree
+                    ? worktreeLabel(selectedWorktree)
+                    : ""}
                   <QuietTrigger
                     {props}
-                    label={`基准分支：${baseName}`}
-                    title={baseName ? `基准分支：${baseName}` : "基准分支"}
-                    text={baseName}
+                    label={targetMode === "existing"
+                      ? `工作树：${treeLabel}`
+                      : `基准分支：${baseName}`}
+                    title={targetMode === "existing"
+                      ? selectedWorktree
+                        ? `工作树：${treeLabel}（${selectedWorktree.path}）`
+                        : "工作树"
+                      : baseName
+                        ? `基准分支：${baseName}（发送后新建 worktree）`
+                        : "基准分支"}
+                    text={targetMode === "existing" ? treeLabel : baseName}
                   >
-                    {#snippet icon()}<IconGitBranch
-                        aria-hidden="true"
-                      />{/snippet}
+                    {#snippet icon()}{#if targetMode === "existing"}<IconGitBranch
+                          aria-hidden="true"
+                        />{:else}<IconCirclePlus
+                          aria-hidden="true"
+                        />{/if}{/snippet}
                   </QuietTrigger>
                 {/snippet}
               </Popover.Trigger>
@@ -603,21 +707,111 @@
                 align="start"
                 class="w-72 gap-0 overflow-hidden p-0"
               >
-                <BranchCommandList
-                  label="基准分支"
-                  branches={localBranches}
-                  {remoteBranches}
-                  selected={baseName}
-                  loading={!branchData && !branches?.error}
-                  failed={!!branches?.error}
-                  disabled={sending}
-                  bind:search={baseSearch}
-                  onselect={(name) => {
-                    baseChoice = { repositoryId: repository?.id ?? "", name };
-                    persistDraft();
-                    setBasePickerOpen(false);
-                  }}
-                />
+                <div class="border-b px-2 py-1.5">
+                  <SegmentedControl.Root
+                    value={targetMode}
+                    onValueChange={(next) => {
+                      if (next === "new" && targetModeChoice !== "new") {
+                        targetModeChoice = "new";
+                        persistDraft();
+                      } else if (
+                        next === "existing" &&
+                        targetModeChoice !== "existing" &&
+                        defaultWorktree
+                      ) {
+                        targetModeChoice = "existing";
+                        persistDraft();
+                      }
+                    }}
+                    aria-label="工作树方式"
+                    class="w-full"
+                  >
+                    <SegmentedControl.Item value="new" disabled={sending}
+                      >新建 worktree</SegmentedControl.Item
+                    >
+                    <SegmentedControl.Item
+                      value="existing"
+                      disabled={sending || !defaultWorktree}
+                      >已有工作树</SegmentedControl.Item
+                    >
+                  </SegmentedControl.Root>
+                </div>
+                {#if targetMode === "existing"}
+                  <Command.Root
+                    label="工作树"
+                    class="h-auto min-w-0"
+                    filter={(value, query, keywords) =>
+                      [value, ...(keywords ?? [])].some((item) =>
+                        item.toLowerCase().includes(query.trim().toLowerCase()),
+                      )
+                        ? 1
+                        : 0}
+                    disableInitialScroll
+                  >
+                    <Command.Input
+                      bind:value={worktreeSearch}
+                      placeholder="搜索工作树…"
+                      aria-label="搜索工作树"
+                      autocomplete="off"
+                      autocapitalize="off"
+                      autocorrect="off"
+                      spellcheck={false}
+                    />
+                    <Command.List
+                      aria-label="工作树列表"
+                      class="max-h-[min(14rem,50dvh)] p-1"
+                    >
+                      <Command.Empty>没有匹配的工作树</Command.Empty>
+                      {#each worktrees as tree (tree.id)}
+                        {@const label = worktreeLabel(tree)}
+                        {@const usable = selectableWorktree(tree)}
+                        <Command.Item
+                          value={tree.id}
+                          keywords={[label, tree.path]}
+                          disabled={sending || !usable}
+                          data-checked={selectedWorktree?.id === tree.id}
+                          onSelect={() => {
+                            targetModeChoice = "existing";
+                            worktreeChoice = {
+                              repositoryId: repository?.id ?? "",
+                              worktreeId: tree.id,
+                            };
+                            persistDraft();
+                            setBasePickerOpen(false);
+                          }}
+                        >
+                          <IconGitBranch
+                            class="text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <ChoiceDetails
+                            primary={label}
+                            secondary={usable
+                              ? tree.path
+                              : tree.error || "工作树不可用"}
+                          />
+                        </Command.Item>
+                      {/each}
+                    </Command.List>
+                  </Command.Root>
+                {:else}
+                  <BranchCommandList
+                    label="基准分支"
+                    branches={localBranches}
+                    {remoteBranches}
+                    selected={baseName}
+                    loading={!branchData && !branches?.error}
+                    failed={!!branches?.error}
+                    disabled={sending}
+                    bind:search={baseSearch}
+                    onselect={(name) => {
+                      targetModeChoice = "new";
+                      baseChoice = { repositoryId: repository?.id ?? "", name };
+                      persistDraft();
+                      setBasePickerOpen(false);
+                    }}
+                  />
+                {/if}
               </Popover.Content>
             </Popover.Root>
           </div>
@@ -727,7 +921,9 @@
               <IconLoader2
                 class="size-3.5 animate-spin motion-reduce:animate-none"
                 aria-hidden="true"
-              />正在创建 worktree 并启动 {agent?.name}…
+              />{targetMode === "existing"
+                ? `正在启动 ${agent?.name}…`
+                : `正在创建 worktree 并启动 ${agent?.name}…`}
             </span>
           {:else if agent}
             <!-- Narrow screens keep the agent and its options in the card, as
