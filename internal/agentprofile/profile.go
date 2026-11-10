@@ -35,6 +35,21 @@ type Resumer interface {
 	ResumesSessions() bool
 }
 
+// TUIResumePreparer is an agent whose persisted session state needs an
+// adjustment before a terminal UI resumes it. Changed reports a write.
+type TUIResumePreparer interface {
+	PrepareTUIResume(sessionID string, getenv func(string) string, userHome string) (changed bool, err error)
+}
+
+// PrepareTUIResume applies an agent's terminal-resume compatibility hook.
+func PrepareTUIResume(a Agent, sessionID string, getenv func(string) string, userHome string) (bool, error) {
+	p, ok := a.(TUIResumePreparer)
+	if !ok {
+		return false, nil
+	}
+	return p.PrepareTUIResume(sessionID, getenv, userHome)
+}
+
 // ConfigReapplier is an agent whose session/load does not restore some
 // config options, so their recorded values are set again after a load.
 type ConfigReapplier interface {

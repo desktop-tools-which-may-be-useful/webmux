@@ -379,6 +379,9 @@ func (a *actor) resumeSide(epoch int, side Side, sid string) resumeResult {
 	if side == SideTUI {
 		argv := a.cmd.TUIArgv()
 		if sid != "" {
+			if err := a.prepareTUIResume(sid); err != nil {
+				return resumeResult{err: fmt.Errorf("%w: %w", ErrAgent, err)}
+			}
 			argv, _ = a.cmd.ResumeArgv(sid)
 		}
 		if err := a.shell.StartRun(argv); err != nil {
