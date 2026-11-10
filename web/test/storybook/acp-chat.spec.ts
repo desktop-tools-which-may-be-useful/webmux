@@ -73,9 +73,8 @@ for (const viewport of [
             );
           })
           .toBe(true);
-        await expect(
-          sheet.getByRole("combobox", { name: "模型", exact: true }),
-        ).toHaveValue("sonnet");
+        const model = sheet.getByRole("button", { name: "模型", exact: true });
+        await expect(model).toHaveText("Sonnet");
         const last = sheet.getByRole("combobox", { name: "模式", exact: true });
         await last.scrollIntoViewIfNeeded();
         await expect(last).toBeInViewport({ ratio: 1 });
@@ -83,6 +82,22 @@ for (const viewport of [
           page,
           `${viewport.width}×${viewport.height} ${theme}`,
         );
+        await model.tap();
+        const search = sheet.getByRole("combobox", {
+          name: "模型",
+          exact: true,
+        });
+        await expect(search).toBeVisible();
+        await search.fill("opus");
+        await expect(sheet.getByRole("option", { name: /Opus/ })).toBeVisible();
+        await expect(sheet.getByRole("option", { name: /Haiku/ })).toHaveCount(
+          0,
+        );
+        await expectNoOverflow(
+          page,
+          `${viewport.width}×${viewport.height} ${theme} model search`,
+        );
+        await model.tap();
         await sheet
           .getByRole("button", { name: "关闭选项", exact: true })
           .tap();
@@ -151,8 +166,8 @@ test("options reveal from their trigger and can close midway without stale clipp
     .poll(() => sheet.evaluate((node) => getComputedStyle(node).clipPath))
     .toBe("none");
   await expect(
-    sheet.getByRole("combobox", { name: "模型", exact: true }),
-  ).toHaveValue("sonnet");
+    sheet.getByRole("button", { name: "模型", exact: true }),
+  ).toHaveText("Sonnet");
   await sheet.getByRole("button", { name: "关闭选项", exact: true }).click();
   await expect(sheet).toBeHidden();
 });

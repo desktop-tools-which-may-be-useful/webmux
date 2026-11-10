@@ -882,8 +882,13 @@ test("config options expose the actual fallback mode and adapter notice", async 
             type: "select",
             value: "smart",
             options: [
-              { value: "fast", name: "Fast" },
-              { value: "smart", name: "Smart" },
+              { value: "fast", name: "Fast", description: "Low latency" },
+              { value: "smart", name: "Smart", description: "Deep reasoning" },
+              {
+                value: "vision",
+                name: "Vision Pro",
+                description: "Multimodal",
+              },
             ],
           },
           {
@@ -943,10 +948,28 @@ test("config options expose the actual fallback mode and adapter notice", async 
     .toBeChecked();
 
   await model.click();
+  const modelSearch = page.getByRole("combobox", { name: "模型" });
+  const modelList = page.getByRole("listbox", { name: "模型列表" });
   await expect
-    .element(page.getByRole("menuitemradio", { name: "Fast" }))
+    .poll(() => modelList.getByRole("option").elements())
+    .toHaveLength(3);
+  await modelSearch.fill("nonexistent");
+  await expect.element(page.getByText("没有匹配的模型")).toBeVisible();
+  // Closing the popover resets the search filter for the next opening.
+  await userEvent.keyboard("{Escape}");
+  await model.click();
+  await expect.element(modelSearch).toHaveValue("");
+  await expect
+    .poll(() => modelList.getByRole("option").elements())
+    .toHaveLength(3);
+  await modelSearch.fill("low latency");
+  await expect
+    .element(modelList.getByRole("option", { name: /Fast/ }))
     .toBeVisible();
-  await page.getByRole("menuitemradio", { name: "Fast" }).click();
+  await expect
+    .element(modelList.getByRole("option", { name: /Smart/ }))
+    .not.toBeInTheDocument();
+  await modelList.getByRole("option", { name: /Fast/ }).click();
   await expect.poll(commands).toEqual([
     {
       method: "PUT",
@@ -1009,9 +1032,11 @@ test("narrow screens move session options into a sheet beside the upload button"
     await expect.element(where).toBeVisible();
     await page.getByRole("button", { name: "会话选项" }).click();
     await expect.element(page.getByLabelText("权限")).toBeVisible();
-    const model = page.getByRole("combobox", { name: "Model", exact: true });
-    await expect.element(model).toHaveValue("a");
-    await userEvent.selectOptions(model, "b");
+    const model = page.getByRole("button", { name: "Model", exact: true });
+    await expect.element(model).toHaveTextContent("A");
+    await model.click();
+    await page.getByRole("combobox", { name: "Model" }).fill("b");
+    await page.getByRole("option", { name: "B", exact: true }).click();
     await expect.poll(commands).toEqual([
       {
         method: "PUT",
@@ -1094,18 +1119,19 @@ test("mobile options keep confirmed values on rejection and show errors inside t
       name: "权限",
       exact: true,
     });
-    const model = sheet.getByRole("combobox", { name: "模型", exact: true });
+    const model = sheet.getByRole("button", { name: "模型", exact: true });
     const memory = sheet.getByRole("switch", { name: "记忆", exact: true });
     await userEvent.selectOptions(permission, "ask");
     await expect
       .element(sheet.getByRole("alert"))
       .toHaveTextContent("保存失败，请重试");
     await expect.element(permission).toHaveValue("auto");
-    await userEvent.selectOptions(model, "b");
+    await model.click();
+    await sheet.getByRole("option", { name: "B", exact: true }).click();
     await expect
       .element(sheet.getByRole("alert"))
       .toHaveTextContent("保存失败，请重试");
-    await expect.element(model).toHaveValue("a");
+    await expect.element(model).toHaveTextContent("A");
     // Refreshing the option catalog must not resurrect the rejected selection.
     socket.frame({
       type: "state",
@@ -1121,10 +1147,12 @@ test("mobile options keep confirmed values on rejection and show errors inside t
         ),
       }),
     });
+    await model.click();
     await expect
-      .element(model.getByRole("option", { name: "C", exact: true }))
+      .element(sheet.getByRole("option", { name: "C", exact: true }))
       .toBeInTheDocument();
-    await expect.element(model).toHaveValue("a");
+    await userEvent.keyboard("{Escape}");
+    await expect.element(model).toHaveTextContent("A");
     await memory.click();
     await expect
       .element(sheet.getByRole("alert"))
@@ -1156,7 +1184,7 @@ test("mobile options keep confirmed values on rejection and show errors inside t
       }),
     });
     await expect.element(permission).toHaveValue("ask");
-    await expect.element(model).toHaveValue("b");
+    await expect.element(model).toHaveTextContent("B");
     await expect.element(memory).toBeChecked();
   } finally {
     await page.viewport(1024, 900);

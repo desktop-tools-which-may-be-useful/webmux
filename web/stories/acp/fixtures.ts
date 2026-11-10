@@ -294,8 +294,9 @@ export const configs: Record<Agent, ChatState["config"]> = {
       type: "select",
       value: "sonnet",
       options: [
-        { value: "sonnet", name: "Sonnet" },
-        { value: "opus", name: "Opus" },
+        { value: "sonnet", name: "Sonnet", description: "均衡的速度与推理" },
+        { value: "opus", name: "Opus", description: "深度思考与复杂任务" },
+        { value: "haiku", name: "Haiku", description: "快速响应" },
       ],
     },
     {

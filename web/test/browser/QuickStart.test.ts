@@ -201,9 +201,19 @@ test("long option labels leave both ends of the startup toolbar reachable", asyn
     const last = toolbar.getByRole("button", { name: /^模型 4：/ });
     await last.click();
     expect(row.scrollLeft).toBeGreaterThan(0);
+    const search = page.getByRole("combobox", { name: "模型 4" });
+    await expect.element(search).toBeVisible();
+    await search.fill("fast");
     await expect
-      .element(page.getByRole("menuitemradio", { name: "Fast Model" }))
+      .element(page.getByRole("option", { name: "Fast Model" }))
       .toBeVisible();
+    await expect
+      .element(
+        page.getByRole("option", {
+          name: "Long Provider / High Capability Model",
+        }),
+      )
+      .not.toBeInTheDocument();
   } finally {
     await page.viewport(1024, 900);
   }

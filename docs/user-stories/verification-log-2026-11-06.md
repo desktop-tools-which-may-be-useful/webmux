@@ -120,3 +120,15 @@
 
 - Chromium 桌面与手机在两个独立浏览器上下文验证置顶、排序、取消置顶、快速切换、刷新与退出清理。单元测试核对不同客户端的顺序变更，Go 协议测试核对中断记录保留与删除后的清理。
 - 本次使用隔离服务与浏览器模拟，未在真机上核对。
+
+本次局部核对（2026-11-10）：聊天视图与快速开始页 `/new` 的模型选择支持文本搜索，对应更新 US-Q07、US-Q18 与 `docs/frontend-architecture.md`，不新增故事或改变覆盖索引。
+
+- 范围：
+  - 新增 `ChatChoiceCommandList.svelte` 与 `isModelOption(option)`（识别 `category: "model"` 或 `id: "model"`），按选项名称、值与说明忽略大小写过滤，展示 `reason ?? description`，无匹配时显示“没有匹配的模型”；
+  - 桌面端 `ChatSelect.svelte` 新增 `searchable` 属性，启用时以 `Popover` 承载 `ChatChoiceCommandList` 并在关闭时清空搜索词；
+  - 移动端 `ChatSessionOptions.svelte` 在“会话选项”底部面板内为模型项提供内联可折叠搜索列表（`Collapsible` + `ChatChoiceCommandList`），选择后自动收起并提交，展开时按 Esc 先收起列表并把焦点归还模型按钮。
+- 依据：
+  - `ChatView.test.ts`（28 项）与 `QuickStart.test.ts`（18 项）浏览器组件测试通过，覆盖桌面端与移动端模型搜索过滤、空状态、关闭重置搜索词及 409 错误回滚保留原值；
+  - Storybook `acp-chat.spec.ts` 与 `design-system.spec.ts` 多视口（含 320×568、375×667、390×844、568×320、667×375、768×800、1280×900）布局与无横向溢出测试通过；
+  - `make check`、`pnpm --dir web check:arch` 与 `make docs-check` 通过，并截取桌面（1280×900）、平板（768×800）、手机（390×844）前后对比截图与交互 GIF。
+- 限制：在 Chromium 桌面与移动视口模拟下验证，未在 iOS/Android 真机核对；未重新核验其余故事能力。

@@ -96,6 +96,7 @@
 - **US-Q07 调整配置与使用命令**：作为使用者，我希望在聊天视图切换模型等配置并使用 agent 的斜杠命令，以便不切回终端也能调整 agent。
   验收要点：
   - 桌面输入框下方显示 agent 提供的配置项（选择类为下拉、布尔类为开关）。两者都按 `category` 显示图标，未知类别使用通用图标；下拉按钮显示服务端确认的当前值，长值可在菜单中查看全文。桌面宽度不足时这一行横向滚动；手机仅在输入卡片内提供一个“会话选项”入口；
+  - 模型配置项（`category: "model"` 或 `id: "model"`）支持文本搜索（按名称、值与说明忽略大小写筛选，无匹配时提示“没有匹配的模型”）：桌面端在下拉弹出层内搜索并在关闭后清空搜索词；手机端在“会话选项”面板内点击模型按钮后展开可搜索列表，按 Esc 先收起列表并把焦点归还模型按钮；
   - 手机打开“会话选项”后，底部面板按行显示名称和当前值，选择后提交；关闭、点击遮罩或下滑可收起，关闭后焦点回到入口；短屏或更多配置时面板内部滚动，不遮住关闭按钮；
   - 打开面板时从齿轮位置展开轮廓，文字与控件不缩放；系统启用“减少动态效果”时直接显示，快速关闭再打开也不残留裁切；
   - 变更经 `session/set_config_option` 生效并在所有设备同步，取值被记录用于切换与恢复后补齐；手机面板的下拉与开关只显示已确认的值，保存失败时保留原值并在面板内提示；
@@ -201,7 +202,7 @@
   - 标识只用于展示，不可聚焦或点击；切到终端视图后隐藏；浏览器不认识的图标键只显示名称，不用其他图标代替。
 - **US-Q18 快速开始聊天**：作为想直接把任务交给 agent 的使用者，我希望在一个输入框写下任务、选好仓库和 agent 后按一次发送，就在新 worktree 里以聊天方式开工，以便省去建 worktree、选配置和等待聊天就绪这几步。
   验收要点：
-  - 桌面快速开始页 `/new` 是聊天模式的主区域：底部输入框，上方一行是仓库与基准分支，下方一行是 agent、该 agent 的配置项与权限模式。下拉按钮显示当前选项，空间不足时可横向滚动到两端；
+  - 桌面快速开始页 `/new` 是聊天模式的主区域：底部输入框，上方一行是仓库与基准分支，下方一行是 agent、该 agent 的配置项（模型配置项同样支持文本搜索）与权限模式。下拉按钮显示当前选项，空间不足时可横向滚动到两端；
   - 窄屏（小于 640px）或高度小于 480px 的触屏设备，在快速开始页 `/new` 与聊天视图中共用紧凑输入状态：
     - 输入框未聚焦且无草稿文字、待发送附件、上传进度或发送中状态时，输入卡片收起为单行输入框与发送/停止按钮。下方不常驻选项行，仓库与分支位置行、初始化指令勾选栏及卡片内包括设置齿轮在内的辅助按钮隐藏；
     - 展开输入框后才显示会话选项入口；agent 与启动方式位于卡片内，权限与 agent 配置统一收进“会话选项”底部面板，显示当前值，读取期间保留加载提示与禁用状态；
@@ -269,4 +270,5 @@
 - [快速开始页](../../web/src/pages/QuickStart.svelte)、[快速开始状态](../../web/src/quick-start.ts)、[创建编排](../../internal/workspace/create_session.go)、[会话接口](../../internal/api/sessions.go)、[按视图输入](../../internal/hybrid/input.go)、[配置项清单](../../internal/hybrid/options.go)
 - [聊天历史](../../web/src/components/ChatHistory.svelte)、[快速开始浏览器用例](../../web/test/browser/QuickStart.test.ts)、[聊天历史浏览器用例](../../web/test/browser/ChatHistory.test.ts)、[快速开始端到端用例](../../web/test/e2e/quick-start.spec.ts)。
 
-- [手机会话选项面板](../../web/src/components/chat/ChatSessionOptions.svelte)、[共用输入卡片](../../web/src/components/chat/ComposerCard.svelte)、[聊天浏览器用例](../../web/test/browser/ChatView.test.ts)、[布局验收](../../web/test/storybook/acp-chat.spec.ts)。
+- [手机会话选项面板](../../web/src/components/chat/ChatSessionOptions.svelte)、[模型可搜索列表](../../web/src/components/chat/ChatChoiceCommandList.svelte)、[共用输入卡片](../../web/src/components/chat/ComposerCard.svelte)；
+- [聊天浏览器用例](../../web/test/browser/ChatView.test.ts)、[布局验收](../../web/test/storybook/acp-chat.spec.ts)。

@@ -49,6 +49,7 @@
   let wrapping = $state(true);
   let name = $state("检查构建");
   let repository = $state("webmux");
+  let model = $state("sonnet");
   const sections = {
     foundations: [
       "设计基础",
@@ -423,6 +424,19 @@
           ]}
           disabled={false}
           onchange={(value) => (repository = value)}
+        />
+        <ChatSelect
+          labeled
+          searchable
+          name="模型"
+          value={model}
+          choices={[
+            { value: "sonnet", name: "Claude Sonnet 4.5" },
+            { value: "opus", name: "Claude Opus 4.1" },
+            { value: "haiku", name: "Claude Haiku 4.5" },
+          ]}
+          disabled={false}
+          onchange={(value) => (model = value)}
         />
         <ChatSelect
           labeled

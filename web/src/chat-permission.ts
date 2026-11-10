@@ -1,4 +1,8 @@
-import { ChatPermissionModeSchema, type ChatPermissionMode } from "./schemas";
+import {
+  ChatPermissionModeSchema,
+  type ChatConfig,
+  type ChatPermissionMode,
+} from "./schemas";
 
 /** The permission modes a chat offers, in menu order. */
 export const permissionChoices: { value: ChatPermissionMode; name: string }[] =
@@ -14,4 +18,9 @@ export function changedPermissionMode(
 ): ChatPermissionMode | undefined {
   const parsed = ChatPermissionModeSchema.safeParse(value);
   return parsed.success && parsed.data !== current ? parsed.data : undefined;
+}
+
+/** Whether a select option represents the agent's model catalog. */
+export function isModelOption(option: ChatConfig): boolean {
+  return option.category === "model" || option.id === "model";
 }

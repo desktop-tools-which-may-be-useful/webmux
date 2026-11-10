@@ -8,6 +8,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
   import type { ConfigValue } from "../../chat-api";
+  import { isModelOption } from "../../chat-permission";
   import type { ChatConfig } from "../../schemas";
   import ChatSelect from "./ChatSelect.svelte";
 
@@ -56,6 +57,7 @@
       choices={option.options}
       {disabled}
       labeled
+      searchable={isModelOption(option)}
       onchange={(value) => onchange(option.id, { value })}
     >
       {#snippet icon()}<OptionIcon aria-hidden="true" />{/snippet}
