@@ -48,16 +48,20 @@ var errMissingCapability = errors.New("agent 未声明 session/load 或 session/
 // on the actor to preserve completed operations' recovery contract, but never
 // hold the record state lock during filesystem I/O.
 type actor struct {
-	replayOwnedMessageID string
-	replayOwnedMessage   bool
-	replayUser           replayUserBuffer
-	svc                  *Service
-	cmd                  agentprofile.Command
-	cwd                  string
-	configID             string
-	log                  *chatLog
-	inbox                chan func()
-	quit                 chan struct{}
+	conversationID                           string
+	contextExecutionID, operationExecutionID string
+	requireNativeResume, nativeContinue      bool
+	replayOwnedMessageID                     string
+	replayOwnedMessage                       bool
+	replayUser                               replayUserBuffer
+	svc                                      *Service
+	cmd                                      agentprofile.Command
+	cwd                                      string
+	configID                                 string
+	log                                      *chatLog
+
+	inbox chan func()
+	quit  chan struct{}
 	// id and shell are set before run starts and never change.
 	id    string
 	shell *session.Session
@@ -163,6 +167,7 @@ type actor struct {
 }
 
 type turn struct {
+	consumed    bool
 	executionID string
 	id          string
 	cancel      context.CancelFunc
@@ -283,7 +288,10 @@ func call[T any](ctx context.Context, a *actor, fn func() (T, error)) (T, error)
 	var zero T
 	reply := make(chan result, 1)
 	if !a.post(func() {
+		previous := a.operationExecutionID
+		a.operationExecutionID, _ = ctx.Value(executionContextKey{}).(string)
 		v, err := fn()
+		a.operationExecutionID = previous
 		a.flush()
 		reply <- result{v, err}
 	}) {
@@ -351,6 +359,7 @@ func (a *actor) overlay() *session.Overlay {
 		side, to = a.switching.from, a.switching.to
 	}
 	info := &session.HybridInfo{
+		ConversationID: a.conversationID, ProviderThreadID: a.activity.thread,
 		Side: string(side), To: string(to), Phase: string(a.chat.Phase),
 		State: string(a.state), Agent: a.cmd.Profile.Name,
 		AgentTitle: a.cmd.Profile.Title, AgentIcon: a.cmd.Profile.Icon,
@@ -566,6 +575,9 @@ func (a *actor) record(immediate bool, change func(*Record)) {
 		a.svc.log.Warn("hybrid record update failed", "id", a.id, "error", err)
 	} else {
 		a.svc.syncConversation(rec)
+		if err := a.activityThread(); err != nil {
+			a.activityFailure()
+		}
 	}
 }
 
@@ -1079,6 +1091,11 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 		a.finishContextExecution(t, status, class)
 	}
 	a.finishActivityRun(stop)
+	if (t.consumed || err == nil) && a.svc.conversations != nil && a.activity.completedRun != "" {
+		if ackErr := a.svc.conversations.AcknowledgeRun(context.Background(), a.activity.completedRun); ackErr != nil {
+			a.activityFailure()
+		}
+	}
 	var rpc *acp.RPCError
 	code := 0
 	if errors.As(err, &rpc) {

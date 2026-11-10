@@ -24,6 +24,10 @@ func (s *Service) PromptContext(ctx context.Context, id string, in ContextPrompt
 	if err != nil {
 		return PromptResult{}, err
 	}
+	binding, err := s.conversations.Binding(ctx, id)
+	if err != nil || binding.ProviderThreadID != e.TargetProviderThreadID {
+		return PromptResult{}, ErrConflict
+	}
 	digest := sha256.Sum256([]byte(in.WireText))
 	if e.RuntimeID != id || e.Phase != "sending" || e.Status != "pending" || e.PromptHash != hex.EncodeToString(digest[:]) {
 		return PromptResult{}, ErrConflict
