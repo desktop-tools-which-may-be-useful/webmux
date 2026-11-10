@@ -73,8 +73,8 @@ type timing struct {
 	// connectorRecheck is how often a missing connector is looked for
 	// again while the terminal side runs.
 	connectorRecheck time.Duration
-	// bgPoll is how often a finished turn with an in_progress tool call
-	// checks the agent's process tree before latching done.
+	// bgPoll is how often a finished turn with unfinished tool or background
+	// work checks the agent's process tree before starting a status refresh.
 	bgPoll time.Duration
 }
 
