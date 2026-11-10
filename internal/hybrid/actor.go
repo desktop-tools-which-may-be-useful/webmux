@@ -54,6 +54,7 @@ type actor struct {
 	replayOwnedMessageID                     string
 	replayOwnedMessage                       bool
 	replayUser                               replayUserBuffer
+	replayNative                             nativeReplay
 	svc                                      *Service
 	cmd                                      agentprofile.Command
 	cwd                                      string
