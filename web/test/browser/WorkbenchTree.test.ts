@@ -117,15 +117,16 @@ test("repositories hold the home page's worktrees and their sessions", async () 
     "legacy-api",
     "直接会话",
   ]);
-  // The main worktree is folded by default; the current session's path is
-  // open, and the newer session comes first.
+  // Worktrees and direct sessions with live sessions start open down to the
+  // session rows, and the newer session comes first.
   await expect
     .element(item("make test（已结束）"))
     .toHaveAttribute("aria-current", "page");
   await expect.element(item("make test（已结束）")).toBeVisible();
-  await expect.element(item("main")).toHaveAttribute("aria-expanded", "false");
-  await tree().getByRole("button", { name: "展开main" }).click();
-  await tree().getByRole("button", { name: "展开直接会话" }).click();
+  await expect.element(item("main")).toHaveAttribute("aria-expanded", "true");
+  await expect
+    .element(item("直接会话"))
+    .toHaveAttribute("aria-expanded", "true");
   const rows = tree()
     .getByRole("treeitem", { name: /（(空闲|工作中|等待|已结束)）$/ })
     .elements();
@@ -166,7 +167,7 @@ test("rows navigate: scopes, worktrees and sessions", async () => {
   expect(handlers.onscope).toHaveBeenLastCalledWith("direct");
   await item("wt/brisk-otter").click();
   expect(handlers.onscope).toHaveBeenLastCalledWith("repo1", "otter");
-  await tree().getByRole("button", { name: "展开main" }).click();
+  await expect.element(item("main")).toHaveAttribute("aria-expanded", "true");
   await item("pnpm dev（空闲）").click();
   expect(handlers.onopen).toHaveBeenCalledWith(live);
 });
@@ -191,6 +192,10 @@ test("each available repository offers new-worktree and manage-worktrees actions
 
 test("a linked worktree row offers a delete button; the main worktree does not", async () => {
   const handlers = renderTree([]);
+  await expect
+    .element(item("webmux"))
+    .toHaveAttribute("aria-expanded", "false");
+  await tree().getByRole("button", { name: "展开webmux" }).click();
   await expect.element(item("wt/brisk-otter")).toBeVisible();
   expect(
     tree().getByRole("button", { name: "删除工作树 main" }).elements(),
@@ -202,19 +207,22 @@ test("a linked worktree row offers a delete button; the main worktree does not",
 });
 
 test("folded nodes keep waiting counts, and folds survive a remount", async () => {
-  renderTree([
-    chat({
-      id: "agent001",
-      title: "等权限",
-      workspace: inOtter,
-      status: "waiting",
-      attention: {
-        kind: "permission",
-        source: "agent",
-        since: "2026-10-28T00:00:00Z",
-      },
-    }),
-  ]);
+  const waitingChat = chat({
+    id: "agent001",
+    title: "等权限",
+    workspace: inOtter,
+    status: "waiting",
+    attention: {
+      kind: "permission",
+      source: "agent",
+      since: "2026-10-28T00:00:00Z",
+    },
+  });
+  renderTree([waitingChat]);
+  await expect
+    .element(item("wt/brisk-otter"))
+    .toHaveAttribute("aria-expanded", "true");
+  await tree().getByRole("button", { name: "收起wt/brisk-otter" }).click();
   await expect
     .element(item("wt/brisk-otter"))
     .toHaveAttribute("aria-expanded", "false");
@@ -232,9 +240,84 @@ test("folded nodes keep waiting counts, and folds survive a remount", async () =
     .element(item("webmux"))
     .toHaveAccessibleName("webmux，1 个会话，1 个等待");
   await cleanup();
+  renderTree([waitingChat]);
+  await expect
+    .element(item("webmux"))
+    .toHaveAttribute("aria-expanded", "false");
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  await expect
+    .element(item("wt/brisk-otter"))
+    .toHaveAttribute("aria-expanded", "false");
+});
+
+test("folder folds reset when live session contents change, without auto-expanding archived or unavailable workspaces", async () => {
+  const active = chat({
+    id: "agent001",
+    title: "主干任务",
+    workspace: inMain,
+  });
   renderTree([]);
   await expect
     .element(item("webmux"))
+    .toHaveAttribute("aria-expanded", "false");
+  expect(item("main").elements()).toEqual([]);
+
+  // Starting a session inside a folded repository/worktree opens both down to
+  // the session row so it can be clicked immediately.
+  await cleanup();
+  renderTree([active]);
+  await expect.element(item("webmux")).toHaveAttribute("aria-expanded", "true");
+  await expect.element(item("main")).toHaveAttribute("aria-expanded", "true");
+  await expect.element(item("主干任务（空闲）")).toBeVisible();
+
+  // User manually folds `main`; while `main` keeps the same session, adding a
+  // session to `wt/brisk-otter` leaves `main` folded and opens `wt/brisk-otter`.
+  await tree().getByRole("button", { name: "收起main" }).click();
+  await expect.element(item("main")).toHaveAttribute("aria-expanded", "false");
+  await cleanup();
+  const otterSession = session({
+    id: "shell002",
+    title: "分支调试",
+    workspace: inOtter,
+  });
+  renderTree([active, otterSession]);
+  await expect.element(item("main")).toHaveAttribute("aria-expanded", "false");
+  await expect
+    .element(item("wt/brisk-otter"))
+    .toHaveAttribute("aria-expanded", "true");
+  await expect.element(item("分支调试（空闲）")).toBeVisible();
+
+  // When all live sessions leave a folder (e.g. archived), it collapses by
+  // default and never auto-expands "已不可用工作区".
+  await cleanup();
+  render(WorkbenchTree, {
+    repositories: [webmux, legacy],
+    sessions: [],
+    records: [keptRecord, inMainRecord],
+    home: { repo1: ["main", "otter"] },
+    scope: "",
+    worktree: "",
+    current: "",
+    canCreate: true,
+    configIcons: new Map(),
+    onscope: vi.fn(),
+    onopen: vi.fn(),
+    onnewworktree: vi.fn(),
+    onhomeworktrees: vi.fn(),
+    onmanageworktrees: vi.fn(),
+    onrepositorydetails: vi.fn(),
+    onremoveworktree: vi.fn(),
+    onrename: vi.fn(),
+    onclose: vi.fn(),
+    onresume: vi.fn(),
+    onremove: vi.fn(),
+  });
+  await expect
+    .element(item("webmux"))
+    .toHaveAttribute("aria-expanded", "false");
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  await expect
+    .element(item("已不可用工作区"))
     .toHaveAttribute("aria-expanded", "false");
 });
 
@@ -247,7 +330,6 @@ test("arrow keys move through the visible rows; the action is the next tab stop"
   await expect.element(item("webmux")).toHaveFocus();
   await userEvent.keyboard("{ArrowDown}");
   await expect.element(item("main")).toHaveFocus();
-  await userEvent.keyboard("{ArrowRight}");
   await expect.element(item("main")).toHaveAttribute("aria-expanded", "true");
   await userEvent.keyboard("{ArrowRight}");
   await expect.element(item("pnpm dev（空闲）")).toHaveFocus();
@@ -377,10 +459,19 @@ function renderArchived(props: { current?: string; resuming?: string } = {}) {
 
 test("archived rows resume on click and mark a released record", async () => {
   const { onresume } = renderArchived();
+  // With only unavailable-workspace sessions/records, the repository and
+  // unavailable workspace stay folded until opened.
+  await expect
+    .element(item("webmux"))
+    .toHaveAttribute("aria-expanded", "false");
+  await tree().getByRole("button", { name: "展开webmux" }).click();
   // Only the one live session counts.
   await expect
     .element(item("已不可用工作区"))
     .toHaveAttribute("aria-label", "已不可用工作区，1 个会话");
+  await expect
+    .element(item("已不可用工作区"))
+    .toHaveAttribute("aria-expanded", "false");
   await tree().getByRole("button", { name: "展开已不可用工作区" }).click();
   const released = item("已释放的聊天（已释放空间，已结束）");
   await expect.element(released).toHaveAttribute("aria-level", "3");
@@ -396,6 +487,7 @@ test("archived rows resume on click and mark a released record", async () => {
 
 test("arrow keys reach archived rows, which offer resume and delete in their menu", async () => {
   const { onresume, onremove } = renderArchived();
+  await tree().getByRole("button", { name: "展开webmux" }).click();
   await item("已不可用工作区").click();
   await userEvent.keyboard("{ArrowRight}");
   await expect

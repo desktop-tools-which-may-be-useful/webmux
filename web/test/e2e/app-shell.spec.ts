@@ -124,8 +124,10 @@ test.describe("desktop sidebar", () => {
     ).toHaveText("tree-repo · main");
     await expect(page.getByRole("link", { name: "pnpm dev" })).toBeVisible();
     await expect(page.locator("[data-worktree-id]:visible")).toHaveCount(1);
-    // The home view has no current session, so its worktree is folded.
-    await tree(page).getByRole("button", { name: "展开main" }).click();
+    // The worktree stays open down to its live session row on the home view.
+    await expect(
+      tree(page).getByRole("treeitem", { name: /^main/ }),
+    ).toHaveAttribute("aria-expanded", "true");
     await tree(page)
       .getByRole("treeitem", { name: /^pnpm dev（/ })
       .click();

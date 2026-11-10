@@ -1113,8 +1113,12 @@ test.describe("hybrid sessions with the fake agent", () => {
     git("rev-parse", "--verify", "refs/heads/feature-y");
 
     // The record stays, released, under the repository's unavailable
-    // workspaces in the sidebar tree.
+    // workspaces in the sidebar tree; neither the repository nor the
+    // unavailable workspace auto-expands when the only session is archived.
     const sidebarTree = page.getByRole("tree", { name: "仓库与会话" });
+    await sidebarTree
+      .getByRole("button", { name: "展开delete-repo", exact: true })
+      .click();
     await sidebarTree
       .getByRole("button", { name: "展开已不可用工作区", exact: true })
       .click();

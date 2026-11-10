@@ -205,6 +205,98 @@
   }
 
   const ExpandedSchema = z.record(z.string(), z.boolean());
+  const FolderMemorySchema = z.object({
+    open: ExpandedSchema.default({}),
+    sessions: z.record(z.string(), z.array(z.string())).default({}),
+  });
+  type FolderMemory = z.infer<typeof FolderMemorySchema>;
+
+  /** Every expandable folder's sorted live session IDs. */
+  export function folderLiveSessions(
+    nodes: readonly TreeNode[],
+  ): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    const walk = (list: readonly TreeNode[]): string[] => {
+      const all: string[] = [];
+      for (const node of list) {
+        if (node.session) {
+          all.push(node.session.id);
+          continue;
+        }
+        if (node.record || node.kind === "all") continue;
+        const below = walk(node.children);
+        out[node.key] = [...below].sort();
+        all.push(...below);
+      }
+      return all;
+    };
+    walk(nodes);
+    return out;
+  }
+
+  function sameIds(a: readonly string[] | undefined, b: readonly string[]) {
+    return (
+      a !== undefined &&
+      a.length === b.length &&
+      a.every((id, index) => id === b[index])
+    );
+  }
+
+  export function readFolderMemory(raw: string): FolderMemory {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      const memory = FolderMemorySchema.safeParse(parsed);
+      if (
+        memory.success &&
+        typeof parsed === "object" &&
+        parsed !== null &&
+        ("open" in parsed || "sessions" in parsed)
+      )
+        return memory.data;
+      const flat = ExpandedSchema.safeParse(parsed);
+      if (flat.success) return { open: flat.data, sessions: {} };
+    } catch {
+      // Unreadable stored data starts fresh.
+    }
+    return { open: {}, sessions: {} };
+  }
+
+  /**
+   * Reconciles saved folder folds with the current live sessions. Folders
+   * whose live sessions changed (or were never recorded) fall back to their
+   * default: open down to reachable live sessions, closed without any, and
+   * "已不可用工作区" (`m:...`) always closed by default even when a session
+   * is archived into it.
+   */
+  export function reconcileFolderMemory(
+    memory: FolderMemory,
+    nodes: readonly TreeNode[],
+  ): FolderMemory {
+    const sessions = folderLiveSessions(nodes);
+    let changed = false;
+    const open = { ...memory.open };
+    for (const [key, ids] of Object.entries(sessions)) {
+      if (key in memory.sessions && !sameIds(memory.sessions[key], ids)) {
+        changed = true;
+        delete open[key];
+      } else if (!(key in memory.sessions)) {
+        changed = true;
+      }
+    }
+    for (const key of Object.keys(memory.sessions)) {
+      if (!(key in sessions)) changed = true;
+    }
+    return changed ? { open, sessions } : memory;
+  }
+
+  export function defaultNodeOpen(node: TreeNode): boolean {
+    if (node.kind === "missing") return false;
+    if (node.kind === "repository")
+      return node.children.some(
+        (child) => child.kind !== "missing" && child.count > 0,
+      );
+    return node.count > 0;
+  }
 </script>
 
 <script lang="ts">
@@ -293,15 +385,17 @@
   } = $props();
 
   const nodes = $derived(workbenchTree(repositories, sessions, home, records));
-  let saved = $state<Record<string, boolean>>(
-    (() => {
-      try {
-        return ExpandedSchema.parse(JSON.parse(stored("workbenchTree", "{}")));
-      } catch {
-        return {};
-      }
-    })(),
+  let saved = $state<FolderMemory>(
+    readFolderMemory(stored("workbenchTree", "{}")),
   );
+  const effective = $derived(reconcileFolderMemory(saved, nodes));
+  $effect(() => {
+    const next = effective;
+    if (next !== saved) {
+      saved = next;
+      store("workbenchTree", JSON.stringify(next));
+    }
+  });
   // The current session's repository and worktree open without being saved.
   const forced = $derived.by(() => {
     // The keys of the current session's ancestors.
@@ -322,12 +416,15 @@
   function isOpen(node: TreeNode) {
     if (!node.children.length || node.reason) return false;
     if (forced.includes(node.key)) return true;
-    // New repositories start open; worktrees and direct sessions, which list
-    // sessions themselves, start closed.
-    return saved[node.key] ?? node.kind === "repository";
+    // Folders with reachable live sessions start open down to the session rows;
+    // folders without live sessions and unavailable workspaces start closed.
+    return effective.open[node.key] ?? defaultNodeOpen(node);
   }
   function setOpen(node: TreeNode, open: boolean) {
-    saved = { ...saved, [node.key]: open };
+    saved = {
+      open: { ...effective.open, [node.key]: open },
+      sessions: effective.sessions,
+    };
     store("workbenchTree", JSON.stringify(saved));
   }
   const visible = $derived.by(() => {

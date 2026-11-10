@@ -34,6 +34,7 @@ afterEach(() => {
   localStorage.removeItem("webmux.shellMode");
   localStorage.removeItem("webmux.sidebarCollapsed");
   localStorage.removeItem("webmux.toastNotifications");
+  localStorage.removeItem("webmux.workbenchTree");
   resetAttentionToasts();
   history.replaceState(null, "", "/");
 });
@@ -621,6 +622,9 @@ test("the workbench tree lists a released record under 已不可用工作区 and
   render(ShellHarness, { drafts: createTerminalDrafts() });
   await snapshot();
   const tree = sidebar().getByRole("tree", { name: "仓库与会话" });
+  const repo = tree.getByRole("treeitem", { name: "webmux" });
+  await expect.element(repo).toHaveAttribute("aria-expanded", "false");
+  await tree.getByRole("button", { name: "展开webmux" }).click();
   // Only live sessions count: the record alone adds no number.
   const group = tree.getByRole("treeitem", { name: "已不可用工作区" });
   await expect.element(group).toHaveAttribute("aria-expanded", "false");
