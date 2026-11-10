@@ -143,6 +143,14 @@
 - 依据：`WorkbenchTree.test.ts`（11 项）与 `AppShell.test.ts`（17 项）浏览器组件测试通过；`make check`、`pnpm --dir web check:arch` 与 `make docs-check` 通过，并截取桌面（1280×900）、平板（768×800）、手机（390×844）前后对比截图与交互 GIF。
 - 限制：未在移动真机核对；未重新核验其余故事能力。
 
+本次局部核对（2026-11-10）：打开已在聊天端的运行中会话不再先出现终端加载，对应更新 US-C14，不新增故事。
+
+- 范围：
+  - 会话页代码还在加载时，聊天端提示“正在加载聊天…”，切换中提示“正在加载会话…”，终端端仍提示“正在加载终端…”，不再把聊天会话写成正在加载终端；
+  - 该页代码加载过一次后，再次从首页打开会话不再重复显示加载行。
+- 依据：`web/test/hybrid.test.ts`（9 项）通过；`svelte-check --fail-on-warnings`、`eslint src`、`pnpm --dir web check:arch` 与 `go test ./internal/docguard` 通过。
+- 限制：未在浏览器里对真实会话做点击核对；未重新核验其余故事能力。
+
 本次局部核对（2026-11-10）：修复 WebKit（Safari、iPadOS）终端中 omp 等程序的 Nerd Font 图标显示为空白的问题，对应更新 US-D08，不新增故事或改变覆盖索引。
 
 - 原因：图标、制表符与中文切片在终端首次绘制后才按需加载，`font-display: block` 期间 WebGL 字形图集缓存了不可见字形；重绘依赖 `loadingdone` 事件，而 WebKit 没有 `FontFaceSetLoadEvent`，切片加载完成也未派发 `loadingdone`，图集从不重建。桌面 Chromium 正常派发，故只在平板上出现。

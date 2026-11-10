@@ -39,6 +39,21 @@ export function sessionViewLabel(
   return "终端";
 }
 
+/**
+ * Loading title for the session page, from the list before that page's chunk
+ * arrives. A chat-side session must not say it is loading a terminal. Unknown
+ * sessions (a direct link before any list) stay neutral.
+ */
+export function sessionPageLabel(
+  session: Pick<SessionInfo, "views" | "view" | "transition"> | undefined,
+): "聊天" | "终端" | "会话" {
+  if (!session) return "会话";
+  if (!session.views.includes("chat") || session.view === "terminal")
+    return session.transition ? "会话" : "终端";
+  if (session.transition) return "会话";
+  return "聊天";
+}
+
 /** Why the chat side cannot start: its connector is not installed. */
 export function connectorMissingText(connector: AgentConnector) {
   return `未安装 ${connector.title}（${connector.executable}）`;
