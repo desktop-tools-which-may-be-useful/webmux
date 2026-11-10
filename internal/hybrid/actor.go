@@ -2,7 +2,7 @@ package hybrid
 
 import (
 	"context"
-
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"slices"
@@ -46,13 +46,14 @@ var errMissingCapability = errors.New("agent 未声明 session/load 或 session/
 // on the actor to preserve completed operations' recovery contract, but never
 // hold the record state lock during filesystem I/O.
 type actor struct {
-	svc      *Service
-	cmd      agentprofile.Command
-	cwd      string
-	configID string
-	log      *chatLog
-	inbox    chan func()
-	quit     chan struct{}
+	replayUser replayUserBuffer
+	svc        *Service
+	cmd        agentprofile.Command
+	cwd        string
+	configID   string
+	log        *chatLog
+	inbox      chan func()
+	quit       chan struct{}
 	// id and shell are set before run starts and never change.
 	id    string
 	shell *session.Session
@@ -158,8 +159,9 @@ type actor struct {
 }
 
 type turn struct {
-	id     string
-	cancel context.CancelFunc
+	executionID string
+	id          string
+	cancel      context.CancelFunc
 	// done closes once the session/prompt call has returned and its result
 	// was posted.
 	done chan struct{}
@@ -787,7 +789,7 @@ func cancelledAnswer(kind string) Answer {
 	return Answer{Outcome: OutcomeCancelled}
 }
 
-func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
+func (a *actor) onUpdateDirect(epoch int, n acp.SessionNotification) {
 	if epoch != a.epoch || a.stopped {
 		return
 	}
@@ -976,11 +978,27 @@ func (a *actor) autoApprove(p *pending) string {
 // without image capability and files without embeddedContext degrade to
 // paths and are reported as notices.
 func (a *actor) send(text string, attachments []Attachment, queueItem, titleSource string) (PromptResult, error) {
-	blocks, notes, err := promptBlocks(text, attachments, a.chat.PromptCapabilities, a.svc.uploadCheck(a.id))
+	return a.sendContext(text, text, attachments, queueItem, titleSource, "", a.svc.uploadCheck(a.id))
+}
+
+func (a *actor) sendContext(text, wireText string, attachments []Attachment, queueItem, titleSource, executionID string, check func(string) (string, error)) (PromptResult, error) {
+	blocks, notes, err := promptBlocks(wireText, attachments, a.chat.PromptCapabilities, check)
 	if err != nil {
 		return PromptResult{}, err
 	}
-	if err := a.beginActivityRun(text, attachments); err != nil {
+	if executionID != "" {
+		if a.svc.conversations == nil {
+			return PromptResult{}, ErrUnavailable
+		}
+		if err := a.svc.conversations.ClaimExecution(context.Background(), executionID); err != nil {
+			return PromptResult{}, err
+		}
+	}
+	promptID := executionID
+	if promptID == "" {
+		promptID = rand.Text()
+	}
+	if err := a.beginActivityRunID(text, attachments, promptID); err != nil {
 		return PromptResult{}, err
 	}
 	a.nextTurn++
@@ -996,7 +1014,7 @@ func (a *actor) send(text string, attachments []Attachment, queueItem, titleSour
 	n := strconv.Itoa(a.nextTurn)
 	result := PromptResult{TurnID: "t" + n, PromptID: "p" + n}
 	ctx, cancel := context.WithCancel(context.Background())
-	t := &turn{id: result.TurnID, cancel: cancel, done: make(chan struct{})}
+	t := &turn{id: result.TurnID, cancel: cancel, done: make(chan struct{}), executionID: executionID}
 	a.turn = t
 	a.snapshotProcesses()
 	a.work.endTurn()
@@ -1035,6 +1053,16 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	a.work.endTurn()
 	t.cancel()
 	stop, text := stopReason(resp, err)
+	if t.executionID != "" {
+		status, class := "unknown", "transport"
+		var refusal *acp.RPCError
+		if err == nil {
+			status, class = "inline", ""
+		} else if errors.As(err, &refusal) && (refusal.Code == acp.CodeAuthRequired || refusal.Code == acp.CodeInvalidParams || refusal.Code == acp.CodeMethodNotFound) {
+			status, class = "failed", "provider_refused"
+		}
+		a.finishContextExecution(t, status, class)
+	}
 	a.finishActivityRun(stop)
 	var rpc *acp.RPCError
 	code := 0

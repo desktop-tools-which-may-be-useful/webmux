@@ -217,7 +217,7 @@ func (s *Service) create(ctx context.Context, in CreateInput) (CreateResult, err
 	if name == "" && plan.side != hybrid.SideACP {
 		name = plan.title
 	}
-	item, promptSent, err := s.startSession(ctx, in.Cwd, name, reference, plan.command, plan.side, initialPrompt)
+	item, promptSent, err := s.startSession(ctx, in.Cwd, name, reference, plan.command, plan.side, initialPrompt, nil)
 	if err != nil {
 		return fail(StepSession, tree, "", err)
 	}
@@ -522,7 +522,7 @@ func (s *Service) resolveCommand(in CreateInput) (resolvedCommand, error) {
 // startSession starts a session in cwd or the selected worktree. Launch
 // config errors keep their launch error kinds; a config with hybrid mode
 // starts a hybrid session, whose errors keep their hybrid kinds.
-func (s *Service) startSession(ctx context.Context, cwd, name string, reference *Reference, command resolvedCommand, side hybrid.Side, initialPrompt func(id string) (string, error)) (*session.Session, bool, error) {
+func (s *Service) startSession(ctx context.Context, cwd, name string, reference *Reference, command resolvedCommand, side hybrid.Side, initialPrompt func(id string) (string, error), identity *HandoffIdentity) (*session.Session, bool, error) {
 	requestCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
@@ -584,7 +584,12 @@ func (s *Service) startSession(ctx context.Context, cwd, name string, reference 
 	var item *session.Session
 	var promptSent bool
 	if command.hybrid {
+		var runtimeID, threadID string
+		if identity != nil {
+			runtimeID, threadID = identity.RuntimeID, identity.ProviderThreadID
+		}
 		item, err = s.hybrids.Create(requestCtx, hybrid.CreateInput{
+			RuntimeID: runtimeID, ProviderThreadID: threadID,
 			Cwd: path, Name: name, ConfigID: command.configID, Cmd: command.cmd, Env: command.env, StartSide: side,
 			Cols: command.cols, Rows: command.rows, Attention: command.attention,
 			InitialPrompt: initialPrompt, InitialPromptSent: &promptSent,
