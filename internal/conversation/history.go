@@ -112,7 +112,7 @@ func readActivity(ctx context.Context, tx *sql.Tx, conversationID, id string, of
 	var part ActivityPart
 	a := &part.Activity
 	var created int64
-	err := tx.QueryRowContext(ctx, `SELECT a.id,a.conversation_id,a.provider_thread_id,COALESCE(a.run_id,''),a.position,COALESCE(r.ordinal,0),a.kind,a.role,a.status,a.source,a.provider_item_id,a.byte_length,a.created_at FROM activity a LEFT JOIN run r ON r.id=a.run_id WHERE a.conversation_id=? AND a.id=? AND a.position IS NOT NULL`, conversationID, id).Scan(&a.ID, &a.ConversationID, &a.ProviderThreadID, &a.RunID, &a.Position, &a.RunOrdinal, &a.Kind, &a.Role, &a.Status, &a.Source, &a.ProviderItemID, &a.ByteLength, &created)
+	err := tx.QueryRowContext(ctx, `SELECT a.id,a.conversation_id,a.provider_thread_id,COALESCE(a.run_id,''),a.position,COALESCE(r.ordinal,0),a.kind,a.role,a.status,a.source,a.provider_item_id,a.byte_length+a.heading_length,a.created_at FROM activity a LEFT JOIN run r ON r.id=a.run_id WHERE a.conversation_id=? AND a.id=? AND a.position IS NOT NULL`, conversationID, id).Scan(&a.ID, &a.ConversationID, &a.ProviderThreadID, &a.RunID, &a.Position, &a.RunOrdinal, &a.Kind, &a.Role, &a.Status, &a.Source, &a.ProviderItemID, &a.ByteLength, &created)
 	if err != nil {
 		return part, storageError(ctx, err)
 	}

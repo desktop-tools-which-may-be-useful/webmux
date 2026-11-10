@@ -97,7 +97,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return ErrUnavailable
 		}
 		// Fail on malformed current-version databases too.
-		for _, table := range []string{"conversation", "provider_thread", "run", "context_handoff", "handoff_delivery", "command_receipt", "activity", "activity_chunk", "activity_attachment", "history_gap"} {
+		for _, table := range []string{"conversation", "provider_thread", "run", "context_handoff", "handoff_delivery", "command_receipt", "activity", "activity_chunk", "activity_heading_chunk", "activity_attachment", "history_gap"} {
 			if _, err := db.ExecContext(ctx, "SELECT 1 FROM "+table+" LIMIT 0"); err != nil {
 				return err
 			}

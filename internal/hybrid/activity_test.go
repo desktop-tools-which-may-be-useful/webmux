@@ -232,3 +232,108 @@ func TestActivityCaptureAndColdReplayUseSameIdentities(t *testing.T) {
 		t.Fatalf("cold replay changed logical count: %d", count)
 	}
 }
+
+func TestActivityToolMetadataPatchesPreserveOutput(t *testing.T) {
+	ctx := context.Background()
+	h, db := historyHarness(t)
+	id := h.create(h.input("omp", SideACP)).Info().ID
+	a, err := h.svc.actor(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.sync(func() {
+		if err := a.beginActivityRun("question", nil); err != nil {
+			t.Error(err)
+			return
+		}
+		a.recordUpdate(&acp.ToolCall{ToolCallID: "patch", Title: "Initial", Kind: "execute", Status: "in_progress", Content: []acp.ToolCallContent{{Type: acp.ToolContentContent, Content: &acp.ContentBlock{Type: acp.ContentText, Text: "existing output"}}}})
+		title := "Updated title"
+		a.recordUpdate(&acp.ToolCallUpdate{ToolCallID: "patch", Title: &title, RawInput: []byte(`{"command":"printf hello","env":{"SECRET":"private"}}`)})
+		status := "completed"
+		a.recordUpdate(&acp.ToolCallUpdate{ToolCallID: "patch", Status: &status, RawOutput: []byte(`{"exitCode":3}`)})
+		a.finishActivityRun(acp.StopEndTurn)
+	}) {
+		t.Fatal("actor stopped")
+	}
+	binding, err := db.Binding(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := db.Activities(ctx, binding.ConversationID, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, part := range page.Items {
+		if part.Activity.ProviderItemID == "patch" {
+			found = true
+			want := "Updated title\nCommand input: printf hello\nExit code: 3\nexisting output"
+			if part.Activity.Text != want {
+				t.Fatalf("metadata patch lost content: %q", part.Activity.Text)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing patched tool")
+	}
+}
+
+func TestActivityOmittedToolStatusStaysPendingAcrossTurns(t *testing.T) {
+	ctx := context.Background()
+	h, db := historyHarness(t)
+	id := h.create(h.input("omp", SideACP)).Info().ID
+	a, err := h.svc.actor(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.sync(func() {
+		if err := a.beginActivityRun("question", nil); err != nil {
+			t.Error(err)
+			return
+		}
+		a.recordUpdate(&acp.ToolCall{ToolCallID: "omitted", Title: "Pending"})
+		a.finishActivityRun(acp.StopEndTurn)
+	}) {
+		t.Fatal("actor stopped")
+	}
+	binding, err := db.Binding(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := db.Activities(ctx, binding.ConversationID, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, part := range page.Items {
+		if part.Activity.ProviderItemID == "omitted" {
+			t.Fatal("unfinished tool published")
+		}
+	}
+	if !a.sync(func() {
+		if err := a.beginActivityRun("next", nil); err != nil {
+			t.Error(err)
+			return
+		}
+		status := "completed"
+		a.recordUpdate(&acp.ToolCallUpdate{ToolCallID: "omitted", Status: &status, Content: []acp.ToolCallContent{{Type: acp.ToolContentContent, Content: &acp.ContentBlock{Type: acp.ContentText, Text: "late result"}}}})
+		a.finishActivityRun(acp.StopEndTurn)
+	}) {
+		t.Fatal("actor stopped")
+	}
+	page, err = db.Activities(ctx, binding.ConversationID, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, part := range page.Items {
+		if part.Activity.ProviderItemID == "omitted" {
+			count++
+			if part.Activity.RunOrdinal != 1 || part.Activity.Text != "Pending\nlate result" {
+				t.Fatalf("late result lost original run: %+v", part.Activity)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("tool duplicated or lost: %d", count)
+	}
+}

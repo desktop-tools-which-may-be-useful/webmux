@@ -190,15 +190,19 @@ func (a *actor) recordUpdate(u acp.Update) {
 			kind = "file_change"
 		}
 		t := recordedTool{run: a.activity.run, key: a.activity.run + ":tool:" + u.ToolCallID, label: u.Title, kind: kind, status: u.Status, input: normalizedCommand(u.RawInput), exitCode: normalizedExit(u.RawOutput)}
+		if t.status == "" {
+			t.status = "pending"
+		}
 		a.activity.tools[u.ToolCallID] = t
-		in = conversation.ActivityInput{RunID: t.run, LocalKey: t.key, ProviderItemID: u.ToolCallID, Kind: t.kind, Role: "agent", Status: u.Status, Text: recordedToolText(t, u.Content), Replace: true}
+		heading := recordedToolHeading(t)
+		in = conversation.ActivityInput{Heading: &heading, RunID: t.run, LocalKey: t.key, ProviderItemID: u.ToolCallID, Kind: t.kind, Role: "agent", Status: t.status, Text: activityToolText("", u.Content), Replace: true}
 	case *acp.ToolCallUpdate:
 		if a.activity.tools == nil {
 			a.activity.tools = map[string]recordedTool{}
 		}
 		t, ok := a.activity.tools[u.ToolCallID]
 		if !ok {
-			t = recordedTool{run: a.activity.run, key: a.activity.run + ":tool:" + u.ToolCallID, kind: "tool"}
+			t = recordedTool{run: a.activity.run, key: a.activity.run + ":tool:" + u.ToolCallID, kind: "tool", status: "pending"}
 		}
 		if u.Title != nil {
 			t.label = *u.Title
@@ -206,8 +210,8 @@ func (a *actor) recordUpdate(u acp.Update) {
 		if u.Kind != nil && *u.Kind == "execute" {
 			t.kind = "command"
 		}
-		status := ""
-		if u.Status != nil {
+		status := t.status
+		if u.Status != nil && *u.Status != "" {
 			status = *u.Status
 			t.status = status
 		}
@@ -223,12 +227,14 @@ func (a *actor) recordUpdate(u acp.Update) {
 		a.activity.tools[u.ToolCallID] = t
 		text := ""
 		if u.Content != nil {
-			text = recordedToolText(t, u.Content)
+			text = activityToolText("", u.Content)
 		}
-		if u.Content == nil && u.RawOutput != nil && t.exitCode != nil {
-			text = "\nExit code: " + strconv.Itoa(*t.exitCode)
+		var heading *string
+		if !ok || u.Title != nil || u.RawInput != nil || u.RawOutput != nil {
+			value := recordedToolHeading(t)
+			heading = &value
 		}
-		in = conversation.ActivityInput{RunID: t.run, LocalKey: t.key, ProviderItemID: u.ToolCallID, Kind: t.kind, Role: "agent", Status: status, Text: text, Replace: u.Content != nil}
+		in = conversation.ActivityInput{Heading: heading, RunID: t.run, LocalKey: t.key, ProviderItemID: u.ToolCallID, Kind: t.kind, Role: "agent", Status: status, Text: text, Replace: u.Content != nil}
 	case *acp.Plan:
 		var body strings.Builder
 		for _, entry := range u.Entries {
@@ -407,16 +413,18 @@ func normalizedExit(raw json.RawMessage) *int {
 	return in.Snake
 }
 
-func recordedToolText(t recordedTool, contents []acp.ToolCallContent) string {
+func recordedToolHeading(t recordedTool) string {
 	heading := t.label
 	if t.input != "" {
 		heading += "\nCommand input: " + t.input
 	}
-	text := activityToolText(heading, contents)
 	if t.exitCode != nil {
-		text += "\nExit code: " + strconv.Itoa(*t.exitCode)
+		heading += "\nExit code: " + strconv.Itoa(*t.exitCode)
 	}
-	return text
+	if heading != "" {
+		heading += "\n"
+	}
+	return heading
 }
 
 func activityAttachments(attachments []Attachment) []conversation.ActivityAttachment {

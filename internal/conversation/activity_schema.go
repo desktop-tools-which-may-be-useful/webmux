@@ -11,13 +11,18 @@ CREATE TABLE activity (
  position INTEGER,
  kind TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL,
  source TEXT NOT NULL, provider_item_id TEXT NOT NULL DEFAULT '', local_key TEXT NOT NULL,
- byte_length INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+ byte_length INTEGER NOT NULL DEFAULT 0, heading_length INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
  UNIQUE(conversation_id,position), UNIQUE(provider_thread_id,local_key),
  FOREIGN KEY(provider_thread_id,conversation_id) REFERENCES provider_thread(id,conversation_id) ON DELETE CASCADE
 );
 CREATE INDEX activity_thread_item ON activity(provider_thread_id,provider_item_id);
 CREATE INDEX activity_run ON activity(run_id);
 CREATE TABLE activity_chunk (
+ activity_id TEXT NOT NULL REFERENCES activity(id) ON DELETE CASCADE,
+ byte_offset INTEGER NOT NULL, byte_length INTEGER NOT NULL, text BLOB NOT NULL,
+ PRIMARY KEY(activity_id,byte_offset)
+);
+CREATE TABLE activity_heading_chunk (
  activity_id TEXT NOT NULL REFERENCES activity(id) ON DELETE CASCADE,
  byte_offset INTEGER NOT NULL, byte_length INTEGER NOT NULL, text BLOB NOT NULL,
  PRIMARY KEY(activity_id,byte_offset)
