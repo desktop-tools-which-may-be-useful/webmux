@@ -22,8 +22,9 @@ const base = `/api/sessions/${id}/chat`;
 async function open(
   location?: Pick<SessionInfo, "workspace" | "cwd">,
   allowDocumentScroll = false,
+  clippedHost = false,
 ) {
-  render(Harness, { id, location, allowDocumentScroll });
+  render(Harness, { id, location, allowDocumentScroll, clippedHost });
   return socketAt(`/ws/s/${id}/chat`);
 }
 
@@ -907,6 +908,82 @@ test("conversation ticks distinguish roles, jump to history and preserve reading
       )
       .toHaveProperty("display", "none");
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+  } finally {
+    await page.viewport(1024, 900);
+  }
+});
+
+test("turn navigation ignores invisible replies and never scrolls a clipped chat host", async () => {
+  await page.viewport(1280, 900);
+  try {
+    const socket = await open(undefined, false, true);
+    socket.frame(snapshot(chatState()));
+    socket.frame({
+      type: "events",
+      generation: "g1",
+      items: events(
+        ...Array.from({ length: 80 }, (_, index) => ({
+          kind: "message.append" as const,
+          message: {
+            messageId: `bounded-${index}`,
+            role: "agent" as const,
+            text: `回复 ${index + 1}\n\n${"可见内容。".repeat(100)}`,
+          },
+        })),
+        {
+          kind: "message.append",
+          message: { messageId: "empty", role: "agent", text: "" },
+        },
+        {
+          kind: "message.append",
+          message: { messageId: "whitespace", role: "agent", text: " \n " },
+        },
+      ),
+    });
+    const navigation = page.getByRole("navigation", { name: "对话轮次" });
+    await expect.element(navigation).toBeVisible();
+    expect(navigation.getByRole("button").elements()).toHaveLength(80);
+    expect(
+      document.querySelector('[data-conversation-message="empty"]'),
+    ).toBeNull();
+    expect(
+      document.querySelector('[data-conversation-message="whitespace"]'),
+    ).toBeNull();
+    const host = document.querySelector<HTMLElement>("[data-chat-test-host]")!;
+    const chat = document.querySelector<HTMLElement>("[data-chat-view]")!;
+    const dock = document.querySelector<HTMLElement>("[data-chat-dock]")!;
+    const scroller = chat.querySelector<HTMLElement>(
+      "[data-slot=scroll-area-viewport]",
+    )!;
+    const ticks = navigation.element().firstElementChild as HTMLElement;
+    host.scrollTop = 48;
+    ticks.scrollTop = 0;
+    const origin = {
+      host: host.scrollTop,
+      window: window.scrollY,
+      chat: chat.getBoundingClientRect().top,
+      dock: dock.getBoundingClientRect().top,
+    };
+    const first = navigation.getByRole("button", {
+      name: /^此前 · AI：回复 1 /,
+    });
+    await first.click();
+    await expect.poll(() => scroller.scrollTop).toBeLessThan(100);
+    await userEvent.keyboard("{End}");
+    await expect
+      .element(navigation.getByRole("button", { name: /^此前 · AI：回复 80 / }))
+      .toHaveFocus();
+    await expect.poll(() => scroller.scrollTop).toBeGreaterThan(1000);
+    const focused = document.activeElement!.getBoundingClientRect();
+    const tickBounds = ticks.getBoundingClientRect();
+    expect(focused.top).toBeGreaterThanOrEqual(tickBounds.top);
+    expect(focused.bottom).toBeLessThanOrEqual(tickBounds.bottom);
+    expect({
+      host: host.scrollTop,
+      window: window.scrollY,
+      chat: chat.getBoundingClientRect().top,
+      dock: dock.getBoundingClientRect().top,
+    }).toEqual(origin);
   } finally {
     await page.viewport(1024, 900);
   }

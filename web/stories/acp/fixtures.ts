@@ -435,6 +435,8 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
               `第 ${index + 2} 轮回复，段落 ${line + 1}：已保留用户消息与工作步骤的顺序。`,
           ).join("\n\n"),
         ),
+        agentText(`long-empty${index}`, ""),
+        agentText(`long-space${index}`, " \n "),
       );
     }
   }

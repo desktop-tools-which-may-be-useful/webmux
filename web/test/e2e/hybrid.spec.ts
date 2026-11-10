@@ -393,6 +393,25 @@ test.describe("hybrid sessions with the fake agent", () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(1000);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.locator("[data-chat-view]")).not.toHaveAttribute(
+      "data-document-scroll",
+    );
+    const panel = page.locator(".terminal-header, [data-chat-dock]");
+    const panelOrigin = await panel.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().top),
+    );
+    const windowOrigin = await page.evaluate(() => window.scrollY);
+    await first.click();
+    await first.press("End");
+    await expect(navigation.getByRole("button").last()).toBeFocused();
+    expect(
+      await panel.evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect().top),
+      ),
+    ).toEqual(panelOrigin);
+    expect(await page.evaluate(() => window.scrollY)).toBe(windowOrigin);
   });
 
   test("phones gain the side tabs when the session info arrives", async ({

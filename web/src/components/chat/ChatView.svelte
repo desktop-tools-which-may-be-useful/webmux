@@ -158,6 +158,7 @@
   });
   const entries = $derived(groupTimeline(model.entries));
   const turns = $derived(conversationTurns(model.entries));
+  const turnIds = $derived(new Set(turns.map((item) => item.id)));
   const request = $derived(chat?.requests[0]);
   const requestTool = $derived.by(() => {
     const at = request?.toolCallId
@@ -317,15 +318,27 @@
     const message = transcript?.querySelector<HTMLElement>(
       `[data-conversation-message="${CSS.escape(id)}"]`,
     );
-    if (!message) return;
+    const target = scrollRoot();
+    if (!message || !target) return;
     // Historical reading must not be undone by the next streaming update.
-    // Keep the pause through the scroll event emitted by scrollIntoView,
-    // including when the target is clamped to the maximum scroll offset.
+    // Keep the pause through the jump's scroll event, including when the
+    // target is clamped to the maximum scroll offset.
     cancelAnimationFrame(turnJumpFrame);
     jumpingToTurn = true;
     stick = false;
     activeTurnId = id;
-    message.scrollIntoView({ block: "start", inline: "nearest" });
+    const viewportTop = documentScroll
+      ? 0
+      : target.getBoundingClientRect().top + target.clientTop;
+    const margin = Number.parseFloat(getComputedStyle(message).scrollMarginTop);
+    const top =
+      (documentScroll ? window.scrollY : target.scrollTop) +
+      message.getBoundingClientRect().top -
+      viewportTop -
+      margin;
+    // Scroll only the owner viewport, never its clipped pane or the page.
+    if (documentScroll) window.scrollTo({ top, behavior: "instant" });
+    else target.scrollTo({ top, behavior: "instant" });
     follow();
     turnJumpFrame = requestAnimationFrame(() => {
       turnJumpFrame = requestAnimationFrame(() => {
@@ -469,7 +482,8 @@
                 ? "min-w-0 scroll-mt-16"
                 : "min-w-0 scroll-mt-4"}
               data-conversation-message={entry.type === "message" &&
-              entry.role !== "thought"
+              entry.role !== "thought" &&
+              turnIds.has(entry.id)
                 ? entry.id
                 : undefined}
             >
