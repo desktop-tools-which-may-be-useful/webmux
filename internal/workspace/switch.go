@@ -225,12 +225,7 @@ func (s *Service) switchState(ctx context.Context, r *repositoryState, worktreeI
 	if err != nil {
 		return switchState{}, err
 	}
-	state := switchState{tree: selected[0], plan: plan, sessions: []session.Info{}}
-	for _, info := range s.targetSessions(state.tree.Path) {
-		if info.Status != session.StatusExited {
-			state.sessions = append(state.sessions, info)
-		}
-	}
+	state := switchState{tree: selected[0], plan: plan, sessions: s.runningSessions(selected[0].Path)}
 	state.blockers = switchBlockers(state.tree, listed, plan)
 	state.warnings = switchWarnings(state.tree, state.sessions)
 	return state, ctx.Err()
@@ -347,21 +342,31 @@ func (s *Service) resolveCommit(ctx context.Context, anchor, expression string) 
 	return oid, nil
 }
 
-// switchBlockers lists what refuses switching tree as plan says; listed
-// are all worktrees of the repository. Never nil.
-func switchBlockers(tree Worktree, listed []Worktree, plan switchPlan) []Issue {
+// worktreeBlockers lists what refuses changing tree's checkout in place;
+// action names the change. Never nil.
+func worktreeBlockers(tree Worktree, action string) []Issue {
 	out := []Issue{}
 	if tree.Kind == "bare" || !tree.Available || tree.Prunable {
-		return append(out, Issue{Code: issueUnsupported, Message: "bare 仓库、不可用或待清理的工作树不能切换"})
+		return append(out, Issue{Code: issueUnsupported, Message: "bare 仓库、不可用或待清理的工作树不能" + action})
 	}
 	if tree.Error != "" || tree.Changes == nil {
-		return append(out, Issue{Code: issueUnverified, Message: "工作树状态无法验证，不能确认安全切换: " + tree.Error})
+		return append(out, Issue{Code: issueUnverified, Message: "工作树状态无法验证，不能确认安全" + action + ": " + tree.Error})
 	}
 	if c := tree.Changes; c.Staged+c.Unstaged+c.Conflicted > 0 {
 		out = append(out, Issue{Code: issueChanges, Message: "有未提交的修改，请先提交或贮藏"})
 	}
 	if tree.Operation != nil {
 		out = append(out, Issue{Code: issueOperation, Message: fmt.Sprintf("正在进行 %s，请先在终端完成或中止", *tree.Operation)})
+	}
+	return out
+}
+
+// switchBlockers lists what refuses switching tree as plan says; listed
+// are all worktrees of the repository. Never nil.
+func switchBlockers(tree Worktree, listed []Worktree, plan switchPlan) []Issue {
+	out := worktreeBlockers(tree, "切换")
+	if len(out) != 0 && (out[0].Code == issueUnsupported || out[0].Code == issueUnverified) {
+		return out
 	}
 	switch plan.target.Kind {
 	case SwitchLocal:

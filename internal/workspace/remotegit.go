@@ -61,15 +61,26 @@ var urlPattern = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://\S+`)
 // noninteractive environment it keeps ssh from prompting, and it turns a
 // failure into a RemoteFailure that is safe to show and to log.
 func (s *Service) remoteGit(ctx context.Context, cwd string, args ...string) ([]byte, *RemoteFailure) {
+	stdout, _, failure := s.remoteGitOutput(ctx, cwd, args...)
+	if failure != nil {
+		return nil, failure
+	}
+	return stdout, nil
+}
+
+// remoteGitOutput is remoteGit that also returns, on failure too, what Git
+// wrote, for callers that parse it further. Both outputs are raw: they can
+// hold credentials and must not be shown or logged as they are.
+func (s *Service) remoteGitOutput(ctx context.Context, cwd string, args ...string) ([]byte, string, *RemoteFailure) {
 	if s.gitPath == "" {
-		return nil, &RemoteFailure{Status: remoteError, Message: remoteMessage(remoteErrorText, s.Capability().GitError)}
+		return nil, "", &RemoteFailure{Status: remoteError, Message: remoteMessage(remoteErrorText, s.Capability().GitError)}
 	}
 	stdout, run := s.runGit(ctx, cwd, s.remoteEnv(ctx, cwd), args...)
 	if run.err == nil {
-		return stdout.Bytes(), nil
+		return stdout.Bytes(), run.stderr, nil
 	}
 	failure := classifyRemote(run, stdout.exceeded)
-	return nil, &failure
+	return stdout.Bytes(), run.stderr, &failure
 }
 
 // remoteEnv never asks an askpass program, and puts ssh in batch mode

@@ -394,6 +394,9 @@
             ontogglepin: () => pin(repo.id, [tree.id], !selectedPinned),
             onremove:
               tree.kind === "linked" ? () => (removing = tree) : undefined,
+            tree,
+            onoperation: (operation) =>
+              shell.branchOperation(repo.id, operation),
           }
         : undefined}
     />
@@ -581,6 +584,8 @@
               {archive}
               detailsOpen={worktreeDetailsOpen}
               ondetailschange={(open) => (worktreeDetailsOpen = open)}
+              onoperation={(operation) =>
+                shell.branchOperation(repo.id, operation)}
             />
           {/each}
           {#if direct.length || placement.direct.length}<DirectSessions

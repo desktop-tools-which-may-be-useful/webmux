@@ -43,7 +43,7 @@
 | 聊天视图：`send --reply`、发送模式与排队提示、`chat status/watch/log/answer/set/permission/queue`                                                | US-S14；US-Q01–US-Q19                               |
 | `view` 切换视图、`ls --archived` 列出、`resume` 恢复与 `rm --forget` 删除记录                                                                    | US-S15                                              |
 | `worktree` 命令与主页显示（`homeWorktrees`）                                                                                                     | US-S16；US-J01–US-J12；US-J16–US-J17                |
-| `repo` 命令与仓库设置（初始化指令）                                                                                                              | US-S17；US-J12                                      |
+| `repo` 命令与仓库设置（初始化指令）；`repo ff`、`repo push`、`repo branch-rm` 分支操作                                                           | US-S17；US-J12；US-J18                              |
 | `launch-config` 增删改与 `forward` 命令                                                                                                          | US-S18；US-R01–US-R04                               |
 | 聊天端选择、拖放或粘贴文件，上传进度、取消、待发送附件、图片小图预览与发送成功后的预览资源释放                                                   | US-Q14；US-E04–US-E07                               |
 | 首页导航、紧凑/预览、详情、分组、按需表单、增量更新、排序、搜索、筛选与空状态                                                                    | US-C01–US-C05                                       |
@@ -96,6 +96,7 @@
 | 仓库面板分区、工作树上游同步与修改统计、最近提交、进行中操作、分支与远程清单、URL 脱敏与 CLI 同步输出                                            | US-J15；US-J02；US-J14                              |
 | 工作树原地切换分支：“切换分支…”入口、三种目标模式、预览阻止与警告、会话确认、409 重新预览、在新工作树打开与转到占用者、`worktree switch`         | US-J16；US-J05；US-J15                              |
 | 仓库面板“获取远程”：逐远程结果、非交互与脱敏、并发合并与时限、快照刷新；CLI `repo fetch` 与 `worktree prune`                                     | US-J17；US-J14；US-J15                              |
+| 分支快进、推送与发布、删除与“清理分支（N）”：统一入口规则、预览凭证、会话确认、两组删除与恢复命令、面板子视图与独立弹窗                          | US-J18；US-J14；US-J15                              |
 | 已归档工作树释放空间：预览、保留提交与记录、推送检查警告、重建确认与私有引用清理                                                                 | US-J13；US-Q12；US-Q19                              |
 | 移除登记、Git/存储/仓库故障降级                                                                                                                  | US-J10–US-J11；US-K08                               |
 | 仓库初始化指令：仓库设置中编辑或清空、引用快捷指令、长度上限与快速开始/新建会话勾选                                                              | US-J12；US-Q18；US-B01                              |

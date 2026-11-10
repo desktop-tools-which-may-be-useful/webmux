@@ -2,6 +2,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import IconDots from "~icons/tabler/dots";
   import { api } from "../api";
+  import type { BranchOperation } from "../branch-actions";
   import { errorMessage } from "../error";
   import {
     BatchRemovalPreviewRequestSchema,
@@ -54,6 +55,7 @@
     busy = $bindable(false),
     onopen,
     onswitch,
+    onoperation,
     onchange,
     onremoved,
   }: {
@@ -67,6 +69,8 @@
     onopen: (worktreeId: string) => void;
     /** Opens the switch of a worktree's branch inside the panel. */
     onswitch: (worktreeId: string) => void;
+    /** Opens a branch operation inside the panel. */
+    onoperation: (operation: BranchOperation) => void;
     onchange: () => void;
     onremoved?: (removedIds: string[]) => void;
   } = $props();
@@ -491,6 +495,8 @@
                     onswitch={switchableWorktree(entry.tree)
                       ? () => onswitch(entry.tree.id)
                       : undefined}
+                    worktree={entry.tree}
+                    {onoperation}
                   />
                 </DropdownMenu.Content>
               </DropdownMenu.Root>

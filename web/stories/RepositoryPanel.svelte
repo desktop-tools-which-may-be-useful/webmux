@@ -118,6 +118,7 @@
       ahead: item.ahead,
       behind: item.behind,
       upstreamGone: item.upstreamGone,
+      mergedIntoDefault: false,
     })),
     bases: [
       {

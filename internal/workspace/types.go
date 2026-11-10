@@ -134,6 +134,9 @@ type Branch struct {
 	Ahead        *int `json:"ahead"`
 	Behind       *int `json:"behind"`
 	UpstreamGone bool `json:"upstreamGone"`
+	// MergedIntoDefault reports that the main worktree's HEAD contains
+	// the branch; false for a bare or unborn main worktree.
+	MergedIntoDefault bool `json:"mergedIntoDefault"`
 }
 type Base struct {
 	Name    string `json:"name"`

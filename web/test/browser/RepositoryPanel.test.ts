@@ -303,7 +303,7 @@ test("browsing a worktree opens its details inside the panel; 返回 keeps the s
   await expect.poll(() => rows.scrollTop).toBe(scrolled);
 });
 
-test("a worktree row's menu offers details and a branch switch but no removal", async () => {
+test("a worktree row's menu offers details, a branch switch and branch actions but no removal", async () => {
   renderPanel({ initialTab: "worktrees" });
   const items = () =>
     page
@@ -321,7 +321,22 @@ test("a worktree row's menu offers details and a branch switch but no removal", 
   await dialog()
     .getByRole("button", { name: "工作树操作：wt/clean-feature" })
     .click();
-  await expect.poll(items).toEqual(["工作树详情…", "切换分支…"]);
+  // Without an upstream the branch can also be published.
+  await expect.poll(items).toEqual(["工作树详情…", "切换分支…", "发布分支…"]);
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(items).toEqual([]);
+  // A diverged or synced branch offers no sync action.
+  for (const name of ["main", "wt/wip-agent"]) {
+    await dialog()
+      .getByRole("button", { name: `工作树操作：${name}` })
+      .click();
+    await expect.poll(items).toEqual(["工作树详情…", "切换分支…"]);
+    await userEvent.keyboard("{Escape}");
+    await expect.poll(items).toEqual([]);
+  }
+  await dialog()
+    .getByRole("button", { name: "工作树操作：wt/clean-feature" })
+    .click();
   await page.getByRole("menuitem", { name: "工作树详情…" }).click();
   await expect
     .element(
@@ -1150,4 +1165,222 @@ test("清理失效登记 is hidden without stale registrations", async () => {
       .getByRole("button", { name: /清理失效登记/ })
       .elements(),
   ).toEqual([]);
+});
+
+// add-branch-sync-actions: the branches section's actions and the flows
+// they open as panel subviews.
+const syncBranches: Branches = {
+  ...branches,
+  branches: [
+    ...branches.branches.filter((item) => item.name !== "wt/huge"),
+    branch("wt/merged", "7".repeat(40), [], {
+      upstream: "origin/wt/merged",
+      ahead: 0,
+      behind: 0,
+      mergedIntoDefault: true,
+    }),
+    branch("wt/behind", "8".repeat(40), [], {
+      upstream: "origin/wt/behind",
+      ahead: 0,
+      behind: 3,
+    }),
+    branch("wt/diverged", "6".repeat(40), [], {
+      upstream: "origin/wt/diverged",
+      ahead: 1,
+      behind: 2,
+    }),
+  ],
+};
+
+test("branch rows offer the actions their state allows and count cleanup candidates", async () => {
+  renderPanel({
+    initialTab: "branches",
+    source: source({ branches: syncBranches }),
+  });
+  const local = dialog().getByRole("region", { name: "本地分支" });
+  // Not checked out, and gone upstream or merged: wt/gone and wt/merged.
+  await expect
+    .element(local.getByRole("button", { name: "清理分支（2）" }))
+    .toBeVisible();
+  await expect.element(local.getByText("已合入默认分支")).toBeVisible();
+  const items = () =>
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim());
+  for (const [name, expected] of [
+    ["feat/login-a", ["推送…", "删除分支…"]],
+    ["wt/gone", ["发布分支…", "删除分支…"]],
+    ["wt/behind", ["快进到上游", "删除分支…"]],
+    ["wt/diverged", ["删除分支…"]],
+  ] as const) {
+    await local.getByRole("button", { name: `分支操作：${name}` }).click();
+    await expect.element(page.getByRole("menuitem").first()).toBeVisible();
+    expect(items()).toEqual(expected);
+    await userEvent.keyboard("{Escape}");
+    await expect.poll(() => items()).toEqual([]);
+  }
+  await expect
+    .element(local.getByText("已分叉，需要在终端合并或变基。"))
+    .toBeVisible();
+  // A checked-out branch in sync has nothing to offer.
+  expect(
+    local.getByRole("button", { name: "分支操作：main" }).elements(),
+  ).toEqual([]);
+});
+
+test("cleanup runs as a panel subview; 返回 shows the branches read again", async () => {
+  await page.viewport(390, 844);
+  const data = source();
+  const after: Branches = {
+    ...syncBranches,
+    branches: syncBranches.branches.filter((item) => item.name !== "wt/merged"),
+  };
+  vi.mocked(data.branches)
+    .mockResolvedValueOnce(syncBranches)
+    .mockResolvedValue(after);
+  const requests: { path: string; body: unknown }[] = [];
+  const reply = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input), location.href).pathname;
+      requests.push({ path, body: JSON.parse(String(init?.body ?? "null")) });
+      if (path.endsWith("/branches/delete-preview"))
+        return reply({
+          confirmationId: "del1",
+          expiresAt: "2026-10-28T00:05:00Z",
+          items: [
+            {
+              branch: "wt/gone",
+              commit: "e".repeat(40),
+              group: "unmerged",
+              unmerged: {
+                total: 1,
+                items: [
+                  {
+                    hash: "e".repeat(40),
+                    subject: "squash 前的提交",
+                    author: "dev",
+                    committedAt: "2026-10-27T00:00:00Z",
+                  },
+                ],
+              },
+              blockers: [],
+            },
+            {
+              branch: "wt/merged",
+              commit: "7".repeat(40),
+              group: "contained",
+              unmerged: { total: 0, items: [] },
+              blockers: [],
+            },
+          ],
+        });
+      if (path.endsWith("/branches/delete"))
+        return reply({
+          results: [
+            {
+              branch: "wt/merged",
+              status: "deleted",
+              commit: "7".repeat(40),
+              message: "已删除",
+            },
+          ],
+          repository: repo,
+        });
+      return new Response(null, { status: 404 });
+    }),
+  );
+  const handlers = renderPanel({ initialTab: "branches", source: data });
+  await dialog().getByRole("button", { name: "清理分支（2）" }).click();
+  const flow = dialog().getByRole("region", { name: "清理分支" });
+  await expect.element(flow).toBeVisible();
+  // The flow takes the panel's place instead of stacking a dialog on it.
+  expect(page.getByRole("dialog").elements()).toHaveLength(1);
+  expect(requests[0]).toEqual({
+    path: "/api/repositories/repo1/branches/delete-preview",
+    body: { branches: ["wt/gone", "wt/merged"] },
+  });
+  await expect
+    .element(flow.getByRole("checkbox", { name: "删除 wt/merged" }))
+    .toBeChecked();
+  await expect
+    .element(flow.getByRole("checkbox", { name: /^删除 wt\/gone/ }))
+    .not.toBeChecked();
+  await flow.getByRole("button", { name: "删除 1 个分支" }).click();
+  expect(requests.at(-1)).toEqual({
+    path: "/api/repositories/repo1/branches/delete",
+    body: { confirmationId: "del1", acknowledgeUnmerged: false },
+  });
+  await expect
+    .element(flow.getByRole("list", { name: "删除结果" }))
+    .toMatchTextContent(/wt\/merged.*已删除/);
+  expect(handlers.onrefresh).toHaveBeenCalledOnce();
+  await flow.getByRole("button", { name: "返回" }).click();
+  const local = dialog().getByRole("region", { name: "本地分支" });
+  await expect.element(local).toBeVisible();
+  expect(data.branches).toHaveBeenCalledTimes(2);
+  await expect
+    .element(local.getByRole("button", { name: "清理分支（1）" }))
+    .toBeVisible();
+});
+
+test("a worktree's details offer its branch actions inside the panel", async () => {
+  const behind = worktree({
+    id: "behind1",
+    kind: "linked",
+    branch: "wt/behind",
+    path: "/repos/webmux.worktrees/behind",
+    upstream: "origin/wt/behind",
+    ahead: 0,
+    behind: 2,
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            confirmationId: "ff1",
+            expiresAt: "2026-10-28T00:05:00Z",
+            branch: "wt/behind",
+            from: "a".repeat(40),
+            to: "b".repeat(40),
+            upstream: "origin/wt/behind",
+            commits: { total: 0, items: [] },
+            worktree: behind,
+            sessions: [],
+            blockers: [],
+            warnings: [],
+          }),
+          { status: 200 },
+        ),
+    ),
+  );
+  renderPanel({
+    initialTab: "worktrees",
+    repository: { ...repo, worktrees: [mainTree, behind] },
+  });
+  await dialog()
+    .getByRole("button", { name: /^wt\/behind/ })
+    .click();
+  const details = dialog().getByRole("region", {
+    name: "工作树详情：wt/behind",
+  });
+  const branchSection = details.getByRole("region", { name: "分支与上游" });
+  expect(
+    branchSection.getByRole("button", { name: "推送…" }).elements(),
+  ).toEqual([]);
+  await branchSection.getByRole("button", { name: "快进到上游" }).click();
+  const flow = dialog().getByRole("region", { name: "快进到上游" });
+  await expect.element(flow).toMatchTextContent(/wt\/behind/);
+  expect(page.getByRole("dialog").elements()).toHaveLength(1);
+  // 返回 leads back to the details it was started from.
+  await flow.getByRole("button", { name: "返回" }).click();
+  await expect.element(details).toBeVisible();
 });

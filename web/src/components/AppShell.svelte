@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Drawer from "$lib/components/ui/drawer";
   import { navigate } from "../api";
+  import type { BranchOperation } from "../branch-actions";
   import { createArchiveSignal } from "../archive-signal";
   import { createArchived } from "../hooks/archived.svelte";
   import { createLaunchConfigs } from "../hooks/launch-configs.svelte";
@@ -126,6 +127,10 @@
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
   let releasingWorktree = $state<Worktree | null>(null);
+  let operating = $state<{
+    repositoryId: string;
+    operation: BranchOperation;
+  } | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
   let configuring = $state<Repository | null>(null);
@@ -196,6 +201,10 @@
     releaseWorktree(worktree) {
       shellUi.drawerOpen = false;
       releasingWorktree = worktree;
+    },
+    branchOperation(repositoryId, operation) {
+      shellUi.drawerOpen = false;
+      operating = { repositoryId, operation };
     },
     forward() {
       shellUi.drawerOpen = false;
@@ -580,6 +589,8 @@
           (s) => s.workspace?.worktreeId === current.id,
         )}
         lastFetchedAt={repo?.lastFetchedAt}
+        onoperation={(operation) =>
+          shell.branchOperation(current.repositoryId, operation)}
         onclose={() => (viewingWorktree = null)}
       />{/snippet}
   </LazyDialog>
@@ -629,6 +640,21 @@
         worktree={target}
         onchange={refreshWorktrees}
         onclose={() => (releasingWorktree = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+{#if operating}
+  {@const target = operating}
+  <LazyDialog
+    load={() => import("./BranchOperationDialog.svelte")}
+    label="分支操作"
+    onclose={() => (operating = null)}
+  >
+    {#snippet children(page)}<page.default
+        repositoryId={target.repositoryId}
+        operation={target.operation}
+        onchange={refreshWorktrees}
+        onclose={() => (operating = null)}
       />{/snippet}
   </LazyDialog>
 {/if}

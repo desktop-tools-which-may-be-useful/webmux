@@ -282,6 +282,7 @@
           onworktreedetails={withTree((tree) => shell.worktreeDetails(tree))}
           onremoveworktree={withTree((tree) => shell.removeWorktree(tree))}
           onswitchbranch={withTree((tree) => shell.switchBranch(tree))}
+          onbranchoperation={shell.branchOperation}
           onrename={shell.rename}
           onclose={shell.close}
           records={shell.archived.records}

@@ -207,3 +207,15 @@
   - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 失败；浏览器套件中 `TerminalGraphics`、`TerminalSyncOutput` 各 1 项在整套并发运行时失败，单独重跑 24 项全部通过；
   - Playwright E2E `repository-maintenance.spec.ts`、`worktrees.spec.ts`、`worktree-switch.spec.ts` 通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与获取、清理流程 GIF。
 - 限制：未在真机上验证；全量 E2E 与 Storybook 构建交给 CI。
+
+本次局部核对（2026-11-11，快进、推送与清理分支的前端与文档）：实现 OpenSpec 变更 `add-branch-sync-actions` 的 Web 端（后端、CLI 与快照已在前一提交），并与切换分支、获取远程的前端合并。
+
+- 更新的故事：新增 US-J18；更新 US-J14 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/shell-control.md` 与 `docs/protocol/http-workspace.md`。
+- 依据：
+  - `pnpm --dir web check`、`check:test`、`check:storybook`、`lint`、`check:arch` 与 `go test ./internal/docguard` 通过；`branch-actions`、`wire-contract`、`wire-arrays` 单测通过；
+  - 浏览器用例 `BranchOperations`、`RepositoryPanel`、`RepositoryGroup`、`WorkbenchTree`、`SwitchBranchDialog` 等通过；Storybook `overflow.spec.ts` 的仓库面板与分支操作场景通过；
+  - Playwright E2E `branch-operations.spec.ts`、`worktree-switch.spec.ts` 与 `repository-maintenance.spec.ts` 在桌面与 iPhone SE 项目通过。
+  - 集成：`make format`、`make check`（含 `golangci-lint` v2.15.0）通过；`make test-go` 全部通过；
+  - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 失败；浏览器套件中 `TerminalGraphics`、`TerminalSyncOutput` 各 1 项在整套并发运行时失败，单独重跑 24 项全部通过；
+  - E2E `branch-operations`、`repository-maintenance`、`worktree-switch`、`worktrees` 共 36 项通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与发布、清理分支流程 GIF。
+- 限制：未在真机上验证；无头浏览器无法验证悬停与触屏常驻；全量 E2E 与 Storybook 构建交给 CI。

@@ -175,6 +175,9 @@ webmux worktree switch . main feat/a             # 原地切换分支；也可 -
 webmux repo add; webmux repo branches .; webmux repo commits . --from main; webmux repo base . main
 webmux repo remotes .; webmux worktree show . feat/x --json   # 远程 URL 已脱敏；JSON 含 upstream、ahead、behind
 webmux repo fetch . && webmux worktree prune . --yes   # 获取全部远程；清理目录已缺失的失效登记，分支保留
+webmux repo ff . feat/a                          # 快进到上游：只用本地远程跟踪引用
+webmux repo push . feat/c --remote origin --to feat/c --yes   # 发布没有上游的分支
+webmux repo branch-rm . --cleanup                # 删除工作树遗留的分支；--unmerged 才删有独有提交的
 printf '{{webmux}}\n\n{{user}}' | webmux repo settings . --init -
 webmux launch-config add "Dev" --icon terminal --env MODE=dev -- bash -lc 'npm run dev'
 webmux launch-config edit "Dev" --unset-env MODE; webmux launch-config show "Dev" --json
@@ -193,6 +196,10 @@ webmux forward add 5173 --session self --label web
 - `repo fetch` 逐行输出每个远程的结果（分类与脱敏同 Web 端），全部成功以 0 结束，任一远程失败或仓库没有远程以 1 结束。
 - `worktree prune` 只选未锁定、目录已缺失的失效登记（不执行 `git worktree prune`），把批量预览写到标准错误，确认规则同 `worktree rm`，非交互且没有 `--yes` 时以 2 结束。
   - 没有可清理项以 0 结束；确认后逐项输出 `removed`、`skipped`、`failed`，有 `failed` 时以 1 结束。
+- `repo ff`、`repo push`、`repo branch-rm` 与 Web 端调用同一组预览与执行接口，预览输出到标准错误：
+  - 有阻止原因时以 1 结束且不做改动；终端上先确认，非交互时需要 `--yes`，否则以 2 结束；
+  - `repo ff` 快进检出的分支且工作树下有运行会话时同样需要确认；`repo push` 对已有上游的分支给出 `--remote` 或 `--to` 时以 2 结束；
+  - `repo branch-rm --cleanup` 选出未被检出、且上游已删除或已合入默认分支的分支，有独有提交的分支只在加 `--unmerged` 时删除；已删除分支的输出行带恢复命令。
 - 初始化指令最多 4000 个字符，超出时 CLI 以 2 拒绝；引用不存在的快捷指令只警告，仍会保存。`--edit` 用 `$VISUAL` 或 `$EDITOR` 编辑。
 - 启动配置的变量值默认隐藏；`edit` 读取后只改给出的字段再整体保存；开启聊天视图（`--chat`）前先检查命令是否支持。
 

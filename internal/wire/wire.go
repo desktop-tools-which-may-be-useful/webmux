@@ -290,7 +290,7 @@ func Branches(b workspace.Branches) contract.Branches {
 	branches := each(b.Branches, func(v workspace.Branch) contract.Branch {
 		return contract.Branch{
 			Name: v.Name, Head: v.Head, WorktreePaths: required(v.WorktreePaths), Subject: v.Subject, CommittedAt: v.CommittedAt,
-			Upstream: v.Upstream, Ahead: v.Ahead, Behind: v.Behind, UpstreamGone: v.UpstreamGone,
+			Upstream: v.Upstream, Ahead: v.Ahead, Behind: v.Behind, UpstreamGone: v.UpstreamGone, MergedIntoDefault: v.MergedIntoDefault,
 		}
 	})
 	bases := each(b.Bases, func(v workspace.Base) contract.BranchBase { return contract.BranchBase(v) })
@@ -424,6 +424,67 @@ func SwitchPreview(p workspace.SwitchPreview) contract.SwitchPreview {
 
 func SwitchWorktree(r contract.SwitchRequest) workspace.SwitchRequest {
 	return workspace.SwitchRequest(r)
+}
+
+func CommitList(l workspace.CommitList) contract.CommitList {
+	return contract.CommitList{Total: l.Total, Items: each(l.Items, func(v workspace.Commit) contract.Commit { return contract.Commit(v) })}
+}
+
+func FastForwardPreview(p workspace.FastForwardPreview) contract.FastForwardPreview {
+	out := contract.FastForwardPreview{
+		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Branch: p.Branch, From: p.From, To: p.To, Upstream: p.Upstream,
+		Commits: CommitList(p.Commits), Sessions: Sessions(p.Sessions), Blockers: Issues(p.Blockers), Warnings: Issues(p.Warnings),
+	}
+	if p.Worktree != nil {
+		tree := Worktree(*p.Worktree)
+		out.Worktree = &tree
+	}
+	return out
+}
+
+func FastForward(r contract.FastForwardRequest) workspace.FastForwardRequest {
+	return workspace.FastForwardRequest(r)
+}
+
+func FastForwardResult(r workspace.FastForwardResult) contract.FastForwardResult {
+	return contract.FastForwardResult{Repository: Repository(r.Repository)}
+}
+
+func PushPreview(p workspace.PushPreview) contract.PushPreview {
+	return contract.PushPreview{
+		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Branch: p.Branch, Commit: p.Commit, Remote: p.Remote, PushURL: p.PushURL,
+		Target: p.Target, Publish: p.Publish, Commits: CommitList(p.Commits), Blockers: Issues(p.Blockers), Warnings: Issues(p.Warnings),
+	}
+}
+
+func Push(r contract.PushRequest) workspace.PushRequest {
+	return workspace.PushRequest(r)
+}
+
+func PushResult(r workspace.PushResult) contract.PushResult {
+	return contract.PushResult{Status: r.Status, Message: r.Message, Repository: Repository(r.Repository)}
+}
+
+func BranchDeletePreview(p workspace.BranchDeletePreview) contract.BranchDeletePreview {
+	return contract.BranchDeletePreview{
+		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt,
+		Items: each(p.Items, func(v workspace.BranchDeleteItem) contract.BranchDeleteItem {
+			return contract.BranchDeleteItem{Branch: v.Branch, Commit: v.Commit, Group: v.Group, Unmerged: CommitList(v.Unmerged), Blockers: Issues(v.Blockers)}
+		}),
+	}
+}
+
+func DeleteBranches(r contract.BranchDeleteRequest) workspace.BranchDeleteRequest {
+	return workspace.BranchDeleteRequest(r)
+}
+
+func BranchDeleteResult(r workspace.BranchDeleteResult) contract.BranchDeleteResult {
+	return contract.BranchDeleteResult{
+		Results: each(r.Results, func(v workspace.BranchDeleteItemResult) contract.BranchDeleteItemResult {
+			return contract.BranchDeleteItemResult(v)
+		}),
+		Repository: Repository(r.Repository),
+	}
 }
 
 func BatchRemoveResult(r workspace.BatchRemoveResult) contract.BatchRemoveResult {

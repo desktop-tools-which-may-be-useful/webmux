@@ -1,6 +1,7 @@
 <script lang="ts">
   import IconChevronDown from "~icons/tabler/chevron-down";
   import * as Collapsible from "$lib/components/ui/collapsible";
+  import type { BranchOperation } from "../branch-actions";
   import type {
     ArchivedSession,
     Repository,
@@ -40,6 +41,7 @@
     archive,
     detailsOpen,
     ondetailschange,
+    onoperation,
   }: {
     repo: Repository;
     // All sessions associated with this repository.
@@ -69,6 +71,8 @@
     /** Details dialog of the focused worktree, opened from the page header. */
     detailsOpen?: boolean;
     ondetailschange?: (open: boolean) => void;
+    /** Starts a sync action of a worktree's branch. */
+    onoperation?: (operation: BranchOperation) => void;
   } = $props();
 
   let contentReady = $state(false);
@@ -176,6 +180,7 @@
           onswitch={switchableWorktree(tree) ? () => onswitch(tree) : undefined}
           archived={treeArchive}
           {archive}
+          {onoperation}
         />
       {/each}
       {@const missingArchive = shownArchive(archived.missing)}

@@ -115,7 +115,7 @@
   - 支持按分支、提交短哈希或路径搜索，按“全部 / 可安全清理 / 有阻塞 / 受保护”分段筛选，并提供“选中全部可安全清理”与“清空选择”；主工作区、bare、已锁定及状态未知的工作树禁选并说明原因，单次最多选择 50 个工作树；
   - 下一步请求服务端实时批量预览（`POST /api/repositories/{id}/worktrees/batch-removal-preview`，5 分钟有效，确认凭证与单项删除和释放空间隔离），分组展示可安全清理项、有阻塞项与不可删除项，并列出忽略文件警告、归档聊天保留情况与推送检查提示；
   - 默认仅安全删除无阻塞项（含清理未锁定缺失目录的 `prunable` 登记）并自动跳过受阻项；仅当显式勾选默认未选中的强制删除授权（同时确认 `includeForce` 与 `closeSessions`）后，才关闭受阻项列出的活动会话并强制删除受阻目录；预览时干净的项即使开启批量强制仍按安全模式复核，防止预览后产生的新修改被静默丢弃；
-  - 本地分支始终保留；可解析提交的已归档混合会话记录（含强制删除刚关闭的聊天）转为“已释放空间”保留；
+  - 本地分支始终保留；可解析提交的已归档混合会话记录（含强制删除刚关闭的聊天）转为“已释放空间”保留；删除后遗留的本地分支在“分支”分区用“清理分支（N）”删除（US-J18）；
   - 批量执行（`POST /api/repositories/{id}/worktrees/batch-remove`）预先保留全部拟删路径以拦截并发会话创建，逐项复核身份与会话，单项失败仅记录为 `failed` 而不中断其余项；
   - 全部成功时分区回到刷新后的浏览列表并提示已删除数量，同时清理已删路径的草稿与主页固定项；存在失败项时停留在结果视图并保留失败项勾选以便重新预览重试；
   - 存在未锁定、目录已缺失且没有运行中会话的 `prunable` linked worktree 时，浏览状态显示“清理失效登记（N）”快捷入口，只预选这些条目并直接请求批量预览（US-J17），N 为 0 时不显示。
@@ -152,6 +152,17 @@
   - 获取以非交互方式运行（不等待终端或图形凭据提示，未自定义 ssh 时加 `BatchMode=yes`），不修改 Git 或凭据配置；错误信息与远程清单同样脱敏（令牌换成 `***`，最多 200 字符），服务日志不记录 URL 与 Git 输出原文；
   - “工作树”分区的“清理失效登记（N）”只计入未锁定、目录已缺失、没有运行中会话的 `prunable` linked worktree，点击后进入批量预览，确认、归档记录保留与逐项结果沿用 US-J14，分支保留；被锁定的失效登记不计入、不预选，行内说明“已锁定，需在终端解锁后清理”；系统从不执行不区分条目的 `git worktree prune`；
   - `POST /api/repositories/{id}/fetch` 沿用认证与 Origin 校验，没有远程时 409；CLI `webmux repo fetch REPO [--json]` 逐行输出每个远程的结果（全部成功 0，否则 1），`webmux worktree prune REPO [--yes] [--json]` 筛出同样的失效登记并走批量预览与删除，确认规则与 `worktree rm` 相同。
+- **US-J18 快进、推送与清理分支**：作为让多个 agent 在各自分支上工作的使用者，我希望在仓库面板里把落后的分支快进到上游、推送或发布领先的分支、删除不再需要的本地分支，以便不切到终端也能处理面板显示出的同步状态。
+  验收要点：
+  - 可用操作由同一条规则决定：有上游、落后且不领先时“快进到上游”；领先且不落后时“推送…”；没有上游或上游已删除时“发布分支…”；领先/落后未计算时两项都显示，由预览给出准确结果；已分叉时都不提供，说明“已分叉，需要在终端合并或变基”；
+  - 入口：首页、侧栏与仓库面板工作树行共用的“⋯”菜单，工作树详情的“分支与上游”一节，以及“分支”分区每个本地分支的“⋯”菜单（未被检出的分支另有“删除分支…”）；detached、bare、不可用或待清理的工作树没有这些项；
+  - 从首页或侧栏发起时在桌面以对话框、窄屏以底部抽屉展示；从仓库面板发起时作为面板内子视图，“返回”回到发起处，不在面板上再叠一层；请求进行中不能返回或关闭；完成后刷新仓库状态，“分支”分区重新读取；
+  - 每个操作先预览，阻止原因、警告与将前进、推送或遗留的提交（最多 20 条加总数）都列出，凭证 5 分钟有效且按操作隔离；执行时状态已变化（409）自动重新预览并说明，晚到的旧预览被丢弃；
+  - 快进只用本地远程跟踪引用，不联网：检出它的工作树有未提交修改、进行中的合并或变基时拒绝，未检出时只移动分支引用；工作树下有运行会话时列出会话并需勾选确认，会话继续运行；
+  - 推送按预览中的提交推送，不强制推送、不推送标签；推送地址脱敏后以等宽文字显示；发布时可选远程并修改远端分支名，成功后设为上游；远端拒绝时说明原因（如“远端有新的提交，请先获取远程再快进”），本地分支与配置不变；
+  - 删除分为“已包含”（提交都能从其他引用到达，默认勾选）与“有独有提交”（列出独有提交，默认不勾选，需逐个勾选）；被检出的分支不能删除并说明占用的工作树；结果逐项显示已删除、已跳过或失败，已删除的行可复制恢复命令 `git branch <名称> <OID>`，并说明垃圾回收前可恢复；
+  - “分支”分区标明已合入默认分支的分支；存在清理候选（未被检出，且上游已删除或已合入默认分支）时标题行显示“清理分支（N）”，单次最多 50 个；
+  - CLI `webmux repo ff`、`webmux repo push`（`--remote`、`--to`）、`webmux repo branch-rm`（`--cleanup`、`--unmerged`）调用同一组接口，终端确认与 `--yes` 规则同 `worktree rm`。
 
 依据：
 
@@ -164,6 +175,9 @@
 - [工作树详情](../../../web/src/components/WorktreeDetails.svelte)、[分支分区](../../../web/src/components/RepositoryBranches.svelte)、[远程分区](../../../web/src/components/RepositoryRemotes.svelte)、[同步摘要浏览器用例](../../../web/test/browser/WorktreeSyncSummary.test.ts)
 - [获取服务](../../../internal/workspace/fetch.go)、[远程调用与错误分类](../../../internal/workspace/remotegit.go)、[获取服务端测试](../../../internal/workspace/fetch_test.go)
 - [仓库命令](../../../internal/clicmd/repo.go)、[工作树命令](../../../internal/clicmd/worktree.go)、[仓库维护 E2E](../../../web/test/e2e/repository-maintenance.spec.ts)
+- [快进](../../../internal/workspace/fastforward.go)、[推送](../../../internal/workspace/push.go)、[删除分支](../../../internal/workspace/branchdelete.go)、[分支操作 CLI](../../../internal/clicmd/branchsync.go)
+- [入口规则](../../../web/src/branch-actions.ts)、[流程容器](../../../web/src/components/BranchOperationFlow.svelte)、[快进流程](../../../web/src/components/FastForwardBranch.svelte)、[推送流程](../../../web/src/components/PushBranch.svelte)
+- [删除流程](../../../web/src/components/DeleteBranches.svelte)、[流程浏览器用例](../../../web/test/browser/BranchOperations.test.ts)、[分支操作 E2E](../../../web/test/e2e/branch-operations.spec.ts)
 
 - [释放空间](../../../internal/workspace/release.go)、[重建](../../../internal/workspace/rebuild.go)、[推送检查](../../../internal/workspace/pushcheck.go)、[释放确认](../../../web/src/components/ReleaseWorktreeDialog.svelte)、[重建确认](../../../web/src/components/RebuildWorktreeDialog.svelte)
 - [推送警告](../../../web/src/components/PushCheckNotice.svelte)、[对话框浏览器用例](../../../web/test/browser/WorktreeDialogs.test.ts)、[释放服务端测试](../../../internal/workspace/release_test.go)、[删除保留记录测试](../../../internal/workspace/remove_retain_test.go)

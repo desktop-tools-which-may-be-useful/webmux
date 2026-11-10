@@ -531,13 +531,17 @@ func TestBranchesTimingWithManyTrackedBranches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Branches with %d tracked branches took %v", branches, elapsed)
-	tracked := 0
+	tracked, merged := 0, 0
 	for _, b := range result.Branches {
 		if b.Behind != nil && *b.Behind == 1 && b.Ahead != nil && *b.Ahead == 0 {
 			tracked++
 		}
+		if b.MergedIntoDefault {
+			merged++
+		}
 	}
+	// The time includes the for-each-ref --merged that fills mergedIntoDefault.
+	t.Logf("Branches with %d tracked branches (%d merged into the default) took %v", branches, merged, elapsed)
 	if tracked != branches {
 		t.Fatalf("tracked branches: %d of %d", tracked, branches)
 	}

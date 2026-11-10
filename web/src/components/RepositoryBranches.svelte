@@ -1,10 +1,19 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import IconChevronDown from "~icons/tabler/chevron-down";
+  import IconDots from "~icons/tabler/dots";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Collapsible from "$lib/components/ui/collapsible";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { ListButton } from "$lib/components/ui/list-button";
+  import {
+    branchActions,
+    cleanupCandidates,
+    cleanupOperation,
+    divergedText,
+    type BranchOperation,
+  } from "../branch-actions";
   import { remoteLocalName } from "../branch-name";
   import { relativeTime } from "../commit-choices";
   import { errorMessage } from "../error";
@@ -12,6 +21,7 @@
   import type { WorktreePreset } from "../new-session-defaults";
   import type { Branches } from "../schemas";
   import { upstreamState } from "../worktree-sync";
+  import BranchMenuItems from "./BranchMenuItems.svelte";
   import InlineNotice from "./InlineNotice.svelte";
   import ListSearchInput from "./ListSearchInput.svelte";
   import UpstreamStatus from "./UpstreamStatus.svelte";
@@ -20,13 +30,18 @@
   // the worktree that has each checked out, then the remote-tracking
   // branches in a fold. Read when the section is first shown; both groups
   // filter by name. A branch no worktree has checked out, and every remote
-  // one, can be opened in a new worktree.
+  // one, can be opened in a new worktree. Each local branch's "⋯" offers
+  // its sync actions and the title row "清理分支（N）"; both open in the
+  // panel (`onoperation`), which bumps `version` afterwards to read the
+  // branches again.
   let {
     active,
     load,
     worktreePaths,
     onopen,
     onnewworktree,
+    onoperation,
+    version = 0,
   }: {
     /** The section is shown; the first time starts the read. */
     active: boolean;
@@ -37,6 +52,9 @@
     onopen: (path: string) => void;
     /** Opens the new-worktree dialog prefilled for a branch. */
     onnewworktree: (preset: WorktreePreset) => void;
+    onoperation?: (operation: BranchOperation) => void;
+    /** A change makes a section that was read read again. */
+    version?: number;
   } = $props();
 
   let data = $state<Branches | null>(null);
@@ -63,6 +81,13 @@
   $effect(() => {
     if (active && !data && !loading && !error) void read();
   });
+  let readVersion = untrack(() => version);
+  $effect(() => {
+    if (version === readVersion) return;
+    readVersion = version;
+    if (untrack(() => data || error)) untrack(() => void read());
+  });
+  const candidates = $derived(cleanupCandidates(data?.branches ?? []));
 
   const remotePrefix = "refs/remotes/";
   const term = $derived(query.trim().toLowerCase());
@@ -109,12 +134,23 @@
     <p role="status" class="text-xs text-muted-foreground">正在读取分支…</p>
   {:else}
     <section class="space-y-2" aria-label="本地分支">
-      <h3 class="flex items-center gap-2 text-sm font-medium">
-        本地分支
-        <Badge variant="secondary"
-          >{countText(localShown.length, local.length)}</Badge
-        >
-      </h3>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="flex items-center gap-2 text-sm font-medium">
+          本地分支
+          <Badge variant="secondary"
+            >{countText(localShown.length, local.length)}</Badge
+          >
+        </h3>
+        {#if onoperation && candidates.length}
+          <Button
+            size="sm"
+            variant="outline"
+            title="删除未被检出、且上游已删除或已合入默认分支的本地分支"
+            onclick={() => onoperation(cleanupOperation(candidates))}
+            >清理分支（{candidates.length}）</Button
+          >
+        {/if}
+      </div>
       {#if localShown.length === 0}
         <p class="text-xs text-muted-foreground">
           {local.length ? "没有匹配的本地分支。" : "没有本地分支。"}
@@ -122,27 +158,54 @@
       {:else}
         <ul class="space-y-2">
           {#each localShown as branch (branch.name)}
+            {@const offered = branchActions(branch)}
             <li class="space-y-1 rounded-lg border p-3 text-xs">
-              <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                <span class="font-mono text-sm font-medium break-all"
-                  >{branch.name}</span
-                >
-                <span class="font-mono text-muted-foreground"
-                  >{branch.head.slice(0, 8)}</span
-                >
-                {#if branch.name === data.defaultBranch}<Badge
-                    variant="secondary">默认</Badge
-                  >{/if}
-                {#if !branch.worktreePaths.length}<Button
-                    size="xs"
-                    variant="outline"
-                    class="ml-auto"
-                    aria-haspopup="dialog"
-                    title={`在新工作树中检出 ${branch.name}`}
-                    onclick={() =>
-                      onnewworktree({ mode: "existing", branch: branch.name })}
-                    >在新工作树打开…</Button
-                  >{/if}
+              <div class="flex min-w-0 items-start gap-1.5">
+                <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                  <span class="font-mono text-sm font-medium break-all"
+                    >{branch.name}</span
+                  >
+                  <span class="font-mono text-muted-foreground"
+                    >{branch.head.slice(0, 8)}</span
+                  >
+                  {#if branch.name === data.defaultBranch}<Badge
+                      variant="secondary">默认</Badge
+                    >{:else if branch.mergedIntoDefault}<Badge variant="outline"
+                      >已合入默认分支</Badge
+                    >{/if}
+                  {#if !branch.worktreePaths.length}<Button
+                      size="xs"
+                      variant="outline"
+                      class="ml-auto"
+                      aria-haspopup="dialog"
+                      title={`在新工作树中检出 ${branch.name}`}
+                      onclick={() =>
+                        onnewworktree({
+                          mode: "existing",
+                          branch: branch.name,
+                        })}>在新工作树打开…</Button
+                    >{/if}
+                </div>
+                {#if onoperation && offered.actions.length}
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger>
+                      {#snippet child({ props })}
+                        <Button
+                          {...props}
+                          variant="ghost"
+                          size="icon-sm"
+                          class="-my-1"
+                          aria-label={`分支操作：${branch.name}`}
+                          title={`分支操作：${branch.name}`}
+                          ><IconDots aria-hidden="true" /></Button
+                        >
+                      {/snippet}
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end" class="min-w-44">
+                      <BranchMenuItems target={branch} {onoperation} />
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Root>
+                {/if}
               </div>
               <p class="break-all text-muted-foreground">
                 {branch.subject || "无标题提交"}{branch.committedAt
@@ -152,6 +215,9 @@
               <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                 <UpstreamStatus state={upstreamState(branch)} />
               </div>
+              {#if offered.diverged}
+                <p class="text-muted-foreground">{divergedText}。</p>
+              {/if}
               {#each branch.worktreePaths as path (path)}
                 <p class="flex min-w-0 flex-wrap items-baseline gap-1">
                   <span class="text-muted-foreground">检出于</span>

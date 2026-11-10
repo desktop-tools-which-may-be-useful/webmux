@@ -501,6 +501,10 @@ func (s *Service) branches(ctx context.Context, r *repositoryState, repository R
 	if err != nil {
 		return result, err
 	}
+	merged, err := s.mergedIntoDefault(ctx, r.entry.AnchorPath, repository)
+	if err != nil {
+		return result, err
+	}
 	const refFields = 6
 	fields := bytes.Split(data, []byte{0})
 	for i := 0; i+refFields-1 < len(fields); i += refFields {
@@ -524,6 +528,7 @@ func (s *Service) branches(ctx context.Context, r *repositoryState, repository R
 					branch.WorktreePaths = append(branch.WorktreePaths, tree.Path)
 				}
 			}
+			branch.MergedIntoDefault = merged[ref]
 			result.Branches = append(result.Branches, branch)
 		}
 		result.Bases = append(result.Bases, Base{Name: ref, Head: head, Subject: subject, Kind: kind, CommittedAt: committedAt})

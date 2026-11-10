@@ -66,6 +66,7 @@
     ahead: null,
     behind: null,
     upstreamGone: false,
+    mergedIntoDefault: false,
   });
   const branches: Branches = {
     branches: [

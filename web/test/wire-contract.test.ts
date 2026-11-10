@@ -243,6 +243,12 @@ const groups: Array<[z.ZodType, string[]]> = [
       "ws-terminal-submission-written",
     ],
   ],
+  // add-branch-sync-actions
+  [S.FastForwardPreviewSchema, ["branch-fast-forward-preview"]],
+  [S.PushPreviewSchema, ["branch-push-preview"]],
+  [S.PushResultSchema, ["branch-push"]],
+  [S.BranchDeletePreviewSchema, ["branch-delete-preview"]],
+  [S.BranchDeleteResultSchema, ["branch-delete"]],
 ];
 const snapshotSchemas = new Map<string, z.ZodType>();
 for (const [schema, names] of groups)

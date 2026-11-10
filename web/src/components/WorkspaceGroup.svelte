@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ArchivedSession, SessionInfo, Worktree } from "../schemas";
   import type { ArchiveActions } from "../archived";
+  import type { BranchOperation } from "../branch-actions";
   import IconFolder from "~icons/tabler/folder";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconPlus from "~icons/tabler/plus";
@@ -34,6 +35,7 @@
     detailsOpen,
     ondetailschange,
     lastFetchedAt,
+    onoperation,
   }: {
     title: string;
     path?: string;
@@ -64,6 +66,8 @@
     ondetailschange?: (open: boolean) => void;
     /** The repository's last fetch, shown in the worktree details. */
     lastFetchedAt?: string | null;
+    /** Starts a sync action of the worktree's branch (menu and details). */
+    onoperation?: (operation: BranchOperation) => void;
   } = $props();
   let localOpen = $state(false);
   const visible = $derived(
@@ -146,6 +150,8 @@
           {ontogglepin}
           {onswitch}
           {onremove}
+          {worktree}
+          {onoperation}
         />
       </div>
       {@render notices()}
@@ -200,6 +206,7 @@
         {lastFetchedAt}
         {worktree}
         sessions={visible}
+        {onoperation}
         onclose={() => setDetails(false)}
       />{/snippet}
   </LazyDialog>

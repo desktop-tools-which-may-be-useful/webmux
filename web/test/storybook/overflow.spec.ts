@@ -281,3 +281,33 @@ test("keeps a full scratch list and its composer reachable", async ({
     await expectNoOverflow(page, name);
   });
 });
+
+// The branch flows with long branch names and URLs, blockers, sessions and
+// both delete groups: the dialog (drawer on phones) stays in the viewport.
+for (const story of [
+  "fast-forward",
+  "fast-forward-blocked",
+  "publish",
+  "push-blocked",
+  "delete-groups",
+]) {
+  test(`branch operation ${story} fits every layout`, async ({ page }) => {
+    test.slow();
+    const failures: string[] = [];
+    page.on("pageerror", (error) => failures.push(error.message));
+    await page.route("**/api/**", (route) => route.abort());
+    await page.goto(
+      `/iframe.html?id=workspace-branch-operations--${story}&viewMode=story&globals=theme:light`,
+    );
+    await expect(page.getByTestId("branch-story")).toBeVisible();
+    const dialog = page.getByRole("dialog");
+    await checkEachLayout(page, async ({ name }) => {
+      await expect
+        .soft(dialog.getByRole("button", { name: "取消" }), name)
+        .toBeVisible();
+      await expectNoOverflow(page, name);
+      await expectDialogFits(page, dialog, name);
+      expect.soft(failures, name).toEqual([]);
+    });
+  });
+}

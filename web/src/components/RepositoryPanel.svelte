@@ -21,6 +21,7 @@
     repositoryBranches,
     repositoryRemotes,
   } from "../api";
+  import { operationTitle, type BranchOperation } from "../branch-actions";
   import { errorMessage } from "../error";
   import { LatestRequest } from "../hooks/remote-request.svelte";
   import { worktreeTitle } from "../home-worktrees";
@@ -34,6 +35,7 @@
     SessionInfo,
   } from "../schemas";
   import type { RepositoryTab } from "../shell.svelte";
+  import BranchOperationFlow from "./BranchOperationFlow.svelte";
   import InlineNotice from "./InlineNotice.svelte";
   import RepositoryBranches from "./RepositoryBranches.svelte";
   import RepositoryOverview from "./RepositoryOverview.svelte";
@@ -50,7 +52,8 @@
   // "返回" instead of a second dialog; the tabs stay mounted underneath, so
   // their search, filters and scroll survive. While a section's request or
   // a switch is in flight (`busy`), going back, switching sections and
-  // closing are all blocked. "获取远程" in the title bar acts on the whole
+  // closing are all blocked. A branch operation (fast-forward, push, delete)
+  // is a subview too, over the tabs or a worktree's details. "获取远程" in the title bar acts on the whole
   // repository from every section; its per-remote results stay below the
   // title until the panel closes or the next fetch.
   let {
@@ -105,12 +108,18 @@
   let tab = $state<RepositoryTab>(untrack(() => initialTab));
   let busy = $state(false);
   // The subviews over the tabs, the last one shown; empty for the tabs.
-  type Subview = { kind: "detail" | "switch"; id: string };
+  type Subview =
+    | { kind: "detail" | "switch"; id: string }
+    | { kind: "operation"; operation: BranchOperation };
   let views = $state<Subview[]>([]);
   const top = $derived(views.at(-1));
   const topTree = $derived(
-    top ? repository.worktrees.find((tree) => tree.id === top.id) : undefined,
+    top && top.kind !== "operation"
+      ? repository.worktrees.find((tree) => tree.id === top.id)
+      : undefined,
   );
+  // Bumped after an operation so the branches section reads them again.
+  let branchesVersion = $state(0);
   const tabs: { id: RepositoryTab; label: string }[] = [
     { id: "overview", label: "概览" },
     { id: "worktrees", label: "工作树" },
@@ -214,6 +223,13 @@
   function openWorktree(id: string) {
     void push({ kind: "detail", id });
   }
+  function openOperation(operation: BranchOperation) {
+    void push({ kind: "operation", operation });
+  }
+  function operated() {
+    branchesVersion++;
+    onrefresh();
+  }
   function openPath(path: string) {
     const tree = repository.worktrees.find((w) => w.path === path);
     if (tree) openWorktree(tree.id);
@@ -244,6 +260,20 @@
   const fetchReasonId = $props.id();
   const fetchLabel = $derived(fetching ? "正在获取远程" : "获取远程");
 </script>
+
+{#snippet subviewHeader(heading: string)}
+  <div class="flex min-w-0 items-center gap-2">
+    <Button
+      variant="ghost"
+      size="sm"
+      class="-ml-2"
+      disabled={busy}
+      onclick={() => void back()}
+      ><IconArrowLeft aria-hidden="true" />返回</Button
+    >
+    <h3 class="min-w-0 text-sm font-medium break-all">{heading}</h3>
+  </div>
+{/snippet}
 
 {#snippet fetchAction()}
   <!-- A disabled button shows no hint, so the wrapper carries the reason. -->
@@ -361,6 +391,7 @@
               bind:busy
               onopen={openWorktree}
               onswitch={(id) => void push({ kind: "switch", id })}
+              onoperation={openOperation}
               {onchange}
               {onremoved}
             />
@@ -373,6 +404,8 @@
                 {worktreePaths}
                 onopen={openPath}
                 {onnewworktree}
+                onoperation={openOperation}
+                version={branchesVersion}
               />
             {/key}
           </Tabs.Content>
@@ -396,7 +429,21 @@
         />
       {/if}
     </div>
-    {#if top}
+    {#if top?.kind === "operation"}
+      {@const heading = operationTitle(top.operation)}
+      <section class="min-w-0 space-y-3" aria-label={heading}>
+        {@render subviewHeader(heading)}
+        {#key top}
+          <BranchOperationFlow
+            repositoryId={repository.id}
+            operation={top.operation}
+            bind:busy
+            onchange={operated}
+            onclose={() => void back()}
+          />
+        {/key}
+      </section>
+    {:else if top}
       {@const title = topTree ? worktreeTitle(topTree) : "工作树"}
       <section
         class="min-w-0 space-y-3"
@@ -406,19 +453,9 @@
             ? `工作树详情：${title}`
             : "工作树详情"}
       >
-        <div class="flex min-w-0 items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            class="-ml-2"
-            disabled={busy}
-            onclick={() => void back()}
-            ><IconArrowLeft aria-hidden="true" />返回</Button
-          >
-          <h3 class="min-w-0 text-sm font-medium break-all">
-            {top.kind === "switch" ? `切换分支：${title}` : title}
-          </h3>
-        </div>
+        {@render subviewHeader(
+          top.kind === "switch" ? `切换分支：${title}` : title,
+        )}
         {#if top.kind === "detail" && topTree && switchableWorktree(topTree)}
           {@const id = topTree.id}
           <Button
@@ -456,6 +493,7 @@
               (s) => s.workspace?.worktreeId === topTree.id,
             )}
             lastFetchedAt={repository.lastFetchedAt}
+            onoperation={openOperation}
           />
         {/if}
       </section>

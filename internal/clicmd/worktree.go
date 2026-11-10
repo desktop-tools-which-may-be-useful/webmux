@@ -796,16 +796,7 @@ func (e Env) printSwitchPreview(p contract.SwitchPreview) {
 	for _, s := range p.Sessions {
 		_, _ = fmt.Fprintf(e.Stderr, "webmux:   session %s (%s) %s\n", s.ID, s.Status, s.Title)
 	}
-	for _, b := range p.Blockers {
-		if b.Path != "" {
-			_, _ = fmt.Fprintf(e.Stderr, "webmux:   blocked: %s (%s)\n", b.Message, b.Path)
-		} else {
-			_, _ = fmt.Fprintf(e.Stderr, "webmux:   blocked: %s\n", b.Message)
-		}
-	}
-	for _, w := range p.Warnings {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux:   warning: %s\n", w.Message)
-	}
+	e.printIssues(p.Blockers, p.Warnings)
 }
 
 // confirmYes asks for yes to be typed on a terminal.
@@ -816,7 +807,7 @@ func (e Env) confirmYes(prompt string) (int, bool) {
 	_, _ = fmt.Fprint(e.Stderr, prompt)
 	answer, _ := bufio.NewReader(e.Stdin).ReadString('\n')
 	if strings.TrimSpace(answer) != "yes" {
-		_, _ = fmt.Fprintln(e.Stderr, "webmux: cancelled; nothing was switched")
+		_, _ = fmt.Fprintln(e.Stderr, "webmux: cancelled; nothing changed")
 		return contract.ExitError, false
 	}
 	return contract.ExitOK, true

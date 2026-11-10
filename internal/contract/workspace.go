@@ -69,17 +69,19 @@ type WorktreeChanges struct {
 
 // Branch is a local branch. Upstream is the short upstream name, null
 // without one; Ahead and Behind are null without an upstream or when it is
-// gone.
+// gone. MergedIntoDefault reports that the main worktree's HEAD contains
+// the branch, false for a bare or unborn main worktree.
 type Branch struct {
-	Name          string   `json:"name"`
-	Head          string   `json:"head"`
-	WorktreePaths []string `json:"worktreePaths"`
-	Subject       string   `json:"subject"`
-	CommittedAt   string   `json:"committedAt"`
-	Upstream      *string  `json:"upstream"`
-	Ahead         *int     `json:"ahead"`
-	Behind        *int     `json:"behind"`
-	UpstreamGone  bool     `json:"upstreamGone"`
+	Name              string   `json:"name"`
+	Head              string   `json:"head"`
+	WorktreePaths     []string `json:"worktreePaths"`
+	Subject           string   `json:"subject"`
+	CommittedAt       string   `json:"committedAt"`
+	Upstream          *string  `json:"upstream"`
+	Ahead             *int     `json:"ahead"`
+	Behind            *int     `json:"behind"`
+	UpstreamGone      bool     `json:"upstreamGone"`
+	MergedIntoDefault bool     `json:"mergedIntoDefault"`
 }
 
 // BranchBase is a local or remote-tracking branch offered as a start point;
@@ -375,6 +377,140 @@ type SwitchPreview struct {
 type SwitchRequest struct {
 	ConfirmationID      string `json:"confirmationId"`
 	AcknowledgeSessions bool   `json:"acknowledgeSessions"`
+}
+
+// CommitList is the first commits of a range, at most 20, newest first;
+// Total counts the whole range.
+type CommitList struct {
+	Total int      `json:"total"`
+	Items []Commit `json:"items"`
+}
+
+// FastForwardPreviewRequest is the body of POST
+// /api/repositories/{id}/branches/fast-forward-preview.
+type FastForwardPreviewRequest struct {
+	Branch string `json:"branch"`
+}
+
+// FastForwardPreview describes moving Branch from From to its upstream's
+// tip To (empty without an existing upstream), from the remote-tracking
+// refs at hand. Worktree checks the branch out, null for none, and
+// Sessions are its running sessions. With blockers ConfirmationID is ""
+// and ExpiresAt null.
+type FastForwardPreview struct {
+	ConfirmationID string        `json:"confirmationId"`
+	ExpiresAt      *time.Time    `json:"expiresAt"`
+	Branch         string        `json:"branch"`
+	From           string        `json:"from"`
+	To             string        `json:"to"`
+	Upstream       string        `json:"upstream"`
+	Commits        CommitList    `json:"commits"`
+	Worktree       *Worktree     `json:"worktree"`
+	Sessions       []SessionInfo `json:"sessions"`
+	Blockers       []Issue       `json:"blockers"`
+	Warnings       []Issue       `json:"warnings"`
+}
+
+// FastForwardRequest confirms a previewed fast-forward; AcknowledgeSessions
+// is required when the preview listed sessions.
+type FastForwardRequest struct {
+	ConfirmationID      string `json:"confirmationId"`
+	AcknowledgeSessions bool   `json:"acknowledgeSessions"`
+}
+
+// FastForwardResult answers a fast-forward with the refreshed repository.
+type FastForwardResult struct {
+	Repository Repository `json:"repository"`
+}
+
+// PushPreviewRequest is the body of POST
+// /api/repositories/{id}/branches/push-preview. Remote and Target apply
+// only to publishing a branch without an existing upstream.
+type PushPreviewRequest struct {
+	Branch string `json:"branch"`
+	Remote string `json:"remote,omitempty"`
+	Target string `json:"target,omitempty"`
+}
+
+// PushPreview describes pushing Commit to branch Target of Remote, whose
+// push URL is redacted. Publish marks a branch without an existing
+// upstream, which gets Target as its upstream. With blockers
+// ConfirmationID is "" and ExpiresAt null.
+type PushPreview struct {
+	ConfirmationID string     `json:"confirmationId"`
+	ExpiresAt      *time.Time `json:"expiresAt"`
+	Branch         string     `json:"branch"`
+	Commit         string     `json:"commit"`
+	Remote         string     `json:"remote"`
+	PushURL        string     `json:"pushUrl"`
+	Target         string     `json:"target"`
+	Publish        bool       `json:"publish"`
+	Commits        CommitList `json:"commits"`
+	Blockers       []Issue    `json:"blockers"`
+	Warnings       []Issue    `json:"warnings"`
+}
+
+// PushRequest confirms a previewed push.
+type PushRequest struct {
+	ConfirmationID string `json:"confirmationId"`
+}
+
+// PushResult answers a push, also a refused one: Status is "ok", "auth",
+// "network", "timeout", "rejected" or "error", and Message explains a
+// failure with credentials redacted.
+type PushResult struct {
+	Status     string     `json:"status"`
+	Message    string     `json:"message"`
+	Repository Repository `json:"repository"`
+}
+
+// BranchDeletePreviewRequest is the body of POST
+// /api/repositories/{id}/branches/delete-preview: 1 to 50 local branches.
+type BranchDeletePreviewRequest struct {
+	Branches []string `json:"branches"`
+}
+
+// BranchDeleteItem previews deleting one branch at Commit. Group is
+// "contained" when other refs keep all its commits and "unmerged"
+// otherwise, with Unmerged listing the commits only it keeps. A blocked
+// item cannot be deleted.
+type BranchDeleteItem struct {
+	Branch   string     `json:"branch"`
+	Commit   string     `json:"commit"`
+	Group    string     `json:"group"`
+	Unmerged CommitList `json:"unmerged"`
+	Blockers []Issue    `json:"blockers"`
+}
+
+// BranchDeletePreview previews deleting branches; without a deletable item
+// ConfirmationID is "" and ExpiresAt null.
+type BranchDeletePreview struct {
+	ConfirmationID string             `json:"confirmationId"`
+	ExpiresAt      *time.Time         `json:"expiresAt"`
+	Items          []BranchDeleteItem `json:"items"`
+}
+
+// BranchDeleteRequest confirms a previewed delete; the unmerged group is
+// deleted only with AcknowledgeUnmerged.
+type BranchDeleteRequest struct {
+	ConfirmationID      string `json:"confirmationId"`
+	AcknowledgeUnmerged bool   `json:"acknowledgeUnmerged"`
+}
+
+// BranchDeleteItemResult is one branch's outcome: "deleted", "skipped" or
+// "failed". A deleted branch's Message gives the command restoring it.
+type BranchDeleteItemResult struct {
+	Branch  string `json:"branch"`
+	Status  string `json:"status"`
+	Commit  string `json:"commit"`
+	Message string `json:"message"`
+}
+
+// BranchDeleteResult answers a delete with each branch's outcome and the
+// refreshed repository.
+type BranchDeleteResult struct {
+	Results    []BranchDeleteItemResult `json:"results"`
+	Repository Repository               `json:"repository"`
 }
 
 // BatchRemovalPreviewRequest selects the worktrees of a repository to preview.

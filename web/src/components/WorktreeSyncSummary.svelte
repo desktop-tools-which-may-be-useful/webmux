@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import IconCopy from "~icons/tabler/copy";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
@@ -23,11 +24,14 @@
     worktree,
     variant = "compact",
     lastFetchedAt,
+    actions,
   }: {
     worktree: Worktree;
     variant?: "indicator" | "compact" | "full";
     /** The repository's last fetch; shown beside the upstream in `full`. */
     lastFetchedAt?: string | null;
+    /** The branch's sync actions, at the end of `full`'s branch section. */
+    actions?: Snippet;
   } = $props();
   const upstream = $derived(worktreeUpstream(worktree));
   const operation = $derived(
@@ -112,6 +116,7 @@
           {/if}
         {/if}
       </dl>
+      {@render actions?.()}
     </section>
     <section class="space-y-2" aria-label="最近提交">
       <h3 class="text-sm font-medium">最近提交</h3>

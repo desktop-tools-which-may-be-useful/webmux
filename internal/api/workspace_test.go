@@ -578,3 +578,86 @@ func TestWorkspaceSwitchAPI(t *testing.T) {
 		t.Fatalf("switched worktree JSON: %s", switched.Body.String())
 	}
 }
+
+func TestWorkspaceBranchOperationsAPI(t *testing.T) {
+	handler, _, _, root := workspaceAPI(t)
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	gitWorkspaceAPI(t, root, "init", "--bare", "-b", "main", remote)
+	gitWorkspaceAPI(t, root, "remote", "add", "origin", remote)
+	gitWorkspaceAPI(t, root, "push", "-u", "origin", "main")
+	gitWorkspaceAPI(t, root, "branch", "--track", "fix/b", "origin/main")
+	gitWorkspaceAPI(t, root, "commit", "--allow-empty", "-m", "ahead one")
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)
+	var repository contract.Repository
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	base := "/api/repositories/" + repository.ID + "/branches"
+	for _, path := range []string{"/fast-forward-preview", "/fast-forward", "/push-preview", "/push", "/delete-preview", "/delete"} {
+		for _, status := range []int{401, 403} {
+			request := httptest.NewRequest("POST", base+path, strings.NewReader(`{}`))
+			if status == 403 {
+				request.Header.Set("Authorization", "Bearer secret")
+				request.Header.Set("Origin", "https://evil.example")
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != status {
+				t.Fatalf("%s auth boundary: got %d want %d", path, recorder.Code, status)
+			}
+		}
+	}
+	workspaceRequest(t, handler, "POST", base+"/fast-forward-preview", contract.FastForwardPreviewRequest{Branch: "--x"}, 400)
+	workspaceRequest(t, handler, "POST", base+"/push-preview", contract.PushPreviewRequest{Branch: "main", Remote: "origin"}, 400)
+	workspaceRequest(t, handler, "POST", base+"/delete-preview", contract.BranchDeletePreviewRequest{Branches: []string{}}, 400)
+	decode := func(recorder *httptest.ResponseRecorder, out any) {
+		t.Helper()
+		if err := json.Unmarshal(recorder.Body.Bytes(), out); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Push: a preview that went stale conflicts; a fresh one pushes.
+	var push contract.PushPreview
+	decode(workspaceRequest(t, handler, "POST", base+"/push-preview", contract.PushPreviewRequest{Branch: "main"}, 200), &push)
+	if push.ConfirmationID == "" || push.Publish || push.Remote != "origin" || push.Commits.Total != 1 || push.Blockers == nil || push.Warnings == nil {
+		t.Fatalf("push preview %+v", push)
+	}
+	gitWorkspaceAPI(t, root, "commit", "--allow-empty", "-m", "ahead two")
+	if stale := workspaceRequest(t, handler, "POST", base+"/push", contract.PushRequest{ConfirmationID: push.ConfirmationID}, 409); !strings.Contains(stale.Body.String(), "请重新预览") {
+		t.Fatalf("stale push: %s", stale.Body.String())
+	}
+	decode(workspaceRequest(t, handler, "POST", base+"/push-preview", contract.PushPreviewRequest{Branch: "main"}, 200), &push)
+	var pushed contract.PushResult
+	decode(workspaceRequest(t, handler, "POST", base+"/push", contract.PushRequest{ConfirmationID: push.ConfirmationID}, 200), &pushed)
+	if pushed.Status != "ok" || pushed.Repository.ID != repository.ID {
+		t.Fatalf("push result %+v", pushed)
+	}
+
+	// Fast-forward: a confirmation is for its own operation only.
+	var ff contract.FastForwardPreview
+	decode(workspaceRequest(t, handler, "POST", base+"/fast-forward-preview", contract.FastForwardPreviewRequest{Branch: "fix/b"}, 200), &ff)
+	if ff.ConfirmationID == "" || ff.Worktree != nil || ff.Commits.Total != 2 || ff.Sessions == nil {
+		t.Fatalf("fast-forward preview %+v", ff)
+	}
+	workspaceRequest(t, handler, "POST", base+"/delete", contract.BranchDeleteRequest{ConfirmationID: ff.ConfirmationID, AcknowledgeUnmerged: true}, 409)
+	var forwarded contract.FastForwardResult
+	decode(workspaceRequest(t, handler, "POST", base+"/fast-forward", contract.FastForwardRequest{ConfirmationID: ff.ConfirmationID}, 200), &forwarded)
+	if forwarded.Repository.ID != repository.ID {
+		t.Fatalf("fast-forward result %+v", forwarded)
+	}
+	workspaceRequest(t, handler, "POST", base+"/fast-forward", contract.FastForwardRequest{ConfirmationID: ff.ConfirmationID}, 409)
+
+	// Delete: contained, then gone.
+	var deletion contract.BranchDeletePreview
+	decode(workspaceRequest(t, handler, "POST", base+"/delete-preview", contract.BranchDeletePreviewRequest{Branches: []string{"fix/b"}}, 200), &deletion)
+	if deletion.ConfirmationID == "" || len(deletion.Items) != 1 || deletion.Items[0].Group != "contained" || deletion.Items[0].Blockers == nil {
+		t.Fatalf("delete preview %+v", deletion)
+	}
+	var deleted contract.BranchDeleteResult
+	decode(workspaceRequest(t, handler, "POST", base+"/delete", contract.BranchDeleteRequest{ConfirmationID: deletion.ConfirmationID}, 200), &deleted)
+	if len(deleted.Results) != 1 || deleted.Results[0].Status != "deleted" || !strings.Contains(deleted.Results[0].Message, "git branch fix/b ") {
+		t.Fatalf("delete result %+v", deleted)
+	}
+	workspaceRequest(t, handler, "POST", base+"/delete", contract.BranchDeleteRequest{ConfirmationID: deletion.ConfirmationID}, 409)
+}

@@ -5,6 +5,7 @@ import WorkbenchTree, {
   workbenchTree,
   type TreeNode,
 } from "../../src/components/WorkbenchTree.svelte";
+import type { BranchOperation } from "../../src/branch-actions";
 import type { Repository, SessionInfo } from "../../src/schemas";
 import { chat, record, repository, session, worktree } from "./shell-fixture";
 
@@ -50,6 +51,10 @@ function renderTree(
     scope: string;
     canCreate: boolean;
     repositories: Repository[];
+    onbranchoperation: (
+      repositoryId: string,
+      operation: BranchOperation,
+    ) => void;
   }> = {},
 ) {
   const handlers = {
@@ -75,6 +80,7 @@ function renderTree(
     current: props.current ?? "",
     canCreate: props.canCreate ?? true,
     configIcons: new Map(),
+    onbranchoperation: props.onbranchoperation,
     ...handlers,
   });
   return handlers;
@@ -628,4 +634,51 @@ test("the current archived record opens its path, and resuming marks the row bus
   await expect
     .element(item("已释放的聊天（已释放空间，已结束）"))
     .toBeDisabled();
+});
+
+test("a worktree's menu offers its branch's sync actions by state", async () => {
+  const onbranchoperation = vi.fn();
+  const synced = { upstream: "origin/x", ahead: 0, behind: 0 };
+  renderTree([], {
+    onbranchoperation,
+    repositories: [
+      repository({
+        worktrees: [
+          worktree({ ...synced, upstream: "origin/main", behind: 2 }),
+          worktree({
+            ...synced,
+            id: "otter",
+            kind: "linked",
+            branch: "wt/brisk-otter",
+            path: "/repos/webmux.worktrees/brisk-otter",
+            ahead: 1,
+          }),
+        ],
+      }),
+    ],
+  });
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  const items = () =>
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim());
+  for (const [name, expected] of [
+    ["main", ["工作树详情…", "切换分支…", "快进到上游"]],
+    ["wt/brisk-otter", ["工作树详情…", "切换分支…", "推送…", "删除 worktree…"]],
+  ] as const) {
+    await tree()
+      .getByRole("button", { name: `工作树操作：${name}` })
+      .click();
+    await expect.element(page.getByRole("menuitem").first()).toBeVisible();
+    expect(items()).toEqual(expected);
+    await userEvent.keyboard("{Escape}");
+    await expect.poll(() => items()).toEqual([]);
+  }
+  await tree().getByRole("button", { name: "工作树操作：main" }).click();
+  await page.getByRole("menuitem", { name: "快进到上游" }).click();
+  expect(onbranchoperation).toHaveBeenCalledWith("repo1", {
+    kind: "fast-forward",
+    branch: "main",
+  });
 });

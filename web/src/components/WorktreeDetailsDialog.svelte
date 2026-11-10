@@ -1,16 +1,19 @@
 <script lang="ts">
+  import type { BranchOperation } from "../branch-actions";
   import type { SessionInfo, Worktree } from "../schemas";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import WorktreeDetails from "./WorktreeDetails.svelte";
 
   // The dialog holding a worktree's (or directory's) details outside the
-  // repository panel: the home page's groups and the sidebar.
+  // repository panel: the home page's groups and the sidebar. A branch
+  // action closes it and opens the operation's own dialog.
   let {
     title,
     path,
     worktree,
     sessions,
     lastFetchedAt,
+    onoperation,
     onclose,
   }: {
     title: string;
@@ -18,6 +21,7 @@
     worktree?: Worktree;
     sessions: readonly SessionInfo[];
     lastFetchedAt?: string | null;
+    onoperation?: (operation: BranchOperation) => void;
     onclose: () => void;
   } = $props();
 </script>
@@ -29,5 +33,15 @@
     : "目录与会话。"}
   {onclose}
 >
-  <WorktreeDetails {path} {worktree} {sessions} {lastFetchedAt} />
+  <WorktreeDetails
+    {path}
+    {worktree}
+    {sessions}
+    {lastFetchedAt}
+    onoperation={onoperation &&
+      ((operation) => {
+        onclose();
+        onoperation(operation);
+      })}
+  />
 </ResponsiveDialog>

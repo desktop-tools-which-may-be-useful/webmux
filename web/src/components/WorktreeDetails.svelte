@@ -3,6 +3,13 @@
   import IconCopy from "~icons/tabler/copy";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
+  import {
+    branchActionLabels,
+    branchActions,
+    branchOperation,
+    divergedText,
+    type BranchOperation,
+  } from "../branch-actions";
   import { copyText } from "../clipboard";
   import { formatBytes } from "../code-image";
   import { errorMessage } from "../error";
@@ -22,12 +29,15 @@
     worktree,
     sessions,
     lastFetchedAt,
+    onoperation,
   }: {
     path?: string;
     worktree?: Worktree;
     sessions: readonly SessionInfo[];
     /** The repository's last fetch, which ahead/behind are based on. */
     lastFetchedAt?: string | null;
+    /** Starts a sync action of the worktree's branch; none without it. */
+    onoperation?: (operation: BranchOperation) => void;
   } = $props();
   const counts = $derived(countSessions(sessions));
   const kindLabel = $derived(
@@ -37,6 +47,7 @@
         ? "bare 仓库"
         : "关联工作树",
   );
+  const offered = $derived(worktree ? branchActions(worktree) : null);
 
   let usage = $state<WorktreeUsage | null>(null);
   let measuring = $state(false);
@@ -134,5 +145,27 @@
       {worktree}
       variant="full"
       {lastFetchedAt}
+      actions={onoperation && offered?.branch ? syncActions : undefined}
     />{/if}
 </div>
+
+{#snippet syncActions()}
+  {#if offered?.branch && onoperation}
+    {@const branch = offered.branch}
+    {#if offered.diverged}
+      <p class="text-xs text-muted-foreground">{divergedText}。</p>
+    {/if}
+    {#if offered.actions.length}
+      <div class="flex flex-wrap gap-2">
+        {#each offered.actions as action (action)}
+          <Button
+            size="sm"
+            variant="outline"
+            onclick={() => onoperation(branchOperation(action, branch))}
+            >{branchActionLabels[action]}</Button
+          >
+        {/each}
+      </div>
+    {/if}
+  {/if}
+{/snippet}

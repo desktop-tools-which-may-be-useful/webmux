@@ -734,6 +734,9 @@ export const BranchSchema = z.object({
   subject: z.string(),
   committedAt: z.string(),
   ...UpstreamFields,
+  // The main worktree's HEAD contains the branch; false for a bare or
+  // unborn main worktree.
+  mergedIntoDefault: z.boolean(),
 });
 export type Branch = z.infer<typeof BranchSchema>;
 export const BranchBaseSchema = z.object({
@@ -1517,3 +1520,129 @@ export const SettingsEventSchema = z.discriminatedUnion("type", [
     changes: SettingsChangesSchema,
   }),
 ]);
+
+// ---- Branch sync actions (add-branch-sync-actions) ----
+// Fast-forward, push and delete of local branches: a preview, then a
+// confirmed execution answering with the repository read again. A preview
+// with blockers carries no confirmation (`confirmationId` "", `expiresAt`
+// null); an execution whose previewed state changed answers 409.
+// Blockers and warnings are the switch's IssueSchema.
+// The first commits of a range (at most 20, newest first); `total` counts
+// the whole range.
+export const CommitListSchema = z.object({
+  total: z.number().int().nonnegative(),
+  items: z.array(CommitSchema),
+});
+export type CommitList = z.infer<typeof CommitListSchema>;
+const PreviewConfirmation = {
+  confirmationId: z.string(),
+  expiresAt: z.iso.datetime({ offset: true }).nullable(),
+};
+export const MAX_BRANCH_DELETE = 50;
+export const FastForwardPreviewRequestSchema = z
+  .object({ branch: z.string().min(1) })
+  .strict();
+// Moves `branch` from `from` to its upstream's tip `to`; `worktree` has it
+// checked out (null for none) and `sessions` are that worktree's running
+// sessions, which keep running.
+export const FastForwardPreviewSchema = z.object({
+  ...PreviewConfirmation,
+  branch: z.string(),
+  from: z.string(),
+  to: z.string(),
+  upstream: z.string(),
+  commits: CommitListSchema,
+  worktree: WorktreeSchema.nullable(),
+  sessions: z.array(SessionInfoSchema),
+  blockers: z.array(IssueSchema),
+  warnings: z.array(IssueSchema),
+});
+export type FastForwardPreview = z.infer<typeof FastForwardPreviewSchema>;
+export const FastForwardRequestSchema = z
+  .object({
+    confirmationId: z.string().min(1),
+    acknowledgeSessions: z.boolean(),
+  })
+  .strict();
+export const FastForwardResultSchema = z.object({
+  repository: RepositorySchema,
+});
+export type FastForwardResult = z.infer<typeof FastForwardResultSchema>;
+// `remote` and `target` only apply to publishing a branch without an
+// existing upstream.
+export const PushPreviewRequestSchema = z
+  .object({
+    branch: z.string().min(1),
+    remote: z.string().min(1).optional(),
+    target: z.string().min(1).optional(),
+  })
+  .strict();
+export type PushPreviewRequest = z.infer<typeof PushPreviewRequestSchema>;
+// Pushes `commit` to branch `target` of `remote`, whose push URL is
+// redacted; `publish` marks a branch without an upstream, which gets the
+// target as its upstream.
+export const PushPreviewSchema = z.object({
+  ...PreviewConfirmation,
+  branch: z.string(),
+  commit: z.string(),
+  remote: z.string(),
+  pushUrl: z.string(),
+  target: z.string(),
+  publish: z.boolean(),
+  commits: CommitListSchema,
+  blockers: z.array(IssueSchema),
+  warnings: z.array(IssueSchema),
+});
+export type PushPreview = z.infer<typeof PushPreviewSchema>;
+export const PushRequestSchema = z
+  .object({ confirmationId: z.string().min(1) })
+  .strict();
+// Also a refused push answers 200; `message` explains it, redacted. The
+// statuses are those of a fetch.
+export const PushResultSchema = z.object({
+  status: FetchResultSchema.shape.status,
+  message: z.string(),
+  repository: RepositorySchema,
+});
+export type PushResult = z.infer<typeof PushResultSchema>;
+export const BranchDeletePreviewRequestSchema = z
+  .object({
+    branches: z.array(z.string().min(1)).min(1).max(MAX_BRANCH_DELETE),
+  })
+  .strict();
+// "contained": other refs keep all its commits; "unmerged": `unmerged`
+// lists the commits only it keeps. A blocked item cannot be deleted.
+export const BranchDeleteItemSchema = z.object({
+  branch: z.string(),
+  commit: z.string(),
+  group: z.enum(["contained", "unmerged"]),
+  unmerged: CommitListSchema,
+  blockers: z.array(IssueSchema),
+});
+export type BranchDeleteItem = z.infer<typeof BranchDeleteItemSchema>;
+export const BranchDeletePreviewSchema = z.object({
+  ...PreviewConfirmation,
+  items: z.array(BranchDeleteItemSchema),
+});
+export type BranchDeletePreview = z.infer<typeof BranchDeletePreviewSchema>;
+// The unmerged group is deleted only with `acknowledgeUnmerged`.
+export const BranchDeleteRequestSchema = z
+  .object({
+    confirmationId: z.string().min(1),
+    acknowledgeUnmerged: z.boolean(),
+  })
+  .strict();
+export const BranchDeleteItemResultSchema = z.object({
+  branch: z.string(),
+  status: z.enum(["deleted", "skipped", "failed"]),
+  commit: z.string(),
+  message: z.string(),
+});
+export type BranchDeleteItemResult = z.infer<
+  typeof BranchDeleteItemResultSchema
+>;
+export const BranchDeleteResultSchema = z.object({
+  results: z.array(BranchDeleteItemResultSchema),
+  repository: RepositorySchema,
+});
+export type BranchDeleteResult = z.infer<typeof BranchDeleteResultSchema>;

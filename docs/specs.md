@@ -81,6 +81,7 @@
 - [worktree-lifecycle](../openspec/specs/worktree-lifecycle/spec.md)：发现、创建与清理 Git worktree
 - [worktree-batch-management](../openspec/specs/worktree-batch-management/spec.md)：单仓库工作树全量清单、状态筛选与批量清理
 - [repository-details](../openspec/specs/repository-details/spec.md)：仓库面板分区、工作树上游同步详情、分支与远程清单及凭据脱敏
+- [repository-maintenance](../openspec/specs/repository-maintenance/spec.md)：获取全部远程与清理目录已不存在的失效工作树登记
 
 ## 配置、状态与同步
 

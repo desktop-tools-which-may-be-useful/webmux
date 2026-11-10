@@ -188,6 +188,20 @@ func wireSchema(name string) wireRules {
 		worktreeFields("/worktree")
 		sessionFields("/sessions/*")
 		add("/blockers/*", "path", "path")
+	case "branch-fast-forward-preview":
+		add("", "id", "confirmationId")
+		add("", "time", "expiresAt")
+		worktreeFields("/worktree")
+		sessionFields("/sessions/*")
+	case "branch-push-preview":
+		add("", "id", "confirmationId")
+		add("", "time", "expiresAt")
+		add("", "path", "pushUrl")
+	case "branch-delete-preview":
+		add("", "id", "confirmationId")
+		add("", "time", "expiresAt")
+	case "branch-push", "branch-delete":
+		repositoryFields("/repository")
 	case "worktree-usage":
 		// The linked worktree's .git file holds a temporary path.
 		add("", "measured", "bytes")
@@ -725,6 +739,17 @@ func (f *wireFixture) git(args ...string) {
 	}
 }
 
+// gitOutput is git that returns Git's standard output without its final
+// newline.
+func (f *wireFixture) gitOutput(args ...string) string {
+	f.t.Helper()
+	out, err := exec.Command("git", append([]string{"-C", f.root}, args...)...).Output()
+	if err != nil {
+		f.t.Fatalf("Git fixture %v: %v", args, err)
+	}
+	return strings.TrimSuffix(string(out), "\n")
+}
+
 func withHost(host string) func(*wireRequest) { return func(r *wireRequest) { r.host = host } }
 func withOrigin(origin string) func(*wireRequest) {
 	return func(r *wireRequest) { r.origin = origin }
@@ -1094,6 +1119,28 @@ func wireWorkspace(f *wireFixture) {
 	batchPreview := f.call("worktree-batch-removal-preview", "POST", base+"/worktrees/batch-removal-preview", contract.BatchRemovalPreviewRequest{WorktreeIDs: []string{batchTreeID, treeID}}, 200)
 	f.call("error-400-worktree-batch-remove", "POST", base+"/worktrees/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: str(batchPreview, "confirmationId"), IncludeForce: true, CloseSessions: false}, 400)
 	f.call("worktree-batch-remove", "POST", base+"/worktrees/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: str(batchPreview, "confirmationId"), IncludeForce: false, CloseSessions: false}, 200)
+	// Branch operations against a local bare remote: the linked worktree,
+	// with its running session, is one commit behind its upstream; a new
+	// branch is published where the remote already has another commit;
+	// a contained and an unmerged branch are deleted without acknowledging
+	// the unmerged one.
+	syncRemote := filepath.Join(f.t.TempDir(), "sync.git")
+	f.norm.path(syncRemote, "<sync-remote>")
+	f.git("init", "--bare", "--quiet", "-b", "main", syncRemote)
+	f.git("remote", "add", "origin", syncRemote)
+	f.git("push", "--quiet", "-u", "origin", "linked")
+	f.git("push", "--quiet", "origin", f.gitOutput("commit-tree", "-p", "linked", "-m", "upstream change", "linked^{tree}")+":refs/heads/linked")
+	f.call("branch-fast-forward-preview", "POST", base+"/branches/fast-forward-preview", contract.FastForwardPreviewRequest{Branch: "linked"}, 200)
+	f.git("branch", "publish/c", f.gitOutput("commit-tree", "-p", "linked", "-m", "local change", "linked^{tree}"))
+	f.git("push", "--quiet", "origin", f.gitOutput("commit-tree", "-p", "linked", "-m", "their change", "linked^{tree}")+":refs/heads/publish/c")
+	pushPreview := f.call("branch-push-preview", "POST", base+"/branches/push-preview", contract.PushPreviewRequest{Branch: "publish/c"}, 200)
+	f.call("branch-push", "POST", base+"/branches/push", contract.PushRequest{ConfirmationID: str(pushPreview, "confirmationId")}, 200)
+	f.git("branch", "merged/old", "linked")
+	deletePreview := f.call("branch-delete-preview", "POST", base+"/branches/delete-preview", contract.BranchDeletePreviewRequest{Branches: []string{"merged/old", "publish/c"}}, 200)
+	f.call("branch-delete", "POST", base+"/branches/delete", contract.BranchDeleteRequest{ConfirmationID: str(deletePreview, "confirmationId")}, 200)
+	f.git("branch", "-D", "publish/c")
+	f.git("branch", "--unset-upstream", "linked")
+	f.git("remote", "remove", "origin")
 	f.call("repository-remotes-empty", "GET", base+"/remotes", nil, 200)
 	f.git("remote", "add", "origin", "https://user:secret@example.invalid/app.git")
 	f.git("remote", "set-url", "--push", "origin", "https://token@example.invalid/app.git")

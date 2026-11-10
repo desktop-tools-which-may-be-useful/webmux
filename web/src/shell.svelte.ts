@@ -2,6 +2,7 @@ import { getContext, setContext } from "svelte";
 import { z } from "zod";
 import { navigate, store, stored } from "./api";
 import type { ArchiveSignal } from "./archive-signal";
+import type { BranchOperation } from "./branch-actions";
 import type { Archived } from "./hooks/archived.svelte";
 import type { LaunchConfigs } from "./hooks/launch-configs.svelte";
 import type { Repositories } from "./hooks/repositories.svelte";
@@ -149,6 +150,11 @@ export interface Shell {
   switchBranch(worktree: Worktree): void;
   /** Opens the shared release preview of an archived record's worktree. */
   releaseWorktree(worktree: Worktree): void;
+  /**
+   * Opens a branch operation (fast-forward, push, delete) outside the
+   * repository panel, which shows the same flow as one of its subviews.
+   */
+  branchOperation(repositoryId: string, operation: BranchOperation): void;
   /** Opens the port-forwarding dialog. */
   forward(): void;
   /** Opens the add-repository dialog. */

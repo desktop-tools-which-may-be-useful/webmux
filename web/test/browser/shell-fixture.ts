@@ -118,6 +118,7 @@ export function branch(
     ahead: null,
     behind: null,
     upstreamGone: false,
+    mergedIntoDefault: false,
     ...patch,
   };
 }

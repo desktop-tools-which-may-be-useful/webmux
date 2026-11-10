@@ -23,6 +23,10 @@
 `webmux repo show`、`worktree ls/show` 与 `repo branches` 显示与上游的领先/落后（`+A/-B`，上游已删除为 `gone`，未计算为 `+?/-?`）、修改统计和最近提交；`repo show` 的上次获取时间是近似值。
 `webmux repo remotes` 列出远程及其 fetch/push 地址，凭据由服务端脱敏。
 `webmux repo fetch` 按名称逐个获取全部远程并清理远端已删除的分支，之后重新检查仓库，领先/落后随之更新。获取不会等待输入：需要密码、令牌或确认 ssh 主机密钥的远程直接报告 `auth`，在终端完成认证后重试；错误信息中的凭据已脱敏。任一远程失败或仓库没有远程时以 1 结束。
+`webmux repo ff`、`push` 与 `branch-rm` 处理分支同步，都先把预览写到标准错误；有阻止原因时不执行并以 1 结束，执行时复核预览后的变化，变化了就要求重新预览。
+- `webmux repo ff REPO BRANCH` 把分支快进到本地已有的远程跟踪分支（需要最新上游时先 `repo fetch`），不合并、不变基；没有上游、领先或已分叉、检出它的 worktree 有未提交修改或进行中的 merge/rebase 时不执行。被检出的分支在其 worktree 中更新，其中的会话继续运行并看到新文件；有运行会话时非交互环境需要 `--yes`，否则以 2 结束。
+- `webmux repo push REPO BRANCH` 把领先且不落后的分支推送到上游；没有上游（或上游已删除）时发布到 `--remote`（默认 `remote.pushDefault`、`origin` 或唯一的远程），远端分支名为 `--to`（默认同名），成功后设为上游。推送的是预览时的提交，不强制推送、不推送标签，照常运行 `pre-push` 钩子。非交互环境需要 `--yes`；对有上游的分支给出 `--remote`/`--to`，或无法确定远程时以 2 结束；远端拒绝、认证失败、网络错误或超时以 1 结束，信息已脱敏。
+- `webmux repo branch-rm REPO BRANCH...` 删除未被检出的本地分支及其配置，不删除远端分支；`--cleanup` 选中未被检出、且已合入默认分支或上游已删除的分支。预览分为“已包含”与“有独有提交”（如 squash merge 后的分支）两组，后者只有给出 `--unmerged` 才删除，否则跳过。确认规则与 `worktree prune` 相同；`deleted` 行附带提交与恢复命令 `git branch <名称> <提交>`（在 Git 垃圾回收前有效），有 `failed` 时以 1 结束。
 
 ## 仓库设置（初始化指令）
 

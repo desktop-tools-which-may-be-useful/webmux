@@ -316,6 +316,7 @@
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { store, stored } from "../api";
+  import type { BranchOperation } from "../branch-actions";
   import { rowStatusLabels } from "../session-status";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
@@ -354,6 +355,7 @@
     onworktreedetails,
     onremoveworktree,
     onswitchbranch,
+    onbranchoperation,
     onrename,
     onclose,
     onresume,
@@ -389,6 +391,11 @@
     onremoveworktree: (repositoryId: string, worktreeId: string) => void;
     /** Opens the switch of a worktree's branch. */
     onswitchbranch: (repositoryId: string, worktreeId: string) => void;
+    /** Starts a sync action of a worktree's branch. */
+    onbranchoperation?: (
+      repositoryId: string,
+      operation: BranchOperation,
+    ) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
     /** Resumes an archived record, rebuilding a released worktree first. */
@@ -694,6 +701,9 @@
             onremove={node.removable
               ? () => onremoveworktree(repositoryId, worktreeId)
               : undefined}
+            worktree={node.worktree}
+            onoperation={onbranchoperation &&
+              ((operation) => onbranchoperation(repositoryId, operation))}
           />
         </SidebarRowMenu>
       {:else if node.session}
