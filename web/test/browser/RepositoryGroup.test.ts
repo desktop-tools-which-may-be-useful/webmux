@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, expect, test } from "vitest";
-import { page } from "vitest/browser";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import RepositoryGroup from "../../src/components/RepositoryGroup.svelte";
-import type { SessionInfo } from "../../src/schemas";
+import type { SessionInfo, Worktree } from "../../src/schemas";
 import { repository, session, worktree } from "./shell-fixture";
 
 beforeEach(async () => {
@@ -18,6 +18,7 @@ function renderGroup(
   focused: boolean,
   linked: Parameters<typeof worktree>[0] = {},
   sessions: SessionInfo[] = [],
+  onswitch: (tree: Worktree) => void = () => {},
 ) {
   render(RepositoryGroup, {
     repo: repository({
@@ -40,6 +41,7 @@ function renderGroup(
     onstart: () => {},
     ontogglepin: () => {},
     onremove: () => {},
+    onswitch,
     onclose: () => {},
   });
 }
@@ -98,4 +100,32 @@ test("a deleted upstream is marked without counts", async () => {
   const linked = page.getByRole("region", { name: "wt/feature" });
   await expect.element(linked.getByText("上游已删除")).toBeVisible();
   expect(linked.getByRole("img").elements()).toEqual([]);
+});
+
+test("a worktree's menu switches its branch unless it is prunable", async () => {
+  const onswitch = vi.fn();
+  renderGroup(
+    false,
+    { available: false, prunable: true },
+    [inLinked],
+    onswitch,
+  );
+  const items = () =>
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim());
+  await page.getByRole("button", { name: "工作树菜单 main" }).click();
+  expect(items()).toEqual(["切换分支…", "从主页移除"]);
+  await page.getByRole("menuitem", { name: "切换分支…" }).click();
+  expect(onswitch).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "main" }),
+  );
+
+  await page.getByRole("button", { name: "工作树菜单 wt/feature" }).click();
+  await expect
+    .element(page.getByRole("menuitem", { name: "删除 worktree…" }))
+    .toBeVisible();
+  expect(items()).not.toContain("切换分支…");
+  await userEvent.keyboard("{Escape}");
 });

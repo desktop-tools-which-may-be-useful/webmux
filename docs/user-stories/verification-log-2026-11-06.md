@@ -183,3 +183,16 @@
   - Storybook `overflow.spec.ts`/`contracts.spec.ts` 22 项通过（含 320×568 双倍字号）；Playwright E2E `worktrees.spec.ts`、`repository-scope.spec.ts`、`workspace-discovery.spec.ts` 与 `hybrid.spec.ts` 通过；
   - 在隔离演示仓库上采集桌面（1280×900）、平板（768×800）、手机（390×844）明暗主题的前后对比截图。
 - 限制：未在 macOS 与移动真机上运行；全量 E2E 分片与 Storybook 构建交给 CI。
+
+本次局部核对（2026-11-11，切换工作树分支的前端与文档）：实现 OpenSpec 变更 `switch-worktree-branch` 的 Web 端（后端、CLI 与快照已在前一提交）。
+
+- 更新的故事：新增 US-J16；更新 US-J05 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/shell-control.md`、`docs/protocol/http-workspace.md` 与前端架构守卫的 `Button wrap` 登记。
+- 依据：
+  - `pnpm --dir web check`、`check:test`、`check:storybook`、`lint`、`check:arch` 与 `make docs-check` 通过；`wire-contract`、`wire-arrays` 与 `new-session-defaults` 单测通过；
+  - 浏览器用例 `SwitchBranchDialog`、`RepositoryPanel`、`WorkbenchTree`、`RepositoryGroup`、`WorktreeCreateFields`、`NewSessionDialog` 等 10 个文件 148 项通过；
+  - Storybook `overflow.spec.ts` 与 `design-system.spec.ts` 25 项通过（含切换弹窗三种场景在 320×568 双倍字号下）；
+  - Playwright E2E `worktree-switch.spec.ts` 在桌面与 iPhone SE 项目 6 项通过，其中已打开代码标签页在切换后由变化检测标为“内容已更新”；`worktrees`、`repository-scope`、`workspace-ui`、`session-creation` 共 38 项通过。
+  - 集成：`make format`、`make check`（含 `golangci-lint` v2.15.0）通过；`make test-go` 全部通过；
+  - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 缺少 `Uint8Array.prototype.toBase64` 失败；浏览器套件中 `RepositoryPanel.test.ts` 一项因前一个菜单仍在退出动画而偶发失败，已改为等待菜单关闭，之后连续 3 次通过；
+  - E2E `worktree-switch`、`worktrees`、`repository-scope`、`workspace-discovery` 共 48 项通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与切换流程 GIF。
+- 限制：未运行全量 E2E 与 Storybook 构建（交给 CI）；未在真机上验证；无头浏览器无法验证悬停与触屏常驻。

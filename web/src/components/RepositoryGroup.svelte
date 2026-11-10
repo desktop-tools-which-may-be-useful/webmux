@@ -15,6 +15,7 @@
   } from "../archived";
   import { homeWorktrees } from "../home-worktrees.svelte";
   import { homeLayout, worktreeTitle } from "../home-worktrees";
+  import { switchableWorktree } from "../worktree-sync";
   import WorkspaceGroup from "./WorkspaceGroup.svelte";
 
   let {
@@ -32,6 +33,7 @@
     onstart,
     ontogglepin,
     onremove,
+    onswitch,
     onclose,
     archived = EMPTY_ARCHIVE,
     visibleArchiveIds,
@@ -56,6 +58,8 @@
     onstart: (worktreeId?: string) => void;
     ontogglepin: (worktreeId: string, pinned: boolean) => void;
     onremove: (worktree: Worktree) => void;
+    /** Opens the switch of a worktree's branch. */
+    onswitch: (worktree: Worktree) => void;
     onclose: (session: SessionInfo) => void;
     // Every archived record placed in this repository.
     archived?: RepositoryArchive;
@@ -169,6 +173,7 @@
           {onclose}
           onstart={() => onstart(tree.id)}
           onremove={tree.kind === "linked" ? () => onremove(tree) : undefined}
+          onswitch={switchableWorktree(tree) ? () => onswitch(tree) : undefined}
           archived={treeArchive}
           {archive}
         />

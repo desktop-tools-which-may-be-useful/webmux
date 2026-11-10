@@ -194,6 +194,7 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.ReleasePreviewSchema, ["worktree-release-preview"]],
   [S.WorktreeUsageSchema, ["worktree-usage"]],
   [S.ReleaseResultSchema, ["worktree-release"]],
+  [S.SwitchPreviewSchema, ["worktree-switch-preview"]],
   [S.RebuildPreviewSchema, ["hybrid-rebuild-preview"]],
   [
     S.SessionEventSchema,

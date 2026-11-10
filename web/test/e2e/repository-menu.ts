@@ -51,6 +51,25 @@ export async function worktreeMenu(
   );
 }
 
+/**
+ * Unfolds a repository's row in the sidebar tree (the phone drawer on
+ * narrow screens) so its worktree rows, and their menus, are shown.
+ */
+export async function unfoldRepository(page: Page, repositoryName: string) {
+  const tree = page.getByRole("tree", { name: "仓库与会话" });
+  const open = page.getByRole("button", { name: "打开侧栏" });
+  const toggle = tree.getByRole("button", {
+    name: new RegExp(`^(展开|收起)${escape(repositoryName)}$`),
+  });
+  await expect(async () => {
+    await expect(tree.or(open).first()).toBeVisible({ timeout: 2000 });
+    if (!(await tree.isVisible())) await open.click({ timeout: 2000 });
+    await expect(toggle).toBeVisible({ timeout: 2000 });
+  }).toPass();
+  if ((await toggle.getAttribute("aria-label"))?.startsWith("展开"))
+    await toggle.click();
+}
+
 /** Asserts the repository panel overview's "主页 n / 共 m" worktree count. */
 export async function expectHomeWorktrees(
   page: Page,

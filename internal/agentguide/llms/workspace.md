@@ -12,6 +12,7 @@
 - 主页显示与 Web 端一致：`pinned`（加入了主页显示）、`sessions`（未加入，但因为有会话或已归档会话而显示）、`hidden`。从未设置过的仓库只显示主工作区。
 - `webmux worktree create` 与 `run` 的新建 worktree 默认加入主页显示，可以选择不加入；`webmux worktree pin`、`unpin`、`home` 调整显示，只改该仓库的条目，冲突时自动重放。
 - `webmux worktree rm` 先预览其中的会话、已归档会话与阻止原因；强制删除会关闭其中的会话，分支保留。非交互环境下需要明确确认。
+- `webmux worktree switch` 原地切换 worktree 的分支（已有本地分支、`--track` 远程分支、`--create` 新分支或 `--detach` 提交），先在标准错误输出预览。有未提交修改、进行中的 merge/rebase 或目标分支已在别处检出时不切换并以 1 结束；修改不会被贮藏或丢弃。其中的会话不会被关闭，会看到切换后的文件；有运行会话时非交互环境需要 `--yes`，否则以 2 结束。需要并行处理时改用 `worktree create`。
 - 在 WebMux 之外改动 worktree（`git worktree add/remove`）后，用 `webmux repo refresh` 让服务端重新检查。
 
 ## 仓库

@@ -295,6 +295,68 @@ type RemoveWorktreeRequest struct {
 	CloseSessions  bool   `json:"closeSessions"`
 }
 
+// SwitchTarget is what a worktree switches to, by Kind: "local" takes
+// Branch; "remote" takes Ref, a short remote-tracking name such as
+// "origin/fix/b", and creates the local branch Name (default: Ref without
+// its remote) tracking it; "new" takes Name and StartPoint (a branch,
+// remote-tracking branch or commit) and sets no upstream; "detach" takes
+// Commit.
+type SwitchTarget struct {
+	Kind       string `json:"kind"`
+	Branch     string `json:"branch,omitempty"`
+	Ref        string `json:"ref,omitempty"`
+	Name       string `json:"name,omitempty"`
+	StartPoint string `json:"startPoint,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+}
+
+// SwitchPreviewRequest is the body of POST
+// /api/repositories/{id}/worktrees/{worktreeId}/switch-preview.
+type SwitchPreviewRequest struct {
+	Target SwitchTarget `json:"target"`
+}
+
+// Issue is one blocker or warning of a preview. Path, when set, is the
+// worktree a blocker refers to, such as the one occupying a branch.
+type Issue struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Path    string `json:"path,omitempty"`
+}
+
+// SwitchTargetInfo is a switch target resolved to its commit. Branch is the
+// branch the worktree ends on, null for a detached target; Upstream is the
+// remote-tracking branch a remote target tracks, null otherwise.
+type SwitchTargetInfo struct {
+	Kind          string  `json:"kind"`
+	Branch        *string `json:"branch"`
+	Commit        string  `json:"commit"`
+	Subject       string  `json:"subject"`
+	CreatesBranch bool    `json:"createsBranch"`
+	Upstream      *string `json:"upstream"`
+}
+
+// SwitchPreview describes switching a worktree's branch. With blockers it
+// carries no confirmation: ConfirmationID is "" and ExpiresAt null.
+// Sessions are the running sessions in the worktree; they keep running.
+type SwitchPreview struct {
+	ConfirmationID string           `json:"confirmationId"`
+	ExpiresAt      *time.Time       `json:"expiresAt"`
+	Worktree       Worktree         `json:"worktree"`
+	Target         SwitchTargetInfo `json:"target"`
+	Sessions       []SessionInfo    `json:"sessions"`
+	Blockers       []Issue          `json:"blockers"`
+	Warnings       []Issue          `json:"warnings"`
+}
+
+// SwitchRequest confirms a previewed switch; AcknowledgeSessions is
+// required when the preview listed sessions. It answers 200 with the
+// refreshed Worktree.
+type SwitchRequest struct {
+	ConfirmationID      string `json:"confirmationId"`
+	AcknowledgeSessions bool   `json:"acknowledgeSessions"`
+}
+
 // BatchRemovalPreviewRequest selects the worktrees of a repository to preview.
 type BatchRemovalPreviewRequest struct {
 	WorktreeIDs []string `json:"worktreeIds"`

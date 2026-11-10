@@ -59,6 +59,7 @@ function renderTree(
     onmanageworktrees: vi.fn(),
     onremoveworktree: vi.fn(),
     onworktreedetails: vi.fn(),
+    onswitchbranch: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
@@ -196,7 +197,7 @@ test("each available repository offers new-worktree and manage-worktrees actions
   );
 });
 
-test("a linked worktree's menu offers its details and removal", async () => {
+test("a linked worktree's menu offers its details, a branch switch and removal", async () => {
   const handlers = renderTree([]);
   await expect
     .element(item("webmux"))
@@ -211,7 +212,7 @@ test("a linked worktree's menu offers its details and removal", async () => {
       .getByRole("menuitem")
       .elements()
       .map((el) => el.textContent?.trim()),
-  ).toEqual(["工作树详情…", "删除 worktree…"]);
+  ).toEqual(["工作树详情…", "切换分支…", "删除 worktree…"]);
   await page.getByRole("menuitem", { name: "删除 worktree…" }).click();
   expect(handlers.onremoveworktree).toHaveBeenCalledWith("repo1", "otter");
 
@@ -220,6 +221,12 @@ test("a linked worktree's menu offers its details and removal", async () => {
     .click();
   await page.getByRole("menuitem", { name: "工作树详情…" }).click();
   expect(handlers.onworktreedetails).toHaveBeenCalledWith("repo1", "otter");
+
+  await tree()
+    .getByRole("button", { name: "工作树操作：wt/brisk-otter" })
+    .click();
+  await page.getByRole("menuitem", { name: "切换分支…" }).click();
+  expect(handlers.onswitchbranch).toHaveBeenCalledWith("repo1", "otter");
 });
 
 test("the main worktree's menu has no removal", async () => {
@@ -231,9 +238,40 @@ test("the main worktree's menu has no removal", async () => {
       .getByRole("menuitem")
       .elements()
       .map((el) => el.textContent?.trim()),
-  ).toEqual(["工作树详情…"]);
+  ).toEqual(["工作树详情…", "切换分支…"]);
   await page.getByRole("menuitem", { name: "工作树详情…" }).click();
   expect(handlers.onworktreedetails).toHaveBeenCalledWith("repo1", "main");
+});
+
+test("bare, missing and prunable worktrees offer no branch switch", async () => {
+  renderTree([], {
+    repositories: [
+      repository({
+        worktrees: [
+          worktree({ kind: "bare", branch: null, path: "/repos/webmux.git" }),
+          worktree({
+            id: "otter",
+            kind: "linked",
+            branch: "wt/gone",
+            path: "/repos/webmux.worktrees/gone",
+            available: false,
+            prunable: true,
+          }),
+        ],
+      }),
+    ],
+  });
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  for (const name of ["工作树操作：Bare 仓库", "工作树操作：wt/gone"]) {
+    await tree().getByRole("button", { name }).click();
+    await expect
+      .element(page.getByRole("menuitem", { name: "工作树详情…" }))
+      .toBeVisible();
+    expect(
+      page.getByRole("menuitem", { name: "切换分支…" }).elements(),
+    ).toEqual([]);
+    await userEvent.keyboard("{Escape}");
+  }
 });
 
 test("a worktree row shows commits ahead of its upstream, named as on the home page", async () => {

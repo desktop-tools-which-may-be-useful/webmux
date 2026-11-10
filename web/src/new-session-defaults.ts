@@ -1,10 +1,22 @@
 import type { LaunchConfigsState } from "./launch-configs";
 import type { Repository, SessionInfo, Worktree } from "./schemas";
 
+/**
+ * Initial values of the new-worktree fields; later edits work as usual.
+ * "existing" selects `branch`; "new" starts from `startBranch` (a local or
+ * remote-tracking branch) with the new branch named `name`.
+ */
+export type WorktreePreset = {
+  mode: "new" | "existing";
+  branch?: string;
+  startBranch?: string;
+  name?: string;
+};
+
 /** The contextual entry the new-session dialog was opened from, if any. */
 export type LaunchEntry =
   | { kind: "worktree"; repositoryId: string; worktreeId: string }
-  | { kind: "new-worktree"; repositoryId: string }
+  | { kind: "new-worktree"; repositoryId: string; preset?: WorktreePreset }
   | { kind: "directory"; cwd: string; workspace: SessionInfo["workspace"] };
 
 /**

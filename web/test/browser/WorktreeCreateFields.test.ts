@@ -484,6 +484,65 @@ test("search selects the literal branch and ignores occupied matches without los
     .toHaveValue("/repos/project.worktrees/branch-042");
 });
 
+test("a preset existing branch opens in that mode with the branch chosen", async () => {
+  serve(200, {
+    ...branches,
+    branches: [...branches.branches, branch("feat/d", head)],
+  });
+  render(Harness, {
+    repository,
+    preset: { mode: "existing", branch: "feat/d" },
+  });
+  await expect
+    .element(page.getByRole("radio", { name: "使用已有分支", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
+  const picker = page.getByRole("button", {
+    name: "已有本地分支",
+    exact: true,
+  });
+  await expect.element(picker).toHaveTextContent("feat/d");
+  await page.getByRole("button", { name: /^高级：/ }).click();
+  await expect.element(pathInput()).toHaveValue("/repos/project.worktrees/d");
+  await expect.element(ready()).toHaveTextContent("ready");
+  // Only the initial values: choosing another branch works as usual.
+  await picker.click();
+  await page
+    .getByRole("option", { name: "wt/taken-branch", exact: true })
+    .click();
+  await expect.element(picker).toHaveTextContent("wt/taken-branch");
+});
+
+test("a preset remote start branch fills its short name as the new branch", async () => {
+  const remoteHead = "c".repeat(40);
+  serve(
+    200,
+    {
+      ...branches,
+      bases: [
+        ...branches.bases,
+        base("refs/remotes/origin/fix/b", remoteHead, "远程修复"),
+      ],
+    },
+    (name) => Response.json(remoteRefresh(name, remoteHead, "远程修复")),
+  );
+  render(Harness, {
+    repository,
+    preset: { mode: "new", startBranch: "origin/fix/b", name: "fix/b" },
+  });
+  await expect
+    .element(page.getByRole("radio", { name: "创建新分支", exact: true }))
+    .toHaveAttribute("aria-checked", "true");
+  await expect.element(startBranchInput()).toHaveTextContent("origin/fix/b");
+  await expect.element(branchInput()).toHaveValue("fix/b");
+  await expect.element(reference()).toHaveTextContent(remoteHead);
+  await page.getByRole("button", { name: /^高级：/ }).click();
+  await expect.element(pathInput()).toHaveValue("/repos/project.worktrees/b");
+  await expect.element(ready()).toHaveTextContent("ready");
+  // The preset name counts as typed: "换一个" still offers a suggestion.
+  await page.getByRole("button", { name: "换一个", exact: true }).click();
+  await expect.element(branchInput()).not.toHaveValue("fix/b");
+});
+
 test("reopening the branch picker starts unfiltered and mode switches close it", async () => {
   serve(200, branches);
   await show();

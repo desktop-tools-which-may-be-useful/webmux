@@ -491,6 +491,10 @@
                     (tree) => tree.id === scope.worktreeId,
                   )?.branch ?? undefined)
                 : undefined}
+              preset={entry?.kind === "new-worktree" &&
+              entry.repositoryId === fieldsRepository.id
+                ? entry.preset
+                : undefined}
               disabled={busy || kind !== "new-worktree"}
               bind:path={newPath}
               bind:mode={branchMode}

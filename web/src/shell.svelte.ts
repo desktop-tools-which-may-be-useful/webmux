@@ -142,6 +142,11 @@ export interface Shell {
   repositoryDetails(repository: Repository, tab?: RepositoryTab): void;
   /** Opens a worktree's details outside the repository panel. */
   worktreeDetails(worktree: Worktree): void;
+  /**
+   * Opens the switch of a worktree's branch outside the repository panel,
+   * which shows the same flow as one of its subviews.
+   */
+  switchBranch(worktree: Worktree): void;
   /** Opens the shared release preview of an archived record's worktree. */
   releaseWorktree(worktree: Worktree): void;
   /** Opens the port-forwarding dialog. */

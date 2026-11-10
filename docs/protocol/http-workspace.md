@@ -20,6 +20,8 @@
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/release-preview` | 释放空间预览：`{confirmationId, expiresAt, worktree, commit, push, archived, ignored, ignoredMore, ignoredBytes?, sizeComplete, blockers}`                                |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/usage`           | 计算工作树目录占用：空 body，返回 `{bytes, entries, complete}`；只在请求时遍历，不随仓库快照返回                                                                          |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/release`         | `{confirmationId}`；删除目录、保留分支与已归档记录并标为已释放，`{releaseId, recordIds}`                                                                                  |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/switch-preview`  | 切换预览：`{target}`，返回 `{confirmationId, expiresAt, worktree, target, sessions, blockers, warnings}`（见下）                                                          |
+| POST       | `/api/repositories/{id}/worktrees/{worktreeId}/switch`          | `{confirmationId, acknowledgeSessions}`；原地切换，200 返回刷新后的 `Worktree`                                                                                            |
 
 删除预览的 `sessions` 是该 worktree 中运行中的会话，`archived` 是其中已归档（`closed` 或 `interrupted`）的会话，二者都是 `SessionInfo`。
 
@@ -32,6 +34,16 @@
 - 执行时 HEAD 与确认不同则 409。
 - 未锁定且目录已缺失的 linked `prunable` 工作树允许安全清理（`git worktree remove -- <path>`），并回退在主仓库校验已记录的 HEAD 提交以保留关联归档记录。
 - 批量删除确认凭证与单项删除、释放空间隔离；`status` 为 `removed`、`skipped` 或 `failed`，单项失败不中断同批其余项。
+
+切换分支（`switch-preview` / `switch`）沿用同样的两阶段确认，凭证只能用于切换：
+
+- `target` 为 `{kind: "local", branch}`、`{kind: "remote", ref, name?}`（`ref` 如 `origin/fix/b`，新建本地分支 `name`，默认去掉远程名，并以 `ref` 为上游）、`{kind: "new", name, startPoint}`（不设置上游）或 `{kind: "detach", commit}`；名称不合法或以 `-` 开头时 400。
+- 响应的 `target` 为 `{kind, branch, commit, subject, createsBranch, upstream}`：`branch` 是切换后所在分支（detach 为 `null`），`commit` 是解析出的完整 OID；`sessions` 是工作树及其子目录下运行中的会话，切换不会关闭它们。
+- `blockers` 与 `warnings` 每项为 `{code, message, path?}`；有阻止原因时仍返回 200，`confirmationId` 为空、`expiresAt` 为 `null`。
+  - 阻止：`changes`（已跟踪修改）、`operation`（进行中的合并、变基等）、`occupied`（`path` 为占用该分支的工作树）、`same`、`exists`（同名本地分支已存在）、`unverifiable`、`unsupported`（bare、不可用或待清理）；
+  - 警告：`untracked`、`locked`、`submodules`、`sessions`。
+- 执行时在仓库门闩下重新检查：工作树、分支或 HEAD、目标提交或会话集合变化时 409 并要求重新预览；有会话却未带 `acknowledgeSessions: true` 时同样拒绝。未跟踪文件会被覆盖时 409，消息列出至多 50 个路径。
+- Git 执行不随客户端断开而中止，上限 3 分钟（超时 504）；钩子或过滤器失败时返回错误，消息带脱敏后的 Git 输出首行，工作树以刷新后的实际状态为准。
 
 `push` 是 `commit` 的推送检查：`{state, branches, more}`。
 

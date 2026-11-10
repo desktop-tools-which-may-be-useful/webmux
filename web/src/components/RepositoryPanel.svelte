@@ -17,6 +17,7 @@
   import { errorMessage } from "../error";
   import { LatestRequest } from "../hooks/remote-request.svelte";
   import { worktreeTitle } from "../home-worktrees";
+  import type { WorktreePreset } from "../new-session-defaults";
   import type {
     ArchivedSession,
     HomeWorktrees,
@@ -31,14 +32,17 @@
   import RepositoryRemotes from "./RepositoryRemotes.svelte";
   import RepositoryWorktrees from "./RepositoryWorktrees.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
+  import SwitchBranch, { type SwitchSource } from "./SwitchBranch.svelte";
   import WorktreeDetails from "./WorktreeDetails.svelte";
+  import { switchableWorktree } from "../worktree-sync";
 
   // The repository panel: overview, worktrees, branches and remotes as line
-  // tabs in one dialog (a bottom drawer on phones). A worktree's details open
-  // inside it as a subview with "返回" instead of a second dialog; the tabs
-  // stay mounted underneath, so their search, filters and scroll survive.
-  // While a section's request is in flight (`busy`), going back, switching
-  // sections and closing are all blocked.
+  // tabs in one dialog (a bottom drawer on phones). A worktree's details and
+  // the switch of its branch open inside it as a stack of subviews with
+  // "返回" instead of a second dialog; the tabs stay mounted underneath, so
+  // their search, filters and scroll survive. While a section's request or
+  // a switch is in flight (`busy`), going back, switching sections and
+  // closing are all blocked.
   let {
     repository,
     sessions,
@@ -49,8 +53,11 @@
     registryReady,
     initialTab = "overview",
     source = { branches: repositoryBranches, remotes: repositoryRemotes },
+    switchSource,
     onunregister,
     onchange,
+    onrefresh,
+    onnewworktree,
     onremoved,
     onclose,
   }: {
@@ -65,8 +72,14 @@
     registryReady: boolean;
     initialTab?: RepositoryTab;
     source?: RepositorySource;
+    /** Where the switch reads and writes; stories pass fixtures. */
+    switchSource?: SwitchSource;
     onunregister: () => void;
     onchange: () => void;
+    /** A switch ran: the repositories are read again at once. */
+    onrefresh: () => void;
+    /** Closes the panel and opens the new-worktree dialog with a preset. */
+    onnewworktree: (preset: WorktreePreset) => void;
     onremoved?: (removedIds: string[]) => void;
     onclose: () => void;
   } = $props();
@@ -74,12 +87,12 @@
   const available = $derived(repository.availability === "available");
   let tab = $state<RepositoryTab>(untrack(() => initialTab));
   let busy = $state(false);
-  // The worktree whose details are shown over the tabs; null for the tabs.
-  let detail = $state<string | null>(null);
-  const detailTree = $derived(
-    detail
-      ? repository.worktrees.find((tree) => tree.id === detail)
-      : undefined,
+  // The subviews over the tabs, the last one shown; empty for the tabs.
+  type Subview = { kind: "detail" | "switch"; id: string };
+  let views = $state<Subview[]>([]);
+  const top = $derived(views.at(-1));
+  const topTree = $derived(
+    top ? repository.worktrees.find((tree) => tree.id === top.id) : undefined,
   );
   const tabs: { id: RepositoryTab; label: string }[] = [
     { id: "overview", label: "概览" },
@@ -131,26 +144,47 @@
     }
     return out;
   }
-  async function openWorktree(id: string) {
+  // Opens a subview; leaving the tabs saves their scroll for "返回".
+  async function push(view: Subview) {
     if (busy) return;
     const outer = dialogScrollers();
-    saved = [...(tabsView?.querySelectorAll<HTMLElement>("*") ?? []), ...outer]
-      .filter((el) => el.scrollTop > 0)
-      .map((el) => [el, el.scrollTop]);
-    detail = id;
+    if (!views.length)
+      saved = [
+        ...(tabsView?.querySelectorAll<HTMLElement>("*") ?? []),
+        ...outer,
+      ]
+        .filter((el) => el.scrollTop > 0)
+        .map((el) => [el, el.scrollTop]);
+    views = [...views, view];
     await tick();
     for (const el of outer) el.scrollTop = 0;
   }
+  function openWorktree(id: string) {
+    void push({ kind: "detail", id });
+  }
   function openPath(path: string) {
     const tree = repository.worktrees.find((w) => w.path === path);
-    if (tree) void openWorktree(tree.id);
+    if (tree) openWorktree(tree.id);
   }
   async function back() {
     if (busy) return;
-    detail = null;
+    views = views.slice(0, -1);
+    if (views.length) return;
     await tick();
-    for (const [el, top] of saved) el.scrollTop = top;
+    for (const [el, offset] of saved) el.scrollTop = offset;
     saved = [];
+  }
+  // The switch's way out to another worktree replaces it with that
+  // worktree's details.
+  function replaceTop(view: Subview) {
+    views = [...views.slice(0, -1), view];
+  }
+  // A finished switch shows the switched worktree's details: the view it
+  // was opened from, or one in its place.
+  function switched(id: string) {
+    const below = views.at(-2);
+    if (below?.kind === "detail" && below.id === id) views = views.slice(0, -1);
+    else replaceTop({ kind: "detail", id });
   }
   const worktreePaths = $derived(
     new Set(repository.worktrees.map((tree) => tree.path)),
@@ -179,7 +213,7 @@
         ).toLocaleString()} 读取的状态，可能已过时。</InlineNotice
       >
     {/if}
-    <div bind:this={tabsView} hidden={!!detail}>
+    <div bind:this={tabsView} hidden={!!top}>
       {#if available}
         <Tabs.Root
           value={tab}
@@ -218,7 +252,8 @@
               archived={records}
               {home}
               bind:busy
-              onopen={(id) => void openWorktree(id)}
+              onopen={openWorktree}
+              onswitch={(id) => void push({ kind: "switch", id })}
               {onchange}
               {onremoved}
             />
@@ -229,6 +264,7 @@
               load={(signal) => source.branches(repository.id, signal)}
               {worktreePaths}
               onopen={openPath}
+              {onnewworktree}
             />
           </Tabs.Content>
           <Tabs.Content value="remotes" class="pt-2">
@@ -251,12 +287,15 @@
         />
       {/if}
     </div>
-    {#if detail}
+    {#if top}
+      {@const title = topTree ? worktreeTitle(topTree) : "工作树"}
       <section
         class="min-w-0 space-y-3"
-        aria-label={detailTree
-          ? `工作树详情：${worktreeTitle(detailTree)}`
-          : "工作树详情"}
+        aria-label={top.kind === "switch"
+          ? `切换分支：${title}`
+          : topTree
+            ? `工作树详情：${title}`
+            : "工作树详情"}
       >
         <div class="flex min-w-0 items-center gap-2">
           <Button
@@ -268,22 +307,47 @@
             ><IconArrowLeft aria-hidden="true" />返回</Button
           >
           <h3 class="min-w-0 text-sm font-medium break-all">
-            {detailTree ? worktreeTitle(detailTree) : "工作树"}
+            {top.kind === "switch" ? `切换分支：${title}` : title}
           </h3>
         </div>
-        {#if detailTree}
-          <WorktreeDetails
-            path={detailTree.path}
-            worktree={detailTree}
-            sessions={sessions.filter(
-              (s) => s.workspace?.worktreeId === detailTree.id,
-            )}
-            lastFetchedAt={repository.lastFetchedAt}
-          />
-        {:else}
+        {#if top.kind === "detail" && topTree && switchableWorktree(topTree)}
+          {@const id = topTree.id}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onclick={() => void push({ kind: "switch", id })}>切换分支…</Button
+          >
+        {/if}
+        {#if !topTree}
           <p class="text-xs text-muted-foreground">
             这个工作树已不在仓库中，可能已被删除。
           </p>
+        {:else if top.kind === "switch"}
+          {@const id = topTree.id}
+          {#key id}<SwitchBranch
+              {repository}
+              worktree={topTree}
+              source={switchSource}
+              bind:busy
+              onchange={onrefresh}
+              ondone={() => switched(id)}
+              {onnewworktree}
+              ongoto={(path) => {
+                const tree = repository.worktrees.find((w) => w.path === path);
+                if (tree) replaceTop({ kind: "detail", id: tree.id });
+              }}
+              oncancel={() => void back()}
+            />{/key}
+        {:else}
+          <WorktreeDetails
+            path={topTree.path}
+            worktree={topTree}
+            sessions={sessions.filter(
+              (s) => s.workspace?.worktreeId === topTree.id,
+            )}
+            lastFetchedAt={repository.lastFetchedAt}
+          />
         {/if}
       </section>
     {/if}

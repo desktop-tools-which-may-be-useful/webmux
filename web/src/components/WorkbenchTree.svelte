@@ -320,7 +320,7 @@
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
   import { underRowAction } from "../sidebar-row";
-  import { worktreeUpstream } from "../worktree-sync";
+  import { switchableWorktree, worktreeUpstream } from "../worktree-sync";
   import UpstreamStatus from "./UpstreamStatus.svelte";
   import SidebarRepositoryMenu from "./SidebarRepositoryMenu.svelte";
   import SidebarRowMenu from "./SidebarRowMenu.svelte";
@@ -353,6 +353,7 @@
     onrepositorydetails,
     onworktreedetails,
     onremoveworktree,
+    onswitchbranch,
     onrename,
     onclose,
     onresume,
@@ -386,6 +387,8 @@
     onworktreedetails: (repositoryId: string, worktreeId: string) => void;
     /** Opens the removal dialog of a linked worktree. */
     onremoveworktree: (repositoryId: string, worktreeId: string) => void;
+    /** Opens the switch of a worktree's branch. */
+    onswitchbranch: (repositoryId: string, worktreeId: string) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
     /** Resumes an archived record, rebuilding a released worktree first. */
@@ -685,6 +688,9 @@
         >
           <WorktreeMenuItems
             ondetails={() => onworktreedetails(repositoryId, worktreeId)}
+            onswitch={node.worktree && switchableWorktree(node.worktree)
+              ? () => onswitchbranch(repositoryId, worktreeId)
+              : undefined}
             onremove={node.removable
               ? () => onremoveworktree(repositoryId, worktreeId)
               : undefined}

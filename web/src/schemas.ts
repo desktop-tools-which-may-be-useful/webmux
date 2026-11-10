@@ -861,6 +861,71 @@ export const BatchRemoveResultSchema = z.object({
   results: z.array(BatchRemoveItemResultSchema),
 });
 export type BatchRemoveResult = z.infer<typeof BatchRemoveResultSchema>;
+// One blocker or warning of a preview; `path`, when set, is the worktree a
+// blocker refers to, such as the one that has the target branch checked out.
+export const IssueSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  path: z.string().optional(),
+});
+export type Issue = z.infer<typeof IssueSchema>;
+// What a worktree switches to: "local" takes `branch`; "remote" takes `ref`
+// ("origin/fix/b") and creates the local branch `name` (default: `ref`
+// without its remote) tracking it; "new" takes `name` and `startPoint` and
+// sets no upstream; "detach" takes `commit`.
+export const SwitchTargetSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("local"), branch: z.string().min(1) }).strict(),
+  z
+    .object({
+      kind: z.literal("remote"),
+      ref: z.string().min(1),
+      name: z.string().min(1).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("new"),
+      name: z.string().min(1),
+      startPoint: z.string().min(1),
+    })
+    .strict(),
+  z.object({ kind: z.literal("detach"), commit: z.string().min(1) }).strict(),
+]);
+export type SwitchTarget = z.infer<typeof SwitchTargetSchema>;
+export const SwitchPreviewRequestSchema = z
+  .object({ target: SwitchTargetSchema })
+  .strict();
+// A preview with blockers carries no confirmation: `confirmationId` is ""
+// and `expiresAt` null. `sessions` are the running sessions in the
+// worktree; a switch never closes them.
+export const SwitchPreviewSchema = z.object({
+  confirmationId: z.string(),
+  expiresAt: z.iso.datetime({ offset: true }).nullable(),
+  worktree: WorktreeSchema,
+  target: z.object({
+    kind: z.enum(["local", "remote", "new", "detach"]),
+    // The branch the worktree ends on; null for a detached target.
+    branch: z.string().nullable(),
+    commit: z.string(),
+    subject: z.string(),
+    createsBranch: z.boolean(),
+    // The remote-tracking branch a remote target tracks.
+    upstream: z.string().nullable(),
+  }),
+  sessions: z.array(SessionInfoSchema),
+  blockers: z.array(IssueSchema),
+  warnings: z.array(IssueSchema),
+});
+export type SwitchPreview = z.infer<typeof SwitchPreviewSchema>;
+// Confirms a previewed switch; `acknowledgeSessions` is required when the
+// preview listed sessions. The answer is the refreshed worktree.
+export const SwitchRequestSchema = z
+  .object({
+    confirmationId: z.string().min(1),
+    acknowledgeSessions: z.boolean(),
+  })
+  .strict();
+export type SwitchRequest = z.infer<typeof SwitchRequestSchema>;
 // Releasing a linked worktree's disk space keeps its archived records and
 // the commit it was on. Ignored entries are top-level paths relative to the
 // worktree, directories ending in "/"; at most 50 are listed and

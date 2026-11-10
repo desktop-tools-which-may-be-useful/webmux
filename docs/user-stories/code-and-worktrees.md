@@ -210,7 +210,12 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   验收要点：
   - “已有本地分支”是选择器：点击展开带搜索框的列表，按名称搜索和键盘选择，选定后收起并在选择器中显示分支名；
   - 已被其他工作树占用的分支禁选；
-  - 不自动 fetch 远端分支。
+  - 不自动 fetch 远端分支；
+  - 仓库面板“分支”分区中，未被任何工作树检出的本地分支和每个远程跟踪分支都有“在新工作树打开…”，点击先关闭面板再打开新建工作树弹窗，屏幕上只有一层，用户确认后才创建：
+    - 本地分支：以“使用已有分支”模式选中该分支；
+    - 远程分支：以“创建新分支”模式把它作为起始分支，新分支名默认取去掉远程名的短名（`origin/fix/b` → `fix/b`）；
+    - 默认路径同样取分支末段；
+  - 切换分支（US-J16）因未提交修改受阻，或用户不愿影响运行中的会话时，“改为在新工作树打开”以同样方式预填所选目标；预填只是初始值，之后的操作与普通新建相同。
 - **US-J06 单独创建与保留工作树**：作为使用者，我希望工作树独立于会话存在，以便先准备环境或在任务结束后继续使用。
   验收要点：
   - 可只创建工作树；
@@ -298,12 +303,28 @@ US-I13 补充：弹出代码窗口取消原页面尚未完成的目录识别时�
   - 面板内的工作树行与侧栏、首页共用同一个“⋯”菜单，面板中的删除只通过“批量清理”完成；
   - `GET /api/repositories/{id}/remotes` 与仓库快照、分支接口的新增字段沿用认证与 Origin 校验；
   - CLI `webmux worktree ls/show`、`webmux repo show/branches` 输出相同的同步状态，`webmux repo remotes REPO [--json]` 列出脱敏后的远程。
+- **US-J16 切换已有工作树的分支**：作为在同一个目录里换任务的使用者，我希望把已有工作树（含主工作区）原地切换到另一个分支或提交，并在切换前看清修改、运行会话与分支占用，以便不必新建工作树，也不会丢失未提交的内容。
+  验收要点：
+  - 首页工作树分组、侧栏工作树行与仓库面板工作树行的“⋯”菜单都有“切换分支…”；bare、不可用或待清理的工作树不显示。从首页或侧栏打开时桌面为对话框、窄屏为底部抽屉；从仓库面板的行菜单或工作树详情子视图（“切换分支…”按钮）打开时是面板内带“返回”的子视图，不叠第二层；
+  - 分段控件选择“已有分支 / 新建分支 / 分离到提交”：
+    - 已有分支是可搜索、分“本地”“远程”两组的列表；当前分支与已被其他工作树检出的分支标出原因后禁选，同名本地分支已存在的远程分支也禁选并提示改选本地分支；选择远程分支会新建同名本地分支并以它为上游；
+    - 新建分支默认填入建议名（可“换一个”），起点默认是当前分支，不设置上游；
+    - 分离模式从当前提交的最近历史中选择；
+  - 每次选择都会自动请求服务端预览，较早选择的晚到结果被丢弃；预览展示“当前 → 目标”与目标提交，并逐条列出阻止原因（未提交的已跟踪修改、进行中的合并/变基等、目标已被其他工作树检出、目标与当前相同、状态无法验证）和警告（未跟踪文件、锁定、子模块）；
+  - 有阻止原因时“切换”禁用：因修改或会话受阻时右下角提供绿色的“改为在新工作树打开”（US-J05），目标已被占用时提供“转到该工作树”（面板中切到其详情子视图，独立弹窗则关闭后打开其详情）；
+  - 工作树或其子目录下有运行中的会话时列出会话，有 agent 正在工作时另行提示可能正在写文件，并要求勾选“我已了解”后才能切换；会话不会被关闭或重启，切换后继续运行并看到新分支的文件；
+  - 确认 5 分钟内有效，仅用于切换；预览后会话集合、分支或目标提交变化时执行被拒（409），界面说明原因并自动重新预览；未跟踪文件会被目标覆盖时切换失败并列出路径（最多 50 条），工作树不变；
+  - 系统不贮藏、不丢弃修改，也不使用强制或合并式切换；客户端断开不会中止 Git，失败或超时后以刷新后的实际状态为准；
+  - 成功后重新读取仓库：独立弹窗关闭，面板子视图回到该工作树的详情；首页与侧栏标题更新为新分支，工作树 ID 与主页置顶不变；已打开的代码视图由现有变化检测（约 5 秒）把受影响的标签页标为“内容已更新”；
+  - 接口为 `POST /api/repositories/{id}/worktrees/{worktreeId}/switch-preview` 与 `…/switch`，沿用认证与 Origin 校验；CLI `webmux worktree switch` 支持同样的四种目标（见 [Shell 控制](../usage/shell-control.md)）。
 
 依据：
 
 - [批量删除服务](../../internal/workspace/batch_remove.go)、[仓库面板工作树分区](../../web/src/components/RepositoryWorktrees.svelte)、[批量预览视图](../../web/src/components/ManageWorktreesPreview.svelte)、[批量分类纯函数](../../web/src/worktree-batch.ts)
 - [批量删除服务端测试](../../internal/workspace/batch_remove_test.go)、[批量分类单测](../../web/test/worktree-batch.test.ts)、[仓库面板浏览器用例](../../web/test/browser/RepositoryPanel.test.ts)
 - [状态读取](../../internal/workspace/status.go)、[远程与脱敏](../../internal/workspace/remotes.go)、[同步详情服务端测试](../../internal/workspace/details_test.go)、[仓库面板](../../web/src/components/RepositoryPanel.svelte)、[同步摘要](../../web/src/components/WorktreeSyncSummary.svelte)
+- [切换服务](../../internal/workspace/switch.go)、[切换服务端测试](../../internal/workspace/switch_test.go)、[切换流程](../../web/src/components/SwitchBranch.svelte)、[切换弹窗](../../web/src/components/SwitchBranchDialog.svelte)
+- [切换浏览器用例](../../web/test/browser/SwitchBranchDialog.test.ts)、[切换 E2E](../../web/test/e2e/worktree-switch.spec.ts)、[CLI 切换](../../internal/clicmd/worktree.go)
 - [工作树详情](../../web/src/components/WorktreeDetails.svelte)、[分支分区](../../web/src/components/RepositoryBranches.svelte)、[远程分区](../../web/src/components/RepositoryRemotes.svelte)、[同步摘要浏览器用例](../../web/test/browser/WorktreeSyncSummary.test.ts)
 
 - [释放空间](../../internal/workspace/release.go)、[重建](../../internal/workspace/rebuild.go)、[推送检查](../../internal/workspace/pushcheck.go)、[释放确认](../../web/src/components/ReleaseWorktreeDialog.svelte)、[重建确认](../../web/src/components/RebuildWorktreeDialog.svelte)

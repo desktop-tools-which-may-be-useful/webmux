@@ -79,14 +79,15 @@ func (st removalState) messages(skip ...blockerKind) []string {
 	return out
 }
 
-// purpose keeps removal and release confirmations apart: one cannot
-// execute the other.
+// purpose keeps the confirmations of different operations apart: one
+// cannot execute another.
 type purpose string
 
 const (
 	purposeRemove      purpose = "remove"
 	purposeRelease     purpose = "release"
 	purposeBatchRemove purpose = "batch-remove"
+	purposeSwitch      purpose = "switch"
 )
 
 type batchTarget struct {
@@ -106,7 +107,9 @@ type confirmation struct {
 	// commit is the commit the preview resolved, empty when HEAD does not
 	// resolve.
 	commit string
-	timer  *time.Timer
+	// switching is what a switch preview bound.
+	switching *switchState
+	timer     *time.Timer
 }
 
 func (c *confirmation) closeHandles() {

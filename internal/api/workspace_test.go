@@ -483,3 +483,55 @@ func TestWorkspaceBatchRemovalAPIAndAuthBoundaries(t *testing.T) {
 		ConfirmationID: preview.ConfirmationID,
 	}, 409)
 }
+
+func TestWorkspaceSwitchAPI(t *testing.T) {
+	handler, _, _, root := workspaceAPI(t)
+	gitWorkspaceAPI(t, root, "branch", "feat/a")
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)
+	var repository contract.Repository
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	treeURL := "/api/repositories/" + repository.ID + "/worktrees/" + repository.Worktrees[0].ID
+	for _, url := range []string{treeURL + "/switch-preview", treeURL + "/switch"} {
+		for _, status := range []int{401, 403} {
+			request := httptest.NewRequest("POST", url, strings.NewReader(`{}`))
+			if status == 403 {
+				request.Header.Set("Authorization", "Bearer secret")
+				request.Header.Set("Origin", "https://evil.example")
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != status {
+				t.Fatalf("switch auth boundary %s: got %d want %d", url, recorder.Code, status)
+			}
+		}
+	}
+	workspaceRequest(t, handler, "POST", treeURL+"/switch-preview", contract.SwitchPreviewRequest{Target: contract.SwitchTarget{Kind: "new", Name: "--orphan", StartPoint: "main"}}, 400)
+	preview := func() contract.SwitchPreview {
+		t.Helper()
+		body := workspaceRequest(t, handler, "POST", treeURL+"/switch-preview", contract.SwitchPreviewRequest{Target: contract.SwitchTarget{Kind: "local", Branch: "feat/a"}}, 200)
+		var out contract.SwitchPreview
+		if err := json.Unmarshal(body.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		if out.ConfirmationID == "" || out.ExpiresAt == nil || out.Target.Branch == nil || *out.Target.Branch != "feat/a" || out.Blockers == nil || out.Warnings == nil || out.Sessions == nil {
+			t.Fatalf("switch preview JSON: %s", body.Body.String())
+		}
+		return out
+	}
+	stale := preview()
+	gitWorkspaceAPI(t, root, "commit", "--allow-empty", "-m", "moved on")
+	conflict := workspaceRequest(t, handler, "POST", treeURL+"/switch", contract.SwitchRequest{ConfirmationID: stale.ConfirmationID}, 409)
+	if !strings.Contains(conflict.Body.String(), "请重新预览") {
+		t.Fatalf("stale switch: %s", conflict.Body.String())
+	}
+	switched := workspaceRequest(t, handler, "POST", treeURL+"/switch", contract.SwitchRequest{ConfirmationID: preview().ConfirmationID}, 200)
+	var tree contract.Worktree
+	if err := json.Unmarshal(switched.Body.Bytes(), &tree); err != nil {
+		t.Fatal(err)
+	}
+	if tree.ID != repository.Worktrees[0].ID || tree.Branch == nil || *tree.Branch != "feat/a" {
+		t.Fatalf("switched worktree JSON: %s", switched.Body.String())
+	}
+}

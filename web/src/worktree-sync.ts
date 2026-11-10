@@ -52,6 +52,14 @@ export function syncNotable(tree: Worktree): boolean {
   );
 }
 
+/**
+ * Whether a worktree's branch can be switched in place: bare, missing or
+ * prunable worktrees have no checkout to switch.
+ */
+export function switchableWorktree(tree: Worktree): boolean {
+  return tree.kind !== "bare" && tree.available && !tree.prunable;
+}
+
 /** The words of a state without counts to show. */
 export function upstreamText(
   state: UpstreamState | { kind: "unknown" },

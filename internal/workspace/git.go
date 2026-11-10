@@ -24,8 +24,15 @@ const (
 )
 
 func (s *Service) git(ctx context.Context, cwd string, args ...string) ([]byte, error) {
+	out, _, err := s.gitOutput(ctx, cwd, args...)
+	return out, err
+}
+
+// gitOutput is git that also returns what Git wrote to standard error, for
+// callers that explain a failure themselves; the error is git's.
+func (s *Service) gitOutput(ctx context.Context, cwd string, args ...string) ([]byte, string, error) {
 	if s.gitPath == "" {
-		return nil, problemf(ErrUnavailable, "%s", s.Capability().GitError)
+		return nil, "", problemf(ErrUnavailable, "%s", s.Capability().GitError)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -39,18 +46,18 @@ func (s *Service) git(ctx context.Context, cwd string, args ...string) ([]byte, 
 	})
 	if err := run.err; err != nil {
 		if stdout.exceeded || run.stderrExceeded {
-			return nil, problemf(ErrTooLarge, "Git 输出超过限制，实际状态可能已变化；请刷新")
+			return nil, run.stderr, problemf(ErrTooLarge, "Git 输出超过限制，实际状态可能已变化；请刷新")
 		}
 		if run.ctxErr != nil {
-			return nil, problemf(ErrTimeout, "Git 操作取消或超时，实际状态可能已变化: %v", run.ctxErr)
+			return nil, run.stderr, problemf(ErrTimeout, "Git 操作取消或超时，实际状态可能已变化: %v", run.ctxErr)
 		}
 		var launch *exec.Error
 		if errors.As(err, &launch) || errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
-			return nil, problemf(ErrUnavailable, "Git 无法执行: %v", err)
+			return nil, run.stderr, problemf(ErrUnavailable, "Git 无法执行: %v", err)
 		}
-		return nil, problemf(ErrInternal, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(run.stderr), err)
+		return nil, run.stderr, problemf(ErrInternal, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(run.stderr), err)
 	}
-	return stdout.Bytes(), nil
+	return stdout.Bytes(), run.stderr, nil
 }
 func canonical(path string) (string, error) {
 	path, err := pathutil.Expand(path)
@@ -395,23 +402,30 @@ func (s *Service) currentTree(ctx context.Context, r *repositoryState, id string
 }
 
 func (s *Service) currentTrees(ctx context.Context, r *repositoryState, ids []string) ([]Worktree, error) {
+	selected, _, err := s.currentTreesListed(ctx, r, ids)
+	return selected, err
+}
+
+// currentTreesListed is currentTrees that also returns every listed
+// worktree, without its status.
+func (s *Service) currentTreesListed(ctx context.Context, r *repositoryState, ids []string) ([]Worktree, []Worktree, error) {
 	if err := s.verifyIdentity(ctx, r); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	e := r.entry
 	data, err := s.git(ctx, e.AnchorPath, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
-		return nil, problemf(ErrUnavailable, "%s", err.Error())
+		return nil, nil, problemf(ErrUnavailable, "%s", err.Error())
 	}
 	trees, err := parseWorktrees(data, e.ID)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
-		return nil, problemf(ErrUnavailable, "%s", err.Error())
+		return nil, nil, problemf(ErrUnavailable, "%s", err.Error())
 	}
 	byID := make(map[string]Worktree, len(trees))
 	for _, tree := range trees {
@@ -421,7 +435,7 @@ func (s *Service) currentTrees(ctx context.Context, r *repositoryState, ids []st
 	for i, id := range ids {
 		tree, ok := byID[id]
 		if !ok {
-			return nil, problemf(ErrNotFound, "工作树不存在，请刷新")
+			return nil, nil, problemf(ErrNotFound, "工作树不存在，请刷新")
 		}
 		selected[i] = tree
 	}
@@ -443,9 +457,9 @@ func (s *Service) currentTrees(ctx context.Context, r *repositoryState, ids []st
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return selected, nil
+	return selected, trees, nil
 }
 func (s *Service) current(ctx context.Context, r *repositoryState) (Repository, error) {
 	if !s.registered(r) {

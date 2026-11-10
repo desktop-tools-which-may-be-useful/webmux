@@ -503,3 +503,13 @@ export function remoteBranchBases(
   }
   return result;
 }
+
+/**
+ * The local branch a remote-tracking branch's short name (`origin/fix/b`)
+ * checks out as: the name without its remote (`fix/b`), as `git switch
+ * --track` derives it.
+ */
+export function remoteLocalName(ref: string): string {
+  const slash = ref.indexOf("/");
+  return slash < 0 ? ref : ref.slice(slash + 1);
+}

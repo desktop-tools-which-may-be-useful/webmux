@@ -36,6 +36,7 @@
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
   import { getShell } from "../shell.svelte";
+  import { switchableWorktree } from "../worktree-sync";
   import { z } from "zod";
 
   // The workbench home: every live session grouped by repository and
@@ -386,6 +387,9 @@
         ? {
             title: worktreeTitle(tree),
             ondetails: () => (worktreeDetailsOpen = true),
+            onswitch: switchableWorktree(tree)
+              ? () => shell.switchBranch(tree)
+              : undefined,
             pinned: selectedPinned,
             ontogglepin: () => pin(repo.id, [tree.id], !selectedPinned),
             onremove:
@@ -570,6 +574,7 @@
               onremove={(tree) => {
                 removing = tree;
               }}
+              onswitch={(tree) => shell.switchBranch(tree)}
               onclose={shell.close}
               archived={placement.repositories.get(repo.id)}
               {visibleArchiveIds}

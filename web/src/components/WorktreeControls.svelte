@@ -13,6 +13,7 @@
     hidden = false,
     pinned,
     ontogglepin,
+    onswitch,
     onremove,
   }: {
     title: string;
@@ -22,6 +23,7 @@
     hidden?: boolean;
     pinned?: boolean;
     ontogglepin?: () => void;
+    onswitch?: () => void;
     onremove?: () => void;
   } = $props();
   const label = $derived(kind === "worktree" ? "工作树" : "目录");
@@ -39,7 +41,7 @@
   aria-haspopup="dialog"
   onclick={ondetails}><IconInfoCircle aria-hidden="true" /></Button
 >
-{#if onremove || ontogglepin}
+{#if onremove || ontogglepin || onswitch}
   <DropdownMenu.Root bind:open={menuOpen}>
     <DropdownMenu.Trigger>
       {#snippet child({ props })}
@@ -54,7 +56,7 @@
       {/snippet}
     </DropdownMenu.Trigger>
     <DropdownMenu.Content align="end">
-      <WorktreeMenuItems {pinned} {ontogglepin} {onremove} />
+      <WorktreeMenuItems {onswitch} {pinned} {ontogglepin} {onremove} />
     </DropdownMenu.Content>
   </DropdownMenu.Root>
 {/if}

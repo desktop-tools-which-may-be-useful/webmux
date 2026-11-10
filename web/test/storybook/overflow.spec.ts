@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { assertRequiredButtons } from "./controls";
 
 import { stories } from "./cases";
-import { checkEachLayout, expectNoOverflow } from "./layouts";
+import { checkEachLayout, expectDialogFits, expectNoOverflow } from "./layouts";
 
 test("worktree heading keeps its width above mobile actions", async ({
   page,
@@ -160,24 +160,7 @@ for (const story of [
           .soft(page.getByRole("list", { name: "远程列表" }), name)
           .toBeVisible();
       await expectNoOverflow(page, name);
-      if (story !== "worktree-sync") {
-        // The dialog's height follows dvh, which can settle a frame after a
-        // viewport change on a loaded CI runner.
-        const viewport = page.viewportSize()!.height;
-        await expect.soft
-          .poll(
-            async () => {
-              const bounds = await dialog.boundingBox();
-              return (
-                bounds !== null &&
-                bounds.y >= -1 &&
-                bounds.y + bounds.height <= viewport + 1
-              );
-            },
-            { message: name, timeout: 2_000 },
-          )
-          .toBe(true);
-      }
+      if (story !== "worktree-sync") await expectDialogFits(page, dialog, name);
       if (story === "worktrees") {
         await dialog
           .getByRole("list", { name: "仓库工作树列表" })
@@ -188,6 +171,51 @@ for (const story of [
         await expect.soft(dialog, name).toHaveCount(1);
         await expectNoOverflow(page, name);
         await back.click();
+      }
+      expect.soft(failures, name).toEqual([]);
+    });
+  });
+}
+
+// The switch of a worktree's branch, previewed with blockers, with sessions
+// to acknowledge and with long names; the preview and its actions must fit
+// the dialog (a drawer on phones) without overflowing.
+for (const [story, shows] of [
+  ["blockers", { role: "button", name: "改为在新工作树打开" }],
+  ["sessions", { role: "checkbox", name: /我已了解/ }],
+  ["long-names", { role: "button", name: "转到该工作树" }],
+] as const) {
+  test(`switch branch ${story} fits every layout`, async ({ page }) => {
+    test.slow();
+    const failures: string[] = [];
+    page.on("pageerror", (error) => failures.push(error.message));
+    await page.route("**/api/**", (route) => route.abort());
+    await page.goto(
+      `/iframe.html?id=workspace-switch-branch--${story}&viewMode=story&globals=theme:light`,
+    );
+    await expect(page.getByTestId("switch-story")).toBeVisible();
+    const dialog = page.getByRole("dialog");
+    const preview = dialog.getByRole("region", { name: "切换预览" });
+
+    await checkEachLayout(page, async ({ name }) => {
+      // Crossing the phone breakpoint swaps the dialog for a drawer, which
+      // starts over without a chosen branch.
+      if (!(await preview.count())) {
+        await dialog
+          .getByRole("button", { name: "目标分支", exact: true })
+          .click();
+        await page.getByRole("option", { name: /^feature\/target/ }).click();
+      }
+      await expect.soft(preview, name).toBeVisible();
+      await expectNoOverflow(page, name);
+      await expectDialogFits(page, dialog, name);
+      for (const control of [
+        dialog.getByRole(shows.role, { name: shows.name }),
+        dialog.getByRole("button", { name: "切换", exact: true }),
+        dialog.getByRole("button", { name: "取消", exact: true }),
+      ]) {
+        await control.scrollIntoViewIfNeeded();
+        await expect.soft(control, name).toBeInViewport({ ratio: 0.99 });
       }
       expect.soft(failures, name).toEqual([]);
     });

@@ -5,9 +5,11 @@
   import { Button } from "$lib/components/ui/button";
   import * as Collapsible from "$lib/components/ui/collapsible";
   import { ListButton } from "$lib/components/ui/list-button";
+  import { remoteLocalName } from "../branch-name";
   import { relativeTime } from "../commit-choices";
   import { errorMessage } from "../error";
   import { LatestRequest } from "../hooks/remote-request.svelte";
+  import type { WorktreePreset } from "../new-session-defaults";
   import type { Branches } from "../schemas";
   import { upstreamState } from "../worktree-sync";
   import InlineNotice from "./InlineNotice.svelte";
@@ -17,12 +19,14 @@
   // The repository panel's branches: local branches with their upstream and
   // the worktree that has each checked out, then the remote-tracking
   // branches in a fold. Read when the section is first shown; both groups
-  // filter by name.
+  // filter by name. A branch no worktree has checked out, and every remote
+  // one, can be opened in a new worktree.
   let {
     active,
     load,
     worktreePaths,
     onopen,
+    onnewworktree,
   }: {
     /** The section is shown; the first time starts the read. */
     active: boolean;
@@ -31,6 +35,8 @@
     worktreePaths: ReadonlySet<string>;
     /** Opens the details of the worktree at a path. */
     onopen: (path: string) => void;
+    /** Opens the new-worktree dialog prefilled for a branch. */
+    onnewworktree: (preset: WorktreePreset) => void;
   } = $props();
 
   let data = $state<Branches | null>(null);
@@ -127,6 +133,16 @@
                 {#if branch.name === data.defaultBranch}<Badge
                     variant="secondary">默认</Badge
                   >{/if}
+                {#if !branch.worktreePaths.length}<Button
+                    size="xs"
+                    variant="outline"
+                    class="ml-auto"
+                    aria-haspopup="dialog"
+                    title={`在新工作树中检出 ${branch.name}`}
+                    onclick={() =>
+                      onnewworktree({ mode: "existing", branch: branch.name })}
+                    >在新工作树打开…</Button
+                  >{/if}
               </div>
               <p class="break-all text-muted-foreground">
                 {branch.subject || "无标题提交"}{branch.committedAt
@@ -192,6 +208,19 @@
                   <span class="min-w-0 break-all text-muted-foreground"
                     >{branch.subject || "无标题提交"}</span
                   >
+                  {#if !branch.label.endsWith("/HEAD")}<Button
+                      size="xs"
+                      variant="outline"
+                      class="ml-auto"
+                      aria-haspopup="dialog"
+                      title={`从 ${branch.label} 新建分支并在新工作树中打开`}
+                      onclick={() =>
+                        onnewworktree({
+                          mode: "new",
+                          startBranch: branch.label,
+                          name: remoteLocalName(branch.label),
+                        })}>在新工作树打开…</Button
+                    >{/if}
                 </li>
               {/each}
             </ul>

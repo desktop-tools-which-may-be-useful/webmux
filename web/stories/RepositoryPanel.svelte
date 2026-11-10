@@ -161,6 +161,8 @@
         {source}
         onunregister={() => {}}
         onchange={() => {}}
+        onrefresh={() => {}}
+        onnewworktree={() => {}}
         onclose={() => (open = false)}
       />
     {/if}

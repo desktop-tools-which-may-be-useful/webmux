@@ -182,6 +182,10 @@ func wireSchema(name string) wireRules {
 		worktreeFields("/worktree")
 		sessionFields("/sessions/*")
 		sessionFields("/archived/*")
+	case "worktree-switch-preview":
+		worktreeFields("/worktree")
+		sessionFields("/sessions/*")
+		add("/blockers/*", "path", "path")
 	case "worktree-usage":
 		// The linked worktree's .git file holds a temporary path.
 		add("", "measured", "bytes")
@@ -1075,6 +1079,9 @@ func wireWorkspace(f *wireFixture) {
 	f.call("session-create-workspace", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "sleep 60"}, "workspace": map[string]string{"repositoryId": repositoryID, "worktreeId": treeID}}, 201)
 	treeURL := base + "/worktrees/" + treeID
 	f.call("worktree-usage", "POST", treeURL+"/usage", map[string]any{}, 200)
+	// Blocked: main is checked out by the main worktree; the running
+	// session is listed and warned about.
+	f.call("worktree-switch-preview", "POST", treeURL+"/switch-preview", contract.SwitchPreviewRequest{Target: contract.SwitchTarget{Kind: "local", Branch: "main"}}, 200)
 	f.call("error-404-worktree-usage", "POST", base+"/worktrees/missing/usage", map[string]any{}, 404)
 	preview := f.call("worktree-removal-preview", "POST", treeURL+"/removal-preview", map[string]any{}, 200)
 	f.call("error-409-worktree-remove", "POST", treeURL+"/remove", map[string]any{"confirmationId": str(preview, "confirmationId"), "mode": "safe"}, 409)

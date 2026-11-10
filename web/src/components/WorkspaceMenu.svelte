@@ -29,6 +29,7 @@
     worktree?: {
       title: string;
       ondetails: () => void;
+      onswitch?: () => void;
       pinned: boolean;
       ontogglepin: () => void;
       onremove?: () => void;
@@ -64,6 +65,7 @@
       <DropdownMenu.Label>{worktree.title}</DropdownMenu.Label>
       <WorktreeMenuItems
         ondetails={worktree.ondetails}
+        onswitch={worktree.onswitch}
         pinned={worktree.pinned}
         ontogglepin={worktree.ontogglepin}
         onremove={worktree.onremove}

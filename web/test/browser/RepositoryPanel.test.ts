@@ -5,6 +5,7 @@ import HomeWorktreeDialog from "../../src/components/HomeWorktreeDialog.svelte";
 import RepositoryPanel, {
   type RepositorySource,
 } from "../../src/components/RepositoryPanel.svelte";
+import type { SwitchSource } from "../../src/components/SwitchBranch.svelte";
 import type {
   ArchivedSession,
   Branches,
@@ -12,6 +13,8 @@ import type {
   Remote,
   Repository,
   SessionInfo,
+  SwitchPreview,
+  Worktree,
 } from "../../src/schemas";
 import type { RepositoryTab } from "../../src/shell.svelte";
 import {
@@ -158,11 +161,14 @@ function renderPanel(
     refreshing: boolean;
     refreshError: string;
     source: RepositorySource;
+    switchSource: SwitchSource;
   }> = {},
 ) {
   const handlers = {
     onunregister: vi.fn(),
     onchange: vi.fn(),
+    onrefresh: vi.fn(),
+    onnewworktree: vi.fn(),
     onremoved: vi.fn(),
     onclose: vi.fn(),
   };
@@ -285,17 +291,25 @@ test("browsing a worktree opens its details inside the panel; 返回 keeps the s
   await expect.poll(() => rows.scrollTop).toBe(scrolled);
 });
 
-test("a worktree row's menu offers details but no removal", async () => {
+test("a worktree row's menu offers details and a branch switch but no removal", async () => {
   renderPanel({ initialTab: "worktrees" });
-  await dialog()
-    .getByRole("button", { name: "工作树操作：wt/clean-feature" })
-    .click();
-  expect(
+  const items = () =>
     page
       .getByRole("menuitem")
       .elements()
-      .map((el) => el.textContent?.trim()),
-  ).toEqual(["工作树详情…"]);
+      .map((el) => el.textContent?.trim());
+  await dialog()
+    .getByRole("button", { name: "工作树操作：wt/stale-reg" })
+    .click();
+  // A prunable worktree has no checkout to switch.
+  await expect.poll(items).toEqual(["工作树详情…"]);
+  await userEvent.keyboard("{Escape}");
+  // The first menu animates out; its items stay in the DOM until it is gone.
+  await expect.poll(items).toEqual([]);
+  await dialog()
+    .getByRole("button", { name: "工作树操作：wt/clean-feature" })
+    .click();
+  await expect.poll(items).toEqual(["工作树详情…", "切换分支…"]);
   await page.getByRole("menuitem", { name: "工作树详情…" }).click();
   await expect
     .element(
@@ -666,6 +680,184 @@ test("branches show their upstream state, search both groups and open the occupy
     .element(dialog().getByRole("searchbox", { name: "搜索分支" }))
     .toHaveValue("clean");
   expect(data.branches).toHaveBeenCalledOnce();
+});
+
+test("unoccupied local and every remote branch open in a new worktree", async () => {
+  const handlers = renderPanel({
+    initialTab: "branches",
+    source: source({ branches }),
+  });
+  const local = dialog().getByRole("region", { name: "本地分支" });
+  const open = "在新工作树打开…";
+  await expect
+    .element(local.getByRole("listitem").filter({ hasText: "feat/login-a" }))
+    .toBeVisible();
+  // Branches a worktree has checked out offer no new worktree.
+  for (const name of ["main", "wt/clean-feature"])
+    expect(
+      local
+        .getByRole("listitem")
+        .filter({ hasText: name })
+        .getByRole("button", { name: open })
+        .elements(),
+    ).toEqual([]);
+  await local
+    .getByRole("listitem")
+    .filter({ hasText: "feat/login-a" })
+    .getByRole("button", { name: open })
+    .click();
+  expect(handlers.onnewworktree).toHaveBeenLastCalledWith({
+    mode: "existing",
+    branch: "feat/login-a",
+  });
+
+  const remote = dialog().getByRole("region", { name: "远程分支" });
+  await remote.getByRole("button", { name: /远程分支/ }).click();
+  await remote
+    .getByRole("listitem")
+    .filter({ hasText: "origin/feat/login-b" })
+    .getByRole("button", { name: open })
+    .click();
+  expect(handlers.onnewworktree).toHaveBeenLastCalledWith({
+    mode: "new",
+    startBranch: "origin/feat/login-b",
+    name: "feat/login-b",
+  });
+});
+
+function switchSource(
+  preview: Partial<SwitchPreview> = {},
+  switched: Worktree = { ...unpinnedClean, branch: "feat/login-a" },
+): SwitchSource {
+  return {
+    branches: vi.fn(async () => branches),
+    commits: vi.fn(async () => ({ commits: [] })),
+    preview: vi.fn(async (tree: Worktree) => ({
+      confirmationId: "switch01",
+      expiresAt: "2026-10-28T00:05:00Z",
+      worktree: tree,
+      target: {
+        kind: "local" as const,
+        branch: "feat/login-a",
+        commit: "d".repeat(40),
+        subject: "登录页",
+        createsBranch: false,
+        upstream: null,
+      },
+      sessions: [],
+      blockers: [],
+      warnings: [],
+      ...preview,
+    })),
+    switch: vi.fn(async () => switched),
+  };
+}
+
+async function chooseBranch(name: string) {
+  await dialog().getByRole("button", { name: "目标分支", exact: true }).click();
+  await page.getByRole("option", { name, exact: true }).click();
+}
+
+test("a worktree row's switch is a subview; a finished switch shows the worktree's details", async () => {
+  const data = switchSource();
+  const handlers = renderPanel({ initialTab: "worktrees", switchSource: data });
+  await dialog()
+    .getByRole("button", { name: "工作树操作：wt/clean-feature" })
+    .click();
+  await page.getByRole("menuitem", { name: "切换分支…" }).click();
+  const view = dialog().getByRole("region", {
+    name: "切换分支：wt/clean-feature",
+  });
+  await expect.element(view).toBeVisible();
+  // One dialog: the switch replaces the tabs instead of stacking.
+  expect(page.getByRole("dialog").elements()).toHaveLength(1);
+  expect(dialog().getByRole("tablist").elements()).toEqual([]);
+
+  await chooseBranch("feat/login-a");
+  await expect
+    .element(view.getByRole("region", { name: "切换预览" }))
+    .toMatchTextContent(/wt\/clean-feature\s*切换到\s*feat\/login-a/);
+  await view.getByRole("button", { name: "切换", exact: true }).click();
+  expect(data.switch).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "clean1" }),
+    { confirmationId: "switch01", acknowledgeSessions: false },
+  );
+  expect(handlers.onrefresh).toHaveBeenCalledOnce();
+  await expect
+    .element(
+      dialog().getByRole("region", { name: "工作树详情：wt/clean-feature" }),
+    )
+    .toBeVisible();
+  // The details' "返回" leads back to the tabs.
+  await dialog().getByRole("button", { name: "返回" }).click();
+  await expect.element(tab("工作树")).toHaveAttribute("aria-selected", "true");
+});
+
+test("the details subview opens the switch; 返回 and 转到该工作树 stay in the panel", async () => {
+  const data = switchSource({
+    confirmationId: "",
+    expiresAt: null,
+    blockers: [
+      {
+        code: "occupied",
+        message: "分支 feat/login-a 已被另一个工作树检出",
+        path: mainTree.path,
+      },
+    ],
+  });
+  renderPanel({ initialTab: "worktrees", switchSource: data });
+  await dialog()
+    .getByRole("list", { name: "仓库工作树列表" })
+    .getByRole("button", { name: /^wt\/clean-feature/ })
+    .click();
+  const details = dialog().getByRole("region", {
+    name: "工作树详情：wt/clean-feature",
+  });
+  await details.getByRole("button", { name: "切换分支…" }).click();
+  const view = dialog().getByRole("region", {
+    name: "切换分支：wt/clean-feature",
+  });
+  await view.getByRole("button", { name: "返回" }).click();
+  await expect.element(details).toBeVisible();
+
+  await details.getByRole("button", { name: "切换分支…" }).click();
+  await chooseBranch("feat/login-a");
+  await expect
+    .element(view.getByRole("button", { name: "切换", exact: true }))
+    .toBeDisabled();
+  await view.getByRole("button", { name: "转到该工作树" }).click();
+  await expect
+    .element(dialog().getByRole("region", { name: "工作树详情：main" }))
+    .toBeVisible();
+  expect(page.getByRole("dialog").elements()).toHaveLength(1);
+  expect(data.switch).not.toHaveBeenCalled();
+});
+
+test("the panel cannot close or go back while a switch runs", async () => {
+  const pending = Promise.withResolvers<Worktree>();
+  const data = switchSource();
+  data.switch = vi.fn(() => pending.promise);
+  const handlers = renderPanel({ initialTab: "worktrees", switchSource: data });
+  await dialog()
+    .getByRole("button", { name: "工作树操作：wt/clean-feature" })
+    .click();
+  await page.getByRole("menuitem", { name: "切换分支…" }).click();
+  await chooseBranch("feat/login-a");
+  const view = dialog().getByRole("region", {
+    name: "切换分支：wt/clean-feature",
+  });
+  await view.getByRole("button", { name: "切换", exact: true }).click();
+  await expect
+    .element(view.getByRole("button", { name: "返回" }))
+    .toBeDisabled();
+  await userEvent.keyboard("{Escape}");
+  expect(handlers.onclose).not.toHaveBeenCalled();
+  pending.resolve({ ...unpinnedClean, branch: "feat/login-a" });
+  await expect
+    .element(
+      dialog().getByRole("region", { name: "工作树详情：wt/clean-feature" }),
+    )
+    .toBeVisible();
 });
 
 test("remotes show one address when fetch and push match, both when they differ", async () => {

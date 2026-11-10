@@ -70,6 +70,16 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 	serveInDone(mux, "POST "+repo+"/worktrees/{worktreeId}/remove", workspaceFailure, func(r *http.Request, req contract.RemoveWorktreeRequest) error {
 		return s.Workspace.RemoveWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.RemoveWorktree(req))
 	})
+	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/switch-preview", http.StatusOK, workspaceFailure, func(r *http.Request, req contract.SwitchPreviewRequest) (contract.SwitchPreview, error) {
+		preview, err := s.Workspace.PreviewSwitch(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.SwitchTarget(req.Target))
+		return wire.SwitchPreview(preview), err
+	})
+	// Git keeps running when the client goes away; the answer is the
+	// worktree as it is afterwards.
+	serveIn(mux, "POST "+repo+"/worktrees/{worktreeId}/switch", http.StatusOK, workspaceFailure, func(r *http.Request, req contract.SwitchRequest) (contract.Worktree, error) {
+		tree, err := s.Workspace.SwitchWorktree(r.Context(), r.PathValue("id"), r.PathValue("worktreeId"), wire.SwitchWorktree(req))
+		return wire.Worktree(tree), err
+	})
 	serveIn(mux, "POST "+repo+"/worktrees/batch-removal-preview", http.StatusOK, workspaceFailure, func(r *http.Request, req contract.BatchRemovalPreviewRequest) (contract.BatchRemovalPreview, error) {
 		preview, err := s.Workspace.PreviewBatchRemoval(r.Context(), r.PathValue("id"), req.WorktreeIDs)
 		return wire.BatchPreview(preview, s.archived), err

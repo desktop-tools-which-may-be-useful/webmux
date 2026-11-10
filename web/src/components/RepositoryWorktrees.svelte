@@ -24,6 +24,7 @@
     type WorktreeBatchEntry,
     type WorktreeBatchFilter,
   } from "../worktree-batch";
+  import { switchableWorktree } from "../worktree-sync";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
@@ -49,6 +50,7 @@
     home,
     busy = $bindable(false),
     onopen,
+    onswitch,
     onchange,
     onremoved,
   }: {
@@ -60,6 +62,8 @@
     busy?: boolean;
     /** Opens a worktree's details inside the panel. */
     onopen: (worktreeId: string) => void;
+    /** Opens the switch of a worktree's branch inside the panel. */
+    onswitch: (worktreeId: string) => void;
     onchange: () => void;
     onremoved?: (removedIds: string[]) => void;
   } = $props();
@@ -449,7 +453,12 @@
                   {/snippet}
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content align="end" class="min-w-48">
-                  <WorktreeMenuItems ondetails={() => onopen(entry.tree.id)} />
+                  <WorktreeMenuItems
+                    ondetails={() => onopen(entry.tree.id)}
+                    onswitch={switchableWorktree(entry.tree)
+                      ? () => onswitch(entry.tree.id)
+                      : undefined}
+                  />
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
             </li>

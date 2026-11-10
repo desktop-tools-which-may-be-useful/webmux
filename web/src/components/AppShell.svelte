@@ -121,6 +121,7 @@
     tab: RepositoryTab;
   } | null>(null);
   let viewingWorktree = $state<Worktree | null>(null);
+  let switchingBranch = $state<Worktree | null>(null);
   // Kept after closing so the confirmation still names the repository.
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
@@ -187,6 +188,10 @@
     worktreeDetails(worktree) {
       shellUi.drawerOpen = false;
       viewingWorktree = worktree;
+    },
+    switchBranch(worktree) {
+      shellUi.drawerOpen = false;
+      switchingBranch = worktree;
     },
     releaseWorktree(worktree) {
       shellUi.drawerOpen = false;
@@ -543,6 +548,16 @@
           );
         }}
         onchange={refreshWorktrees}
+        onrefresh={() => void repositories.refresh(true)}
+        onnewworktree={(preset) => {
+          // Read the panel's repository before closing the panel clears it.
+          shell.start({
+            kind: "new-worktree",
+            repositoryId: currentRepo.id,
+            preset,
+          });
+          viewingRepository = null;
+        }}
         onclose={() => (viewingRepository = null)}
       />{/snippet}
   </LazyDialog>
@@ -567,6 +582,35 @@
         onclose={() => (viewingWorktree = null)}
       />{/snippet}
   </LazyDialog>
+{/if}
+{#if switchingBranch}
+  {@const target = switchingBranch}
+  {@const repo = repositories.list.find((r) => r.id === target.repositoryId)}
+  {@const current = repo?.worktrees.find((w) => w.id === target.id) ?? target}
+  {#if repo}
+    <LazyDialog
+      load={() => import("./SwitchBranchDialog.svelte")}
+      label="切换分支"
+      onclose={() => (switchingBranch = null)}
+    >
+      {#snippet children(page)}<page.default
+          repository={repo}
+          worktree={current}
+          onchange={() => void repositories.refresh(true)}
+          onnewworktree={(preset) =>
+            shell.start({
+              kind: "new-worktree",
+              repositoryId: repo.id,
+              preset,
+            })}
+          ongoto={(path) => {
+            const tree = repo.worktrees.find((w) => w.path === path);
+            if (tree) shell.worktreeDetails(tree);
+          }}
+          onclose={() => (switchingBranch = null)}
+        />{/snippet}
+    </LazyDialog>
+  {/if}
 {/if}
 <UnregisterRepositoryDialog
   repository={unregistering}

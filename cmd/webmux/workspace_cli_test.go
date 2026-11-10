@@ -171,6 +171,17 @@ func TestWorkspaceCommands(t *testing.T) {
 		t.Fatalf("remotes of an unknown repo: %d", code)
 	}
 
+	// worktree switch changes the branch in place; running sessions need --yes.
+	if out, stderr, code := f.cli(t, "worktree", "switch", repo, "main", "--create", "feat/x"); code != 0 || out != "feat/x\n" {
+		t.Fatalf("switch to a new branch: %d %q %q", code, out, stderr)
+	}
+	if out, stderr, code := f.cli(t, "worktree", "switch", repo, "feat/x", "main"); code != 0 || out != "main\n" {
+		t.Fatalf("switch back: %d %q %q", code, out, stderr)
+	}
+	if _, stderr, code := f.cli(t, "worktree", "switch", repo, "exp/a", "--create", "exp/c"); code != contract.ExitUsage || !strings.Contains(stderr, "--yes") {
+		t.Fatalf("switch with a running session: %d %q", code, stderr)
+	}
+
 	// worktree rm previews, refuses blockers and needs --yes without a terminal.
 	if _, stderr, code := f.cli(t, "worktree", "rm", repo, "exp/a"); code != contract.ExitError || !strings.Contains(stderr, "session") {
 		t.Fatalf("rm with a running session: %d %q", code, stderr)

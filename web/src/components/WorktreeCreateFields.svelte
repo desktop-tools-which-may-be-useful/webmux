@@ -9,6 +9,7 @@
     type CommitTip,
   } from "../commit-choices";
   import { LatestRequest } from "../hooks/remote-request.svelte";
+  import type { WorktreePreset } from "../new-session-defaults";
   import { Badge } from "$lib/components/ui/badge";
   import {
     BranchesSchema,
@@ -27,6 +28,7 @@
   import IconGitBranch from "~icons/tabler/git-branch";
   import PickerField from "./PickerField.svelte";
   import * as SegmentedControl from "$lib/components/ui/segmented-control";
+  import { untrack } from "svelte";
   import type { z } from "zod";
   let {
     repository,
@@ -37,6 +39,7 @@
     startBranch = $bindable(""),
     disabled = false,
     preferredStartBranch,
+    preset,
   }: {
     repository: Repository;
     path: string;
@@ -48,7 +51,13 @@
     disabled?: boolean;
     /** The start branch to use when it is a local branch, else the default. */
     preferredStartBranch?: string;
+    /** Initial values, applied once when the branches are first read. */
+    preset?: WorktreePreset;
   } = $props();
+  // The preset sets the mode at once so the form never shows the other one
+  // first; its branches wait for the list.
+  let pendingPreset = untrack(() => preset);
+  if (pendingPreset) mode = pendingPreset.mode;
   let data = $state<z.infer<typeof BranchesSchema> | null>(null);
   let error = $state("");
   let loading = $state(false);
@@ -264,6 +273,23 @@
     refreshUpstream(name);
   }
 
+  // An existing branch is taken only while no worktree has it checked out;
+  // a new branch's name counts as typed, so no suggestion replaces it.
+  function applyPreset(
+    initial: WorktreePreset,
+    value: z.infer<typeof BranchesSchema>,
+  ) {
+    if (initial.mode === "existing") {
+      const chosen = value.branches.find(
+        (item) => item.name === initial.branch,
+      );
+      if (chosen && !chosen.worktreePaths.length) branch = chosen.name;
+    } else if (initial.name) {
+      branch = initial.name;
+      branchEdited = true;
+    }
+  }
+
   $effect(() => {
     const id = repository.id;
     let active = true;
@@ -286,12 +312,22 @@
         data = value;
         base = value.defaultBase || "";
         baseSubject = value.defaultBaseSubject;
+        const initial = pendingPreset;
+        pendingPreset = undefined;
+        if (initial) applyPreset(initial, value);
         fillSuggestedBranch();
+        const start = initial?.mode === "new" ? initial.startBranch : "";
         startBranch =
-          preferredStartBranch &&
-          value.branches.some((item) => item.name === preferredStartBranch)
-            ? preferredStartBranch
-            : value.defaultBranch || "";
+          start &&
+          (value.branches.some((item) => item.name === start) ||
+            remoteBranches.some((item) => item.name === start))
+            ? start
+            : preferredStartBranch &&
+                value.branches.some(
+                  (item) => item.name === preferredStartBranch,
+                )
+              ? preferredStartBranch
+              : value.defaultBranch || "";
         if (mode === "new") chooseStartBranch(startBranch);
       })
       .catch((err) => {

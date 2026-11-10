@@ -315,6 +315,9 @@
         >
         <Button disabled>不可用</Button>
         <Button disabled aria-busy="true">正在保存…</Button>
+        <Button variant="success" wrap
+          >改为在新工作树打开（窄屏大字号时换行）</Button
+        >
       </Card.Content>
     </Card.Root>
     <InlineNotice

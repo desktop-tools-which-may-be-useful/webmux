@@ -3,6 +3,7 @@ import {
   AgentGuidePromptSchema,
   ArtifactsFolderSchema,
   BranchesSchema,
+  CommitsSchema,
   ErrorSchema,
   ForwardRequestSchema,
   ForwardSchema,
@@ -11,11 +12,18 @@ import {
   NoContentSchema,
   RecentDirsSchema,
   RemotesSchema,
+  SwitchPreviewRequestSchema,
+  SwitchPreviewSchema,
+  SwitchRequestSchema,
   TextSettingSchema,
   UploadSchema,
+  WorktreeSchema,
   type ForwardRequest,
   type ForwardUpdate,
   type SessionInfo,
+  type SwitchRequest,
+  type SwitchTarget,
+  type Worktree,
 } from "./schemas";
 
 export class APIError extends Error {
@@ -279,6 +287,48 @@ export function repositoryRemotes(id: string, signal?: AbortSignal) {
     "GET",
     undefined,
     signal,
+  );
+}
+// The recent history reachable from the given commits, newest first.
+export function repositoryCommits(
+  id: string,
+  from: readonly string[],
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams(from.map((hash) => ["from", hash]));
+  return api(
+    `/repositories/${id}/commits?${query}`,
+    CommitsSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+// Switching a worktree's branch in place: a preview, then its confirmation.
+const worktreeRoute = (tree: Pick<Worktree, "repositoryId" | "id">) =>
+  `/repositories/${tree.repositoryId}/worktrees/${tree.id}`;
+export function previewSwitch(
+  tree: Worktree,
+  target: SwitchTarget,
+  signal?: AbortSignal,
+) {
+  return api(
+    worktreeRoute(tree) + "/switch-preview",
+    SwitchPreviewSchema,
+    "POST",
+    { target },
+    signal,
+    SwitchPreviewRequestSchema,
+  );
+}
+export function switchWorktree(tree: Worktree, request: SwitchRequest) {
+  return api(
+    worktreeRoute(tree) + "/switch",
+    WorktreeSchema,
+    "POST",
+    request,
+    undefined,
+    SwitchRequestSchema,
   );
 }
 export function navigate(path: string) {

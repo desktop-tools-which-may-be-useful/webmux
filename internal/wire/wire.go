@@ -399,6 +399,26 @@ func BatchRemoveWorktrees(r contract.BatchRemoveWorktreesRequest) workspace.Batc
 	return workspace.BatchRemoveRequest(r)
 }
 
+func SwitchTarget(t contract.SwitchTarget) workspace.SwitchTarget {
+	return workspace.SwitchTarget(t)
+}
+
+func Issues(in []workspace.Issue) []contract.Issue {
+	return each(in, func(i workspace.Issue) contract.Issue { return contract.Issue(i) })
+}
+
+func SwitchPreview(p workspace.SwitchPreview) contract.SwitchPreview {
+	return contract.SwitchPreview{
+		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree),
+		Target:   contract.SwitchTargetInfo(p.Target),
+		Sessions: Sessions(p.Sessions), Blockers: Issues(p.Blockers), Warnings: Issues(p.Warnings),
+	}
+}
+
+func SwitchWorktree(r contract.SwitchRequest) workspace.SwitchRequest {
+	return workspace.SwitchRequest(r)
+}
+
 func BatchRemoveResult(r workspace.BatchRemoveResult) contract.BatchRemoveResult {
 	return contract.BatchRemoveResult{
 		Results: each(r.Results, func(v workspace.BatchRemoveItemResult) contract.BatchRemoveItemResult {

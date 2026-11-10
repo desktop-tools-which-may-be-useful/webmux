@@ -26,6 +26,7 @@
     onclose,
     onstart,
     onremove,
+    onswitch,
     pinned,
     ontogglepin,
     archived = [],
@@ -49,6 +50,8 @@
     onclose: (session: SessionInfo) => void;
     onstart?: () => void;
     onremove?: () => void;
+    /** Opens the switch of the worktree's branch. */
+    onswitch?: () => void;
     // Undefined outside curated repository lists.
     pinned?: boolean;
     ontogglepin?: () => void;
@@ -141,6 +144,7 @@
           {hidden}
           {pinned}
           {ontogglepin}
+          {onswitch}
           {onremove}
         />
       </div>
