@@ -11,7 +11,7 @@
   - 接受会话 ID 的命令都接受 `self`；会话外使用 `self` 以退出码 2 结束；
   - 旧版 CLI 调用服务端没有的新接口时提示“服务端版本过旧”，给出两边的版本并建议使用 `$WEBMUX_BIN`；
   - 本机状态（`status --json`）包含 `bin`。
-- **US-S02 读取会话元数据**：作为脚本或 agent，我希望一次取得会话所在的仓库、分支、启动配置、混合状态、链接、父子会话与标签，以便判断自己的处境和要操作的对象。
+- **US-S02 读取会话元数据**：作为脚本或 agent，我希望一次取得会话所在的仓库、分支、启动配置、混合状态、父子会话与标签，以便判断自己的处境和要操作的对象。
   - `GET /api/sessions/{id}/details` 返回 `SessionDetails`，不含 Token、启动环境变量值或其他会话的输出；临时文件夹只在已存在时报告，接口不创建它；
   - `webmux get [SESSION]` 在会话内默认 `self`，会话外必须给出 ID；默认输出对齐的键值，`--json` 输出 `SessionDetails`；
   - `--field PATH` 按点分路径输出单个值（字符串不带引号，对象与数组为 JSON），值为空或不存在时以 1 结束；`--json` 与 `--field` 互斥。
@@ -56,7 +56,7 @@
     - 失败按服务端的 `step` 报告失败步骤，保留已创建的 worktree 与会话并给出路径与 ID，不回滚；
   - 视图与首条消息：`--view terminal|chat`（取代 `--start-side`，`chat` 隐含 `--detach`）、`--prompt TEXT|-`（终端视图且未给 `--name` 时即会话名，US-B07）、`--init`（需要工作区关联，含 `--new-worktree`）；
     `--set ID=VALUE`、`--permission ask|auto`、`--attach-file PATH`（先经 `POST /api/uploads` 上传，要求 `--prompt`）只在 `--view chat` 时可用，否则在本地以 2 结束；
-  - 输出与等待：`--json` 输出 `{session, link}`（新建 worktree 时另含 `worktree` 与 `configWarnings`），配置警告写到标准错误，`--wait STATE --timeout DUR` 等会话第一次进入该状态（超时 124），
+  - 输出与等待：`--json` 输出 `{session}`（新建 worktree 时另含 `worktree` 与 `configWarnings`），配置警告写到标准错误，`--wait STATE --timeout DUR` 等会话第一次进入该状态（超时 124），
     `--reply` 要求 `--view chat` 与 `--prompt` 并与 `--wait`、`--follow` 互斥，`--label` 设置标签，`--dry-run` 只打印请求且隐藏环境变量值、不上传附件；
   - 没有终端时自动分离，`--attach` 强制附着；
   - `--cols N --rows M` 设定终端的初始尺寸，必须同时给出且各为 1–1000，否则在本地以 2 结束；省略时为 80×24；请求体的 `cols`、`rows` 贯通到 PTY，所以进程第一次输出就按该尺寸排版，
@@ -119,7 +119,7 @@
   - `webmux view SESSION terminal|chat` 调用 `POST /api/sessions/{id}/view` 并等到切换结束；终端 TUI 忙时 `--force` 强制中断，否则取消切换并以 1 退出；
     服务端列出 agent 会话候选时用 `--agent-session` 重试（只在切到 `chat` 时有效）；普通会话以 1 结束并说明没有聊天视图；
   - `webmux ls --archived`（或 `--state closed|interrupted|archived|all`，可重复）与 `--repo REPO` 经 `GET /api/sessions?state=` 列出已归档会话，按归档更新时间从新到旧，状态列显示 `closed` 或 `interrupted`；
-  - `webmux resume SESSION [--view terminal|chat]` 调用 `POST /api/sessions/{id}/resume`，缺省按归档时的视图恢复，终端视图且有终端时附着、否则输出 ID 与链接（`--detach` 不附着），
+  - `webmux resume SESSION [--view terminal|chat]` 调用 `POST /api/sessions/{id}/resume`，缺省按归档时的视图恢复，终端视图且有终端时附着、否则输出 ID（`--detach` 不附着），
     启动配置已删除时需要 `--without-env`，候选冲突时用 `--agent-session` 重试，运行中的会话（`not_archived`）以 1 结束；
   - `webmux rm SESSION --forget` 删除已归档会话的记录（agent 自己的历史保留），终端上先确认，非交互时需要 `--yes`；
   - 已删除的 `chat switch`、`chat ls`、`chat resume`、`chat forget` 按未知命令以 2 结束。
@@ -140,7 +140,7 @@
     `edit` 只改给出的字段，未提及的变量值保持不变；名称不存在时以 2 结束并列出已保存的名称；变量值不出现在输出或诊断中；
   - 聊天视图（混合模式）开关：`add --chat` 先经 `POST /api/launch-configs/chat-support` 做支持检查，不支持时以 1 结束；`edit` 用 `--chat`/`--no-chat` 开关；`ls` 显示是否开启聊天视图；
     旧选项 `--hybrid`/`--no-hybrid` 按未知选项以 2 结束；
-  - `forward ls|add|rm`：`add` 输出转发地址，`--session self` 关联当前会话，`--no-compat` 关闭兼容改写；转发关闭、端口非法或重复时给出原因并以 1 结束。
+  - `forward ls|add|rm`：`add` 输出转发端口，`--session self` 关联当前会话，`--no-compat` 关闭兼容改写；转发关闭、端口非法或重复时给出原因并以 1 结束。
 - **US-S19 从脚本调整终端尺寸**：作为脚本或 agent，我希望在没有浏览器控制终端时改变会话的 PTY 尺寸，以便让程序按我需要的宽高排版并用 `screen` 读到完整画面。
   - `POST /api/sessions/{id}/resize {cols, rows, take?}` 与其他会话接口一样要求认证并检查 Origin（本机套接字上的会话内调用同样可用），成功时 200 返回 `SessionInfo`，PTY、会话信息与预览同时变为新尺寸并向观察端广播控制帧；
   - 当前没有控制端，或控制端是脚本输入（`send` 取得的 `script` 控制权）时直接允许；控制端是浏览器或 `attach` 时返回 409，因为浏览器收到控制帧后会把自己的网格重发，脚本强行修改会来回抢；

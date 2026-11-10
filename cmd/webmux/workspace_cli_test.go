@@ -249,7 +249,7 @@ func TestLaunchConfigAndForwardCommands(t *testing.T) {
 		t.Log("forwarding is off in this configuration; skipped")
 		return
 	}
-	if code != 0 || !strings.HasSuffix(strings.TrimSpace(stdout), "/forward/45973/") {
+	if code != 0 || strings.TrimSpace(stdout) != "45973" {
 		t.Fatalf("forward add: %d %q %q", code, stdout, stderr)
 	}
 	if _, _, code := f.cli(t, "forward", "add", "45973"); code != contract.ExitError {

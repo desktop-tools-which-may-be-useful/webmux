@@ -98,9 +98,9 @@ var runCommand = &Command{
 	Env: []Item{
 		{Name: "WEBMUX_SOCKET", Text: "Local API socket used when neither --socket nor --config is given."},
 	},
-	Output: "Detached: one line with the session ID, a tab and the local link, or with --json an object {session, link, " +
-		"configWarnings} plus worktree when one was created. Attached or --follow: the session's output; notices and config " +
-		"warnings go to standard error. --reply: the agent's final reply. --dry-run prints the request with environment values hidden.",
+	Output: "Detached: the session ID, or with --json an object {session, configWarnings} plus worktree when one was " +
+		"created. Attached or --follow: the session's output; notices and config warnings go to standard error. " +
+		"--reply: the agent's final reply. --dry-run prints the request with environment values hidden.",
 	Exit: []ExitItem{
 		{Code: 0, Text: "Created (detached), detached after attaching, --reply and the turn ended normally, or --follow and the program exited 0."},
 		{Code: 1, Text: "A step failed (the worktree, the session, its settings or the first prompt), an upload failed, " +
@@ -113,7 +113,7 @@ var runCommand = &Command{
 	Examples: []Example{
 		{Command: "webmux run -- claude", Text: "Start Claude Code in the current directory and attach; Ctrl+] detaches."},
 		{Command: "webmux run --detach --cols 200 --rows 50 -- make test", Text: "Start a session whose terminal is 200 columns by 50 rows from its first output."},
-		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID and link."},
+		{Command: "webmux run --detach --name tests --cwd ~/src/app -- make test", Text: "Start a named session in another directory and print its ID."},
 		{Command: "webmux run --follow --strip -- go test ./...", Text: "Run tests in a persistent session, stream plain text and exit with their status."},
 		{Command: `webmux run --new-worktree --branch fix/lint --launch-config Codex --view chat --set model=gpt-5 --prompt "Fix all lint and summarize" --reply`, Text: "Start an agent on a new worktree's chat view and print its reply."},
 		{Command: "webmux run --dry-run --label run=7 -- make build", Text: "Show the request run would send, without creating anything."},
@@ -177,12 +177,12 @@ var runCommand = &Command{
 		fs.Var(o.set, "set", "chat view: set agent option `ID=VALUE` (see webmux launch-config options)")
 		fs.StringVar(&o.permission, "permission", "", "chat view: permission `MODE` ask or auto")
 		fs.Var(&o.attachments, "attach-file", "chat view: upload the file at `PATH` and send it with the first prompt")
-		fs.BoolVar(&o.detach, "detach", false, "create the session and print its ID and link without attaching")
+		fs.BoolVar(&o.detach, "detach", false, "create the session and print its ID without attaching")
 		fs.BoolVar(&o.attachMode, "attach", false, "attach even when that needs a terminal this process lacks (exit 2)")
 		fs.BoolVar(&o.follow, "follow", false, "stream the output to standard output and exit with the program's status")
 		fs.BoolVar(&o.strip, "strip", false, "with --follow, remove terminal control sequences")
 		fs.BoolVar(&o.killOnInterrupt, "kill-on-interrupt", false, "with --follow, end the program on SIGINT or SIGTERM")
-		fs.BoolVar(&o.asJSON, "json", false, "print {session, link, ...} as JSON when detached, or the turn with --reply")
+		fs.BoolVar(&o.asJSON, "json", false, "print {session, ...} as JSON when detached, or the turn with --reply")
 		fs.BoolVar(&o.dryRun, "dry-run", false, "print the request without creating anything; environment values are hidden")
 		fs.StringVar(&o.wait, "wait", "", "detach, then wait until the session is first in `STATE` (see webmux wait)")
 		fs.BoolVar(&o.reply, "reply", false, "chat view: follow the first prompt's turn and print the agent's final reply")
@@ -440,14 +440,10 @@ func (e Env) run(ctx context.Context, o runOptions, argv []string) int {
 		}
 		return e.detached(ctx, client, created, o, extra)
 	}
-	// Tell the user where to find the session (for example on a phone)
-	// before the session's output starts; stdout stays the session's. The
-	// terminal is already raw, so the line ends with CR LF.
-	if link, err := link(ctx, client, created.ID); err == nil {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · %s · Ctrl+] to detach\r\n", created.ID, link)
-	} else {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · Ctrl+] to detach\r\n", created.ID)
-	}
+	// Announce the session ID before the session's output starts; stdout
+	// stays the session's. The terminal is already raw, so the line ends with
+	// CR LF.
+	_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · Ctrl+] to detach\r\n", created.ID)
 	return e.attach(ctx, client, created.ID, false, console)
 }
 
@@ -480,12 +476,11 @@ func (e Env) createFailure(err error) int {
 // chat view and prints the reply.
 func (e Env) replyRun(ctx context.Context, client *localclient.Client, result contract.CreateSessionResult, o runOptions) int {
 	id := result.Session.ID
-	link, _ := link(ctx, client, id)
 	where := ""
 	if result.Worktree != nil {
 		where = " · " + result.Worktree.Path
 	}
-	_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s%s · %s\n", id, where, link)
+	_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s%s\n", id, where)
 	if o.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, o.timeout)
@@ -654,16 +649,12 @@ func (e Env) detached(ctx context.Context, client *localclient.Client, created c
 		}
 		session = matched[0]
 	}
-	link, err := link(ctx, client, created.ID)
-	if err != nil {
-		return e.Fail(err)
-	}
 	if o.asJSON {
-		out := map[string]any{"session": session, "link": link}
+		out := map[string]any{"session": session}
 		maps.Copy(out, extra)
 		writeJSON(e.Stdout, out)
 	} else {
-		_, _ = fmt.Fprintf(e.Stdout, "%s\t%s\n", created.ID, link)
+		_, _ = fmt.Fprintln(e.Stdout, created.ID)
 	}
 	return contract.ExitOK
 }
@@ -681,9 +672,7 @@ func (e Env) waitFailure(err error) int {
 // stop following (130, 143) and leave the program running, or end it first
 // with --kill-on-interrupt.
 func (e Env) followRun(ctx context.Context, client *localclient.Client, id string, o runOptions) int {
-	if link, err := link(ctx, client, id); err == nil {
-		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · %s\n", id, link)
-	}
+	_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s\n", id)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)

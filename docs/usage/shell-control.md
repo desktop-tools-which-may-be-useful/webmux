@@ -15,7 +15,7 @@
 | 看全屏 TUI 当前画面                     | `webmux screen <ID>`                                                                       |
 | 等会话需要我或空闲                      | `webmux wait <ID> --until attention,idle --changed`                                        |
 | 任务完成后提醒我                        | `webmux notify --kind done "构建完成"`                                                     |
-| 查看当前会话的仓库、分支与链接          | `webmux get`                                                                               |
+| 查看当前会话的仓库与分支                | `webmux get`                                                                               |
 | 找到本会话的临时文件夹                  | `webmux dir self`                                                                          |
 | 读 WebMux 工具手册                      | `webmux guide`                                                                             |
 
@@ -45,7 +45,7 @@
 ## 查看会话元数据
 
 ```sh
-webmux get                               # 在会话内查看当前会话：仓库、分支、启动配置、视图、链接、父子会话与标签
+webmux get                               # 在会话内查看当前会话：仓库、分支、启动配置、视图、父子会话与标签
 webmux get abcd2345 --json               # 另一个会话的完整详情（SessionDetails）
 branch=$(webmux get --field worktree.branch)   # 不用 jq 取单个字段
 ```

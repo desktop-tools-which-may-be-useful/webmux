@@ -35,7 +35,7 @@ func Commands() Registry {
 
 var getCommand = &Command{
 	Name: "get", Group: GroupSessions, Args: "[SESSION]",
-	Summary: "Show a session's metadata: repository, branch, launch config, views, links, parent, children and labels.",
+	Summary: "Show a session's metadata: repository, branch, launch config, views, parent, children and labels.",
 	Description: "Inside a WebMux session SESSION defaults to self. The details are gathered by the server in one request " +
 		"(GET /api/sessions/{id}/details); they never include the token or launch environment values. " +
 		"The artifacts folder is reported only when it exists; get never creates it.",
@@ -207,9 +207,6 @@ func printDetails(e Env, d contract.SessionDetails) {
 	}
 	if d.ArtifactsDir != nil {
 		row("Artifacts", *d.ArtifactsDir)
-	}
-	if d.Link != nil {
-		row("Link", *d.Link)
 	}
 	row("Parent", d.ParentID)
 	if len(d.Children) > 0 {

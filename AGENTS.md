@@ -53,7 +53,7 @@ Run from the repository root; the full list is in [conventions](docs/agent-rules
 ## Collaboration and Pull Requests
 
 - Deliver changes via a Pull Request from a dedicated branch off `origin/main` (use an isolated `git worktree` when the current checkout is on `main` or shared); never commit or push directly to `main` unless the user explicitly asks otherwise. Follow Conventional Commits (`feat(web): ...`, `fix: ...`).
-- Follow every PR until all CI checks and PR bot checks/reviews (including `pullfrog[bot]` feedback and `pullfrog-approval`) pass; fix CI failures and address or resolve bot review findings on the branch until all checks are green.
+- Follow every PR until all CI checks pass; fix CI failures on the branch until all checks are green.
 - Once checks pass, leave the PR open for maintainer review and merge; do not merge unless the user explicitly asks you to.
 - UI PRs require screenshots at desktop, tablet and phone sizes, before/after pairs for existing UI, and GIFs for interaction/motion changes. Follow [testing](docs/agent-rules/testing.md#ui-pull-request-evidence).
 
