@@ -189,9 +189,9 @@ agent 提供的配置项 SHALL 在桌面输入框下方显示，在手机收进�
 
 回合以 `end_turn` 结束时，若仍有 `in_progress` 工具调用，或本轮工具输入明确包含 `run_in_background: true` / `IsDaemon: true`，系统 SHALL 设置 `turn.unfinished: true`，显示“本轮已结束，仍有任务未完成”，且 SHALL NOT 立即产生 `done` 关注。
 
-系统 SHALL NOT 依赖 agent 在回合后主动发送后台完成通知，SHALL 观察 agent 进程树。连续两次静默轮询确认本回合新启动的进程全部退出后，系统 SHALL 自动发送一条英文 `session/prompt`，要求 agent 检查最新后台状态并汇报结果。
+系统 SHALL NOT 依赖 agent 在回合后主动发送后台完成通知，SHALL 观察 agent 进程树。连续两次静默轮询确认本回合新启动的进程全部退出后，若档案声明了后台状态检查 prompt，系统 SHALL 自动发送该 `session/prompt`；未声明的 agent SHALL 直接按提醒策略产生 `done`，SHALL NOT 额外发起模型回合。
 
-系统 SHALL 通过该回合的 ACP 更新刷新工具状态与回复，并在其结束后才按提醒策略产生 `done`。新回合开始、切换、重连或会话关闭 SHALL 停止观察。非 Linux/macOS 无进程树支持时，两次轮询后按无新进程处理。
+系统 SHALL 通过档案声明的检查回合刷新工具状态与回复，并在其结束后才按提醒策略产生 `done`。新回合开始、切换、重连或会话关闭 SHALL 停止观察。非 Linux/macOS 无进程树支持时，两次轮询后按无新进程处理。
 
 自动检查回合 SHALL 标记为后台刷新，旧工具在该回合补发的完成事件 SHALL NOT 再次触发后台观察或自动检查。系统 SHALL NOT 伪造工具退出码或读取 agent 的私有 transcript。
 

@@ -16,10 +16,9 @@ import (
 // The turn is then not "done" yet; the actor watches the agent's process tree
 // and asks the agent to refresh its status once those processes are gone.
 const (
-	bgPoll                 = time.Second
-	bgQuiet                = 2 // consecutive polls without new processes
-	bgMaxWatch             = time.Hour
-	backgroundStatusPrompt = "The background processes from the previous turn have exited. Please check the latest background task status and report the outcome to the user. Do not start any new tasks."
+	bgPoll     = time.Second
+	bgQuiet    = 2 // consecutive polls without new processes
+	bgMaxWatch = time.Hour
 )
 
 // processSet is pid and its descendants.
@@ -117,13 +116,18 @@ func hasNewProcess(pid int, base map[int]bool) bool {
 	return false
 }
 
-// backgroundDone starts one agent turn to flush and report the status that
-// agents such as agy only release with a prompt. Its end latches done attention.
+// backgroundDone starts a profile-specific status refresh, or latches done
+// directly for agents that need no extra prompt.
 func (a *actor) backgroundDone(link *acpLink) {
 	if a.link != link || a.turn != nil || a.attention != nil {
 		return
 	}
-	if _, err := a.sendTurn(backgroundStatusPrompt, nil, "", "", true); err != nil {
+	prompt := a.cmd.Profile.BackgroundStatusPrompt
+	if prompt == "" {
+		a.scheduleOrLatchDone(a.chat.Turn.StartedAt, time.Now().UTC())
+		return
+	}
+	if _, err := a.sendTurn(prompt, nil, "", "", true); err != nil {
 		a.svc.log.Warn("background status refresh failed to start", "id", a.id, "error", err)
 		a.emit(Event{Kind: EventNotice, Notice: &Notice{Level: acp.NoticeError, Text: "后台任务状态刷新失败，请发送消息重试"}})
 		if a.attentionPolicy.Mode != session.AttentionModeOff {

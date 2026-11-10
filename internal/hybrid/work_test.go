@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile/agy"
 	"github.com/rainchan/webmux/internal/agentprofile/kimi"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/attentionkind"
@@ -182,7 +183,7 @@ func TestWorkBackgroundInput(t *testing.T) {
 func TestTurnWithBackgroundCommandIsDoneOnlyAfterItEnds(t *testing.T) {
 	h := newHarness(t, 0)
 	h.fast()
-	s := h.create(h.input(omp.Name, SideACP))
+	s := h.create(h.input(agy.Name, SideACP))
 	id := s.Info().ID
 	st := h.follow(id)
 	prompt(t, h, id, "hi /background")
@@ -197,7 +198,7 @@ func TestTurnWithBackgroundCommandIsDoneOnlyAfterItEnds(t *testing.T) {
 		a := s.Info().Attention
 		return a != nil && a.Kind == attentionkind.Done
 	})
-	if got := h.replayedUsers(id); !slices.Equal(got, []string{"hi /background", backgroundStatusPrompt}) {
+	if got := h.replayedUsers(id); !slices.Equal(got, []string{"hi /background", agy.BackgroundStatusPrompt}) {
 		t.Fatalf("background refresh prompts %q", got)
 	}
 	if h.chatState(id).Turn.Unfinished {
@@ -226,6 +227,9 @@ func TestTurnWithStartedBackgroundCommandIsDoneOnlyAfterItEnds(t *testing.T) {
 		a := s.Info().Attention
 		return a != nil && a.Kind == attentionkind.Done
 	})
+	if got := h.replayedUsers(id); !slices.Equal(got, []string{"hi /background-started"}) {
+		t.Fatalf("Kimi must not start an agy-specific refresh: %q", got)
+	}
 }
 
 func TestTurnWithOpenToolWithoutNewProcessBecomesDoneAfterQuietPolls(t *testing.T) {

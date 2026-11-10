@@ -61,6 +61,11 @@
   - OpenCode 会拉起私有服务；
   - Codex 的 codex-acp 冷启动约 2.5 秒。
 
+## Antigravity CLI（agy）
+
+- agy 在后台命令完成后，可能要到下一次 prompt 才补发工具状态与结果。WebMux 在本回合新启动的进程退出且连续两次静默轮询后，自动发送英文消息，要求 agy 检查并汇报最新后台状态，通过正常 ACP 更新刷新工具行与回复。
+- 这个自动检查只用于 agy，会产生一次额外模型调用；Kimi 和其他 agent 在进程退出后直接按提醒策略完成，不额外发起回合。
+
 ## Kimi Code CLI
 
 - 聊天端直接运行同一服务用户的 `kimi acp`，复用其登录状态和 `KIMI_CODE_HOME`，不自动登录或注销；命令菜单隐藏 `/login` 与 `/logout`。

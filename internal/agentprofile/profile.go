@@ -273,6 +273,9 @@ type Profile struct {
 	// full "provider/model" id, for agents whose model display names repeat
 	// across providers.
 	ModelChoiceValues bool
+	// BackgroundStatusPrompt asks the agent to flush and report background
+	// status after watched processes exit. Empty does not start an extra turn.
+	BackgroundStatusPrompt string
 	// ChatSide derives chat-side config values from the kept options and
 	// lists the kept options the chat side cannot apply.
 	ChatSide func(kept []KeptOption) ([]Seed, []string)
