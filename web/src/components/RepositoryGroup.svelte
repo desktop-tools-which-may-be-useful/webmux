@@ -1,6 +1,7 @@
 <script lang="ts">
   import IconChevronDown from "~icons/tabler/chevron-down";
   import * as Collapsible from "$lib/components/ui/collapsible";
+  import type { BranchOperation } from "../branch-actions";
   import type {
     ArchivedSession,
     Repository,
@@ -15,6 +16,7 @@
   } from "../archived";
   import { homeWorktrees } from "../home-worktrees.svelte";
   import { homeLayout, worktreeTitle } from "../home-worktrees";
+  import { switchableWorktree } from "../worktree-sync";
   import WorkspaceGroup from "./WorkspaceGroup.svelte";
 
   let {
@@ -32,12 +34,14 @@
     onstart,
     ontogglepin,
     onremove,
+    onswitch,
     onclose,
     archived = EMPTY_ARCHIVE,
     visibleArchiveIds,
     archive,
     detailsOpen,
     ondetailschange,
+    onoperation,
   }: {
     repo: Repository;
     // All sessions associated with this repository.
@@ -56,6 +60,8 @@
     onstart: (worktreeId?: string) => void;
     ontogglepin: (worktreeId: string, pinned: boolean) => void;
     onremove: (worktree: Worktree) => void;
+    /** Opens the switch of a worktree's branch. */
+    onswitch: (worktree: Worktree) => void;
     onclose: (session: SessionInfo) => void;
     // Every archived record placed in this repository.
     archived?: RepositoryArchive;
@@ -65,6 +71,8 @@
     /** Details dialog of the focused worktree, opened from the page header. */
     detailsOpen?: boolean;
     ondetailschange?: (open: boolean) => void;
+    /** Starts a sync action of a worktree's branch. */
+    onoperation?: (operation: BranchOperation) => void;
   } = $props();
 
   let contentReady = $state(false);
@@ -147,6 +155,7 @@
           title={worktreeTitle(tree)}
           path={tree.path}
           worktree={tree}
+          lastFetchedAt={repo.lastFetchedAt}
           sessions={sessions.filter((s) => s.workspace?.worktreeId === tree.id)}
           {visibleIds}
           {compact}
@@ -168,8 +177,10 @@
           {onclose}
           onstart={() => onstart(tree.id)}
           onremove={tree.kind === "linked" ? () => onremove(tree) : undefined}
+          onswitch={switchableWorktree(tree) ? () => onswitch(tree) : undefined}
           archived={treeArchive}
           {archive}
+          {onoperation}
         />
       {/each}
       {@const missingArchive = shownArchive(archived.missing)}

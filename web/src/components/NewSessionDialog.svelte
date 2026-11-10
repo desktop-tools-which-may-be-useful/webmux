@@ -10,6 +10,7 @@
     isCommandReady,
     isDirectoryNotFoundError,
     isLocationTargetReady,
+    resolveEntryPreset,
     resolveFallbackAfterWorktreeRemoved,
     resolveInitialLaunch,
     resolveInitialTarget,
@@ -194,14 +195,12 @@
   function removed(tree: Worktree) {
     onworktreeremoved?.(tree);
     if (createdTree?.id === tree.id) createdTree = null;
-    const next = resolveFallbackAfterWorktreeRemoved(
+    ({ kind, worktreeId } = resolveFallbackAfterWorktreeRemoved(
       repositories,
       kind,
       worktreeId,
       tree,
-    );
-    kind = next.kind;
-    worktreeId = next.worktreeId;
+    ));
   }
   const treeTargetMissing = $derived(treeOnly && kind !== "new-worktree");
   const targetReady = $derived(
@@ -322,10 +321,7 @@
 >
   <form
     class="min-w-0"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void create();
-    }}
+    onsubmit={(event) => (event.preventDefault(), void create())}
   >
     <fieldset disabled={busy} class="min-w-0 space-y-4">
       <LocationPicker
@@ -367,6 +363,7 @@
                 fieldsRepository,
                 scope?.worktreeId,
               )}
+              preset={resolveEntryPreset(entry, fieldsRepository.id)}
               disabled={busy || kind !== "new-worktree"}
               bind:path={newPath}
               bind:mode={branchMode}

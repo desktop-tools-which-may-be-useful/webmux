@@ -12,6 +12,9 @@ import type {
 type WorktreeBatchCategory = "safe" | "blocked" | "protected";
 export type WorktreeBatchFilter = "all" | WorktreeBatchCategory;
 
+/** Why a locked registration whose directory is gone is left alone. */
+export const LOCKED_STALE_REASON = "已锁定，需在终端解锁后清理";
+
 export interface WorktreeBatchEntry {
   tree: Worktree;
   title: string;
@@ -56,9 +59,12 @@ function classifyWorktree(
   if (tree.locked) {
     return {
       category: "protected",
-      reason: tree.lockReason
-        ? `已锁定：${tree.lockReason}`
-        : "工作树已锁定，请先在终端解锁",
+      reason:
+        tree.prunable && !tree.available
+          ? LOCKED_STALE_REASON
+          : tree.lockReason
+            ? `已锁定：${tree.lockReason}`
+            : "工作树已锁定，请先在终端解锁",
     };
   }
   const missingPrunable = tree.prunable && !tree.available;
@@ -148,6 +154,25 @@ export function countWorktreeBatchCategories(
     counts[entry.category]++;
   }
   return counts;
+}
+
+/**
+ * The stale registrations "清理失效登记" preselects: unlocked linked
+ * worktrees Git marks prunable whose directory is gone, and that are safe
+ * to clean (no running session). The batch preview checks the directory
+ * again on the server; this list only drives the shortcut and its count.
+ */
+export function staleRegistrations(
+  entries: readonly WorktreeBatchEntry[],
+): WorktreeBatchEntry[] {
+  return entries.filter(
+    ({ tree, category }) =>
+      category === "safe" &&
+      tree.kind === "linked" &&
+      tree.prunable &&
+      !tree.available &&
+      !tree.locked,
+  );
 }
 
 export function filterWorktreeBatchEntries(

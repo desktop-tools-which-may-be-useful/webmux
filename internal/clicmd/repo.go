@@ -184,10 +184,12 @@ var repoRemoveCommand = &Command{
 
 var repoShowCommand = &Command{
 	Name: "repo show", Group: GroupWorkspace, Args: "REPO",
-	Summary:   "Show a repository: paths, availability, initialization instruction and worktrees with their home page state.",
+	Summary: "Show a repository: paths, availability, last fetch, initialization instruction and worktrees with their " +
+		"upstream, changes, last commit and home page state.",
 	Arguments: []Item{repoArgument},
-	Output:    "Aligned key-value lines and a worktree table; with --json, the Repository with home states.",
-	Exit:      exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names nothing."}),
+	Output: "Aligned key-value lines and a worktree table; last fetch is the newest FETCH_HEAD time, approximate. With " +
+		"--json, the Repository with home states.",
+	Exit: exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names nothing."}),
 	Examples: []Example{
 		{Command: "webmux repo show .", Text: "Inspect the current repository."},
 		{Command: "webmux repo show . --json | jq .initInstruction", Text: "Read its initialization instruction."},
@@ -223,11 +225,15 @@ func (e Env) showRepository(ctx context.Context, client *localclient.Client, rep
 	if repo.InitInstruction != "" {
 		init = fmt.Sprintf("%s (%d characters)", oneLine(repo.InitInstruction, 60), utf8.RuneCountInString(repo.InitInstruction))
 	}
+	fetched := "-"
+	if repo.LastFetchedAt != nil {
+		fetched = repo.LastFetchedAt.Local().Format(time.DateTime) + " (approximate)"
+	}
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
 	for _, row := range [][2]string{
 		{"id", repo.ID}, {"name", repo.Name}, {"path", repo.AnchorPath}, {"git dir", repo.CommonDir},
 		{"availability", repo.Availability}, {"error", repo.Error}, {"checked", repo.CheckedAt.Local().Format(time.DateTime)},
-		{"init", init},
+		{"last fetch", fetched}, {"init", init},
 	} {
 		if row[1] != "" {
 			_, _ = fmt.Fprintf(w, "%s\t%s\n", row[0], row[1])
@@ -236,9 +242,10 @@ func (e Env) showRepository(ctx context.Context, client *localclient.Client, rep
 	_ = w.Flush()
 	_, _ = fmt.Fprintln(e.Stdout)
 	w = tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ID\tKIND\tBRANCH\tPATH\tSTATE\tSESSIONS\tHOME")
+	_, _ = fmt.Fprintln(w, "ID\tKIND\tBRANCH\tPATH\tSTATE\tSESSIONS\tHOME\tUPSTREAM\tCHANGES\tLAST COMMIT")
 	for _, t := range view.Worktrees {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%s\n", t.ID, t.Kind, worktreeName(t.Worktree), t.Path, worktreeState(t.Worktree), t.Sessions, t.Home)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", t.ID, t.Kind, worktreeName(t.Worktree), t.Path, worktreeState(t.Worktree),
+			t.Sessions, t.Home, upstreamName(t.Worktree), changeCounts(t.Changes), commitLine(t.LastCommit))
 	}
 	_ = w.Flush()
 	return contract.ExitOK

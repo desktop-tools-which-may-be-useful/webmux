@@ -7,10 +7,16 @@
     fetchRepositoryBranches,
     fetchRepositoryCommits,
     formatCommitLoadError,
+    isAbortError,
     refreshRepositoryBranchBase,
+    resolveInitialStartBranch,
+    resolveRefreshedLocalHead,
+    resolveSelectedStartBranchState,
+    resolveWorktreePresetSelection,
     type CommitTip,
   } from "../commit-choices";
   import { LatestRequest } from "../hooks/remote-request.svelte";
+  import type { WorktreePreset } from "../new-session-defaults";
   import { BranchesSchema, CommitsSchema, type Repository } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -21,6 +27,7 @@
   import PickerField from "./PickerField.svelte";
   import WorktreeAdvancedFields from "./WorktreeAdvancedFields.svelte";
   import * as SegmentedControl from "$lib/components/ui/segmented-control";
+  import { untrack } from "svelte";
   import type { z } from "zod";
   let {
     repository,
@@ -31,6 +38,7 @@
     startBranch = $bindable(""),
     disabled = false,
     preferredStartBranch,
+    preset,
   }: {
     repository: Repository;
     path: string;
@@ -42,7 +50,13 @@
     disabled?: boolean;
     /** The start branch to use when it is a local branch, else the default. */
     preferredStartBranch?: string;
+    /** Initial values, applied once when the branches are first read. */
+    preset?: WorktreePreset;
   } = $props();
+  // The preset sets the mode at once so the form never shows the other one
+  // first; its branches wait for the list.
+  let pendingPreset = untrack(() => preset);
+  if (pendingPreset) mode = pendingPreset.mode;
   let data = $state<z.infer<typeof BranchesSchema> | null>(null);
   let error = $state("");
   let loading = $state(false);
@@ -57,17 +71,16 @@
   let pathEdited = $state(false);
   let startBranchPickerOpen = $state(false);
   let startBranchSearch = $state("");
-  function setStartBranchPickerOpen(next: boolean) {
+  const setStartBranchPickerOpen = (next: boolean) => {
     startBranchPickerOpen = next;
     if (!next) startBranchSearch = "";
-  }
+  };
   let branchPickerOpen = $state(false);
   let branchSearch = $state("");
-  // The desktop list stays mounted while closed; each opening starts unfiltered.
-  function setBranchPickerOpen(next: boolean) {
+  const setBranchPickerOpen = (next: boolean) => {
     branchPickerOpen = next;
     if (!next) branchSearch = "";
-  }
+  };
   let branchEdited = $state(false);
   let commits = $state<z.infer<typeof CommitsSchema>["commits"]>([]);
   let commitsLoading = $state(false);
@@ -117,17 +130,17 @@
       });
   }
 
-  function suggestedBranch(avoid?: string) {
-    if (!data) return "";
-    return suggestWorktreeBranch({
-      branchNames: data.branches.map((item) => item.name),
-      worktreePaths: repository.worktrees.map((tree) => tree.path),
-      avoid,
-    });
-  }
+  const suggestedBranch = (avoid?: string) =>
+    data
+      ? suggestWorktreeBranch({
+          branchNames: data.branches.map((item) => item.name),
+          worktreePaths: repository.worktrees.map((tree) => tree.path),
+          avoid,
+        })
+      : "";
   function fillSuggestedBranch() {
-    if (mode !== "new" || branchEdited || branch || !data) return;
-    branch = suggestedBranch();
+    if (mode === "new" && !branchEdited && !branch && data)
+      branch = suggestedBranch();
   }
 
   function clearRefresh() {
@@ -156,14 +169,7 @@
         upstream = value.upstream;
         refreshWarning = value.fetchWarning;
         lastRefreshedAt = value.baseSource === "remote" ? new Date() : null;
-        // A remote base descends from the local tip; a local base is the
-        // freshly read tip. Either way the fetched upstream tip is listed, so
-        // a diverged upstream stays selectable without becoming the default.
-        const localHead =
-          value.baseSource === "local"
-            ? value.base
-            : (data?.branches.find((item) => item.name === branchName)?.head ??
-              "");
+        const localHead = resolveRefreshedLocalHead(value, data, branchName);
         if (editVersion === baseEditVersion) {
           base = value.base;
           baseSource = value.baseSource;
@@ -179,11 +185,7 @@
             .catch(() => {});
       })
       .catch((err: unknown) => {
-        if (
-          !request.reportable() ||
-          (err instanceof DOMException && err.name === "AbortError")
-        )
-          return;
+        if (!request.reportable() || isAbortError(err)) return;
         refreshWarning = "上游刷新失败，保留当前基线；请重试";
         baseSource = "";
         upstream = "";
@@ -197,32 +199,29 @@
   function chooseStartBranch(name: string) {
     startBranch = name;
     clearRefresh();
-    const selected = data?.branches.find((item) => item.name === name);
-    if (!selected) {
-      const remote = remoteBranches.find((item) => item.name === name);
-      if (remote) {
-        base = remote.head;
-        baseSource = "remote";
-        upstream = remote.name;
-        baseSubject = remote.subject;
-        loadCommits(branchTips("", remote.head));
-        refreshUpstream(name);
-        return;
-      }
-      base = data?.defaultBase || "";
-      baseSource = "";
-      baseSubject = data?.defaultBaseSubject || "";
-      if (base) loadCommits([{ hash: base, tag: "当前主工作区" }]);
-      else clearCommits();
+    const resolved = resolveSelectedStartBranchState(
+      name,
+      data,
+      remoteBranches,
+    );
+    base = resolved.base;
+    baseSubject = resolved.baseSubject;
+    if (resolved.kind === "remote") {
+      baseSource = "remote";
+      upstream = resolved.upstream;
+      loadCommits(resolved.tips);
+      refreshUpstream(name);
       return;
     }
-    base = selected.head;
-    baseSource = "local";
-    baseSubject =
-      data?.bases.find((item) => item.name === `refs/heads/${name}`)?.subject ||
-      "";
-    loadCommits(branchTips(selected.head, ""));
-    refreshUpstream(name);
+    if (resolved.kind === "local") {
+      baseSource = "local";
+      loadCommits(resolved.tips);
+      refreshUpstream(name);
+      return;
+    }
+    baseSource = "";
+    if (resolved.tips.length) loadCommits(resolved.tips);
+    else clearCommits();
   }
 
   $effect(() => {
@@ -247,20 +246,26 @@
         data = value;
         base = value.defaultBase || "";
         baseSubject = value.defaultBaseSubject;
+        const initial = pendingPreset;
+        pendingPreset = undefined;
+        const applied = initial
+          ? resolveWorktreePresetSelection(initial, value)
+          : null;
+        if (applied) {
+          branch = applied.branch;
+          branchEdited = applied.branchEdited;
+        }
         fillSuggestedBranch();
-        startBranch =
-          preferredStartBranch &&
-          value.branches.some((item) => item.name === preferredStartBranch)
-            ? preferredStartBranch
-            : value.defaultBranch || "";
+        startBranch = resolveInitialStartBranch(
+          value,
+          remoteBranches,
+          initial,
+          preferredStartBranch,
+        );
         if (mode === "new") chooseStartBranch(startBranch);
       })
-      .catch((err) => {
-        if (active) error = errorMessage(err);
-      })
-      .finally(() => {
-        if (active) loading = false;
-      });
+      .catch((err) => active && (error = errorMessage(err)))
+      .finally(() => active && (loading = false));
     return () => {
       active = false;
       clearRefresh();
@@ -273,35 +278,43 @@
         ? `${data.defaultParent}/${branch.split("/").at(-1) || ""}`
         : "";
   });
+  const mappedLocalBranches = $derived(
+    (data?.branches ?? []).map((item) => ({ name: item.name })),
+  );
+  const mappedExistingBranches = $derived(
+    (data?.branches ?? []).map((item) => ({
+      name: item.name,
+      reason: item.worktreePaths.length ? "已被工作树占用" : undefined,
+    })),
+  );
+  function handleModeChange(next: string | undefined) {
+    if (next === "new" && mode !== "new") {
+      mode = "new";
+      setBranchPickerOpen(false);
+      setStartBranchPickerOpen(false);
+      branchEdited = false;
+      branch = "";
+      fillSuggestedBranch();
+      chooseStartBranch(startBranch);
+    } else if (next === "existing" && mode !== "existing") {
+      mode = "existing";
+      setStartBranchPickerOpen(false);
+      clearRefresh();
+      clearCommits();
+      baseSource = "";
+      branch = "";
+    }
+  }
   const ready = $derived(
     !!data && !loading && !!branch && !!path && (mode === "existing" || !!base),
   );
-  export function isReady() {
-    return ready;
-  }
+  export const isReady = () => ready;
 </script>
 
 <div class="space-y-3 rounded-lg border p-3">
   <SegmentedControl.Root
     value={mode}
-    onValueChange={(next) => {
-      if (next === "new" && mode !== "new") {
-        mode = "new";
-        setBranchPickerOpen(false);
-        setStartBranchPickerOpen(false);
-        branchEdited = false;
-        branch = "";
-        fillSuggestedBranch();
-        chooseStartBranch(startBranch);
-      } else if (next === "existing" && mode !== "existing") {
-        mode = "existing";
-        setStartBranchPickerOpen(false);
-        clearRefresh();
-        clearCommits();
-        baseSource = "";
-        branch = "";
-      }
-    }}
+    onValueChange={handleModeChange}
     aria-label="工作树分支"
   >
     <SegmentedControl.Item value="new">创建新分支</SegmentedControl.Item>
@@ -353,9 +366,7 @@
           {/snippet}
           <BranchCommandList
             label="起始分支"
-            branches={(data?.branches ?? []).map((item) => ({
-              name: item.name,
-            }))}
+            branches={mappedLocalBranches}
             remoteBranches={remoteBranches.map((item) => ({ name: item.name }))}
             selected={startBranch}
             {loading}
@@ -411,17 +422,14 @@
             variant="outline"
             size="sm"
             disabled={!data || loading}
-            onclick={() => {
-              branch = suggestedBranch(branch || undefined);
-            }}>换一个</Button
+            onclick={() => (branch = suggestedBranch(branch || undefined))}
+            >换一个</Button
           >
         </div>
         <Input
           id="worktree-branch"
           bind:value={branch}
-          oninput={() => {
-            branchEdited = true;
-          }}
+          oninput={() => (branchEdited = true)}
           required
           placeholder="feature/my-task"
           autocomplete="off"
@@ -454,19 +462,13 @@
         {/snippet}
         <BranchCommandList
           label="已有本地分支"
-          branches={(data?.branches ?? []).map((item) => ({
-            name: item.name,
-            reason: item.worktreePaths.length ? "已被工作树占用" : undefined,
-          }))}
+          branches={mappedExistingBranches}
           selected={branch}
           {loading}
           failed={!!error}
           {disabled}
           bind:search={branchSearch}
-          onselect={(name) => {
-            branch = name;
-            setBranchPickerOpen(false);
-          }}
+          onselect={(name) => ((branch = name), setBranchPickerOpen(false))}
         />
       </PickerField>
     </div>
@@ -483,9 +485,7 @@
     commitsCount={commits.length}
     {commitsLoading}
     {commitsError}
-    onpathedited={() => {
-      pathEdited = true;
-    }}
+    onpathedited={() => (pathEdited = true)}
     onbaseedited={() => {
       baseEditVersion += 1;
       baseSource = "";

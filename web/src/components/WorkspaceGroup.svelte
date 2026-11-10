@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ArchivedSession, SessionInfo, Worktree } from "../schemas";
   import type { ArchiveActions } from "../archived";
+  import type { BranchOperation } from "../branch-actions";
   import IconFolder from "~icons/tabler/folder";
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconPlus from "~icons/tabler/plus";
@@ -26,12 +27,15 @@
     onclose,
     onstart,
     onremove,
+    onswitch,
     pinned,
     ontogglepin,
     archived = [],
     archive,
     detailsOpen,
     ondetailschange,
+    lastFetchedAt,
+    onoperation,
   }: {
     title: string;
     path?: string;
@@ -48,6 +52,8 @@
     onclose: (session: SessionInfo) => void;
     onstart?: () => void;
     onremove?: () => void;
+    /** Opens the switch of the worktree's branch. */
+    onswitch?: () => void;
     // Undefined outside curated repository lists.
     pinned?: boolean;
     ontogglepin?: () => void;
@@ -58,6 +64,10 @@
     /** Set by the page header while focused; otherwise the group owns it. */
     detailsOpen?: boolean;
     ondetailschange?: (open: boolean) => void;
+    /** The repository's last fetch, shown in the worktree details. */
+    lastFetchedAt?: string | null;
+    /** Starts a sync action of the worktree's branch (menu and details). */
+    onoperation?: (operation: BranchOperation) => void;
   } = $props();
   let localOpen = $state(false);
   const visible = $derived(
@@ -138,7 +148,10 @@
           {hidden}
           {pinned}
           {ontogglepin}
+          {onswitch}
           {onremove}
+          {worktree}
+          {onoperation}
         />
       </div>
       {@render notices()}
@@ -190,8 +203,10 @@
     {#snippet children(page)}<page.default
         {title}
         path={groupPath}
+        {lastFetchedAt}
         {worktree}
         sessions={visible}
+        {onoperation}
         onclose={() => setDetails(false)}
       />{/snippet}
   </LazyDialog>

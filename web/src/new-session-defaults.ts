@@ -18,10 +18,22 @@ import {
 
 type ChosenLaunchConfig = LaunchConfig | LaunchConfigSummary;
 
+/**
+ * Initial values of the new-worktree fields; later edits work as usual.
+ * "existing" selects `branch`; "new" starts from `startBranch` (a local or
+ * remote-tracking branch) with the new branch named `name`.
+ */
+export type WorktreePreset = {
+  mode: "new" | "existing";
+  branch?: string;
+  startBranch?: string;
+  name?: string;
+};
+
 /** The contextual entry the new-session dialog was opened from, if any. */
 export type LaunchEntry =
   | { kind: "worktree"; repositoryId: string; worktreeId: string }
-  | { kind: "new-worktree"; repositoryId: string }
+  | { kind: "new-worktree"; repositoryId: string; preset?: WorktreePreset }
   | { kind: "directory"; cwd: string; workspace: SessionInfo["workspace"] };
 
 /**
@@ -69,13 +81,9 @@ export function resolveLaunchScope(input: {
   if (entry?.kind === "new-worktree")
     return { repositoryId: entry.repositoryId };
   if (entry || !input.home) return undefined;
-  const repository = input.repositories.find(
-    (repo) => repo.id === input.choice,
-  );
+  const repository = input.repositories.find((r) => r.id === input.choice);
   if (!repository) return undefined;
-  const tree = repository.worktrees.find(
-    (item) => item.id === input.worktreeId,
-  );
+  const tree = repository.worktrees.find((w) => w.id === input.worktreeId);
   return tree
     ? { repositoryId: repository.id, worktreeId: tree.id }
     : { repositoryId: repository.id };
@@ -347,15 +355,11 @@ export async function submitNewSessionRequest(
   }
   if (result.worktree) input.adoptTree(result.worktree);
   const session = result.session;
-  store(
-    "recentDirs",
-    JSON.stringify(
-      [session.cwd, ...input.recent.filter((p) => p !== session.cwd)].slice(
-        0,
-        10,
-      ),
-    ),
-  );
+  const recent = [
+    session.cwd,
+    ...input.recent.filter((p) => p !== session.cwd),
+  ].slice(0, 10);
+  store("recentDirs", JSON.stringify(recent));
   store(
     "lastLaunch",
     input.chosenConfig ? `config:${input.chosenConfig.id}` : "custom",
@@ -389,9 +393,8 @@ export function resolveFallbackAfterWorktreeRemoved(
   worktreeId: string,
   removedTree: Worktree,
 ): { kind: TargetKind; worktreeId: string } {
-  if (kind !== "worktree" || worktreeId !== removedTree.id) {
+  if (kind !== "worktree" || worktreeId !== removedTree.id)
     return { kind, worktreeId };
-  }
   const main = repositories
     .find((r) => r.id === removedTree.repositoryId)
     ?.worktrees.find((w) => w.kind === "main");
@@ -417,11 +420,10 @@ export function formatLocationSummaryText(
   branch: string,
 ): string {
   if (kind === "directory") return cwd.trim();
-  if (kind === "worktree") {
+  if (kind === "worktree")
     return worktree
       ? `${repository?.name ?? ""} · ${worktreeLabel(worktree)}`
       : "";
-  }
   return `${repository?.name ?? ""} 的新工作树 ${branch}`;
 }
 
@@ -432,14 +434,12 @@ export function resolveInstructionRepository(
   repositories: readonly Repository[],
   repository: Repository | undefined,
 ): Repository | undefined {
-  if (kind === "directory") {
-    const id =
-      entryDirectory?.workspace && cwd === entryDirectory.cwd
-        ? entryDirectory.workspace.repositoryId
-        : "";
-    return repositories.find((r) => r.id === id);
-  }
-  return repository;
+  if (kind !== "directory") return repository;
+  const id =
+    entryDirectory?.workspace && cwd === entryDirectory.cwd
+      ? entryDirectory.workspace.repositoryId
+      : "";
+  return repositories.find((r) => r.id === id);
 }
 
 export function validateNewSessionSubmit(
@@ -447,12 +447,10 @@ export function validateNewSessionSubmit(
   kind: TargetKind,
   commandReady: boolean,
 ): string | null {
-  if (onlyTree && kind !== "new-worktree") {
+  if (onlyTree && kind !== "new-worktree")
     return "请将位置选为新建工作树，或勾选创建后启动会话。";
-  }
-  if (!onlyTree && !commandReady) {
+  if (!onlyTree && !commandReady)
     return "请选择有效启动配置，或输入可执行程序及参数。";
-  }
   return null;
 }
 
@@ -484,9 +482,17 @@ export function resolvePreferredStartBranch(
   fieldsRepository: Repository | undefined,
   scopeWorktreeId: string | undefined,
 ): string | undefined {
-  if (!fieldsRepository || !scopeWorktreeId) return undefined;
   return (
-    fieldsRepository.worktrees.find((tree) => tree.id === scopeWorktreeId)
-      ?.branch ?? undefined
+    fieldsRepository?.worktrees.find((t) => t.id === scopeWorktreeId)?.branch ??
+    undefined
   );
+}
+
+export function resolveEntryPreset(
+  entry: LaunchEntry | undefined,
+  repositoryId: string,
+): WorktreePreset | undefined {
+  return entry?.kind === "new-worktree" && entry.repositoryId === repositoryId
+    ? entry.preset
+    : undefined;
 }

@@ -130,6 +130,9 @@ const groups: Array<[z.ZodType, string[]]> = [
   ],
   [S.BranchesSchema, ["repository-branches"]],
   [S.CommitsSchema, ["repository-commits"]],
+  [S.RemotesSchema, ["repository-remotes", "repository-remotes-empty"]],
+  [S.FetchRemotesResponseSchema, ["repository-fetch"]],
+  [S.SwitchPreviewSchema, ["worktree-switch-preview"]],
   [S.RefreshBranchBaseResponseSchema, ["repository-branch-refresh"]],
   [
     S.RepositorySchema,
@@ -193,6 +196,7 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.ReleasePreviewSchema, ["worktree-release-preview"]],
   [S.WorktreeUsageSchema, ["worktree-usage"]],
   [S.ReleaseResultSchema, ["worktree-release"]],
+  [S.SwitchPreviewSchema, ["worktree-switch-preview"]],
   [S.RebuildPreviewSchema, ["hybrid-rebuild-preview"]],
   [
     S.SessionEventSchema,
@@ -239,6 +243,12 @@ const groups: Array<[z.ZodType, string[]]> = [
       "ws-terminal-submission-written",
     ],
   ],
+  // add-branch-sync-actions
+  [S.FastForwardPreviewSchema, ["branch-fast-forward-preview"]],
+  [S.PushPreviewSchema, ["branch-push-preview"]],
+  [S.PushResultSchema, ["branch-push"]],
+  [S.BranchDeletePreviewSchema, ["branch-delete-preview"]],
+  [S.BranchDeleteResultSchema, ["branch-delete"]],
 ];
 const snapshotSchemas = new Map<string, z.ZodType>();
 for (const [schema, names] of groups)

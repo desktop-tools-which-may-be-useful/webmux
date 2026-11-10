@@ -12,14 +12,18 @@ import (
 	"github.com/rainchan/webmux/internal/session"
 )
 
-// purpose keeps removal and release confirmations apart: one cannot
-// execute the other.
+// purpose keeps the confirmations of different operations apart: one
+// cannot execute another.
 type purpose string
 
 const (
-	purposeRemove      purpose = "remove"
-	purposeRelease     purpose = "release"
-	purposeBatchRemove purpose = "batch-remove"
+	purposeRemove       purpose = "remove"
+	purposeRelease      purpose = "release"
+	purposeBatchRemove  purpose = "batch-remove"
+	purposeSwitch       purpose = "switch"
+	purposeFastForward  purpose = "fast-forward"
+	purposePush         purpose = "push"
+	purposeBranchDelete purpose = "branch-delete"
 )
 
 type batchTarget struct {
@@ -39,7 +43,14 @@ type confirmation struct {
 	// commit is the commit the preview resolved, empty when HEAD does not
 	// resolve.
 	commit string
-	timer  *time.Timer
+	// switching is what a switch preview bound.
+	switching *switchState
+	// fastForward, push and branchDelete are what the branch operation
+	// previews bound.
+	fastForward  *fastForwardState
+	push         *pushState
+	branchDelete []branchDeleteTarget
+	timer        *time.Timer
 }
 
 func (c *confirmation) closeHandles() {

@@ -3,6 +3,7 @@
 // it did and how recent it is instead of typing a hash.
 import { api } from "./api";
 import { errorMessage } from "./error";
+import type { WorktreePreset } from "./new-session-defaults";
 import {
   BranchesSchema,
   CommitsSchema,
@@ -150,4 +151,111 @@ export function fetchRepositoryBranches(
 
 export function formatCommitLoadError(err: unknown) {
   return `无法读取最近提交：${errorMessage(err)}`;
+}
+
+export function resolveRefreshedLocalHead(
+  value: z.infer<typeof RefreshBranchBaseResponseSchema>,
+  data: z.infer<typeof BranchesSchema> | null,
+  branchName: string,
+): string {
+  if (value.baseSource === "local") return value.base;
+  return data?.branches.find((item) => item.name === branchName)?.head ?? "";
+}
+
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
+export function resolveSelectedStartBranchState(
+  name: string,
+  data: z.infer<typeof BranchesSchema> | null,
+  remoteBranches: readonly { name: string; head: string; subject: string }[],
+):
+  | {
+      kind: "local";
+      base: string;
+      baseSubject: string;
+      tips: CommitTip[];
+    }
+  | {
+      kind: "remote";
+      base: string;
+      upstream: string;
+      baseSubject: string;
+      tips: CommitTip[];
+    }
+  | {
+      kind: "default";
+      base: string;
+      baseSubject: string;
+      tips: CommitTip[];
+    } {
+  const selected = data?.branches.find((item) => item.name === name);
+  if (selected) {
+    const baseSubject =
+      data?.bases.find((item) => item.name === `refs/heads/${name}`)?.subject ||
+      "";
+    return {
+      kind: "local",
+      base: selected.head,
+      baseSubject,
+      tips: branchTips(selected.head, ""),
+    };
+  }
+  const remote = remoteBranches.find((item) => item.name === name);
+  if (remote) {
+    return {
+      kind: "remote",
+      base: remote.head,
+      upstream: remote.name,
+      baseSubject: remote.subject,
+      tips: branchTips("", remote.head),
+    };
+  }
+  const base = data?.defaultBase || "";
+  return {
+    kind: "default",
+    base,
+    baseSubject: data?.defaultBaseSubject || "",
+    tips: base ? [{ hash: base, tag: "当前主工作区" }] : [],
+  };
+}
+export function resolveWorktreePresetSelection(
+  initial: WorktreePreset,
+  value: z.infer<typeof BranchesSchema>,
+): { branch: string; branchEdited: boolean } | null {
+  if (initial.mode === "existing") {
+    const chosen = value.branches.find((item) => item.name === initial.branch);
+    if (chosen && !chosen.worktreePaths.length) {
+      return { branch: chosen.name, branchEdited: false };
+    }
+    return null;
+  }
+  if (initial.name) {
+    return { branch: initial.name, branchEdited: true };
+  }
+  return null;
+}
+
+export function resolveInitialStartBranch(
+  value: z.infer<typeof BranchesSchema>,
+  remoteBranches: readonly { name: string }[],
+  initial: WorktreePreset | undefined,
+  preferredStartBranch: string | undefined,
+): string {
+  const start = initial?.mode === "new" ? initial.startBranch : "";
+  if (
+    start &&
+    (value.branches.some((item) => item.name === start) ||
+      remoteBranches.some((item) => item.name === start))
+  ) {
+    return start;
+  }
+  if (
+    preferredStartBranch &&
+    value.branches.some((item) => item.name === preferredStartBranch)
+  ) {
+    return preferredStartBranch;
+  }
+  return value.defaultBranch || "";
 }

@@ -5,7 +5,8 @@ import WorkbenchTree, {
   workbenchTree,
   type TreeNode,
 } from "../../src/components/WorkbenchTree.svelte";
-import type { SessionInfo } from "../../src/schemas";
+import type { BranchOperation } from "../../src/branch-actions";
+import type { Repository, SessionInfo } from "../../src/schemas";
 import { chat, record, repository, session, worktree } from "./shell-fixture";
 
 afterEach(async () => {
@@ -45,7 +46,16 @@ const inOtter = {
 
 function renderTree(
   sessions: SessionInfo[],
-  props: Partial<{ current: string; scope: string; canCreate: boolean }> = {},
+  props: Partial<{
+    current: string;
+    scope: string;
+    canCreate: boolean;
+    repositories: Repository[];
+    onbranchoperation: (
+      repositoryId: string,
+      operation: BranchOperation,
+    ) => void;
+  }> = {},
 ) {
   const handlers = {
     onscope: vi.fn(),
@@ -53,13 +63,15 @@ function renderTree(
     onnewworktree: vi.fn(),
     onmanageworktrees: vi.fn(),
     onremoveworktree: vi.fn(),
+    onworktreedetails: vi.fn(),
+    onswitchbranch: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
     onremove: vi.fn(),
   };
   render(WorkbenchTree, {
-    repositories: [webmux, legacy],
+    repositories: props.repositories ?? [webmux, legacy],
     sessions,
     records: [],
     // Both worktrees are on the home page.
@@ -68,6 +80,7 @@ function renderTree(
     current: props.current ?? "",
     canCreate: props.canCreate ?? true,
     configIcons: new Map(),
+    onbranchoperation: props.onbranchoperation,
     ...handlers,
   });
   return handlers;
@@ -190,20 +203,108 @@ test("each available repository offers new-worktree and manage-worktrees actions
   );
 });
 
-test("a linked worktree row offers a delete button; the main worktree does not", async () => {
+test("a linked worktree's menu offers its details, a branch switch and removal", async () => {
   const handlers = renderTree([]);
   await expect
     .element(item("webmux"))
     .toHaveAttribute("aria-expanded", "false");
   await tree().getByRole("button", { name: "展开webmux" }).click();
   await expect.element(item("wt/brisk-otter")).toBeVisible();
-  expect(
-    tree().getByRole("button", { name: "删除工作树 main" }).elements(),
-  ).toEqual([]);
   await tree()
-    .getByRole("button", { name: "删除工作树 wt/brisk-otter" })
+    .getByRole("button", { name: "工作树操作：wt/brisk-otter" })
     .click();
+  expect(
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim()),
+  ).toEqual(["工作树详情…", "切换分支…", "删除 worktree…"]);
+  await page.getByRole("menuitem", { name: "删除 worktree…" }).click();
   expect(handlers.onremoveworktree).toHaveBeenCalledWith("repo1", "otter");
+
+  await tree()
+    .getByRole("button", { name: "工作树操作：wt/brisk-otter" })
+    .click();
+  await page.getByRole("menuitem", { name: "工作树详情…" }).click();
+  expect(handlers.onworktreedetails).toHaveBeenCalledWith("repo1", "otter");
+
+  await tree()
+    .getByRole("button", { name: "工作树操作：wt/brisk-otter" })
+    .click();
+  await page.getByRole("menuitem", { name: "切换分支…" }).click();
+  expect(handlers.onswitchbranch).toHaveBeenCalledWith("repo1", "otter");
+});
+
+test("the main worktree's menu has no removal", async () => {
+  const handlers = renderTree([]);
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  await tree().getByRole("button", { name: "工作树操作：main" }).click();
+  expect(
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim()),
+  ).toEqual(["工作树详情…", "切换分支…"]);
+  await page.getByRole("menuitem", { name: "工作树详情…" }).click();
+  expect(handlers.onworktreedetails).toHaveBeenCalledWith("repo1", "main");
+});
+
+test("bare, missing and prunable worktrees offer no branch switch", async () => {
+  renderTree([], {
+    repositories: [
+      repository({
+        worktrees: [
+          worktree({ kind: "bare", branch: null, path: "/repos/webmux.git" }),
+          worktree({
+            id: "otter",
+            kind: "linked",
+            branch: "wt/gone",
+            path: "/repos/webmux.worktrees/gone",
+            available: false,
+            prunable: true,
+          }),
+        ],
+      }),
+    ],
+  });
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  for (const name of ["工作树操作：Bare 仓库", "工作树操作：wt/gone"]) {
+    await tree().getByRole("button", { name }).click();
+    await expect
+      .element(page.getByRole("menuitem", { name: "工作树详情…" }))
+      .toBeVisible();
+    expect(
+      page.getByRole("menuitem", { name: "切换分支…" }).elements(),
+    ).toEqual([]);
+    await userEvent.keyboard("{Escape}");
+  }
+});
+
+test("a worktree row shows commits ahead of its upstream, named as on the home page", async () => {
+  renderTree([], {
+    repositories: [
+      repository({
+        worktrees: [
+          worktree({ upstream: "origin/main", ahead: 0, behind: 0 }),
+          worktree({
+            id: "otter",
+            kind: "linked",
+            branch: "wt/brisk-otter",
+            path: "/repos/webmux.worktrees/brisk-otter",
+            upstream: "origin/wt/brisk-otter",
+            ahead: 3,
+            behind: 0,
+          }),
+        ],
+      }),
+    ],
+  });
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  await expect
+    .element(tree().getByRole("img", { name: "领先上游 3 个提交" }))
+    .toBeVisible();
+  // The synced main worktree shows no indicator.
+  expect(tree().getByRole("img").elements()).toHaveLength(1);
 });
 
 test("folded nodes keep waiting counts, and folds survive a remount", async () => {
@@ -307,6 +408,7 @@ test("folder folds reset when live session contents change, without auto-expandi
     onmanageworktrees: vi.fn(),
     onrepositorydetails: vi.fn(),
     onremoveworktree: vi.fn(),
+    onworktreedetails: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
@@ -532,4 +634,51 @@ test("the current archived record opens its path, and resuming marks the row bus
   await expect
     .element(item("已释放的聊天（已释放空间，已结束）"))
     .toBeDisabled();
+});
+
+test("a worktree's menu offers its branch's sync actions by state", async () => {
+  const onbranchoperation = vi.fn();
+  const synced = { upstream: "origin/x", ahead: 0, behind: 0 };
+  renderTree([], {
+    onbranchoperation,
+    repositories: [
+      repository({
+        worktrees: [
+          worktree({ ...synced, upstream: "origin/main", behind: 2 }),
+          worktree({
+            ...synced,
+            id: "otter",
+            kind: "linked",
+            branch: "wt/brisk-otter",
+            path: "/repos/webmux.worktrees/brisk-otter",
+            ahead: 1,
+          }),
+        ],
+      }),
+    ],
+  });
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  const items = () =>
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim());
+  for (const [name, expected] of [
+    ["main", ["工作树详情…", "切换分支…", "快进到上游"]],
+    ["wt/brisk-otter", ["工作树详情…", "切换分支…", "推送…", "删除 worktree…"]],
+  ] as const) {
+    await tree()
+      .getByRole("button", { name: `工作树操作：${name}` })
+      .click();
+    await expect.element(page.getByRole("menuitem").first()).toBeVisible();
+    expect(items()).toEqual(expected);
+    await userEvent.keyboard("{Escape}");
+    await expect.poll(() => items()).toEqual([]);
+  }
+  await tree().getByRole("button", { name: "工作树操作：main" }).click();
+  await page.getByRole("menuitem", { name: "快进到上游" }).click();
+  expect(onbranchoperation).toHaveBeenCalledWith("repo1", {
+    kind: "fast-forward",
+    branch: "main",
+  });
 });

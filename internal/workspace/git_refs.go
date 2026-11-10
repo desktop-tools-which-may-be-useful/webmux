@@ -15,28 +15,43 @@ import (
 
 func (s *Service) branches(ctx context.Context, r *repositoryState, repository Repository) (Branches, error) {
 	result := Branches{Branches: []Branch{}, Bases: []Base{}, DefaultParent: filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")}
-	data, err := s.git(ctx, r.entry.AnchorPath, "for-each-ref", "--sort=-committerdate", "--format=%(refname)%00%(objectname)%00%(subject)%00", "refs/heads/", "refs/remotes/")
+	data, err := s.git(ctx, r.entry.AnchorPath, "for-each-ref", "--sort=-committerdate",
+		"--format=%(refname)%00%(objectname)%00%(subject)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(committerdate:iso-strict)%00",
+		"refs/heads/", "refs/remotes/")
 	if err != nil {
 		return result, err
 	}
+	merged, err := s.mergedIntoDefault(ctx, r.entry.AnchorPath, repository)
+	if err != nil {
+		return result, err
+	}
+	const refFields = 6
 	fields := bytes.Split(data, []byte{0})
-	for i := 0; i+2 < len(fields); i += 3 {
+	for i := 0; i+refFields-1 < len(fields); i += refFields {
 		ref := strings.TrimPrefix(string(fields[i]), "\n")
 		head := string(fields[i+1])
+		subject := string(fields[i+2])
+		committedAt := string(fields[i+5])
 		if ref == "" {
 			continue
 		}
-		name := strings.TrimPrefix(ref, "refs/heads/")
-		if strings.HasPrefix(ref, "refs/heads/") {
-			branch := Branch{Name: name, Head: head, WorktreePaths: []string{}}
+		kind := "remote"
+		if name, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			kind = "local"
+			branch := Branch{Name: name, Head: head, WorktreePaths: []string{}, Subject: subject, CommittedAt: committedAt}
+			if upstream := string(fields[i+3]); upstream != "" {
+				branch.Upstream = &upstream
+				branch.Ahead, branch.Behind, branch.UpstreamGone = parseTrack(string(fields[i+4]))
+			}
 			for _, tree := range repository.Worktrees {
 				if tree.Branch != nil && *tree.Branch == name {
 					branch.WorktreePaths = append(branch.WorktreePaths, tree.Path)
 				}
 			}
+			branch.MergedIntoDefault = merged[ref]
 			result.Branches = append(result.Branches, branch)
 		}
-		result.Bases = append(result.Bases, Base{Name: ref, Head: head, Subject: string(fields[i+2])})
+		result.Bases = append(result.Bases, Base{Name: ref, Head: head, Subject: subject, Kind: kind, CommittedAt: committedAt})
 	}
 	for _, tree := range repository.Worktrees {
 		if tree.Kind == "main" && tree.Head != nil {
@@ -51,6 +66,7 @@ func (s *Service) branches(ctx context.Context, r *repositoryState, repository R
 	}
 	return result, nil
 }
+
 func (s *Service) Branches(ctx context.Context, id string) (Branches, error) {
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
@@ -134,13 +150,11 @@ func (s *Service) RecentCommits(ctx context.Context, id string, from []string) (
 		}
 	}
 	if len(missing) > 0 {
-		args := append([]string{"log", "--no-walk=unsorted", "--no-show-signature",
-			"--format=%H%x00%s%x00%an%x00%cI%x00"}, missing...)
-		extra, err := s.git(ctx, r.entry.AnchorPath, append(args, "--")...)
+		extra, err := s.describeCommits(ctx, r.entry.AnchorPath, missing)
 		if err != nil {
 			return nil, err
 		}
-		commits = append(commits, parseCommitLog(extra)...)
+		commits = append(commits, extra...)
 		sort.SliceStable(commits, func(i, j int) bool {
 			return commitTime(commits[i].CommittedAt).After(commitTime(commits[j].CommittedAt))
 		})

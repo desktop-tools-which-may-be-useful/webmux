@@ -2,6 +2,8 @@
   import IconDots from "~icons/tabler/dots";
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import type { BranchOperation } from "../branch-actions";
+  import type { Worktree } from "../schemas";
   import RepositoryMenuItems from "./RepositoryMenuItems.svelte";
   import WorktreeMenuItems from "./WorktreeMenuItems.svelte";
 
@@ -29,9 +31,13 @@
     worktree?: {
       title: string;
       ondetails: () => void;
+      onswitch?: () => void;
       pinned: boolean;
       ontogglepin: () => void;
       onremove?: () => void;
+      /** With `onoperation`, adds its branch's sync actions. */
+      tree?: Worktree;
+      onoperation?: (operation: BranchOperation) => void;
     };
   } = $props();
   const label = $derived(`仓库菜单：${repository}`);
@@ -62,13 +68,14 @@
     {#if worktree}
       <DropdownMenu.Separator />
       <DropdownMenu.Label>{worktree.title}</DropdownMenu.Label>
-      <DropdownMenu.Item onSelect={worktree.ondetails}
-        >工作树详情…</DropdownMenu.Item
-      >
       <WorktreeMenuItems
+        ondetails={worktree.ondetails}
+        onswitch={worktree.onswitch}
         pinned={worktree.pinned}
         ontogglepin={worktree.ontogglepin}
         onremove={worktree.onremove}
+        worktree={worktree.tree}
+        onoperation={worktree.onoperation}
       />
     {/if}
   </DropdownMenu.Content>

@@ -126,6 +126,7 @@ function repository(id: string, worktreeIds: string[]): Repository {
     availability: "available",
     error: "",
     checkedAt: "2026-10-20T00:00:00Z",
+    lastFetchedAt: null,
     initInstruction: "",
     worktrees: worktreeIds.map(
       (worktreeId) => ({ id: worktreeId }) as Worktree,

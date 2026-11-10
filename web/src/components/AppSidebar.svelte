@@ -79,6 +79,15 @@
       forgetRecords: [record],
     });
   }
+  // Runs a worktree action of the tree, by the IDs its rows carry.
+  function withTree(action: (tree: Worktree) => void) {
+    return (repositoryId: string, worktreeId: string) => {
+      const tree = shell.repositories.list
+        .find((r) => r.id === repositoryId)
+        ?.worktrees.find((w) => w.id === worktreeId);
+      if (tree) action(tree);
+    };
+  }
   // The worktree is already gone when this runs; a failed record deletion
   // leaves a released record behind, which the user can delete again.
   async function forgetAfterWorktree(record: ArchivedSession) {
@@ -262,7 +271,7 @@
             const repo = shell.repositories.list.find(
               (r) => r.id === repositoryId,
             );
-            if (repo) shell.manageWorktrees(repo);
+            if (repo) shell.repositoryDetails(repo, "worktrees");
           }}
           onrepositorydetails={(repositoryId) => {
             const repo = shell.repositories.list.find(
@@ -270,12 +279,10 @@
             );
             if (repo) shell.repositoryDetails(repo);
           }}
-          onremoveworktree={(repositoryId, worktreeId) => {
-            const tree = shell.repositories.list
-              .find((r) => r.id === repositoryId)
-              ?.worktrees.find((w) => w.id === worktreeId);
-            if (tree) shell.removeWorktree(tree);
-          }}
+          onworktreedetails={withTree((tree) => shell.worktreeDetails(tree))}
+          onremoveworktree={withTree((tree) => shell.removeWorktree(tree))}
+          onswitchbranch={withTree((tree) => shell.switchBranch(tree))}
+          onbranchoperation={shell.branchOperation}
           onrename={shell.rename}
           onclose={shell.close}
           records={shell.archived.records}

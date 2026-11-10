@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Worktree } from "../schemas";
   import { Badge } from "$lib/components/ui/badge";
+  import { syncNotable } from "../worktree-sync";
+  import WorktreeSyncSummary from "./WorktreeSyncSummary.svelte";
 
   // Undefined `pinned` means the list is not curated (no pin badge).
   let { worktree, pinned }: { worktree: Worktree; pinned?: boolean } = $props();
@@ -11,7 +13,8 @@
       worktree.prunable ||
       !worktree.available ||
       worktree.dirty !== false ||
-      worktree.hasUntracked,
+      worktree.hasUntracked ||
+      syncNotable(worktree),
   );
 </script>
 
@@ -28,5 +31,6 @@
     {:else if worktree.dirty}<Badge variant="warning">有修改</Badge>
     {/if}
     {#if worktree.hasUntracked}<Badge variant="outline">未跟踪文件</Badge>{/if}
+    <WorktreeSyncSummary {worktree} variant="indicator" />
   </div>
 {/if}

@@ -1,18 +1,38 @@
 import { z } from "zod";
 import {
-  AgentConnectorSchema,
   ChatAttachmentSchema,
   ChatConfigSchema,
   ChatPermissionModeSchema,
   SessionViewSchema,
 } from "./chat-schemas";
-import {
-  AttentionSettingsSchema,
-  ForwardSchema,
-  PreviewSettingsSchema,
-  SessionInfoSchema,
-} from "./session-schemas";
+import { ForwardSchema, SessionInfoSchema } from "./session-schemas";
 
+// One commit: a worktree's last commit or a start point offered for a new
+// worktree.
+export const CommitSchema = z.object({
+  hash: z.string(),
+  subject: z.string(),
+  author: z.string(),
+  committedAt: z.string(),
+});
+export type Commit = z.infer<typeof CommitSchema>;
+// Change counts of a worktree's status; one entry may be both staged and
+// unstaged.
+const WorktreeChangesSchema = z.object({
+  staged: z.number().int().nonnegative(),
+  unstaged: z.number().int().nonnegative(),
+  untracked: z.number().int().nonnegative(),
+  conflicted: z.number().int().nonnegative(),
+});
+export type WorktreeChanges = z.infer<typeof WorktreeChangesSchema>;
+const WorktreeOperationSchema = z.enum([
+  "merge",
+  "rebase",
+  "cherry-pick",
+  "revert",
+  "bisect",
+]);
+export type WorktreeOperation = z.infer<typeof WorktreeOperationSchema>;
 export const WorktreeSchema = z.object({
   id: z.string(),
   repositoryId: z.string(),
@@ -29,6 +49,16 @@ export const WorktreeSchema = z.object({
   hasUntracked: z.boolean(),
   hasIgnored: z.boolean(),
   error: z.string(),
+  // Null without an upstream; ahead and behind are also null when the
+  // upstream is gone or the counts were not computed.
+  upstream: z.string().nullable(),
+  ahead: z.number().int().nonnegative().nullable(),
+  behind: z.number().int().nonnegative().nullable(),
+  upstreamGone: z.boolean(),
+  lastCommit: CommitSchema.nullable(),
+  // Null when the status could not be read.
+  changes: WorktreeChangesSchema.nullable(),
+  operation: WorktreeOperationSchema.nullable(),
 });
 export type Worktree = z.infer<typeof WorktreeSchema>;
 // The longest repository init instruction the server accepts, in characters.
@@ -41,6 +71,8 @@ export const RepositorySchema = z.object({
   availability: z.enum(["available", "unavailable"]),
   error: z.string(),
   checkedAt: z.iso.datetime({ offset: true }),
+  // Newest FETCH_HEAD change in the repository; approximate, null if never.
+  lastFetchedAt: z.iso.datetime({ offset: true }).nullable(),
   // Quick start puts it before the first message; "" when unset.
   initInstruction: z.string(),
   worktrees: z.array(WorktreeSchema),
@@ -67,18 +99,6 @@ export const CreateSessionResultSchema = z.object({
   worktree: WorktreeSchema.optional(),
   configWarnings: z.array(z.string()),
 });
-// The body of a failed POST /sessions: the step that failed and what earlier
-// steps left behind, which is never removed automatically.
-export const CreateSessionFailureSchema = z.object({
-  error: z.string(),
-  step: z.enum(["precheck", "worktree", "session", "config", "prompt"]),
-  reason: z.string().optional(),
-  eligibility: z.string().optional(),
-  connector: AgentConnectorSchema.optional(),
-  worktree: WorktreeSchema.optional(),
-  sessionId: z.string().optional(),
-});
-export type CreateSessionFailure = z.infer<typeof CreateSessionFailureSchema>;
 
 // Server-synchronized choice of worktrees shown on the home page, keyed by
 // repository ID. A repository without an entry was never curated.
@@ -87,32 +107,67 @@ export const HomeWorktreesSchema = z.record(
   z.array(z.string().min(1)).max(1000),
 );
 export type HomeWorktrees = z.infer<typeof HomeWorktreesSchema>;
+const UpstreamFields = {
+  upstream: z.string().nullable(),
+  ahead: z.number().int().nonnegative().nullable(),
+  behind: z.number().int().nonnegative().nullable(),
+  upstreamGone: z.boolean(),
+};
+const BranchSchema = z.object({
+  name: z.string(),
+  head: z.string(),
+  worktreePaths: z.array(z.string()),
+  subject: z.string(),
+  committedAt: z.string(),
+  ...UpstreamFields,
+  // The main worktree's HEAD contains the branch; false for a bare or
+  // unborn main worktree.
+  mergedIntoDefault: z.boolean(),
+});
+export type Branch = z.infer<typeof BranchSchema>;
+const BranchBaseSchema = z.object({
+  name: z.string(),
+  head: z.string(),
+  subject: z.string(),
+  kind: z.enum(["local", "remote"]),
+  committedAt: z.string(),
+});
+export type BranchBase = z.infer<typeof BranchBaseSchema>;
 export const BranchesSchema = z.object({
-  branches: z.array(
-    z.object({
-      name: z.string(),
-      head: z.string(),
-      worktreePaths: z.array(z.string()),
-    }),
-  ),
-  bases: z.array(
-    z.object({ name: z.string(), head: z.string(), subject: z.string() }),
-  ),
+  branches: z.array(BranchSchema),
+  bases: z.array(BranchBaseSchema),
   defaultBase: z.string().nullable(),
   defaultBaseSubject: z.string(),
   defaultBranch: z.string().nullable(),
   defaultParent: z.string(),
 });
+export type Branches = z.infer<typeof BranchesSchema>;
 export const CommitsSchema = z.object({
-  commits: z.array(
-    z.object({
-      hash: z.string(),
-      subject: z.string(),
-      author: z.string(),
-      committedAt: z.string(),
-    }),
-  ),
+  commits: z.array(CommitSchema),
 });
+// GET /repositories/:id/remotes; URLs are redacted by the server.
+const RemoteSchema = z.object({
+  name: z.string(),
+  fetchUrl: z.string(),
+  pushUrl: z.string(),
+});
+export type Remote = z.infer<typeof RemoteSchema>;
+export const RemotesSchema = z.object({ remotes: z.array(RemoteSchema) });
+export type Remotes = z.infer<typeof RemotesSchema>;
+// POST /repositories/:id/fetch: one result per remote, sorted by name, and
+// the repository read again afterwards. `message` is "" for "ok" and
+// otherwise explains the failure with credentials redacted.
+export const FetchResultSchema = z.object({
+  remote: z.string(),
+  status: z.enum(["ok", "auth", "network", "timeout", "rejected", "error"]),
+  message: z.string(),
+});
+export type FetchResult = z.infer<typeof FetchResultSchema>;
+export const FetchRemotesResponseSchema = z.object({
+  results: z.array(FetchResultSchema),
+  repository: RepositorySchema,
+});
+export type FetchRemotesResponse = z.infer<typeof FetchRemotesResponseSchema>;
 export const RefreshBranchBaseRequestSchema = z.object({
   branch: z.string().min(1),
 });
@@ -266,6 +321,9 @@ export const RebuildRequestSchema = z.object({
   commit: z.string(),
 });
 
+// Launch configs are server-stored launch commands. Summaries (list) carry only
+// env variable names; the full config with values is fetched per id for edits.
+// A null preview inherits the browser's global preview setting.
 export const DirectoriesSchema = z.array(z.string());
 // `reason` accompanies push 409s; other errors omit it.
 export const ErrorSchema = z.object({
@@ -389,73 +447,3 @@ export const CreateSessionRequestSchema = z
     { message: "agentConfig 与 permissionMode 只用于聊天视图" },
   );
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
-
-// Whether a command can have a chat view, computed by the server from its
-// built-in agent profiles; reason is a stable code.
-export const ChatSupportSchema = z.object({
-  supported: z.boolean(),
-  // Display names of every agent the chat view supports.
-  supportedAgents: z.array(z.string()),
-  agent: z.string().optional(),
-  reason: z
-    .enum([
-      "unknown_agent",
-      "unsupported_form",
-      "session_store",
-      "directory_arg",
-      "non_interactive",
-      "session_arg",
-    ])
-    .optional(),
-  connector: AgentConnectorSchema.optional(),
-});
-export type ChatSupport = z.infer<typeof ChatSupportSchema>;
-
-// Launch configs are server-stored launch commands. Summaries (list) carry only
-// env variable names; the full config with values is fetched per id for edits.
-// A null preview inherits the browser's global preview setting.
-const launchConfigFields = {
-  id: z.string().regex(/^[a-z2-7]{8}$/),
-  name: z.string().min(1),
-  icon: z
-    .string()
-    .regex(/^[a-z][a-z0-9-]{0,63}$/)
-    .optional(),
-  cmd: z.array(z.string()).min(1),
-  preview: PreviewSettingsSchema.nullable().optional(),
-  attention: AttentionSettingsSchema.nullable().optional(),
-  chat: z.boolean(),
-  chatSupport: ChatSupportSchema,
-  createdAt: z.iso.datetime({ offset: true }),
-  updatedAt: z.iso.datetime({ offset: true }),
-};
-export const LaunchConfigSummarySchema = z.object({
-  ...launchConfigFields,
-  envNames: z.array(z.string()),
-  // The chat options the config's latest chat side reported, with their
-  // last values; [] until one has started.
-  chatOptions: z.array(ChatConfigSchema),
-});
-export type LaunchConfigSummary = z.infer<typeof LaunchConfigSummarySchema>;
-export const LaunchConfigSchema = z.object({
-  ...launchConfigFields,
-  env: z.record(z.string(), z.string()),
-});
-export type LaunchConfig = z.infer<typeof LaunchConfigSchema>;
-export const LaunchConfigsSchema = z
-  .array(LaunchConfigSummarySchema)
-  .max(100)
-  .refine(
-    (configs) =>
-      new Set(configs.map((config) => config.id)).size === configs.length,
-    "启动配置 ID 不能重复",
-  );
-const LaunchPresetSchema = z.object({
-  name: launchConfigFields.name,
-  icon: launchConfigFields.icon,
-  cmd: launchConfigFields.cmd,
-  envNames: z.array(z.string()),
-  chat: z.boolean(),
-});
-export type LaunchPreset = z.infer<typeof LaunchPresetSchema>;
-export const LaunchPresetsSchema = z.array(LaunchPresetSchema);

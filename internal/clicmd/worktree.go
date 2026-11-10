@@ -20,7 +20,7 @@ var worktreeArgument = Item{Name: "WORKTREE", Text: "A worktree of REPO: its ID,
 
 var worktreeGroup = &Command{
 	Name: "worktree", Group: GroupWorkspace,
-	Summary: "List, create and remove worktrees and choose which the home page shows.",
+	Summary: "List, create, switch and remove worktrees and choose which the home page shows.",
 }
 
 // repoAndClient connects and resolves a REPO argument.
@@ -78,7 +78,8 @@ func worktreeName(t contract.Worktree) string {
 	return "(no commits)"
 }
 
-// worktreeState summarizes availability, lock, prune and change flags.
+// worktreeState summarizes availability, lock, prune and change flags, and
+// the upstream comparison.
 func worktreeState(t contract.Worktree) string {
 	var parts []string
 	if !t.Available {
@@ -93,10 +94,71 @@ func worktreeState(t contract.Worktree) string {
 	if t.Dirty != nil && *t.Dirty || t.HasUntracked {
 		parts = append(parts, "changed")
 	}
+	if sync := upstreamSync(t.Upstream, t.Ahead, t.Behind, t.UpstreamGone); sync != "" {
+		parts = append(parts, sync)
+	}
 	if len(parts) == 0 {
 		return "-"
 	}
 	return strings.Join(parts, ",")
+}
+
+// upstreamSync compares a branch with its upstream: "+AHEAD/-BEHIND",
+// "+?/-?" when Git did not count, "gone" when the upstream ref is missing,
+// and "" without an upstream.
+func upstreamSync(upstream *string, ahead, behind *int, gone bool) string {
+	switch {
+	case upstream == nil:
+		return ""
+	case gone:
+		return "gone"
+	case ahead == nil || behind == nil:
+		return "+?/-?"
+	}
+	return fmt.Sprintf("+%d/-%d", *ahead, *behind)
+}
+
+// upstreamName is the worktree's upstream, "none", or "unknown" when its
+// status could not be read.
+func upstreamName(t contract.Worktree) string {
+	switch {
+	case t.Upstream == nil && t.Changes == nil:
+		return "unknown"
+	case t.Upstream == nil:
+		return "none"
+	case t.UpstreamGone:
+		return *t.Upstream + " (gone)"
+	}
+	return *t.Upstream
+}
+
+// changeCounts lists the non-zero change counts, "clean", or "unknown" when
+// the status could not be read.
+func changeCounts(c *contract.WorktreeChanges) string {
+	if c == nil {
+		return "unknown"
+	}
+	var parts []string
+	for _, count := range []struct {
+		n    int
+		name string
+	}{{c.Staged, "staged"}, {c.Unstaged, "unstaged"}, {c.Untracked, "untracked"}, {c.Conflicted, "conflicted"}} {
+		if count.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", count.n, count.name))
+		}
+	}
+	if len(parts) == 0 {
+		return "clean"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// commitLine is "HASH SUBJECT", or "-" without a commit.
+func commitLine(c *contract.Commit) string {
+	if c == nil {
+		return "-"
+	}
+	return shortHash(c.Hash) + " " + oneLine(c.Subject, 60)
 }
 
 var worktreeListCommand = &Command{
@@ -106,8 +168,9 @@ var worktreeListCommand = &Command{
 		"but shown because it has sessions or archived sessions) or hidden. A repository nobody curated shows only its " +
 		"main worktree.",
 	Arguments: []Item{repoArgument},
-	Output: "A table: REPO, ID, KIND, BRANCH, PATH, STATE, SESSIONS, HOME. With --json, the Repository array; each worktree " +
-		"also has home and sessions.",
+	Output: "A table: REPO, ID, KIND, BRANCH, PATH, STATE, SESSIONS, HOME. STATE ends with the comparison with the upstream: " +
+		"+AHEAD/-BEHIND, +?/-? when Git did not count it, gone when the upstream branch no longer exists, nothing without " +
+		"an upstream. With --json, the Repository array; each worktree also has home and sessions.",
 	Exit: exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names no registered repository."}),
 	Examples: []Example{
 		{Command: "webmux worktree ls .", Text: "List the current repository's worktrees."},
@@ -173,10 +236,12 @@ var worktreeListCommand = &Command{
 
 var worktreeShowCommand = &Command{
 	Name: "worktree show", Group: GroupWorkspace, Args: "REPO WORKTREE",
-	Summary:   "Show one worktree: every field, its home page state, its sessions and archived sessions.",
+	Summary: "Show one worktree: every field, its upstream, last commit and changes, its home page state, its sessions " +
+		"and archived sessions.",
 	Arguments: []Item{repoArgument, worktreeArgument},
-	Output:    "Aligned key-value lines and lists; with --json, {worktree, sessions, archived}.",
-	Exit:      exitsCommon(ExitItem{Code: 2, Text: "Also: REPO or WORKTREE names nothing."}),
+	Output: "Aligned key-value lines and lists; upstream is none without one and unknown when the status could not be " +
+		"read. With --json, {worktree, sessions, archived}.",
+	Exit: exitsCommon(ExitItem{Code: 2, Text: "Also: REPO or WORKTREE names nothing."}),
 	Examples: []Example{
 		{Command: "webmux worktree show . fix/lint", Text: "Inspect the worktree of a branch."},
 		{Command: "webmux worktree show . . --json", Text: "Inspect the worktree the current directory is in."},
@@ -212,10 +277,24 @@ var worktreeShowCommand = &Command{
 			if tree.Head != nil {
 				head = *tree.Head
 			}
+			sync := upstreamSync(tree.Upstream, tree.Ahead, tree.Behind, tree.UpstreamGone)
+			if sync == "gone" {
+				sync = ""
+			}
+			committed := ""
+			if tree.LastCommit != nil {
+				committed = tree.LastCommit.Author + ", " + tree.LastCommit.CommittedAt
+			}
+			operation := ""
+			if tree.Operation != nil {
+				operation = *tree.Operation + " in progress"
+			}
 			w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
 			for _, row := range [][2]string{
 				{"repository", repo.Name + " (" + repo.ID + ")"}, {"id", tree.ID}, {"path", tree.Path}, {"kind", tree.Kind},
 				{"branch", worktreeName(tree)}, {"head", head}, {"state", worktreeState(tree)}, {"home", view.Home},
+				{"upstream", upstreamName(tree)}, {"ahead/behind", sync}, {"last commit", commitLine(tree.LastCommit)},
+				{"committed", committed}, {"changes", changeCounts(tree.Changes)}, {"operation", operation},
 				{"lock reason", tree.LockReason}, {"error", tree.Error},
 			} {
 				if row[1] != "" {

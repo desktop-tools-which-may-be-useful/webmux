@@ -27,6 +27,13 @@ const worktree: Worktree = {
   hasUntracked: false,
   hasIgnored: false,
   error: "",
+  upstream: null,
+  ahead: null,
+  behind: null,
+  upstreamGone: false,
+  lastCommit: null,
+  changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+  operation: null,
 };
 
 const transparent = "rgba(0, 0, 0, 0)";

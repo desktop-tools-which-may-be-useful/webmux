@@ -1,8 +1,12 @@
 <script lang="ts">
   import WorktreeCreateFields from "../../src/components/WorktreeCreateFields.svelte";
+  import type { WorktreePreset } from "../../src/new-session-defaults";
   import type { Repository } from "../../src/schemas";
 
-  let { repository }: { repository: Repository } = $props();
+  let {
+    repository,
+    preset,
+  }: { repository: Repository; preset?: WorktreePreset } = $props();
   let path = $state("");
   let mode = $state<"new" | "existing">("new");
   let branch = $state("");
@@ -14,6 +18,7 @@
 <WorktreeCreateFields
   bind:this={fields}
   {repository}
+  {preset}
   bind:path
   bind:mode
   bind:branch

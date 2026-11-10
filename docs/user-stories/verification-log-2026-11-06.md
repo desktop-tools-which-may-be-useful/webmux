@@ -168,3 +168,54 @@
   - `make build`（含 `pnpm --dir web check`）、`check:test`、`lint`、`check:arch`、`make format-check` 与 `make docs-check` 通过。
   - 使用者在真实 iPad 上打开修复版独立实例（未含补一帧刷新），确认 omp 的 Nerd Font 图标正常显示。
 - 限制：真机只核对了 iPad 上的 omp 图标（该构建尚未补一帧刷新），未覆盖 iPhone 与中文切片的真机表现；未运行全量 E2E 与完整 `make test`。
+
+本次局部核对（2026-11-10，仓库面板与工作树同步详情）：实现 OpenSpec 变更 `enrich-repository-details`，并归档已完成的 `batch-worktree-management`。
+
+- 更新的故事：新增 US-J15；更新 US-J02、US-J03、US-J08、US-J14、US-C01、US-C17 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/sessions.md`、`docs/usage/shell-control.md`、`docs/protocol/http-workspace.md`。
+- 范围：
+  - 状态读取改为 `status --porcelain=v2 -z --branch`，补充上游、领先/落后、上游已删除、修改计数与进行中操作（读取标记文件，不增加 Git 进程）；每次快照多一次批量 `log` 读取最近提交；`lastFetchedAt` 取 `FETCH_HEAD` 修改时间；
+  - 分支清单补充上游与提交信息，新增 `GET /api/repositories/{id}/remotes`（服务端脱敏）与 `webmux repo remotes`；
+  - “仓库详情…”改为四分区仓库面板，“管理工作树”弹窗并入“工作树”分区；工作树详情在面板内作为子视图打开；侧栏工作树行改用“⋯”菜单，首页与侧栏显示领先/落后指示。
+- 依据：
+  - 测量：500 个带上游分支的 `Branches` 约 93 ms；与上游相差 10000 个提交时 `status --branch` 约 29 ms，因此未启用 `--no-ahead-behind`；
+  - `make format`、`make check`（含 `check:arch`、`golangci-lint` v2.15.0 与 `make docs-check`）通过；`make test-fast` 的 Go race 全部通过；
+  - Vitest Node 套件 736 项中只有 `base64url.test.ts` 1 项失败：本机 Node 24 没有 `Uint8Array.prototype.toBase64`（仓库要求 Node 26），与本变更无关；浏览器套件 671 项中 `TerminalGraphics.test.ts` 1 项在整套并发运行时失败、单独重跑 18 项全部通过；
+  - Storybook `overflow.spec.ts`/`contracts.spec.ts` 22 项通过（含 320×568 双倍字号）；Playwright E2E `worktrees.spec.ts`、`repository-scope.spec.ts`、`workspace-discovery.spec.ts` 与 `hybrid.spec.ts` 通过；
+  - 在隔离演示仓库上采集桌面（1280×900）、平板（768×800）、手机（390×844）明暗主题的前后对比截图。
+- 限制：未在 macOS 与移动真机上运行；全量 E2E 分片与 Storybook 构建交给 CI。
+
+本次局部核对（2026-11-11，切换工作树分支的前端与文档）：实现 OpenSpec 变更 `switch-worktree-branch` 的 Web 端（后端、CLI 与快照已在前一提交）。
+
+- 更新的故事：新增 US-J16；更新 US-J05 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/shell-control.md`、`docs/protocol/http-workspace.md` 与前端架构守卫的 `Button wrap` 登记。
+- 依据：
+  - `pnpm --dir web check`、`check:test`、`check:storybook`、`lint`、`check:arch` 与 `make docs-check` 通过；`wire-contract`、`wire-arrays` 与 `new-session-defaults` 单测通过；
+  - 浏览器用例 `SwitchBranchDialog`、`RepositoryPanel`、`WorkbenchTree`、`RepositoryGroup`、`WorktreeCreateFields`、`NewSessionDialog` 等 10 个文件 148 项通过；
+  - Storybook `overflow.spec.ts` 与 `design-system.spec.ts` 25 项通过（含切换弹窗三种场景在 320×568 双倍字号下）；
+  - Playwright E2E `worktree-switch.spec.ts` 在桌面与 iPhone SE 项目 6 项通过，其中已打开代码标签页在切换后由变化检测标为“内容已更新”；`worktrees`、`repository-scope`、`workspace-ui`、`session-creation` 共 38 项通过。
+  - 集成：`make format`、`make check`（含 `golangci-lint` v2.15.0）通过；`make test-go` 全部通过；
+  - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 缺少 `Uint8Array.prototype.toBase64` 失败；浏览器套件中 `RepositoryPanel.test.ts` 一项因前一个菜单仍在退出动画而偶发失败，已改为等待菜单关闭，之后连续 3 次通过；
+  - E2E `worktree-switch`、`worktrees`、`repository-scope`、`workspace-discovery` 共 48 项通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与切换流程 GIF。
+- 限制：未运行全量 E2E 与 Storybook 构建（交给 CI）；未在真机上验证；无头浏览器无法验证悬停与触屏常驻。
+
+本次局部核对（2026-11-11，获取远程与清理失效登记）：实现 OpenSpec 变更 `add-repository-maintenance`，并把仓库与 worktree 故事从 `code-and-worktrees.md` 原文迁到 `code-and-worktrees/worktrees.md`（原文件超过 48 KiB）。
+
+- 更新的故事：新增 US-J17；更新 US-J14 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/shell-control.md`、`docs/protocol/http-workspace.md`。
+- 依据：
+  - `remoteGit` 单测覆盖 `GIT_SSH_COMMAND`、`core.sshCommand`、`GIT_SSH` 三种情况下不注入 `BatchMode`、都未设置时注入，以及 `auth`/`network`/`timeout`/`rejected`/`error` 分类与令牌脱敏；日志断言不含 URL；
+  - `FetchRemotes` 用本地 bare 远程验证清除远端已删分支、`lastFetchedAt` 前进、单个远程失败不影响其他远程、请求取消后仍完成、并发两次只执行一次 fetch，且获取期间 `CreateWorktree` 不被阻塞；
+  - `make format`、`make check`（含 `golangci-lint` v2.15.0）通过；`make test-go` 全部通过；
+  - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 失败；浏览器套件中 `TerminalGraphics`、`TerminalSyncOutput` 各 1 项在整套并发运行时失败，单独重跑 24 项全部通过；
+  - Playwright E2E `repository-maintenance.spec.ts`、`worktrees.spec.ts`、`worktree-switch.spec.ts` 通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与获取、清理流程 GIF。
+- 限制：未在真机上验证；全量 E2E 与 Storybook 构建交给 CI。
+
+本次局部核对（2026-11-11，快进、推送与清理分支的前端与文档）：实现 OpenSpec 变更 `add-branch-sync-actions` 的 Web 端（后端、CLI 与快照已在前一提交），并与切换分支、获取远程的前端合并。
+
+- 更新的故事：新增 US-J18；更新 US-J14 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/shell-control.md` 与 `docs/protocol/http-workspace.md`。
+- 依据：
+  - `pnpm --dir web check`、`check:test`、`check:storybook`、`lint`、`check:arch` 与 `go test ./internal/docguard` 通过；`branch-actions`、`wire-contract`、`wire-arrays` 单测通过；
+  - 浏览器用例 `BranchOperations`、`RepositoryPanel`、`RepositoryGroup`、`WorkbenchTree`、`SwitchBranchDialog` 等通过；Storybook `overflow.spec.ts` 的仓库面板与分支操作场景通过；
+  - Playwright E2E `branch-operations.spec.ts`、`worktree-switch.spec.ts` 与 `repository-maintenance.spec.ts` 在桌面与 iPhone SE 项目通过。
+  - 集成：`make format`、`make check`（含 `golangci-lint` v2.15.0）通过；`make test-go` 全部通过；
+  - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 失败；浏览器套件中 `TerminalGraphics`、`TerminalSyncOutput` 各 1 项在整套并发运行时失败，单独重跑 24 项全部通过；
+  - E2E `branch-operations`、`repository-maintenance`、`worktree-switch`、`worktrees` 共 36 项通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与发布、清理分支流程 GIF。
+- 限制：未在真机上验证；无头浏览器无法验证悬停与触屏常驻；全量 E2E 与 Storybook 构建交给 CI。

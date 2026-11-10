@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
-  import IconSearch from "~icons/tabler/search";
   import { api } from "../api";
+  import type { BranchOperation } from "../branch-actions";
   import { errorMessage } from "../error";
   import {
     BatchRemovalPreviewRequestSchema,
@@ -21,41 +21,57 @@
     countWorktreeBatchCategories,
     filterWorktreeBatchEntries,
     groupBatchPreviewItems,
+    staleRegistrations,
     type WorktreeBatchFilter,
   } from "../worktree-batch";
   import { Button } from "$lib/components/ui/button";
-  import * as InputGroup from "$lib/components/ui/input-group";
   import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import InlineNotice from "./InlineNotice.svelte";
+  import ListSearchInput from "./ListSearchInput.svelte";
   import ManageWorktreesPreview from "./ManageWorktreesPreview.svelte";
   import ManageWorktreesSelectList from "./ManageWorktreesSelectList.svelte";
-  import ResponsiveDialog from "./ResponsiveDialog.svelte";
 
+  // The repository panel's worktrees: every worktree of the repository,
+  // searchable and filtered by how safely it can be removed. Browsing opens
+  // a worktree's details; "批量清理" turns the list into a selection, then
+  // a server preview, then per-item results. "清理失效登记" preselects the
+  // stale registrations and goes straight to that preview. Removal happens
+  // only here in the panel, so the rows' menus carry no delete entry.
   let {
     repository,
     sessions,
     archived,
     home,
+    busy = $bindable(false),
+    onopen,
+    onswitch,
+    onoperation,
     onchange,
     onremoved,
-    onclose,
   }: {
     repository: Repository;
     sessions: readonly SessionInfo[];
     archived: readonly ArchivedSession[];
     home: HomeWorktrees;
+    /** A preview or removal request is in flight. */
+    busy?: boolean;
+    /** Opens a worktree's details inside the panel. */
+    onopen: (worktreeId: string) => void;
+    /** Opens the switch of a worktree's branch inside the panel. */
+    onswitch: (worktreeId: string) => void;
+    /** Opens a branch operation inside the panel. */
+    onoperation: (operation: BranchOperation) => void;
     onchange: () => void;
     onremoved?: (removedIds: string[]) => void;
-    onclose: () => void;
   } = $props();
 
-  type Stage = "select" | "preview" | "result";
-  let stage = $state<Stage>("select");
+  type Stage = "browse" | "select" | "preview" | "result";
+  let stage = $state<Stage>("browse");
   let query = $state("");
   let statusFilter = $state<WorktreeBatchFilter>("all");
   const selected = new SvelteSet<string>();
-  let busy = $state(false);
   let error = $state("");
+  let done = $state("");
   let preview = $state<BatchRemovalPreview | null>(null);
   let includeForce = $state(false);
   let lastResult = $state<BatchRemoveResult | null>(null);
@@ -64,6 +80,11 @@
     buildWorktreeBatchEntries(repository, home, sessions, archived),
   );
   const counts = $derived(countWorktreeBatchCategories(entries));
+  const stale = $derived(
+    staleRegistrations(entries)
+      .slice(0, MAX_BATCH_WORKTREES)
+      .map((entry) => entry.tree.id),
+  );
   const filteredEntries = $derived(
     filterWorktreeBatchEntries(entries, statusFilter, query),
   );
@@ -104,23 +125,21 @@
     };
   });
 
-  const dialogTitle = $derived(
+  const heading = $derived(
     stage === "preview"
       ? includeForce
-        ? `批量强制删除 · ${repository.name}`
-        : `确认批量清理 · ${repository.name}`
+        ? "批量强制删除"
+        : "确认批量清理"
       : stage === "result"
-        ? `批量清理部分完成 · ${repository.name}`
-        : `管理工作树 · ${repository.name}`,
+        ? "批量清理部分完成"
+        : "",
   );
-  const dialogDescription = $derived(
+  const description = $derived(
     stage === "preview"
       ? includeForce
         ? "危险操作：将关闭受阻工作树中的活动会话，并永久丢弃未提交修改、未跟踪及忽略文件；已归档聊天记录保留。"
         : "默认仅删除无阻塞的工作树并跳过受阻项；本地分支与已归档混合会话记录均会保留。"
-      : stage === "result"
-        ? "部分工作树已完成清理；失败项已保留选中，可重新读取预览后重试。"
-        : "查看并批量清理该仓库下的全部工作树（含未添加到主页的空闲项）。删除工作树不会删除本地分支。",
+      : "部分工作树已完成清理；失败项已保留选中，可重新读取预览后重试。",
   );
 
   function toggleWorktree(id: string, checked: boolean) {
@@ -151,9 +170,26 @@
     }
   }
 
-  function clearSelection() {
+  function startSelecting() {
+    error = "";
+    done = "";
+    stage = "select";
+  }
+
+  function stopSelecting() {
     error = "";
     selected.clear();
+    stage = "browse";
+  }
+
+  // Selects exactly the stale registrations and previews them; a failed
+  // preview leaves the selection to review.
+  async function pruneStale() {
+    done = "";
+    selected.clear();
+    for (const id of stale) selected.add(id);
+    await loadPreview(stale);
+    if (stage !== "preview") stage = "select";
   }
 
   async function loadPreview(ids: readonly string[] = selectedIds) {
@@ -203,14 +239,16 @@
       const failed = res.results.filter((item) => item.status === "failed");
       if (removed.length > 0) onremoved?.(removed);
       onchange();
-      if (failed.length === 0) {
-        onclose();
-        return;
-      }
-      selected.clear();
-      for (const item of failed) selected.add(item.worktreeId);
       preview = null;
       includeForce = false;
+      selected.clear();
+      if (failed.length === 0) {
+        // Everything asked for is done: back to the refreshed list.
+        done = `已删除 ${removed.length} 个工作树。`;
+        stage = "browse";
+        return;
+      }
+      for (const item of failed) selected.add(item.worktreeId);
       lastResult = res;
       stage = "result";
     } catch (err) {
@@ -225,67 +263,44 @@
   }
 </script>
 
-<ResponsiveDialog
-  title={dialogTitle}
-  description={dialogDescription}
-  drawerDescription="删除工作树不删除本地分支；已归档混合会话记录保留。"
-  class="sm:max-w-2xl"
-  pinDrawerHeader
-  {busy}
-  {onclose}
->
-  <div class="space-y-4">
-    {#if stage === "select"}
-      <div class="space-y-3">
-        <InputGroup.Root class="w-full min-w-0">
-          <InputGroup.Addon>
-            <IconSearch aria-hidden="true" />
-          </InputGroup.Addon>
-          <InputGroup.Input
-            type="search"
-            aria-label="搜索工作树"
-            placeholder="按分支、提交哈希或路径搜索…"
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck={false}
-            bind:value={query}
-            onkeydown={(event) => {
-              if (event.key === "Escape" && query && !event.isComposing) {
-                event.preventDefault();
-                event.stopPropagation();
-                query = "";
-              }
-            }}
-          />
-        </InputGroup.Root>
+<div class="space-y-4">
+  {#if stage === "browse" || stage === "select"}
+    <div class="space-y-3">
+      <ListSearchInput
+        bind:value={query}
+        label="搜索工作树"
+        placeholder="按分支、提交哈希或路径搜索…"
+      />
 
-        <SegmentedControl.Root
-          value={statusFilter}
-          onValueChange={(value) => {
-            const next = filters.find((item) => item.id === value);
-            if (next) statusFilter = next.id;
-          }}
-          size="form"
-          aria-label="按工作树状态筛选"
-          wrap
-        >
-          {#each filters as filter (filter.id)}
-            <SegmentedControl.Item value={filter.id} class="min-h-9">
-              {filter.label}
-              <span
-                class="inline-block w-[3ch] text-right font-mono text-xs tabular-nums opacity-60"
-                >{filter.count}</span
-              >
-            </SegmentedControl.Item>
-          {/each}
-        </SegmentedControl.Root>
+      <SegmentedControl.Root
+        value={statusFilter}
+        onValueChange={(value) => {
+          const next = filters.find((item) => item.id === value);
+          if (next) statusFilter = next.id;
+        }}
+        size="form"
+        aria-label="按工作树状态筛选"
+        wrap
+      >
+        {#each filters as filter (filter.id)}
+          <SegmentedControl.Item value={filter.id} class="min-h-9">
+            {filter.label}
+            <span
+              class="inline-block w-[3ch] text-right font-mono text-xs tabular-nums opacity-60"
+              >{filter.count}</span
+            >
+          </SegmentedControl.Item>
+        {/each}
+      </SegmentedControl.Root>
 
-        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span class="text-muted-foreground tabular-nums">
-            已选 {selectedIds.length} 项（共 {entries.length} 个工作树）
-          </span>
-          <div class="flex flex-wrap items-center gap-1.5">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span class="text-muted-foreground tabular-nums">
+          {stage === "select"
+            ? `已选 ${selectedIds.length} 项（共 ${entries.length} 个工作树）`
+            : `共 ${entries.length} 个工作树`}
+        </span>
+        <div class="flex flex-wrap items-center gap-1.5">
+          {#if stage === "select"}
             <Button
               type="button"
               variant="outline"
@@ -302,22 +317,70 @@
               size="sm"
               class="min-h-9 sm:min-h-8"
               disabled={busy || selectedIds.length === 0}
-              onclick={clearSelection}
+              onclick={() => {
+                error = "";
+                selected.clear();
+              }}
             >
               清空选择
             </Button>
-          </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-9 sm:min-h-8"
+              disabled={busy}
+              onclick={stopSelecting}
+            >
+              退出批量清理
+            </Button>
+          {:else}
+            {#if stale.length > 0}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="min-h-9 sm:min-h-8"
+                disabled={busy}
+                onclick={() => void pruneStale()}
+              >
+                {busy ? "正在读取预览…" : `清理失效登记（${stale.length}）`}
+              </Button>
+            {/if}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="min-h-9 sm:min-h-8"
+              disabled={busy || entries.length === 0}
+              onclick={startSelecting}
+            >
+              批量清理
+            </Button>
+          {/if}
         </div>
       </div>
+    </div>
 
-      <ManageWorktreesSelectList
-        {entries}
-        {filteredEntries}
-        {selectedIds}
-        {busy}
-        ontoggle={toggleWorktree}
-      />
-    {:else if stage === "preview" && preview}
+    {#if done}<InlineNotice tone="success">{done}</InlineNotice>{/if}
+
+    <ManageWorktreesSelectList
+      {stage}
+      {entries}
+      {filteredEntries}
+      {selectedIds}
+      {busy}
+      ontoggle={toggleWorktree}
+      {onopen}
+      {onswitch}
+      {onoperation}
+    />
+  {:else}
+    <div class="space-y-1">
+      <h3 class="text-sm font-medium">{heading}</h3>
+      <p class="text-xs text-muted-foreground">{description}</p>
+    </div>
+    {#if stage === "preview" && preview}
       {#if busy}
         <p role="status" class="text-sm">正在处理，请勿重复提交…</p>
       {/if}
@@ -348,15 +411,14 @@
         </ul>
       </InlineNotice>
     {/if}
+  {/if}
 
-    {#if error}
-      <p role="alert" class="text-sm break-all text-destructive">{error}</p>
-    {/if}
+  {#if error}
+    <p role="alert" class="text-sm break-all text-destructive">{error}</p>
+  {/if}
 
+  {#if stage !== "browse"}
     <div class="flex flex-wrap justify-end gap-2">
-      <Button type="button" variant="outline" disabled={busy} onclick={onclose}>
-        {stage === "result" ? "关闭" : "取消"}
-      </Button>
       {#if stage === "select"}
         <Button
           type="button"
@@ -421,5 +483,5 @@
         </Button>
       {/if}
     </div>
-  </div>
-</ResponsiveDialog>
+  {/if}
+</div>

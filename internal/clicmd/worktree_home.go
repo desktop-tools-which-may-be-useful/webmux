@@ -1,11 +1,14 @@
 package clicmd
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
@@ -110,6 +113,148 @@ func (h home) view(repo contract.Repository) repositoryView {
 		v.Worktrees = append(v.Worktrees, worktreeView{Worktree: t, Home: h.status(repo, t), Sessions: len(h.sessions[t.ID])})
 	}
 	return v
+}
+
+var worktreeSwitchCommand = &Command{
+	Name: "worktree switch", Group: GroupWorkspace, Args: "REPO WORKTREE [BRANCH]",
+	Summary: "Switch a worktree to another branch or commit after previewing what it affects.",
+	Description: "Give exactly one target: BRANCH, a local branch no other worktree has checked out; --track REMOTE/BRANCH, " +
+		"which creates the local branch BRANCH tracking it; --create NAME, a new branch without an upstream starting at " +
+		"--from (default: the worktree's current commit); or --detach REF, a commit. The preview is printed to standard " +
+		"error first: what blocks the switch (uncommitted changes, a merge or rebase in progress, a branch checked out " +
+		"elsewhere), warnings, and the running sessions, which keep running and see the switched files. With blockers " +
+		"nothing changes. With running sessions it asks you to type yes on a terminal; without a terminal it needs --yes. " +
+		"Changes are never stashed, carried or discarded; once Git starts, interrupting the command does not stop it.",
+	Arguments: []Item{repoArgument, worktreeArgument, {Name: "BRANCH", Text: "The local branch to switch to."}},
+	Output:    "The branch the worktree is on, or the commit for --detach; with --json, the Worktree.",
+	Exit: exitsCommon(
+		ExitItem{Code: 1, Text: "Also: blockers, the preview went stale, or Git refused (files would be overwritten, a hook failed)."},
+		ExitItem{Code: 2, Text: "Also: running sessions, no terminal to confirm and no --yes."},
+	),
+	Examples: []Example{
+		{Command: "webmux worktree switch . main feat/a", Text: "Switch the main worktree to an existing branch."},
+		{Command: "webmux worktree switch . main --track origin/fix/b", Text: "Check out a remote branch as fix/b tracking it."},
+		{Command: "webmux worktree switch . exp/a --create exp/b --from main --yes", Text: "Start a new branch in a script, even with sessions running."},
+		{Command: "webmux worktree switch . main --detach v1.2.0", Text: "Look at a tagged commit."},
+	},
+	SeeAlso: []string{"webmux worktree create", "webmux repo branches", "webmux worktree show"},
+	Notes: map[string]Note{
+		"track": {Conflicts: []string{"create", "detach"}}, "create": {Conflicts: []string{"track", "detach"}},
+		"detach": {Conflicts: []string{"track", "create", "from"}}, "from": {Requires: []string{"create"}},
+	},
+	Bind: func(fs *flag.FlagSet) Action {
+		track := fs.String("track", "", "create a local branch tracking the remote-tracking branch `REMOTE/BRANCH`")
+		create := fs.String("create", "", "create the new branch `NAME`")
+		from := fs.String("from", "", "start --create at `REF` (default: the worktree's current commit)")
+		detach := fs.String("detach", "", "check out the commit `REF` without a branch")
+		yes := fs.Bool("yes", false, "do not ask for confirmation")
+		asJSON := fs.Bool("json", false, "print the Worktree")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 2 && len(args) != 3 {
+				return e.Usagef("a repository, a worktree and a target are required")
+			}
+			targets := 0
+			for _, given := range []bool{len(args) == 3, *track != "", *create != "", *detach != ""} {
+				if given {
+					targets++
+				}
+			}
+			if targets != 1 {
+				return e.Usagef("give exactly one of BRANCH, --track REMOTE/BRANCH, --create NAME or --detach REF")
+			}
+			if *from != "" && *create == "" {
+				return e.Usagef("--from applies to --create only")
+			}
+			client, repo, code := e.repoAndClient(ctx, args[0])
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			tree, err := e.worktreeIn(ctx, repo, args[1])
+			if err != nil {
+				return e.locationError(err)
+			}
+			var target contract.SwitchTarget
+			switch {
+			case len(args) == 3:
+				target = contract.SwitchTarget{Kind: "local", Branch: args[2]}
+			case *track != "":
+				target = contract.SwitchTarget{Kind: "remote", Ref: *track}
+			case *create != "":
+				start := *from
+				if start == "" {
+					if tree.Head == nil {
+						return e.Usagef("the worktree has no commit: give --from REF")
+					}
+					start = *tree.Head
+				}
+				target = contract.SwitchTarget{Kind: "new", Name: *create, StartPoint: start}
+			default:
+				target = contract.SwitchTarget{Kind: "detach", Commit: *detach}
+			}
+			base := "/api/repositories/" + url.PathEscape(repo.ID) + "/worktrees/" + url.PathEscape(tree.ID)
+			var preview contract.SwitchPreview
+			if err := client.Do(ctx, http.MethodPost, base+"/switch-preview", contract.SwitchPreviewRequest{Target: target}, &preview); err != nil {
+				return e.Fail(err)
+			}
+			e.printSwitchPreview(preview)
+			if len(preview.Blockers) > 0 {
+				_, _ = fmt.Fprintln(e.Stderr, "webmux: not switched")
+				return contract.ExitError
+			}
+			if len(preview.Sessions) > 0 && !*yes {
+				if code, ok := e.confirmYes("Type yes to switch while these sessions run: "); !ok {
+					return code
+				}
+			}
+			request := contract.SwitchRequest{ConfirmationID: preview.ConfirmationID, AcknowledgeSessions: len(preview.Sessions) > 0}
+			var switched contract.Worktree
+			if err := client.Do(ctx, http.MethodPost, base+"/switch", request, &switched); err != nil {
+				return e.Fail(err)
+			}
+			switch {
+			case *asJSON:
+				writeJSON(e.Stdout, switched)
+			case switched.Branch != nil:
+				_, _ = fmt.Fprintln(e.Stdout, *switched.Branch)
+			case switched.Head != nil:
+				_, _ = fmt.Fprintln(e.Stdout, *switched.Head)
+			}
+			return contract.ExitOK
+		}
+	},
+}
+
+func (e Env) printSwitchPreview(p contract.SwitchPreview) {
+	to := "detached " + shortHash(p.Target.Commit)
+	if p.Target.Branch != nil {
+		to = *p.Target.Branch + " at " + shortHash(p.Target.Commit)
+		if p.Target.CreatesBranch {
+			to = "new branch " + to
+		}
+	}
+	_, _ = fmt.Fprintf(e.Stderr, "webmux: switching %s (%s) to %s %s\n", p.Worktree.Path, worktreeName(p.Worktree), to, oneLine(p.Target.Subject, 60))
+	if p.Target.Upstream != nil {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux:   tracking %s\n", *p.Target.Upstream)
+	}
+	for _, s := range p.Sessions {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux:   session %s (%s) %s\n", s.ID, s.Status, s.Title)
+	}
+	e.printIssues(p.Blockers, p.Warnings)
+}
+
+// confirmYes asks for yes to be typed on a terminal.
+func (e Env) confirmYes(prompt string) (int, bool) {
+	if e.Interactive == nil || !e.Interactive() || e.Stdin == nil {
+		return e.Usagef("not a terminal: repeat with --yes to confirm"), false
+	}
+	_, _ = fmt.Fprint(e.Stderr, prompt)
+	answer, _ := bufio.NewReader(e.Stdin).ReadString('\n')
+	if strings.TrimSpace(answer) != "yes" {
+		_, _ = fmt.Fprintln(e.Stderr, "webmux: cancelled; nothing changed")
+		return contract.ExitError, false
+	}
+	return contract.ExitOK, true
 }
 
 // pinCommand builds worktree pin and unpin.
@@ -247,4 +392,102 @@ var worktreeHomeCommand = &Command{
 			return contract.ExitOK
 		}
 	},
+}
+
+// stale reports a registration safe to prune, as the Web UI selects them:
+// an unlocked prunable linked worktree. The server checks again that its
+// directory is missing.
+func stale(t contract.Worktree) bool {
+	return t.Kind == "linked" && t.Prunable && !t.Locked
+}
+
+var worktreePruneCommand = &Command{
+	Name: "worktree prune", Group: GroupWorkspace, Args: "REPO",
+	Summary: "Remove the registrations of linked worktrees whose directories are gone; their branches stay.",
+	Description: "Selects REPO's unlocked prunable linked worktrees and previews removing them together; the preview goes " +
+		"to standard error and the server checks again that each directory is missing. A locked one is left out: unlock " +
+		"it in a terminal first. An entry the preview blocks (its directory came back, sessions run in it) is skipped. " +
+		"On a terminal the command asks first; without a terminal it needs --yes. Archived sessions of a removed worktree " +
+		"are kept. Unlike git worktree prune, only the previewed entries are removed.",
+	Arguments: []Item{repoArgument},
+	Output: "Lines \"STATUS<TAB>PATH<TAB>BRANCH<TAB>ERROR\", status removed, skipped or failed; with --json, the " +
+		"BatchRemoveResult object. With nothing to prune, a note on standard error (and empty results with --json).",
+	Exit: exitsCommon(
+		ExitItem{Code: 1, Text: "Also: a registration failed to be removed, or the confirmation was refused."},
+		ExitItem{Code: 2, Text: "Also: no terminal to confirm and no --yes, or REPO names nothing."},
+	),
+	Examples: []Example{
+		{Command: "webmux worktree prune .", Text: "Clean up after deleting worktree directories by hand."},
+		{Command: "webmux worktree prune . --yes --json | jq -r '.results[] | select(.status != \"removed\") | .path'", Text: "Prune in a script and list what was not removed."},
+	},
+	SeeAlso: []string{"webmux worktree ls", "webmux worktree rm"},
+	Bind: func(fs *flag.FlagSet) Action {
+		yes := fs.Bool("yes", false, "do not ask for confirmation")
+		asJSON := fs.Bool("json", false, "print the BatchRemoveResult object")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 1 {
+				return e.Usagef("exactly one repository is required")
+			}
+			client, repo, code := e.repoAndClient(ctx, args[0])
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			ids := []string{}
+			for _, t := range repo.Worktrees {
+				if stale(t) {
+					ids = append(ids, t.ID)
+				}
+			}
+			if len(ids) == 0 {
+				_, _ = fmt.Fprintf(e.Stderr, "webmux: %s has no stale worktree registrations to prune\n", repo.Name)
+				if *asJSON {
+					writeJSON(e.Stdout, contract.BatchRemoveResult{Results: []contract.BatchRemoveItemResult{}})
+				}
+				return contract.ExitOK
+			}
+			base := "/api/repositories/" + url.PathEscape(repo.ID) + "/worktrees"
+			var preview contract.BatchRemovalPreview
+			if err := client.Do(ctx, http.MethodPost, base+"/batch-removal-preview", contract.BatchRemovalPreviewRequest{WorktreeIDs: ids}, &preview); err != nil {
+				return e.Fail(err)
+			}
+			for _, item := range preview.Items {
+				e.printPruneItem(item)
+			}
+			if !*yes {
+				if code, ok := e.confirm(fmt.Sprintf("Remove %d stale worktree registrations of %s? Branches stay.", len(preview.Items), repo.Name)); !ok {
+					return code
+				}
+			}
+			var result contract.BatchRemoveResult
+			if err := client.Do(ctx, http.MethodPost, base+"/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: preview.ConfirmationID}, &result); err != nil {
+				return e.Fail(err)
+			}
+			code = contract.ExitOK
+			for _, r := range result.Results {
+				if r.Status == "failed" {
+					code = contract.ExitError
+				}
+			}
+			if *asJSON {
+				writeJSON(e.Stdout, result)
+				return code
+			}
+			for _, r := range result.Results {
+				_, _ = fmt.Fprintf(e.Stdout, "%s\t%s\t%s\t%s\n", r.Status, r.Path, r.Branch, r.Error)
+			}
+			return code
+		}
+	},
+}
+
+// printPruneItem prints one entry of a prune preview to standard error.
+func (e Env) printPruneItem(item contract.RemovalPreviewItem) {
+	_, _ = fmt.Fprintf(e.Stderr, "webmux: pruning %s (%s)\n", item.Worktree.Path, worktreeName(item.Worktree))
+	for _, r := range item.Archived {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux:   archived session %s (%s) is kept\n", r.ID, sessionName(r))
+	}
+	for _, b := range item.Blockers {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux:   skipped: %s\n", b)
+	}
 }

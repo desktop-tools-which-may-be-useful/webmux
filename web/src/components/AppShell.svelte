@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Drawer from "$lib/components/ui/drawer";
   import { navigate } from "../api";
+  import type { BranchOperation } from "../branch-actions";
   import { createArchiveSignal } from "../archive-signal";
   import { createArchived } from "../hooks/archived.svelte";
   import { createLaunchConfigs } from "../hooks/launch-configs.svelte";
@@ -33,6 +34,7 @@
     shellUi,
     sidebarWidthMax,
     sidebarWidthMin,
+    type RepositoryTab,
     type Shell,
     type ShellMode,
   } from "../shell.svelte";
@@ -93,10 +95,18 @@
     onremoved?: () => void;
     forgetRecords?: readonly ArchivedSession[];
   } | null>(null);
-  let managingWorktrees = $state<Repository | null>(null);
   let choosingHome = $state<Repository | null>(null);
-  let viewingRepository = $state<Repository | null>(null);
+  let viewingRepository = $state<{
+    repository: Repository;
+    tab: RepositoryTab;
+  } | null>(null);
+  let viewingWorktree = $state<Worktree | null>(null);
+  let switchingBranch = $state<Worktree | null>(null);
   let releasingWorktree = $state<Worktree | null>(null);
+  let operating = $state<{
+    repositoryId: string;
+    operation: BranchOperation;
+  } | null>(null);
   let forwarding = $state(false);
   let adding = $state(false);
   let configuring = $state<Repository | null>(null);
@@ -146,21 +156,31 @@
       shellUi.drawerOpen = false;
       removingWorktree = { worktree, ...options };
     },
-    manageWorktrees(repository) {
-      shellUi.drawerOpen = false;
-      managingWorktrees = repository;
-    },
     chooseHomeWorktrees(repository) {
       shellUi.drawerOpen = false;
       choosingHome = repository;
     },
-    repositoryDetails(repository) {
+    repositoryDetails(repository, tab = "overview") {
       shellUi.drawerOpen = false;
-      viewingRepository = repository;
+      viewingRepository = { repository, tab };
+      // The panel shows the last snapshot while Git is read again.
+      void repositories.refresh();
+    },
+    worktreeDetails(worktree) {
+      shellUi.drawerOpen = false;
+      viewingWorktree = worktree;
+    },
+    switchBranch(worktree) {
+      shellUi.drawerOpen = false;
+      switchingBranch = worktree;
     },
     releaseWorktree(worktree) {
       shellUi.drawerOpen = false;
       releasingWorktree = worktree;
+    },
+    branchOperation(repositoryId, operation) {
+      shellUi.drawerOpen = false;
+      operating = { repositoryId, operation };
     },
     forward() {
       shellUi.drawerOpen = false;
@@ -360,10 +380,12 @@
   bind:renaming
   bind:closing
   bind:removingWorktree
-  bind:managingWorktrees
   bind:choosingHome
   bind:viewingRepository
+  bind:viewingWorktree
+  bind:switchingBranch
   bind:releasingWorktree
+  bind:operating
   bind:forwarding
   bind:adding
   bind:configuring

@@ -6,6 +6,7 @@ import type {
   HomeWorktrees,
   Repository,
   SessionInfo,
+  Worktree,
 } from "./schemas";
 import { rowStatus } from "./session-status";
 
@@ -29,7 +30,9 @@ export type TreeNode = {
   /** The archived record of an archived row. */
   record?: ArchivedSession;
   path?: string;
-  /** A linked worktree, which the row's delete button can remove. */
+  /** The worktree of a worktree row, for its upstream indicator. */
+  worktree?: Worktree;
+  /** A linked worktree, which the row's menu can remove. */
   removable?: boolean;
   /** Why a repository is unavailable; "" when it is fine. */
   reason?: string;
@@ -138,6 +141,7 @@ export function workbenchTree(
               worktreeId: tree.id,
               path: tree.path,
               removable: tree.kind === "linked",
+              worktree: tree,
               children: sessionNodes(inside, treeKey, 3),
             },
             inside,

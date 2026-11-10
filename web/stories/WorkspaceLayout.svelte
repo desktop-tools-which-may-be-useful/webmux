@@ -25,6 +25,13 @@
     hasUntracked: false,
     hasIgnored: false,
     error: "",
+    upstream: null,
+    ahead: null,
+    behind: null,
+    upstreamGone: false,
+    lastCommit: null,
+    changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+    operation: null,
   };
   const shell: SessionInfo = {
     ...fixture,

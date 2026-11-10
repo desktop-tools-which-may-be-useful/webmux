@@ -46,6 +46,7 @@
   import { type StatusFilter } from "../session-status";
   import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
   import { getShell } from "../shell.svelte";
+  import { switchableWorktree } from "../worktree-sync";
   import { z } from "zod";
 
   // The workbench home: every live session grouped by repository and
@@ -174,14 +175,8 @@
       removing = tree;
     },
     release: shell.releaseWorktree,
-    onresumed: () => {
-      rebuildFailure = "";
-      void shell.archived.refresh();
-    },
-    onrebuilt: (failure) => {
-      rebuildFailure = failure;
-      refreshWorktrees();
-    },
+    onresumed: () => ((rebuildFailure = ""), void shell.archived.refresh()),
+    onrebuilt: (failure) => ((rebuildFailure = failure), refreshWorktrees()),
   });
   const running = $derived(
     sessions.some((session) => session.status === "running"),
@@ -245,6 +240,10 @@
         ]);
     });
   }
+  const closeRemoveWorktree = () => {
+    removing = null;
+    removingRecord = null;
+  };
   onMount(() =>
     mountSessionListPolling(
       () => void shell.repositories.refresh(),
@@ -264,17 +263,23 @@
       onnewworktree={() =>
         shell.start({ kind: "new-worktree", repositoryId: repo.id })}
       onhome={() => shell.chooseHomeWorktrees(repo)}
-      onmanage={() => shell.manageWorktrees(repo)}
+      onmanage={() => shell.repositoryDetails(repo, "worktrees")}
       onsettings={shell.openRepositorySettings}
       ondetails={() => shell.repositoryDetails(repo)}
       worktree={tree
         ? {
             title: worktreeTitle(tree),
             ondetails: () => (worktreeDetailsOpen = true),
+            onswitch: switchableWorktree(tree)
+              ? () => shell.switchBranch(tree)
+              : undefined,
             pinned: selectedPinned,
             ontogglepin: () => pin(repo.id, [tree.id], !selectedPinned),
             onremove:
               tree.kind === "linked" ? () => (removing = tree) : undefined,
+            tree,
+            onoperation: (operation) =>
+              shell.branchOperation(repo.id, operation),
           }
         : undefined}
     />
@@ -433,15 +438,16 @@
                     })}
               ontogglepin={(worktreeId, pinned) =>
                 pin(repo.id, [worktreeId], pinned)}
-              onremove={(tree) => {
-                removing = tree;
-              }}
+              onremove={(tree) => (removing = tree)}
+              onswitch={(tree) => shell.switchBranch(tree)}
               onclose={shell.close}
               archived={placement.repositories.get(repo.id)}
               {visibleArchiveIds}
               {archive}
               detailsOpen={worktreeDetailsOpen}
               ondetailschange={(open) => (worktreeDetailsOpen = open)}
+              onoperation={(operation) =>
+                shell.branchOperation(repo.id, operation)}
             />
           {/each}
           {#if direct.length || placement.direct.length}<DirectSessions
@@ -475,20 +481,14 @@
   <LazyDialog
     load={() => import("../components/RemoveWorktreeDialog.svelte")}
     label="删除确认"
-    onclose={() => {
-      removing = null;
-      removingRecord = null;
-    }}
+    onclose={closeRemoveWorktree}
   >
     {#snippet children(page)}<page.default
         worktree={target}
         forgetRecords={targetRecord ? [targetRecord] : []}
         onremoved={() => void removeAfterWorktree(targetRecord)}
         onchange={refreshWorktrees}
-        onclose={() => {
-          removing = null;
-          removingRecord = null;
-        }}
+        onclose={closeRemoveWorktree}
       />{/snippet}
   </LazyDialog>
 {/if}

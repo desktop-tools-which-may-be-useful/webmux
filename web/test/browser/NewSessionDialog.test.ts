@@ -5,6 +5,7 @@ import NewSessionDialog from "../../src/components/NewSessionDialog.svelte";
 import type { LaunchConfigsState } from "../../src/launch-configs";
 import type { LaunchEntry } from "../../src/new-session-defaults";
 import type { Repository, SessionInfo, Worktree } from "../../src/schemas";
+import { base, branch } from "./shell-fixture";
 
 const config = {
   id: "abcdefg2",
@@ -46,6 +47,13 @@ const mainTree: Worktree = {
   hasUntracked: false,
   hasIgnored: false,
   error: "",
+  upstream: null,
+  ahead: null,
+  behind: null,
+  upstreamGone: false,
+  lastCommit: null,
+  changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+  operation: null,
 };
 const repository = {
   id: "repo-1",
@@ -55,6 +63,7 @@ const repository = {
   availability: "available",
   error: "",
   checkedAt: "2026-10-23T00:00:00Z",
+  lastFetchedAt: null,
   initInstruction: "",
   worktrees: [mainTree],
 } satisfies Repository;
@@ -174,20 +183,8 @@ beforeEach(() => {
       }
       if (path === "/api/repositories/repo-1/branches") {
         return Response.json({
-          branches: [
-            {
-              name: "main",
-              head: "a".repeat(40),
-              worktreePaths: ["/repos/project"],
-            },
-          ],
-          bases: [
-            {
-              name: "refs/heads/main",
-              head: "a".repeat(40),
-              subject: "initial",
-            },
-          ],
+          branches: [branch("main", "a".repeat(40), ["/repos/project"])],
+          bases: [base("refs/heads/main", "a".repeat(40), "initial")],
           defaultBase: "a".repeat(40),
           defaultBaseSubject: "initial",
           defaultBranch: "main",

@@ -2,18 +2,30 @@ import { z } from "zod";
 import {
   AgentGuidePromptSchema,
   ArtifactsFolderSchema,
+  BranchesSchema,
+  CommitsSchema,
+  EmptyRequestSchema,
   ErrorSchema,
+  FetchRemotesResponseSchema,
   ForwardRequestSchema,
   ForwardSchema,
   ForwardTicketSchema,
   ForwardUpdateSchema,
   NoContentSchema,
   RecentDirsSchema,
+  RemotesSchema,
+  SwitchPreviewRequestSchema,
+  SwitchPreviewSchema,
+  SwitchRequestSchema,
   TextSettingSchema,
   UploadSchema,
+  WorktreeSchema,
   type ForwardRequest,
   type ForwardUpdate,
   type SessionInfo,
+  type SwitchRequest,
+  type SwitchTarget,
+  type Worktree,
 } from "./schemas";
 
 export class APIError extends Error {
@@ -258,6 +270,80 @@ export async function agentGuidePrompt(
       signal,
     )
   ).prompt;
+}
+// A repository's branches with their upstream tracking, and its remotes with
+// redacted URLs; both are local reads that never fetch.
+export function repositoryBranches(id: string, signal?: AbortSignal) {
+  return api(
+    `/repositories/${id}/branches`,
+    BranchesSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+export function repositoryRemotes(id: string, signal?: AbortSignal) {
+  return api(
+    `/repositories/${id}/remotes`,
+    RemotesSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+// The recent history reachable from the given commits, newest first.
+export function repositoryCommits(
+  id: string,
+  from: readonly string[],
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams(from.map((hash) => ["from", hash]));
+  return api(
+    `/repositories/${id}/commits?${query}`,
+    CommitsSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+// Switching a worktree's branch in place: a preview, then its confirmation.
+const worktreeRoute = (tree: Pick<Worktree, "repositoryId" | "id">) =>
+  `/repositories/${tree.repositoryId}/worktrees/${tree.id}`;
+export function previewSwitch(
+  tree: Worktree,
+  target: SwitchTarget,
+  signal?: AbortSignal,
+) {
+  return api(
+    worktreeRoute(tree) + "/switch-preview",
+    SwitchPreviewSchema,
+    "POST",
+    { target },
+    signal,
+    SwitchPreviewRequestSchema,
+  );
+}
+export function switchWorktree(tree: Worktree, request: SwitchRequest) {
+  return api(
+    worktreeRoute(tree) + "/switch",
+    WorktreeSchema,
+    "POST",
+    request,
+    undefined,
+    SwitchRequestSchema,
+  );
+}
+// Fetches every remote of a repository; the server finishes the fetch even
+// when this request is abandoned, and answers with the repository read again.
+export function fetchRepositoryRemotes(id: string) {
+  return api(
+    `/repositories/${id}/fetch`,
+    FetchRemotesResponseSchema,
+    "POST",
+    {},
+    undefined,
+    EmptyRequestSchema,
+  );
 }
 export function navigate(path: string) {
   history.pushState(null, "", path);

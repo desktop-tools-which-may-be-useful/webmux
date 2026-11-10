@@ -28,15 +28,19 @@
   import IconGitBranch from "~icons/tabler/git-branch";
   import IconLayoutDashboard from "~icons/tabler/layout-dashboard";
   import IconLoader2 from "~icons/tabler/loader-2";
-  import IconTrash from "~icons/tabler/trash";
   import { Button } from "$lib/components/ui/button";
   import { ListButton } from "$lib/components/ui/list-button";
   import { store, stored } from "../api";
+  import type { BranchOperation } from "../branch-actions";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import RowStatus from "./RowStatus.svelte";
   import { underRowAction } from "../sidebar-row";
+  import { switchableWorktree, worktreeUpstream } from "../worktree-sync";
+  import UpstreamStatus from "./UpstreamStatus.svelte";
   import SidebarRepositoryMenu from "./SidebarRepositoryMenu.svelte";
+  import SidebarRowMenu from "./SidebarRowMenu.svelte";
   import SidebarSessionMenu from "./SidebarSessionMenu.svelte";
+  import WorktreeMenuItems from "./WorktreeMenuItems.svelte";
 
   // The workbench-mode sidebar: repositories → worktrees → live sessions.
   // Archived records that fit no worktree (a removed or released one) sit
@@ -62,7 +66,10 @@
     onhomeworktrees,
     onmanageworktrees,
     onrepositorydetails,
+    onworktreedetails,
     onremoveworktree,
+    onswitchbranch,
+    onbranchoperation,
     onrename,
     onclose,
     onresume,
@@ -92,8 +99,17 @@
     onhomeworktrees: (repositoryId: string) => void;
     onmanageworktrees: (repositoryId: string) => void;
     onrepositorydetails: (repositoryId: string) => void;
+    /** Opens a worktree's details. */
+    onworktreedetails: (repositoryId: string, worktreeId: string) => void;
     /** Opens the removal dialog of a linked worktree. */
     onremoveworktree: (repositoryId: string, worktreeId: string) => void;
+    /** Opens the switch of a worktree's branch. */
+    onswitchbranch: (repositoryId: string, worktreeId: string) => void;
+    /** Starts a sync action of a worktree's branch. */
+    onbranchoperation?: (
+      repositoryId: string,
+      operation: BranchOperation,
+    ) => void;
     onrename: (session: SessionInfo) => void;
     onclose: (session: SessionInfo) => void;
     /** Resumes an archived record, rebuilding a released worktree first. */
@@ -345,6 +361,13 @@
           class={`min-w-0 flex-1 truncate ${node.kind === "repository" ? "font-medium" : ""} ${node.reason || status === "ended" ? "text-muted-foreground" : ""}`}
           >{node.label}</span
         >
+        {#if node.worktree}
+          {@const upstream = worktreeUpstream(node.worktree)}
+          {#if upstream?.kind === "gone" || (upstream?.kind === "tracked" && (upstream.ahead || upstream.behind))}<span
+              class="flex shrink-0 items-center gap-1"
+              ><UpstreamStatus state={upstream} indicator /></span
+            >{/if}
+        {/if}
         {#if node.record?.released}<IconFolderOff
             class="text-muted-foreground"
             aria-hidden="true"
@@ -364,7 +387,7 @@
         {:else}{@render counts(
             node,
             (node.kind === "repository" && !node.reason && canCreate) ||
-              !!node.removable,
+              node.kind === "worktree",
           )}{/if}
       </ListButton>
       {#if node.kind === "repository" && canCreate}
@@ -377,17 +400,26 @@
           onmanage={() => onmanageworktrees(node.repositoryId ?? "")}
           ondetails={() => onrepositorydetails(node.repositoryId ?? "")}
         />
-      {:else if node.removable && node.repositoryId && node.worktreeId}
+      {:else if node.kind === "worktree" && node.repositoryId && node.worktreeId}
         {@const repositoryId = node.repositoryId}
         {@const worktreeId = node.worktreeId}
-        <ListButton
-          variant="file-tree-action"
-          aria-label={`删除工作树 ${node.label}`}
-          title={`删除工作树 ${node.label}`}
+        <SidebarRowMenu
+          ariaLabel={`工作树操作：${node.label}`}
           tabindex={tabStop === node.key ? 0 : -1}
-          onclick={() => onremoveworktree(repositoryId, worktreeId)}
-          ><IconTrash aria-hidden="true" /></ListButton
         >
+          <WorktreeMenuItems
+            ondetails={() => onworktreedetails(repositoryId, worktreeId)}
+            onswitch={node.worktree && switchableWorktree(node.worktree)
+              ? () => onswitchbranch(repositoryId, worktreeId)
+              : undefined}
+            onremove={node.removable
+              ? () => onremoveworktree(repositoryId, worktreeId)
+              : undefined}
+            worktree={node.worktree}
+            onoperation={onbranchoperation &&
+              ((operation) => onbranchoperation(repositoryId, operation))}
+          />
+        </SidebarRowMenu>
       {:else if node.session}
         <SidebarSessionMenu
           label={node.label}
