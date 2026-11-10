@@ -116,6 +116,8 @@ type Service struct {
 	starting sync.WaitGroup
 	// recovering holds the record IDs a resume or removal is working on.
 	recovering map[string]bool
+	// writerClaims serializes writer admission for a durable Conversation.
+	writerClaims map[string]writerClaim
 	// restarted holds the sessions this start found active and interrupted.
 	restarted []string
 }
@@ -393,6 +395,20 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	if err := bindConversation(); err != nil {
 		_ = s.manager.Remove(info.ID)
 		return nil, err
+	}
+	if s.conversations != nil {
+		binding, err := s.conversations.Binding(ctx, info.ID)
+		if err != nil {
+			_ = s.manager.Remove(info.ID)
+			return nil, err
+		}
+		release, err := s.ClaimConversation(binding.ConversationID, in.ContextExecutionID)
+		if err != nil {
+			_ = cleanupConversation(context.WithoutCancel(ctx), info.ID)
+			_ = s.manager.Remove(info.ID)
+			return nil, err
+		}
+		defer release()
 	}
 	if err := a.activityThread(); err != nil {
 		_ = s.manager.Remove(info.ID)
