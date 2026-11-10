@@ -20,6 +20,7 @@ import {
 export type Agent = "omp" | "opencode" | "claudecode";
 export type Scenario =
   | "conversation"
+  | "long-conversation"
   | "permission"
   | "commands"
   | "cancelled"
@@ -401,12 +402,42 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
   const idleScenarios: Scenario[] = [
     "commands",
     "cancelled",
+    "long-conversation",
     "connector-missing",
     "recovery-failure",
     ...terminalScenarios,
   ];
   const running = !idleScenarios.includes(scenario);
   const events = [...history];
+  if (scenario === "long-conversation") {
+    for (let index = 0; index < 8; index++) {
+      events.push(
+        user(`long-u${index}`, `第 ${index + 2} 轮：继续完善排序和测试。`),
+        {
+          kind: "message.append",
+          message: {
+            messageId: `long-t${index}`,
+            role: "thought",
+            text: "检查已有实现和回归测试。",
+          },
+        },
+        tool(
+          `long-r${index}`,
+          "read",
+          `检查第 ${index + 2} 轮改动`,
+          "completed",
+        ),
+        agentText(
+          `long-a${index}`,
+          Array.from(
+            { length: 6 },
+            (_, line) =>
+              `第 ${index + 2} 轮回复，段落 ${line + 1}：已保留用户消息与工作步骤的顺序。`,
+          ).join("\n\n"),
+        ),
+      );
+    }
+  }
   if (scenario === "compaction") events.push(...compaction);
   if (scenario === "mode-fallback")
     events.push({

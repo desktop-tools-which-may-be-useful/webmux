@@ -3,17 +3,31 @@
   import IconHandStop from "~icons/tabler/hand-stop";
   import IconLoader2 from "~icons/tabler/loader-2";
   import IconX from "~icons/tabler/x";
+  import { Button } from "$lib/components/ui/button";
+  import ConnectorInstallHint from "../ConnectorInstallHint.svelte";
+  import InlineNotice from "../InlineNotice.svelte";
+  import { outdatedText } from "../../hybrid";
   import type { ChatModel } from "../../chat-model";
   import type { ChatRequest, ChatState } from "../../schemas";
 
   let {
+    mode = "turn",
+    truncated = false,
+    error = "",
+    unavailable = "",
+    onterminal,
     chat,
-    entries,
+    entries = [],
     request,
   }: {
+    mode?: "notices" | "dock" | "turn";
+    truncated?: boolean;
+    error?: string;
+    unavailable?: string;
+    onterminal?: () => void;
     chat: ChatState | undefined;
-    entries: ChatModel["entries"];
-    request: ChatRequest | undefined;
+    entries?: ChatModel["entries"];
+    request?: ChatRequest | undefined;
   } = $props();
 
   let now = $state(Date.now());
@@ -83,55 +97,94 @@
   // Server timestamps keep the duration correct across reconnects and devices.
   // Only the live display ticks; the total is derived from the final timestamp.
   $effect(() => {
-    if (!chat?.turn.running || turnStartedAt === undefined) return;
+    if (mode !== "turn" || !chat?.turn.running || turnStartedAt === undefined)
+      return;
     now = Date.now();
     const timer = window.setInterval(() => (now = Date.now()), 1000);
     return () => window.clearInterval(timer);
   });
 </script>
 
-<!-- A persistent live region announces only the final duration. The
-     visible per-second ticker stays out of every live region. -->
-<p class="sr-only" role="status">{turnCompletionAnnouncement}</p>
-{#if !chat}
-  <p
-    class="flex items-center gap-2 text-sm text-muted-foreground"
-    role="status"
-  >
-    <IconLoader2 class="size-3.5 animate-spin" aria-hidden="true" />
-    正在连接聊天…
-  </p>
-{:else if chat.turn.running && !request}
-  <p
-    class="flex items-center gap-2 text-sm text-muted-foreground"
-    role="status"
-  >
-    <IconLoader2 class="size-3.5 animate-spin" aria-hidden="true" />
-    正在工作…
-    {#if turnElapsed !== undefined}
-      <span class="tabular-nums" aria-hidden="true"
-        >· {formatDuration(turnElapsed)}</span
+{#if mode === "notices"}
+  {#if truncated}
+    <InlineNotice>更早的历史未缓存，可切到终端查看</InlineNotice>
+  {/if}
+  {#each chat?.outdated ?? [] as item (item.name)}
+    <InlineNotice tone="warning">{outdatedText(item)}</InlineNotice>
+  {/each}
+  {#if chat?.unsupported.length}
+    <InlineNotice tone="warning"
+      >聊天视图不支持该参数：{chat.unsupported.join(" ")}</InlineNotice
+    >
+  {/if}
+{:else if mode === "dock"}
+  {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
+  {#if chat?.connectorMissing}
+    <ConnectorInstallHint connector={chat.connectorMissing}>
+      {#snippet actions()}<Button
+          size="sm"
+          variant="outline"
+          disabled={!!unavailable}
+          onclick={onterminal}>切到终端</Button
+        >{/snippet}
+    </ConnectorInstallHint>
+  {/if}
+  {#if chat?.authRequired}
+    <InlineNotice tone="danger">
+      <span class="flex flex-wrap items-center gap-2"
+        >Agent 需要登录，请在终端中完成登录。<Button
+          size="sm"
+          variant="outline"
+          disabled={!!unavailable}
+          onclick={onterminal}>切到终端登录</Button
+        ></span
       >
-    {/if}
-  </p>
-{:else if turnElapsed !== undefined && turnEndedAt !== undefined}
-  <p
-    class="flex items-center gap-2 text-sm text-muted-foreground"
-    aria-hidden="true"
-    data-turn-result={chat.turn.stopReason}
-  >
-    {#if chat.turn.stopReason === "end_turn" && turnHasOpenTools}
-      <IconLoader2 class="size-3.5 text-info" aria-hidden="true" />
-    {:else if chat.turn.stopReason === "end_turn"}
-      <IconCircleCheck class="size-3.5 text-success" aria-hidden="true" />
-    {:else if chat.turn.stopReason === "cancelled"}
-      <IconHandStop class="size-3.5 text-warning" aria-hidden="true" />
-    {:else if turnFailed}
-      <IconX class="size-3.5 text-destructive" aria-hidden="true" />
-    {:else}
-      <IconCircleCheck class="size-3.5" aria-hidden="true" />
-    {/if}
-    {turnCompletionLabel}
-    <span class="tabular-nums">· 用时 {formatDuration(turnElapsed)}</span>
-  </p>
+    </InlineNotice>
+  {/if}
+{:else}
+  <!-- A persistent live region announces only the final duration. The
+       visible per-second ticker stays out of every live region. -->
+  <p class="sr-only" role="status">{turnCompletionAnnouncement}</p>
+  {#if !chat}
+    <p
+      class="flex items-center gap-2 text-sm text-muted-foreground"
+      role="status"
+    >
+      <IconLoader2 class="size-3.5 animate-spin" aria-hidden="true" />
+      正在连接聊天…
+    </p>
+  {:else if chat.turn.running && !request}
+    <p
+      class="flex items-center gap-2 text-sm text-muted-foreground"
+      role="status"
+    >
+      <IconLoader2 class="size-3.5 animate-spin" aria-hidden="true" />
+      正在工作…
+      {#if turnElapsed !== undefined}
+        <span class="tabular-nums" aria-hidden="true"
+          >· {formatDuration(turnElapsed)}</span
+        >
+      {/if}
+    </p>
+  {:else if turnElapsed !== undefined && turnEndedAt !== undefined}
+    <p
+      class="flex items-center gap-2 text-sm text-muted-foreground"
+      aria-hidden="true"
+      data-turn-result={chat.turn.stopReason}
+    >
+      {#if chat.turn.stopReason === "end_turn" && turnHasOpenTools}
+        <IconLoader2 class="size-3.5 text-info" aria-hidden="true" />
+      {:else if chat.turn.stopReason === "end_turn"}
+        <IconCircleCheck class="size-3.5 text-success" aria-hidden="true" />
+      {:else if chat.turn.stopReason === "cancelled"}
+        <IconHandStop class="size-3.5 text-warning" aria-hidden="true" />
+      {:else if turnFailed}
+        <IconX class="size-3.5 text-destructive" aria-hidden="true" />
+      {:else}
+        <IconCircleCheck class="size-3.5" aria-hidden="true" />
+      {/if}
+      {turnCompletionLabel}
+      <span class="tabular-nums">· 用时 {formatDuration(turnElapsed)}</span>
+    </p>
+  {/if}
 {/if}

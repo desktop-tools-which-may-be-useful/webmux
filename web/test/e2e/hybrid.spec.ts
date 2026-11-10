@@ -333,6 +333,68 @@ test.describe("hybrid sessions with the fake agent", () => {
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
   });
 
+  test("wide document-scroll chat keeps turn ticks beside the app sidebar", async ({
+    page,
+    request,
+    workDir,
+  }, testInfo) => {
+    test.skip(!!testInfo.project.use.isMobile, "A tablet-width desktop pane");
+    const id = await createHybrid(request, workDir, "chat");
+    await page.setViewportSize({ width: 1000, height: 900 });
+    await openHybrid(page, id, "chat");
+    for (let i = 0; i < 8; i++) {
+      await chatTurn(
+        page,
+        `turn-nav-${i} line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8`,
+      );
+    }
+
+    const navigation = page.getByRole("navigation", { name: "对话轮次" });
+    await expect(navigation).toBeVisible();
+    await expect
+      .poll(() =>
+        page
+          .locator("[data-chat-view]")
+          .evaluate((node) => node.getBoundingClientRect().width),
+      )
+      .toBeGreaterThanOrEqual(896);
+    await expect
+      .poll(() =>
+        page
+          .locator("[data-chat-view]")
+          .evaluate((node) => node.getBoundingClientRect().width),
+      )
+      .toBeLessThan(1024);
+    await expect
+      .poll(() =>
+        page.locator("[data-chat-view]").getAttribute("data-document-scroll"),
+      )
+      .toBe("true");
+    const geometry = await page.evaluate(() => ({
+      sidebarRight: document
+        .querySelector(".app-sidebar")!
+        .getBoundingClientRect().right,
+      navigationLeft: document
+        .querySelector('nav[aria-label="对话轮次"]')!
+        .getBoundingClientRect().left,
+    }));
+    expect(geometry.navigationLeft).toBeGreaterThanOrEqual(
+      geometry.sidebarRight,
+    );
+
+    const first = navigation.getByRole("button", {
+      name: /^第 1 轮 · 你：turn-nav-0/,
+    });
+    await first.click();
+    await expect(first).toHaveAttribute("aria-current", "location");
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeLessThan(100);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(1000);
+  });
+
   test("phones gain the side tabs when the session info arrives", async ({
     page,
     request,

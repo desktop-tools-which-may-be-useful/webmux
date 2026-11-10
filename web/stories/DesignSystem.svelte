@@ -468,6 +468,30 @@
         <ListButton variant="navigation">更新文档</ListButton>
       </Card.Content>
     </Card.Root>
+    <Card.Root>
+      <Card.Header
+        ><Card.Title>对话轮次刻度</Card.Title><Card.Description
+          >用户消息使用前景色，AI 消息使用信息蓝；当前消息加长并提高不透明度。</Card.Description
+        ></Card.Header
+      >
+      <Card.Content class="flex flex-col items-start">
+        <ListButton
+          variant="turn"
+          data-turn-role="user"
+          aria-label="第 1 轮 · 你：修复首页排序"
+          title="第 1 轮 · 你：修复首页排序"
+          ><span aria-hidden="true"></span></ListButton
+        >
+        <ListButton
+          variant="turn"
+          data-turn-role="agent"
+          aria-label="第 1 轮 · AI：已修改排序"
+          aria-current="location"
+          title="第 1 轮 · AI：已修改排序"
+          ><span aria-hidden="true"></span></ListButton
+        >
+      </Card.Content>
+    </Card.Root>
   {:else if section === "feedback"}
     <Card.Root>
       <Card.Header
