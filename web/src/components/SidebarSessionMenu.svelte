@@ -1,6 +1,8 @@
 <script lang="ts">
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { SessionInfo } from "../schemas";
+  import { sessionPins } from "../session-pins.svelte";
+  import { findShell } from "../shell.svelte";
   import SidebarRowMenu from "./SidebarRowMenu.svelte";
 
   // The "⋯" button over the end of a sidebar session row and its menu: the
@@ -38,6 +40,8 @@
     disabled?: boolean;
   } = $props();
 
+  const shell = findShell();
+  const live = $derived(shell?.sessions.sessions ?? []);
   const closeLabel = $derived.by(() => {
     if (target.kind !== "live") return "";
     const { session } = target;
@@ -51,6 +55,29 @@
 <SidebarRowMenu ariaLabel={`会话操作：${label}`} {tabindex} {disabled}>
   {#if target.kind === "live"}
     {@const { session, onrename, onclose } = target}
+    {#if session.status !== "exited"}
+      {@const pinned = sessionPins.has(session.id)}
+      <DropdownMenu.Item
+        disabled={!sessionPins.ready || (!pinned && sessionPins.full)}
+        onSelect={() => sessionPins.toggle(session.id)}
+      >
+        {pinned ? "取消置顶" : "置顶会话"}
+      </DropdownMenu.Item>
+      {#if pinned}
+        <DropdownMenu.Item
+          disabled={!sessionPins.ready ||
+            !sessionPins.canMove(session.id, -1, live)}
+          onSelect={() => sessionPins.move(session.id, -1, live)}
+          >上移置顶</DropdownMenu.Item
+        >
+        <DropdownMenu.Item
+          disabled={!sessionPins.ready ||
+            !sessionPins.canMove(session.id, 1, live)}
+          onSelect={() => sessionPins.move(session.id, 1, live)}
+          >下移置顶</DropdownMenu.Item
+        >
+      {/if}
+    {/if}
     <DropdownMenu.Item onSelect={() => onrename(session)}
       >修改标题</DropdownMenu.Item
     >

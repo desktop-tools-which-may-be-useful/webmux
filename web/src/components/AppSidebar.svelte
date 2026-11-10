@@ -9,6 +9,7 @@
   import { homeWorktrees } from "../home-worktrees.svelte";
   import { connectorMissingText } from "../hybrid";
   import { removeRecord, resumeSession } from "../recoverable";
+  import { sessionPins } from "../session-pins.svelte";
   import type { Route } from "../route";
   import type { ArchivedSession, HybridRelease, Worktree } from "../schemas";
   import {
@@ -22,6 +23,7 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import ChatHistory from "./ChatHistory.svelte";
   import RebuildWorktreeDialog from "./RebuildWorktreeDialog.svelte";
+  import SidebarLiveSessionRow from "./SidebarLiveSessionRow.svelte";
   import ModeSwitch from "./ModeSwitch.svelte";
   import SidebarFooter from "./SidebarFooter.svelte";
   import WorkbenchTree from "./WorkbenchTree.svelte";
@@ -45,6 +47,11 @@
   const current = $derived(route.name === "terminal" ? route.id : "");
   const live = $derived(
     shell.sessions.sessions.filter((session) => session.state === "active"),
+  );
+  const pinned = $derived(sessionPins.ordered(live));
+  const pinnedIDs = $derived(new Set(pinned.map((session) => session.id)));
+  const unpinned = $derived(
+    live.filter((session) => !pinnedIDs.has(session.id)),
   );
   const configs = $derived(
     shell.launchConfigs.state.status === "ready"
@@ -78,6 +85,7 @@
     resumeError = "";
     try {
       await removeRecord(record.id);
+      sessionPins.refreshEnded(record.id);
       shell.drafts.remove(record.id);
     } catch (err) {
       resumeError = `工作树已删除，但无法删除“${recordTitle(record)}”的记录：${errorMessage(err)}`;
@@ -92,6 +100,7 @@
     resumeError = "";
     try {
       await removeRecord(record.id);
+      sessionPins.refreshEnded(record.id);
       shell.drafts.remove(record.id);
       await shell.archived.refresh();
     } catch (err) {
@@ -173,20 +182,43 @@
         />新聊天{:else}<IconPlus aria-hidden="true" />新建会话{/if}
     </Button>
   </div>
+  {#if pinned.length}
+    <section
+      class="max-h-36 shrink-0 overflow-y-auto px-2 pt-2"
+      aria-label="已置顶会话"
+    >
+      <h2 class="px-3 pb-1 text-xs text-muted-foreground">置顶</h2>
+      <ul class="space-y-0.5">
+        {#each pinned as session (session.id)}
+          <SidebarLiveSessionRow
+            {session}
+            {current}
+            icon={session.agent?.icon ??
+              configIcons.get(session.configId ?? "") ??
+              ""}
+            pinned
+            onopen={openSession}
+            onrename={shell.rename}
+            onclose={shell.close}
+          />
+        {/each}
+      </ul>
+    </section>
+  {/if}
   <ScrollArea
     type="hover"
     class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overscroll-contain [&_[data-slot=scroll-area-viewport]>div]:!block"
   >
     <div class="px-2 py-2">
-      {#if resumeError}<p
+      {#if resumeError || sessionPins.error}<p
           role="alert"
           class="mb-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"
         >
-          {resumeError}
+          {resumeError || sessionPins.error}
         </p>{/if}
       {#if shellUi.mode === "chat"}
         <ChatHistory
-          sessions={live}
+          sessions={unpinned}
           records={shell.archived.records}
           {configs}
           repositories={shell.repositories.list}
@@ -205,7 +237,7 @@
            appear between rows already on screen during startup. -->
         <WorkbenchTree
           repositories={shell.repositories.list}
-          sessions={live}
+          sessions={unpinned}
           home={homeWorktrees.value}
           scope={route.name === "sessions"
             ? (shell.repositories.choice ?? "all")
