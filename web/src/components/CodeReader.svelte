@@ -1,10 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import {
-    CodeView,
-    getFiletypeFromFileName,
-    type CodeViewOptions,
-  } from "@pierre/diffs";
+  import { CodeView, type CodeViewOptions } from "@pierre/diffs";
   import { captureCursor, restoreCursor } from "../code-search";
   import { createCodeFind } from "../code-find.svelte";
   import { settings, changeSettings } from "../settings.svelte";
@@ -24,6 +20,12 @@
     watchReader,
     type CodeHorizontalTrack,
   } from "../code-reader-controls";
+  import {
+    measureFilePosition,
+    parseFileGoto,
+    resolvePierreFile,
+    scrollFileToColumn,
+  } from "../code-reader-dom";
   import type { CodeReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import CodeHorizontalScrollbar from "./CodeHorizontalScrollbar.svelte";
@@ -67,22 +69,7 @@
   const searchLines = lines.map((line, index) =>
     index < lines.length - 1 ? `${line}\n` : line,
   );
-  const file = untrack(() => {
-    const name = path.split(/[\\/]/).pop() || path;
-    const inferred = getFiletypeFromFileName(name);
-    // Pierre's filename lookup is case-sensitive; retry lowercase extensions
-    // as the previous reader did (`README.MD`, `MAIN.GO`).
-    const lang =
-      inferred === "text"
-        ? getFiletypeFromFileName(name.toLowerCase())
-        : inferred;
-    return {
-      name,
-      contents,
-      // The old reader highlighted Svelte as JavaScript; keep that reading.
-      lang: /\.svelte$/i.test(name) ? "javascript" : lang,
-    };
-  });
+  const file = untrack(() => resolvePierreFile(path, contents));
   // Until applied, `capture()` returns it unchanged.
   let pending = untrack(() => restore);
   // The top line last measured while the reader had layout; a hidden tab
@@ -163,64 +150,21 @@
     choose(line, line);
   }
 
-  // The first visible line and how far (0-1 of its height) it is scrolled
-  // past. A scroll event fires before the renderer has painted its rows, so
-  // derive it from the numeric line layout instead of the stale DOM.
   function position(): Pick<CodeReaderState, "line" | "offset"> {
-    const fallback = () =>
-      known ?? {
-        line: lineNumber(untrack(() => requested ?? restoreLine)),
-        offset: 0,
-      };
-    if (!viewer || host.clientHeight === 0) return fallback();
-    const item = viewer.getRenderedItems()[0];
-    if (!item) return fallback();
-    const itemTop = viewer.getTopForItem(id);
-    if (itemTop !== undefined) {
-      const local = viewer.getScrollTop() - itemTop;
-      let low = 1;
-      let high = lines.length;
-      let block: { top: number; height: number } | undefined;
-      let found = 0;
-      while (low <= high) {
-        const middle = Math.floor((low + high) / 2);
-        const candidate = item.instance.getLinePosition(middle);
-        if (!candidate) break;
-        if (candidate.top <= local) {
-          block = candidate;
-          found = middle;
-          low = middle + 1;
-        } else {
-          high = middle - 1;
-        }
-      }
-      if (block) {
-        known = {
-          line: lineNumber(found),
-          offset:
-            block.height > 0
-              ? Math.min(1, Math.max(0, (local - block.top) / block.height))
-              : 0,
-        };
-        return known;
-      }
-    }
-    const edge = host.getBoundingClientRect().top;
-    for (const row of item.element.shadowRoot?.querySelectorAll<HTMLElement>(
-      "[data-line]",
-    ) ?? []) {
-      const line = Number(row.dataset.line);
-      if (!Number.isInteger(line) || line < 1) continue;
-      const rect = row.getBoundingClientRect();
-      if (rect.bottom <= edge + 0.5) continue;
-      const offset =
-        rect.height > 0
-          ? Math.min(1, Math.max(0, (edge - rect.top) / rect.height))
-          : 0;
-      known = { line, offset };
-      return known;
-    }
-    return fallback();
+    const measured = measureFilePosition(
+      viewer,
+      host,
+      id,
+      lines.length,
+      () =>
+        known ?? {
+          line: lineNumber(untrack(() => requested ?? restoreLine)),
+          offset: 0,
+        },
+    );
+    if (viewer && host.clientHeight > 0 && viewer.getRenderedItems()[0])
+      known = measured;
+    return measured;
   }
 
   export function line() {
@@ -328,51 +272,15 @@
   }
 
   function scrollToColumn(line: number, column: number) {
-    const target = lineNumber(line);
-    let attempts = 0;
-    // CodeView queues its render on a frame, so the target row usually only
-    // exists after the scroll request has painted.
-    const apply = () => {
-      const row = viewer
-        ?.getRenderedItems()[0]
-        ?.element.shadowRoot?.querySelector<HTMLElement>(
-          `[data-line="${target}"]`,
-        );
-      const scroller = row?.closest<HTMLElement>("[data-code]");
-      if (!row || !scroller) {
-        if (++attempts < 20) requestAnimationFrame(apply);
-        return;
-      }
-      const length = row.textContent?.length ?? 0;
-      if (!length) return;
-      const rect = row.getBoundingClientRect();
-      const box = scroller.getBoundingClientRect();
-      const x =
-        rect.left +
-        (rect.width * Math.min(Math.max(column - 1, 0), length)) / length;
-      scroller.scrollLeft += x - box.left;
-    };
-    requestAnimationFrame(apply);
+    scrollFileToColumn(() => viewer, lineNumber(line), column);
   }
 
   function goto(value: string) {
-    const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());
-    if (match) {
-      // Before the first placement the restored selection is still pending.
-      const current =
-        (placed ? undefined : pending?.selection?.start) ??
-        selected?.start ??
-        1;
-      const [, sign, digits, column, percent] = match;
-      let target = digits ? Number(digits) : current;
-      if (digits && percent) {
-        let fraction = target / 100;
-        if (sign)
-          fraction =
-            fraction * (sign === "-" ? -1 : 1) + current / lines.length;
-        target = Math.round(lines.length * fraction);
-      } else if (digits && sign)
-        target = current + target * (sign === "-" ? -1 : 1);
+    const current =
+      (placed ? undefined : pending?.selection?.start) ?? selected?.start ?? 1;
+    const parsed = parseFileGoto(value, current, lines.length);
+    if (parsed) {
+      const { target, column } = parsed;
       // Before the first placement this jump replaces the restored or initial
       // scroll position, which would otherwise win once layout arrives; the
       // rest of the restored state still applies.
@@ -384,7 +292,7 @@
         }
       }
       scrollToLine(target, "center");
-      if (column) scrollToColumn(target, Number(column.slice(1)));
+      if (column !== undefined) scrollToColumn(target, column);
     }
     find.panel = undefined;
     host.focus();

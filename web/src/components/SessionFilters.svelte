@@ -17,7 +17,7 @@
     onclear,
   }: {
     // Unfiltered list: the filter counts never depend on the active filter.
-    sessions: SessionInfo[];
+    sessions: readonly SessionInfo[];
     // Archived hybrid records, also unfiltered.
     archivedCount: number;
     query: string;

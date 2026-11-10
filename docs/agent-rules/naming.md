@@ -1,6 +1,9 @@
 # File Naming
 
-A reader should be able to predict a file's name from what it owns. Names state the noun or responsibility, never a vague word. `internal/archtest` (`TestGoFileNames`) and `web/test/architecture.test.ts` (`file naming`) enforce the mechanical parts below; the rest is review judgement.
+A reader should be able to predict a file's name from what it owns. Names state the noun or responsibility, never a vague word.
+
+- `internal/archtest` (`TestGoFileNames`, `TestSourceFileSize`) enforces Go file naming and the `< 500` line production source budget.
+- `web/test/architecture.test.ts` (`file naming`) enforces frontend file naming and the `< 500` line production source budget; the rest is review judgement.
 
 ## Frontend (`web/`)
 

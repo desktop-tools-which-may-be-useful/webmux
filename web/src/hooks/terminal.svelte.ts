@@ -2,18 +2,13 @@ import { onMount, untrack } from "svelte";
 import type { Terminal } from "@xterm/xterm";
 import { SearchAddon } from "@xterm/addon-search";
 import {
+  executeTerminalFind,
   terminalFindError,
   terminalFindLimit,
   type TerminalFindOptions,
   type TerminalFindResults,
 } from "../terminal-search";
 import { terminalFont } from "./terminal-font-preference.svelte";
-import {
-  type ControlState,
-  type SessionInfo,
-  type SubmissionProgress,
-} from "../schemas";
-import type { Connection } from "../ws";
 import { modifiedInput, type Modifiers } from "../input";
 import { loadTerminalFont } from "../fonts";
 import { hasTouchInput } from "../touch-input";
@@ -24,72 +19,15 @@ import {
 } from "./terminal-renderer";
 import {
   attachTerminalInput,
+  bindTerminalViewport,
+  fitTerminalGrid,
+  toggleTerminalKeyboard,
   type TerminalClipboard,
   type TerminalUserInput,
 } from "./terminal-input";
 import { createTerminalSocket } from "./terminal-socket.svelte";
-
-export interface TerminalController {
-  readonly ready: boolean;
-  readonly info: SessionInfo | undefined;
-  readonly connection: Connection;
-  readonly restoring: boolean;
-  /** The run whose output this page has drawn, if any. */
-  readonly drawn: string | undefined;
-  readonly exitCode: number | null;
-  readonly fontSize: number;
-  readonly modifiers: Modifiers;
-  readonly shiftLocked: boolean;
-  readonly error: string;
-  readonly selection: string;
-  // Whether the newest output is in view (see `updateBottom`).
-  readonly atBottom: boolean;
-  readonly historyTruncated: boolean;
-  readonly control: ControlState | undefined;
-  readonly controlling: boolean;
-  readonly clientId: string;
-  readonly canFind: boolean;
-  readonly findResults: TerminalFindResults | null;
-  readonly findReplayed: boolean;
-  readonly bufferType: "normal" | "alternate";
-  readonly scrollback: number;
-  findNext(
-    query: string,
-    options: TerminalFindOptions,
-    incremental?: boolean,
-  ): void;
-  findPrevious(query: string, options: TerminalFindOptions): void;
-  clearFind(): void;
-  claim(): void;
-  submit(
-    submissionId: string,
-    text: string,
-    enter: boolean,
-    report: (state: SubmissionProgress) => void,
-  ): boolean;
-  track(
-    submissionId: string,
-    report: (state: SubmissionProgress) => void,
-  ): void;
-  untrack(submissionId: string): void;
-  copySelection(): void;
-  clearSelection(): void;
-  send(input: string): boolean;
-  setFontSize(value: number): void;
-  resetModifiers(): void;
-  toggleModifier(key: keyof Modifiers): void;
-  lockModifier(key: "shift"): void;
-  paste(text: string): boolean;
-  // Toggles the soft keyboard; `beforeOpen` runs just before focusing.
-  keyboard(beforeOpen?: (target: HTMLElement) => void): void;
-  clear(): void;
-  resync(): void;
-  // Reattaches after the session moved back to its terminal side.
-  reconnect(): void;
-  fit(): void;
-  scrollToBottom(): void;
-  focus(): void;
-}
+export type { TerminalController } from "../terminal-search";
+import type { TerminalController } from "../terminal-search";
 
 // One session's terminal: composes the xterm renderer, the session socket,
 // keyboard/IME/draft input and touch gestures on the host from
@@ -167,30 +105,18 @@ export function useTerminal(
       terminalFindError(query, options.regex)
     )
       return;
-    if (incremental || !findActive) {
-      search.clearDecorations();
-      // The addon starts at row zero without a selection. Seed a one-cell
-      // anchor at the viewport, synchronously replaced by the actual match
-      // (or cleared on no match). Never seed before validating the query.
-      terminal.select(0, terminal.buffer.active.viewportY, 1);
-    }
+    const wasActive = findActive;
     findActive = true;
     findReplayed = false;
-    const theme = terminal.options.theme;
-    const searchOptions = {
-      ...options,
+    executeTerminalFind(
+      terminal,
+      search,
+      query,
+      options,
+      previous,
       incremental,
-      decorations: {
-        matchBackground: theme?.yellow,
-        matchBorder: theme?.yellow,
-        matchOverviewRuler: theme?.yellow ?? "#a16207",
-        activeMatchBackground: theme?.blue,
-        activeMatchBorder: theme?.blue,
-        activeMatchColorOverviewRuler: theme?.blue ?? "#2563eb",
-      },
-    };
-    if (previous) search.findPrevious(query, searchOptions);
-    else search.findNext(query, searchOptions);
+      wasActive,
+    );
   }
   // Whether the newest output is in view: the xterm viewport sits at the
   // buffer end and, for an observer panning a larger grid, the host does too.
@@ -209,45 +135,29 @@ export function useTerminal(
   function safeFit() {
     const parent = getContainer();
     if (isVisible() && parent?.clientWidth > 0 && parent?.clientHeight > 0) {
-      // Observers render the controller's grid and scroll it, never fit.
-      const control = stream.control;
-      const locked = isSizeLocked();
       const held =
         isHeightHeld() &&
         sized &&
         parent.offsetWidth === fitWidth &&
         terminal?.options.fontSize === fitFont;
-      parent.classList.toggle("observing", stream.observing);
-      if (control && stream.observing) {
-        if (
-          terminal?.cols !== control.cols ||
-          terminal?.rows !== control.rows
-        ) {
-          terminal?.resize(control.cols, control.rows);
-          // Keep the newest rows, where prompts appear, in view.
-          parent.scrollTop = parent.scrollHeight;
-        }
-        // Taking control later must fit this host instead of pushing the
-        // previous controller's grid onto the PTY.
-        sized = false;
-      } else if (!sized || (!locked && !held)) {
-        renderer?.fit();
-        if (renderer) {
-          sized = true;
-          fitWidth = parent.offsetWidth;
-          fitFont = terminal?.options.fontSize ?? 0;
-        }
-      }
+      ({ sized, fitWidth, fitFont } = fitTerminalGrid(
+        parent,
+        terminal,
+        renderer,
+        stream.control,
+        stream.observing,
+        isSizeLocked(),
+        held,
+        sized,
+        fitWidth,
+        fitFont,
+      ));
       if ((scrollOnFit || (gridFixed() && follow)) && terminal) {
-        // A locked grid may exceed the host: scroll it like an observer so
-        // the newest rows, where prompts appear, stay visible.
         anchorBottom(parent);
         scrollOnFit = false;
       }
       updateBottom();
     } else {
-      // A fit request the hidden or zero-sized host dropped must not count as
-      // sized, or the next show would be suppressed and keep the old grid.
       sized = false;
     }
   }
@@ -362,23 +272,17 @@ export function useTerminal(
           else stream.sendReply(data);
         },
       });
-      // The browser's own text paste reaches xterm's textarea, which reports
-      // the payload through onData synchronously. Keep it literal too, not just
-      // the soft-key paste button, while a soft modifier is armed or locked.
-      const nativePaste = () => {
-        pasting = true;
-        queueMicrotask(() => {
-          pasting = false;
-        });
-      };
-      parent.addEventListener("paste", nativePaste, true);
-      const selected = term.onSelectionChange(() => {
-        selection = term.getSelection();
-      });
-      const scrolled = term.onScroll(() => updateBottom(true));
-      const parsed = term.onWriteParsed(() => updateBottom());
-      const hostScrolled = () => updateBottom(true);
-      parent.addEventListener("scroll", hostScrolled, { passive: true });
+      const detachViewport = bindTerminalViewport(
+        term,
+        parent,
+        () => (selection = term.getSelection()),
+        () => updateBottom(true),
+        () => updateBottom(),
+        () => {
+          pasting = true;
+          queueMicrotask(() => (pasting = false));
+        },
+      );
       const detachTouch = attachTouchGestures(term, parent, {
         hasSelection: () => Boolean(selection),
         keyboardDismissed: isKeyboardDismissed,
@@ -393,11 +297,7 @@ export function useTerminal(
         view.dispose();
         detachTouch();
         detachInput();
-        scrolled.dispose();
-        parsed.dispose();
-        parent.removeEventListener("scroll", hostScrolled);
-        parent.removeEventListener("paste", nativePaste, true);
-        selected.dispose();
+        detachViewport();
         resultsChanged.dispose();
         bufferChanged.dispose();
         clearFind();
@@ -533,28 +433,13 @@ export function useTerminal(
       return pasteResult;
     },
     keyboard(beforeOpen) {
-      const textarea = terminal?.textarea;
-      if (!terminal || !textarea) return;
-      const focused = document.activeElement === textarea;
-      if (focused && isKeyboardDismissed() && !keyboardReopenAttempted) {
-        // Android can hide the IME with Back while the helper keeps focus;
-        // focus() alone is then a no-op, so restart focus once to reopen it.
-        // If the browser still declines, the next press toggles normally.
-        keyboardReopenAttempted = true;
-        stream.claim();
-        textarea.blur();
-        beforeOpen?.(textarea);
-        terminal.focus();
-        return;
-      }
-      keyboardReopenAttempted = false;
-      if (focused) {
-        terminal.blur();
-        return;
-      }
-      stream.claim();
-      beforeOpen?.(textarea);
-      terminal.focus();
+      keyboardReopenAttempted = toggleTerminalKeyboard(
+        terminal,
+        isKeyboardDismissed,
+        keyboardReopenAttempted,
+        stream.claim,
+        beforeOpen,
+      );
     },
     clear() {
       clearFind();

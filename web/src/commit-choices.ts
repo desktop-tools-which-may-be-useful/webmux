@@ -1,8 +1,15 @@
 // Rows for the start-commit dropdown. A row shows the commit title first and
 // its short hash, tip tags and age second, so users recognise a commit by what
 // it did and how recent it is instead of typing a hash.
+import { api } from "./api";
+import { errorMessage } from "./error";
+import {
+  BranchesSchema,
+  CommitsSchema,
+  RefreshBranchBaseRequestSchema,
+  RefreshBranchBaseResponseSchema,
+} from "./schemas";
 import type { z } from "zod";
-import type { CommitsSchema } from "./schemas";
 
 export type Commit = z.infer<typeof CommitsSchema>["commits"][number];
 /** A branch tip the history was read from, e.g. the local or upstream tip. */
@@ -83,4 +90,64 @@ export function commitChoices(
     },
     ...rows,
   ];
+}
+
+// Tags for a branch's local tip and, after a fetch, its upstream tip.
+export function branchTips(local: string, upstreamHead: string): CommitTip[] {
+  if (!local && upstreamHead) return [{ hash: upstreamHead, tag: "远程最新" }];
+  if (!upstreamHead) return [{ hash: local, tag: "本地最新" }];
+  if (upstreamHead === local) return [{ hash: local, tag: "本地与远程最新" }];
+  return [
+    { hash: upstreamHead, tag: "远程最新" },
+    { hash: local, tag: "本地最新" },
+  ];
+}
+
+export function fetchRepositoryCommits(
+  repositoryId: string,
+  tips: CommitTip[],
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams(
+    [...new Set(tips.map((tip) => tip.hash))].map((hash) => ["from", hash]),
+  );
+  return api(
+    `/repositories/${repositoryId}/commits?${query}`,
+    CommitsSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+
+export function refreshRepositoryBranchBase(
+  repositoryId: string,
+  branchName: string,
+  signal: AbortSignal,
+) {
+  return api(
+    `/repositories/${repositoryId}/branches/refresh`,
+    RefreshBranchBaseResponseSchema,
+    "POST",
+    { branch: branchName },
+    signal,
+    RefreshBranchBaseRequestSchema,
+  );
+}
+
+export function fetchRepositoryBranches(
+  repositoryId: string,
+  signal?: AbortSignal,
+) {
+  return api(
+    `/repositories/${repositoryId}/branches`,
+    BranchesSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+
+export function formatCommitLoadError(err: unknown) {
+  return `无法读取最近提交：${errorMessage(err)}`;
 }

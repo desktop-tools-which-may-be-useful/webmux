@@ -1,7 +1,7 @@
 export const pdfMediaType = "application/pdf";
 
 // Text formats with a read-only preview beside the source view.
-type PreviewFormat = "markdown" | "html" | "csv" | "tsv" | "json";
+export type PreviewFormat = "markdown" | "html" | "csv" | "tsv" | "json";
 
 const formats: [RegExp, PreviewFormat][] = [
   [/\.(?:md|markdown|mdown|mkd)$/i, "markdown"],

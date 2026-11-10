@@ -2,123 +2,44 @@ import { onDestroy, untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { api } from "../api";
 import { setBrowserChrome } from "../browser-chrome";
-import {
-  answerSwitch,
-  changeView,
-  chatActions,
-  type ChatActions,
-} from "../chat-api";
+import { answerSwitch, changeView, chatActions } from "../chat-api";
 import { errorMessage } from "../error";
 import {
+  buildHybridNotices,
+  deriveHybridHeaderInfo,
   eligibilityText,
-  shortId,
+  switchConfirmations,
   switchSteps,
   switchTarget,
+  type HybridAmbiguous,
+  type HybridConfirm,
+  type HybridView,
   type SwitchProgressPhase,
-  type SwitchStep,
   type SwitchTarget,
 } from "../hybrid";
+export type { HybridNotice, HybridView } from "../hybrid";
+export type { HybridSession, HybridTerminal } from "./hybrid-types";
+import {
+  returnQueuedDraft,
+  type HybridSession,
+  type HybridTerminal,
+} from "./hybrid-types";
 import { loadRecord, sessionConflict } from "../recoverable";
 import {
   SessionInfoSchema,
-  type AgentCandidate,
   type AgentConnector,
   type ArchivedSession,
   type ChatEvent,
   type SessionInfo,
 } from "../schemas";
 import type { TerminalDraft, TerminalDrafts } from "../terminal-draft.svelte";
-import type { Connection } from "../ws";
-import { createChatSocket, type ChatSocket } from "./chat-socket.svelte";
-
-/** What the hybrid page needs from the session's terminal stream. */
-export interface HybridTerminal {
-  readonly info: SessionInfo | undefined;
-  readonly connection: Connection;
-  readonly restoring: boolean;
-  /** The run whose output this page has drawn, if any. */
-  readonly drawn: string | undefined;
-  reconnect(): void;
-}
+import { createChatSocket } from "./chat-socket.svelte";
 
 // A switch to the terminal stays on the progress until the new run has
 // drawn on this page, at most this long; the progress stays at least
 // minimumProgress so a fast switch does not flash.
 const arrivalTimeout = 10_000;
 const minimumProgress = 400;
-
-/**
- * What the pane shows: the terminal (also for ordinary sessions), the chat
- * view, a switch in progress, or the resume choices of a session that is
- * gone but recoverable.
- */
-export type HybridView = "terminal" | "chat" | "switching" | "recovery";
-
-/** A dismissible page strip. */
-export type HybridNotice = {
-  key: string;
-  tone: "info" | "warning" | "danger";
-  text: string;
-};
-
-/** A switch that waits for the user to confirm interrupting a turn. */
-type HybridConfirm = { to: SwitchTarget; title: string; body: string };
-
-/** A switch to chat that found several agent sessions to continue. */
-type HybridAmbiguous = {
-  message: string;
-  candidates: AgentCandidate[];
-};
-
-export interface HybridSession {
-  /** The session is (or was) a hybrid session. */
-  readonly known: boolean;
-  readonly view: HybridView;
-  readonly chat: ChatSocket;
-  readonly actions: ChatActions;
-  /** Session info for the header: the terminal's, or read on the chat view. */
-  readonly info: SessionInfo | undefined;
-  /** The view the session settled on, null while switching or unknown. */
-  readonly side: SwitchTarget | null;
-  /** The view a running switch goes to, when known. */
-  readonly target: SwitchTarget | null;
-  readonly steps: SwitchStep[];
-  /** Why switching to chat is unavailable now; "" when it is available. */
-  readonly chatUnavailable: string;
-  readonly confirming: HybridConfirm | null;
-  /** The interrupt timed out and the switch waits for a choice (D21). */
-  readonly awaitingChoice: boolean;
-  readonly answering: boolean;
-  readonly notices: HybridNotice[];
-  /** The closed or interrupted session, to resume it. */
-  readonly recoverable: ArchivedSession | undefined;
-  /** Neither the session nor a record exists: its drafts can go. */
-  readonly missing: boolean;
-  /** The chat side's connector is not installed; undefined once dismissed. */
-  readonly connector: AgentConnector | undefined;
-  /** A switch to chat waiting for the user to pick the agent session. */
-  readonly ambiguous: HybridAmbiguous | null;
-  request(to: SwitchTarget): void;
-  confirm(): void;
-  cancelConfirm(): void;
-  choose(choice: "wait" | "force" | "cancel"): Promise<void>;
-  /** Switches to chat continuing the picked agent session. */
-  pick(agentSessionId: string): void;
-  cancelPick(): void;
-  dismissConnector(): void;
-  dismiss(key: string): void;
-}
-
-const confirmations: Record<SwitchTarget, Omit<HybridConfirm, "to">> = {
-  terminal: {
-    title: "切换到终端？",
-    body: "当前回合会被中断，已输出的内容会保留。",
-  },
-  chat: {
-    title: "切换到聊天？",
-    body: "TUI 正在执行回合：会先发送中断键，等它停下后再退出 TUI。",
-  },
-};
 
 // The hybrid side of the session page: the chat channel, where the session
 // is, switching (with the D21 choice and the confirmation before a running
@@ -220,20 +141,9 @@ export function useHybrid(
       (current?.state ?? "active") !== "active" ||
       !!state?.recovery,
   );
-  const info = $derived.by(() => {
-    const restInfo = fromServer ? current : undefined;
-    if (where === "terminal" || !restInfo) return terminal.info ?? current;
-    // Read once per change below; the turn itself is newer than that read.
-    const running = state?.turn.running ?? false;
-    const status = running
-      ? "running"
-      : state?.requests.length
-        ? "waiting"
-        : restInfo.status === "running"
-          ? "idle"
-          : restInfo.status;
-    return { ...restInfo, status } satisfies SessionInfo;
-  });
+  const info = $derived(
+    deriveHybridHeaderInfo(where, fromServer, current, terminal.info, state),
+  );
   // While the stream is not attached, the session's view, transition and
   // header are read from the server on every change the chat channel or the
   // stream reports. The model's title re-reads the session so the server's
@@ -368,18 +278,6 @@ export function useHybrid(
         notice = event.notice.text;
   }
 
-  // D20: the prompts still queued come back to this device's draft only,
-  // never sent anywhere by themselves.
-  function returnDraft(text: string) {
-    if (draft.submission) drafts.addScratch(draft, text);
-    else {
-      const merged = draft.text ? `${draft.text}\n\n${text}` : text;
-      drafts.edit(draft, merged, merged.length);
-    }
-    drafts.setEnabled(draft, true);
-    notice = "排队的消息已退回到本机草稿，不会自动发送。";
-  }
-
   async function run(to: SwitchTarget, agentSessionId?: string) {
     requesting = to;
     error = "";
@@ -389,7 +287,7 @@ export function useHybrid(
       if (key.startsWith("failure:")) dismissed.delete(key);
     try {
       const result = await changeView(id, to, agentSessionId);
-      if (result.draft) returnDraft(result.draft);
+      if (result.draft) notice = returnQueuedDraft(drafts, draft, result.draft);
       dropped = result.dropped;
     } catch (err) {
       const conflict = sessionConflict(err);
@@ -432,34 +330,9 @@ export function useHybrid(
     return switchConnector;
   });
 
-  const notices = $derived.by(() => {
-    const list: HybridNotice[] = [];
-    const failure = state?.switchError || error;
-    if (failure)
-      list.push({ key: `failure:${failure}`, tone: "danger", text: failure });
-    if (notice)
-      list.push({ key: `notice:${notice}`, tone: "info", text: notice });
-    if (dropped.length)
-      list.push({
-        key: `dropped:${dropped.join(" ")}`,
-        tone: "warning",
-        text: `以下参数在恢复时未保留：${dropped.join(" ")}`,
-      });
-    const change = state?.idChange;
-    if (change && where === "terminal")
-      list.push({
-        key: `id:${change.from}>${change.to}`,
-        tone: "info",
-        text: `TUI 已切换到新会话 ${shortId(change.to)}（上一个：${shortId(change.from)}），切到聊天时接手新会话`,
-      });
-    if (state?.queueLost)
-      list.push({
-        key: "queue-lost",
-        tone: "warning",
-        text: `排队的消息已丢失（${state.queueLost} 条），浏览器中的草稿不受影响`,
-      });
-    return list.filter((item) => !dismissed.has(item.key));
-  });
+  const notices = $derived(
+    buildHybridNotices(state, where, error, notice, dropped, dismissed),
+  );
 
   return {
     get known() {
@@ -520,7 +393,7 @@ export function useHybrid(
         to === "terminal"
           ? !!state?.turn.running
           : terminal.info?.status === "running";
-      if (running) confirming = { to, ...confirmations[to] };
+      if (running) confirming = { to, ...switchConfirmations[to] };
       else void run(to);
     },
     confirm() {

@@ -283,33 +283,33 @@
       "count": 1,
       "owner": "user-files"
     },
+    "internal/codeview/copy.go|copyAt|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/copy.go|copyAt|os.NewFile": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/copy.go|copyDir|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/copy.go|copyDir|os.NewFile": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/codeview/copy.go|copyFile|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/copy.go|copyFile|os.NewFile": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
     "internal/codeview/mutate.go|*Service.Delete|golang.org/x/sys/unix.Unlinkat": {
       "count": 3,
       "owner": "user-files"
-    },
-    "internal/codeview/mutate.go|copyAt|golang.org/x/sys/unix.Openat": {
-      "count": 1,
-      "owner": "user-files"
-    },
-    "internal/codeview/mutate.go|copyAt|os.NewFile": {
-      "count": 1,
-      "owner": "user-files"
-    },
-    "internal/codeview/mutate.go|copyDir|golang.org/x/sys/unix.Openat": {
-      "count": 1,
-      "owner": "user-files"
-    },
-    "internal/codeview/mutate.go|copyDir|os.NewFile": {
-      "count": 1,
-      "owner": "user-files"
-    },
-    "internal/codeview/mutate.go|copyFile|golang.org/x/sys/unix.Openat": {
-      "count": 1,
-      "owner": "read-only-codeview"
-    },
-    "internal/codeview/mutate.go|copyFile|os.NewFile": {
-      "count": 1,
-      "owner": "read-only-codeview"
     },
     "internal/codeview/mutate.go|moveAt|golang.org/x/sys/unix.Renameat": {
       "count": 1,

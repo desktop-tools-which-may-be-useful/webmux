@@ -27,6 +27,15 @@
     watchReader,
     type CodeHorizontalTrack,
   } from "../code-reader-controls";
+  import {
+    diffExpansionLines,
+    enhanceDiffControls,
+    findDiffExpandTarget,
+    findUnexpandedDiffRegion,
+    getDiffInstance,
+    measureDiffTopLine,
+    parseDiffGotoLine,
+  } from "../code-diff-dom";
   import type { CodeDiffReaderState } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import CodeHorizontalScrollbar from "./CodeHorizontalScrollbar.svelte";
@@ -78,7 +87,6 @@
     },
   );
   const id = "diff";
-  const expansionLines = 30;
   // Until applied, `capture()` returns it unchanged.
   let pending = untrack(() => restore);
   // Unmodified lines revealed per hunk separator. The library keeps its own
@@ -125,49 +133,11 @@
     selected = range;
     onselect(range);
   }
-  // The rendered diff instance, its expandHunk wrapped to record expansions
-  // exactly as the library's renderer counts them.
   function diffInstance() {
-    const item = viewer?.getRenderedItems()[0];
-    if (item?.type !== "diff") return;
-    const { instance } = item;
-    if (!recorded.has(instance)) {
-      recorded.add(instance);
-      const expand = instance.expandHunk;
-      instance.expandHunk = (index, direction, count) => {
-        // The schema needs finite counts; this exceeds any region.
-        const lines = Math.min(count ?? expansionLines, 1e9);
-        const region = expanded.get(index) ?? { fromStart: 0, fromEnd: 0 };
-        if (direction !== "down")
-          region.fromStart = Math.min(region.fromStart + lines, 1e9);
-        if (direction !== "up")
-          region.fromEnd = Math.min(region.fromEnd + lines, 1e9);
-        expanded.set(index, region);
-        expand(index, direction, count);
-      };
-    }
-    return instance;
+    return getDiffInstance(viewer, recorded, expanded);
   }
-  // The first source row at least partly below the top edge.
   function topLine(): CodeDiffReaderState["top"] {
-    if (host.clientHeight === 0) return knownTop;
-    const item = viewer?.getRenderedItems()[0];
-    const edge = host.getBoundingClientRect().top;
-    for (const row of item?.element.shadowRoot?.querySelectorAll<HTMLElement>(
-      "[data-line]",
-    ) ?? []) {
-      const line = Number(row.dataset.line);
-      if (!Number.isInteger(line) || line < 1) continue;
-      if (row.getBoundingClientRect().bottom <= edge + 0.5) continue;
-      // Split columns name their side; unified rows only by their type.
-      const deletions = row.closest("[data-deletions]")
-        ? true
-        : row.closest("[data-additions]")
-          ? false
-          : (row.dataset.lineType ?? "").includes("deletion");
-      knownTop = { line, side: deletions ? "deletions" : "additions" };
-      return knownTop;
-    }
+    knownTop = measureDiffTopLine(viewer, host, knownTop);
     return knownTop;
   }
   export function capture(): CodeDiffReaderState {
@@ -225,17 +195,8 @@
   function scrollToLine(line: number) {
     if (!hasChanges || !sourceLines.length) return;
     const number = Math.max(1, Math.min(sourceLines.length, line));
-    const startOf = (hunk: FileDiffMetadata["hunks"][number]) =>
-      side === "old" ? hunk.deletionStart : hunk.additionStart;
-    let region = fileDiff.hunks.findIndex((hunk) => number < startOf(hunk));
-    if (region < 0) region = fileDiff.hunks.length;
-    const previous = fileDiff.hunks[region - 1];
-    const previousEnd = previous
-      ? startOf(previous) +
-        (side === "old" ? previous.deletionCount : previous.additionCount) -
-        1
-      : 0;
-    if (number > previousEnd) {
+    const region = findUnexpandedDiffRegion(fileDiff, side, number);
+    if (region !== undefined) {
       if (expired) return;
       diffInstance()?.expandHunk(region, "both", Number.POSITIVE_INFINITY);
     }
@@ -254,20 +215,12 @@
     choose(range);
   }
   function goto(value: string) {
-    const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());
-    if (match) {
-      const current = selected?.start ?? 1;
-      const [, sign, digits, , percent] = match;
-      let target = digits ? Number(digits) : current;
-      if (digits && percent) {
-        target =
-          Math.round((sourceLines.length * target) / 100) *
-            (sign === "-" ? -1 : 1) +
-          (sign ? current : 0);
-      } else if (digits && sign)
-        target = current + target * (sign === "-" ? -1 : 1);
-      scrollToLine(target);
-    }
+    const target = parseDiffGotoLine(
+      value,
+      selected?.start ?? 1,
+      sourceLines.length,
+    );
+    if (target !== undefined) scrollToLine(target);
     find.panel = undefined;
     host.focus();
   }
@@ -283,7 +236,7 @@
       disableFileHeader: true,
       enableLineSelection: true,
       lineHoverHighlight: "number",
-      expansionLineCount: expansionLines,
+      expansionLineCount: diffExpansionLines,
       hunkSeparators: "line-info",
       itemMetrics: codeFont.itemMetrics,
       layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
@@ -321,47 +274,9 @@
       `,
     };
   }
-  // The library's expand controls are role=button divs. Supply names and
-  // keyboard handling here, and enforce the frozen-snapshot policy.
   function enhanceControls() {
     diffInstance();
-    for (const item of viewer?.getRenderedItems() ?? []) {
-      for (const button of item.element.shadowRoot?.querySelectorAll<HTMLElement>(
-        "[data-expand-button]",
-      ) ?? []) {
-        const all =
-          button.hasAttribute("data-expand-all-button") ||
-          button.hasAttribute("data-expand-both");
-        button.setAttribute(
-          "aria-label",
-          all
-            ? "展开全部上下文"
-            : button.hasAttribute("data-expand-up")
-              ? `向上展开 ${expansionLines} 行`
-              : `向下展开 ${expansionLines} 行`,
-        );
-        button.setAttribute("aria-disabled", String(expired));
-        button.tabIndex = expired ? -1 : 0;
-        if (button.hasAttribute("data-expand-all-button"))
-          button.textContent = "展开全部";
-      }
-      for (const label of item.element.shadowRoot?.querySelectorAll<HTMLElement>(
-        "[data-unmodified-lines]",
-      ) ?? []) {
-        const count = label.textContent?.match(/\d+/)?.[0];
-        if (count) label.textContent = `${count} 行未修改`;
-      }
-    }
-  }
-  function expandTarget(event: Event) {
-    return event
-      .composedPath()
-      .find(
-        (node): node is HTMLElement =>
-          node instanceof HTMLElement &&
-          (node.hasAttribute("data-expand-button") ||
-            node.hasAttribute("data-unmodified-lines")),
-      );
+    enhanceDiffControls(viewer, expired);
   }
   onMount(() => {
     const stopEnvironment = watchReader(host, {
@@ -390,13 +305,13 @@
     viewer.setItems([{ id, type: "diff", fileDiff }]);
     mounted = true;
     const guardExpansion = (event: Event) => {
-      if (expired && expandTarget(event)) {
+      if (expired && findDiffExpandTarget(event)) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
     };
     const keydown = (event: KeyboardEvent) => {
-      const button = expandTarget(event);
+      const button = findDiffExpandTarget(event);
       if (button && (event.key === "Enter" || event.key === " ")) {
         event.preventDefault();
         if (!expired) {
@@ -414,7 +329,7 @@
                 : button.hasAttribute("data-expand-up")
                   ? "up"
                   : "down",
-              all ? Number.POSITIVE_INFINITY : expansionLines,
+              all ? Number.POSITIVE_INFINITY : diffExpansionLines,
             );
           }
         }

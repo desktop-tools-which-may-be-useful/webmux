@@ -1,28 +1,31 @@
 <script lang="ts" module>
-  import type { CodeNode } from "../schemas";
-  /** A tree entry the menu acts on; the root has the empty path. */
-  export type FileTarget = Pick<CodeNode, "nodeId" | "path" | "name" | "kind">;
+  export type { FileTarget } from "../code-file-actions";
 </script>
 
 <script lang="ts">
   import { errorMessage } from "../error";
-  import { untrack, type Component } from "svelte";
+  import { untrack } from "svelte";
   import { MediaQuery } from "svelte/reactivity";
   import type { z } from "zod";
-  import { api, apiBlob, uploadForm } from "../api";
-  import { saveBlob } from "../download";
-  import { formatBytes, rawError } from "../code-image";
+  import { formatBytes } from "../code-image";
   import {
-    CodeContextSchema,
-    CodeCopyRequestSchema,
-    CodeMkdirRequestSchema,
-    CodeNameSchema,
-    CodeMutationSchema,
-    CodeRenameRequestSchema,
-    CodeUsageSchema,
-    NoContentSchema,
-    type CodeNavigatorState,
-  } from "../schemas";
+    buildCodeFileActions,
+    cloneClipboard,
+    describeCodeRemoveDetail,
+    downloadCodeNode,
+    dropClipboardPaths,
+    makeRootFileTarget,
+    rawDownloadError,
+    requestCodePaste,
+    requestCodeRemove,
+    runNamingMutation,
+    selectFileStem,
+    toMenuAnchor,
+    uploadCodeFilesBatch,
+    type CodeFileClipboard,
+    type FileTarget,
+  } from "../code-file-actions";
+  import { CodeContextSchema } from "../schemas";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -46,27 +49,9 @@
   import IconTrash from "~icons/tabler/trash";
   import IconUpload from "~icons/tabler/upload";
 
-  type Action = {
-    label: string;
-    icon?: Component;
-    run: () => void;
-    disabled?: boolean;
-    destructive?: boolean;
-    // Actions of one group sit between separators.
-    group: number;
-  };
-  type Clipboard = NonNullable<CodeNavigatorState["clipboard"]>;
+  type Clipboard = CodeFileClipboard;
 
-  // The explorer's context menu: file operations on one tree entry, with the
-  // copy/cut clipboard, dialogs and transfer progress they need.
-  let {
-    id,
-    context,
-    includeIgnored,
-    openFile,
-    changed,
-    restore,
-  }: {
+  interface Props {
     id: string;
     context: z.infer<typeof CodeContextSchema> | undefined;
     includeIgnored: boolean;
@@ -75,7 +60,10 @@
     changed: (removed: string[]) => void;
     /** The copy/cut clipboard to start with. */
     restore?: Clipboard;
-  } = $props();
+  }
+
+  let { id, context, includeIgnored, openFile, changed, restore }: Props =
+    $props();
 
   const base = $derived(`/sessions/${id}/code`);
   const writable = $derived(!!context?.writableAvailable);
@@ -101,127 +89,47 @@
   const pasteReady = $derived(
     !!clipboard && clipboard.contextId === context?.contextId,
   );
-  // Narrow windows get a bottom action sheet with full touch targets, at the
-  // breakpoint where ResponsiveDialog turns into a drawer.
   const desktop = new MediaQuery("(min-width: 640px)");
   let nameInput = $state<HTMLInputElement | null>(null);
-  const rootTarget = $derived<FileTarget>({
-    nodeId: "",
-    path: "",
-    name: context?.rootPath.split("/").filter(Boolean).at(-1) ?? "根目录",
-    kind: "directory",
-  });
-  const actions = $derived.by((): Action[] => {
-    const node = target;
-    if (!node) return [];
-    if (node.kind === "boundary" || node.kind === "special")
-      return [
-        { label: "此类条目不支持文件操作", disabled: true, group: 0, run() {} },
-      ];
-    const folder = node.kind === "directory";
-    const editable = node.path !== "" && (node.kind === "file" || folder);
-    const hold = (mode: Clipboard["mode"]) => () => {
-      clipboard = { contextId: context?.contextId ?? "", nodes: [node], mode };
-    };
-    const list: Action[] = [];
-    if (node.kind === "file")
-      list.push(
-        {
-          label: "打开",
-          icon: IconEye,
-          group: 0,
-          run: () => openFile(node.path, node.nodeId),
-        },
-        {
-          label: "下载",
-          icon: IconDownload,
-          group: 0,
-          run: () => void save(node, false),
-        },
-      );
-    if (folder)
-      list.push(
-        {
-          label: "下载为 ZIP",
-          icon: IconFileZip,
-          group: 0,
-          run: () => void save(node, true),
-        },
-        {
-          label: "上传到此目录",
-          icon: IconUpload,
-          group: 1,
-          disabled: !writable,
-          run: () => {
-            pickerTarget = node;
-            picker?.open();
-          },
-        },
-        {
-          label: "新建文件夹",
-          icon: IconFolderPlus,
-          group: 1,
-          disabled: !writable,
-          run: () => startNaming("mkdir", node),
-        },
-      );
-    if (editable)
-      list.push(
-        {
-          label: "重命名",
-          icon: IconPencil,
-          group: 2,
-          disabled: !writable,
-          run: () => startNaming("rename", node),
-        },
-        { label: "复制", icon: IconCopy, group: 2, run: hold("copy") },
-        {
-          label: "剪切",
-          icon: IconScissors,
-          group: 2,
-          disabled: !writable,
-          run: hold("move"),
-        },
-      );
-    if (folder)
-      list.push({
-        label: `粘贴${pasteReady && clipboard ? `（${clipboard.mode === "move" ? "移动" : "复制"} ${clipboard.nodes[0]?.name ?? ""}）` : ""}`,
-        icon: IconClipboard,
-        group: 2,
-        disabled: !writable || !pasteReady,
-        run: () => void paste(node),
-      });
-    if (node.path !== "")
-      list.push({
-        label: "删除…",
-        icon: IconTrash,
-        group: 3,
-        destructive: true,
-        disabled: !writable,
-        run: () => void askRemove(node),
-      });
-    return list;
-  });
-  // Renaming preselects the name without its extension, so typing replaces
-  // only the stem; the field keeps focus as the user edits.
+  const rootTarget = $derived(makeRootFileTarget(context?.rootPath));
+  const actions = $derived(
+    buildCodeFileActions({
+      node: target,
+      writable,
+      pasteReady,
+      clipboard,
+      contextId: context?.contextId ?? "",
+      icons: {
+        eye: IconEye,
+        download: IconDownload,
+        fileZip: IconFileZip,
+        upload: IconUpload,
+        folderPlus: IconFolderPlus,
+        pencil: IconPencil,
+        copy: IconCopy,
+        scissors: IconScissors,
+        clipboard: IconClipboard,
+        trash: IconTrash,
+      },
+      openFile,
+      save: (node, archive) => void save(node, archive),
+      openUploadPicker: (node) => {
+        pickerTarget = node;
+        picker?.open();
+      },
+      startNaming,
+      setClipboard: (next) => (clipboard = next),
+      paste: (node) => void paste(node),
+      askRemove: (node) => void askRemove(node),
+    }),
+  );
   $effect(() => {
     const input = nameInput;
     const current = naming;
     if (!input || !current) return;
-    untrack(() => {
-      const dot =
-        current.kind === "rename" && current.node.kind === "file"
-          ? name.lastIndexOf(".")
-          : -1;
-      input.focus();
-      input.setSelectionRange(0, dot > 0 ? dot : name.length);
-    });
+    untrack(() => selectFileStem(input, current.kind, current.node.kind, name));
   });
 
-  /**
-   * Opens the menu for node, anchored at the control that asked or at the
-   * pointer position of a context-menu event; focus then returns to row.
-   */
   export function show(
     node: FileTarget,
     at: HTMLElement | { x: number; y: number },
@@ -229,51 +137,24 @@
   ) {
     target = node;
     returnFocus = row;
-    anchor =
-      at instanceof HTMLElement
-        ? at
-        : { getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) };
+    anchor = toMenuAnchor(at);
     menuOpen = true;
   }
 
-  /** The pending copy/cut, to carry into another instance. */
   export function capture(): Clipboard | undefined {
-    if (!clipboard) return undefined;
-    const { contextId, nodes, mode } = clipboard;
-    return {
-      contextId,
-      mode,
-      nodes: nodes.map(({ nodeId, path, name, kind }) => ({
-        nodeId,
-        path,
-        name,
-        kind,
-      })),
-    };
+    return cloneClipboard(clipboard);
   }
 
-  /** Why files cannot be uploaded right now; empty when they can. */
   export function uploadRefusal(): string {
     if (!writable) return "当前目录只读，无法上传";
     return uploadController ? "请等待当前上传完成" : "";
   }
 
-  /** Reports a refused operation in the strip above the tree. */
   export function refuse(message: string) {
     notice = "";
     error = message;
   }
 
-  function query(node: FileTarget, extra: Record<string, string> = {}) {
-    return new URLSearchParams({
-      contextId: context?.contextId ?? "",
-      nodeId: node.nodeId,
-      ...extra,
-    });
-  }
-
-  // Runs one operation, reporting its outcome in the strip above the tree.
-  // A refusal reported meanwhile gives way to the outcome.
   async function run(action: () => Promise<string | void>) {
     error = "";
     notice = "";
@@ -287,13 +168,8 @@
     }
   }
 
-  // Drops clipboard entries at or below paths that no longer exist.
   function forget(paths: string[]) {
-    if (!clipboard) return;
-    const nodes = clipboard.nodes.filter(
-      (n) => !paths.some((p) => n.path === p || n.path.startsWith(p + "/")),
-    );
-    clipboard = nodes.length ? { ...clipboard, nodes } : undefined;
+    clipboard = dropClipboardPaths(clipboard, paths);
   }
 
   function startNaming(kind: "rename" | "mkdir", node: FileTarget) {
@@ -304,41 +180,25 @@
 
   async function submitName() {
     if (!naming || !context) return;
-    const { kind, node } = naming;
-    const checked = CodeNameSchema.safeParse(name);
-    if (!checked.success) {
-      dialogError = checked.error.issues[0]?.message ?? "名称无效";
-      return;
-    }
     busy = true;
     dialogError = "";
     try {
-      const result =
-        kind === "rename"
-          ? await api(
-              `${base}/rename`,
-              CodeMutationSchema,
-              "POST",
-              { contextId: context.contextId, nodeId: node.nodeId, name },
-              undefined,
-              CodeRenameRequestSchema,
-            )
-          : await api(
-              `${base}/mkdir`,
-              CodeMutationSchema,
-              "POST",
-              { contextId: context.contextId, parentNodeId: node.nodeId, name },
-              undefined,
-              CodeMkdirRequestSchema,
-            );
+      const result = await runNamingMutation(
+        base,
+        context.contextId,
+        naming.kind,
+        naming.node,
+        name,
+        changed,
+        forget,
+      );
+      if (result.error) {
+        dialogError = result.error;
+        return;
+      }
       naming = undefined;
       error = "";
-      const placed = result.nodes[0]?.name ?? name;
-      notice = placed === name ? "" : `名称已被占用，已改为 ${placed}`;
-      if (kind === "rename" && placed !== node.name) {
-        forget([node.path]);
-        changed([node.path]);
-      } else changed([]);
+      notice = result.notice ?? "";
     } catch (e) {
       dialogError = errorMessage(e);
     } finally {
@@ -349,47 +209,25 @@
   async function paste(into: FileTarget) {
     const current = clipboard;
     if (!current || !context) return;
-    await run(async () => {
-      const result = await api(
-        `${base}/copy`,
-        CodeMutationSchema,
-        "POST",
-        {
-          contextId: context.contextId,
-          nodeIds: current.nodes.map((n) => n.nodeId),
-          targetNodeId: into.nodeId,
-          mode: current.mode,
-        },
-        undefined,
-        CodeCopyRequestSchema,
-      );
-      if (current.mode === "move") {
-        clipboard = undefined;
-        changed(
-          current.nodes
-            .filter((n, i) => result.nodes[i]?.path !== n.path)
-            .map((n) => n.path),
-        );
-      } else changed([]);
-      const renamed = result.nodes.filter(
-        (n, i) => n.name !== current.nodes[i]?.name,
-      );
-      return renamed.length
-        ? `同名条目已存在，已粘贴为 ${renamed.map((n) => n.name).join("、")}`
-        : `已${current.mode === "move" ? "移动" : "复制"} ${result.nodes.length} 项`;
-    });
+    await run(() =>
+      requestCodePaste(
+        base,
+        context.contextId,
+        current,
+        into,
+        changed,
+        () => (clipboard = undefined),
+      ),
+    );
   }
 
   async function askRemove(node: FileTarget) {
     await run(async () => {
-      let detail = `将删除${node.kind === "symlink" ? "符号链接（不影响其目标）" : "文件"} ${node.path}。此操作不能撤销。`;
-      if (node.kind === "directory") {
-        const usage = await api(
-          `${base}/usage?${query(node)}`,
-          CodeUsageSchema,
-        );
-        detail = `将递归删除文件夹 ${node.path} 及其中 ${usage.entries - 1}${usage.limited ? "+" : ""} 个条目（${formatBytes(usage.bytes)}）。此操作不能撤销。`;
-      }
+      const detail = await describeCodeRemoveDetail(
+        base,
+        context?.contextId ?? "",
+        node,
+      );
       removing = { node, detail };
       confirmOpen = true;
     });
@@ -399,57 +237,33 @@
     const node = removing?.node;
     confirmOpen = false;
     if (!node) return;
-    await run(async () => {
-      await api(
-        `${base}/node?${query(node, node.kind === "directory" ? { recursive: "1" } : {})}`,
-        NoContentSchema,
-        "DELETE",
-      );
-      forget([node.path]);
-      changed([node.path]);
-      return `已删除 ${node.name}`;
-    });
+    await run(() =>
+      requestCodeRemove(base, context?.contextId ?? "", node, forget, changed),
+    );
   }
 
-  /**
-   * Uploads files into a folder one by one, replacing any running upload;
-   * resolves to the outcome shown in the strip.
-   */
   export async function upload(files: File[], into: FileTarget) {
     if (!files.length) return "";
     uploadController?.abort();
     const controller = new AbortController();
     uploadController = controller;
-    const stored: string[] = [];
-    await run(async () => {
-      try {
-        for (const [index, file] of files.entries()) {
-          const current = {
-            name: file.name,
-            percent: 0,
-            index: index + 1,
-            total: files.length,
-            waiting: false,
-          };
-          progress = current;
-          const result = await uploadForm(
-            `${base}/upload?${query(into)}`,
-            file,
-            CodeMutationSchema,
-            (percent) => (progress = { ...current, percent }),
-            controller.signal,
-          );
-          stored.push(...result.nodes.map((n) => n.name));
-        }
-        return `已上传 ${stored.join("、")}`;
-      } finally {
-        if (uploadController === controller) {
-          uploadController = undefined;
-          progress = null;
-        }
-        if (stored.length) changed([]);
-      }
-    });
+    await run(() =>
+      uploadCodeFilesBatch({
+        base,
+        contextId: context?.contextId ?? "",
+        into,
+        files,
+        signal: controller.signal,
+        onProgress: (next) => (progress = next),
+        onCleanup: (storedCount) => {
+          if (uploadController === controller) {
+            uploadController = undefined;
+            progress = null;
+          }
+          if (storedCount) changed([]);
+        },
+      }),
+    );
     return error || notice;
   }
 
@@ -462,19 +276,21 @@
     error = "";
     notice = "";
     try {
-      const blob = await apiBlob(
-        archive
-          ? `${base}/archive?${query(node, { includeIgnored: String(includeIgnored) })}`
-          : `${base}/node?${query(node)}`,
-        controller.signal,
-        (bytes) => {
+      await downloadCodeNode({
+        base,
+        contextId: context?.contextId ?? "",
+        node,
+        archive,
+        includeIgnored,
+        signal: controller.signal,
+        ownerDocument: returnFocus?.ownerDocument ?? document,
+        filename,
+        onProgress: (bytes) => {
           if (download) download.bytes = bytes;
         },
-      );
-      if (!controller.signal.aborted)
-        saveBlob(returnFocus?.ownerDocument ?? document, blob, filename);
+      });
     } catch (e) {
-      if (!controller.signal.aborted) error = rawError(e, "下载");
+      if (!controller.signal.aborted) error = rawDownloadError(e);
     } finally {
       if (downloadController === controller) {
         downloadController = undefined;
@@ -599,7 +415,6 @@
             data-destructive={action.destructive}
             disabled={action.disabled}
             onclick={() => {
-              // Run inside the tap: the upload picker needs the gesture.
               menuOpen = false;
               action.run();
             }}

@@ -1,40 +1,35 @@
 <script lang="ts">
   import { errorMessage } from "../error";
   import { untrack } from "svelte";
-  import {
-    api,
-    APIError,
-    navigate,
-    parseArgs,
-    recentDirs,
-    store,
-    stored,
-  } from "../api";
+  import { navigate, recentDirs, stored } from "../api";
   import type { LaunchConfigsState } from "../launch-configs";
   import {
+    buildNewSessionSummary,
+    formatLocationSummaryText,
+    formatSubmitButtonLabel,
+    isCommandReady,
+    isDirectoryNotFoundError,
+    isLocationTargetReady,
+    resolveFallbackAfterWorktreeRemoved,
     resolveInitialLaunch,
     resolveInitialTarget,
-    selectableWorktree,
-    worktreeLabel,
+    resolveInstructionRepository,
+    resolvePreferredStartBranch,
+    storedView,
+    submitNewSessionRequest,
+    validateNewSessionSubmit,
     type LaunchEntry,
     type LaunchScope,
     type LaunchSource,
   } from "../new-session-defaults";
   import { sessionConflict } from "../recoverable";
   import ConnectorInstallHint from "./ConnectorInstallHint.svelte";
-  import {
-    CreateSessionFailureSchema,
-    CreateSessionRequestSchema,
-    CreateSessionResultSchema,
-    CreateWorktreeRequestSchema,
-    NoContentSchema,
-    WorktreeSchema,
-    type AgentConnector,
-    type CreateSessionRequest,
-    type Repository,
-    type SessionInfo,
-    type SessionView,
-    type Worktree,
+  import type {
+    AgentConnector,
+    Repository,
+    SessionInfo,
+    SessionView,
+    Worktree,
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
@@ -51,27 +46,7 @@
   import WorktreeCreateFields from "./WorktreeCreateFields.svelte";
   import type { SplitDirection } from "../terminal-layout";
 
-  // The view a config starts on, as stored; values before the view names
-  // were "acp" and "tui".
-  function storedView(value: string): SessionView {
-    return value === "chat" || value === "acp" ? "chat" : "terminal";
-  }
-
-  let {
-    launchConfigs,
-    defaultCwd,
-    repositories = [],
-    entry,
-    scope,
-    selectedRepositoryId = "",
-    intent = "session",
-    split = false,
-    oncreated,
-    onchange,
-    onworktreecreated,
-    onworktreeremoved,
-    onclose,
-  }: {
+  interface Props {
     launchConfigs: LaunchConfigsState;
     defaultCwd: string;
     repositories?: Repository[];
@@ -89,7 +64,23 @@
     /** A worktree was deleted from the location list. */
     onworktreeremoved?: (tree: Worktree) => void;
     onclose: () => void;
-  } = $props();
+  }
+
+  let {
+    launchConfigs,
+    defaultCwd,
+    repositories = [],
+    entry,
+    scope,
+    selectedRepositoryId = "",
+    intent = "session",
+    split = false,
+    oncreated,
+    onchange,
+    onworktreecreated,
+    onworktreeremoved,
+    onclose,
+  }: Props = $props();
   const recent = recentDirs();
   const initial = untrack(() =>
     resolveInitialTarget({
@@ -139,9 +130,7 @@
     launchConfigs.status === "ready" ? launchConfigs.configs : [],
   );
   const chosenConfig = $derived(
-    source === "config"
-      ? configs.find((config) => config.id === configId)
-      : undefined,
+    source === "config" ? configs.find((c) => c.id === configId) : undefined,
   );
   $effect(() => {
     if (!launchResolved && !launchTouched) {
@@ -159,44 +148,28 @@
       !chosenConfig
     )
       source = "unset";
-  });
-  // Each agent keeps the side it last started on; an agent never started
-  // falls back to the side of the most recent hybrid session.
-  // The repository whose initialization instruction the new session can use:
-  // the chosen worktree's, or the pane's own when a split keeps its workspace.
-  const instructionRepository = $derived.by(() => {
-    if (kind === "directory") {
-      const id =
-        entryDirectory?.workspace && cwd === entryDirectory.cwd
-          ? entryDirectory.workspace.repositoryId
-          : "";
-      return repositories.find((r) => r.id === id);
+    if (chosenConfig?.chat) {
+      startSide = storedView(
+        stored("hybridStartSide:" + chosenConfig.id) ||
+          stored("hybridStartSide"),
+      );
     }
-    return repository;
   });
+  const repository = $derived(repositories.find((r) => r.id === repositoryId));
+  const instructionRepository = $derived(
+    resolveInstructionRepository(
+      kind,
+      cwd,
+      entryDirectory,
+      repositories,
+      repository,
+    ),
+  );
   const hasInstruction = $derived(!!instructionRepository?.initInstruction);
   const startsOnChat = $derived(!!chosenConfig?.chat && startSide === "chat");
-  // The instruction is a natural-language prompt for the agent, so only a
-  // chat start sends it unless the user ticks it here.
   let instructionChoice = $state<boolean | undefined>();
   const useInstruction = $derived(instructionChoice ?? startsOnChat);
-  const hybridConfigId = $derived(chosenConfig?.chat ? chosenConfig.id : "");
-  $effect(() => {
-    if (!hybridConfigId) return;
-    startSide = storedView(
-      stored("hybridStartSide:" + hybridConfigId) || stored("hybridStartSide"),
-    );
-  });
-  const commandReady = $derived.by(() => {
-    if (source === "config") return !!chosenConfig;
-    if (source !== "custom") return false;
-    try {
-      const argv = parseArgs(command);
-      return !!argv.length && !!argv[0];
-    } catch {
-      return false;
-    }
-  });
+  const commandReady = $derived(isCommandReady(source, chosenConfig, command));
 
   let newPath = $state("");
   let branchMode = $state<"new" | "existing">("new");
@@ -204,50 +177,42 @@
   let base = $state("");
   let startBranch = $state("");
   let worktreeFields = $state<WorktreeCreateFields>();
-  // The repository of the new-worktree fields. They stay mounted once shown,
-  // so typed fields survive switching location away and back; only choosing
-  // a new worktree in another repository resets them.
   let fieldsRepositoryId = $state(
     initial.kind === "new-worktree" ? initial.repositoryId : "",
   );
-  // Location changes come from the picker's bindings; whichever of the two
-  // lands last sees both values.
-  function followNewWorktree() {
-    if (kind === "new-worktree") fieldsRepositoryId = repositoryId;
-  }
   const fieldsRepository = $derived(
     repositories.find((r) => r.id === fieldsRepositoryId),
   );
   let createdTree = $state<Worktree | null>(null);
   const worktreeReady = $derived(worktreeFields?.isReady() ?? false);
-  const repository = $derived(repositories.find((r) => r.id === repositoryId));
   const worktree = $derived(
     createdTree?.id === worktreeId
       ? createdTree
       : repository?.worktrees.find((w) => w.id === worktreeId),
   );
   let removing = $state<Worktree | null>(null);
-  // A removed selection falls back to its repository's main worktree.
   function removed(tree: Worktree) {
     onworktreeremoved?.(tree);
     if (createdTree?.id === tree.id) createdTree = null;
-    if (kind !== "worktree" || worktreeId !== tree.id) return;
-    const main = repositories
-      .find((r) => r.id === tree.repositoryId)
-      ?.worktrees.find((w) => w.kind === "main");
-    if (main) worktreeId = main.id;
-    else kind = "directory";
+    const next = resolveFallbackAfterWorktreeRemoved(
+      repositories,
+      kind,
+      worktreeId,
+      tree,
+    );
+    kind = next.kind;
+    worktreeId = next.worktreeId;
   }
-  // Creating only a worktree needs a new-worktree location; any other
-  // location would have nothing to create.
   const treeTargetMissing = $derived(treeOnly && kind !== "new-worktree");
   const targetReady = $derived(
-    !treeTargetMissing &&
-      (kind === "directory"
-        ? !!cwd.trim()
-        : kind === "worktree"
-          ? !!worktree && selectableWorktree(worktree)
-          : !!repository && worktreeReady),
+    isLocationTargetReady(
+      treeTargetMissing,
+      kind,
+      cwd,
+      worktree,
+      repository,
+      worktreeReady,
+    ),
   );
   const newWorktreeSummary = $derived(
     branchMode === "new"
@@ -255,26 +220,21 @@
       : `已有分支 ${branch || "未选择"}`,
   );
   const locationText = $derived(
-    kind === "directory"
-      ? cwd.trim()
-      : kind === "worktree"
-        ? worktree
-          ? `${repository?.name ?? ""} · ${worktreeLabel(worktree)}`
-          : ""
-        : `${repository?.name ?? ""} 的新工作树 ${branch}`,
+    formatLocationSummaryText(kind, cwd, repository, worktree, branch),
   );
-  const summary = $derived.by(() => {
-    if (treeTargetMissing)
-      return "请将位置选为新建工作树，或勾选创建后启动会话";
-    if (!targetReady)
-      return kind === "new-worktree" ? "请填写新工作树信息" : "请选择位置";
-    if (treeOnly) return `将创建 ${locationText}`;
-    if (!commandReady)
-      return source === "custom" ? "请输入可执行程序及参数" : "请选择启动方式";
-    const launch =
-      source === "config" ? (chosenConfig?.name ?? "") : command.trim();
-    return `将在 ${locationText} 运行 ${launch}`;
-  });
+  const summary = $derived(
+    buildNewSessionSummary({
+      treeTargetMissing,
+      targetReady,
+      treeOnly,
+      kind,
+      locationText,
+      commandReady,
+      source,
+      chosenConfig,
+      command,
+    }),
+  );
 
   // A worktree made on the way becomes the chosen location.
   function adoptTree(tree: Worktree) {
@@ -289,145 +249,55 @@
   async function create(makeDirectory = false) {
     if (busy) return;
     const onlyTree = treeOnly;
-    if (onlyTree && kind !== "new-worktree") {
-      error = "请将位置选为新建工作树，或勾选创建后启动会话。";
-      return;
-    }
-    if (!onlyTree && !commandReady) {
-      error = "请选择有效启动配置，或输入可执行程序及参数。";
+    const validationError = validateNewSessionSubmit(
+      onlyTree,
+      kind,
+      commandReady,
+    );
+    if (validationError) {
+      error = validationError;
       return;
     }
     busy = true;
     error = "";
     missingConnector = undefined;
     try {
-      // Paint the pending state before a fast local response can immediately
-      // start loading and mounting the terminal in the same interaction.
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      );
-      const custom = source === "custom";
-      const cmd = custom && !onlyTree ? parseArgs(command) : undefined;
-      if (custom && !onlyTree && (!cmd?.length || !cmd[0]))
-        throw new Error("请输入可执行程序及参数");
-      // Only a worktree: create it on its own. With a session, the create
-      // request makes the worktree first.
-      if (kind === "new-worktree" && onlyTree) {
-        const tree = await api(
-          `/repositories/${repositoryId}/worktrees`,
-          WorktreeSchema,
-          "POST",
-          {
-            path: newPath,
-            mode: branchMode,
-            branch,
-            ...(branchMode === "new" ? { base } : {}),
-          },
-          undefined,
-          CreateWorktreeRequestSchema,
-        );
-        adoptTree(tree);
+      const outcome = await submitNewSessionRequest({
+        onlyTree,
+        kind,
+        repositoryId,
+        worktreeId,
+        newPath,
+        branchMode,
+        branch,
+        base,
+        cwd,
+        entryDirectory,
+        prompt,
+        hasInstruction,
+        useInstruction,
+        chosenConfig,
+        name,
+        startSide,
+        source,
+        command,
+        makeDirectory,
+        recent,
+        adoptTree,
+      });
+      if (outcome.kind === "tree") {
         onclose();
         return;
       }
-      const workspace =
-        entryDirectory?.workspace && cwd === entryDirectory.cwd
-          ? entryDirectory.workspace
-          : null;
-      const target =
-        kind === "new-worktree"
-          ? {
-              newWorktree: {
-                repositoryId,
-                mode: branchMode,
-                branch,
-                ...(branchMode === "new" ? { base } : {}),
-                ...(newPath ? { path: newPath } : {}),
-              },
-            }
-          : kind === "directory"
-            ? {
-                cwd,
-                ...(workspace
-                  ? {
-                      workspace: {
-                        repositoryId: workspace.repositoryId,
-                        worktreeId: workspace.worktreeId,
-                      },
-                    }
-                  : {}),
-              }
-            : { workspace: { repositoryId, worktreeId } };
-      const first = {
-        ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
-        ...(hasInstruction && useInstruction
-          ? { useInitInstruction: true }
-          : {}),
-      };
-      const payload: CreateSessionRequest = chosenConfig
-        ? {
-            ...target,
-            configId: chosenConfig.id,
-            name,
-            ...(chosenConfig.chat ? { view: startSide } : {}),
-            ...first,
-          }
-        : { ...target, cmd, name, ...first };
-      if (makeDirectory)
-        await api("/fs/mkdir", NoContentSchema, "POST", { path: cwd });
-      let result;
-      try {
-        result = await api(
-          "/sessions",
-          CreateSessionResultSchema,
-          "POST",
-          payload,
-          undefined,
-          CreateSessionRequestSchema,
-        );
-      } catch (err) {
-        // A worktree the request made stays; a retry starts the session in
-        // it instead of making another.
-        const failure =
-          err instanceof APIError
-            ? CreateSessionFailureSchema.safeParse(err.body)
-            : undefined;
-        if (failure?.success && failure.data.worktree)
-          adoptTree(failure.data.worktree);
-        throw err;
-      }
-      if (result.worktree) adoptTree(result.worktree);
-      const session = result.session;
-      store(
-        "recentDirs",
-        JSON.stringify(
-          [session.cwd, ...recent.filter((p) => p !== session.cwd)].slice(
-            0,
-            10,
-          ),
-        ),
-      );
-      store(
-        "lastLaunch",
-        chosenConfig ? `config:${chosenConfig.id}` : "custom",
-      );
-      if (chosenConfig?.chat) {
-        store("hybridStartSide", startSide);
-        store("hybridStartSide:" + chosenConfig.id, startSide);
-      }
-      if (custom) store("customCommand", command);
-      if (oncreated) oncreated(session, direction);
-      else navigate("/s/" + session.id);
+      if (oncreated) oncreated(outcome.session, direction);
+      else navigate("/s/" + outcome.session.id);
     } catch (err) {
       if (kind !== "directory") onchange();
       const conflict = sessionConflict(err);
       if (
         kind === "directory" &&
         !makeDirectory &&
-        err instanceof APIError &&
-        err.status === 400 &&
-        err.message.startsWith("directory:") &&
-        err.message.includes("no such file or directory")
+        isDirectoryNotFoundError(err)
       ) {
         mkdirMounted = true;
         mkdirOpen = true;
@@ -440,7 +310,16 @@
   }
 </script>
 
-{#snippet fields()}
+<ResponsiveDialog
+  title={treeOnly ? "新建工作树" : "新建会话"}
+  description={treeOnly
+    ? "创建独立的代码副本，可选择同时启动会话。"
+    : "浏览器断开后，会话仍会继续。"}
+  class="p-5 sm:max-w-3xl"
+  pinDrawerHeader
+  {busy}
+  {onclose}
+>
   <form
     class="min-w-0"
     onsubmit={(event) => {
@@ -456,14 +335,12 @@
         {preferredRepositoryId}
         {createdTree}
         {newWorktreeSummary}
-        onremove={(tree) => {
-          removing = tree;
-        }}
+        onremove={(tree) => (removing = tree)}
         bind:kind={
           () => kind,
           (next) => {
             kind = next;
-            followNewWorktree();
+            if (kind === "new-worktree") fieldsRepositoryId = repositoryId;
           }
         }
         bind:cwd
@@ -471,7 +348,7 @@
           () => repositoryId,
           (next) => {
             repositoryId = next;
-            followNewWorktree();
+            if (kind === "new-worktree") fieldsRepositoryId = repositoryId;
           }
         }
         bind:worktreeId
@@ -486,11 +363,10 @@
           {#key fieldsRepository.id}<WorktreeCreateFields
               bind:this={worktreeFields}
               repository={fieldsRepository}
-              preferredStartBranch={scope?.worktreeId
-                ? (fieldsRepository.worktrees.find(
-                    (tree) => tree.id === scope.worktreeId,
-                  )?.branch ?? undefined)
-                : undefined}
+              preferredStartBranch={resolvePreferredStartBranch(
+                fieldsRepository,
+                scope?.worktreeId,
+              )}
               disabled={busy || kind !== "new-worktree"}
               bind:path={newPath}
               bind:mode={branchMode}
@@ -519,18 +395,13 @@
           bind:command
           bind:startSide
           disabled={busy}
-          onchoose={() => {
-            launchTouched = true;
-          }}
+          onchoose={() => (launchTouched = true)}
         />
         <FirstMessageFields
           repositoryName={instructionRepository?.name}
           {hasInstruction}
           bind:useInstruction={
-            () => useInstruction,
-            (next) => {
-              instructionChoice = next;
-            }
+            () => useInstruction, (next) => (instructionChoice = next)
           }
           bind:prompt
           chat={startsOnChat}
@@ -586,33 +457,12 @@
             type="submit"
             aria-describedby="session-summary"
             disabled={busy || !targetReady || (!treeOnly && !commandReady)}
-            >{busy
-              ? treeOnly
-                ? "正在创建…"
-                : "正在启动…"
-              : treeOnly
-                ? "创建工作树"
-                : split
-                  ? "创建并加入分屏 →"
-                  : "创建并进入 →"}</Button
+            >{formatSubmitButtonLabel(busy, treeOnly, split)}</Button
           >
         </div>
       </div>
     </fieldset>
   </form>
-{/snippet}
-
-<ResponsiveDialog
-  title={treeOnly ? "新建工作树" : "新建会话"}
-  description={treeOnly
-    ? "创建独立的代码副本，可选择同时启动会话。"
-    : "浏览器断开后，会话仍会继续。"}
-  class="p-5 sm:max-w-3xl"
-  pinDrawerHeader
-  {busy}
-  {onclose}
->
-  {@render fields()}
 </ResponsiveDialog>
 
 {#if removing}
@@ -641,10 +491,8 @@
       >
       <AlertDialog.Footer>
         <AlertDialog.Cancel>取消</AlertDialog.Cancel>
-        <AlertDialog.Action
-          onclick={() => {
-            void create(true);
-          }}>创建目录并启动</AlertDialog.Action
+        <AlertDialog.Action onclick={() => void create(true)}
+          >创建目录并启动</AlertDialog.Action
         >
       </AlertDialog.Footer>
     </AlertDialog.Content>

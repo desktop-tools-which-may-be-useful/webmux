@@ -1,3 +1,9 @@
+import type { ControlState, SessionInfo, SubmissionProgress } from "./schemas";
+import type { Connection } from "./ws";
+import type { Modifiers } from "./input";
+import type { Terminal } from "@xterm/xterm";
+import type { SearchAddon } from "@xterm/addon-search";
+
 export interface TerminalFindOptions {
   caseSensitive: boolean;
   wholeWord: boolean;
@@ -75,4 +81,99 @@ export function isTerminalFindShortcut(
         !event.ctrlKey &&
         !event.shiftKey))
   );
+}
+
+export function executeTerminalFind(
+  terminal: Terminal,
+  search: SearchAddon,
+  query: string,
+  options: TerminalFindOptions,
+  previous: boolean,
+  incremental: boolean,
+  findActive: boolean,
+) {
+  if (incremental || !findActive) {
+    search.clearDecorations();
+    // The addon starts at row zero without a selection. Seed a one-cell
+    // anchor at the viewport, synchronously replaced by the actual match
+    // (or cleared on no match). Never seed before validating the query.
+    terminal.select(0, terminal.buffer.active.viewportY, 1);
+  }
+  const theme = terminal.options.theme;
+  const searchOptions = {
+    ...options,
+    incremental,
+    decorations: {
+      matchBackground: theme?.yellow,
+      matchBorder: theme?.yellow,
+      matchOverviewRuler: theme?.yellow ?? "#a16207",
+      activeMatchBackground: theme?.blue,
+      activeMatchBorder: theme?.blue,
+      activeMatchColorOverviewRuler: theme?.blue ?? "#2563eb",
+    },
+  };
+  if (previous) search.findPrevious(query, searchOptions);
+  else search.findNext(query, searchOptions);
+}
+
+export interface TerminalController {
+  readonly ready: boolean;
+  readonly info: SessionInfo | undefined;
+  readonly connection: Connection;
+  readonly restoring: boolean;
+  /** The run whose output this page has drawn, if any. */
+  readonly drawn: string | undefined;
+  readonly exitCode: number | null;
+  readonly fontSize: number;
+  readonly modifiers: Modifiers;
+  readonly shiftLocked: boolean;
+  readonly error: string;
+  readonly selection: string;
+  // Whether the newest output is in view (see `updateBottom`).
+  readonly atBottom: boolean;
+  readonly historyTruncated: boolean;
+  readonly control: ControlState | undefined;
+  readonly controlling: boolean;
+  readonly clientId: string;
+  readonly canFind: boolean;
+  readonly findResults: TerminalFindResults | null;
+  readonly findReplayed: boolean;
+  readonly bufferType: "normal" | "alternate";
+  readonly scrollback: number;
+  findNext(
+    query: string,
+    options: TerminalFindOptions,
+    incremental?: boolean,
+  ): void;
+  findPrevious(query: string, options: TerminalFindOptions): void;
+  clearFind(): void;
+  claim(): void;
+  submit(
+    submissionId: string,
+    text: string,
+    enter: boolean,
+    report: (state: SubmissionProgress) => void,
+  ): boolean;
+  track(
+    submissionId: string,
+    report: (state: SubmissionProgress) => void,
+  ): void;
+  untrack(submissionId: string): void;
+  copySelection(): void;
+  clearSelection(): void;
+  send(input: string): boolean;
+  setFontSize(value: number): void;
+  resetModifiers(): void;
+  toggleModifier(key: keyof Modifiers): void;
+  lockModifier(key: "shift"): void;
+  paste(text: string): boolean;
+  // Toggles the soft keyboard; `beforeOpen` runs just before focusing.
+  keyboard(beforeOpen?: (target: HTMLElement) => void): void;
+  clear(): void;
+  resync(): void;
+  // Reattaches after the session moved back to its terminal side.
+  reconnect(): void;
+  fit(): void;
+  scrollToBottom(): void;
+  focus(): void;
 }

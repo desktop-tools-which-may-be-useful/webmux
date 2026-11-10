@@ -148,30 +148,8 @@
   // The position last seen with layout; a hidden tab reports this one.
   let known: CodePdfState = { fitted: true, zoom: 1, page: 1, offset: 0 };
   function reading(): CodePdfState {
-    const element = scroller;
-    if (phase !== "ready" || !element || element.clientHeight === 0)
-      return known;
-    const pages = element.querySelectorAll<HTMLElement>("[data-pdf-page]");
-    if (!pages.length) return known;
-    // The page crossing the top edge, found by its offset like `track`.
-    const line = element.scrollTop + padding;
-    let low = 0,
-      high = pages.length - 1;
-    while (low < high) {
-      const middle = Math.ceil((low + high) / 2);
-      if (pages[middle]!.offsetTop <= line + 1) low = middle;
-      else high = middle - 1;
-    }
-    const box = pages[low]!;
-    return {
-      fitted,
-      zoom,
-      page: low + 1,
-      offset:
-        box.offsetHeight > 0
-          ? Math.min(1, Math.max(0, (line - box.offsetTop) / box.offsetHeight))
-          : 0,
-    };
+    if (!pdf) return known;
+    return pdf.measurePdfReading(scroller, phase, fitted, zoom, known);
   }
   export function capture(): CodePdfState {
     return pending ?? reading();
@@ -206,20 +184,9 @@
   }
   // Zooms keeping the content point under (x, y) of the scroller fixed.
   function zoomTo(next: number, x?: number, y?: number) {
-    if (phase !== "ready" || !scroller) return;
-    const target = clamp(next);
-    const px = x ?? scroller.clientWidth / 2,
-      py = y ?? scroller.clientHeight / 2;
-    const ratio = target / zoom;
-    const left = (scroller.scrollLeft + px) * ratio - px,
-      top = (scroller.scrollTop + py) * ratio - py;
-    zoom = target;
+    if (phase !== "ready" || !scroller || !pdf) return;
+    zoom = pdf.zoomPdfScroller(scroller, zoom, next, x, y);
     fitted = false;
-    const element = scroller;
-    requestAnimationFrame(() => {
-      element.scrollLeft = left;
-      element.scrollTop = top;
-    });
   }
   // Near the end the scroll position is clamped, so a jump target that cannot
   // reach the top stays current until the reader scrolls away from it.
@@ -244,42 +211,18 @@
   }
 
   // Visible pages decide which pages hold a canvas.
-  $effect(() => {
-    const element = scroller;
-    const count = sizes.length;
-    if (!element || phase !== "ready" || !count) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const number = Number((entry.target as HTMLElement).dataset.pdfPage);
-          if (entry.isIntersecting) visible.add(number);
-          else visible.delete(number);
-        }
-      },
-      { root: element },
-    );
-    for (const target of element.querySelectorAll("[data-pdf-page]"))
-      observer.observe(target);
-    return () => observer.disconnect();
-  });
+  $effect(() => pdf?.observePdfPages(scroller, phase, sizes.length, visible));
   // The current page is the one crossing the top edge of the viewport; the
   // first intersecting page may be the previous page's edge after a jump.
   function track() {
-    if (!scroller || !visible.size) return;
+    if (!scroller || !visible.size || !pdf) return;
     if (jumped && Math.abs(scroller.scrollTop - jumped.top) < 1) {
       current = jumped.page;
       if (!editing) pageInput = String(jumped.page);
       return;
     }
     jumped = undefined;
-    const line = scroller.scrollTop + padding + 1;
-    let page = Math.min(...visible);
-    for (const number of visible) {
-      const box = scroller.querySelector<HTMLElement>(
-        `[data-pdf-page="${number}"]`,
-      );
-      if (box && box.offsetTop <= line && number > page) page = number;
-    }
+    const page = pdf.findVisiblePdfPage(scroller, visible);
     current = page;
     if (!editing) pageInput = String(page);
   }
@@ -303,159 +246,39 @@
 
   // Draws the page at the current zoom; detaching cancels and frees pixels.
   function canvas(number: number) {
-    return (element: HTMLCanvasElement) => {
-      const module = pdf,
-        scale = zoom,
-        loading = page(number);
-      if (!module || !loading) return;
-      let stopped = false;
-      let cancel = () => {};
-      void loading
-        .then((loaded) => {
-          if (stopped) return;
-          const viewport = module.pageViewport(loaded, scale);
-          const size = sizes[number - 1];
-          if (
-            size &&
-            (Math.abs(size.width - viewport.width / scale) > 0.5 ||
-              Math.abs(size.height - viewport.height / scale) > 0.5)
-          )
-            sizes[number - 1] = {
-              width: viewport.width / scale,
-              height: viewport.height / scale,
-            };
-          const task = module.renderCanvas(loaded, element, viewport);
-          cancel = task.cancel;
-          return task.promise;
-        })
-        .catch((error: unknown) => {
-          if (
-            !stopped &&
-            !(
-              error instanceof Error &&
-              error.name === "RenderingCancelledException"
-            )
-          )
-            renderFailure = `PDF 渲染失败：第 ${number} 页无法显示`;
-        });
-      return () => {
-        stopped = true;
-        cancel();
-        element.width = 0;
-        element.height = 0;
-      };
-    };
+    if (!pdf) return () => {};
+    return pdf.attachPdfCanvas(
+      pdf,
+      zoom,
+      page(number),
+      sizes,
+      number,
+      (msg) => (renderFailure = msg),
+    );
   }
   // Selectable text and link annotations; both follow zoom through CSS.
   function textLayer(number: number) {
-    return (element: HTMLElement) => {
-      const module = pdf,
-        document = proxy,
-        loading = page(number);
-      if (!module || !document || !loading) return;
-      let stopped = false;
-      let cancel = () => {};
-      void loading
-        .then((loaded) => {
-          if (stopped) return;
-          if (!links.has(number))
-            void module
-              .pageLinks(document, loaded)
-              .then((found) => links.set(number, found))
-              .catch(() => links.set(number, []));
-          const task = module.renderText(
-            loaded,
-            element,
-            module.pageViewport(loaded, 1),
-          );
-          cancel = task.cancel;
-          return task.promise;
-        })
-        .catch(() => {
-          /* the canvas reports page failures; text is best effort */
-        });
-      return () => {
-        stopped = true;
-        cancel();
-        element.replaceChildren();
-      };
-    };
+    if (!pdf) return () => {};
+    return pdf.attachPdfTextLayer(pdf, proxy, page(number), links, number);
   }
 
   // Native one-finger scrolling stays; two fingers zoom the pages, previewed
   // with a transform and committed (re-rendered) when the pinch ends.
   $effect(() => {
     const element = scroller;
-    if (!element) return;
-    let start: { distance: number; x: number; y: number } | undefined;
-    const measure = (touches: TouchList) => {
-      const [a, b] = [touches[0], touches[1]];
-      if (!a || !b) return;
-      const rect = element.getBoundingClientRect();
-      return {
-        distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1,
-        x: (a.clientX + b.clientX) / 2 - rect.left,
-        y: (a.clientY + b.clientY) / 2 - rect.top,
-      };
-    };
-    const touchstart = (event: TouchEvent) => {
-      event.stopPropagation();
-      if (phase !== "ready" || event.touches.length !== 2) return;
-      start = measure(event.touches);
-      if (start) pinch = { scale: 1, x: start.x, y: start.y };
-    };
-    const touchmove = (event: TouchEvent) => {
-      event.stopPropagation();
-      if (!start || event.touches.length !== 2) return;
-      event.preventDefault();
-      const now = measure(event.touches);
-      if (now)
-        pinch = {
-          scale: clamp((zoom * now.distance) / start.distance) / zoom,
-          x: start.x,
-          y: start.y,
-        };
-    };
-    const touchend = (event: TouchEvent) => {
-      event.stopPropagation();
-      if (!start || event.touches.length >= 2) return;
-      const done = pinch;
-      start = undefined;
-      pinch = undefined;
-      if (done && done.scale !== 1) zoomTo(zoom * done.scale, done.x, done.y);
-    };
-    const wheel = (event: WheelEvent) => {
-      // Browsers report trackpad pinches as ctrl+wheel.
-      if (!event.ctrlKey) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const rect = element.getBoundingClientRect();
-      zoomTo(
-        zoom * step ** (-event.deltaY / 100),
-        event.clientX - rect.left,
-        event.clientY - rect.top,
-      );
-    };
-    const resize = () => {
-      // A hidden tab has no layout; a pending restore waits until it is shown.
-      if (pending) void applyRestore();
-      else if (fitted && phase === "ready") fit();
-    };
-    const observer = new ResizeObserver(resize);
-    observer.observe(element);
-    element.addEventListener("touchstart", touchstart, { passive: true });
-    element.addEventListener("touchmove", touchmove, { passive: false });
-    element.addEventListener("touchend", touchend);
-    element.addEventListener("touchcancel", touchend);
-    element.addEventListener("wheel", wheel, { passive: false });
-    return () => {
-      observer.disconnect();
-      element.removeEventListener("touchstart", touchstart);
-      element.removeEventListener("touchmove", touchmove);
-      element.removeEventListener("touchend", touchend);
-      element.removeEventListener("touchcancel", touchend);
-      element.removeEventListener("wheel", wheel);
-    };
+    const module = pdf;
+    if (!element || !module) return;
+    return module.attachPdfPinchZoom(element, {
+      isReady: () => phase === "ready",
+      getZoom: () => zoom,
+      getPinch: () => pinch,
+      setPinch: (next) => (pinch = next),
+      zoomTo,
+      onResize: () => {
+        if (pending) void applyRestore();
+        else if (fitted && phase === "ready") fit();
+      },
+    });
   });
 </script>
 
