@@ -71,7 +71,7 @@ func wireSchema(name string) wireRules {
 	}
 	repositoryFields := func(prefix string) {
 		add(prefix, "id", "id")
-		add(prefix, "time", "checkedAt")
+		add(prefix, "time", "checkedAt", "lastFetchedAt")
 		add(prefix, "path", "anchorPath", "commonDir", "error")
 		worktreeFields(prefix + "/worktrees/*")
 	}
@@ -711,6 +711,14 @@ func (f *wireFixture) send(conn *websocket.Conn, kind byte, p []byte) {
 	}
 }
 
+// git changes the fixture repository outside the API.
+func (f *wireFixture) git(args ...string) {
+	f.t.Helper()
+	if out, err := exec.Command("git", append([]string{"-C", f.root}, args...)...).CombinedOutput(); err != nil {
+		f.t.Fatalf("Git fixture %v: %v %s", args, err, out)
+	}
+}
+
 func withHost(host string) func(*wireRequest) { return func(r *wireRequest) { r.host = host } }
 func withOrigin(origin string) func(*wireRequest) {
 	return func(r *wireRequest) { r.origin = origin }
@@ -1077,6 +1085,12 @@ func wireWorkspace(f *wireFixture) {
 	batchPreview := f.call("worktree-batch-removal-preview", "POST", base+"/worktrees/batch-removal-preview", contract.BatchRemovalPreviewRequest{WorktreeIDs: []string{batchTreeID, treeID}}, 200)
 	f.call("error-400-worktree-batch-remove", "POST", base+"/worktrees/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: str(batchPreview, "confirmationId"), IncludeForce: true, CloseSessions: false}, 400)
 	f.call("worktree-batch-remove", "POST", base+"/worktrees/batch-remove", contract.BatchRemoveWorktreesRequest{ConfirmationID: str(batchPreview, "confirmationId"), IncludeForce: false, CloseSessions: false}, 200)
+	f.call("repository-remotes-empty", "GET", base+"/remotes", nil, 200)
+	f.git("remote", "add", "origin", "https://user:secret@example.invalid/app.git")
+	f.git("remote", "set-url", "--push", "origin", "https://token@example.invalid/app.git")
+	f.call("repository-remotes", "GET", base+"/remotes", nil, 200)
+	f.git("remote", "remove", "origin")
+	f.call("error-404-repository-remotes", "GET", "/api/repositories/missing/remotes", nil, 404)
 	f.call("repository-unregister", "DELETE", base, nil, 204)
 }
 

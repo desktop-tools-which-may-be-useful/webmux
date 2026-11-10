@@ -168,3 +168,18 @@
   - `make build`（含 `pnpm --dir web check`）、`check:test`、`lint`、`check:arch`、`make format-check` 与 `make docs-check` 通过。
   - 使用者在真实 iPad 上打开修复版独立实例（未含补一帧刷新），确认 omp 的 Nerd Font 图标正常显示。
 - 限制：真机只核对了 iPad 上的 omp 图标（该构建尚未补一帧刷新），未覆盖 iPhone 与中文切片的真机表现；未运行全量 E2E 与完整 `make test`。
+
+本次局部核对（2026-11-10，仓库面板与工作树同步详情）：实现 OpenSpec 变更 `enrich-repository-details`，并归档已完成的 `batch-worktree-management`。
+
+- 更新的故事：新增 US-J15；更新 US-J02、US-J03、US-J08、US-J14、US-C01、US-C17 与覆盖索引，同步 `docs/usage/worktrees.md`、`docs/usage/sessions.md`、`docs/usage/shell-control.md`、`docs/protocol/http-workspace.md`。
+- 范围：
+  - 状态读取改为 `status --porcelain=v2 -z --branch`，补充上游、领先/落后、上游已删除、修改计数与进行中操作（读取标记文件，不增加 Git 进程）；每次快照多一次批量 `log` 读取最近提交；`lastFetchedAt` 取 `FETCH_HEAD` 修改时间；
+  - 分支清单补充上游与提交信息，新增 `GET /api/repositories/{id}/remotes`（服务端脱敏）与 `webmux repo remotes`；
+  - “仓库详情…”改为四分区仓库面板，“管理工作树”弹窗并入“工作树”分区；工作树详情在面板内作为子视图打开；侧栏工作树行改用“⋯”菜单，首页与侧栏显示领先/落后指示。
+- 依据：
+  - 测量：500 个带上游分支的 `Branches` 约 93 ms；与上游相差 10000 个提交时 `status --branch` 约 29 ms，因此未启用 `--no-ahead-behind`；
+  - `make format`、`make check`（含 `check:arch`、`golangci-lint` v2.15.0 与 `make docs-check`）通过；`make test-fast` 的 Go race 全部通过；
+  - Vitest Node 套件 736 项中只有 `base64url.test.ts` 1 项失败：本机 Node 24 没有 `Uint8Array.prototype.toBase64`（仓库要求 Node 26），与本变更无关；浏览器套件 671 项中 `TerminalGraphics.test.ts` 1 项在整套并发运行时失败、单独重跑 18 项全部通过；
+  - Storybook `overflow.spec.ts`/`contracts.spec.ts` 22 项通过（含 320×568 双倍字号）；Playwright E2E `worktrees.spec.ts`、`repository-scope.spec.ts`、`workspace-discovery.spec.ts` 与 `hybrid.spec.ts` 通过；
+  - 在隔离演示仓库上采集桌面（1280×900）、平板（768×800）、手机（390×844）明暗主题的前后对比截图。
+- 限制：未在 macOS 与移动真机上运行；全量 E2E 分片与 Storybook 构建交给 CI。

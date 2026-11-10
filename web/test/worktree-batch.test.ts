@@ -29,6 +29,13 @@ const makeTree = (id: string, patch: Partial<Worktree> = {}): Worktree => ({
   hasUntracked: false,
   hasIgnored: false,
   error: "",
+  upstream: null,
+  ahead: null,
+  behind: null,
+  upstreamGone: false,
+  lastCommit: null,
+  changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+  operation: null,
   ...patch,
 });
 
@@ -40,6 +47,7 @@ const makeRepo = (worktrees: Worktree[]): Repository => ({
   availability: "available",
   error: "",
   checkedAt: "2026-11-06T00:00:00Z",
+  lastFetchedAt: null,
   initInstruction: "",
   worktrees,
 });

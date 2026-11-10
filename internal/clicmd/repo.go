@@ -185,10 +185,12 @@ var repoRemoveCommand = &Command{
 
 var repoShowCommand = &Command{
 	Name: "repo show", Group: GroupWorkspace, Args: "REPO",
-	Summary:   "Show a repository: paths, availability, initialization instruction and worktrees with their home page state.",
+	Summary: "Show a repository: paths, availability, last fetch, initialization instruction and worktrees with their " +
+		"upstream, changes, last commit and home page state.",
 	Arguments: []Item{repoArgument},
-	Output:    "Aligned key-value lines and a worktree table; with --json, the Repository with home states.",
-	Exit:      exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names nothing."}),
+	Output: "Aligned key-value lines and a worktree table; last fetch is the newest FETCH_HEAD time, approximate. With " +
+		"--json, the Repository with home states.",
+	Exit: exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names nothing."}),
 	Examples: []Example{
 		{Command: "webmux repo show .", Text: "Inspect the current repository."},
 		{Command: "webmux repo show . --json | jq .initInstruction", Text: "Read its initialization instruction."},
@@ -224,11 +226,15 @@ func (e Env) showRepository(ctx context.Context, client *localclient.Client, rep
 	if repo.InitInstruction != "" {
 		init = fmt.Sprintf("%s (%d characters)", oneLine(repo.InitInstruction, 60), utf8.RuneCountInString(repo.InitInstruction))
 	}
+	fetched := "-"
+	if repo.LastFetchedAt != nil {
+		fetched = repo.LastFetchedAt.Local().Format(time.DateTime) + " (approximate)"
+	}
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
 	for _, row := range [][2]string{
 		{"id", repo.ID}, {"name", repo.Name}, {"path", repo.AnchorPath}, {"git dir", repo.CommonDir},
 		{"availability", repo.Availability}, {"error", repo.Error}, {"checked", repo.CheckedAt.Local().Format(time.DateTime)},
-		{"init", init},
+		{"last fetch", fetched}, {"init", init},
 	} {
 		if row[1] != "" {
 			_, _ = fmt.Fprintf(w, "%s\t%s\n", row[0], row[1])
@@ -237,9 +243,10 @@ func (e Env) showRepository(ctx context.Context, client *localclient.Client, rep
 	_ = w.Flush()
 	_, _ = fmt.Fprintln(e.Stdout)
 	w = tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ID\tKIND\tBRANCH\tPATH\tSTATE\tSESSIONS\tHOME")
+	_, _ = fmt.Fprintln(w, "ID\tKIND\tBRANCH\tPATH\tSTATE\tSESSIONS\tHOME\tUPSTREAM\tCHANGES\tLAST COMMIT")
 	for _, t := range view.Worktrees {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%s\n", t.ID, t.Kind, worktreeName(t.Worktree), t.Path, worktreeState(t.Worktree), t.Sessions, t.Home)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", t.ID, t.Kind, worktreeName(t.Worktree), t.Path, worktreeState(t.Worktree),
+			t.Sessions, t.Home, upstreamName(t.Worktree), changeCounts(t.Changes), commitLine(t.LastCommit))
 	}
 	_ = w.Flush()
 	return contract.ExitOK
@@ -285,10 +292,11 @@ func branchesOf(ctx context.Context, client *localclient.Client, repo contract.R
 
 var repoBranchesCommand = &Command{
 	Name: "repo branches", Group: GroupWorkspace, Args: "REPO",
-	Summary:   "List a repository's local branches, their commits and the worktrees that check them out.",
+	Summary:   "List a repository's local branches, their commits, upstreams and the worktrees that check them out.",
 	Arguments: []Item{repoArgument},
-	Output: "A table: BRANCH, HEAD, WORKTREES, with the default base and branch on standard error. With --json, the Branches " +
-		"object (branches, bases, defaultBase, defaultBranch, defaultParent).",
+	Output: "A table: BRANCH, HEAD, UPSTREAM, AHEAD/BEHIND (+AHEAD/-BEHIND, gone when the upstream branch no longer " +
+		"exists, - without an upstream), WORKTREES, with the default base and branch on standard error. With --json, " +
+		"the Branches object (branches, bases, defaultBase, defaultBranch, defaultParent).",
 	Exit: exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names nothing."}),
 	Examples: []Example{
 		{Command: "webmux repo branches .", Text: "See which branches are free for a new worktree."},
@@ -321,13 +329,60 @@ var repoBranchesCommand = &Command{
 				_, _ = fmt.Fprintf(e.Stderr, "webmux: default branch %s\n", *branches.DefaultBranch)
 			}
 			w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "BRANCH\tHEAD\tWORKTREES")
+			_, _ = fmt.Fprintln(w, "BRANCH\tHEAD\tUPSTREAM\tAHEAD/BEHIND\tWORKTREES")
 			for _, b := range branches.Branches {
 				trees := strings.Join(b.WorktreePaths, ", ")
 				if trees == "" {
 					trees = "-"
 				}
-				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", b.Name, shortHash(b.Head), trees)
+				upstream, sync := "-", "-"
+				if b.Upstream != nil {
+					upstream, sync = *b.Upstream, upstreamSync(b.Upstream, b.Ahead, b.Behind, b.UpstreamGone)
+				}
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", b.Name, shortHash(b.Head), upstream, sync, trees)
+			}
+			_ = w.Flush()
+			return contract.ExitOK
+		}
+	},
+}
+
+var repoRemotesCommand = &Command{
+	Name: "repo remotes", Group: GroupWorkspace, Args: "REPO",
+	Summary: "List a repository's remotes with their fetch and push URLs.",
+	Description: "The server redacts credentials before answering: a password becomes ***, and so does an http(s) user " +
+		"name given without a password, which is usually a token. ssh user names stay.",
+	Arguments: []Item{repoArgument},
+	Output:    "A table: NAME, FETCH, PUSH; with --json, the Remotes object.",
+	Exit:      exitsCommon(ExitItem{Code: 2, Text: "Also: REPO names nothing."}),
+	Examples: []Example{
+		{Command: "webmux repo remotes .", Text: "See where the current repository fetches from and pushes to."},
+		{Command: "webmux repo remotes . --json | jq -r '.remotes[].name'", Text: "List the remote names."},
+	},
+	SeeAlso: []string{"webmux repo show", "webmux repo branches"},
+	Bind: func(fs *flag.FlagSet) Action {
+		asJSON := fs.Bool("json", false, "print the Remotes object")
+		return func(ctx context.Context, e Env, args []string) int {
+			if len(args) != 1 {
+				return e.Usagef("exactly one repository is required")
+			}
+			client, repo, code := e.repoAndClient(ctx, args[0])
+			if client == nil {
+				return code
+			}
+			defer client.Close()
+			var remotes contract.Remotes
+			if err := client.Do(ctx, http.MethodGet, "/api/repositories/"+url.PathEscape(repo.ID)+"/remotes", nil, &remotes); err != nil {
+				return e.Fail(err)
+			}
+			if *asJSON {
+				writeJSON(e.Stdout, remotes)
+				return contract.ExitOK
+			}
+			w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
+			_, _ = fmt.Fprintln(w, "NAME\tFETCH\tPUSH")
+			for _, r := range remotes.Remotes {
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Name, r.FetchURL, r.PushURL)
 			}
 			_ = w.Flush()
 			return contract.ExitOK

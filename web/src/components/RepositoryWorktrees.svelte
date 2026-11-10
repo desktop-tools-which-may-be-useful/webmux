@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
-  import IconSearch from "~icons/tabler/search";
+  import IconDots from "~icons/tabler/dots";
   import { api } from "../api";
   import { errorMessage } from "../error";
   import {
@@ -21,43 +21,56 @@
     countWorktreeBatchCategories,
     filterWorktreeBatchEntries,
     groupBatchPreviewItems,
+    type WorktreeBatchEntry,
     type WorktreeBatchFilter,
   } from "../worktree-batch";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
-  import * as InputGroup from "$lib/components/ui/input-group";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { Label } from "$lib/components/ui/label";
+  import { ListButton } from "$lib/components/ui/list-button";
   import * as SegmentedControl from "$lib/components/ui/segmented-control";
   import InlineNotice from "./InlineNotice.svelte";
+  import ListSearchInput from "./ListSearchInput.svelte";
   import ManageWorktreesPreview from "./ManageWorktreesPreview.svelte";
-  import ResponsiveDialog from "./ResponsiveDialog.svelte";
+  import WorktreeMenuItems from "./WorktreeMenuItems.svelte";
+  import WorktreeSyncSummary from "./WorktreeSyncSummary.svelte";
 
+  // The repository panel's worktrees: every worktree of the repository,
+  // searchable and filtered by how safely it can be removed. Browsing opens
+  // a worktree's details; "批量清理" turns the list into a selection, then
+  // a server preview, then per-item results. Removal happens only here in the
+  // panel, so the rows' menus carry no delete entry.
   let {
     repository,
     sessions,
     archived,
     home,
+    busy = $bindable(false),
+    onopen,
     onchange,
     onremoved,
-    onclose,
   }: {
     repository: Repository;
     sessions: readonly SessionInfo[];
     archived: readonly ArchivedSession[];
     home: HomeWorktrees;
+    /** A preview or removal request is in flight. */
+    busy?: boolean;
+    /** Opens a worktree's details inside the panel. */
+    onopen: (worktreeId: string) => void;
     onchange: () => void;
     onremoved?: (removedIds: string[]) => void;
-    onclose: () => void;
   } = $props();
 
-  type Stage = "select" | "preview" | "result";
-  let stage = $state<Stage>("select");
+  type Stage = "browse" | "select" | "preview" | "result";
+  let stage = $state<Stage>("browse");
   let query = $state("");
   let statusFilter = $state<WorktreeBatchFilter>("all");
   const selected = new SvelteSet<string>();
-  let busy = $state(false);
   let error = $state("");
+  let done = $state("");
   let preview = $state<BatchRemovalPreview | null>(null);
   let includeForce = $state(false);
   let lastResult = $state<BatchRemoveResult | null>(null);
@@ -106,23 +119,21 @@
     };
   });
 
-  const dialogTitle = $derived(
+  const heading = $derived(
     stage === "preview"
       ? includeForce
-        ? `批量强制删除 · ${repository.name}`
-        : `确认批量清理 · ${repository.name}`
+        ? "批量强制删除"
+        : "确认批量清理"
       : stage === "result"
-        ? `批量清理部分完成 · ${repository.name}`
-        : `管理工作树 · ${repository.name}`,
+        ? "批量清理部分完成"
+        : "",
   );
-  const dialogDescription = $derived(
+  const description = $derived(
     stage === "preview"
       ? includeForce
         ? "危险操作：将关闭受阻工作树中的活动会话，并永久丢弃未提交修改、未跟踪及忽略文件；已归档聊天记录保留。"
         : "默认仅删除无阻塞的工作树并跳过受阻项；本地分支与已归档混合会话记录均会保留。"
-      : stage === "result"
-        ? "部分工作树已完成清理；失败项已保留选中，可重新读取预览后重试。"
-        : "查看并批量清理该仓库下的全部工作树（含未添加到主页的空闲项）。删除工作树不会删除本地分支。",
+      : "部分工作树已完成清理；失败项已保留选中，可重新读取预览后重试。",
   );
 
   function toggleWorktree(id: string, checked: boolean) {
@@ -153,9 +164,16 @@
     }
   }
 
-  function clearSelection() {
+  function startSelecting() {
+    error = "";
+    done = "";
+    stage = "select";
+  }
+
+  function stopSelecting() {
     error = "";
     selected.clear();
+    stage = "browse";
   }
 
   async function loadPreview(ids: readonly string[] = selectedIds) {
@@ -205,14 +223,16 @@
       const failed = res.results.filter((item) => item.status === "failed");
       if (removed.length > 0) onremoved?.(removed);
       onchange();
-      if (failed.length === 0) {
-        onclose();
-        return;
-      }
-      selected.clear();
-      for (const item of failed) selected.add(item.worktreeId);
       preview = null;
       includeForce = false;
+      selected.clear();
+      if (failed.length === 0) {
+        // Everything asked for is done: back to the refreshed list.
+        done = `已删除 ${removed.length} 个工作树。`;
+        stage = "browse";
+        return;
+      }
+      for (const item of failed) selected.add(item.worktreeId);
       lastResult = res;
       stage = "result";
     } catch (err) {
@@ -227,67 +247,92 @@
   }
 </script>
 
-<ResponsiveDialog
-  title={dialogTitle}
-  description={dialogDescription}
-  drawerDescription="删除工作树不删除本地分支；已归档混合会话记录保留。"
-  class="sm:max-w-2xl"
-  pinDrawerHeader
-  {busy}
-  {onclose}
->
-  <div class="space-y-4">
-    {#if stage === "select"}
-      <div class="space-y-3">
-        <InputGroup.Root class="w-full min-w-0">
-          <InputGroup.Addon>
-            <IconSearch aria-hidden="true" />
-          </InputGroup.Addon>
-          <InputGroup.Input
-            type="search"
-            aria-label="搜索工作树"
-            placeholder="按分支、提交哈希或路径搜索…"
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck={false}
-            bind:value={query}
-            onkeydown={(event) => {
-              if (event.key === "Escape" && query && !event.isComposing) {
-                event.preventDefault();
-                event.stopPropagation();
-                query = "";
-              }
-            }}
-          />
-        </InputGroup.Root>
+{#snippet badges(entry: WorktreeBatchEntry)}
+  <div class="flex flex-wrap items-center gap-1.5">
+    <span class="font-medium break-all">{entry.title}</span>
+    {#if entry.tree.head}
+      <span class="font-mono text-xs text-muted-foreground"
+        >{entry.tree.head.slice(0, 8)}</span
+      >
+    {/if}
+    {#if entry.tree.kind === "main"}
+      <Badge variant="secondary">主工作区</Badge>
+    {:else if entry.tree.kind === "bare"}
+      <Badge variant="secondary">bare</Badge>
+    {/if}
+    {#if !entry.pinned && entry.tree.kind === "linked"}
+      <Badge variant="outline">未添加到主页</Badge>
+    {/if}
+    {#if entry.tree.locked}
+      <Badge variant="outline">已锁定</Badge>
+    {/if}
+    {#if entry.tree.prunable && !entry.tree.available}
+      <Badge variant="outline">Git 登记待清理</Badge>
+    {:else if !entry.tree.available}
+      <Badge variant="destructive">不可用</Badge>
+    {:else if entry.category === "safe"}
+      <Badge variant="secondary">可安全清理</Badge>
+    {/if}
+    {#if entry.tree.dirty === true}
+      <Badge variant="warning">有修改</Badge>
+    {/if}
+    {#if entry.tree.hasUntracked}
+      <Badge variant="outline">未跟踪文件</Badge>
+    {/if}
+    {#if entry.tree.hasIgnored}
+      <Badge variant="outline">含忽略文件</Badge>
+    {/if}
+    {#if entry.activeSessionCount > 0}
+      <Badge variant="warning">{entry.activeSessionCount} 个运行中会话</Badge>
+    {/if}
+    {#if entry.archivedCount > 0}
+      <Badge variant="secondary">{entry.archivedCount} 条归档聊天</Badge>
+    {/if}
+  </div>
+  <p class="font-mono text-xs break-all text-muted-foreground">
+    {entry.tree.path}
+  </p>
+  <WorktreeSyncSummary worktree={entry.tree} />
+{/snippet}
 
-        <SegmentedControl.Root
-          value={statusFilter}
-          onValueChange={(value) => {
-            const next = filters.find((item) => item.id === value);
-            if (next) statusFilter = next.id;
-          }}
-          size="form"
-          aria-label="按工作树状态筛选"
-          wrap
-        >
-          {#each filters as filter (filter.id)}
-            <SegmentedControl.Item value={filter.id} class="min-h-9">
-              {filter.label}
-              <span
-                class="inline-block w-[3ch] text-right font-mono text-xs tabular-nums opacity-60"
-                >{filter.count}</span
-              >
-            </SegmentedControl.Item>
-          {/each}
-        </SegmentedControl.Root>
+<div class="space-y-4">
+  {#if stage === "browse" || stage === "select"}
+    <div class="space-y-3">
+      <ListSearchInput
+        bind:value={query}
+        label="搜索工作树"
+        placeholder="按分支、提交哈希或路径搜索…"
+      />
 
-        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span class="text-muted-foreground tabular-nums">
-            已选 {selectedIds.length} 项（共 {entries.length} 个工作树）
-          </span>
-          <div class="flex flex-wrap items-center gap-1.5">
+      <SegmentedControl.Root
+        value={statusFilter}
+        onValueChange={(value) => {
+          const next = filters.find((item) => item.id === value);
+          if (next) statusFilter = next.id;
+        }}
+        size="form"
+        aria-label="按工作树状态筛选"
+        wrap
+      >
+        {#each filters as filter (filter.id)}
+          <SegmentedControl.Item value={filter.id} class="min-h-9">
+            {filter.label}
+            <span
+              class="inline-block w-[3ch] text-right font-mono text-xs tabular-nums opacity-60"
+              >{filter.count}</span
+            >
+          </SegmentedControl.Item>
+        {/each}
+      </SegmentedControl.Root>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span class="text-muted-foreground tabular-nums">
+          {stage === "select"
+            ? `已选 ${selectedIds.length} 项（共 ${entries.length} 个工作树）`
+            : `共 ${entries.length} 个工作树`}
+        </span>
+        <div class="flex flex-wrap items-center gap-1.5">
+          {#if stage === "select"}
             <Button
               type="button"
               variant="outline"
@@ -304,30 +349,55 @@
               size="sm"
               class="min-h-9 sm:min-h-8"
               disabled={busy || selectedIds.length === 0}
-              onclick={clearSelection}
+              onclick={() => {
+                error = "";
+                selected.clear();
+              }}
             >
               清空选择
             </Button>
-          </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-9 sm:min-h-8"
+              disabled={busy}
+              onclick={stopSelecting}
+            >
+              退出批量清理
+            </Button>
+          {:else}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="min-h-9 sm:min-h-8"
+              disabled={entries.length === 0}
+              onclick={startSelecting}
+            >
+              批量清理
+            </Button>
+          {/if}
         </div>
       </div>
+    </div>
 
-      {#if filteredEntries.length === 0}
-        <p
-          class="rounded-lg border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground"
-        >
-          {entries.length === 0
-            ? "该仓库暂无工作树。"
-            : "没有匹配当前筛选条件的工作树。"}
-        </p>
-      {:else}
-        <ul
-          class="max-h-[45dvh] space-y-2 overflow-y-auto pr-1"
-          aria-label="仓库工作树列表"
-        >
-          {#each filteredEntries as entry (entry.tree.id)}
-            {@const isProtected = entry.category === "protected"}
-            {@const isChecked = !isProtected && selected.has(entry.tree.id)}
+    {#if done}<InlineNotice tone="success">{done}</InlineNotice>{/if}
+
+    {#if filteredEntries.length === 0}
+      <p
+        class="rounded-lg border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground"
+      >
+        {entries.length === 0
+          ? "该仓库暂无工作树。"
+          : "没有匹配当前筛选条件的工作树。"}
+      </p>
+    {:else}
+      <ul class="space-y-2" aria-label="仓库工作树列表">
+        {#each filteredEntries as entry (entry.tree.id)}
+          {@const isProtected = entry.category === "protected"}
+          {@const isChecked = !isProtected && selected.has(entry.tree.id)}
+          {#if stage === "select"}
             <li
               class={[
                 "rounded-lg border p-3 text-sm",
@@ -346,54 +416,7 @@
                   class="mt-0.5"
                 />
                 <div class="min-w-0 flex-1 space-y-1">
-                  <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="font-medium break-all">{entry.title}</span>
-                    {#if entry.tree.head}
-                      <span class="font-mono text-xs text-muted-foreground"
-                        >{entry.tree.head.slice(0, 8)}</span
-                      >
-                    {/if}
-                    {#if entry.tree.kind === "main"}
-                      <Badge variant="secondary">主工作区</Badge>
-                    {:else if entry.tree.kind === "bare"}
-                      <Badge variant="secondary">bare</Badge>
-                    {/if}
-                    {#if !entry.pinned && entry.tree.kind === "linked"}
-                      <Badge variant="outline">未添加到主页</Badge>
-                    {/if}
-                    {#if entry.tree.locked}
-                      <Badge variant="outline">已锁定</Badge>
-                    {/if}
-                    {#if entry.tree.prunable && !entry.tree.available}
-                      <Badge variant="outline">Git 登记待清理</Badge>
-                    {:else if !entry.tree.available}
-                      <Badge variant="destructive">不可用</Badge>
-                    {:else if entry.category === "safe"}
-                      <Badge variant="secondary">可安全清理</Badge>
-                    {/if}
-                    {#if entry.tree.dirty === true}
-                      <Badge variant="warning">有修改</Badge>
-                    {/if}
-                    {#if entry.tree.hasUntracked}
-                      <Badge variant="outline">未跟踪文件</Badge>
-                    {/if}
-                    {#if entry.tree.hasIgnored}
-                      <Badge variant="outline">含忽略文件</Badge>
-                    {/if}
-                    {#if entry.activeSessionCount > 0}
-                      <Badge variant="warning"
-                        >{entry.activeSessionCount} 个运行中会话</Badge
-                      >
-                    {/if}
-                    {#if entry.archivedCount > 0}
-                      <Badge variant="secondary"
-                        >{entry.archivedCount} 条归档聊天</Badge
-                      >
-                    {/if}
-                  </div>
-                  <p class="font-mono text-xs break-all text-muted-foreground">
-                    {entry.tree.path}
-                  </p>
+                  {@render badges(entry)}
                   {#if isProtected}
                     <p class="text-xs break-all text-muted-foreground">
                       {entry.reason}
@@ -402,10 +425,44 @@
                 </div>
               </Label>
             </li>
-          {/each}
-        </ul>
-      {/if}
-    {:else if stage === "preview" && preview}
+          {:else}
+            <li class="flex min-w-0 items-start gap-1 text-sm">
+              <ListButton
+                variant="option"
+                class="min-w-0 flex-1"
+                aria-haspopup="dialog"
+                onclick={() => onopen(entry.tree.id)}
+              >
+                <div class="min-w-0 space-y-1">{@render badges(entry)}</div>
+              </ListButton>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  {#snippet child({ props })}
+                    <Button
+                      {...props}
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`工作树操作：${entry.title}`}
+                      title={`工作树操作：${entry.title}`}
+                      ><IconDots aria-hidden="true" /></Button
+                    >
+                  {/snippet}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content align="end" class="min-w-48">
+                  <WorktreeMenuItems ondetails={() => onopen(entry.tree.id)} />
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </li>
+          {/if}
+        {/each}
+      </ul>
+    {/if}
+  {:else}
+    <div class="space-y-1">
+      <h3 class="text-sm font-medium">{heading}</h3>
+      <p class="text-xs text-muted-foreground">{description}</p>
+    </div>
+    {#if stage === "preview" && preview}
       {#if busy}
         <p role="status" class="text-sm">正在处理，请勿重复提交…</p>
       {/if}
@@ -436,15 +493,14 @@
         </ul>
       </InlineNotice>
     {/if}
+  {/if}
 
-    {#if error}
-      <p role="alert" class="text-sm break-all text-destructive">{error}</p>
-    {/if}
+  {#if error}
+    <p role="alert" class="text-sm break-all text-destructive">{error}</p>
+  {/if}
 
+  {#if stage !== "browse"}
     <div class="flex flex-wrap justify-end gap-2">
-      <Button type="button" variant="outline" disabled={busy} onclick={onclose}>
-        {stage === "result" ? "关闭" : "取消"}
-      </Button>
       {#if stage === "select"}
         <Button
           type="button"
@@ -509,5 +565,5 @@
         </Button>
       {/if}
     </div>
-  </div>
-</ResponsiveDialog>
+  {/if}
+</div>

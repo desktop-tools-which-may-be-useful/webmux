@@ -32,6 +32,7 @@
     archive,
     detailsOpen,
     ondetailschange,
+    lastFetchedAt,
   }: {
     title: string;
     path?: string;
@@ -58,6 +59,8 @@
     /** Set by the page header while focused; otherwise the group owns it. */
     detailsOpen?: boolean;
     ondetailschange?: (open: boolean) => void;
+    /** The repository's last fetch, shown in the worktree details. */
+    lastFetchedAt?: string | null;
   } = $props();
   let localOpen = $state(false);
   const visible = $derived(
@@ -190,6 +193,7 @@
     {#snippet children(page)}<page.default
         {title}
         path={groupPath}
+        {lastFetchedAt}
         {worktree}
         sessions={visible}
         onclose={() => setDetails(false)}

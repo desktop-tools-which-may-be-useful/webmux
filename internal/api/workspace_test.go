@@ -239,6 +239,53 @@ func TestWorkspaceBranchRefreshAPI(t *testing.T) {
 	}
 }
 
+func TestWorkspaceRemotesAPIRedactsCredentials(t *testing.T) {
+	handler, _, _, root := workspaceAPI(t)
+	register := workspaceRequest(t, handler, "POST", "/api/repositories", map[string]string{"path": root}, 201)
+	var repository contract.Repository
+	if err := json.Unmarshal(register.Body.Bytes(), &repository); err != nil {
+		t.Fatal(err)
+	}
+	remotesURL := "/api/repositories/" + repository.ID + "/remotes"
+	for _, status := range []int{401, 403} {
+		request := httptest.NewRequest("GET", remotesURL, nil)
+		if status == 403 {
+			request.Header.Set("Authorization", "Bearer secret")
+			request.Header.Set("Origin", "https://evil.example")
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != status {
+			t.Fatalf("remotes auth boundary: got %d want %d", recorder.Code, status)
+		}
+	}
+	workspaceRequest(t, handler, "GET", "/api/repositories/missing/remotes", nil, 404)
+	empty := workspaceRequest(t, handler, "GET", remotesURL, nil, 200)
+	if strings.TrimSpace(empty.Body.String()) != `{"remotes":[]}` {
+		t.Fatalf("no remotes: %s", empty.Body.String())
+	}
+
+	gitWorkspaceAPI(t, root, "remote", "add", "origin", "https://user:hunter2@example.invalid/app.git")
+	gitWorkspaceAPI(t, root, "remote", "set-url", "--push", "origin", "https://token123@example.invalid/app.git")
+	gitWorkspaceAPI(t, root, "remote", "add", "backup", "git@example.invalid:team/app.git")
+	listed := workspaceRequest(t, handler, "GET", remotesURL, nil, 200)
+	body := listed.Body.String()
+	if strings.Contains(body, "hunter2") || strings.Contains(body, "token123") {
+		t.Fatalf("remotes leaked credentials: %s", body)
+	}
+	var remotes contract.Remotes
+	if err := json.Unmarshal(listed.Body.Bytes(), &remotes); err != nil {
+		t.Fatal(err)
+	}
+	want := []contract.Remote{
+		{Name: "backup", FetchURL: "git@example.invalid:team/app.git", PushURL: "git@example.invalid:team/app.git"},
+		{Name: "origin", FetchURL: "https://user:***@example.invalid/app.git", PushURL: "https://***@example.invalid/app.git"},
+	}
+	if fmt.Sprint(remotes.Remotes) != fmt.Sprint(want) {
+		t.Fatalf("remotes: %+v", remotes.Remotes)
+	}
+}
+
 func TestWorkspaceAPIConfigDegradationAndTimeout(t *testing.T) {
 	cwd := t.TempDir()
 	t.Setenv("PATH", t.TempDir())

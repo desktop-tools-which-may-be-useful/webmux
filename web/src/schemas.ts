@@ -608,6 +608,32 @@ export const VoiceServerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("error"), error: z.string() }),
 ]);
 export type VoiceServerEvent = z.infer<typeof VoiceServerEventSchema>;
+// One commit: a worktree's last commit or a start point offered for a new
+// worktree.
+export const CommitSchema = z.object({
+  hash: z.string(),
+  subject: z.string(),
+  author: z.string(),
+  committedAt: z.string(),
+});
+export type Commit = z.infer<typeof CommitSchema>;
+// Change counts of a worktree's status; one entry may be both staged and
+// unstaged.
+export const WorktreeChangesSchema = z.object({
+  staged: z.number().int().nonnegative(),
+  unstaged: z.number().int().nonnegative(),
+  untracked: z.number().int().nonnegative(),
+  conflicted: z.number().int().nonnegative(),
+});
+export type WorktreeChanges = z.infer<typeof WorktreeChangesSchema>;
+export const WorktreeOperationSchema = z.enum([
+  "merge",
+  "rebase",
+  "cherry-pick",
+  "revert",
+  "bisect",
+]);
+export type WorktreeOperation = z.infer<typeof WorktreeOperationSchema>;
 export const WorktreeSchema = z.object({
   id: z.string(),
   repositoryId: z.string(),
@@ -624,6 +650,16 @@ export const WorktreeSchema = z.object({
   hasUntracked: z.boolean(),
   hasIgnored: z.boolean(),
   error: z.string(),
+  // Null without an upstream; ahead and behind are also null when the
+  // upstream is gone or the counts were not computed.
+  upstream: z.string().nullable(),
+  ahead: z.number().int().nonnegative().nullable(),
+  behind: z.number().int().nonnegative().nullable(),
+  upstreamGone: z.boolean(),
+  lastCommit: CommitSchema.nullable(),
+  // Null when the status could not be read.
+  changes: WorktreeChangesSchema.nullable(),
+  operation: WorktreeOperationSchema.nullable(),
 });
 export type Worktree = z.infer<typeof WorktreeSchema>;
 // The longest repository init instruction the server accepts, in characters.
@@ -636,6 +672,8 @@ export const RepositorySchema = z.object({
   availability: z.enum(["available", "unavailable"]),
   error: z.string(),
   checkedAt: z.iso.datetime({ offset: true }),
+  // Newest FETCH_HEAD change in the repository; approximate, null if never.
+  lastFetchedAt: z.iso.datetime({ offset: true }).nullable(),
   // Quick start puts it before the first message; "" when unset.
   initInstruction: z.string(),
   worktrees: z.array(WorktreeSchema),
@@ -683,32 +721,50 @@ export const HomeWorktreesSchema = z.record(
   z.array(z.string().min(1)).max(1000),
 );
 export type HomeWorktrees = z.infer<typeof HomeWorktreesSchema>;
+const UpstreamFields = {
+  upstream: z.string().nullable(),
+  ahead: z.number().int().nonnegative().nullable(),
+  behind: z.number().int().nonnegative().nullable(),
+  upstreamGone: z.boolean(),
+};
+export const BranchSchema = z.object({
+  name: z.string(),
+  head: z.string(),
+  worktreePaths: z.array(z.string()),
+  subject: z.string(),
+  committedAt: z.string(),
+  ...UpstreamFields,
+});
+export type Branch = z.infer<typeof BranchSchema>;
+export const BranchBaseSchema = z.object({
+  name: z.string(),
+  head: z.string(),
+  subject: z.string(),
+  kind: z.enum(["local", "remote"]),
+  committedAt: z.string(),
+});
+export type BranchBase = z.infer<typeof BranchBaseSchema>;
 export const BranchesSchema = z.object({
-  branches: z.array(
-    z.object({
-      name: z.string(),
-      head: z.string(),
-      worktreePaths: z.array(z.string()),
-    }),
-  ),
-  bases: z.array(
-    z.object({ name: z.string(), head: z.string(), subject: z.string() }),
-  ),
+  branches: z.array(BranchSchema),
+  bases: z.array(BranchBaseSchema),
   defaultBase: z.string().nullable(),
   defaultBaseSubject: z.string(),
   defaultBranch: z.string().nullable(),
   defaultParent: z.string(),
 });
+export type Branches = z.infer<typeof BranchesSchema>;
 export const CommitsSchema = z.object({
-  commits: z.array(
-    z.object({
-      hash: z.string(),
-      subject: z.string(),
-      author: z.string(),
-      committedAt: z.string(),
-    }),
-  ),
+  commits: z.array(CommitSchema),
 });
+// GET /repositories/:id/remotes; URLs are redacted by the server.
+export const RemoteSchema = z.object({
+  name: z.string(),
+  fetchUrl: z.string(),
+  pushUrl: z.string(),
+});
+export type Remote = z.infer<typeof RemoteSchema>;
+export const RemotesSchema = z.object({ remotes: z.array(RemoteSchema) });
+export type Remotes = z.infer<typeof RemotesSchema>;
 export const RefreshBranchBaseRequestSchema = z.object({
   branch: z.string().min(1),
 });

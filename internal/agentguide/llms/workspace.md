@@ -18,6 +18,8 @@
 
 `webmux repo add` 登记当前目录所在的仓库，`webmux repo rm` 取消登记（不删除任何文件）。
 `webmux repo branches`、`commits` 与 `base` 帮助选择新 worktree 的基点；`base` 会先取回上游，取回失败只警告。
+`webmux repo show`、`worktree ls/show` 与 `repo branches` 显示与上游的领先/落后（`+A/-B`，上游已删除为 `gone`，未计算为 `+?/-?`）、修改统计和最近提交；`repo show` 的上次获取时间是近似值。
+`webmux repo remotes` 列出远程及其 fetch/push 地址，凭据由服务端脱敏。
 
 ## 仓库设置（初始化指令）
 

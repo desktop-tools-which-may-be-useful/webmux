@@ -62,10 +62,8 @@
     {#if worktree}
       <DropdownMenu.Separator />
       <DropdownMenu.Label>{worktree.title}</DropdownMenu.Label>
-      <DropdownMenu.Item onSelect={worktree.ondetails}
-        >工作树详情…</DropdownMenu.Item
-      >
       <WorktreeMenuItems
+        ondetails={worktree.ondetails}
         pinned={worktree.pinned}
         ontogglepin={worktree.ontogglepin}
         onremove={worktree.onremove}

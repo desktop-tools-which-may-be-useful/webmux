@@ -170,39 +170,6 @@ func parseWorktrees(data []byte, repository string) ([]Worktree, error) {
 	}
 	return out, nil
 }
-func parseStatus(data []byte) (dirty, untracked, ignored bool, err error) {
-	if len(data) == 0 {
-		return
-	}
-	if data[len(data)-1] != 0 {
-		err = errors.New("状态输出不是 NUL 格式（来自 Git）")
-		return
-	}
-	records := bytes.Split(data[:len(data)-1], []byte{0})
-	for i := 0; i < len(records); i++ {
-		record := records[i]
-		if len(record) < 4 || record[2] != ' ' {
-			err = errors.New("状态记录无效（来自 Git）")
-			return
-		}
-		switch string(record[:2]) {
-		case "??":
-			untracked = true
-		case "!!":
-			ignored = true
-		default:
-			dirty = true
-			if record[0] == 'R' || record[0] == 'C' || record[1] == 'R' || record[1] == 'C' {
-				i++
-				if i >= len(records) {
-					err = errors.New("重命名状态记录不完整（来自 Git）")
-					return
-				}
-			}
-		}
-	}
-	return
-}
 func (s *Service) snapshot(ctx context.Context, r *repositoryState) (Repository, error) {
 	if err := ctx.Err(); err != nil {
 		return Repository{}, err
@@ -307,6 +274,7 @@ func (s *Service) readRepository(ctx context.Context, r *repositoryState) Reposi
 		}(&trees[i])
 	}
 	wg.Wait()
+	s.fillLastCommits(ctx, e.AnchorPath, trees)
 	sort.SliceStable(trees, func(i, j int) bool {
 		if trees[i].Kind != "linked" {
 			return true
@@ -317,6 +285,7 @@ func (s *Service) readRepository(ctx context.Context, r *repositoryState) Reposi
 		return trees[i].Path < trees[j].Path
 	})
 	result.Availability, result.Worktrees = "available", trees
+	result.LastFetchedAt = lastFetched(e.CommonDir)
 	return result
 }
 
@@ -336,17 +305,85 @@ func (s *Service) populateWorktreeStatus(ctx context.Context, commonDir string, 
 		return
 	}
 	tree.Available = true
-	status, statusErr := s.git(ctx, tree.Path, "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=matching")
+	tree.Operation = detectOperation(tree.Path)
+	data, statusErr := s.git(ctx, tree.Path, "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=normal", "--ignored=matching")
 	if statusErr != nil {
 		tree.Error = statusErr.Error()
 		return
 	}
-	dirty, untracked, ignored, parseErr := parseStatus(status)
+	status, parseErr := parseStatus(data)
 	if parseErr != nil {
 		tree.Error = parseErr.Error()
 		return
 	}
-	tree.Dirty, tree.HasUntracked, tree.HasIgnored = &dirty, untracked, ignored
+	dirty := status.dirty
+	tree.Dirty, tree.HasUntracked, tree.HasIgnored = &dirty, status.untracked, status.ignored
+	tree.Upstream, tree.Ahead, tree.Behind, tree.UpstreamGone = status.upstream, status.ahead, status.behind, status.upstreamGone
+	tree.Changes = &status.changes
+}
+
+// fillLastCommits describes every worktree's HEAD with one batched log;
+// a failed read only leaves LastCommit empty.
+func (s *Service) fillLastCommits(ctx context.Context, anchor string, trees []Worktree) {
+	eligible := func(tree Worktree) bool {
+		return tree.Available && tree.Kind != "bare" && tree.Head != nil && isObjectID(*tree.Head)
+	}
+	var heads []string
+	seen := map[string]bool{}
+	for _, tree := range trees {
+		if eligible(tree) && !seen[*tree.Head] {
+			seen[*tree.Head] = true
+			heads = append(heads, *tree.Head)
+		}
+	}
+	if len(heads) == 0 {
+		return
+	}
+	commits, err := s.describeCommits(ctx, anchor, heads)
+	if err != nil {
+		return
+	}
+	byHash := make(map[string]Commit, len(commits))
+	for _, commit := range commits {
+		byHash[commit.Hash] = commit
+	}
+	for i := range trees {
+		if !eligible(trees[i]) {
+			continue
+		}
+		if commit, ok := byHash[*trees[i].Head]; ok {
+			trees[i].LastCommit = &commit
+		}
+	}
+}
+
+// describeCommits reads exactly the given commits, without walking history.
+func (s *Service) describeCommits(ctx context.Context, cwd string, oids []string) ([]Commit, error) {
+	args := append([]string{"log", "--no-walk=unsorted", "--no-show-signature", "--format=%H%x00%s%x00%an%x00%cI%x00"}, oids...)
+	data, err := s.git(ctx, cwd, append(args, "--")...)
+	if err != nil {
+		return nil, err
+	}
+	return parseCommitLog(data), nil
+}
+
+// verifyIdentity checks that the repository is still registered and its
+// anchor still belongs to the registered common directory.
+func (s *Service) verifyIdentity(ctx context.Context, r *repositoryState) error {
+	if !s.registered(r) {
+		return problemf(ErrNotFound, "仓库已移除")
+	}
+	common, err := s.common(ctx, r.entry.AnchorPath)
+	if err == nil && common != r.entry.CommonDir {
+		err = errors.New("仓库 common directory 身份已改变，请移除并重新注册")
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return problemf(ErrUnavailable, "%s", err.Error())
+	}
+	return nil
 }
 
 func (s *Service) currentTree(ctx context.Context, r *repositoryState, id string) (Worktree, error) {
@@ -358,20 +395,10 @@ func (s *Service) currentTree(ctx context.Context, r *repositoryState, id string
 }
 
 func (s *Service) currentTrees(ctx context.Context, r *repositoryState, ids []string) ([]Worktree, error) {
-	if !s.registered(r) {
-		return nil, problemf(ErrNotFound, "仓库已移除")
+	if err := s.verifyIdentity(ctx, r); err != nil {
+		return nil, err
 	}
 	e := r.entry
-	common, err := s.common(ctx, e.AnchorPath)
-	if err == nil && common != e.CommonDir {
-		err = errors.New("仓库 common directory 身份已改变，请移除并重新注册")
-	}
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, problemf(ErrUnavailable, "%s", err.Error())
-	}
 	data, err := s.git(ctx, e.AnchorPath, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		if ctx.Err() != nil {
@@ -443,20 +470,30 @@ func findTree(repository Repository, id string) (Worktree, error) {
 }
 func (s *Service) branches(ctx context.Context, r *repositoryState, repository Repository) (Branches, error) {
 	result := Branches{Branches: []Branch{}, Bases: []Base{}, DefaultParent: filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")}
-	data, err := s.git(ctx, r.entry.AnchorPath, "for-each-ref", "--sort=-committerdate", "--format=%(refname)%00%(objectname)%00%(subject)%00", "refs/heads/", "refs/remotes/")
+	data, err := s.git(ctx, r.entry.AnchorPath, "for-each-ref", "--sort=-committerdate",
+		"--format=%(refname)%00%(objectname)%00%(subject)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(committerdate:iso-strict)%00",
+		"refs/heads/", "refs/remotes/")
 	if err != nil {
 		return result, err
 	}
+	const refFields = 6
 	fields := bytes.Split(data, []byte{0})
-	for i := 0; i+2 < len(fields); i += 3 {
+	for i := 0; i+refFields-1 < len(fields); i += refFields {
 		ref := strings.TrimPrefix(string(fields[i]), "\n")
 		head := string(fields[i+1])
+		subject := string(fields[i+2])
+		committedAt := string(fields[i+5])
 		if ref == "" {
 			continue
 		}
-		name := strings.TrimPrefix(ref, "refs/heads/")
-		if strings.HasPrefix(ref, "refs/heads/") {
-			branch := Branch{Name: name, Head: head, WorktreePaths: []string{}}
+		kind := "remote"
+		if name, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			kind = "local"
+			branch := Branch{Name: name, Head: head, WorktreePaths: []string{}, Subject: subject, CommittedAt: committedAt}
+			if upstream := string(fields[i+3]); upstream != "" {
+				branch.Upstream = &upstream
+				branch.Ahead, branch.Behind, branch.UpstreamGone = parseTrack(string(fields[i+4]))
+			}
 			for _, tree := range repository.Worktrees {
 				if tree.Branch != nil && *tree.Branch == name {
 					branch.WorktreePaths = append(branch.WorktreePaths, tree.Path)
@@ -464,7 +501,7 @@ func (s *Service) branches(ctx context.Context, r *repositoryState, repository R
 			}
 			result.Branches = append(result.Branches, branch)
 		}
-		result.Bases = append(result.Bases, Base{Name: ref, Head: head, Subject: string(fields[i+2])})
+		result.Bases = append(result.Bases, Base{Name: ref, Head: head, Subject: subject, Kind: kind, CommittedAt: committedAt})
 	}
 	for _, tree := range repository.Worktrees {
 		if tree.Kind == "main" && tree.Head != nil {
@@ -562,13 +599,11 @@ func (s *Service) RecentCommits(ctx context.Context, id string, from []string) (
 		}
 	}
 	if len(missing) > 0 {
-		args := append([]string{"log", "--no-walk=unsorted", "--no-show-signature",
-			"--format=%H%x00%s%x00%an%x00%cI%x00"}, missing...)
-		extra, err := s.git(ctx, r.entry.AnchorPath, append(args, "--")...)
+		extra, err := s.describeCommits(ctx, r.entry.AnchorPath, missing)
 		if err != nil {
 			return nil, err
 		}
-		commits = append(commits, parseCommitLog(extra)...)
+		commits = append(commits, extra...)
 		sort.SliceStable(commits, func(i, j int) bool {
 			return commitTime(commits[i].CommittedAt).After(commitTime(commits[j].CommittedAt))
 		})

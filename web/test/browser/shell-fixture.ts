@@ -1,5 +1,7 @@
 import type {
   ArchivedSession,
+  Branch,
+  BranchBase,
   LaunchConfigSummary,
   Repository,
   SessionInfo,
@@ -73,6 +75,13 @@ export function worktree(patch: Partial<Worktree> = {}): Worktree {
     hasUntracked: false,
     hasIgnored: false,
     error: "",
+    upstream: null,
+    ahead: null,
+    behind: null,
+    upstreamGone: false,
+    lastCommit: null,
+    changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+    operation: null,
     ...patch,
   };
 }
@@ -86,9 +95,40 @@ export function repository(patch: Partial<Repository> = {}): Repository {
     availability: "available",
     error: "",
     checkedAt: "2026-10-28T00:00:00Z",
+    lastFetchedAt: null,
     initInstruction: "",
     worktrees: [worktree()],
     ...patch,
+  };
+}
+
+export function branch(
+  name: string,
+  head: string,
+  worktreePaths: string[] = [],
+  patch: Partial<Branch> = {},
+): Branch {
+  return {
+    name,
+    head,
+    worktreePaths,
+    subject: "",
+    committedAt: "2026-10-28T00:00:00Z",
+    upstream: null,
+    ahead: null,
+    behind: null,
+    upstreamGone: false,
+    ...patch,
+  };
+}
+
+export function base(name: string, head: string, subject = ""): BranchBase {
+  return {
+    name,
+    head,
+    subject,
+    kind: name.startsWith("refs/remotes/") ? "remote" : "local",
+    committedAt: "2026-10-28T00:00:00Z",
   };
 }
 

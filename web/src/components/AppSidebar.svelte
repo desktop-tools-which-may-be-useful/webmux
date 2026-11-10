@@ -262,13 +262,19 @@
             const repo = shell.repositories.list.find(
               (r) => r.id === repositoryId,
             );
-            if (repo) shell.manageWorktrees(repo);
+            if (repo) shell.repositoryDetails(repo, "worktrees");
           }}
           onrepositorydetails={(repositoryId) => {
             const repo = shell.repositories.list.find(
               (r) => r.id === repositoryId,
             );
             if (repo) shell.repositoryDetails(repo);
+          }}
+          onworktreedetails={(repositoryId, worktreeId) => {
+            const tree = shell.repositories.list
+              .find((r) => r.id === repositoryId)
+              ?.worktrees.find((w) => w.id === worktreeId);
+            if (tree) shell.worktreeDetails(tree);
           }}
           onremoveworktree={(repositoryId, worktreeId) => {
             const tree = shell.repositories.list

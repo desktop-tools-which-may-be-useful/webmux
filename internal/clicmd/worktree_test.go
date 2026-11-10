@@ -75,6 +75,42 @@ func TestArchivedWorktreeFollowsTheWeb(t *testing.T) {
 	}
 }
 
+// TestWorktreeSyncColumns covers the upstream states the Web UI also
+// distinguishes: none, gone, not counted, counted, and unknown status.
+func TestWorktreeSyncColumns(t *testing.T) {
+	clean := &contract.WorktreeChanges{}
+	tests := []struct {
+		name                string
+		give                contract.Worktree
+		wantState, wantName string
+		wantChanges         string
+	}{
+		{"no upstream", contract.Worktree{Available: true, Changes: clean}, "-", "none", "clean"},
+		{"gone", contract.Worktree{Available: true, Upstream: new("origin/x"), UpstreamGone: true, Changes: clean}, "gone", "origin/x (gone)", "clean"},
+		{"not counted", contract.Worktree{Available: true, Upstream: new("origin/x"), Changes: clean}, "+?/-?", "origin/x", "clean"},
+		{"counted", contract.Worktree{Available: true, Upstream: new("origin/x"), Ahead: new(2), Behind: new(0), Dirty: new(true),
+			Changes: &contract.WorktreeChanges{Staged: 1, Unstaged: 2, Conflicted: 1}}, "changed,+2/-0", "origin/x", "1 staged, 2 unstaged, 1 conflicted"},
+		{"unknown", contract.Worktree{Available: true}, "-", "unknown", "unknown"},
+	}
+	for _, tt := range tests {
+		if got := worktreeState(tt.give); got != tt.wantState {
+			t.Errorf("%s: state %q, want %q", tt.name, got, tt.wantState)
+		}
+		if got := upstreamName(tt.give); got != tt.wantName {
+			t.Errorf("%s: upstream %q, want %q", tt.name, got, tt.wantName)
+		}
+		if got := changeCounts(tt.give.Changes); got != tt.wantChanges {
+			t.Errorf("%s: changes %q, want %q", tt.name, got, tt.wantChanges)
+		}
+	}
+	if got := commitLine(&contract.Commit{Hash: "0123456789abcdef", Subject: "fix\nbody"}); got != "0123456789ab fix" {
+		t.Errorf("commit line %q", got)
+	}
+	if got := commitLine(nil); got != "-" {
+		t.Errorf("no commit %q", got)
+	}
+}
+
 // settingsServer is a /api/settings fake that rejects the first n PATCHes
 // with 409 after another client changed another repository.
 type settingsServer struct {

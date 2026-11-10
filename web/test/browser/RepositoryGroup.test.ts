@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import RepositoryGroup from "../../src/components/RepositoryGroup.svelte";
-import { repository, worktree } from "./shell-fixture";
+import type { SessionInfo } from "../../src/schemas";
+import { repository, session, worktree } from "./shell-fixture";
 
 beforeEach(async () => {
   await page.viewport(1024, 900);
@@ -13,15 +14,24 @@ afterEach(async () => {
   document.body.style.padding = "";
 });
 
-function renderGroup(focused: boolean) {
+function renderGroup(
+  focused: boolean,
+  linked: Parameters<typeof worktree>[0] = {},
+  sessions: SessionInfo[] = [],
+) {
   render(RepositoryGroup, {
     repo: repository({
       worktrees: [
         worktree({ id: "main" }),
-        worktree({ id: "linked", kind: "linked", branch: "wt/feature" }),
+        worktree({
+          id: "linked",
+          kind: "linked",
+          branch: "wt/feature",
+          ...linked,
+        }),
       ],
     }),
-    sessions: [],
+    sessions,
     filtering: false,
     focused,
     open: true,
@@ -54,4 +64,38 @@ test("an unfocused repository keeps its name as a foldable heading", async () =>
   await expect
     .element(heading.getByRole("button", { expanded: true }))
     .toBeVisible();
+});
+
+// A worktree with a session is always on the home page.
+const inLinked = session({
+  id: "linked01",
+  workspace: {
+    repositoryId: "repo1",
+    worktreeId: "linked",
+    worktreePath: "/repos/webmux",
+  },
+});
+
+test("a worktree ahead of its upstream says so in its title, without a behind count", async () => {
+  renderGroup(false, { upstream: "origin/wt/feature", ahead: 3, behind: 0 }, [
+    inLinked,
+  ]);
+  const linked = page.getByRole("region", { name: "wt/feature" });
+  await expect
+    .element(linked.getByRole("img", { name: "领先上游 3 个提交" }))
+    .toHaveTextContent("3");
+  expect(linked.getByRole("img", { name: /落后/ }).elements()).toEqual([]);
+  // Synced and untracked worktrees show no indicator.
+  expect(
+    page.getByRole("region", { name: "main" }).getByRole("img").elements(),
+  ).toEqual([]);
+});
+
+test("a deleted upstream is marked without counts", async () => {
+  renderGroup(false, { upstream: "origin/wt/feature", upstreamGone: true }, [
+    inLinked,
+  ]);
+  const linked = page.getByRole("region", { name: "wt/feature" });
+  await expect.element(linked.getByText("上游已删除")).toBeVisible();
+  expect(linked.getByRole("img").elements()).toEqual([]);
 });

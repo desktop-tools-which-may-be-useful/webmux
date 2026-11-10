@@ -128,6 +128,72 @@ for (const story of stories) {
   });
 }
 
+// The repository panel's sections and the worktree sync summary, with names
+// and URLs long enough to wrap; a worktree's details open in the same
+// dialog (drawer on phones) instead of a second one.
+for (const story of [
+  "overview",
+  "worktrees",
+  "branches",
+  "remotes",
+  "worktree-sync",
+]) {
+  test(`repository panel ${story} fits every layout`, async ({ page }) => {
+    // Twelve layouts, and the worktrees story also opens a subview in each.
+    test.slow();
+    const failures: string[] = [];
+    page.on("pageerror", (error) => failures.push(error.message));
+    await page.route("**/api/**", (route) => route.abort());
+    await page.goto(
+      `/iframe.html?id=workspace-repository-panel--${story}&viewMode=story&globals=theme:light`,
+    );
+    await expect(page.getByTestId("repository-story")).toBeVisible();
+    const dialog = page.getByRole("dialog");
+
+    await checkEachLayout(page, async ({ name }) => {
+      if (story === "branches")
+        await expect
+          .soft(page.getByRole("region", { name: "本地分支" }), name)
+          .toBeVisible();
+      if (story === "remotes")
+        await expect
+          .soft(page.getByRole("list", { name: "远程列表" }), name)
+          .toBeVisible();
+      await expectNoOverflow(page, name);
+      if (story !== "worktree-sync") {
+        // The dialog's height follows dvh, which can settle a frame after a
+        // viewport change on a loaded CI runner.
+        const viewport = page.viewportSize()!.height;
+        await expect.soft
+          .poll(
+            async () => {
+              const bounds = await dialog.boundingBox();
+              return (
+                bounds !== null &&
+                bounds.y >= -1 &&
+                bounds.y + bounds.height <= viewport + 1
+              );
+            },
+            { message: name, timeout: 2_000 },
+          )
+          .toBe(true);
+      }
+      if (story === "worktrees") {
+        await dialog
+          .getByRole("list", { name: "仓库工作树列表" })
+          .getByRole("button", { name: /^feature\/ahead-/ })
+          .click();
+        const back = dialog.getByRole("button", { name: "返回" });
+        await expect.soft(back, name).toBeVisible();
+        await expect.soft(dialog, name).toHaveCount(1);
+        await expectNoOverflow(page, name);
+        await back.click();
+      }
+      expect.soft(failures, name).toEqual([]);
+    });
+  });
+}
+
 test("keeps a full scratch list and its composer reachable", async ({
   page,
 }) => {

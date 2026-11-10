@@ -172,6 +172,7 @@ webmux worktree ls . --hidden                    # HOME 列：pinned、sessions�
 webmux worktree pin . exp/a; webmux worktree home . --reset
 webmux worktree rm . fix/lint --yes              # 先预览；有阻止原因时需要 --force
 webmux repo add; webmux repo branches .; webmux repo commits . --from main; webmux repo base . main
+webmux repo remotes .; webmux worktree show . feat/x --json   # 远程 URL 已脱敏；JSON 含 upstream、ahead、behind
 printf '{{webmux}}\n\n{{user}}' | webmux repo settings . --init -
 webmux launch-config add "Dev" --icon terminal --env MODE=dev -- bash -lc 'npm run dev'
 webmux launch-config edit "Dev" --unset-env MODE; webmux launch-config show "Dev" --json
@@ -182,6 +183,7 @@ webmux forward add 5173 --session self --label web
 - 主页显示的规则与 Web 端相同：从未设置的仓库只显示主工作区，有会话或已归档会话的 worktree 总会显示。
   - 写入只改该仓库的 `homeWorktrees` 条目，与其他设备冲突（409）时重新读取并重放，最多 3 次。
 - `worktree rm`、`repo rm`、`launch-config rm` 与 `rm --forget` 一样：终端上先确认，非交互时需要 `--yes`。`repo rm` 不删除文件，并清理该仓库的主页显示设置。
+- `worktree ls` 的状态列在有上游时追加领先/落后（如 `+2/-1`）或 `gone`；`worktree show`、`repo show` 输出上游、领先/落后、最近提交与修改统计，`repo show` 另输出上次获取远程时间；`repo branches` 有上游与领先/落后列，无上游时为 `-`。这些数据只读本地引用，不联网；`--json` 与 HTTP 响应一致。
 - 初始化指令最多 4000 个字符，超出时 CLI 以 2 拒绝；引用不存在的快捷指令只警告，仍会保存。`--edit` 用 `$VISUAL` 或 `$EDITOR` 编辑。
 - 启动配置的变量值默认隐藏；`edit` 读取后只改给出的字段再整体保存；开启聊天视图（`--chat`）前先检查命令是否支持。
 

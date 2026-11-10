@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AgentGuidePromptSchema,
   ArtifactsFolderSchema,
+  BranchesSchema,
   ErrorSchema,
   ForwardRequestSchema,
   ForwardSchema,
@@ -9,6 +10,7 @@ import {
   ForwardUpdateSchema,
   NoContentSchema,
   RecentDirsSchema,
+  RemotesSchema,
   TextSettingSchema,
   UploadSchema,
   type ForwardRequest,
@@ -258,6 +260,26 @@ export async function agentGuidePrompt(
       signal,
     )
   ).prompt;
+}
+// A repository's branches with their upstream tracking, and its remotes with
+// redacted URLs; both are local reads that never fetch.
+export function repositoryBranches(id: string, signal?: AbortSignal) {
+  return api(
+    `/repositories/${id}/branches`,
+    BranchesSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+export function repositoryRemotes(id: string, signal?: AbortSignal) {
+  return api(
+    `/repositories/${id}/remotes`,
+    RemotesSchema,
+    "GET",
+    undefined,
+    signal,
+  );
 }
 export function navigate(path: string) {
   history.pushState(null, "", path);

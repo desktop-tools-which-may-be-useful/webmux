@@ -14,7 +14,7 @@
   import { createServerSetup } from "../hooks/server-setup.svelte";
   import { createSessionList } from "../hooks/session-list.svelte";
   import { homeWorktrees } from "../home-worktrees.svelte";
-  import { homeLayout, setPinned } from "../home-worktrees";
+  import { homeLayout, setPinned, worktreeTitle } from "../home-worktrees";
   import {
     resolveLaunchScope,
     type LaunchEntry,
@@ -35,6 +35,7 @@
     shellUi,
     sidebarWidthMax,
     sidebarWidthMin,
+    type RepositoryTab,
     type Shell,
     type ShellMode,
   } from "../shell.svelte";
@@ -114,9 +115,12 @@
           )
       : undefined;
   }
-  let managingWorktrees = $state<Repository | null>(null);
   let choosingHome = $state<Repository | null>(null);
-  let viewingRepository = $state<Repository | null>(null);
+  let viewingRepository = $state<{
+    repository: Repository;
+    tab: RepositoryTab;
+  } | null>(null);
+  let viewingWorktree = $state<Worktree | null>(null);
   // Kept after closing so the confirmation still names the repository.
   let unregistering = $state<Repository | null>(null);
   let unregisterOpen = $state(false);
@@ -170,17 +174,19 @@
       shellUi.drawerOpen = false;
       removingWorktree = { worktree, ...options };
     },
-    manageWorktrees(repository) {
-      shellUi.drawerOpen = false;
-      managingWorktrees = repository;
-    },
     chooseHomeWorktrees(repository) {
       shellUi.drawerOpen = false;
       choosingHome = repository;
     },
-    repositoryDetails(repository) {
+    repositoryDetails(repository, tab = "overview") {
       shellUi.drawerOpen = false;
-      viewingRepository = repository;
+      viewingRepository = { repository, tab };
+      // The panel shows the last snapshot while Git is read again.
+      void repositories.refresh();
+    },
+    worktreeDetails(worktree) {
+      shellUi.drawerOpen = false;
+      viewingWorktree = worktree;
     },
     releaseWorktree(worktree) {
       shellUi.drawerOpen = false;
@@ -481,30 +487,6 @@
       />{/snippet}
   </LazyDialog>
 {/if}
-{#if managingWorktrees}
-  {@const target = managingWorktrees}
-  {@const currentRepo =
-    repositories.list.find((r) => r.id === target.id) ?? target}
-  <LazyDialog
-    load={() => import("./ManageWorktreesDialog.svelte")}
-    label="管理工作树"
-    onclose={() => (managingWorktrees = null)}
-  >
-    {#snippet children(page)}<page.default
-        repository={currentRepo}
-        sessions={sessions.sessions}
-        archived={archived.records}
-        home={homeWorktrees.value}
-        onremoved={(removedIds) => {
-          homeWorktrees.save(
-            setPinned(homeWorktrees.value, currentRepo, removedIds, false),
-          );
-        }}
-        onchange={refreshWorktrees}
-        onclose={() => (managingWorktrees = null)}
-      />{/snippet}
-  </LazyDialog>
-{/if}
 {#if choosingHome}
   {@const target = choosingHome}
   {@const currentRepo =
@@ -525,7 +507,7 @@
           )}
         onmanage={() => {
           choosingHome = null;
-          shell.manageWorktrees(currentRepo);
+          shell.repositoryDetails(currentRepo, "worktrees");
         }}
         onclose={() => (choosingHome = null)}
       />{/snippet}
@@ -534,24 +516,55 @@
 {#if viewingRepository}
   {@const target = viewingRepository}
   {@const currentRepo =
-    repositories.list.find((r) => r.id === target.id) ?? target}
+    repositories.list.find((r) => r.id === target.repository.id) ??
+    target.repository}
   <LazyDialog
-    load={() => import("./RepositoryDetailsDialog.svelte")}
+    load={() => import("./RepositoryPanel.svelte")}
     label="仓库详情"
     onclose={() => (viewingRepository = null)}
   >
     {#snippet children(page)}<page.default
         repository={currentRepo}
+        initialTab={target.tab}
         sessions={sessions.sessions}
         records={archived.records}
         home={homeWorktrees.value}
         refreshing={repositories.refreshing}
+        refreshError={repositories.error}
         registryReady={setup.value.registryReady}
         onunregister={() => {
           unregistering = currentRepo;
           unregisterOpen = true;
+          viewingRepository = null;
         }}
+        onremoved={(removedIds) => {
+          homeWorktrees.save(
+            setPinned(homeWorktrees.value, currentRepo, removedIds, false),
+          );
+        }}
+        onchange={refreshWorktrees}
         onclose={() => (viewingRepository = null)}
+      />{/snippet}
+  </LazyDialog>
+{/if}
+{#if viewingWorktree}
+  {@const target = viewingWorktree}
+  {@const repo = repositories.list.find((r) => r.id === target.repositoryId)}
+  {@const current = repo?.worktrees.find((w) => w.id === target.id) ?? target}
+  <LazyDialog
+    load={() => import("./WorktreeDetailsDialog.svelte")}
+    label="工作树详情"
+    onclose={() => (viewingWorktree = null)}
+  >
+    {#snippet children(page)}<page.default
+        title={worktreeTitle(current)}
+        path={current.path}
+        worktree={current}
+        sessions={sessions.sessions.filter(
+          (s) => s.workspace?.worktreeId === current.id,
+        )}
+        lastFetchedAt={repo?.lastFetchedAt}
+        onclose={() => (viewingWorktree = null)}
       />{/snippet}
   </LazyDialog>
 {/if}

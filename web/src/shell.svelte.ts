@@ -23,6 +23,8 @@ import type { TerminalDrafts } from "./terminal-draft.svelte";
 // survive reloads on this device.
 
 export type ShellMode = "chat" | "workbench";
+/** The sections of the repository panel. */
+export type RepositoryTab = "overview" | "worktrees" | "branches" | "remotes";
 const ModeSchema = z.enum(["chat", "workbench"]);
 const CollapsedSchema = z.enum(["true", "false"]);
 
@@ -131,12 +133,15 @@ export interface Shell {
       forgetRecords?: readonly ArchivedSession[];
     },
   ): void;
-  /** Opens the batch worktree management dialog of a repository. */
-  manageWorktrees(repository: Repository): void;
   /** Opens the choice of which worktrees a repository's home page lists. */
   chooseHomeWorktrees(repository: Repository): void;
-  /** Opens a repository's details (path, counts, removal of its registration). */
-  repositoryDetails(repository: Repository): void;
+  /**
+   * Opens a repository's panel at a section (the overview by default) and
+   * reads the repositories again, as the home page does.
+   */
+  repositoryDetails(repository: Repository, tab?: RepositoryTab): void;
+  /** Opens a worktree's details outside the repository panel. */
+  worktreeDetails(worktree: Worktree): void;
   /** Opens the shared release preview of an archived record's worktree. */
   releaseWorktree(worktree: Worktree): void;
   /** Opens the port-forwarding dialog. */

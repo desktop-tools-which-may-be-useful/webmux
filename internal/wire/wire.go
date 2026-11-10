@@ -258,13 +258,29 @@ func PendingUpdate(installed, launcher string) *contract.PendingUpdate {
 	return &contract.PendingUpdate{InstalledVersion: installed, Launcher: launcher}
 }
 
-func Worktree(w workspace.Worktree) contract.Worktree { return contract.Worktree(w) }
+func Worktree(w workspace.Worktree) contract.Worktree {
+	out := contract.Worktree{
+		ID: w.ID, RepositoryID: w.RepositoryID, Path: w.Path, Kind: w.Kind, Branch: w.Branch, Head: w.Head,
+		Detached: w.Detached, Locked: w.Locked, LockReason: w.LockReason, Prunable: w.Prunable, Available: w.Available,
+		Dirty: w.Dirty, HasUntracked: w.HasUntracked, HasIgnored: w.HasIgnored, Error: w.Error,
+		Upstream: w.Upstream, Ahead: w.Ahead, Behind: w.Behind, UpstreamGone: w.UpstreamGone, Operation: w.Operation,
+	}
+	if w.LastCommit != nil {
+		commit := contract.Commit(*w.LastCommit)
+		out.LastCommit = &commit
+	}
+	if w.Changes != nil {
+		changes := contract.WorktreeChanges(*w.Changes)
+		out.Changes = &changes
+	}
+	return out
+}
 
 func Repository(r workspace.Repository) contract.Repository {
 	return contract.Repository{
 		ID: r.ID, Name: r.Name, CommonDir: r.CommonDir, AnchorPath: r.AnchorPath,
 		Availability: r.Availability, Error: r.Error, CheckedAt: r.CheckedAt,
-		Worktrees: each(r.Worktrees, Worktree), InitInstruction: r.InitInstruction,
+		Worktrees: each(r.Worktrees, Worktree), InitInstruction: r.InitInstruction, LastFetchedAt: r.LastFetchedAt,
 	}
 }
 
@@ -272,11 +288,12 @@ func Repositories(in []workspace.Repository) []contract.Repository { return each
 
 func Branches(b workspace.Branches) contract.Branches {
 	branches := each(b.Branches, func(v workspace.Branch) contract.Branch {
-		return contract.Branch{Name: v.Name, Head: v.Head, WorktreePaths: required(v.WorktreePaths)}
+		return contract.Branch{
+			Name: v.Name, Head: v.Head, WorktreePaths: required(v.WorktreePaths), Subject: v.Subject, CommittedAt: v.CommittedAt,
+			Upstream: v.Upstream, Ahead: v.Ahead, Behind: v.Behind, UpstreamGone: v.UpstreamGone,
+		}
 	})
-	bases := each(b.Bases, func(v workspace.Base) contract.BranchBase {
-		return contract.BranchBase{Name: v.Name, Head: v.Head, Subject: v.Subject}
-	})
+	bases := each(b.Bases, func(v workspace.Base) contract.BranchBase { return contract.BranchBase(v) })
 	return contract.Branches{
 		Branches:           branches,
 		Bases:              bases,
@@ -285,6 +302,10 @@ func Branches(b workspace.Branches) contract.Branches {
 		DefaultBranch:      b.DefaultBranch,
 		DefaultParent:      b.DefaultParent,
 	}
+}
+
+func Remotes(r workspace.Remotes) contract.Remotes {
+	return contract.Remotes{Remotes: each(r.Remotes, func(v workspace.Remote) contract.Remote { return contract.Remote(v) })}
 }
 
 func Commits(in []workspace.Commit) contract.Commits {

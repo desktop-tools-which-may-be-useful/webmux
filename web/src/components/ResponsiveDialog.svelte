@@ -18,6 +18,7 @@
     busy = false,
     class: className,
     pinDrawerHeader = false,
+    truncateDrawerTitle = false,
   }: {
     title: string;
     description: string;
@@ -30,6 +31,11 @@
     class?: string;
     /** Keep the drawer header fixed and scroll only the body. */
     pinDrawerHeader?: boolean;
+    /**
+     * Keep a long drawer title to one line so a fixed header stays short;
+     * the full title remains the accessible name and the hover hint.
+     */
+    truncateDrawerTitle?: boolean;
   } = $props();
   const desktop = new MediaQuery("(min-width: 640px)");
   let open = $state(true);
@@ -47,7 +53,11 @@
 
 {#snippet drawerHeader()}
   <Drawer.Header>
-    <Drawer.Title>{title}</Drawer.Title>
+    <Drawer.Title
+      >{#if truncateDrawerTitle}<span class="block truncate" {title}
+          >{title}</span
+        >{:else}{title}{/if}</Drawer.Title
+    >
     <Drawer.Description>{drawerDescription ?? description}</Drawer.Description>
   </Drawer.Header>
 {/snippet}

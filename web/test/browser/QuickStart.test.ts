@@ -10,7 +10,14 @@ import {
   socketAt,
 } from "./chat-fixture";
 import ShellHarness from "./ShellHarness.svelte";
-import { chat, launchConfig, repository, worktree } from "./shell-fixture";
+import {
+  base,
+  branch,
+  chat,
+  launchConfig,
+  repository,
+  worktree,
+} from "./shell-fixture";
 
 installChatFixture();
 
@@ -27,22 +34,14 @@ const effort = {
 };
 const branches = {
   branches: [
-    { name: "main", head: "a".repeat(40), worktreePaths: ["/repos/webmux"] },
+    branch("main", "a".repeat(40), ["/repos/webmux"]),
     // Shares main's commit: branches are told apart by name.
-    { name: "release", head: "a".repeat(40), worktreePaths: [] },
-    { name: "feature", head: "b".repeat(40), worktreePaths: [] },
+    branch("release", "a".repeat(40)),
+    branch("feature", "b".repeat(40)),
   ],
   bases: [
-    {
-      name: "refs/remotes/origin/HEAD",
-      head: "a".repeat(40),
-      subject: "init",
-    },
-    {
-      name: "refs/remotes/origin/upstream-fix",
-      head: "c".repeat(40),
-      subject: "upstream fix",
-    },
+    base("refs/remotes/origin/HEAD", "a".repeat(40), "init"),
+    base("refs/remotes/origin/upstream-fix", "c".repeat(40), "upstream fix"),
   ],
   defaultBase: "a".repeat(40),
   defaultBaseSubject: "init",

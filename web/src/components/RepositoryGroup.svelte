@@ -147,6 +147,7 @@
           title={worktreeTitle(tree)}
           path={tree.path}
           worktree={tree}
+          lastFetchedAt={repo.lastFetchedAt}
           sessions={sessions.filter((s) => s.workspace?.worktreeId === tree.id)}
           {visibleIds}
           {compact}

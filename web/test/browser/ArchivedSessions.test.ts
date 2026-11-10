@@ -310,6 +310,13 @@ const linked: Worktree = {
   hasUntracked: false,
   hasIgnored: false,
   error: "",
+  upstream: null,
+  ahead: null,
+  behind: null,
+  upstreamGone: false,
+  lastCommit: null,
+  changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+  operation: null,
 };
 
 test("deleting a linked worktree's record leaves the worktree alone", async () => {
@@ -366,6 +373,13 @@ const feature: Worktree = {
   hasUntracked: false,
   hasIgnored: true,
   error: "",
+  upstream: null,
+  ahead: null,
+  behind: null,
+  upstreamGone: false,
+  lastCommit: null,
+  changes: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+  operation: null,
 };
 const released: HybridRecord = {
   ...record,

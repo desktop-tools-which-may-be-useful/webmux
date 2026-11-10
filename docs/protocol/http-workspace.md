@@ -11,6 +11,7 @@
 | GET        | `/api/repositories/{id}/branches`                               | `{branches, bases, defaultBase, defaultBaseSubject, defaultBranch, defaultParent}`，不 fetch                                                                              |
 | GET        | `/api/repositories/{id}/commits?from=<oid>[&from=<oid>]`        | `{commits: [{hash, subject, author, committedAt}]}`：自 1–2 个完整提交 ID（本地与上游尖端）合并最近 50 条，新到旧，超出上限的起始提交仍会列出；非法 ID 400                |
 | POST       | `/api/repositories/{id}/branches/refresh`                       | `{branch}`；fetch 已配置上游并返回远程基线或本地回退；`upstreamHead` 为 fetch 到的上游尖端（本地分叉时也返回），未成功时为空                                              |
+| GET        | `/api/repositories/{id}/remotes`                                | `{remotes: [{name, fetchUrl, pushUrl}]}`，按名称排序；URL 已去除凭据（见下），不联网                                                                                      |
 | POST       | `/api/repositories/{id}/worktrees`                              | `{path, mode: "new", branch, base}` 或 `{path, mode: "existing", branch}`，201                                                                                            |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, archived, commit, push, blockers, warnings, forceAllowed}`                                                     |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204                                                                                |
@@ -53,6 +54,20 @@
 - 成功：`{branch, base, baseSubject, baseSource: "remote", upstream, fetchWarning: ""}`；仅当本地尖端是上游提交的祖先时，`base` 是本次上游跟踪引用的精确 OID。本地领先或分叉时保留本地尖端并说明。
 - 降级：无上游、上游为本机仓库、fetch 失败或超时仍返回 200。`baseSource` 为 `"local"`，`base` 回退到所选本地分支，`fetchWarning` 给出非阻断说明。
 - 安全：响应不包含 remote URL、命令行或原始 stderr；普通 GET 分支清单始终无网络行为。
+
+### 同步详情字段
+
+仓库快照与分支清单的同步字段全部在本机计算，不访问网络：
+
+- 仓库：`lastFetchedAt` 为 `<common>/FETCH_HEAD` 与 `<common>/worktrees/*/FETCH_HEAD` 中最新的修改时间（近似值），从未获取时为 `null`。
+- 工作树新增以下字段，`dirty`、`hasUntracked`、`hasIgnored` 的含义不变：
+  - `upstream`：如 `origin/feat/x`，无上游或 detached 时为 `null`；`ahead`/`behind`：领先/落后提交数；`upstreamGone`：上游引用已不存在；
+  - `lastCommit`：`{hash, subject, author, committedAt}`；`changes`：`{staged, unstaged, untracked, conflicted}`，状态读取失败时为 `null`；
+  - `operation`：`merge`、`rebase`、`cherry-pick`、`revert`、`bisect` 或 `null`。
+- 上游状态的判读：`upstream` 为 `null` 表示无上游；`upstreamGone` 为 true 时 `ahead`/`behind` 为 `null`；`upstream` 非空、未删除但 `ahead` 为 `null` 表示领先/落后未计算。
+- `branches` 每项另有 `subject`、`committedAt`、`upstream`、`ahead`、`behind`、`upstreamGone`；`bases` 每项另有 `kind`（`local` / `remote`）与 `committedAt`。
+
+`remotes` 的 URL 在返回前脱敏，服务日志不记录原始 URL：带密码的 URL 只把密码换成 `***`；只有用户名的 `http`/`https` URL 整个用户名换成 `***`；`ssh://` 与 scp 风格地址原样返回；无法解析的 URL 丢弃 `@` 之前的部分。
 
 错误码：400 输入错误，404 不存在，409 冲突或确认过期，503 Git / 清单不可用，504 超时，500 存储或非预期错误。JSON 结构见 `internal/contract/workspace.go`。
 

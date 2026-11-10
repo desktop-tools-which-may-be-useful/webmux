@@ -1116,7 +1116,7 @@ test.describe("hybrid sessions with the fake agent", () => {
       .getByRole("button", { name: "工作树菜单 feature-y", exact: true })
       .click();
     await page
-      .getByRole("menuitem", { name: "删除 worktree", exact: true })
+      .getByRole("menuitem", { name: "删除 worktree…", exact: true })
       .click();
     const removal = page.getByRole("dialog", { name: "删除 worktree" });
     await expect(removal).toContainText("保留的已归档会话（之后可重建并恢复）");

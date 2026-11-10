@@ -379,7 +379,7 @@
       onnewworktree={() =>
         shell.start({ kind: "new-worktree", repositoryId: repo.id })}
       onhome={() => shell.chooseHomeWorktrees(repo)}
-      onmanage={() => shell.manageWorktrees(repo)}
+      onmanage={() => shell.repositoryDetails(repo, "worktrees")}
       onsettings={shell.openRepositorySettings}
       ondetails={() => shell.repositoryDetails(repo)}
       worktree={tree

@@ -44,6 +44,11 @@ func (s *Server) workspaceRoutes(mux *http.ServeMux) {
 		branches, err := s.Workspace.Branches(r.Context(), r.PathValue("id"))
 		return wire.Branches(branches), err
 	})
+	// Remote URLs are redacted by the workspace service before they leave it.
+	serve(mux, "GET "+repo+"/remotes", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Remotes, error) {
+		remotes, err := s.Workspace.Remotes(r.Context(), r.PathValue("id"))
+		return wire.Remotes(remotes), err
+	})
 	serve(mux, "GET "+repo+"/commits", http.StatusOK, workspaceFailure, func(r *http.Request) (contract.Commits, error) {
 		commits, err := s.Workspace.RecentCommits(r.Context(), r.PathValue("id"), r.URL.Query()["from"])
 		return wire.Commits(commits), err

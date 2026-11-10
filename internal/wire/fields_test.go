@@ -22,8 +22,10 @@ func TestDirectConversionsKeepFieldOrder(t *testing.T) {
 		contract any
 	}{
 		{"Capability", workspace.Capability{}, contract.WorkspaceCapability{}},
-		{"Worktree", workspace.Worktree{}, contract.Worktree{}},
+		{"WorktreeChanges", workspace.WorktreeChanges{}, contract.WorktreeChanges{}},
+		{"Commit", workspace.Commit{}, contract.Commit{}},
 		{"Base", workspace.Base{}, contract.BranchBase{}},
+		{"Remote", workspace.Remote{}, contract.Remote{}},
 		{"Reference", workspace.Reference{}, contract.WorkspaceReference{}},
 		{"CreateRequest", workspace.CreateRequest{}, contract.CreateWorktreeRequest{}},
 		{"RemoveRequest", workspace.RemoveRequest{}, contract.RemoveWorktreeRequest{}},

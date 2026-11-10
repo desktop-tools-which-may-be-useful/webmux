@@ -5,7 +5,7 @@ import WorkbenchTree, {
   workbenchTree,
   type TreeNode,
 } from "../../src/components/WorkbenchTree.svelte";
-import type { SessionInfo } from "../../src/schemas";
+import type { Repository, SessionInfo } from "../../src/schemas";
 import { chat, record, repository, session, worktree } from "./shell-fixture";
 
 afterEach(async () => {
@@ -45,7 +45,12 @@ const inOtter = {
 
 function renderTree(
   sessions: SessionInfo[],
-  props: Partial<{ current: string; scope: string; canCreate: boolean }> = {},
+  props: Partial<{
+    current: string;
+    scope: string;
+    canCreate: boolean;
+    repositories: Repository[];
+  }> = {},
 ) {
   const handlers = {
     onscope: vi.fn(),
@@ -53,13 +58,14 @@ function renderTree(
     onnewworktree: vi.fn(),
     onmanageworktrees: vi.fn(),
     onremoveworktree: vi.fn(),
+    onworktreedetails: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
     onremove: vi.fn(),
   };
   render(WorkbenchTree, {
-    repositories: [webmux, legacy],
+    repositories: props.repositories ?? [webmux, legacy],
     sessions,
     records: [],
     // Both worktrees are on the home page.
@@ -190,20 +196,71 @@ test("each available repository offers new-worktree and manage-worktrees actions
   );
 });
 
-test("a linked worktree row offers a delete button; the main worktree does not", async () => {
+test("a linked worktree's menu offers its details and removal", async () => {
   const handlers = renderTree([]);
   await expect
     .element(item("webmux"))
     .toHaveAttribute("aria-expanded", "false");
   await tree().getByRole("button", { name: "展开webmux" }).click();
   await expect.element(item("wt/brisk-otter")).toBeVisible();
-  expect(
-    tree().getByRole("button", { name: "删除工作树 main" }).elements(),
-  ).toEqual([]);
   await tree()
-    .getByRole("button", { name: "删除工作树 wt/brisk-otter" })
+    .getByRole("button", { name: "工作树操作：wt/brisk-otter" })
     .click();
+  expect(
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim()),
+  ).toEqual(["工作树详情…", "删除 worktree…"]);
+  await page.getByRole("menuitem", { name: "删除 worktree…" }).click();
   expect(handlers.onremoveworktree).toHaveBeenCalledWith("repo1", "otter");
+
+  await tree()
+    .getByRole("button", { name: "工作树操作：wt/brisk-otter" })
+    .click();
+  await page.getByRole("menuitem", { name: "工作树详情…" }).click();
+  expect(handlers.onworktreedetails).toHaveBeenCalledWith("repo1", "otter");
+});
+
+test("the main worktree's menu has no removal", async () => {
+  const handlers = renderTree([]);
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  await tree().getByRole("button", { name: "工作树操作：main" }).click();
+  expect(
+    page
+      .getByRole("menuitem")
+      .elements()
+      .map((el) => el.textContent?.trim()),
+  ).toEqual(["工作树详情…"]);
+  await page.getByRole("menuitem", { name: "工作树详情…" }).click();
+  expect(handlers.onworktreedetails).toHaveBeenCalledWith("repo1", "main");
+});
+
+test("a worktree row shows commits ahead of its upstream, named as on the home page", async () => {
+  renderTree([], {
+    repositories: [
+      repository({
+        worktrees: [
+          worktree({ upstream: "origin/main", ahead: 0, behind: 0 }),
+          worktree({
+            id: "otter",
+            kind: "linked",
+            branch: "wt/brisk-otter",
+            path: "/repos/webmux.worktrees/brisk-otter",
+            upstream: "origin/wt/brisk-otter",
+            ahead: 3,
+            behind: 0,
+          }),
+        ],
+      }),
+    ],
+  });
+  await tree().getByRole("button", { name: "展开webmux" }).click();
+  await expect
+    .element(tree().getByRole("img", { name: "领先上游 3 个提交" }))
+    .toBeVisible();
+  // The synced main worktree shows no indicator.
+  expect(tree().getByRole("img").elements()).toHaveLength(1);
 });
 
 test("folded nodes keep waiting counts, and folds survive a remount", async () => {
@@ -307,6 +364,7 @@ test("folder folds reset when live session contents change, without auto-expandi
     onmanageworktrees: vi.fn(),
     onrepositorydetails: vi.fn(),
     onremoveworktree: vi.fn(),
+    onworktreedetails: vi.fn(),
     onrename: vi.fn(),
     onclose: vi.fn(),
     onresume: vi.fn(),
