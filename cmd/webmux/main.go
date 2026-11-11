@@ -25,6 +25,7 @@ import (
 	"github.com/rainchan/webmux/internal/clicmd"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/conversation"
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/hybrid"
@@ -284,8 +285,15 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	defer folders.Close()
 	// Like launch configs, a broken hybrid record store only disables
 	// hybrid sessions; New logs why.
+	conversations := conversation.Open(conversation.Options{StateDir: c.StateDir})
+	defer func() {
+		if err := conversations.Close(); err != nil {
+			slog.Warn("conversation database close failed")
+		}
+	}()
 	hybrids := hybrid.New(hybrid.Options{
-		StateDir: c.StateDir, Manager: m, ScrollbackBytes: sessionOptions.ScrollbackBytes,
+		Conversations: conversations,
+		StateDir:      c.StateDir, Manager: m, ScrollbackBytes: sessionOptions.ScrollbackBytes,
 		Version: version, Logger: slog.Default(), Uploads: folders.UploadPath,
 	})
 	if err := hybrids.Unavailable(); err != nil {

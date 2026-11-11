@@ -142,6 +142,9 @@ func (s *Service) RemoveRecord(ctx context.Context, id string) error {
 	if err := s.records.remove(id); err != nil {
 		return err
 	}
+	if err := s.forgetConversation(context.WithoutCancel(ctx), id); err != nil {
+		return err
+	}
 	s.log.Info("hybrid record removed", "id", id)
 	return nil
 }
@@ -242,7 +245,7 @@ func (s *Service) Resume(ctx context.Context, id string, in ResumeInput) (*sessi
 	if in.Side != "" && in.Side != SideTUI && in.Side != SideACP {
 		return nil, fmt.Errorf("%w: side 只能是 tui 或 acp", ErrInvalid)
 	}
-	if err := s.records.unavailable(); err != nil {
+	if err := s.Unavailable(); err != nil {
 		return nil, err
 	}
 	return once(ctx, &s.resumes, in.ClientRequestID, "resume "+id, func(context.Context) (*session.Session, error) {

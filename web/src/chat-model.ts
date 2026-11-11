@@ -83,6 +83,7 @@ export function conversationTurns(
     if (entry.type !== "message" || entry.role === "thought") continue;
     if (entry.role === "user") turn++;
     const compact = entry.text.replace(/\s+/g, " ").trim();
+    if (entry.role === "agent" && !compact && !entry.truncated) continue;
     let end = 80;
     if (
       compact.charCodeAt(end - 1) >= 0xd800 &&
@@ -101,7 +102,7 @@ export function conversationTurns(
           ? "用户附件"
           : entry.role === "user"
             ? "空消息"
-            : "AI 回复"),
+            : "内容已截断"),
     });
   }
   return items;

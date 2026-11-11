@@ -402,6 +402,44 @@ describe("conversation turn navigation", () => {
     ]);
   });
 
+  test("only adds an empty agent reply once it has visible content", () => {
+    let m = connect();
+    m = applyFrame(
+      m,
+      events([
+        ev({
+          kind: "message.append",
+          message: { messageId: "a1", role: "agent", text: " \n " },
+        }),
+        ev({
+          kind: "message.append",
+          message: {
+            messageId: "cut",
+            role: "agent",
+            text: "",
+            truncated: true,
+          },
+        }),
+      ]),
+    );
+    expect(conversationTurns(m.entries)).toEqual([
+      { id: "cut", role: "agent", turn: 0, summary: "内容已截断" },
+    ]);
+    m = applyFrame(
+      m,
+      events([
+        ev({
+          kind: "message.append",
+          message: { messageId: "a1", role: "agent", text: "回复正文" },
+        }),
+      ]),
+    );
+    expect(conversationTurns(m.entries)).toEqual([
+      { id: "a1", role: "agent", turn: 0, summary: "回复正文" },
+      { id: "cut", role: "agent", turn: 0, summary: "内容已截断" },
+    ]);
+  });
+
   test("bounds summaries as a streaming message grows", () => {
     let m = connect();
     m = applyFrame(

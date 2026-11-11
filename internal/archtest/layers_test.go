@@ -19,6 +19,7 @@ var webmux = manifest{
 		// Business rules, state, filesystem and processes.
 		"internal/session":           service,
 		"internal/hybrid":            service,
+		"internal/conversation":      service,
 		"internal/workspace":         service,
 		"internal/settings":          service,
 		"internal/launch":            service,

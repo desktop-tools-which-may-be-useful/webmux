@@ -21,11 +21,13 @@
     drafts: providedDrafts,
     location,
     allowDocumentScroll = false,
+    clippedHost = false,
   }: {
     id: string;
     drafts?: TerminalDrafts;
     location?: Pick<SessionInfo, "workspace" | "cwd">;
     allowDocumentScroll?: boolean;
+    clippedHost?: boolean;
   } = $props();
   const session = untrack(() => id);
   const chat = createChatSocket(session);
@@ -66,24 +68,30 @@
   />
 {/snippet}
 
-<div style={documentScroll ? "min-height: 100dvh" : "height: 800px"}>
-  <ChatView
-    sessionId={session}
-    model={chat.model}
-    chat={chat.state}
-    connection={chat.connection}
-    {draft}
-    {drafts}
-    {uploads}
-    {location}
-    {actions}
-    {quickMenu}
-    {documentScroll}
-    oneditchange={(value) => (editing = value)}
-    onreview={(path) => (reviewed = path)}
-    onopenlocation={(target) => (openedLocation = target)}
-    onterminal={() => (terminalRequests += 1)}
-  />
+<div
+  data-chat-test-host
+  style={clippedHost ? "height: 700px; overflow: hidden" : undefined}
+>
+  {#if clippedHost}<div style="height: 96px"></div>{/if}
+  <div style={documentScroll ? "min-height: 100dvh" : "height: 800px"}>
+    <ChatView
+      sessionId={session}
+      model={chat.model}
+      chat={chat.state}
+      connection={chat.connection}
+      {draft}
+      {drafts}
+      {uploads}
+      {location}
+      {actions}
+      {quickMenu}
+      {documentScroll}
+      oneditchange={(value) => (editing = value)}
+      onreview={(path) => (reviewed = path)}
+      onopenlocation={(target) => (openedLocation = target)}
+      onterminal={() => (terminalRequests += 1)}
+    />
+  </div>
 </div>
 <output aria-label="Reviewed path">{reviewed}</output>
 <output aria-label="Opened location"

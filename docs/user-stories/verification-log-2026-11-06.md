@@ -219,3 +219,12 @@
   - Vitest Node 套件只有 `base64url.test.ts` 因本机 Node 24 失败；浏览器套件中 `TerminalGraphics`、`TerminalSyncOutput` 各 1 项在整套并发运行时失败，单独重跑 24 项全部通过；
   - E2E `branch-operations`、`repository-maintenance`、`worktree-switch`、`worktrees` 共 36 项通过；在隔离演示仓库上采集桌面、平板、手机明暗主题截图与发布、清理分支流程 GIF。
 - 限制：未在真机上验证；无头浏览器无法验证悬停与触屏常驻；全量 E2E 与 Storybook 构建交给 CI。
+
+## 2026-11-11：Handoff 01 持久身份与事务基础（US-Q12）
+
+- 范围：新旧混合记录的 Conversation / ProviderThread 身份、Run ordinal、handoff / delivery / receipt 原子提交、迁移与关联删除；本层不开放交接或保存完整 Activity。
+- 依据：新增存储与迁移测试的 Go race 检查、子进程事务提交前崩溃回滚、ID 冲突、并发与重启、淘汰与 worktree 释放/重建保留测试通过。
+- 集成：`make check` 通过，含文档、持久化、架构、前端检查、vet 与 golangci-lint；前端生产构建通过。
+- 兼容：Go 1.26.10 / modernc.org/sqlite v1.62.0；Linux amd64 与 macOS arm64 均以 `CGO_ENABLED=0` 交叉编译通过。
+- 体积：相同前端与 `-trimpath -ldflags='-s -w'` 下，Linux amd64 从 50,610,338 到 54,853,794 字节，增加 4,243,456 字节（约 4.05 MiB）。
+- 限制：未在原生 macOS 运行 SQLite；完整端到端交接尚未实现；本机继承的 `CODEX_PATH` 会覆盖 fake agent，回归测试需清除此变量。

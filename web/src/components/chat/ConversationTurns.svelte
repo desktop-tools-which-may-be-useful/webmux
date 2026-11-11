@@ -21,6 +21,15 @@
       item.role === "user" ? "你" : "AI"
     }：${item.summary}`;
 
+  function revealTick(selected: HTMLElement) {
+    if (!list) return;
+    const top = selected.offsetTop;
+    const bottom = top + selected.offsetHeight;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + list.clientHeight)
+      list.scrollTop = bottom - list.clientHeight;
+  }
+
   function move(event: KeyboardEvent, index: number) {
     let next: number;
     switch (event.key) {
@@ -43,7 +52,13 @@
     const item = items[next];
     if (!item) return;
     onselect(item.id);
-    list?.querySelector<HTMLElement>(`[data-turn-index="${next}"]`)?.focus();
+    const selected = list?.querySelector<HTMLElement>(
+      `[data-turn-index="${next}"]`,
+    );
+    if (selected) {
+      selected.focus({ preventScroll: true });
+      revealTick(selected);
+    }
   }
 
   // Keep the current tick visible without scrolling the transcript itself.
@@ -51,15 +66,14 @@
     const container = list;
     const id = activeId;
     if (!container || !id) return;
-    const selected = container.querySelector<HTMLElement>(
-      `[data-turn-id="${CSS.escape(id)}"]`,
-    );
-    if (!selected) return;
-    const top = selected.offsetTop;
-    const bottom = top + selected.offsetHeight;
-    if (top < container.scrollTop) container.scrollTop = top;
-    else if (bottom > container.scrollTop + container.clientHeight)
-      container.scrollTop = bottom - container.clientHeight;
+    const focused = document.activeElement;
+    const selected =
+      focused instanceof HTMLElement && container.contains(focused)
+        ? focused
+        : container.querySelector<HTMLElement>(
+            `[data-turn-id="${CSS.escape(id)}"]`,
+          );
+    if (selected) revealTick(selected);
   });
 </script>
 

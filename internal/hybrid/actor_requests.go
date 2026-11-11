@@ -322,8 +322,10 @@ func (a *actor) refreshWork() {
 // record changes the session's record. Immediate writes finish before the
 // operation returns, preserving the recovery contract of completed switches.
 func (a *actor) record(immediate bool, change func(*Record)) {
-	if _, err := a.svc.records.update(a.id, immediate, change); err != nil {
+	if rec, err := a.svc.records.update(a.id, immediate, change); err != nil {
 		a.svc.log.Warn("hybrid record update failed", "id", a.id, "error", err)
+	} else {
+		a.svc.syncConversation(rec)
 	}
 }
 

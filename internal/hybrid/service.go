@@ -23,6 +23,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
+	"github.com/rainchan/webmux/internal/conversation"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -42,7 +43,9 @@ const (
 type Options struct {
 	// StateDir holds hybrid-sessions.json.
 	StateDir string
-	Manager  *session.Manager
+	// Conversations is explicitly assembled by cmd; nil disables durable identity.
+	Conversations *conversation.Service
+	Manager       *session.Manager
 	// ScrollbackBytes bounds each session's chat event log, like a
 	// terminal's scrollback (config scrollback_bytes).
 	ScrollbackBytes int
@@ -81,8 +84,10 @@ var defaultTiming = timing{
 
 // Service owns the hybrid sessions of one server.
 type Service struct {
-	manager *session.Manager
-	records *records
+	conversations     *conversation.Service
+	conversationError error
+	manager           *session.Manager
+	records           *records
 	// options remembers each launch config's agent options for display
 	// before a session starts (agent-options.json).
 	options  *agentOptions
@@ -132,7 +137,7 @@ func New(o Options) *Service {
 	}
 	userHome, _ := os.UserHomeDir()
 	s := &Service{
-		manager: o.Manager, records: openRecords(o.StateDir), options: openAgentOptions(o.StateDir), capacity: capacity, version: o.Version, log: log,
+		conversations: o.Conversations, manager: o.Manager, records: openRecords(o.StateDir), options: openAgentOptions(o.StateDir), capacity: capacity, version: o.Version, log: log,
 		uploads: o.Uploads, userHome: userHome, agents: agents.Default(),
 		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
 		recovering: make(map[string]bool),
@@ -140,6 +145,10 @@ func New(o Options) *Service {
 	restarted, err := s.records.recoverAfterRestart(time.Now())
 	if err != nil {
 		log.Warn("hybrid sessions unavailable", "error", err)
+	}
+	s.conversationError = s.migrateConversations()
+	if s.conversationError != nil {
+		log.Warn("conversation identity migration unavailable")
 	}
 	s.restarted = restarted
 	s.records.setLogger(log)
@@ -150,7 +159,12 @@ func New(o Options) *Service {
 }
 
 // Unavailable reports why hybrid sessions cannot be created, or nil.
-func (s *Service) Unavailable() error { return s.records.unavailable() }
+func (s *Service) Unavailable() error {
+	if s.conversationError != nil {
+		return fmt.Errorf("%w: conversation identity unavailable", ErrUnavailable)
+	}
+	return s.records.unavailable()
+}
 
 // Restarted returns the IDs of the sessions the previous server left
 // running: the ones this start marked interrupted. A server that wants them
@@ -261,7 +275,7 @@ func (s *Service) CheckCreate(ctx context.Context, in CreateInput) error {
 
 // admit runs the checks that precede every create.
 func (s *Service) admit(in CreateInput) (agentprofile.Command, Side, string, error) {
-	if err := s.records.unavailable(); err != nil {
+	if err := s.Unavailable(); err != nil {
 		return agentprofile.Command{}, "", "", err
 	}
 	side := in.StartSide
@@ -355,10 +369,17 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 		Cmd: in.Cmd, Side: side, PreviousIDs: []string{}, Config: map[string]string{},
 		State: StateActive, CreatedAt: now, UpdatedAt: now,
 	}
+	if err := s.ensureConversation(context.WithoutCancel(ctx), rec); err != nil {
+		_ = s.manager.Remove(info.ID)
+		return nil, err
+	}
 	a.recordTitle = rec.Title
 	evicted, err := s.records.add(rec, s.recoveringNow)
 	if err != nil {
 		// The shell has no process yet: removal cannot be refused.
+		if cleanupErr := s.forgetConversation(context.WithoutCancel(ctx), info.ID); cleanupErr != nil {
+			s.log.Warn("conversation cleanup incomplete", "id", info.ID)
+		}
 		_ = s.manager.Remove(info.ID)
 		return nil, err
 	}
@@ -368,6 +389,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 		_ = s.manager.Remove(info.ID)
 		if err := s.records.remove(info.ID); err != nil {
 			s.log.Warn("hybrid record cleanup failed", "id", info.ID, "error", err)
+		}
+		if err := s.forgetConversation(context.Background(), info.ID); err != nil {
+			s.log.Warn("conversation cleanup incomplete", "id", info.ID)
 		}
 		for _, e := range evicted {
 			if err := s.records.restore(e); err != nil {
@@ -388,6 +412,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	if err := awaitStarted(a, started); err != nil {
 		// The failed start removed its own record, so the dropped ones
 		// go back rather than being lost for nothing.
+		if err := s.forgetConversation(context.Background(), info.ID); err != nil {
+			s.log.Warn("conversation cleanup incomplete", "id", info.ID)
+		}
 		for _, e := range evicted {
 			if err := s.records.restore(e); err != nil {
 				s.log.Warn("hybrid evicted record restore failed", "id", e.ID, "error", err)
@@ -398,6 +425,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*session.Session,
 	for _, e := range evicted {
 		s.log.Info("hybrid record evicted", "id", e.ID)
 		s.evict(ctx, e.ID)
+		if err := s.forgetConversation(context.WithoutCancel(ctx), e.ID); err != nil {
+			s.log.Warn("evicted conversation cleanup incomplete", "id", e.ID)
+		}
 		if s.onEvicted != nil {
 			s.onEvicted(context.WithoutCancel(ctx), e)
 		}
