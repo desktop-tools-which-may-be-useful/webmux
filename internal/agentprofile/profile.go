@@ -15,8 +15,8 @@ import (
 
 // Agent is one CLI agent that hybrid sessions can move between a terminal
 // UI and an ACP connection. Behaviour that only some agents have is an
-// optional interface (Resumer, ConfigReapplier, Steerer, LockTracker,
-// ForceSwitchNoter); callers type-assert for it.
+// optional interface (Resumer, TUIResumePreparer, ConfigReapplier, Steerer,
+// LockTracker, ProcessRegistry, ForceSwitchNoter); callers type-assert for it.
 type Agent interface {
 	// Profile is the agent's static description; it is read-only.
 	Profile() *Profile
@@ -33,6 +33,21 @@ type Agent interface {
 // crash reconnects use session/load.
 type Resumer interface {
 	ResumesSessions() bool
+}
+
+// TUIResumePreparer is an agent whose persisted session state needs an
+// adjustment before a terminal UI resumes it. Changed reports a write.
+type TUIResumePreparer interface {
+	PrepareTUIResume(sessionID string, getenv func(string) string, userHome string) (changed bool, err error)
+}
+
+// PrepareTUIResume applies an agent's terminal-resume compatibility hook.
+func PrepareTUIResume(a Agent, sessionID string, getenv func(string) string, userHome string) (bool, error) {
+	p, ok := a.(TUIResumePreparer)
+	if !ok {
+		return false, nil
+	}
+	return p.PrepareTUIResume(sessionID, getenv, userHome)
 }
 
 // ConfigReapplier is an agent whose session/load does not restore some

@@ -69,6 +69,17 @@ func (l *acpLink) release() error {
 	return l.stop()
 }
 
+func (a *actor) prepareTUIResume(sid string) error {
+	changed, err := agentprofile.PrepareTUIResume(a.cmd.Agent, sid, a.shell.Getenv, a.svc.userHome)
+	if err != nil {
+		return fmt.Errorf("prepare terminal resume: %w", err)
+	}
+	if changed {
+		a.svc.log.Info("hybrid agent session rebound for terminal", "id", a.id, "agent", a.cmd.Profile.Name)
+	}
+	return nil
+}
+
 // failure is a failed step: err for the requesting user (it may carry the
 // agent's stderr, never log it), public for every device.
 type failure struct {

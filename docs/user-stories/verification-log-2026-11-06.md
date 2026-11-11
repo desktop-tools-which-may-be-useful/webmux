@@ -228,3 +228,13 @@
 - 兼容：Go 1.26.10 / modernc.org/sqlite v1.62.0；Linux amd64 与 macOS arm64 均以 `CGO_ENABLED=0` 交叉编译通过。
 - 体积：相同前端与 `-trimpath -ldflags='-s -w'` 下，Linux amd64 从 50,610,338 到 54,853,794 字节，增加 4,243,456 字节（约 4.05 MiB）。
 - 限制：未在原生 macOS 运行 SQLite；完整端到端交接尚未实现；本机继承的 `CODEX_PATH` 会覆盖 fake agent，回归测试需清除此变量。
+
+本次局部核对（2026-11-10）：Kimi 2.5.2 从 ACP 聊天切到 TUI 时恢复本地工具注册，对应更新 US-Q04、US-Q12，不新增故事或改变覆盖索引。
+
+- 范围：新增 agent 的 TUI 恢复准备钩子；Kimi 在切换、归档恢复和回滚启动 TUI 前，按会话环境定位 `wire.jsonl`，只把当前会话的 `acp:<会话ID>` 环境绑定改为 `local`，首次修改保留备份并原子替换，其他事件保持不变；没有事件日志的旧实现不变，补丁失败取消终端启动并回滚。
+- 依据：
+  - `go test -race ./internal/agentprofile/... ./internal/hybrid` 通过，覆盖精确绑定修改、备份、幂等、损坏日志、重复日志、切换、重复切换、归档恢复和失败回滚；
+  - `make test-fast` 通过，包含 Go race 全仓测试、前端单元测试与 78 个浏览器测试文件共 648 项；
+  - `make persistence-check`、`make docs-check` 与 `git diff --check` 通过；
+  - 使用真实 Kimi 2.5.2 和隔离 WebMux 实例，经 API 创建 ACP 会话、启动后台任务并切到 TUI，确认绑定改为 `local` 且真实 Bash 工具调用成功输出标记。
+- 限制：真实端到端覆盖聊天切终端，未单独点击归档恢复；未运行完整 Storybook、全量 E2E 与性能套件，未重新核验其余故事能力。

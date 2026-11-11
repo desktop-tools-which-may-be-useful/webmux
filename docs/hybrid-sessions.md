@@ -59,6 +59,7 @@ TUI 正在执行回合时，webmux 先发送中断键并等待空闲；10 秒仍
 - 只保留模型、配置、批准方式等参数；提示词与 `--continue`/`--resume`/`--conversation`/`--settings` 等会话参数会在页面列出为“未保留”。
 - Claude 的 `session/cancel` 不等于后台任务已清理。切换还会结束连接器并等待受管后代退出，自行脱离进程树的任务不在保证范围内。
 - Kimi 的 `session/load` 与 `session/resume` 保留模型与思考等级，只把模式恢复为默认值，WebMux 会重新应用记录的模式；`--skills-dir`、`--add-dir` 与自定义 Agent 不会在聊天端静默生效。
+- Kimi 2.5.2 切到终端时，WebMux 会把 ACP 环境绑定改为本地，避免恢复后工具丢失，详见 [Kimi Code CLI](hybrid-sessions/agents.md#kimi-code-cli)。
 
 ### 切换按钮不可用的原因
 
