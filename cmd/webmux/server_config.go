@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/p2psettings"
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -19,6 +20,7 @@ import (
 // serverRun is the validated server configuration plus how it was obtained.
 type serverRun struct {
 	config.Config
+	Agents         *agentprofile.Registry
 	ConfigPath     string
 	ConfigExplicit bool
 	// ConfigFound reports whether the configuration file was loaded from disk.

@@ -83,6 +83,7 @@ type harness struct {
 	logs      *syncBuffer
 	manager   *session.Manager
 	svc       *Service
+	agents    *agentprofile.Registry
 	configure []func(*session.Options)
 }
 
@@ -104,8 +105,12 @@ func (b *syncBuffer) String() string {
 }
 
 func newHarness(t *testing.T, scrollback int, configure ...func(*session.Options)) *harness {
+	return newHarnessWithAgents(t, scrollback, nil, configure...)
+}
+
+func newHarnessWithAgents(t *testing.T, scrollback int, registry *agentprofile.Registry, configure ...func(*session.Options)) *harness {
 	t.Helper()
-	h := &harness{t: t, state: t.TempDir(), store: t.TempDir(), logs: &syncBuffer{}, configure: configure}
+	h := &harness{t: t, state: t.TempDir(), store: t.TempDir(), logs: &syncBuffer{}, agents: registry, configure: configure}
 	h.open(scrollback)
 	return h
 }
@@ -116,7 +121,7 @@ func (h *harness) open(scrollback int) {
 		configure(&options)
 	}
 	h.manager = session.NewManager(options)
-	h.svc = New(Options{StateDir: h.state, Manager: h.manager, ScrollbackBytes: scrollback, Version: "test", Logger: slog.New(slog.NewTextHandler(h.logs, nil)), Uploads: func(_, path string) (string, error) { return trust(path) }})
+	h.svc = New(Options{StateDir: h.state, Manager: h.manager, ScrollbackBytes: scrollback, Version: "test", Logger: slog.New(slog.NewTextHandler(h.logs, nil)), Agents: h.agents, Uploads: func(_, path string) (string, error) { return trust(path) }})
 	svc, manager := h.svc, h.manager
 	h.t.Cleanup(func() {
 		svc.Close()

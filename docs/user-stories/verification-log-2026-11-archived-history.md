@@ -198,3 +198,18 @@
   - 隔离实例 Playwright E2E（`p2p.spec.ts`，桌面与手机视口）覆盖本机自动跳过、真实 Chromium ↔ Pion WebRTC 直连升级、终端流与无 HTTP XHR 的分块文件上传、双路径回显测速及在线关闭无损回退，桌面（1280×900）、平板（768×800）与手机（390×844）无页面横向溢出。
 - 限制：
   - 仅在 Linux 本地隔离实例与无头 Chromium 中核验；无头浏览器未验证 `hover` 与 `any-pointer: coarse` 媒体查询，未在 macOS、iOS/Android 真机或跨运营商对称 NAT / 移动蜂窝公网链路上实测打洞成功率。
+本次局部核对（2026-11-11）：支持通过 `WEBMUX_ACP_AGENTS` 声明没有内置适配器的 ACP agent，更新 US-Q01，不新增故事或改变覆盖索引。
+
+- 范围：
+  - 外部 agent 使用有界、严格的 JSON 声明稳定 ID、显示信息、原生进程名及完整 TUI/ACP/resume argv binding；
+  - 完整 binding 精确匹配，可为同一 agent 声明多条启动配置；shell 启动文件外层与 ACP fd 3 隔离保持原样；
+  - 可选 launcher 只接受唯一匹配的原生直接子进程，可选 connector 只提供安装与版本元数据；
+  - 启动环境在显式加载后只构造一次 agent 注册表，同一实例用于启动配置校验、API、提交延迟与混合会话。
+- 依据：
+  - `nix shell nixpkgs#nodejs_26 nixpkgs#pnpm_12 -c env npm_config_manage_package_manager_versions=false pnpm --dir web build` 通过，`svelte-check` 为 0 个错误与警告；
+  - 外部声明、注册表注入、进程选择与服务环境的定向 `go test -race` 通过；API nil 启动配置服务合同用例在补齐 `/bin/echo` 的隔离视图下连续 20 次通过；
+  - `go test ./internal/archtest -count=1`、`go vet ./...`、`make docs-check` 与 `git diff --check` 通过。
+- 限制：
+  - 宿主 NixOS 没有测试硬编码的 `/bin/echo`、`/bin/sleep` 等路径；未改写这些既有测试，相关定向用例在只读映射所需路径的隔离视图中运行；
+  - 广泛 `go test -race` 中既有 `TestClaudeConnectorMissing` 与 `TestClaudeProcessExitBeforeSwitch` 等待终端空闲超时；本次外部 agent、注入与进程选择的定向 race 用例通过；
+  - 未用真实第三方外部 agent 完成 TUI、聊天与恢复端到端切换，未重新核验其它故事能力。

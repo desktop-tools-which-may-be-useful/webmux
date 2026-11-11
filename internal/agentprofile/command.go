@@ -123,12 +123,17 @@ type Command struct {
 	Shell string
 	// Executable is argv's agent executable as written (possibly a path).
 	Executable string
-	args       []string
-	kept       []string
-	acpKept    []string
-	keptOpts   []KeptOption
-	dropped    []string
-	hasPrompt  bool
+	// bound is an explicitly declared complete command. Its TUI, ACP and
+	// resume argv bypass the built-in option classifier.
+	bound     *CommandSpec
+	tui       []string
+	outer     []string
+	args      []string
+	kept      []string
+	acpKept   []string
+	keptOpts  []KeptOption
+	dropped   []string
+	hasPrompt bool
 }
 
 func newCommand(agent Agent, form Form, shell, exe string, args []string) (Command, error) {
@@ -137,6 +142,20 @@ func newCommand(agent Agent, form Form, shell, exe string, args []string) (Comma
 		return Command{}, err
 	}
 	return cmd, nil
+}
+
+func newBoundCommand(agent Agent, form Form, shell string, full, tui []string, spec CommandSpec) Command {
+	binding := spec.clone()
+	return Command{
+		Agent:      agent,
+		Profile:    agent.Profile(),
+		Form:       form,
+		Shell:      shell,
+		Executable: tui[0],
+		bound:      &binding,
+		tui:        slices.Clone(tui),
+		outer:      slices.Clone(full[:len(full)-len(tui)]),
+	}
 }
 
 func splitForm(argv []string) (Form, string, string, []string, bool) {
@@ -246,16 +265,26 @@ func (c Command) wrap(script string, args ...string) []string {
 	return c.wrapExec(script, c.Executable, args...)
 }
 
+// wrapArgv runs a complete inner argv in the command's original form.
+func (c Command) wrapArgv(script string, argv []string) []string {
+	if c.Form != FormStartup {
+		return slices.Clone(argv)
+	}
+	if c.bound != nil {
+		prefix := slices.Clone(c.outer)
+		prefix[len(prefix)-2] = script
+		return append(prefix, argv...)
+	}
+	prefix := []string{c.Shell, "-ic"}
+	if c.Shell == ShellBash {
+		prefix = []string{"/usr/bin/env", ShellBash, "-ic"}
+	}
+	return append(append(prefix, script, startupName), argv...)
+}
+
 // wrapExec runs executable in the command's form.
 func (c Command) wrapExec(script, executable string, args ...string) []string {
-	if c.Form == FormStartup {
-		prefix := []string{c.Shell, "-ic"}
-		if c.Shell == ShellBash {
-			prefix = []string{"/usr/bin/env", ShellBash, "-ic"}
-		}
-		return append(append(prefix, script, startupName, executable), args...)
-	}
-	return append([]string{executable}, args...)
+	return c.wrapArgv(script, append([]string{executable}, args...))
 }
 
 // Lookup runs `command -v` for each name in the command's form, so a
@@ -269,6 +298,11 @@ func (c Command) Lookup(names ...string) []string {
 		return nil
 	}
 	script := `for n in "$@"; do printf '\n` + LookupMarker + `%s' "$(command -v -- "$n" 2>/dev/null)"; done; printf '\n'`
+	if c.bound != nil {
+		prefix := slices.Clone(c.outer)
+		prefix[len(prefix)-2] = script
+		return append(prefix, names...)
+	}
 	return append([]string{c.Shell, "-ic", script, startupName}, names...)
 }
 
@@ -334,6 +368,9 @@ func (c Command) withoutOverriddenInject(args []string) []string {
 // TUIArgv is the first terminal launch: the original command plus the
 // profile's required TUI options, in the original form.
 func (c Command) TUIArgv() []string {
+	if c.bound != nil {
+		return c.wrapArgv(startupScript, c.tui)
+	}
 	cleaned := c.withoutOverriddenInject(c.args)
 	return c.wrap(startupScript, append(c.injected(cleaned), cleaned...)...)
 }
@@ -343,6 +380,9 @@ func (c Command) TUIArgv() []string {
 // command does not already carry a prompt. When ok is false, the caller should
 // start TUIArgv() and type the prompt into the terminal once it is quiet.
 func (c Command) InitialTUIArgv(prompt string) (argv []string, ok bool) {
+	if c.bound != nil {
+		return nil, false
+	}
 	if prompt == "" || c.hasPrompt || c.Profile.InitialPrompt == nil {
 		return nil, false
 	}
@@ -360,6 +400,10 @@ func (c Command) InitialTUIArgv(prompt string) (argv []string, ok bool) {
 // options the profile preserves. Dropped lists the omitted arguments as
 // written, an option and its value joined by a space.
 func (c Command) ResumeArgv(agentSessionID string) (argv, dropped []string) {
+	if c.bound != nil {
+		inner := append(slices.Clone(c.bound.Resume), agentSessionID)
+		return c.wrapArgv(startupScript, inner), nil
+	}
 	args := append(c.injected(c.kept), c.kept...)
 	args = append(args, c.Profile.ResumeFlag, agentSessionID)
 	return c.wrap(startupScript, args...), slices.Clone(c.dropped)
@@ -372,6 +416,9 @@ func (c Command) ResumeArgv(agentSessionID string) (argv, dropped []string) {
 // options that change behaviour but do not reach the chat side, for the
 // user to be told.
 func (c Command) ACPArgv() (argv, unsupported []string) {
+	if c.bound != nil {
+		return c.wrapArgv(startupACPScript, c.bound.ACP), nil
+	}
 	_, unsupported = c.ChatConfig()
 	if connector := c.Profile.Connector; connector != nil {
 		return c.wrapExec(startupACPScript, connector.Executable), unsupported
@@ -391,6 +438,30 @@ func (c Command) ChatConfig() (seeds []Seed, unsupported []string) {
 		return nil, nil
 	}
 	return c.Profile.ChatSide(c.keptOpts)
+}
+
+// Connector describes the separately installed ACP program this exact command
+// binding needs. It is metadata for checks and install guidance; ACPArgv remains
+// the complete declared argv.
+func (c Command) Connector() *Connector {
+	if c.bound != nil {
+		return c.bound.Connector
+	}
+	return c.Profile.Connector
+}
+
+// RunsProcess reports whether a running native process belongs to this
+// command's agent.
+func (c Command) RunsProcess(base string) bool { return c.Profile.RunsProcess(base) }
+
+// Launcher is the interpreter or wrapper that remains the PTY root process for
+// this command. A declared command may have a different process shape from
+// another command of the same agent.
+func (c Command) Launcher() string {
+	if c.bound != nil {
+		return c.bound.Launcher
+	}
+	return c.Profile.Launcher
 }
 
 // ProtocolOnFD3 reports that ACPArgv's process writes the protocol to fd 3.

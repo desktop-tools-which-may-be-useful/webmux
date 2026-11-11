@@ -170,13 +170,12 @@ func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
 		}
 		return id, ident, known
 	}
-	// Fallback: identify from the PTY root process executable.
+	// Fallback: identify from the native agent root, or exactly one native
+	// direct child of this command's launcher.
 	if !known && id.PID != 0 && id.Executable != "" {
-		p := a.cmd.Profile
-		if p.RunsProcess(id.Executable) ||
-			(p.Launcher != "" && id.Executable == p.Launcher &&
-				slices.ContainsFunc(a.shell.RunChildren(), p.RunsProcess)) {
-			fallback := agentprofile.Identity{Agent: p.Name, Cwd: id.Cwd}
+		process, ok := a.agentProcess()
+		if ok {
+			fallback := agentprofile.Identity{Agent: a.cmd.Profile.Name, Cwd: process.Cwd}
 			switch {
 			case a.tracksLocks():
 				fallback.AgentSessionID = a.lockedSession(id)
@@ -263,7 +262,7 @@ func (a *actor) listedReason(t target) string {
 func (a *actor) setEligibility(reason string) {
 	e := Eligibility{Available: reason == "", Reason: reason}
 	if reason == ReasonConnectorMissing {
-		e.Connector = a.cmd.Profile.Connector
+		e.Connector = a.cmd.Connector()
 	}
 	if a.chat.Eligibility != e {
 		a.chat.Eligibility = e

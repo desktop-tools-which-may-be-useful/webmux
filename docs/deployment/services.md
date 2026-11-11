@@ -21,7 +21,7 @@ webmux service uninstall
 - 服务使用当前可执行文件和配置文件的绝对路径，不复制二进制。移动二进制后，需在新位置执行 `service install --force` 更新定义。
 - 已有服务定义需要 `service install --force` 才能替换，并会重启服务。`service install --dry-run` 只输出服务定义，不写文件、不创建配置、不操作服务；可与 `--config` 配合使用。
 - `stop`、`restart`、覆盖安装和卸载会结束当前所有终端会话，滚屏不会在重启后恢复。`uninstall` 保留二进制、配置、日志和状态目录。
-- 安装会保存当前 PATH 中的绝对目录，并补充常见 agent 安装目录，只保存 PATH、shell、locale 和 `XDG_STATE_HOME` 等指定环境变量。更新 agent 安装路径后可重新执行 `install --force`。
+- 安装会保存当前 PATH 中的绝对目录，并补充常见 agent 安装目录，只保存 PATH、shell、locale、`XDG_STATE_HOME` 与外部 ACP agent 声明 `WEBMUX_ACP_AGENTS` 等指定环境变量；不会保存 token 等其它环境。更新 agent 安装路径或声明后可重新执行 `install --force`。
 - 服务工作目录为用户主目录；配置中的 `default_cwd`、`state_dir` 建议使用绝对路径或支持的 `~` 路径；自定义启动命令的可执行程序使用绝对路径或 PATH 中的命令名，避免依赖安装时的工作目录。
 - Linux 需要可用的 systemd 用户管理器；macOS 需要已登录的 GUI 会话。服务启用成功不代表 HTTP 端口已成功监听，遇到端口冲突等启动失败时查看 `status` 和 `logs`。
 

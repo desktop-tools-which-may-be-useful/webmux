@@ -16,6 +16,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
+	"github.com/rainchan/webmux/internal/launchicon"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -88,11 +89,20 @@ type Config struct {
 	Hybrid    bool               `json:"hybrid,omitempty"`
 	CreatedAt time.Time          `json:"createdAt"`
 	UpdatedAt time.Time          `json:"updatedAt"`
+	// agents is set by Service on returned values; it is never persisted.
+	agents *agentprofile.Registry
 }
 
 // HybridSupport reports whether the config's command can run as a hybrid
-// session, computed from the built-in agent profiles on every call.
-func (c Config) HybridSupport() agentprofile.Support { return agents.Default().Check(c.Cmd) }
+// session using the registry of the service that returned it. Standalone
+// values use the built-ins for compatibility with package callers.
+func (c Config) HybridSupport() agentprofile.Support {
+	registry := c.agents
+	if registry == nil {
+		registry = agents.Default()
+	}
+	return registry.Check(c.Cmd)
+}
 
 // Summary is the list form: environment names only, never values.
 type Summary struct {
@@ -128,10 +138,8 @@ func invalidf(format string, args ...any) error {
 
 // normalize validates in and returns a trimmed copy that shares no slice or
 // map with the caller. Errors never contain environment values.
-func normalize(in Input) (Input, error) {
-	switch in.Icon {
-	case "", "terminal", "claudecode", "codex", "antigravity", "geminicli", "cursor", "githubcopilot", "opencode", "qwen", "kimi", "codebuddy", "pi", "qoder":
-	default:
+func normalize(in Input, registry *agentprofile.Registry) (Input, error) {
+	if !launchicon.Supported(in.Icon) {
 		return Input{}, invalidf("图标不受支持")
 	}
 	name := strings.TrimSpace(in.Name)
@@ -187,8 +195,8 @@ func normalize(in Input) (Input, error) {
 		}
 	}
 	if in.Hybrid {
-		if support := agents.Default().Check(in.Cmd); !support.Supported {
-			return Input{}, invalidf("无法开启混合模式：%s", agents.Default().Explain(support.Reason))
+		if support := registry.Check(in.Cmd); !support.Supported {
+			return Input{}, invalidf("无法开启混合模式：%s", registry.Explain(support.Reason))
 		}
 	}
 	return Input{Name: name, Icon: in.Icon, Cmd: slices.Clone(in.Cmd), Env: cloneEnv(in.Env), Preview: preview, Attention: attention, Hybrid: in.Hybrid}, nil
@@ -227,7 +235,7 @@ func (c Config) clone() Config {
 	return c
 }
 
-func (c Config) summary() Summary {
+func (c Config) summary(registry *agentprofile.Registry) Summary {
 	names := slices.Sorted(maps.Keys(c.Env))
 	if names == nil {
 		names = []string{}
@@ -241,7 +249,7 @@ func (c Config) summary() Summary {
 		Preview:       clonePreview(c.Preview),
 		Attention:     cloneAttention(c.Attention),
 		Hybrid:        c.Hybrid,
-		HybridSupport: c.HybridSupport(),
+		HybridSupport: registry.Check(c.Cmd),
 		CreatedAt:     c.CreatedAt,
 		UpdatedAt:     c.UpdatedAt,
 	}

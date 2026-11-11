@@ -30,6 +30,31 @@ func mustCreate(t *testing.T, s *Service, in Input) Config {
 	return c
 }
 
+func TestInjectedRegistryControlsHybridValidationAndSupport(t *testing.T) {
+	external := agentprofile.Spec{ProcessExecutables: []string{"acme-native"}, Commands: []agentprofile.CommandSpec{{
+		Match: []string{"acme", "work"}, ACP: []string{"acme", "serve"}, Resume: []string{"acme", "resume"},
+	}}}.Agent("acme-agent")
+	registry := agentprofile.NewRegistry(external)
+	s := Open(t.TempDir(), registry)
+	t.Cleanup(s.Close)
+
+	created, err := s.Create(Input{Name: "Acme", Cmd: []string{"/opt/bin/acme", "work"}, Hybrid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := registry.Check(created.Cmd)
+	if got := created.HybridSupport(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("created support = %+v, want %+v", got, want)
+	}
+	list, err := s.List()
+	if err != nil || len(list) != 1 || !reflect.DeepEqual(list[0].HybridSupport, want) {
+		t.Fatalf("list support = %+v, %v; want %+v", list, err, want)
+	}
+	if _, err := s.Create(Input{Name: "Other", Cmd: []string{"acme", "other"}, Hybrid: true}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("non-binding hybrid create = %v, want ErrInvalid", err)
+	}
+}
+
 func TestFirstOpenIsEmptyAndCreatesNoFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "state")
 	s := open(t, dir)
@@ -471,6 +496,12 @@ func TestNilAndClosedUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.Get("abcdefgh"); !errors.Is(err, ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if _, err := s.Create(Input{Name: "agent", Cmd: []string{"agent"}}); !errors.Is(err, ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if _, err := s.Update("abcdefgh", Input{Name: "agent", Cmd: []string{"agent"}}); !errors.Is(err, ErrUnavailable) {
 		t.Fatal(err)
 	}
 	s.Close()

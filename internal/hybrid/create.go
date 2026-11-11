@@ -42,7 +42,7 @@ type CreateInput struct {
 // only the connector lookup.
 func (s *Service) CheckCreate(ctx context.Context, in CreateInput) error {
 	cmd, side, cwd, err := s.admit(in)
-	if err != nil || side != SideACP || cmd.Profile.Connector == nil {
+	if err != nil || side != SideACP || cmd.Connector() == nil {
 		return err
 	}
 	probe, err := s.manager.ProbeShell(session.CreateInput{Cwd: cwd, Cmd: cmd.TUIArgv(), Env: in.Env, ConfigID: in.ConfigID})

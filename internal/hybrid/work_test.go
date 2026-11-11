@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agy"
 	"github.com/rainchan/webmux/internal/agentprofile/kimi"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
@@ -232,6 +233,40 @@ func TestTurnWithStartedBackgroundCommandIsDoneOnlyAfterItEnds(t *testing.T) {
 	}
 	if got := h.replayedUsers(id); !slices.Equal(got, []string{"hi /background-started"}) {
 		t.Fatalf("Kimi must not start an agy-specific refresh: %q", got)
+	}
+}
+
+func TestExternalAgentBackgroundCommandLatchesDoneWithoutRefresh(t *testing.T) {
+	path := agentPath(t, "kimi")
+	registry := agentprofile.NewRegistry(agentprofile.Spec{
+		ProcessExecutables: []string{"external-native"},
+		Commands: []agentprofile.CommandSpec{{
+			Match:  []string{"external-agent"},
+			ACP:    []string{path, "--acp"},
+			Resume: []string{path},
+		}},
+	}.Agent("external-agent"))
+	h := newHarnessWithAgents(t, 0, registry)
+	h.fast()
+	in := h.input("kimi", SideACP)
+	in.Cmd = []string{"external-agent"}
+	s := h.create(in)
+	id := s.Info().ID
+	st := h.follow(id)
+	prompt(t, h, id, "hi /background-started")
+	st.until("turn end", hasKind(EventTurnEnd))
+	if !h.chatState(id).Turn.Unfinished {
+		t.Fatal("completed start call must not hide the running background command")
+	}
+	waitFor(t, "done once the external command ended", func() bool {
+		a := s.Info().Attention
+		return a != nil && a.Kind == attentionkind.Done
+	})
+	if h.chatState(id).Turn.Unfinished {
+		t.Fatal("external background command must clear the unfinished turn state")
+	}
+	if got := h.replayedUsers(id); !slices.Equal(got, []string{"hi /background-started"}) {
+		t.Fatalf("external agent must not start a profile-specific refresh: %q", got)
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/statefile"
 )
@@ -35,6 +37,9 @@ type Service struct {
 	store   *statefile.Handle[storedFile]
 	configs []Config
 	presets []Input
+	// agents is the process-wide registry assembled by cmd. It computes hybrid
+	// support and validates hybrid edits consistently with the API and service.
+	agents *agentprofile.Registry
 	// fresh reports that launch-configs.json did not exist at Open and has not
 	// been written since; only then does Seed fill it.
 	fresh bool
@@ -49,12 +54,17 @@ type Service struct {
 // of every deleted config, so state kept per config elsewhere goes with it.
 func (s *Service) OnDelete(fn func(id string)) { s.deleted = fn }
 
-// Open loads the store. It never fails: a lock conflict, an unreadable
-// directory or a corrupt file leaves the service unavailable and the file
-// untouched until the server restarts. A missing file is an empty list and is
-// not created until the first write or Seed.
-func Open(stateDir string) *Service {
-	s := &Service{}
+// Open loads the store with the registry used for hybrid support. It never
+// fails: a lock conflict, an unreadable directory or a corrupt file leaves the
+// service unavailable and the file untouched until the server restarts. A
+// missing file is an empty list and is not created until the first write or
+// Seed. Nil agents uses the built-ins for backwards-compatible embedders.
+func Open(stateDir string, registries ...*agentprofile.Registry) *Service {
+	registry := agents.Default()
+	if len(registries) > 0 && registries[0] != nil {
+		registry = registries[0]
+	}
+	s := &Service{agents: registry}
 	dir, err := pathutil.Expand(stateDir)
 	if err == nil {
 		dir, err = filepath.Abs(dir)
@@ -74,7 +84,7 @@ func Open(stateDir string) *Service {
 func (s *Service) load() error {
 	var f storedFile
 	var err error
-	s.store, f, err = statefile.Open[storedFile](s.dir, statefile.Launch, func(f storedFile) error { _, err := validateStored(f); return err })
+	s.store, f, err = statefile.Open[storedFile](s.dir, statefile.Launch, func(f storedFile) error { _, err := validateStored(f, s.agents); return err })
 	if statefile.IsKind(err, statefile.Missing) {
 		s.fresh = true
 		return nil
@@ -82,11 +92,11 @@ func (s *Service) load() error {
 	if err != nil {
 		return err
 	}
-	s.configs, err = validateStored(f)
+	s.configs, err = validateStored(f, s.agents)
 	return err
 }
 
-func validateStored(stored storedFile) ([]Config, error) {
+func validateStored(stored storedFile, registry *agentprofile.Registry) ([]Config, error) {
 	if stored.V != fileVersion || stored.Configs == nil {
 		return nil, errors.New("文件损坏或版本不受支持")
 	}
@@ -96,7 +106,7 @@ func validateStored(stored storedFile) ([]Config, error) {
 	ids, names := map[string]bool{}, map[string]bool{}
 	configs := make([]Config, 0, len(stored.Configs))
 	for i, c := range stored.Configs {
-		in, err := normalize(Input{Name: c.Name, Icon: c.Icon, Cmd: c.Cmd, Env: c.Env, Preview: c.Preview, Attention: c.Attention})
+		in, err := normalize(Input{Name: c.Name, Icon: c.Icon, Cmd: c.Cmd, Env: c.Env, Preview: c.Preview, Attention: c.Attention}, registry)
 		switch {
 		case err != nil:
 			return nil, fmt.Errorf("第 %d 条配置: %w", i+1, err)
@@ -187,9 +197,14 @@ func (s *Service) List() ([]Summary, error) {
 func (s *Service) summariesLocked() []Summary {
 	out := make([]Summary, 0, len(s.configs))
 	for _, c := range s.configs {
-		out = append(out, c.summary())
+		out = append(out, c.summary(s.agents))
 	}
 	return out
+}
+
+func (s *Service) config(c Config) Config {
+	c.agents = s.agents
+	return c.clone()
 }
 
 // Get returns a copy of one full config.
@@ -199,14 +214,17 @@ func (s *Service) Get(id string) (Config, error) {
 	}
 	defer s.mu.Unlock()
 	if i := s.indexLocked(id); i >= 0 {
-		return s.configs[i].clone(), nil
+		return s.config(s.configs[i]), nil
 	}
 	return Config{}, ErrNotFound
 }
 
 // Create validates in, saves a new config and returns a copy of it.
 func (s *Service) Create(in Input) (Config, error) {
-	in, err := normalize(in)
+	if s == nil {
+		return Config{}, s.Unavailable()
+	}
+	in, err := normalize(in, s.agents)
 	if err != nil {
 		return Config{}, err
 	}
@@ -231,7 +249,7 @@ func (s *Service) Create(in Input) (Config, error) {
 		return Config{}, err
 	}
 	s.configs = next
-	return c.clone(), nil
+	return s.config(c), nil
 }
 
 // Seed creates launch-configs.json with ins when the file did not exist at
@@ -243,7 +261,7 @@ func (s *Service) Seed(ins []Input) error {
 		return err
 	}
 	defer s.mu.Unlock()
-	presets, err := normalizePresets(ins)
+	presets, err := normalizePresets(ins, s.agents)
 	if err != nil {
 		return err
 	}
@@ -274,7 +292,10 @@ func (s *Service) Seed(ins []Input) error {
 
 // Update replaces the editable fields of id; id and createdAt are kept.
 func (s *Service) Update(id string, in Input) (Config, error) {
-	in, err := normalize(in)
+	if s == nil {
+		return Config{}, s.Unavailable()
+	}
+	in, err := normalize(in, s.agents)
 	if err != nil {
 		return Config{}, err
 	}
@@ -297,7 +318,7 @@ func (s *Service) Update(id string, in Input) (Config, error) {
 		return Config{}, err
 	}
 	s.configs = next
-	return c.clone(), nil
+	return s.config(c), nil
 }
 
 // Delete removes id.

@@ -12,7 +12,8 @@
     - 未识别的 agent、命令写法、会话库或目录参数、非交互参数；
     - `codex resume`/`fork`、Claude Code 的 `--continue`/`--resume`/`--session-id` 等打开已有会话的参数；
     - Claude 的 `--worktree`/`--tmux`、`--no-session-persistence`/`--environment`，以及 Antigravity CLI 的 `--project`/`--new-project` 与非交互参数；
-  - 未识别的 agent 与勾选框说明列出服务端返回的受支持 agent（`supportedAgents`，来自 agent 注册表）；
+  - 未识别的 agent 与勾选框说明列出注册表返回的 `supportedAgents`；`WEBMUX_ACP_AGENTS` 声明的外部 agent 同样列出，只接受完整 argv binding；
+  - 外部 agent 的 ID、各模式 argv、原生进程与 launcher/connector 相互独立；精确匹配、resume、shell 外层与 fd 3 验收见[外部 ACP agent](../hybrid-sessions/agents.md#外部-acp-agent)；
   - 勾选不受支持的命令保存返回 400，保存不检查第三方连接器是否已安装；
   - Claude Code 使用稳定档案 ID `claudecode`，允许 `CLAUDE_CONFIG_DIR` 环境但不允许命令内会话参数；
   - 列表显示“混合”标记；

@@ -52,6 +52,9 @@ type Options struct {
 	Version string
 	// Logger receives lifecycle events, method names and error codes only.
 	Logger *slog.Logger
+	// Agents is the immutable process-wide registry assembled by cmd. Nil uses
+	// the built-ins for backwards-compatible embedders and package tests.
+	Agents *agentprofile.Registry
 	// Uploads validates that path is one of session id's uploaded files and
 	// returns it cleaned (artifacts.Service.UploadPath). Nil refuses every
 	// attachment.
@@ -134,10 +137,14 @@ func New(o Options) *Service {
 	if o.Version == "" {
 		o.Version = "dev"
 	}
+	registry := o.Agents
+	if registry == nil {
+		registry = agents.Default()
+	}
 	userHome, _ := os.UserHomeDir()
 	s := &Service{
 		conversations: o.Conversations, manager: o.Manager, records: openRecords(o.StateDir), options: openAgentOptions(o.StateDir), capacity: capacity, version: o.Version, log: log,
-		uploads: o.Uploads, userHome: userHome, agents: agents.Default(),
+		uploads: o.Uploads, userHome: userHome, agents: registry,
 		timing: defaultTiming, probes: make(chan struct{}, maxProbes), actors: make(map[string]*actor),
 		recovering: make(map[string]bool),
 	}

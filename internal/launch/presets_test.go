@@ -172,7 +172,7 @@ func TestAgentIconsComeFromLaunchCatalog(t *testing.T) {
 			t.Errorf("agent %q: title %q, icon %q; want a title and a brand glyph", p.Name, p.Title, p.Icon)
 			continue
 		}
-		if _, err := normalize(Input{Name: p.Title, Icon: p.Icon, Cmd: []string{p.Name}}); err != nil {
+		if _, err := normalize(Input{Name: p.Title, Icon: p.Icon, Cmd: []string{p.Name}}, registry); err != nil {
 			t.Errorf("agent %q icon %q is not a launch-config icon: %v", p.Name, p.Icon, err)
 		}
 	}

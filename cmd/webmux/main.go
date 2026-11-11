@@ -20,6 +20,7 @@ import (
 
 	"github.com/rainchan/webmux/cmd/internal/assemble"
 	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/clicmd"
@@ -181,6 +182,7 @@ func run(args []string) error {
 		}
 	}
 	applyLaunchEnv()
+	c.Agents = agents.LoadExternal(os.Getenv(agents.ExternalAgentsEnv), slog.Default())
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return serve(ctx, c, os.Stdout)
@@ -191,6 +193,10 @@ func run(args []string) error {
 // structured logs.
 func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// Direct embedders/tests supply validated config rather than loadConfig.
+	registry := c.Agents
+	if registry == nil {
+		registry = agents.Default()
+	}
 	if c.TunnelSettings == nil {
 		c.TunnelSettings = tunnelsettings.Open(c.StateDir, c.Tunnel)
 		c.Tunnel, c.TunnelWebManaged = c.TunnelSettings.Effective()
@@ -244,7 +250,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	sessionOptions := assemble.SessionOptions(c.Config)
+	sessionOptions := assemble.SessionOptions(c.Config, registry)
 	// Keep the child terminal identity tied to the running WebMux build. The
 	// session package still defaults to "dev" for embedders and tests.
 	sessionOptions.TerminalVersion = version
@@ -257,7 +263,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	m := session.NewManager(sessionOptions)
 	// Opening never fails: a locked, corrupt or unreadable store only
 	// disables launch configs, and the endpoints answer 503 with the reason.
-	launches := launch.Open(c.StateDir)
+	launches := launch.Open(c.StateDir, registry)
 	defer launches.Close()
 	if err := launches.Unavailable(); err != nil {
 		slog.Warn("launch configs unavailable", "error", err)
@@ -281,7 +287,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	hybrids := hybrid.New(hybrid.Options{
 		Conversations: conversations,
 		StateDir:      c.StateDir, Manager: m, ScrollbackBytes: sessionOptions.ScrollbackBytes,
-		Version: version, Logger: slog.Default(), Uploads: folders.UploadPath,
+		Version: version, Logger: slog.Default(), Agents: registry, Uploads: folders.UploadPath,
 	})
 	if err := hybrids.Unavailable(); err != nil {
 		slog.Warn("hybrid records unreadable; session artifacts folders kept", "error", err)
@@ -381,7 +387,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	p2pCtl := newP2PController(c.P2PSettings, p2pService)
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
-		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
+		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Agents: registry, Settings: preferences, Hybrid: hybrids,
 		Forward:       forwards,
 		Voice:         voiceService,
 		VoiceSettings: newVoiceController(voiceStore, voiceService, voiceConfig),

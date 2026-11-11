@@ -50,6 +50,7 @@ flowchart LR
 | `internal/contract`                           | 只依赖标准库的线上类型：REST 请求与响应、WebSocket 事件与终端帧、本机控制面与 `/local/v1` 路径             |
 | `internal/wire`                               | Controller 层：Service 类型与 `contract` 线上类型之间的双向转换                                            |
 | `internal/pathutil`, `internal/attentionkind` | 共享的路径展开与注意力种类，供 Service、配置与客户端共用                                                   |
+| `internal/launchicon`                        | 浏览器启动配置与 agent 档案共用的图标 key 目录                                                            |
 | `internal/localclient`                        | 经任意拨号器访问 HTTP/WS API 的客户端，可交叉编译到 Windows                                                |
 | `internal/client`                             | CLI 侧的实例定位、链接推导、`status`/`stop` 退回逻辑                                                       |
 | `internal/config`                             | TOML 解析、默认值与校验                                                                                    |
@@ -116,7 +117,7 @@ Tailscale 控制器的生命周期：
 | 装配根         | `cmd/...`                                                                                                                                                                  | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
 | Controller     | `internal/api`、`internal/hub`、`internal/wire`                                                                                                                            | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
 | Service        | `session`、`hybrid`、`conversation`、`workspace`、`settings`、`launch`、`push`、`codeview`、`files`、`artifacts`、`tunnelsettings`、`tailscale`、`tailscalesettings`       | 业务规则、状态、文件系统与进程                                                     |
-| 共享           | `contract`、`config`、`runtime`、`jsonutil`、`statefile`、`settingsstore`、`fetch`、`pathutil`、`attentionkind`、`procpeek`、`vtpreview`、`wsl`、`acp`、`agentprofile/...` | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
+| 共享           | `contract`、`config`、`runtime`、`jsonutil`、`launchicon`、`statefile`、`settingsstore`、`fetch`、`pathutil`、`attentionkind`、`procpeek`、`vtpreview`、`wsl`、`acp`、`agentprofile/...` | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
 | 服务器外客户端 | `client`、`localclient`、`attach`、`clicmd`、`tray/...`、`wslclient`、`tunnel`、`service`                                                                                  | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
 
 | 规则 | 检查                                                                                                                                                                                                                                                                                      |

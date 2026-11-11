@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/p2p"
 	"github.com/rainchan/webmux/internal/p2psettings"
 	"github.com/rainchan/webmux/internal/session"
@@ -257,6 +260,46 @@ func TestP2PRPCAuthAndRouting(t *testing.T) {
 	})
 	if okResp.Status != 200 || !strings.Contains(string(okResp.Body), `"p2p":true`) {
 		t.Fatalf("RPC /api/config = %d %s", okResp.Status, string(okResp.Body))
+	}
+}
+
+func TestP2PRPCUsesInjectedRegistryLikeHTTP(t *testing.T) {
+	registry := agentprofile.NewRegistry(agentprofile.Spec{
+		Title: "Acme Agent", ProcessExecutables: []string{"acme-native"},
+		Commands: []agentprofile.CommandSpec{{
+			Match:  []string{"acme", "work"},
+			ACP:    []string{"acme", "serve"},
+			Resume: []string{"acme", "resume"},
+		}},
+	}.Agent("acme-agent"))
+	store := launch.Open(t.TempDir(), registry)
+	t.Cleanup(store.Close)
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
+	t.Cleanup(func() { m.Shutdown(context.Background()) })
+	bridge := NewBridge(testDeps(t, Deps{
+		Config: config.Config{Token: "login-secret"}, Manager: m, Launch: store, Agents: registry,
+	}))
+	body := `{"cmd":["/opt/acme","work"]}`
+	httpResp := tunnelAPIRequest(bridge.HTTPHandler, http.MethodPost, "/api/launch-configs/chat-support", body, "login-secret", "")
+	rpcResp := bridge.ServeRPC(context.Background(), p2p.RPCRequest{
+		Method: http.MethodPost, Path: "/api/launch-configs/chat-support", Body: []byte(body),
+		Headers: map[string]string{"Authorization": "Bearer login-secret", "Content-Type": "application/json"},
+	})
+	if rpcResp.Status != httpResp.Code {
+		t.Fatalf("RPC status = %d, HTTP status = %d", rpcResp.Status, httpResp.Code)
+	}
+	var httpSupport, rpcSupport contract.ChatSupport
+	if err := json.Unmarshal(httpResp.Body.Bytes(), &httpSupport); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(rpcResp.Body, &rpcSupport); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(rpcSupport, httpSupport) {
+		t.Fatalf("RPC support = %+v, HTTP support = %+v", rpcSupport, httpSupport)
+	}
+	if !rpcSupport.Supported || rpcSupport.Agent != "acme-agent" || !reflect.DeepEqual(rpcSupport.SupportedAgents, registry.Titles()) {
+		t.Fatalf("injected registry support = %+v", rpcSupport)
 	}
 }
 
