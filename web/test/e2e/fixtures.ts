@@ -415,7 +415,7 @@ export async function recordInput(
   const path = join(directory, "received-input");
   await runCommand(
     page,
-    `stty raw -echo; printf '\\033[?2004${bracketed ? "h" : "l"}RECORDER_READY\\r\\n'; cat > ${quote(path)}`,
+    `stty raw -echo; : > ${quote(path)}; printf '\\033[?2004${bracketed ? "h" : "l"}RECORDER_READY\\r\\n'; cat >> ${quote(path)}`,
   );
   await expectTerminalLine(page, "RECORDER_READY");
   await expect.poll(() => readFile(path, "utf8")).toBe("");

@@ -245,3 +245,14 @@
 - 依据：`go test -race ./internal/config ./internal/p2psettings ./cmd/webmux -run 'TestP2P|Test.*Store|TestConfiguredViewCorruptP2P'` 通过；`go test ./internal/api -run TestWireSnapshotsP2P -update` 通过并更新 P2P 默认列表快照。
 - 网络探测：当前环境通过 IPv4 UDP 向四个节点各发送 3 次 STUN Binding 请求，Google 与 Bilibili 均成功 3 次，小米与 Cloudflare 均成功 2 次、超时 1 次；成功响应包含映射地址。
 - 限制：探测结果仅代表当前出站网络，不保证各地运营商可达性；未重新核验全部 P2P 行为或其他故事。
+
+## 2026-11-11：Handoff 02 完整 Activity 与 replay 对账（US-Q05、US-Q12）
+
+- 范围：UI 截断前的规范化消息、命令输入/退出码/输出、文件修改、计划、压缩、权限结果、错误、回合与切换；附件只存元数据和来源引用。
+- 存储：64 KiB 分块追加，快照保留相同前缀；完成后事务发布 position；长项按 UTF-8 字节分页；半条崩溃尾部保持未提交并标 gap。
+- 对账：ProviderThread + provider item ID，以及无 ID 的完整项有序前缀；native ID 改变、乱序、缺失或未知无 ID 内容保持 reconcile_required，TUI 缺口不被猜测性删除。
+- 验证：存储与 recorder 的针对性 Go race 测试通过，含大于 256 KiB 的消息/工具、重复文本、快照尾部、后台工具跨回合归属、v1 升级和实际 fake-agent 冷 load 去重。
+- 基准：Linux amd64 / Go 1.26.10，128 次 4 KiB 追加约 67.9 μs/op、60.31 MB/s、7,279 B/op；这是临时目录中的单次样本，不代表生产磁盘或全套性能验收。
+- 限制：当前提供服务层读取，REST 与浏览器历史查询在下一层接入；未在原生 macOS 执行本层测试，未验证真实 provider 的完整回放能力。
+- 评审补充：工具标题、命令输入与退出码独立分块保存，metadata-only patch 不改写累计输出；省略初始工具状态按 pending 处理，跨回合完成保持原 Run。新增回归覆盖这两种情况和输出零改写。
+- 插话补充：接受插话后切断无 native ID 的消息连续段，显式 failed 丢弃未消费草稿；实际 ACP 调用、关闭和重开数据库的回归测试验证顺序正确且不产生伪崩溃缺口。

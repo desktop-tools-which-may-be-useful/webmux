@@ -20,6 +20,7 @@ type Conversation struct {
 	ActiveProviderThreadID        string
 	NextRunOrdinal                int64
 	HistoryOrigin                 string
+	ReconcileRequired             bool
 	CreatedAt, UpdatedAt          time.Time
 }
 
@@ -75,4 +76,37 @@ type HandoffInput struct {
 	FromRunOrdinal, ToRunOrdinal                                       int64
 	SelectedItemIDs, OmittedItemIDs                                    []string
 	ClientRequestID, RequestHash                                       string
+}
+
+// Activity is an immutable committed historical item. Text is materialized only
+// in bounded byte ranges; drafts have Position zero and are never paginated.
+type Activity struct {
+	ID, ConversationID, ProviderThreadID, RunID string
+	Position, RunOrdinal                        int64
+	Kind, Role, Status, Source, ProviderItemID  string
+	Text                                        string
+	ByteLength                                  int64
+	CreatedAt                                   time.Time
+	Attachments                                 []ActivityAttachment
+}
+
+type ActivityAttachment struct {
+	Name, MimeType, Reference string
+	Size                      int64
+}
+
+type ActivityInput struct {
+	// Heading patches normalized tool metadata independently of accumulated output.
+	Heading                                           *string
+	ProviderThreadID, RunID, LocalKey, ProviderItemID string
+	Kind, Role, Status, Source, Text                  string
+	// Replace is for ACP snapshots (tool content, plans, compaction summaries).
+	// Stream chunks leave it false, appending only the received delta.
+	Replace     bool
+	Attachments []ActivityAttachment
+}
+
+type HistoryGap struct {
+	ID, ProviderThreadID, Reason string
+	CreatedAt                    time.Time
 }

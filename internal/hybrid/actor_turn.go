@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
-
 	"github.com/rainchan/webmux/internal/acp"
 	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func processIdentity(pid int) *runtime.Identity {
@@ -130,6 +129,7 @@ func (a *actor) started(started chan<- error, res startResult) {
 	a.dirty = true
 	pid, process := res.pid, res.process
 	if res.link == nil {
+		a.recordTUIGap()
 		// A terminal that already exited left the session interrupted.
 		if a.state == StateActive {
 			a.record(true, func(r *Record) { r.PID, r.Process = pid, process })
@@ -184,6 +184,11 @@ func (a *actor) sendTurn(text string, attachments []Attachment, queueItem, title
 	if err != nil {
 		return PromptResult{}, err
 	}
+	if !backgroundRefresh {
+		if err := a.beginActivityRun(text, attachments); err != nil {
+			return PromptResult{}, err
+		}
+	}
 	a.nextTurn++
 	if a.promptTitle {
 		a.promptTitle = false
@@ -237,6 +242,7 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	a.work.endTurn()
 	t.cancel()
 	stop, text := stopReason(resp, err)
+	a.finishActivityRun(stop)
 	var rpc *acp.RPCError
 	code := 0
 	if errors.As(err, &rpc) {

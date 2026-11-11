@@ -158,6 +158,7 @@ type config struct {
 	promptImage      bool
 	embeddedContext  bool
 	modeFallback     bool
+	steerOutcome     string
 	protocolVersion  int
 	noise            string
 }
@@ -260,6 +261,7 @@ func parseArgs(args []string) (config, bool, error) {
 		promptImage:      os.Getenv("FAKEAGENT_PROMPT_IMAGE") == "1",
 		embeddedContext:  os.Getenv("FAKEAGENT_EMBEDDED_CONTEXT") == "1",
 		modeFallback:     os.Getenv("FAKEAGENT_MODE_FALLBACK") == "1",
+		steerOutcome:     os.Getenv("FAKEAGENT_STEER_OUTCOME"),
 		noise:            os.Getenv("FAKEAGENT_STDOUT_NOISE"),
 		codexVersion:     envOr("FAKEAGENT_CODEX_VERSION", "0.166.0"),
 		claudeVersion:    envOr("FAKEAGENT_CLAUDE_VERSION", "2.1.316"),
