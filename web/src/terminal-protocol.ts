@@ -141,3 +141,42 @@ export function formatTerminalSocketPath(
   if (!compressed) params.set("zreplay", "1");
   return `/ws/s/${id}?${params}`;
 }
+
+export type AppendOverlapDecision =
+  | { accept: true; skipBytes: number; hasTail: boolean }
+  | { accept: false };
+
+// Evaluates a 0x04 append position frame against the client's already-rendered
+// stream offset, trimming any overlap delivered during a make-before-break
+// transport handoff.
+export function resolveAppendOverlap(
+  synced: boolean,
+  currentGeneration: string | undefined,
+  currentOffset: number,
+  position: { generation: string; start: number; end: number },
+): AppendOverlapDecision {
+  if (
+    !synced ||
+    position.generation !== currentGeneration ||
+    position.start > currentOffset ||
+    currentOffset > position.end
+  ) {
+    return { accept: false };
+  }
+  return {
+    accept: true,
+    skipBytes: currentOffset - position.start,
+    hasTail: position.end > currentOffset,
+  };
+}
+
+export function trimOverlapChunk<T extends ArrayBufferLike>(
+  payload: Uint8Array<T>,
+  skipBytes: number,
+): { remainingSkip: number; slice: Uint8Array<T> | null } {
+  if (skipBytes <= 0) return { remainingSkip: 0, slice: payload };
+  if (payload.byteLength <= skipBytes) {
+    return { remainingSkip: skipBytes - payload.byteLength, slice: null };
+  }
+  return { remainingSkip: 0, slice: payload.subarray(skipBytes) };
+}

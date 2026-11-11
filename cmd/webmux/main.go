@@ -30,6 +30,8 @@ import (
 	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/p2p"
+	"github.com/rainchan/webmux/internal/p2psettings"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
@@ -154,30 +156,6 @@ func helpRequested(args []string) bool {
 	return false
 }
 
-// versionCommand never reads configuration or starts anything: the Windows
-// tray runs it to decide compatibility before any other call.
-func versionCommand(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("webmux version", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	asJSON := flags.Bool("json", false, "print the version and control contract as JSON")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return contract.ExitOK
-		}
-		return contract.ExitUsage
-	}
-	if flags.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "webmux: unexpected argument %q\n", flags.Arg(0))
-		return contract.ExitUsage
-	}
-	if *asJSON {
-		writeJSON(stdout, contract.VersionV1{V: contract.V, Version: version, Contract: contract.V})
-		return contract.ExitOK
-	}
-	_, _ = fmt.Fprintln(stdout, "webmux", version)
-	return contract.ExitOK
-}
-
 func runServe(args []string) int {
 	if err := run(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -196,6 +174,7 @@ func run(args []string) error {
 	}
 	defer c.TunnelSettings.Close()
 	defer c.TailscaleSettings.Close()
+	defer c.P2PSettings.Close()
 	if c.LogFile != "" {
 		if err := redirectOutput(c.LogFile); err != nil {
 			return fmt.Errorf("log file: %w", err)
@@ -228,6 +207,14 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	defer c.TailscaleSettings.Close()
 	if err := c.TailscaleSettings.Unavailable(); err != nil {
 		slog.Warn("tailscale settings unavailable; managed Tailscale entry remains off", "error", err)
+	}
+	if c.P2PSettings == nil {
+		c.P2PSettings = p2psettings.Open(c.StateDir, c.P2P)
+		c.P2P, c.P2PWebManaged = c.P2PSettings.Effective()
+	}
+	defer c.P2PSettings.Close()
+	if err := c.P2PSettings.Unavailable(); err != nil {
+		slog.Warn("p2p settings unavailable; opportunistic P2P remains off", "error", err)
 	}
 	locator := tunnel.Locator{Explicit: c.Tunnel.Cloudflared, StateDir: c.StateDir, Mirrors: c.Tunnel.DownloadMirrors}
 	var cloudflared string
@@ -374,12 +361,31 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	voiceConfig := c.Config
 	voiceConfig.Voice, _ = voiceStore.Effective()
 	voiceService := voice.New(assemble.VoiceOptions(voiceConfig))
+	var bridge api.Bridge
+	p2pService := p2p.New(assemble.P2POptions(
+		c.Config,
+		version,
+		func(sctx context.Context, path string, conn p2p.StreamConn) {
+			if bridge.ServeStream != nil {
+				bridge.ServeStream(sctx, path, conn)
+			}
+		},
+		func(rctx context.Context, req p2p.RPCRequest) p2p.RPCResponse {
+			if bridge.ServeRPC != nil {
+				return bridge.ServeRPC(rctx, req)
+			}
+			return p2p.RPCResponse{Status: http.StatusServiceUnavailable, StatusText: http.StatusText(http.StatusServiceUnavailable)}
+		},
+	))
+	defer p2pService.Close()
+	p2pCtl := newP2PController(c.P2PSettings, p2pService)
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Artifacts: folders, Push: pushes, Launch: launches, Settings: preferences, Hybrid: hybrids,
 		Forward:       forwards,
 		Voice:         voiceService,
 		VoiceSettings: newVoiceController(voiceStore, voiceService, voiceConfig),
+		P2P:           p2pCtl,
 		DefaultShell:  agentprofile.DefaultShell(os.Getenv("SHELL")),
 		// The executable's identity is recorded now; later status and
 		// configuration requests compare against it.
@@ -390,11 +396,12 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	deps.Tailscale = tsCtl
+	bridge = api.NewBridge(deps)
 	// Remote-access systems report their links through one interface; a new
 	// forwarding system only needs to be appended here.
 	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels, tsCtl, []accessProvider{tunnels, tsCtl})
 	server := &http.Server{
-		Handler:           api.New(deps),
+		Handler:           bridge.HTTPHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -425,6 +432,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	<-resumed
 	tunnels.Close()
 	tsCtl.Close()
+	p2pService.Close()
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
 	pushes.Close() // Stop sending before sessions exit.

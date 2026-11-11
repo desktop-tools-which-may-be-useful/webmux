@@ -53,3 +53,12 @@ Storybook 设计系统标题允许换行，以适应不同系统字体和大号�
 | ---- | -------------------------------------------------------- | ------------------------------------------------------- |
 | 浅色 | ![修改前](images/binary-size/storybook-before-light.png) | ![修改后](images/binary-size/storybook-after-light.png) |
 | 深色 | ![修改前](images/binary-size/storybook-before-dark.png)  | ![修改后](images/binary-size/storybook-after-dark.png)  |
+
+## 可选模块裁剪（`-tags nop2p`）
+
+默认构建内嵌纯 Go WebRTC DataChannel 引擎（`pion/webrtc/v4`）与本地路由器端口映射（UPnP IGD / NAT-PMP / PCP，见 US-H12）。资源极度受限的嵌入式或容器构建可附加 `-tags nop2p` 裁剪 P2P 依赖（其他 HTTP/WebSocket 功能不变）：
+
+| 构建方式（Linux amd64，`CGO_ENABLED=0 -trimpath -ldflags "-s -w"`） |         体积 |               差异 |
+| ------------------------------------------------------------------- | -----------: | -----------------: |
+| 默认构建（含 WebRTC P2P 与网关端口映射）                            | 60,620,960 B |  基准（57.81 MiB） |
+| 裁剪构建（`-tags nop2p`）                                           | 55,607,456 B | -4.78 MiB（-8.3%） |

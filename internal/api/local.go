@@ -132,6 +132,10 @@ func NewLocal(d Deps, local Local) http.Handler {
 			failure(w, http.StatusForbidden, errors.New("processes inside a WebMux session cannot change Tailscale settings"))
 			return
 		}
+		if (r.URL.Path == "/api/p2p" || strings.HasPrefix(r.URL.Path, "/api/p2p/")) && local.fromSession(r) {
+			failure(w, http.StatusForbidden, errors.New("processes inside a WebMux session cannot control P2P"))
+			return
+		}
 		routes.ServeHTTP(w, r)
 	})
 }

@@ -12,6 +12,7 @@ const maxBufferedAmount = 1024 * 1024;
 const compressionKey = "wsCompression";
 // Every live connection, so a compression change can reattach them at once.
 const live = new Set<() => void>();
+const handoffs = new Set<() => void>();
 
 // Per-device permessage-deflate preference. Browsers always offer the
 // extension, so the server negotiates it only when the URL asks. Until the
@@ -28,6 +29,15 @@ export function wsCompression(): boolean {
 export function setWsCompression(enabled: boolean) {
   store(compressionKey, enabled ? "on" : "off");
   for (const reopen of live) reopen();
+}
+
+/**
+ * Seamlessly hands off all active managed connections onto `currentTransport()`
+ * using make-before-break: the candidate stream opens before the previous
+ * socket is closed, avoiding any disconnect state flicker or output gap.
+ */
+export function handoffLiveSockets() {
+  for (const handoff of handoffs) handoff();
 }
 
 // Opens an authenticated one-shot stream without reconnects (for example a
@@ -78,6 +88,7 @@ export function connect(
   options: ConnectOptions = {},
 ): SocketConnection {
   let socket: TransportSocket | undefined,
+    candidateSocket: TransportSocket | undefined,
     timer: number | undefined,
     stableTimer: number | undefined,
     controlTimer: number | undefined,
@@ -86,6 +97,16 @@ export function connect(
     disposed = false,
     finished: "exited" | "missing" | "moved" | undefined;
   const controls = new Map<number, Uint8Array>();
+  function clearCandidate() {
+    if (!candidateSocket) return;
+    const prev = candidateSocket;
+    candidateSocket = undefined;
+    prev.onopen = null;
+    prev.onmessage = null;
+    prev.onclose = null;
+    prev.onerror = null;
+    prev.close(1000, "cancel handoff");
+  }
   function clearControls() {
     clearTimeout(controlTimer);
     controlTimer = undefined;
@@ -112,29 +133,16 @@ export function connect(
     }
     if (controls.size) controlTimer = window.setTimeout(flushControls, 50);
   }
-  function open() {
-    if (disposed || finished) return;
-    clearTimeout(timer);
-    clearTimeout(stableTimer);
-    clearTimeout(resumeTimer);
-    resumeTimer = undefined;
-    clearControls();
-    const previous = socket;
-    socket = undefined;
-    previous?.close();
-    onState(attempt ? "reconnecting" : "connecting");
-    const target = typeof path === "string" ? path : path();
-    const next = currentTransport().openStream(target, {
-      token: stored("token"),
-      compress: wsCompression(),
-    });
-    socket = next;
+  function wireActiveSocket(next: TransportSocket, onReady: () => void) {
     let closed = false;
     next.onopen = () => {
-      if (socket !== next || closed) return;
+      if (closed) return;
+      onReady();
+      if (socket !== next) return;
       stableTimer = window.setTimeout(() => {
         if (socket === next) attempt = 0;
       }, 10000);
+      flushControls();
       onState("connected");
     };
     next.onmessage = (event) => {
@@ -149,6 +157,10 @@ export function connect(
       }
     };
     next.onclose = (event) => {
+      if (candidateSocket === next) {
+        candidateSocket = undefined;
+        return;
+      }
       if (socket !== next || disposed || closed) return;
       closed = true;
       clearTimeout(stableTimer);
@@ -171,6 +183,26 @@ export function connect(
       timer = window.setTimeout(open, delay);
     };
     next.onerror = () => next.close();
+  }
+  function open() {
+    if (disposed || finished) return;
+    clearTimeout(timer);
+    clearTimeout(stableTimer);
+    clearTimeout(resumeTimer);
+    resumeTimer = undefined;
+    clearControls();
+    clearCandidate();
+    const previous = socket;
+    socket = undefined;
+    previous?.close();
+    onState(attempt ? "reconnecting" : "connecting");
+    const target = typeof path === "string" ? path : path();
+    const next = currentTransport().openStream(target, {
+      token: stored("token"),
+      compress: wsCompression(),
+    });
+    socket = next;
+    wireActiveSocket(next, () => {});
   }
   const visible = () => {
     // A probe left by a foreground that was hidden again must not replace
@@ -221,11 +253,13 @@ export function connect(
     close() {
       disposed = true;
       live.delete(reopen);
+      handoffs.delete(handoff);
       clearTimeout(timer);
       clearTimeout(stableTimer);
       clearTimeout(resumeTimer);
       resumeTimer = undefined;
       clearControls();
+      clearCandidate();
       const previous = socket;
       socket = undefined;
       previous?.close();
@@ -258,7 +292,39 @@ export function connect(
   const reopen = () => {
     if (!disposed && !finished) open();
   };
+  const handoff = () => {
+    if (disposed || finished) return;
+    if (socket?.readyState !== SOCKET_OPEN) {
+      open();
+      return;
+    }
+    clearCandidate();
+    const target = typeof path === "string" ? path : path();
+    const next = currentTransport().openStream(target, {
+      token: stored("token"),
+      compress: wsCompression(),
+    });
+    candidateSocket = next;
+    wireActiveSocket(next, () => {
+      if (candidateSocket !== next || disposed || finished) return;
+      candidateSocket = undefined;
+      clearTimeout(timer);
+      clearTimeout(stableTimer);
+      clearTimeout(resumeTimer);
+      resumeTimer = undefined;
+      const previous = socket;
+      socket = next;
+      if (previous) {
+        previous.onopen = null;
+        previous.onmessage = null;
+        previous.onclose = null;
+        previous.onerror = null;
+        previous.close(1000, "transport handoff");
+      }
+    });
+  };
   live.add(reopen);
+  handoffs.add(handoff);
   open();
   return api;
 }

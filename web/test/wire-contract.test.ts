@@ -181,6 +181,8 @@ const groups: Array<[z.ZodType, string[]]> = [
     S.VoiceSettingsSchema,
     ["voice-settings-get", "voice-settings-put", "voice-settings-reset"],
   ],
+  [S.P2PStatusSchema, ["p2p-get", "p2p-settings-put", "p2p-settings-reset"]],
+  [S.P2PSignalResponseSchema, ["p2p-signal-offer"]],
   [
     S.WorktreeSchema,
     [

@@ -20,6 +20,8 @@ import {
   formatTerminalSocketPath,
   newSubmissionId,
   preparePaste,
+  resolveAppendOverlap,
+  trimOverlapChunk,
 } from "../terminal-protocol";
 import {
   connect,
@@ -59,10 +61,7 @@ export interface TerminalSocketAttachment {
   dispose(): void;
 }
 
-// The terminal stream of one session (`/ws/s/{id}`, frames in
-// docs/protocol/websocket.md, mirrored by internal/hub): output continuity and replay,
-// session info, exit, control, submissions and replay-aware parser handlers.
-// State outlives the mounted terminal; `attach` binds one xterm instance.
+// Terminal stream of one session (`/ws/s/{id}`, docs/protocol/websocket.md).
 export function createTerminalSocket(id: string, manageChrome = true) {
   let info = $state<SessionInfo>();
   let connection = $state<Connection>("connecting");
@@ -158,13 +157,8 @@ export function createTerminalSocket(id: string, manageChrome = true) {
       if (controlling() && view.isVisible() && term.cols > 0 && term.rows > 0)
         ws.send(1, encodeTerminalSize(term.cols, term.rows));
     };
-    // DEC mode 2031 reports: CSI ? 997 ; 1 n is dark, 2 is light. Programs
-    // answer them by re-querying colors (OSC 10/11), which xterm answers
-    // from the theme. Sent as device replies, so only the responsible
-    // connection's report reaches the PTY.
+    // DEC mode 2031 reports: CSI ? 997 ; 1 n is dark, 2 is light.
     const root = document.documentElement;
-    // Read the class directly: the renderer's theme observer runs later, and
-    // a control frame may arrive in between.
     let reportedDark: boolean | undefined;
     const reportScheme = () => {
       reportedDark = root.classList.contains("dark");
@@ -172,7 +166,7 @@ export function createTerminalSocket(id: string, manageChrome = true) {
     };
     let resetPosition: StreamPosition | undefined;
     let appending = false;
-    // Whether this connection has seen the program enable scheme reports.
+    let skipOverlap = 0;
     let schemeReports = false;
     const ws = connect(
       () =>
@@ -186,19 +180,20 @@ export function createTerminalSocket(id: string, manageChrome = true) {
         ),
       (data) => {
         if (typeof data === "string") return;
-        // A DEFLATE frame wraps one whole server frame, type byte included.
         let frame = new Uint8Array(data);
         if (frame[0] === 7) frame = inflateSync(frame.subarray(1));
-        const payload = frame.subarray(1);
+        let payload = frame.subarray(1);
         if (frame[0] === 0) {
+          const trimmed = trimOverlapChunk(payload, skipOverlap);
+          skipOverlap = trimmed.remainingSkip;
+          if (!trimmed.slice) return;
+          payload = trimmed.slice;
           const viewportY =
             appending && view.preserveViewport()
               ? term.buffer.active.viewportY
               : undefined;
           // Output missed while hidden leaves a gap: stop writing, keep
           // the offset, and let the foreground reconnect fill it in.
-          // Bytes xterm cannot keep up with are dropped the same way; the
-          // offset counts only bytes handed to xterm, so either resumes.
           if (document.hidden || stale) stale = true;
           else if (output.write(payload)) {
             offset += payload.length;
@@ -224,21 +219,26 @@ export function createTerminalSocket(id: string, manageChrome = true) {
           historyTruncated = position.truncated;
           resetPosition = undefined;
           appending = false;
+          skipOverlap = 0;
           if (position.mode === "reset") resetPosition = position;
-          else if (
-            synced &&
-            position.generation === generation &&
-            position.start === offset
-          ) {
-            // The bytes that follow are exactly the missing tail.
-            output.replay();
-            stale = false;
-            restoring = false;
-            appending = position.end > position.start;
-            if (!appending && !view.preserveViewport()) view.scrollToBottom();
-          } else {
-            synced = false;
-            ws.send(2, new Uint8Array());
+          else {
+            const decision = resolveAppendOverlap(
+              synced,
+              generation,
+              offset,
+              position,
+            );
+            if (decision.accept) {
+              skipOverlap = decision.skipBytes;
+              output.replay();
+              stale = false;
+              restoring = false;
+              appending = decision.hasTail;
+              if (!appending && !view.preserveViewport()) view.scrollToBottom();
+            } else {
+              synced = false;
+              ws.send(2, new Uint8Array());
+            }
           }
         } else if (frame[0] === 1) {
           const position = resetPosition;

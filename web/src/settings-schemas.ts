@@ -137,6 +137,8 @@ export const ConfigSchema = z.object({
   portDetection: z.boolean(),
   // Whether external speech recognition is configured on the server.
   voice: z.boolean().default(false),
+  // Whether opportunistic P2P direct upgrade is enabled on the server.
+  p2p: z.boolean().default(false),
 });
 
 export const VoiceClientMessageSchema = z.object({

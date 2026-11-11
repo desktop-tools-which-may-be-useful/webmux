@@ -220,6 +220,11 @@ function adaptWebSocket(socket: WebSocket): TransportSocket {
 const defaultTransport = createHttpTransport();
 let activeTransport: ClientTransport = defaultTransport;
 
+/** Returns the default browser HTTP + WebSocket transport. */
+export function defaultBrowserTransport(): ClientTransport {
+  return defaultTransport;
+}
+
 /** Returns the active client transport. */
 export function currentTransport(): ClientTransport {
   return activeTransport;

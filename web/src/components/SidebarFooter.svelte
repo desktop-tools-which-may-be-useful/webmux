@@ -13,6 +13,7 @@
     hostStrain,
     SLOW_LATENCY_MS,
   } from "../host-health";
+  import { p2pState } from "../p2p.svelte";
   import { HealthSchema, type Health } from "../schemas";
   import { toggleTheme } from "../theme";
   import type { Connection } from "../ws";
@@ -48,8 +49,13 @@
   let latency = $state<number | null>(null);
   let measuring = $state(false);
   let health = $state<Health | null>(null);
+  const effectiveLatency = $derived(
+    p2pState.mode === "p2p" && p2pState.p2pRttMs !== null
+      ? p2pState.p2pRttMs
+      : latency,
+  );
   const strain = $derived(
-    connection === "connected" ? hostStrain(latency, health) : "",
+    connection === "connected" ? hostStrain(effectiveLatency, health) : "",
   );
   const statusLabel = $derived(
     connection === "connected"
@@ -164,13 +170,19 @@
         >
           {connectionLabel}
         </dd>
+        <dt class="text-muted-foreground">传输路径</dt>
+        <dd class={p2pState.mode === "p2p" ? "text-success" : ""}>
+          {#if p2pState.mode === "p2p"}P2P 直连{p2pState.candidateType
+              ? `（${p2pState.candidateType}${p2pState.ipFamily ? `/${p2pState.ipFamily}` : ""}）`
+              : ""}{:else}WebSocket{/if}
+        </dd>
         <dt class="text-muted-foreground">网络延时</dt>
         <dd
-          class={latency !== null && latency > SLOW_LATENCY_MS
+          class={effectiveLatency !== null && effectiveLatency > SLOW_LATENCY_MS
             ? "text-warning"
             : ""}
         >
-          {#if connection !== "connected"}不可用{:else if measuring}测量中…{:else if latency !== null}{latency}
+          {#if connection !== "connected"}不可用{:else if measuring && effectiveLatency === null}测量中…{:else if effectiveLatency !== null}{effectiveLatency}
             ms{:else}不可用{/if}
         </dd>
         {#if health?.load}

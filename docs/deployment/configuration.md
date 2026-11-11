@@ -151,6 +151,32 @@ env = ["DASHSCOPE_API_KEY=sk-xxx"]
 | `voice.cmd` | `[]`   | 识别程序的完整参数数组（argv），直接执行、不经 shell 展开；为空时禁用语音识别    |
 | `voice.env` | `[]`   | 附加到子进程环境的 `KEY=VALUE` 列表；只保存在服务端，从不通过 `/api/config` 返回 |
 
+### 机会性 P2P 直连（`[p2p]`）
+
+经 Cloudflare Tunnel、Tailscale DERP 或反向代理等高延迟中转入口访问时，浏览器先保持现有 WebSocket 打开会话，后台自动协商 WebRTC DataChannel 直连（DTLS 1.2+），满足滞回阈值后无感升级全部实时流与 `/api/*` 请求（含分块文件上传）：
+
+- 本机回环、内网、Tailscale MagicDNS 或基线 RTT `< 15 ms` 自动跳过协商；
+- 显式拒绝 `relay`（TURN）候选，不部署中继服务器，保持零中继成本；
+- 设置页“网络”分区可在线开关直连升级、路由器端口映射（UPnP IGD / NAT-PMP / PCP）与自定义 STUN 列表，保存在状态目录的 `p2p-settings.json` 并立即生效，“恢复配置文件默认”删除网页覆盖。
+
+```toml
+[p2p]
+enabled = true
+port_mapping = true
+stun_servers = [
+  "stun:stun.miwifi.com:3478",
+  "stun:stun.chat.bilibili.com:3478",
+  "stun:stun.cloudflare.com:3478",
+  "stun:stun.l.google.com:19302",
+]
+```
+
+| 键                 | 默认值                                         | 作用                                                          |
+| ------------------ | ---------------------------------------------- | ------------------------------------------------------------- |
+| `p2p.enabled`      | `true`                                         | 是否允许浏览器协商 WebRTC DataChannel 直连升级                |
+| `p2p.port_mapping` | `true`                                         | 自动向本地网关申请 UPnP IGD / NAT-PMP / PCP 外部 UDP 端口映射 |
+| `p2p.stun_servers` | 小米、Bilibili、Cloudflare 与 Google 公共 STUN | 仅允许 `stun:` 或 `stuns:` URI，拒绝 `turn:` / `turns:`       |
+
 #### `STDIN / STDOUT` 外部识别协议
 
 使用者可用任意语言或脚本对接自己的云端/本地 ASR 服务，只要可执行文件满足以下标准流协议：

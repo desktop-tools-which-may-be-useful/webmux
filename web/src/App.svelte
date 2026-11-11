@@ -20,6 +20,7 @@
 <script lang="ts">
   import Brand from "./components/Brand.svelte";
   import { startSettings, stopSettings } from "./settings.svelte";
+  import { markFirstScreenReady, startP2P, stopP2P } from "./p2p.svelte";
   import { errorMessage } from "./error";
   import { onMount, tick } from "svelte";
   import { api, consumeTokenFragment, navigate, store, stored } from "./api";
@@ -131,7 +132,9 @@
     try {
       await api("/health", HealthSchema);
       ready = true;
+      markFirstScreenReady();
       startSettings();
+      if (route.name !== "forward-auth") startP2P();
       error = "";
       // Re-registers an existing push subscription, e.g. after the server
       // rebuilt its store; without one it touches nothing.
@@ -169,6 +172,7 @@
       void tick().then(focusMain);
     };
     const auth = () => {
+      stopP2P();
       stopSettings();
       drafts.clearAll();
       clearHomeCache();
@@ -215,6 +219,7 @@
     void check();
     return () => {
       disconnectPins();
+      stopP2P();
       stopSettings();
       routes.disconnect();
       drafts.clearAll();

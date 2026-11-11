@@ -35,7 +35,7 @@
 | E    | 剪贴板与文件上传                       | US-E01–US-E07 |
 | F    | 草稿编写、保存与发送确认               | US-F01–US-F09 |
 | G    | 快捷指令与语音输入                     | US-G01–US-G07 |
-| H    | 手机、平板与触摸操作、慢速网络         | US-H01–US-H11 |
+| H    | 手机、平板与触摸操作、慢速网络         | US-H01–US-H12 |
 | I    | 代码工作区、Diff、引用与文件操作       | US-I01–US-I19 |
 | J    | 仓库登记与 worktree 管理               | US-J01–US-J18 |
 | K    | 配置、运行与服务管理                   | US-K01–US-K17 |
@@ -63,7 +63,7 @@
 | [配置、运行与贡献者工具](user-stories/operations-and-tooling.md)                  | K–L                |
 | [原生客户端、隧道与托盘](user-stories/clients-network-tray.md)                    | M–P                |
 | [终端分屏用户故事](user-stories/terminal-splits.md)                               | D13–D14            |
-| [网络压缩用户故事](user-stories/terminal-network.md)                              | H10–H11            |
+| [网络压缩与 P2P 直连用户故事](user-stories/terminal-network.md)                   | H10–H12            |
 | [语音输入用户故事](user-stories/terminal-voice.md)                                | G07                |
 | [混合会话](user-stories/hybrid-sessions.md)                                       | Q                  |
 | [端口转发预览](user-stories/port-forwarding.md)                                   | R                  |

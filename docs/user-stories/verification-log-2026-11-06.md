@@ -238,3 +238,10 @@
   - `make persistence-check`、`make docs-check` 与 `git diff --check` 通过；
   - 使用真实 Kimi 2.5.2 和隔离 WebMux 实例，经 API 创建 ACP 会话、启动后台任务并切到 TUI，确认绑定改为 `local` 且真实 Bash 工具调用成功输出标记。
 - 限制：真实端到端覆盖聊天切终端，未单独点击归档恢复；未运行完整 Storybook、全量 E2E 与性能套件，未重新核验其余故事能力。
+
+本次局部核对（2026-11-11）：默认 STUN 列表增加小米与 Bilibili，保留 Cloudflare 与 Google，对应更新 US-H12，不新增故事或改变覆盖索引。
+
+- 范围：同步配置示例、部署说明与 P2P 变更规格；已保存的 TOML 或网页自定义列表不变。
+- 依据：`go test -race ./internal/config ./internal/p2psettings ./cmd/webmux -run 'TestP2P|Test.*Store|TestConfiguredViewCorruptP2P'` 通过；`go test ./internal/api -run TestWireSnapshotsP2P -update` 通过并更新 P2P 默认列表快照。
+- 网络探测：当前环境通过 IPv4 UDP 向四个节点各发送 3 次 STUN Binding 请求，Google 与 Bilibili 均成功 3 次，小米与 Cloudflare 均成功 2 次、超时 1 次；成功响应包含映射地址。
+- 限制：探测结果仅代表当前出站网络，不保证各地运营商可达性；未重新核验全部 P2P 行为或其他故事。

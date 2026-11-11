@@ -75,6 +75,9 @@ type Deps struct {
 	// VoiceSettings reads and replaces the recognizer from the settings
 	// page; nil answers 503.
 	VoiceSettings VoiceControl
+	// P2P manages opportunistic WebRTC P2P direct upgrades and its settings;
+	// nil answers 503 on /api/p2p* (except /api/p2p/ping).
+	P2P P2PControl
 	// InstalledVersion returns the installed version awaiting a restart,
 	// or ""; nil never reports one.
 	InstalledVersion func() string
@@ -100,23 +103,7 @@ type Server struct {
 
 // New builds the TCP handler. Local-only endpoints are not found here.
 func New(d Deps) http.Handler {
-	s := newServer(d)
-	mux := s.routes()
-	return s.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/local/") {
-			http.NotFound(w, r)
-			return
-		}
-		// The gateway serves only browsers on the TCP listener.
-		if r.URL.Path == "/forward" || strings.HasPrefix(r.URL.Path, "/forward/") {
-			s.gateway(w, r)
-			return
-		}
-		if r.URL.Path == "/forward-auth" && r.Method == http.MethodGet && forwardAuthPage(w, r) {
-			return
-		}
-		mux.ServeHTTP(w, r)
-	}))
+	return NewBridge(d).HTTPHandler
 }
 
 func newServer(d Deps) *Server {
@@ -142,7 +129,8 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
 		voiceEnabled := s.Voice != nil && s.Voice.Enabled()
-		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported, Voice: voiceEnabled})
+		p2pEnabled := s.P2P != nil && s.P2P.Enabled()
+		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, DefaultShell: s.DefaultShell, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo(), PendingUpdate: s.pendingUpdate(), PortDetection: session.ListeningPortsSupported, Voice: voiceEnabled, P2P: p2pEnabled})
 	})
 	s.sessionRoutes(mux)
 	serveIn(mux, "PATCH /api/sessions/{id}", http.StatusOK, renameFailure, s.rename)
@@ -163,6 +151,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.forwardRoutes(mux)
 	s.tailscaleRoutes(mux)
 	s.voiceRoutes(mux)
+	s.p2pRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })

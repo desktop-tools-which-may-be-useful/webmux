@@ -67,6 +67,8 @@ flowchart LR
 | `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测                  |
 | `internal/tailscalesettings`                  | Tailscale 网页设置持久化、独立文件锁、校验与故障关闭                                                       |
 | `internal/voicesettings`                      | 语音识别网页设置持久化、独立文件锁、校验与故障关闭                                                         |
+| `internal/p2p`                                | WebRTC DataChannel 直连引擎（单端口 UDP 复用、UPnP/NAT-PMP/PCP 端口映射、流分片与 RPC 承载、`nop2p` 裁剪） |
+| `internal/p2psettings`                        | P2P 直连网页设置持久化（`p2p-settings.json`）、独立文件锁、校验与故障关闭                                  |
 | `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                                         |
 | `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测；根内文件操作与目录 ZIP                                     |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                                    |

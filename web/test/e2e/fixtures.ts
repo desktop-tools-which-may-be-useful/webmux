@@ -90,6 +90,11 @@ async function cleanLaunchConfigs(request: APIRequestContext) {
   }
 }
 
+async function cleanP2PSettings(request: APIRequestContext) {
+  const response = await request.delete("/api/p2p/settings");
+  expect([200, 501]).toContain(response.status());
+}
+
 export const test = base.extend<
   { workDir: string; _isolation: void },
   { server: E2EServer }
@@ -123,6 +128,7 @@ export const test = base.extend<
       await cleanHybridRecords(request);
       await cleanRepositories(request);
       await cleanLaunchConfigs(request);
+      await cleanP2PSettings(request);
       const prefs = await (await request.get("/api/settings")).json();
       expect(
         (
@@ -203,6 +209,7 @@ export const test = base.extend<
           await cleanHybridRecords(request);
           await cleanRepositories(request);
           await cleanLaunchConfigs(request);
+          await cleanP2PSettings(request);
           const prefs = await (await request.get("/api/settings")).json();
           expect(
             (

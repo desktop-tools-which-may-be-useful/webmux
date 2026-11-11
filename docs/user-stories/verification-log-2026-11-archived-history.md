@@ -182,3 +182,19 @@
 - 交互证据：隔离实例运行 fake agent，聊天侧栏直接恢复终端模式并保留对话，录制实际操作；未使用开发者的现有服务。
 - 文档治理：原混合故事文件已超过体积上限，把 US-Q18 原文迁至 `hybrid-sessions/quick-start.md`，原入口保留链接及共用实现依据，故事 ID 与计数不变。
 - 限制：未验证真实移动设备、悬停显示或真机触屏常驻行为；未重新核对其他故事。
+
+本次局部核对（2026-11-11）：新增机会性 WebRTC DataChannel P2P 直连升级、本地路由器端口映射与设置页双路径回显测速，新增 US-H12 并更新 US-A04、US-K03、US-M08、US-L10 与覆盖索引。
+
+- 范围：
+  - `internal/config` 与 `internal/p2psettings` 新增 `[p2p]` 配置段（默认启用直连升级、自动端口映射与 Cloudflare/Google 公共 STUN）及 `<state_dir>/p2p-settings.json` 持久化覆盖，接入配置诊断视图与持久化清单；
+  - `internal/p2p` 基于 `pion/webrtc/v4` 实现双栈单端口 ICE UDP 复用、UPnP IGD / NAT-PMP / PCP 网关端口映射、32 KiB 流分片与背压控制及 `/api/*` 与文件上传 RPC 承载：
+    - 支持 `-tags nop2p` 裁剪构建（Linux amd64 `CGO_ENABLED=0 -trimpath -ldflags "-s -w"` 默认 `60,620,960 B`，`-tags nop2p` 为 `55,607,456 B`，体积差 `4.78 MiB`）；
+  - `internal/api`、`internal/hub` 与 `cmd/webmux` 接入 `/api/p2p*` 路由、终端与实时流桥接、本机状态摘要及会话内进程 403 边界；
+  - `web/src/p2p*.ts`、`ws.ts` 与 `terminal-socket.svelte.ts` 实现本机/低延迟自动跳过、候选类型校验（拒绝 `relay`）、滞回切换、终端流先建后拆 `append` 重叠裁剪续接及断连无感回落；
+  - `P2PSettings.svelte`、`NetworkSettings.svelte` 与 `SidebarFooter.svelte` 新增设置页网络分区控制面板、一键双路径回显测速与侧栏主机状态传输路径显示。
+- 依据：
+  - `openspec validate "add-p2p-direct-upgrade" --strict`、`make check`、`go test -race ./...`、`go test -tags nop2p ./internal/p2p ./cmd/webmux` 通过；
+  - 前端单元与浏览器组件测试（`p2p.test.ts`、`p2p-handoff.test.ts`、`P2PSettings.test.ts`、`TerminalReplay.test.ts`、`SettingsNavigation.test.ts`）通过；
+  - 隔离实例 Playwright E2E（`p2p.spec.ts`，桌面与手机视口）覆盖本机自动跳过、真实 Chromium ↔ Pion WebRTC 直连升级、终端流与无 HTTP XHR 的分块文件上传、双路径回显测速及在线关闭无损回退，桌面（1280×900）、平板（768×800）与手机（390×844）无页面横向溢出。
+- 限制：
+  - 仅在 Linux 本地隔离实例与无头 Chromium 中核验；无头浏览器未验证 `hover` 与 `any-pointer: coarse` 媒体查询，未在 macOS、iOS/Android 真机或跨运营商对称 NAT / 移动蜂窝公网链路上实测打洞成功率。

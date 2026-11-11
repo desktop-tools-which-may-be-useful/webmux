@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/p2psettings"
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
@@ -32,6 +33,9 @@ type serverRun struct {
 	// TailscaleSettings holds the web override of [tailscale].
 	TailscaleSettings   *tailscalesettings.Service
 	TailscaleWebManaged bool
+	// P2PSettings holds the web override of [p2p].
+	P2PSettings   *p2psettings.Service
+	P2PWebManaged bool
 }
 
 // flagParseError marks a flag error already reported by the flag set, so a
@@ -114,6 +118,7 @@ func parseServerRun(name string, args []string, stderr io.Writer) (serverRun, er
 	closeSettings := func() {
 		run.TunnelSettings.Close()
 		run.TailscaleSettings.Close()
+		run.P2PSettings.Close()
 	}
 	if err = c.Validate(); err != nil {
 		run.TunnelSettings.Close()
@@ -121,6 +126,8 @@ func parseServerRun(name string, args []string, stderr io.Writer) (serverRun, er
 	}
 	run.TailscaleSettings = tailscalesettings.Open(c.StateDir, c.Tailscale)
 	c.Tailscale, run.TailscaleWebManaged = run.TailscaleSettings.Effective()
+	run.P2PSettings = p2psettings.Open(c.StateDir, c.P2P)
+	c.P2P, run.P2PWebManaged = run.P2PSettings.Effective()
 	if c.Tailscale.Provider == "windows" && !wsl.Detected() {
 		closeSettings()
 		return run, errors.New(`tailscale.provider "windows" is only valid inside WSL; use "linux" or "auto"`)
