@@ -32,6 +32,7 @@
   import type { z } from "zod";
   let {
     repository,
+    deferred = false,
     path = $bindable(""),
     mode = $bindable<"new" | "existing">("new"),
     branch = $bindable(""),
@@ -42,6 +43,8 @@
     preset,
   }: {
     repository: Repository;
+    /** Handoff reserves a fresh branch and assigns its directory on send. */
+    deferred?: boolean;
     path: string;
     mode: "new" | "existing";
     branch: string;
@@ -374,31 +377,33 @@
 {/snippet}
 
 <div class="space-y-3 rounded-lg border p-3">
-  <SegmentedControl.Root
-    value={mode}
-    onValueChange={(next) => {
-      if (next === "new" && mode !== "new") {
-        mode = "new";
-        setBranchPickerOpen(false);
-        setStartBranchPickerOpen(false);
-        branchEdited = false;
-        branch = "";
-        fillSuggestedBranch();
-        chooseStartBranch(startBranch);
-      } else if (next === "existing" && mode !== "existing") {
-        mode = "existing";
-        setStartBranchPickerOpen(false);
-        clearRefresh();
-        clearCommits();
-        baseSource = "";
-        branch = "";
-      }
-    }}
-    aria-label="工作树分支"
-  >
-    <SegmentedControl.Item value="new">创建新分支</SegmentedControl.Item>
-    <SegmentedControl.Item value="existing">使用已有分支</SegmentedControl.Item>
-  </SegmentedControl.Root>
+  {#if !deferred}<SegmentedControl.Root
+      value={mode}
+      onValueChange={(next) => {
+        if (next === "new" && mode !== "new") {
+          mode = "new";
+          setBranchPickerOpen(false);
+          setStartBranchPickerOpen(false);
+          branchEdited = false;
+          branch = "";
+          fillSuggestedBranch();
+          chooseStartBranch(startBranch);
+        } else if (next === "existing" && mode !== "existing") {
+          mode = "existing";
+          setStartBranchPickerOpen(false);
+          clearRefresh();
+          clearCommits();
+          baseSource = "";
+          branch = "";
+        }
+      }}
+      aria-label="工作树分支"
+    >
+      <SegmentedControl.Item value="new">创建新分支</SegmentedControl.Item>
+      <SegmentedControl.Item value="existing"
+        >使用已有分支</SegmentedControl.Item
+      >
+    </SegmentedControl.Root>{/if}
   {#if loading}<p role="status" class="text-sm">正在读取本地分支…</p>{/if}
   {#if error}<p role="alert" class="break-all text-sm text-destructive">
       {error}
@@ -571,8 +576,15 @@
       尚无可用提交。请先在终端创建提交；仍可在主工作区启动会话。
     </p>{/if}
   <AdvancedSection
-    title={mode === "new" ? "高级：起始提交与存放目录" : "高级：存放目录"}
-    summary={[mode === "new" ? selectedCommit?.shortHash : "", path]
+    title={deferred
+      ? "高级：起始提交"
+      : mode === "new"
+        ? "高级：起始提交与存放目录"
+        : "高级：存放目录"}
+    summary={[
+      mode === "new" ? selectedCommit?.shortHash : "",
+      deferred ? "" : path,
+    ]
       .filter(Boolean)
       .join(" · ")}
   >
@@ -626,24 +638,26 @@
           </p>{/if}
       </div>
     {/if}
-    <div class="space-y-2">
-      <Label for="worktree-path">新工作树完整路径</Label>
-      <Input
-        id="worktree-path"
-        bind:value={path}
-        oninput={() => {
-          pathEdited = true;
-        }}
-        mono
-        required
-        autocomplete="off"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck={false}
-      />
-      <p class="text-xs text-muted-foreground">
-        目录名默认取分支最后一段，不会覆盖已有目录。
-      </p>
-    </div>
+    {#if !deferred}
+      <div class="space-y-2">
+        <Label for="worktree-path">新工作树完整路径</Label>
+        <Input
+          id="worktree-path"
+          bind:value={path}
+          oninput={() => {
+            pathEdited = true;
+          }}
+          mono
+          required
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck={false}
+        />
+        <p class="text-xs text-muted-foreground">
+          目录名默认取分支最后一段，不会覆盖已有目录。
+        </p>
+      </div>
+    {/if}
   </AdvancedSection>
 </div>
