@@ -246,6 +246,12 @@
 - 网络探测：当前环境通过 IPv4 UDP 向四个节点各发送 3 次 STUN Binding 请求，Google 与 Bilibili 均成功 3 次，小米与 Cloudflare 均成功 2 次、超时 1 次；成功响应包含映射地址。
 - 限制：探测结果仅代表当前出站网络，不保证各地运营商可达性；未重新核验全部 P2P 行为或其他故事。
 
+本次局部核对（2026-11-11）：修复正式版与 dev 发版安装 NSIS 时依赖 runner 默认 Ubuntu 镜像列表的问题，对应更新 US-L04，不新增故事或改变覆盖索引。
+
+- 范围：两条发版流程共用 `.github/scripts/install-nsis.sh`，只为该次安装使用独立的 kernel.org HTTPS 源与临时索引目录，仍以 Ubuntu 归档密钥验证签名，索引失败停止安装。
+- 依据：Ubuntu 26.04 干净容器内真实安装 NSIS 3.10 并编译 Windows 安装程序成功，验证全局 `ubuntu.sources` 摘要不变；`bash -n`、受影响文件 Oxfmt、文档治理及 `TestAgents` 检查通过。
+- 限制：本地容器通过宿主代理与显式 CA 包配置联网；不能代替 GitHub runner 的实际发版验收，未重新核验其他故事。
+
 ## 2026-11-11：Handoff 02 完整 Activity 与 replay 对账（US-Q05、US-Q12）
 
 - 范围：UI 截断前的规范化消息、命令输入/退出码/输出、文件修改、计划、压缩、权限结果、错误、回合与切换；附件只存元数据和来源引用。
