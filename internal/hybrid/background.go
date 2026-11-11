@@ -124,6 +124,8 @@ func (a *actor) backgroundDone(link *acpLink) {
 	}
 	prompt := a.cmd.Profile.BackgroundStatusPrompt
 	if prompt == "" {
+		a.chat.Turn.Unfinished = false
+		a.dirty = true
 		a.scheduleOrLatchDone(a.chat.Turn.StartedAt, time.Now().UTC())
 		return
 	}

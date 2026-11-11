@@ -175,7 +175,7 @@ agent 提供的配置项 SHALL 在桌面输入框下方显示，在手机收进�
 | --------------------------------------------- | ------------ |
 | 有待答复的权限请求                            | `permission` |
 | 有待答复的表单请求                            | `question`   |
-| 回合以 `end_turn` 结束且无未完成后台工作     | `done`       |
+| 回合以 `end_turn` 结束且无未完成后台工作      | `done`       |
 | 回合以 `refusal`、错误或 `auth_required` 结束 | `error`      |
 
 用户发送消息或答复请求时，系统 SHALL 清除关注。会话状态 SHALL 相应地取 `running`（回合进行中）、`waiting`（存在关注）或 `idle`。
@@ -203,7 +203,7 @@ agent 提供的配置项 SHALL 在桌面输入框下方显示，在手机收进�
 #### Scenario: Kimi 的后台启动调用已经完成
 
 - **WHEN** Kimi 的 Bash 工具输入包含 `run_in_background: true`，启动调用已标为 `completed`，回合以 `end_turn` 返回且后台进程仍在运行
-- **THEN** 回合仍显示有任务未完成，不产生 `done` 关注；后台进程退出且连续两次静默轮询后，直接按提醒策略产生 `done`，不自动发起状态检查回合
+- **THEN** 回合仍显示有任务未完成，不产生 `done` 关注；后台进程退出且连续两次静默轮询后，清除 `turn.unfinished` 并直接按提醒策略产生 `done`，不自动发起状态检查回合
 
 ### Requirement: 聊天端的推送与卡片预览
 

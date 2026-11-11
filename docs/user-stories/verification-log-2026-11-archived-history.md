@@ -159,3 +159,16 @@
   - 合并后在本地重跑 `make check` 与 `go test -race ./...` 通过。
 - 限制：
   - 本次为纯工程守卫与内部模块拆分，不改变用户可见行为；未重新运行完整 Playwright E2E 与性能测试套件。
+
+本次局部核对（2026-11-11，v0.14.5 发布前）：在 Linux/WSL2 本机以隔离 WebMux 实例运行真实 Kimi 2.5.2 与 agy 1.5.4，覆盖 #497、#499、#503，涉及 US-Q04、US-Q05、US-Q12 与 US-L15。
+
+- Kimi：ACP 启动后台 Bash 后切到 TUI，当前会话绑定变为 `local`，原有其他事件保持不变且首次备份存在；TUI 真实执行 Bash 并生成、读取 `KIMI_TUI_REAL_OK`。
+- 归档恢复：关闭会话、重启隔离服务后恢复到终端，再切回聊天，WebMux 与 Kimi 会话 ID 均保持不变，首次绑定备份未被覆盖。
+- agy：真实后台命令退出后自动补发一次状态检查，旧工具更新为 `completed`，输出文件内容正确，清除 `unfinished` 并产生 `done`；没有用户补发消息，也没有重复刷新回合。
+- 发现并修复：Kimi 后台退出只产生 `done`，未清除 `turn.unfinished`。直接完成路径现在同步清除此标记并发布状态；在已有 Kimi 后台测试中补充回归断言。
+- 修复后真实复验：Kimi 与 agy 均先出现 `unfinished`，实际输出文件分别为 `KIMI_FIXED_OK` 与 `AGY_FIXED_OK`，最终页面显示“已完成”；Kimi 只有用户回合，agy 只有用户回合与一次自动检查。
+- 依据：
+  - `make build VERSION=0.14.5`、`go test ./internal/archtest -run TestSourceFileSize`、`pnpm --dir web check:arch` 通过；
+  - Go race 定向覆盖后台启动、进行中的工具、无新进程与新回合/切换取消观察四条路径，通过；
+  - Chromium 查看本地真实实例；Kimi 完成状态覆盖桌面、平板、手机视口，手机 390×844 无页面横向溢出。
+- 限制：仅验证当前 Linux/WSL2 与已安装 agent 版本；未验证 macOS、真实移动设备、外部推送投递或脱离受管进程树的 daemon。

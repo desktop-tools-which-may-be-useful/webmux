@@ -227,6 +227,9 @@ func TestTurnWithStartedBackgroundCommandIsDoneOnlyAfterItEnds(t *testing.T) {
 		a := s.Info().Attention
 		return a != nil && a.Kind == attentionkind.Done
 	})
+	if h.chatState(id).Turn.Unfinished {
+		t.Fatal("completed background command must clear the unfinished turn state")
+	}
 	if got := h.replayedUsers(id); !slices.Equal(got, []string{"hi /background-started"}) {
 		t.Fatalf("Kimi must not start an agy-specific refresh: %q", got)
 	}
