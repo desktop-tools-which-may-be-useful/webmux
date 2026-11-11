@@ -553,6 +553,11 @@ func (a *actor) runToTUI(op *switchOp, link *acpLink, turnDone chan struct{}, si
 	if !a.sync(func() { a.setPhase(PhaseStarting); a.processGone(gone) }) {
 		return
 	}
+	if err := a.prepareTUIResume(sid); err != nil {
+		a.svc.log.Warn("hybrid terminal resume preparation failed", "id", a.id, "error", err)
+		a.rollbackToACP(op, sid, failure{err: fmt.Errorf("%w: 准备终端会话失败", ErrAgent), public: "准备终端会话失败"})
+		return
+	}
 	argv, dropped := a.cmd.ResumeArgv(sid)
 	if err := a.shell.StartRun(argv); err != nil {
 		a.svc.log.Warn("hybrid terminal start failed", "id", a.id, "error", err)
@@ -609,8 +614,11 @@ func (a *actor) rollbackToTUI(op *switchOp, sid string, cause failure) {
 	if !a.sync(func() { a.setPhase(PhaseRollingBack) }) {
 		return
 	}
-	argv, _ := a.cmd.ResumeArgv(sid)
-	err := a.shell.StartRun(argv)
+	err := a.prepareTUIResume(sid)
+	if err == nil {
+		argv, _ := a.cmd.ResumeArgv(sid)
+		err = a.shell.StartRun(argv)
+	}
 	a.sync(func() {
 		a.side = SideTUI
 		if err != nil {
