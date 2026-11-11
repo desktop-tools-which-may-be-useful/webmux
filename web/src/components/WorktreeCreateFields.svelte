@@ -513,7 +513,7 @@
             type="button"
             variant="outline"
             size="sm"
-            disabled={!data || loading}
+            disabled={disabled || !data || loading}
             onclick={() => {
               branch = suggestedBranch(branch || undefined);
             }}>换一个</Button
@@ -521,6 +521,7 @@
         </div>
         <Input
           id="worktree-branch"
+          disabled={disabled || loading || !data}
           bind:value={branch}
           oninput={() => {
             branchEdited = true;
