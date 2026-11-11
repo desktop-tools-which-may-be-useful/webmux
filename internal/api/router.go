@@ -391,10 +391,10 @@ func (s *Server) mkdir(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
-// accept upgrades a WebSocket. Browsers always offer permessage-deflate and
-// scripts cannot withdraw the offer, so the client opts in with compress=1;
-// otherwise the extension is not negotiated.
-func (s *Server) accept(w http.ResponseWriter, r *http.Request) *websocket.Conn {
+// accept upgrades a WebSocket and adapts it to hub.MessageConn. Browsers
+// always offer permessage-deflate and scripts cannot withdraw the offer, so
+// the client opts in with compress=1; otherwise the extension is not negotiated.
+func (s *Server) accept(w http.ResponseWriter, r *http.Request) hub.MessageConn {
 	opts := &websocket.AcceptOptions{InsecureSkipVerify: true, Subprotocols: []string{wsProtocol}}
 	if r.URL.Query().Get("compress") == "1" {
 		opts.CompressionMode = websocket.CompressionContextTakeover
@@ -403,7 +403,7 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) *websocket.Conn 
 	if err != nil {
 		return nil
 	}
-	return c
+	return hub.NewWebSocketConn(c)
 }
 func (s *Server) listWS(w http.ResponseWriter, r *http.Request) {
 	if c := s.accept(w, r); c != nil {
@@ -417,7 +417,7 @@ func (s *Server) terminalWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		_ = c.Close(4404, "session not found")
+		_ = c.Close(hub.StatusNotFound, "session not found")
 		return
 	}
 	// permessage-deflate already compresses a compress=1 connection; zreplay=1

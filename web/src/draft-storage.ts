@@ -4,10 +4,8 @@ import {
   type StoredDraft,
   type StoredScratch,
 } from "./schemas";
+import { activeHostId, hostNamespacePrefix } from "./storage";
 
-const draftPrefix = "webmux.draft.";
-const scratchPrefix = "webmux.scratch.";
-const settingKey = "webmux.draftPersistence";
 export const draftRetention = 7 * 24 * 60 * 60 * 1000;
 // Large drafts stay in memory only rather than exhausting the origin quota.
 export const draftStorageLimit = 200_000;
@@ -32,13 +30,23 @@ export interface DraftStorage {
   scratchCount(): number;
 }
 
+export interface DraftStorageOptions {
+  hostId?: string | null;
+}
+
 // Drafts live in this browser only, keyed by session and bound to the run
 // (generation) they were written for. Every access tolerates unavailable or
 // corrupt storage: persistence is a convenience, never a requirement.
 export function createDraftStorage(
   storage: Storage | null,
   now: () => number = Date.now,
+  options: DraftStorageOptions = {},
 ): DraftStorage {
+  const scope = options.hostId === undefined ? activeHostId() : options.hostId;
+  const namespace = hostNamespacePrefix(scope);
+  const draftPrefix = namespace + "draft.";
+  const scratchPrefix = namespace + "scratch.";
+  const settingKey = namespace + "draftPersistence";
   const attempt = <T>(fallback: T, action: (storage: Storage) => T): T => {
     if (!storage) return fallback;
     try {
@@ -176,15 +184,22 @@ export function createDraftStorage(
   return result;
 }
 
-let shared: DraftStorage | undefined;
-export function browserDraftStorage() {
-  return (shared ??= createDraftStorage(
-    (() => {
-      try {
-        return localStorage;
-      } catch {
-        return null;
-      }
-    })(),
-  ));
+const sharedByHost = new Map<
+  string,
+  { area: Storage | null; instance: DraftStorage }
+>();
+export function browserDraftStorage(): DraftStorage {
+  const hostId = activeHostId();
+  const cacheKey = hostId ?? "";
+  let area: Storage | null;
+  try {
+    area = localStorage;
+  } catch {
+    area = null;
+  }
+  const cached = sharedByHost.get(cacheKey);
+  if (cached && cached.area === area) return cached.instance;
+  const instance = createDraftStorage(area, Date.now, { hostId });
+  sharedByHost.set(cacheKey, { area, instance });
+  return instance;
 }

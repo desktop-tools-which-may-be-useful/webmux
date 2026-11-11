@@ -17,7 +17,6 @@ import {
   SwitchPreviewRequestSchema,
   SwitchPreviewSchema,
   SwitchRequestSchema,
-  TextSettingSchema,
   UploadSchema,
   WorktreeSchema,
   type ForwardRequest,
@@ -27,6 +26,10 @@ import {
   type SwitchTarget,
   type Worktree,
 } from "./schemas";
+import { store, stored } from "./storage";
+import { currentTransport, TransportUploadError } from "./transport";
+
+export { store, stored };
 
 export class APIError extends Error {
   constructor(
@@ -41,25 +44,6 @@ export class APIError extends Error {
     public body?: unknown,
   ) {
     super(message);
-  }
-}
-export const stored = (key: string, fallback = "") => {
-  try {
-    return TextSettingSchema.parse(
-      localStorage.getItem("webmux." + key) ?? fallback,
-    );
-  } catch {
-    return fallback;
-  }
-};
-/** Writes a local setting, or removes its key when the value is null. */
-export function store(key: string, value: string | null) {
-  const storageKey = "webmux." + key;
-  try {
-    if (value === null) localStorage.removeItem(storageKey);
-    else localStorage.setItem(storageKey, value);
-  } catch {
-    /* private-mode storage is optional */
   }
 }
 const tokenFragment = "#token=";
@@ -101,14 +85,13 @@ async function request(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<Response> {
-  const response = await fetch("/api" + path, {
+  const response = await currentTransport().fetch(path, {
     method,
     signal,
     headers: {
       Authorization: "Bearer " + stored("token"),
       "Content-Type": "application/json",
     },
-    // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- Callers supply the method; GET requests omit the optional body.
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok)
@@ -187,58 +170,35 @@ export function uploadQuickStartFile(
 ): Promise<z.infer<typeof UploadSchema>> {
   return uploadForm("/uploads", file, UploadSchema, progress, signal);
 }
-// XHR exposes upload progress; fetch does not. Authentication and errors stay
-// shared with the JSON transport, and multipart boundaries belong to the browser.
-export function uploadForm<T extends z.ZodType>(
+// Upload progress, authentication and errors stay shared across transports,
+// while the default HTTP transport uses XHR and browser multipart boundaries.
+export async function uploadForm<T extends z.ZodType>(
   path: string,
   file: File,
   schema: T,
   progress: (percent: number) => void,
   signal: AbortSignal,
 ): Promise<z.output<T>> {
-  const { promise, resolve, reject } = Promise.withResolvers<z.output<T>>();
-  if (signal.aborted) {
-    reject(new DOMException("上传已取消", "AbortError"));
-    return promise;
-  }
-  const xhr = new XMLHttpRequest();
-  const abort = () => xhr.abort();
-  const cleanup = () => signal.removeEventListener("abort", abort);
-  xhr.open("POST", "/api" + path);
-  xhr.setRequestHeader("Authorization", "Bearer " + stored("token"));
-  xhr.responseType = "json";
-  xhr.timeout = 5 * 60 * 1000;
-  xhr.upload.onprogress = (event) => {
-    if (event.lengthComputable)
-      progress(Math.round((event.loaded / event.total) * 100));
-  };
-  xhr.onload = () => {
-    cleanup();
-    try {
-      if (xhr.status < 200 || xhr.status >= 300)
-        throw responseError(xhr.status, xhr.response, xhr.statusText);
-      resolve(schema.parse(xhr.response));
-    } catch (err) {
-      reject(err);
-    }
-  };
-  xhr.onerror = () => {
-    cleanup();
-    reject(new APIError(0, "上传失败：网络连接异常"));
-  };
-  xhr.ontimeout = () => {
-    cleanup();
-    reject(new APIError(0, "上传超时"));
-  };
-  xhr.onabort = () => {
-    cleanup();
-    reject(new DOMException("上传已取消", "AbortError"));
-  };
-  signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) throw new DOMException("上传已取消", "AbortError");
   const form = new FormData();
   form.append("file", file);
-  xhr.send(form);
-  return promise;
+  let result;
+  try {
+    result = await currentTransport().upload({
+      path,
+      form,
+      token: stored("token"),
+      timeoutMs: 5 * 60 * 1000,
+      signal,
+      onProgress: progress,
+    });
+  } catch (err) {
+    if (err instanceof TransportUploadError) throw new APIError(0, err.message);
+    throw err;
+  }
+  if (result.status < 200 || result.status >= 300)
+    throw responseError(result.status, result.body, result.statusText);
+  return schema.parse(result.body);
 }
 // Creates the session's artifacts folder when missing and returns its path.
 export async function ensureArtifactsFolder(

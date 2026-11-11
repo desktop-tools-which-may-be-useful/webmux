@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { api, APIError, store, stored } from "./api";
+import { api, APIError } from "./api";
 import { remoteBranchBases, suggestWorktreeBranch } from "./branch-name";
+import { activeHostId, isStoredMissing, store, stored } from "./storage";
 import type { ConfigValue } from "./chat-api";
 import { newRequestId } from "./ids";
 import { selectableWorktree } from "./new-session-defaults";
@@ -86,7 +87,8 @@ export type QuickStartDraft = {
   instructionChoice?: { repositoryId: string; use: boolean };
 };
 
-let memoryDraft: QuickStartDraft | undefined;
+const memoryDrafts = new Map<string, QuickStartDraft>();
+const memoryKey = () => activeHostId() ?? "";
 
 function readJson<T extends z.ZodType>(key: string, schema: T) {
   try {
@@ -118,17 +120,13 @@ export const quickStartMemory = {
     store("quickStart", JSON.stringify(choice));
   },
   loadDraft(): QuickStartDraft {
+    const scope = memoryKey();
     const raw = stored("quick-start-draft", "");
     if (!raw) {
       // If storage was cleared externally (e.g. between tests), drop the
       // fallback only when localStorage is reachable and empty.
-      try {
-        if (localStorage.getItem("webmux.quick-start-draft") === null)
-          memoryDraft = undefined;
-      } catch {
-        /* use memoryDraft when storage is unreachable */
-      }
-      return memoryDraft ?? { text: "" };
+      if (isStoredMissing("quick-start-draft")) memoryDrafts.delete(scope);
+      return memoryDrafts.get(scope) ?? { text: "" };
     }
     try {
       const parsed = DraftSchema.safeParse(JSON.parse(raw));
@@ -143,7 +141,7 @@ export const quickStartMemory = {
       quickStartMemory.clearDraft();
       return;
     }
-    memoryDraft = draft;
+    memoryDrafts.set(memoryKey(), draft);
     store("quick-start-draft", JSON.stringify(draft));
   },
   saveDraft(text: string) {
@@ -153,12 +151,8 @@ export const quickStartMemory = {
     });
   },
   clearDraft() {
-    memoryDraft = undefined;
-    try {
-      localStorage.removeItem("webmux.quick-start-draft");
-    } catch {
-      /* private-mode storage is optional */
-    }
+    memoryDrafts.delete(memoryKey());
+    store("quick-start-draft", null);
   },
 };
 

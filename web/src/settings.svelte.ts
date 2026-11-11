@@ -1,5 +1,6 @@
 import { SvelteSet } from "svelte/reactivity";
-import { api, APIError, stored, store } from "./api";
+import { api, APIError } from "./api";
+import { onActiveHostChange, store, stored } from "./storage";
 import { connect, type SocketConnection } from "./ws";
 import {
   SettingsSnapshotSchema,
@@ -15,14 +16,18 @@ import {
 } from "./settings-intent";
 
 function cached(): SettingsSnapshot {
+  const raw = stored("settingsCache");
+  if (!raw) {
+    return {
+      revision: 0,
+      updatedAt: "",
+      values: structuredClone(emptySettings),
+    };
+  }
   try {
-    return SettingsSnapshotSchema.parse(JSON.parse(stored("settingsCache")));
+    return SettingsSnapshotSchema.parse(JSON.parse(raw));
   } catch {
-    try {
-      localStorage.removeItem("webmux.settingsCache");
-    } catch {
-      /* optional cache */
-    }
+    store("settingsCache", null);
     return {
       revision: 0,
       updatedAt: "",
@@ -89,6 +94,12 @@ export function stopSettings() {
   settings.connected = false;
   render();
 }
+onActiveHostChange(() => {
+  stopSettings();
+  confirmed = cached();
+  settings.error = "";
+  render();
+});
 export function startSettings() {
   stopSettings();
   const epoch = generation;

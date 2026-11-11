@@ -10,6 +10,7 @@ import {
   type ListeningPort,
 } from "./schemas";
 import { settings } from "./settings.svelte";
+import { hostOrigin } from "./transport";
 import { connect, type Connection, type SocketConnection } from "./ws";
 
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
@@ -107,7 +108,7 @@ export async function removeForward(port: number): Promise<void> {
 
 /** The absolute address of a forward path, for sharing. */
 export function forwardLink(path: string): string {
-  return new URL(path, location.origin).href;
+  return new URL(path, hostOrigin()).href;
 }
 
 /** Ports from 30000 up are usually ephemeral RPC or helper sockets. */

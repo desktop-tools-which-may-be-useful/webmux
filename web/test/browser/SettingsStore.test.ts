@@ -1,5 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { seedSettings } from "./settings-fixture";
+import { diffReview } from "../../src/diff-review.svelte";
+import type { CodeChange } from "../../src/schemas";
 import {
   settings,
   saveSettings,
@@ -7,9 +9,11 @@ import {
   startSettings,
 } from "../../src/settings.svelte";
 import { emptySettings } from "../../src/settings-intent";
+import { setActiveHostId } from "../../src/storage";
 
 afterEach(() => {
   stopSettings();
+  setActiveHostId(null);
   vi.unstubAllGlobals();
   localStorage.clear();
 });
@@ -117,4 +121,62 @@ test("a reconnected snapshot replaces stale revisions after a server reset", asy
   expect(
     JSON.parse(localStorage.getItem("webmux.settingsCache")!).revision,
   ).toBe(0);
+});
+
+test("isolates settingsCache and diffReview storage events per hostId", async () => {
+  localStorage.setItem("webmux.host.host-a.settingsCache", "{corrupt");
+  localStorage.setItem(
+    "webmux.host.host-b.settingsCache",
+    JSON.stringify({
+      revision: 3,
+      updatedAt: "2026-10-26T00:00:00Z",
+      values: { ...emptySettings, theme: "dark" },
+    }),
+  );
+
+  setActiveHostId("host-a");
+  expect(localStorage.getItem("webmux.host.host-a.settingsCache")).toBeNull();
+  expect(settings.revision).toBe(0);
+
+  setActiveHostId("host-b");
+  expect(settings.revision).toBe(3);
+  expect(settings.values.theme).toBe("dark");
+
+  const change: CodeChange = {
+    path: "a.ts",
+    nodeId: "n1",
+    status: "modified",
+    group: "working",
+    reviewVersion: "v1",
+  };
+  setActiveHostId("host-a");
+  const disconnect = diffReview.connect();
+  try {
+    expect(diffReview.has("repo", change)).toBe(false);
+    localStorage.setItem(
+      "webmux.host.host-b.diffReview",
+      JSON.stringify([[JSON.stringify(["repo", "working", "n1"]), "v1"]]),
+    );
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "webmux.host.host-b.diffReview",
+        storageArea: localStorage,
+      }),
+    );
+    expect(diffReview.has("repo", change)).toBe(false);
+
+    localStorage.setItem(
+      "webmux.host.host-a.diffReview",
+      JSON.stringify([[JSON.stringify(["repo", "working", "n1"]), "v1"]]),
+    );
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "webmux.host.host-a.diffReview",
+        storageArea: localStorage,
+      }),
+    );
+    expect(diffReview.has("repo", change)).toBe(true);
+  } finally {
+    disconnect();
+  }
 });

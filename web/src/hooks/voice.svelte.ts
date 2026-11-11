@@ -4,6 +4,11 @@ import {
   type VoiceServerEvent,
 } from "../schemas";
 import {
+  SOCKET_CONNECTING,
+  SOCKET_OPEN,
+  type TransportSocket,
+} from "../transport";
+import {
   computeVoiceLevel,
   downsampleFloat32,
   floatTo16BitPCM,
@@ -64,7 +69,7 @@ export function createVoiceRecorder(
   let level = $state(0);
   let sessionToken = 0;
 
-  let socket: WebSocket | undefined;
+  let socket: TransportSocket | undefined;
   let stream: MediaStream | undefined;
   let audioContext: AudioContext | undefined;
   let sourceNode: MediaStreamAudioSourceNode | undefined;
@@ -121,8 +126,7 @@ export function createVoiceRecorder(
     socket = undefined;
     if (
       prev &&
-      (prev.readyState === WebSocket.OPEN ||
-        prev.readyState === WebSocket.CONNECTING)
+      (prev.readyState === SOCKET_OPEN || prev.readyState === SOCKET_CONNECTING)
     ) {
       prev.close();
     }
@@ -133,14 +137,14 @@ export function createVoiceRecorder(
   }
 
   function flushFrame(pcm: Int16Array) {
-    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (socket?.readyState !== SOCKET_OPEN) return;
     socket.send(
       new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength).slice(),
     );
   }
 
   function sendStopFrame() {
-    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (socket?.readyState !== SOCKET_OPEN) return;
     if (pendingSamples.length > 0) {
       const remaining = new Int16Array(pendingSamples);
       pendingSamples = [];
@@ -162,7 +166,7 @@ export function createVoiceRecorder(
     for (let i = 0; i < pcm.length; i++) {
       pendingSamples.push(pcm[i]!);
     }
-    if (state !== "recording" || socket?.readyState !== WebSocket.OPEN) {
+    if (state !== "recording" || socket?.readyState !== SOCKET_OPEN) {
       // Bound pre-ready buffered audio to ~5 seconds so memory stays bounded.
       const maxBuffered = TARGET_SAMPLE_RATE * 5;
       if (pendingSamples.length > maxBuffered) {

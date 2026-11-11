@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/forward"
 	"github.com/rainchan/webmux/internal/session"
@@ -14,7 +13,7 @@ import (
 // List streams /ws/sessions: a snapshot of the sessions and forwards, then
 // session events and a forwards event after each forward change. forwards
 // may be nil, which lists none.
-func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c *websocket.Conn) {
+func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c MessageConn) {
 	ctx, cancel := context.WithCancel(ctx)
 	// Subscribing to forwards before reading the list leaves no change
 	// unannounced; a signal already covered by the snapshot only repeats it.
@@ -33,8 +32,8 @@ func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c 
 	}()
 	send := func(event contract.SessionEvent) bool {
 		data, err := json.Marshal(event)
-		if err != nil || write(ctx, c, websocket.MessageText, data) != nil {
-			_ = c.Close(4408, "write timeout")
+		if err != nil || write(ctx, c, MessageText, data) != nil {
+			_ = c.Close(StatusSlowClient, "write timeout")
 			return false
 		}
 		return true
@@ -51,7 +50,7 @@ func List(ctx context.Context, m *session.Manager, forwards *forward.Service, c 
 		case <-reader.Done():
 			return
 		case <-sub.Slow:
-			_ = c.Close(4408, "slow client")
+			_ = c.Close(StatusSlowClient, "slow client")
 			return
 		case event := <-sub.Out:
 			event, ok := view.event(event)

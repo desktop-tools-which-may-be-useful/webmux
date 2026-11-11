@@ -1,5 +1,12 @@
-import { store, stored } from "./api";
-import { encodeBase64Url } from "./base64url";
+import { store, stored } from "./storage";
+import {
+  currentTransport,
+  protocols,
+  SOCKET_OPEN,
+  type TransportSocket,
+} from "./transport";
+
+export { protocols };
 
 const maxBufferedAmount = 1024 * 1024;
 const compressionKey = "wsCompression";
@@ -22,30 +29,14 @@ export function setWsCompression(enabled: boolean) {
   store(compressionKey, enabled ? "on" : "off");
   for (const reopen of live) reopen();
 }
-function withCompression(target: string): string {
-  if (!wsCompression()) return target;
-  return `${target}${target.includes("?") ? "&" : "?"}compress=1`;
-}
 
-// Browsers cannot set Authorization on a WebSocket handshake. The token rides
-// in an offered subprotocol instead of the URL (proxy and edge request logs)
-// or a cookie (shared by every port of the host). The server selects only
-// "webmux" and never echoes the token protocol.
-export function protocols(token: string): string[] {
-  if (!token) return ["webmux"];
-  return ["webmux", "webmux.token." + encodeBase64Url(token)];
-}
-
-// Opens an authenticated one-shot WebSocket without reconnects (for example a
+// Opens an authenticated one-shot stream without reconnects (for example a
 // single speech-recognition session).
-export function openSocket(path: string, compress = true): WebSocket {
-  const target = compress ? withCompression(path) : path;
-  const socket = new WebSocket(
-    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${target}`,
-    protocols(stored("token")),
-  );
-  socket.binaryType = "arraybuffer";
-  return socket;
+export function openSocket(path: string, compress = true): TransportSocket {
+  return currentTransport().openStream(path, {
+    token: stored("token"),
+    compress: compress && wsCompression(),
+  });
 }
 
 export type Connection =
@@ -86,7 +77,7 @@ export function connect(
   onError: (message: string) => void,
   options: ConnectOptions = {},
 ): SocketConnection {
-  let socket: WebSocket | undefined,
+  let socket: TransportSocket | undefined,
     timer: number | undefined,
     stableTimer: number | undefined,
     controlTimer: number | undefined,
@@ -102,7 +93,7 @@ export function connect(
   }
   function transmit(kind: number, payload: Uint8Array) {
     if (
-      socket?.readyState !== WebSocket.OPEN ||
+      socket?.readyState !== SOCKET_OPEN ||
       socket.bufferedAmount + payload.byteLength + 1 > maxBufferedAmount
     )
       return false;
@@ -115,7 +106,7 @@ export function connect(
   function flushControls() {
     clearTimeout(controlTimer);
     controlTimer = undefined;
-    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (socket?.readyState !== SOCKET_OPEN) return;
     for (const [kind, payload] of controls) {
       if (transmit(kind, payload)) controls.delete(kind);
     }
@@ -132,14 +123,13 @@ export function connect(
     socket = undefined;
     previous?.close();
     onState(attempt ? "reconnecting" : "connecting");
-    const target = withCompression(typeof path === "string" ? path : path());
-    const next = new WebSocket(
-      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${target}`,
-      protocols(stored("token")),
-    );
+    const target = typeof path === "string" ? path : path();
+    const next = currentTransport().openStream(target, {
+      token: stored("token"),
+      compress: wsCompression(),
+    });
     socket = next;
     let closed = false;
-    next.binaryType = "arraybuffer";
     next.onopen = () => {
       if (socket !== next || closed) return;
       stableTimer = window.setTimeout(() => {
@@ -192,7 +182,7 @@ export function connect(
     // Callers that can probe it keep a healthy connection.
     const current = socket;
     const probed =
-      current?.readyState === WebSocket.OPEN &&
+      current?.readyState === SOCKET_OPEN &&
       !!options.resume?.((kind, payload) => api.send(kind, payload));
     if (!probed) {
       open();
@@ -205,7 +195,7 @@ export function connect(
   };
   document.addEventListener("visibilitychange", visible);
   const online = () => {
-    if (socket?.readyState !== WebSocket.OPEN) open();
+    if (socket?.readyState !== SOCKET_OPEN) open();
   };
   window.addEventListener("online", online);
   const restored = (event: PageTransitionEvent) => {
@@ -216,7 +206,7 @@ export function connect(
   window.addEventListener("pageshow", restored);
   const api: SocketConnection = {
     send(kind: number, payload: Uint8Array) {
-      if (socket?.readyState !== WebSocket.OPEN) return false;
+      if (socket?.readyState !== SOCKET_OPEN) return false;
       if (payload.byteLength + 1 > maxBufferedAmount) return false;
       // Only idempotent controls are retained: one latest resize and one resync.
       if (kind === 1 || kind === 2) {
@@ -254,7 +244,7 @@ export function connect(
         finished ||
         document.hidden ||
         resumeTimer !== undefined ||
-        socket?.readyState !== WebSocket.OPEN
+        socket?.readyState !== SOCKET_OPEN
       )
         return;
       const current = socket;

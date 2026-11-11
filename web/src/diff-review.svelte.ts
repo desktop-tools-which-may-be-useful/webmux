@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { store, stored } from "./api";
 import type { CodeChange } from "./schemas";
+import { hostStorageKey, onActiveHostChange, store, stored } from "./storage";
 
 const key = "diffReview";
 const limit = 500;
@@ -19,6 +19,9 @@ function read(fallback: Record<string, string> = {}) {
 }
 
 let marks = $state.raw(read());
+onActiveHostChange(() => {
+  marks = read();
+});
 const markKey = (scope: string, change: CodeChange) =>
   JSON.stringify([scope, change.group, change.nodeId]);
 
@@ -34,7 +37,7 @@ export const diffReview = {
     function sync(event: StorageEvent) {
       if (
         event.storageArea === localStorage &&
-        (event.key === "webmux." + key || event.key === null)
+        (event.key === hostStorageKey(key) || event.key === null)
       )
         marks = read();
     }
