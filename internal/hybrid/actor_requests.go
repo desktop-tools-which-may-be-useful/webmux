@@ -87,6 +87,7 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 		if _, ok := n.Update.(*acp.UserMessageChunk); ok {
 			return
 		}
+		a.work.noteBackground(n.Update)
 	}
 	events := a.tr.update(n.Update)
 	if hidden := a.cmd.Profile.HiddenCommands; len(hidden) > 0 {

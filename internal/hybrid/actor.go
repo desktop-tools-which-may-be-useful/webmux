@@ -149,8 +149,9 @@ type actor struct {
 }
 
 type turn struct {
-	id     string
-	cancel context.CancelFunc
+	id                string
+	cancel            context.CancelFunc
+	backgroundRefresh bool
 	// done closes once the session/prompt call has returned and its result
 	// was posted.
 	done chan struct{}

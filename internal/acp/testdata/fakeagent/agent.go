@@ -734,6 +734,10 @@ func (a *agent) pause(ctx context.Context) bool {
 }
 
 func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string) {
+	if strings.HasPrefix(text, "The background processes from the previous turn have exited.") {
+		done := acp.ToolCompleted
+		a.update(sid, &acp.ToolCallUpdate{ToolCallID: "bg_1", Status: &done, RawInput: json.RawMessage(`{"IsDaemon":true}`)})
+	}
 	if a.cfg.profile == "agy" {
 		// Like real agy acp, echo the user's prompt as a user_message_chunk
 		// without a messageId at the start of the active turn.
@@ -780,6 +784,17 @@ func (a *agent) turn(ctx context.Context, sid, text string) (reply, stop string)
 	if strings.Contains(text, "/background-noprocess") {
 		// An in_progress tool call with no child process left behind.
 		a.update(sid, &acp.ToolCall{ToolCallID: "bg_np", Title: "wait remote", Kind: "fetch", Status: acp.ToolInProgress})
+	} else if strings.Contains(text, "/background-started") {
+		// Like Kimi: starting the command completes the tool call, not the work.
+		cmd := exec.Command("sleep", "2")
+		if err := cmd.Start(); err == nil {
+			go func() { _ = cmd.Wait() }()
+		}
+		a.update(sid, &acp.ToolCall{ToolCallID: "bg_started", Title: "sleep 2", Kind: "execute", Status: acp.ToolInProgress,
+			RawInput: json.RawMessage(`{"run_in_background":true}`)})
+		done := acp.ToolCompleted
+		a.update(sid, &acp.ToolCallUpdate{ToolCallID: "bg_started", Status: &done,
+			RawOutput: json.RawMessage(`"task_id: bash-test\nstatus: running"`)})
 	} else if strings.Contains(text, "/background") {
 		// Like agy: a command keeps running after the turn ends and its tool
 		// call stays in_progress.
