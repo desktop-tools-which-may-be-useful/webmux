@@ -307,8 +307,8 @@
     loading = true;
     pathEdited = false;
     branchEdited = false;
-    branch = "";
-    base = "";
+    branch = pendingPreset?.mode === "new" ? (pendingPreset.name ?? "") : "";
+    base = pendingPreset?.base ?? "";
     void api(`/repositories/${id}/branches`, BranchesSchema)
       .then((value) => {
         if (!active) return;
@@ -331,7 +331,11 @@
                 )
               ? preferredStartBranch
               : value.defaultBranch || "";
-        if (mode === "new") chooseStartBranch(startBranch);
+        if (mode === "new" && initial?.base) {
+          base = initial.base;
+          baseSubject = "已保存的起始提交";
+          loadCommits([{ hash: base, tag: "已保存的起始提交" }]);
+        } else if (mode === "new") chooseStartBranch(startBranch);
       })
       .catch((err) => {
         if (active) error = errorMessage(err);
