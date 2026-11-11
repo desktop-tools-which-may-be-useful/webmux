@@ -161,10 +161,12 @@
   - 在 WebMux 中删除工作树（安全或强制）成功后，该目录下已关闭或已中断的记录（含强制删除时刚关闭的会话留下的）保留并标为已释放，出现在所属仓库“已不可用工作区”，仍可重建并恢复（US-J09）；HEAD 无法解析时记录保持原样，不能重建；
   - Claude 记录沿用 `claudecode` 档案与通用候选/外部占用错误，恢复聊天后重应用 model/effort 并保留实际 mode，注册记录不可读不伪造无外部写者保证；
   - 记录不含环境变量值、消息、注册记录正文或 token，存储不可用时只禁用混合会话；
+  - `conversations.sqlite` 为每条新旧混合记录分配稳定 Conversation / ProviderThread 身份；旧历史标为 unknown，不启动 agent 或修改原 argv/env；并发创建与服务重启不重复分配已提交身份或 Run 序号；
+  - 当前数据库仅提供身份与事务基础，尚未保存完整消息历史或开放可靠交接；忘记或成功淘汰记录会清理关联数据，释放、重建 worktree 与删除启动配置保留对话；
   - 记录读取不等待文件落盘；立即写入失败保留此前已接受修改的 dirty 状态并重试，服务关闭等待在途创建、恢复与持久化，不在关闭后启动新 actor，最终写入失败记录诊断；
   - 记录文件最多保存 200 条（含运行中），文件另有 1 MiB 字节上限（命令很长时先于条数写满）：
     - 新建混合会话时若任一上限已满，先淘汰最近未更新的已关闭或已中断记录，仍在运行、正在恢复或正在删除的记录不会被淘汰；
-    - 淘汰会清理该记录的临时文件夹与不再共享的释放引用；
+    - 淘汰会清理该记录的临时文件夹、关联对话数据与不再共享的释放引用；
     - 没有可淘汰的记录时创建以 409 `limit` 拒绝，启动失败时恢复刚淘汰的记录；
     - 每个配置记住的 agent 选项有数量与文本上限，且聊天选项缓存文件超过 1 MiB 时先丢弃最旧的配置记录。
 - **US-Q13 本地终端接入混合会话**：作为原生终端使用者，我希望 CLI 对混合会话的行为清楚可预期，以便与 Web 端的切换配合使用。
@@ -283,3 +285,5 @@
 
 - [手机会话选项面板](../../web/src/components/chat/ChatSessionOptions.svelte)、[模型可搜索列表](../../web/src/components/chat/ChatChoiceCommandList.svelte)、[共用输入卡片](../../web/src/components/chat/ComposerCard.svelte)；
 - [聊天浏览器用例](../../web/test/browser/ChatView.test.ts)、[布局验收](../../web/test/storybook/acp-chat.spec.ts)。
+
+- [对话事务存储](../../internal/conversation/)、[私有数据库生命周期](../../internal/statefile/database.go)。

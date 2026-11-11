@@ -107,6 +107,15 @@
       "failure": "unavailable",
       "web": "是",
       "source": "internal/hybrid/options.go"
+    },
+    {
+      "id": "conversation",
+      "path": "conversations.sqlite",
+      "lock": "conversations.sqlite.lock",
+      "owner": "internal/conversation",
+      "failure": "unavailable",
+      "web": "是",
+      "source": "internal/conversation/store.go"
     }
   ],
   "exceptions": {
@@ -658,6 +667,22 @@
     "internal/agenttrust/qoder.go|path|settings.json": {
       "count": 1,
       "owner": "agent-trust"
+    },
+    "internal/statefile/catalog.go|path|conversations.sqlite": {
+      "count": 1,
+      "owner": "conversation"
+    },
+    "internal/statefile/database.go|OpenDatabase|database/sql.Open": {
+      "count": 1,
+      "owner": "conversation"
+    },
+    "internal/conversation/store.go|Open|github.com/rainchan/webmux/internal/statefile.OpenDatabase": {
+      "count": 1,
+      "owner": "conversation"
+    },
+    "internal/statefile/database.go|path|.lock": {
+      "count": 1,
+      "owner": "conversation"
     }
   }
 }
