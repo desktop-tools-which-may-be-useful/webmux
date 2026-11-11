@@ -156,8 +156,9 @@ type actor struct {
 }
 
 type turn struct {
-	id     string
-	cancel context.CancelFunc
+	id                string
+	cancel            context.CancelFunc
+	backgroundRefresh bool
 	// done closes once the session/prompt call has returned and its result
 	// was posted.
 	done chan struct{}
@@ -782,6 +783,7 @@ func (a *actor) onUpdate(epoch int, n acp.SessionNotification) {
 		if _, ok := n.Update.(*acp.UserMessageChunk); ok {
 			return
 		}
+		a.work.noteBackground(n.Update)
 	}
 	events := a.tr.update(n.Update)
 	if hidden := a.cmd.Profile.HiddenCommands; len(hidden) > 0 {
@@ -962,6 +964,10 @@ func (a *actor) autoApprove(p *pending) string {
 // without image capability and files without embeddedContext degrade to
 // paths and are reported as notices.
 func (a *actor) send(text string, attachments []Attachment, queueItem, titleSource string) (PromptResult, error) {
+	return a.sendTurn(text, attachments, queueItem, titleSource, false)
+}
+
+func (a *actor) sendTurn(text string, attachments []Attachment, queueItem, titleSource string, backgroundRefresh bool) (PromptResult, error) {
 	blocks, notes, err := promptBlocks(text, attachments, a.chat.PromptCapabilities, a.svc.uploadCheck(a.id))
 	if err != nil {
 		return PromptResult{}, err
@@ -979,7 +985,7 @@ func (a *actor) send(text string, attachments []Attachment, queueItem, titleSour
 	n := strconv.Itoa(a.nextTurn)
 	result := PromptResult{TurnID: "t" + n, PromptID: "p" + n}
 	ctx, cancel := context.WithCancel(context.Background())
-	t := &turn{id: result.TurnID, cancel: cancel, done: make(chan struct{})}
+	t := &turn{id: result.TurnID, cancel: cancel, backgroundRefresh: backgroundRefresh, done: make(chan struct{})}
 	a.turn = t
 	a.snapshotProcesses()
 	a.work.endTurn()
@@ -1013,8 +1019,9 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	}
 	a.turn = nil
 	// Read before endTurn clears the tracker. An agent may end the turn while
-	// a backgrounded command still runs (agy), so the turn is not "done".
-	running := a.work.running()
+	// a backgrounded command still runs, so the turn is not "done". A refresh
+	// turn must not trigger another refresh when the old tool completes.
+	unfinishedWork := !t.backgroundRefresh && a.work.unfinished()
 	a.work.endTurn()
 	t.cancel()
 	stop, text := stopReason(resp, err)
@@ -1026,7 +1033,7 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	a.svc.log.Info("hybrid turn ended", "id", a.id, "stopReason", stop, "code", code)
 	a.tr.breakMessage()
 	endedAt := time.Now().UTC()
-	unfinished := stop == acp.StopEndTurn && running
+	unfinished := stop == acp.StopEndTurn && unfinishedWork
 	a.chat.Turn = Turn{Unfinished: unfinished, TurnID: t.id, StopReason: stop, StartedAt: a.chat.Turn.StartedAt, EndedAt: &endedAt}
 	normal := stop == acp.StopEndTurn || stop == acp.StopMaxTokens || stop == acp.StopMaxTurnRequests
 	switch {
@@ -1041,7 +1048,7 @@ func (a *actor) turnEnded(t *turn, resp acp.PromptResponse, err error) {
 	now := time.Now().UTC()
 	switch stop {
 	case acp.StopEndTurn:
-		if running {
+		if unfinishedWork {
 			a.watchBackground()
 		} else {
 			a.scheduleOrLatchDone(a.chat.Turn.StartedAt, now)

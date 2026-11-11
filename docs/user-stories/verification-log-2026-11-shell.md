@@ -172,3 +172,18 @@
 - 已运行：`make check`；`TerminalViewport`、`SoftKeys` Vitest 浏览器组件测试（10 项）；Playwright `softkeys.spec.ts`（9 项通过、9 项按平台跳过），覆盖移动端栏内几何关系、无横向溢出、控制切换、按键输入与桌面强制栏显隐联动。
 - 视觉核对：真实 Storybook 组件下桌面（1280×900）、平板（768×800）、手机（390×844）明暗主题前后对比，另核对 375×667、320×568、667×375 横屏与 1280×720；摇杆均位于软键栏内、不与终端重叠且无页面横向溢出，开关完整可见；补充手机折叠状态截图及展开、收起交互 GIF。
 - 限制：未在 iOS/Android 真机核对；视觉截图通过强制显示软键栏生成，未验证系统 IME 开合；未运行其余未受影响的 E2E、Storybook 与性能套件。
+
+本次局部核对（2026-11-10，agy 与 Kimi 后台启动后的提醒）：识别 `run_in_background: true` 与 `IsDaemon: true`，即使后台启动工具调用已标为 `completed`，仍设置 `turn.unfinished` 并等待本轮新进程退出后再记 `done`，对应更新 US-Q05，不新增故事或改变覆盖索引。
+
+- 真实 ACP 探测：Kimi Code CLI 2.5.2 两次在 prompt 返回后继续监听 20 秒，后台结果文件均已生成，但只收到 `usage_update`；追加一次后续 prompt 仍未收到后台完成通知。
+- Antigravity CLI 1.5.4 使用 `Blocking=false`、`WaitMsBeforeAsync=500`、`IsDaemon=false`，在工具仍为 `in_progress`、结果文件尚未生成时正常回复并返回 `end_turn`；结果文件后来生成，但空闲等待 30 秒通知数为 0，下一次 prompt 开始时才补发工具 `completed` 更新与后台完成消息。
+- 已运行：`go test -race ./internal/hybrid ./internal/acp ./internal/contract`；新增后台启动用例连续运行 5 次；`make check`（含前端检查、架构守卫、文档守卫、go vet 与 golangci-lint）。
+- 真实 WebMux 端到端：以隔离状态目录和动态回环端口启动修改后的二进制，通过 REST 创建 Kimi 聊天会话；状态从 `running` 变为无提醒的 `idle`，结果文件生成后再变为带 `done` 的 `waiting`，随后关闭会话与测试服务。
+- 限制：未在真实 WebMux 中重跑 agy 的完整端到端；完成时间来自受管进程树观察，不保证自行 daemonize、脱离进程树或非本地任务；未在 macOS 或真机浏览器上核对。
+
+本次局部核对（2026-11-11，#332 后台状态自动刷新）：后台进程退出且连续两次静默轮询后，仅 agy 自动发送英文 `session/prompt`，要求检查并汇报最新状态；通过真实 ACP 更新刷新工具行与回复，检查回合结束后才记 `done`，并防止旧工具完成事件重复触发检查。对应更新 US-Q05，不新增故事或改变覆盖索引。
+
+- 实现：由 agent 档案声明后台状态检查 prompt，只有 agy 声明；复用正常 prompt 管线，不伪造工具退出码、不读取私有 transcript，其他 agent 不额外发起模型回合。
+- 已运行：`go test -race ./internal/hybrid ./internal/acp ./internal/contract`；后台进程、无进程、Kimi 启动调用完成及新回合/切换取消观察的定向回归；`make check`。
+- 真实 WebMux 端到端：agy 1.5.4 产生第二个状态检查回合，Kimi 2.5.2 不发起额外回合；两种 agent 均在后台结果文件生成后出现 `done`，自动化脚本验收退出码均为 0。
+- 限制：agy 自动检查会产生一次额外模型调用，结果内容由 agent 决定；完成检测仍限受管进程树，不保证自行 daemonize、脱离进程树或非本地任务；未在 macOS 或真机浏览器上核对。
