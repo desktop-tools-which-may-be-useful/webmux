@@ -6,7 +6,7 @@
 
 | 工具     | 版本           |
 | -------- | -------------- |
-| Go       | 1.26+          |
+| Go       | 1.27+          |
 | Node.js  | 26.13.0（LTS） |
 | pnpm     | 12.18.0        |
 | GNU Make | 任意           |
@@ -99,12 +99,13 @@ pnpm --dir web exec playwright test test/e2e/terminal.spec.ts
 
 ## 测试
 
-`make test` 始终是完整门禁；日常迭代可用 `make test-fast`，或在需要时单独运行某一层。
+`make test` 始终是完整门禁；日常迭代可用 `make test-fast`，或在需要时单独运行某一层。本地 `make test` 先并行运行 Go 与 Vitest，再并行运行 Storybook 与 E2E，避免原生手势用例与 E2E 争用资源；性能测试仍在其他套件结束后单独执行。`make test-fast` 并行运行 Go 与 Vitest。
 
 - **Go**：标准 `testing` 包，始终使用 `-race`；默认 `-parallel=4`，多核本机可提高 `GO_TEST_PARALLEL`（例如 `make test GO_TEST_PARALLEL=8`）。
 - **单元测试**：Vitest 在 Node 中运行。
-- **组件测试**：真实 Svelte / Tailwind / xterm 渲染，不需要后端。
-- **端到端测试**：`make test` 与 `make test-e2e` 先构建一次真实的生产前端和 `.cache/webmux-e2e/webmux`，并在本次调用内复用；直接运行 `pnpm --dir web test:e2e` 时仍在私有临时目录构建。各 worker 使用独立后端、临时 HOME、配置、工作目录与动态端口，结束后自动清理进程。本地默认最多 2 个 worker，可用 `WEBMUX_E2E_WORKERS=1` 回退串行；直接运行 Playwright 时可加 `--workers=N`。CI 在 Ubuntu 上分四片运行（每片 2 个 worker）。测试不会连接你正在使用的 WebMux 服务。
+- **组件测试**：真实 Svelte / Tailwind / xterm 渲染，不需要后端；本地按可用并行度最多使用 4 个 worker，避免与其他并行套件争用资源。
+- **Storybook**：本地按可用并行度使用最多 6 个 worker，CI 固定为 6 个。
+- **端到端测试**：`make test` 与 `make test-e2e` 先构建一次真实的生产前端和 `.cache/webmux-e2e/webmux`，并在本次调用内复用；直接运行 `pnpm --dir web test:e2e` 时仍在私有临时目录构建。各 worker 使用独立后端、临时 HOME、配置、工作目录与动态端口，结束后自动清理进程。本地按可用并行度使用最多 8 个 worker，可用 `WEBMUX_E2E_WORKERS=1` 回退串行；直接运行 Playwright 时可加 `--workers=N`。CI 在 Ubuntu 上分四片运行（每片 2 个 worker）。测试不会连接你正在使用的 WebMux 服务。
 
 E2E 失败时的截图、trace 和日志位于 `web/playwright-report/` 与 `web/test-results/`，可通过 `pnpm --dir web test:e2e:report` 查看。
 

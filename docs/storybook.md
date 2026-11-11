@@ -14,7 +14,7 @@ pnpm --dir web test:storybook     # 构建后在真实 Chromium 中检查布局
 
 - 系统分配独立的回环端口，并将同一端口传给预览服务、就绪检查和测试 URL。
 - 每个故事在独立浏览器上下文中加载一次页面，按 `layouts.ts` 矩阵依次切换视口、媒体 `colorScheme`、根节点 `.dark` 类与字号缩放并重排断言。
-- CI 使用六个 worker，复用浏览器进程并在首次重试记录 trace。
+- 本地按可用并行度使用最多六个 worker，CI 固定六个；复用浏览器进程并在首次重试记录 trace。
 
 `make test` 与 Ubuntu CI 的 Storybook job 包含 Storybook 测试；布局与平台无关，macOS CI 不再运行。测试输出：
 
