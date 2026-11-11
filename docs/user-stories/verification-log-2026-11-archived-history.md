@@ -145,3 +145,17 @@
   - `web/test/launch-configs.test.ts`、`svelte-check`、Oxlint、`pnpm --dir web check:arch` 与 `make docs-check` 通过。
 - 限制：
   - 未在 iOS/Android 真机上核对触控体验，无头浏览器未验证 hover 与 `any-pointer: coarse`；未重新核验其余故事能力。
+
+本次局部核对（2026-11-11）：新增全仓生产源码文件 `< 500` 行架构守卫并完成存量超限文件按职责拆分，更新 US-L15 与覆盖索引，不新增故事。
+
+- 范围：
+  - `internal/archtest/filesize_test.go` 新增 `TestSourceFileSize` 与 `TestSourceFileSizeViolationMessage`，限制 `cmd/` 与 `internal/` 下所有非测试生产 `.go` 文件少于 500 行（`<= 499` 行），超限时输出按职责拆分 `<family>_<part>.go` 的重构指令；
+  - `web/test/architecture.test.ts` 新增 `production source files stay under 500 lines`，限制 `web/src/` 下非测试、非 stories 且非 `src/lib/components/ui/` 生成组件的 `.ts` 与 `.svelte` 生产文件少于 500 行，超限时输出按领域模块、子组件与分层边界拆分的指引；
+  - 全仓 25 个 Go 生产文件与 32 个前端生产文件按职责边界完成拆分，保持原有对外 API、组件行为与持久化清单一致；
+  - 合入 #497、#499 与 handoff 身份存储后，`internal/hybrid` 的 `service.go`、`recovery.go`、`link.go` 再次超限，按职责拆出 `create.go`（会话创建与准入）、`record_removal.go`（记录删除与 actor 退役）与 `config_reapply.go`（配置重应用）。
+- 依据：
+  - `make check`（含 `svelte-check`、`oxfmt --check`、`make docs-check`、`make persistence-check`、`oxlint`、`pnpm --dir web check:arch`、`go vet`、`golangci-lint`）全部通过；
+  - `go test -race ./...` 与前端 Vitest 单元及浏览器组件测试通过。
+  - 合并后在本地重跑 `make check` 与 `go test -race ./...` 通过。
+- 限制：
+  - 本次为纯工程守卫与内部模块拆分，不改变用户可见行为；未重新运行完整 Playwright E2E 与性能测试套件。

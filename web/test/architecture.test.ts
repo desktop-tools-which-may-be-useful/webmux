@@ -231,4 +231,32 @@ describe("file naming", () => {
       "Use <Component>.test.ts for components, kebab-case for helpers.",
     ).toEqual([]);
   });
+
+  test("production source files stay under 500 lines", () => {
+    const maxLines = 499;
+    const prodFiles = [...sources, ...components].sort();
+    const oversized = prodFiles.flatMap((file) => {
+      const normalized = file.replaceAll("\\", "/");
+      const text = readFileSync(`${root}/${normalized}`, "utf8");
+      const rawLines = text.split("\n");
+      const lineCount =
+        rawLines.at(-1) === "" ? rawLines.length - 1 : rawLines.length;
+      return lineCount > maxLines
+        ? [`${normalized} (${lineCount} lines, max ${maxLines})`]
+        : [];
+    });
+
+    expect(
+      oversized,
+      [
+        "Production frontend source files must stay strictly under 500 lines (<= 499 lines).",
+        "How to split an oversized file:",
+        "1. Move pure domain logic, parsers, formatters, and DOM/API algorithms out of .svelte components into kebab-case modules in src/*.ts (note: src/*.ts must never import src/hooks/ or .svelte components).",
+        "2. Move reusable reactive controllers and $state/$effect lifecycle coordination into src/hooks/*.svelte.ts.",
+        "3. Split large visual regions, dialogs, toolbars, or headers into focused PascalCase subcomponents in src/components/*.svelte.",
+        "4. Name new files after their concrete domain concept — never use catch-all names like helpers.ts, utils.ts, common.ts, misc.ts, or part2.ts.",
+        "5. Do NOT strip comments or cram multiple statements onto one line just to pass the line count.",
+      ].join("\n"),
+    ).toEqual([]);
+  });
 });

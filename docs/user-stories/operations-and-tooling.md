@@ -274,11 +274,12 @@
   - 签名 job 用独立的 `WEBMUX_DEV_SIGNING_KEY`，`releasesign` 按版本选择私钥与公钥组，sign 与 publish 不可取消；
   - 正式版发布说明从上一个 `v*` 标签生成，不以 `dev` 标签为起点；
   - 文档公布开发版公钥与轮换流程，说明正式标签须在 main 可达提交上、更新本地 `dev` 标签需 `git fetch --tags --force`。
-- **US-L15 文件命名约定与守卫**：作为贡献者或 coding agent，我希望仅凭职责就能预测源码文件名，以便不用全仓搜索就能定位或放置代码。
+- **US-L15 文件命名与大小约定及守卫**：作为贡献者或 coding agent，我希望仅凭职责就能预测源码文件名，且单个生产源码文件保持在 500 行以内，以便不用全仓搜索就能定位或放置代码，并在文件膨胀时收到明确的职责拆分指引。
   验收要点：
   - [文件命名](../agent-rules/naming.md)规定前端非组件 TypeScript 用 kebab-case、组件与组件测试用 PascalCase、Go 文件用 snake_case 并按“名词/职责”命名；
   - `TestGoFileNames` 在 `go test ./...` 中拒绝非 snake_case 的 Go 文件名，以及含 `util`、`helper`、`misc`、`more`、`common` 等空泛词的名字；
-  - `web/test/architecture.test.ts` 的 `file naming` 拒绝 camelCase 的 TypeScript 文件和非 PascalCase 的 Svelte 组件；
+  - `TestSourceFileSize` 在 `go test ./...` 中要求 `cmd/` 与 `internal/` 下的非测试生产 `.go` 文件少于 500 行（`<= 499` 行），超限时报错指示按职责拆分为同家族 `<family>_<part>.go` 文件并禁止删注释或改用空泛文件名；
+  - `web/test/architecture.test.ts` 的 `file naming` 拒绝 camelCase 的 TypeScript 文件、非 PascalCase 的 Svelte 组件，以及 500 行及以上的生产 `.ts`/`.svelte` 文件（排除生成的 `src/lib/components/ui/`、测试与 stories），超限时提示按领域模块、子组件或架构分层拆分；
   - 规则页登记在 [Agent 规则](../agent-rules.md)，`AGENTS.md` 只保留一行指针。
 
 依据：
@@ -293,7 +294,8 @@
 - [分层清单](../../internal/archtest/layers_test.go)、[agent 名称守卫](../../internal/archtest/agentnames_test.go)、[架构规则](../../internal/archtest/arch_test.go)、[规则样例](../../internal/archtest/testdata/fixture)
 - [线上快照测试](../../internal/api/wire_snapshot_test.go)、[归一化回归测试](../../internal/api/wire_normalizer_test.go)、[分层说明](../architecture.md#分层与架构测试)
 - [前端架构守卫](../frontend-architecture.md)
-- [AGENTS.md 体积测试](../../internal/archtest/agents_size_test.go)、[Agent 规则索引](../agent-rules.md)、[文件命名守卫](../../internal/archtest/filenames_test.go)、[文件命名约定](../agent-rules/naming.md)、[前端命名守卫](../../web/test/architecture.test.ts)
+- [AGENTS.md 体积测试](../../internal/archtest/agents_size_test.go)、[Agent 规则索引](../agent-rules.md)、[文件命名约定](../agent-rules/naming.md)
+- [文件命名守卫](../../internal/archtest/filenames_test.go)、[文件大小守卫](../../internal/archtest/filesize_test.go)、[前端命名与大小守卫](../../web/test/architecture.test.ts)
 - [文档导航守卫](../../internal/docguard/links_test.go)、[文档中心](../README.md)、[首页](../../README.md)
 - [ESLint 架构规则](../../web/eslint.config.mjs)、[前端分层规则](../../web/.dependency-cruiser.cjs)、[前端架构测试](../../web/test/architecture.test.ts)、[文档治理](../doc-governance.md)、[文档治理规则与样例](../../internal/docguard/doc_test.go)。
 

@@ -1,3 +1,5 @@
+import { osc52CopyText } from "../terminal-clipboard";
+import type { TerminalGraphics } from "./terminal-graphics";
 import type { Terminal } from "@xterm/xterm";
 
 interface RendererInternals {
@@ -78,7 +80,7 @@ export function holdRepaintsDuringSync(term: Terminal): () => void {
 // which would swallow a written `CSI ? 2026 l` as data. The modes object is
 // replaced by reset(), so it is looked up when the update ends. Returns false
 // when the internals are unavailable.
-export function endSynchronizedOutput(term: Terminal): boolean {
+function endSynchronizedOutput(term: Terminal): boolean {
   const modes = core(term)?.coreService?.decPrivateModes;
   if (!modes || typeof modes.synchronizedOutput !== "boolean") return false;
   if (modes.synchronizedOutput) {
@@ -90,7 +92,96 @@ export function endSynchronizedOutput(term: Terminal): boolean {
 }
 
 // Whether endSynchronizedOutput() can end an update this terminal starts.
-export function canEndSynchronizedOutput(term: Terminal): boolean {
+function canEndSynchronizedOutput(term: Terminal): boolean {
   const modes = core(term)?.coreService?.decPrivateModes;
   return !!modes && typeof modes.synchronizedOutput === "boolean";
+}
+
+// CAN aborts an unfinished control sequence without executing it. Send it as
+// bytes so xterm also abandons any incomplete UTF-8 prefix before the reset.
+const resetBoundary = new Uint8Array([0x18]);
+// DEC 2026 synchronized output around a replay: xterm keeps the old screen
+// until the restored one is complete and paints it once, instead of a blank
+// screen and every intermediate frame. It starts right after CAN, so the screen
+// reset() empties is never painted, and again after reset(), which clears it.
+const syncStart = new TextEncoder().encode("\x1b[?2026h");
+const syncedResetBoundary = new Uint8Array([...resetBoundary, ...syncStart]);
+
+export interface SnapshotRestoreContext {
+  term: Terminal;
+  graphics: TerminalGraphics | undefined;
+  writeOutput(data: Uint8Array, parsed: () => void): void;
+  resetFind(): void;
+  scrollToBottom(): void;
+  isDisposed(): boolean;
+  isCurrent(version: number): boolean;
+  setReplaying(value: boolean): void;
+  setRestoring(value: boolean): void;
+  setDrawn(run: string): void;
+  isRecovering(): boolean;
+}
+
+export function restoreTerminalSnapshot(
+  ctx: SnapshotRestoreContext,
+  payload: Uint8Array,
+  run: string | undefined,
+  version: number,
+  releaseGraphics: (() => void) | undefined,
+  setRestoreFrame: (id: number) => void,
+) {
+  ctx.setRestoring(true);
+  const synchronize = canEndSynchronizedOutput(ctx.term);
+  ctx.writeOutput(synchronize ? syncedResetBoundary : resetBoundary, () => {
+    if (ctx.isDisposed()) return;
+    ctx.term.reset();
+    releaseGraphics?.();
+    ctx.resetFind();
+    if (ctx.isCurrent(version)) ctx.setReplaying(true);
+  });
+  let replay = payload;
+  if (synchronize) {
+    replay = new Uint8Array(syncStart.length + payload.length);
+    replay.set(syncStart);
+    replay.set(payload, syncStart.length);
+  }
+  ctx.writeOutput(replay, () => {
+    if (synchronize && !ctx.isDisposed() && ctx.isCurrent(version))
+      endSynchronizedOutput(ctx.term);
+    if (ctx.isCurrent(version)) ctx.setReplaying(false);
+    if (payload.length && run) ctx.setDrawn(run);
+    if (ctx.isDisposed() || !ctx.isCurrent(version)) return;
+    setRestoreFrame(
+      requestAnimationFrame(() => {
+        if (ctx.isDisposed() || !ctx.isCurrent(version)) return;
+        ctx.scrollToBottom();
+        ctx.setRestoring(ctx.isRecovering());
+      }),
+    );
+  });
+}
+
+export function registerTerminalProtocolHandlers(
+  term: Terminal,
+  isReplaying: () => boolean,
+  copy: (text: string) => void,
+  reportScheme: () => void,
+) {
+  const oscClipboard = term.parser.registerOscHandler(52, (data) => {
+    const text = osc52CopyText(data);
+    if (text === undefined) return false;
+    if (!isReplaying()) copy(text);
+    return true;
+  });
+  const schemeQuery = term.parser.registerCsiHandler(
+    { prefix: "?", final: "n" },
+    (params) => {
+      if (params.length !== 1 || params[0] !== 996) return false;
+      if (!isReplaying()) reportScheme();
+      return true;
+    },
+  );
+  return () => {
+    oscClipboard.dispose();
+    schemeQuery.dispose();
+  };
 }

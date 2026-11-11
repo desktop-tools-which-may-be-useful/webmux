@@ -1,4 +1,4 @@
-import { SvelteMap, SvelteURLSearchParams } from "svelte/reactivity";
+import { SvelteMap } from "svelte/reactivity";
 import { inflateSync } from "fflate";
 import type { Terminal } from "@xterm/xterm";
 import {
@@ -14,7 +14,10 @@ import {
 } from "../schemas";
 import {
   clientIdentity,
+  encodeIdsQuery,
   encodeSubmission,
+  encodeTerminalSize,
+  formatTerminalSocketPath,
   newSubmissionId,
   preparePaste,
 } from "../terminal-protocol";
@@ -24,7 +27,6 @@ import {
   type Connection,
   type SocketConnection,
 } from "../ws";
-import { osc52CopyText } from "../terminal-clipboard";
 import { createOutputBudget } from "../terminal-output";
 import { resetBrowserChrome, setBrowserChrome } from "../browser-chrome";
 import {
@@ -32,20 +34,11 @@ import {
   type TerminalGraphics,
 } from "./terminal-graphics";
 import {
-  canEndSynchronizedOutput,
-  endSynchronizedOutput,
+  registerTerminalProtocolHandlers,
+  restoreTerminalSnapshot,
 } from "./terminal-sync";
 
 const inputSendError = "终端输入未发送：连接不可用或发送队列已满，请重试。";
-// CAN aborts an unfinished control sequence without executing it. Send it as
-// bytes so xterm also abandons any incomplete UTF-8 prefix before the reset.
-const resetBoundary = new Uint8Array([0x18]);
-// DEC 2026 synchronized output around a replay: xterm keeps the old screen
-// until the restored one is complete and paints it once, instead of a blank
-// screen and every intermediate frame. It starts right after CAN, so the screen
-// reset() empties is never painted, and again after reset(), which clears it.
-const syncStart = new TextEncoder().encode("\x1b[?2026h");
-const syncedResetBoundary = new Uint8Array([...resetBoundary, ...syncStart]);
 
 // What the session socket needs from the mounted terminal view.
 export interface TerminalSocketView {
@@ -137,56 +130,33 @@ export function createTerminalSocket(id: string, manageChrome = true) {
     );
     const restore = (payload: Uint8Array, run: string | undefined) => {
       output.replay();
-      // Invalidate old decodes before queuing the new replay generation. The
-      // old images stay painted until the replayed screen replaces them.
       const releaseGraphics = graphics?.reset();
       const version = ++restoreVersion;
       cancelAnimationFrame(restoreFrame);
-      restoring = true;
-      // The update is ended in code, never by bytes after the snapshot: a raw
-      // snapshot may stop inside an unfinished sequence that live bytes finish.
-      const synchronize = canEndSynchronizedOutput(term);
-      // Public reset() resets the screen, not xterm's pending parser sequence.
-      // Parse CAN first, then reset away the old screen before replay/live bytes.
-      writeOutput(synchronize ? syncedResetBoundary : resetBoundary, () => {
-        if (disposed) return;
-        term.reset();
-        releaseGraphics?.();
-        view.resetFind();
-        // A superseded boundary may run late; it must not reopen the window
-        // after the newer replay already closed it.
-        if (version === restoreVersion) replaying = true;
-      });
-      let replay = payload;
-      if (synchronize) {
-        replay = new Uint8Array(syncStart.length + payload.length);
-        replay.set(syncStart);
-        replay.set(payload, syncStart.length);
-      }
-      writeOutput(replay, () => {
-        // A replay with images completes on the graphics chain, possibly after
-        // a newer restore started; only the current one may end its update.
-        if (synchronize && !disposed && version === restoreVersion)
-          endSynchronizedOutput(term);
-        // Only the current replay closes the window: a superseded one may
-        // finish late and must not expose the newer replay's OSC 52 copies
-        // and color queries as live output.
-        if (version === restoreVersion) replaying = false;
-        if (payload.length && run) drawn = run;
-        if (disposed || version !== restoreVersion) return;
-        restoreFrame = requestAnimationFrame(() => {
-          if (disposed || version !== restoreVersion) return;
-          view.scrollToBottom();
-          restoring = output.recovering;
-        });
-      });
+      restoreTerminalSnapshot(
+        {
+          term,
+          graphics,
+          writeOutput,
+          resetFind: () => view.resetFind(),
+          scrollToBottom: () => view.scrollToBottom(),
+          isDisposed: () => disposed,
+          isCurrent: (v) => v === restoreVersion,
+          setReplaying: (v) => (replaying = v),
+          setRestoring: (v) => (restoring = v),
+          setDrawn: (v) => (drawn = v),
+          isRecovering: () => output.recovering,
+        },
+        payload,
+        run,
+        version,
+        releaseGraphics,
+        (id) => (restoreFrame = id),
+      );
     };
     const sendSize = () => {
       if (controlling() && view.isVisible() && term.cols > 0 && term.rows > 0)
-        ws.send(
-          1,
-          encoder.encode(JSON.stringify({ cols: term.cols, rows: term.rows })),
-        );
+        ws.send(1, encodeTerminalSize(term.cols, term.rows));
     };
     // DEC mode 2031 reports: CSI ? 997 ; 1 n is dark, 2 is light. Programs
     // answer them by re-querying colors (OSC 10/11), which xterm answers
@@ -205,20 +175,15 @@ export function createTerminalSocket(id: string, manageChrome = true) {
     // Whether this connection has seen the program enable scheme reports.
     let schemeReports = false;
     const ws = connect(
-      () => {
-        const query = new SvelteURLSearchParams({
-          client: identity.id,
-          label: identity.label,
-        });
-        if (synced && generation) {
-          query.set("generation", generation);
-          query.set("offset", String(offset));
-        }
-        // permessage-deflate already compresses a compress=1 connection;
-        // otherwise the server DEFLATEs the replay itself.
-        if (!wsCompression()) query.set("zreplay", "1");
-        return `/ws/s/${id}?${query}`;
-      },
+      () =>
+        formatTerminalSocketPath(
+          id,
+          identity,
+          synced,
+          generation,
+          offset,
+          wsCompression(),
+        ),
       (data) => {
         if (typeof data === "string") return;
         // A DEFLATE frame wraps one whole server frame, type byte included.
@@ -333,11 +298,7 @@ export function createTerminalSocket(id: string, manageChrome = true) {
         if (state === "connected") {
           view.fit();
           // The PTY grid follows only after the server confirms control.
-          if (submissions.size)
-            ws.send(
-              4,
-              encoder.encode(JSON.stringify({ ids: [...submissions.keys()] })),
-            );
+          if (submissions.size) ws.send(4, encodeIdsQuery(submissions.keys()));
         }
         if (state === "connecting" || state === "reconnecting") {
           // The ring may have wrapped since the last position was received.
@@ -363,13 +324,7 @@ export function createTerminalSocket(id: string, manageChrome = true) {
         // rendered offset. Otherwise a query for an unknown submission ID is a
         // side-effect-free ping whose "missing" reply proves the socket alive.
         resume(send) {
-          return (
-            !stale &&
-            send(
-              4,
-              encoder.encode(JSON.stringify({ ids: [newSubmissionId()] })),
-            )
-          );
+          return !stale && send(4, encodeIdsQuery([newSubmissionId()]));
         },
       },
     );
@@ -378,24 +333,11 @@ export function createTerminalSocket(id: string, manageChrome = true) {
       if (!replaying) ws.send(6, encoder.encode(text));
     });
     const resize = term.onResize(sendSize);
-    // OSC 52 is the application copy request handled by xterm's clipboard
-    // addon. Selection copy (Ctrl+C, macOS Cmd+C and the selection toolbar)
-    // already uses this same callback, which writes the browser clipboard.
-    const oscClipboard = term.parser.registerOscHandler(52, (data) => {
-      const text = osc52CopyText(data);
-      if (text === undefined) return false;
-      if (!replaying) view.copy(text);
-      return true;
-    });
-    // CSI ? 996 n asks for the current scheme. Replayed history must not
-    // answer a query the program made long ago.
-    const schemeQuery = term.parser.registerCsiHandler(
-      { prefix: "?", final: "n" },
-      (params) => {
-        if (params.length !== 1 || params[0] !== 996) return false;
-        if (!replaying) reportScheme();
-        return true;
-      },
+    const disposeProtocol = registerTerminalProtocolHandlers(
+      term,
+      () => replaying,
+      (text) => view.copy(text),
+      reportScheme,
     );
     function restoreExited() {
       if (disposed) return;
@@ -426,8 +368,7 @@ export function createTerminalSocket(id: string, manageChrome = true) {
         document.removeEventListener("visibilitychange", visible);
         graphics?.dispose();
         resize.dispose();
-        oscClipboard.dispose();
-        schemeQuery.dispose();
+        disposeProtocol();
         output.dispose();
         ws.close();
         if (manageChrome) resetBrowserChrome();
@@ -528,10 +469,7 @@ export function createTerminalSocket(id: string, manageChrome = true) {
     track(submissionId: string, report: (state: SubmissionProgress) => void) {
       submissions.set(submissionId, report);
       if (connection === "connected")
-        socket?.send(
-          4,
-          encoder.encode(JSON.stringify({ ids: [submissionId] })),
-        );
+        socket?.send(4, encodeIdsQuery([submissionId]));
     },
     untrack(submissionId: string) {
       submissions.delete(submissionId);

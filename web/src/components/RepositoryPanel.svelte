@@ -220,19 +220,18 @@
     await tick();
     for (const el of outer) el.scrollTop = 0;
   }
-  function openWorktree(id: string) {
-    void push({ kind: "detail", id });
-  }
-  function openOperation(operation: BranchOperation) {
+  const openWorktree = (id: string) => void push({ kind: "detail", id });
+  const openOperation = (operation: BranchOperation) =>
     void push({ kind: "operation", operation });
-  }
   function operated() {
     branchesVersion++;
     onrefresh();
   }
   function openPath(path: string) {
     const tree = repository.worktrees.find((w) => w.path === path);
-    if (tree) openWorktree(tree.id);
+    if (!tree) return;
+    if (views.length) replaceTop({ kind: "detail", id: tree.id });
+    else openWorktree(tree.id);
   }
   async function back() {
     if (busy) return;
@@ -242,20 +241,14 @@
     for (const [el, offset] of saved) el.scrollTop = offset;
     saved = [];
   }
-  // The switch's way out to another worktree replaces it with that
-  // worktree's details.
-  function replaceTop(view: Subview) {
-    views = [...views.slice(0, -1), view];
-  }
-  // A finished switch shows the switched worktree's details: the view it
-  // was opened from, or one in its place.
+  const replaceTop = (view: Subview) => (views = [...views.slice(0, -1), view]);
   function switched(id: string) {
     const below = views.at(-2);
     if (below?.kind === "detail" && below.id === id) views = views.slice(0, -1);
     else replaceTop({ kind: "detail", id });
   }
   const worktreePaths = $derived(
-    new Set(repository.worktrees.map((tree) => tree.path)),
+    new Set(repository.worktrees.map((t) => t.path)),
   );
   const fetchReasonId = $props.id();
   const fetchLabel = $derived(fetching ? "正在获取远程" : "获取远程");
@@ -331,13 +324,13 @@
     {#if fetchError}
       <InlineNotice tone="danger">获取远程失败：{fetchError}</InlineNotice>
     {:else if fetchResults}
-      <InlineNotice
-        tone={failedFetches === 0
+      {@const tone =
+        failedFetches === 0
           ? "success"
           : failedFetches === fetchResults.length
             ? "danger"
             : "warning"}
-      >
+      <InlineNotice {tone}>
         <ul class="space-y-1" aria-label="获取结果">
           {#each fetchResults as result (result.remote)}
             <li class="wrap-anywhere">
@@ -479,10 +472,7 @@
               onchange={onrefresh}
               ondone={() => switched(id)}
               {onnewworktree}
-              ongoto={(path) => {
-                const tree = repository.worktrees.find((w) => w.path === path);
-                if (tree) replaceTop({ kind: "detail", id: tree.id });
-              }}
+              ongoto={openPath}
               oncancel={() => void back()}
             />{/key}
         {:else}

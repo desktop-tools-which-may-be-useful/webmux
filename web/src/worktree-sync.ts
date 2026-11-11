@@ -1,9 +1,19 @@
 // How a worktree or branch stands against its upstream, and the words the
 // UI uses for it. Every count is local: ahead and behind compare with the
 // remote-tracking refs from the last fetch.
+import {
+  remoteBranchBases,
+  remoteLocalName,
+  suggestWorktreeBranch,
+} from "./branch-name";
 import { relativeTime } from "./commit-choices";
+import type { WorktreePreset } from "./new-session-defaults";
 import type {
   Branch,
+  Branches,
+  Repository,
+  SwitchPreview,
+  SwitchTarget,
   Worktree,
   WorktreeChanges,
   WorktreeOperation,
@@ -102,4 +112,118 @@ export function changeCounts(changes: WorktreeChanges) {
 /** The last fetch's age (labels mark it approximate), or 未知 if never. */
 export function fetchedText(lastFetchedAt: string | null, now = Date.now()) {
   return lastFetchedAt ? relativeTime(lastFetchedAt, now) : "未知";
+}
+
+export function deriveSwitchBranchItems(
+  data: Branches | null,
+  worktreePath: string,
+  worktreeBranch: string | null,
+) {
+  const localNames = new Set((data?.branches ?? []).map((item) => item.name));
+  const remotes = data ? remoteBranchBases(data.bases, localNames) : [];
+  const localItems = (data?.branches ?? []).map((item) => {
+    const elsewhere = item.worktreePaths.find((p) => p !== worktreePath);
+    return {
+      name: item.name,
+      reason:
+        item.name === worktreeBranch
+          ? "当前分支"
+          : elsewhere
+            ? `已在 ${elsewhere} 检出`
+            : undefined,
+    };
+  });
+  const remoteItems = remotes.map((item) => {
+    const local = remoteLocalName(item.name);
+    return {
+      name: item.name,
+      reason: localNames.has(local)
+        ? `本地已有 ${local}，请直接切换到该分支`
+        : undefined,
+    };
+  });
+  return { localNames, remotes, localItems, remoteItems };
+}
+
+export function suggestSwitchBranchName(
+  localNames: ReadonlySet<string>,
+  repository: Repository,
+  avoid?: string,
+) {
+  return suggestWorktreeBranch({
+    branchNames: [...localNames],
+    worktreePaths: repository.worktrees.map((tree) => tree.path),
+    avoid,
+  });
+}
+
+export function buildSwitchTarget(input: {
+  mode: "existing" | "new" | "detach";
+  chosen: { kind: "local" | "remote"; name: string } | null;
+  newName: string;
+  nameTaken: boolean;
+  startPoint: string;
+  commit: string;
+}): SwitchTarget | null {
+  if (input.mode === "existing") {
+    if (!input.chosen) return null;
+    return input.chosen.kind === "local"
+      ? { kind: "local", branch: input.chosen.name }
+      : { kind: "remote", ref: input.chosen.name };
+  }
+  if (input.mode === "new") {
+    const name = input.newName.trim();
+    return name && !input.nameTaken && input.startPoint
+      ? { kind: "new", name, startPoint: input.startPoint }
+      : null;
+  }
+  return input.commit ? { kind: "detach", commit: input.commit } : null;
+}
+
+export function canConfirmSwitch(
+  preview: SwitchPreview | null,
+  previewing: boolean,
+  busy: boolean,
+  acknowledged: boolean,
+): boolean {
+  return (
+    !!preview &&
+    !previewing &&
+    !busy &&
+    preview.confirmationId !== "" &&
+    !preview.blockers.length &&
+    (!preview.sessions.length || acknowledged)
+  );
+}
+
+export function resolveSwitchOccupantPath(
+  preview: SwitchPreview | null,
+): string | undefined {
+  return preview?.blockers.find((item) => item.code === "occupied" && item.path)
+    ?.path;
+}
+
+export function resolveSwitchNewWorktreePreset(
+  preview: SwitchPreview | null,
+  target: SwitchTarget | null,
+  startIsBranch: boolean,
+): WorktreePreset | null {
+  if (!preview || !target || target.kind === "detach") return null;
+  const blocked = (code: string) =>
+    preview.blockers.some((item) => item.code === code);
+  if (!blocked("changes") && !preview.sessions.length) return null;
+  if (blocked("occupied") || blocked("exists") || blocked("same")) return null;
+  if (target.kind === "local")
+    return { mode: "existing", branch: target.branch };
+  if (target.kind === "remote")
+    return {
+      mode: "new",
+      startBranch: target.ref,
+      name: remoteLocalName(target.ref),
+    };
+  return {
+    mode: "new",
+    name: target.name,
+    ...(startIsBranch ? { startBranch: target.startPoint } : {}),
+  };
 }

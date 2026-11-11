@@ -13,8 +13,7 @@ export type SessionView = z.infer<typeof SessionViewSchema>;
 // Ordinary sessions are always active; a session with a chat view becomes
 // closed or interrupted and then lives on as an archive record.
 export const SessionStateSchema = z.enum(["active", "closed", "interrupted"]);
-export type SessionState = z.infer<typeof SessionStateSchema>;
-export const TransitionPhaseSchema = z.enum([
+const TransitionPhaseSchema = z.enum([
   "interrupting",
   "awaiting_choice",
   "cancelling",
@@ -30,7 +29,6 @@ export const SessionTransitionSchema = z.object({
   to: SessionViewSchema,
   phase: TransitionPhaseSchema,
 });
-export type SessionTransition = z.infer<typeof SessionTransitionSchema>;
 
 // The agent behind a session's chat view.
 export const SessionAgentSchema = z.object({
@@ -43,7 +41,6 @@ export const SessionAgentSchema = z.object({
   // tool call or plan step it is on, one line. Omitted otherwise.
   work: z.string().optional(),
 });
-export type SessionAgent = z.infer<typeof SessionAgentSchema>;
 
 // What a closed or interrupted session's archive record adds.
 export const SessionArchiveSchema = z.object({
@@ -54,7 +51,6 @@ export const SessionArchiveSchema = z.object({
   interruptedAt: datetime.nullable(),
   updatedAt: datetime,
 });
-export type SessionArchive = z.infer<typeof SessionArchiveSchema>;
 
 export const ViewChangeResultSchema = z.object({
   view: SessionViewSchema,
@@ -78,7 +74,7 @@ export const HybridReleaseSchema = z.object({
 });
 export type HybridRelease = z.infer<typeof HybridReleaseSchema>;
 
-export const AgentCandidateSchema = z.object({
+const AgentCandidateSchema = z.object({
   agentSessionId: z.string(),
   title: z.string(),
   updatedAt: datetime,
@@ -133,7 +129,7 @@ export const ChatAttachmentSchema = z.object({
 });
 export type ChatAttachment = z.infer<typeof ChatAttachmentSchema>;
 
-export const ChatContentSchema = z.object({
+const ChatContentSchema = z.object({
   type: z.enum(["text", "diff", "resource_link", "unsupported"]),
   text: z.string().optional(),
   path: z.string().optional(),
@@ -152,7 +148,7 @@ const ChatLocationSchema = z.object({
   line: z.number().int().optional(),
 });
 
-export const ChatToolSchema = z.object({
+const ChatToolSchema = z.object({
   toolCallId: z.string().min(1),
   kind: z.string().optional(),
   title: z.string().optional(),
@@ -160,9 +156,8 @@ export const ChatToolSchema = z.object({
   content: z.array(ChatContentSchema).optional(),
   locations: z.array(ChatLocationSchema).optional(),
 });
-export type ChatTool = z.infer<typeof ChatToolSchema>;
 
-export const ChatPlanSchema = z.object({
+const ChatPlanSchema = z.object({
   entries: z.array(
     z.object({
       content: z.string(),
@@ -173,7 +168,7 @@ export const ChatPlanSchema = z.object({
 });
 export type ChatPlan = z.infer<typeof ChatPlanSchema>;
 
-export const ChatCommandSchema = z.object({
+const ChatCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
   hint: z.string().optional(),
@@ -197,7 +192,7 @@ export const ChatConfigSchema = z.object({
 });
 export type ChatConfig = z.infer<typeof ChatConfigSchema>;
 
-export const ChatUsageSchema = z.object({
+const ChatUsageSchema = z.object({
   used: z.number().nonnegative(),
   size: z.number().nonnegative(),
   cost: z.number().optional(),
@@ -224,7 +219,7 @@ const ChatFormFieldSchema = z.object({
 });
 export type ChatFormField = z.infer<typeof ChatFormFieldSchema>;
 
-export const ChatRequestSchema = z.object({
+const ChatRequestSchema = z.object({
   requestId: z.string().min(1),
   kind: z.enum(["permission", "form"]),
   toolCallId: z.string().optional(),
@@ -240,7 +235,7 @@ export const ChatRequestSchema = z.object({
 });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
-export const StopReasonSchema = z.enum([
+const StopReasonSchema = z.enum([
   "end_turn",
   "max_tokens",
   "max_turn_requests",
@@ -253,7 +248,7 @@ export type StopReason = z.infer<typeof StopReasonSchema>;
 
 const eventBase = { seq: z.number().int().nonnegative(), at: datetime };
 
-export const ChatEventSchema = z.discriminatedUnion("kind", [
+const ChatEventSchema = z.discriminatedUnion("kind", [
   z.object({
     ...eventBase,
     kind: z.literal("message.append"),
@@ -360,14 +355,14 @@ export const ChatPermissionModeRequestSchema = z
   .object({ clientRequestId: z.string(), mode: ChatPermissionModeSchema })
   .strict();
 
-export const ChatEligibilitySchema = z.object({
+const ChatEligibilitySchema = z.object({
   available: z.boolean(),
   reason: z.string().optional(),
   connector: AgentConnectorSchema.optional(),
 });
 export type ChatEligibility = z.infer<typeof ChatEligibilitySchema>;
 
-export const ChatStateSchema = z.object({
+const ChatStateSchema = z.object({
   // Components running below their verified versions.
   outdated: z.array(
     z.object({ name: z.string(), version: z.string(), verified: z.string() }),
@@ -446,4 +441,3 @@ export const SessionInputResultSchema = z.object({
   turnId: z.string().optional(),
   promptId: z.string().optional(),
 });
-export type SessionInputResult = z.infer<typeof SessionInputResultSchema>;

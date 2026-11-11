@@ -1,8 +1,16 @@
 // Rows for the start-commit dropdown. A row shows the commit title first and
 // its short hash, tip tags and age second, so users recognise a commit by what
 // it did and how recent it is instead of typing a hash.
+import { api } from "./api";
+import { errorMessage } from "./error";
+import type { WorktreePreset } from "./new-session-defaults";
+import {
+  BranchesSchema,
+  CommitsSchema,
+  RefreshBranchBaseRequestSchema,
+  RefreshBranchBaseResponseSchema,
+} from "./schemas";
 import type { z } from "zod";
-import type { CommitsSchema } from "./schemas";
 
 export type Commit = z.infer<typeof CommitsSchema>["commits"][number];
 /** A branch tip the history was read from, e.g. the local or upstream tip. */
@@ -83,4 +91,171 @@ export function commitChoices(
     },
     ...rows,
   ];
+}
+
+// Tags for a branch's local tip and, after a fetch, its upstream tip.
+export function branchTips(local: string, upstreamHead: string): CommitTip[] {
+  if (!local && upstreamHead) return [{ hash: upstreamHead, tag: "远程最新" }];
+  if (!upstreamHead) return [{ hash: local, tag: "本地最新" }];
+  if (upstreamHead === local) return [{ hash: local, tag: "本地与远程最新" }];
+  return [
+    { hash: upstreamHead, tag: "远程最新" },
+    { hash: local, tag: "本地最新" },
+  ];
+}
+
+export function fetchRepositoryCommits(
+  repositoryId: string,
+  tips: CommitTip[],
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams(
+    [...new Set(tips.map((tip) => tip.hash))].map((hash) => ["from", hash]),
+  );
+  return api(
+    `/repositories/${repositoryId}/commits?${query}`,
+    CommitsSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+
+export function refreshRepositoryBranchBase(
+  repositoryId: string,
+  branchName: string,
+  signal: AbortSignal,
+) {
+  return api(
+    `/repositories/${repositoryId}/branches/refresh`,
+    RefreshBranchBaseResponseSchema,
+    "POST",
+    { branch: branchName },
+    signal,
+    RefreshBranchBaseRequestSchema,
+  );
+}
+
+export function fetchRepositoryBranches(
+  repositoryId: string,
+  signal?: AbortSignal,
+) {
+  return api(
+    `/repositories/${repositoryId}/branches`,
+    BranchesSchema,
+    "GET",
+    undefined,
+    signal,
+  );
+}
+
+export function formatCommitLoadError(err: unknown) {
+  return `无法读取最近提交：${errorMessage(err)}`;
+}
+
+export function resolveRefreshedLocalHead(
+  value: z.infer<typeof RefreshBranchBaseResponseSchema>,
+  data: z.infer<typeof BranchesSchema> | null,
+  branchName: string,
+): string {
+  if (value.baseSource === "local") return value.base;
+  return data?.branches.find((item) => item.name === branchName)?.head ?? "";
+}
+
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
+export function resolveSelectedStartBranchState(
+  name: string,
+  data: z.infer<typeof BranchesSchema> | null,
+  remoteBranches: readonly { name: string; head: string; subject: string }[],
+):
+  | {
+      kind: "local";
+      base: string;
+      baseSubject: string;
+      tips: CommitTip[];
+    }
+  | {
+      kind: "remote";
+      base: string;
+      upstream: string;
+      baseSubject: string;
+      tips: CommitTip[];
+    }
+  | {
+      kind: "default";
+      base: string;
+      baseSubject: string;
+      tips: CommitTip[];
+    } {
+  const selected = data?.branches.find((item) => item.name === name);
+  if (selected) {
+    const baseSubject =
+      data?.bases.find((item) => item.name === `refs/heads/${name}`)?.subject ||
+      "";
+    return {
+      kind: "local",
+      base: selected.head,
+      baseSubject,
+      tips: branchTips(selected.head, ""),
+    };
+  }
+  const remote = remoteBranches.find((item) => item.name === name);
+  if (remote) {
+    return {
+      kind: "remote",
+      base: remote.head,
+      upstream: remote.name,
+      baseSubject: remote.subject,
+      tips: branchTips("", remote.head),
+    };
+  }
+  const base = data?.defaultBase || "";
+  return {
+    kind: "default",
+    base,
+    baseSubject: data?.defaultBaseSubject || "",
+    tips: base ? [{ hash: base, tag: "当前主工作区" }] : [],
+  };
+}
+export function resolveWorktreePresetSelection(
+  initial: WorktreePreset,
+  value: z.infer<typeof BranchesSchema>,
+): { branch: string; branchEdited: boolean } | null {
+  if (initial.mode === "existing") {
+    const chosen = value.branches.find((item) => item.name === initial.branch);
+    if (chosen && !chosen.worktreePaths.length) {
+      return { branch: chosen.name, branchEdited: false };
+    }
+    return null;
+  }
+  if (initial.name) {
+    return { branch: initial.name, branchEdited: true };
+  }
+  return null;
+}
+
+export function resolveInitialStartBranch(
+  value: z.infer<typeof BranchesSchema>,
+  remoteBranches: readonly { name: string }[],
+  initial: WorktreePreset | undefined,
+  preferredStartBranch: string | undefined,
+): string {
+  const start = initial?.mode === "new" ? initial.startBranch : "";
+  if (
+    start &&
+    (value.branches.some((item) => item.name === start) ||
+      remoteBranches.some((item) => item.name === start))
+  ) {
+    return start;
+  }
+  if (
+    preferredStartBranch &&
+    value.branches.some((item) => item.name === preferredStartBranch)
+  ) {
+    return preferredStartBranch;
+  }
+  return value.defaultBranch || "";
 }

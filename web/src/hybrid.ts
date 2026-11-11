@@ -1,4 +1,5 @@
 import type {
+  AgentCandidate,
   AgentConnector,
   ChatEligibility,
   ChatState,
@@ -167,4 +168,97 @@ export function switchSteps(
 /** An agent session ID shortened for notices. */
 export function shortId(id: string) {
   return id.length > 12 ? `${id.slice(0, 8)}…` : id;
+}
+
+/**
+ * What the pane shows: the terminal (also for ordinary sessions), the chat
+ * view, a switch in progress, or the resume choices of a session that is
+ * gone but recoverable.
+ */
+export type HybridView = "terminal" | "chat" | "switching" | "recovery";
+
+/** A dismissible page strip. */
+export type HybridNotice = {
+  key: string;
+  tone: "info" | "warning" | "danger";
+  text: string;
+};
+
+/** A switch that waits for the user to confirm interrupting a turn. */
+export type HybridConfirm = { to: SwitchTarget; title: string; body: string };
+
+/** A switch to chat that found several agent sessions to continue. */
+export type HybridAmbiguous = {
+  message: string;
+  candidates: AgentCandidate[];
+};
+
+export const switchConfirmations: Record<
+  SwitchTarget,
+  Omit<HybridConfirm, "to">
+> = {
+  terminal: {
+    title: "切换到终端？",
+    body: "当前回合会被中断，已输出的内容会保留。",
+  },
+  chat: {
+    title: "切换到聊天？",
+    body: "TUI 正在执行回合：会先发送中断键，等它停下后再退出 TUI。",
+  },
+};
+
+export function buildHybridNotices(
+  state: ChatState | undefined,
+  where: SessionView | undefined,
+  error: string,
+  notice: string,
+  dropped: readonly string[],
+  dismissed: ReadonlySet<string>,
+): HybridNotice[] {
+  const list: HybridNotice[] = [];
+  const failure = state?.switchError || error;
+  if (failure)
+    list.push({ key: `failure:${failure}`, tone: "danger", text: failure });
+  if (notice)
+    list.push({ key: `notice:${notice}`, tone: "info", text: notice });
+  if (dropped.length)
+    list.push({
+      key: `dropped:${dropped.join(" ")}`,
+      tone: "warning",
+      text: `以下参数在恢复时未保留：${dropped.join(" ")}`,
+    });
+  const change = state?.idChange;
+  if (change && where === "terminal")
+    list.push({
+      key: `id:${change.from}>${change.to}`,
+      tone: "info",
+      text: `TUI 已切换到新会话 ${shortId(change.to)}（上一个：${shortId(change.from)}），切到聊天时接手新会话`,
+    });
+  if (state?.queueLost)
+    list.push({
+      key: "queue-lost",
+      tone: "warning",
+      text: `排队的消息已丢失（${state.queueLost} 条），浏览器中的草稿不受影响`,
+    });
+  return list.filter((item) => !dismissed.has(item.key));
+}
+
+export function deriveHybridHeaderInfo(
+  where: SessionView | undefined,
+  fromServer: boolean,
+  current: SessionInfo | undefined,
+  terminalInfo: SessionInfo | undefined,
+  state: ChatState | undefined,
+): SessionInfo | undefined {
+  const restInfo = fromServer ? current : undefined;
+  if (where === "terminal" || !restInfo) return terminalInfo ?? current;
+  const running = state?.turn.running ?? false;
+  const status = running
+    ? "running"
+    : state?.requests.length
+      ? "waiting"
+      : restInfo.status === "running"
+        ? "idle"
+        : restInfo.status;
+  return { ...restInfo, status } satisfies SessionInfo;
 }

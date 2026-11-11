@@ -1,3 +1,5 @@
+import type { ControlState } from "../schemas";
+import type { TerminalRenderer } from "./terminal-renderer";
 import type { IDisposable, Terminal } from "@xterm/xterm";
 import { isIOS } from "../touch-input";
 
@@ -352,5 +354,90 @@ export function attachTerminalInput(
     parent.classList.remove("ios-ime");
     input.dispose();
     provenance?.dispose();
+  };
+}
+
+export function toggleTerminalKeyboard(
+  terminal: Terminal | undefined,
+  isKeyboardDismissed: () => boolean,
+  reopenAttempted: boolean,
+  claim: () => void,
+  beforeOpen?: (target: HTMLElement) => void,
+): boolean {
+  const textarea = terminal?.textarea;
+  if (!terminal || !textarea) return reopenAttempted;
+  const focused = document.activeElement === textarea;
+  if (focused && isKeyboardDismissed() && !reopenAttempted) {
+    // Android can hide the IME with Back while the helper keeps focus;
+    // focus() alone is then a no-op, so restart focus once to reopen it.
+    // If the browser still declines, the next press toggles normally.
+    claim();
+    textarea.blur();
+    beforeOpen?.(textarea);
+    terminal.focus();
+    return true;
+  }
+  if (focused) {
+    terminal.blur();
+    return false;
+  }
+  claim();
+  beforeOpen?.(textarea);
+  terminal.focus();
+  return false;
+}
+
+export function fitTerminalGrid(
+  parent: HTMLElement,
+  terminal: Terminal | undefined,
+  renderer: TerminalRenderer | undefined,
+  control: ControlState | undefined,
+  observing: boolean,
+  locked: boolean,
+  held: boolean,
+  sized: boolean,
+  fitWidth: number,
+  fitFont: number,
+) {
+  parent.classList.toggle("observing", observing);
+  if (control && observing) {
+    if (terminal?.cols !== control.cols || terminal?.rows !== control.rows) {
+      terminal?.resize(control.cols, control.rows);
+      parent.scrollTop = parent.scrollHeight;
+    }
+    return { sized: false, fitWidth, fitFont };
+  }
+  if (!sized || (!locked && !held)) {
+    renderer?.fit();
+    if (renderer) {
+      return {
+        sized: true,
+        fitWidth: parent.offsetWidth,
+        fitFont: terminal?.options.fontSize ?? 0,
+      };
+    }
+  }
+  return { sized, fitWidth, fitFont };
+}
+
+export function bindTerminalViewport(
+  term: Terminal,
+  parent: HTMLElement,
+  onSelect: () => void,
+  onUserScroll: () => void,
+  onWriteParsed: () => void,
+  onNativePaste: () => void,
+) {
+  parent.addEventListener("paste", onNativePaste, true);
+  const selected = term.onSelectionChange(onSelect);
+  const scrolled = term.onScroll(onUserScroll);
+  const parsed = term.onWriteParsed(onWriteParsed);
+  parent.addEventListener("scroll", onUserScroll, { passive: true });
+  return () => {
+    scrolled.dispose();
+    parsed.dispose();
+    parent.removeEventListener("scroll", onUserScroll);
+    parent.removeEventListener("paste", onNativePaste, true);
+    selected.dispose();
   };
 }

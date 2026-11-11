@@ -1,7 +1,6 @@
 import { applyFrame, emptyChat, type ChatModel } from "../../src/chat-model";
 import {
   ChatFrameSchema,
-  ChatStateSchema,
   CodeChangeSchema,
   type AgentConnector,
   type ChatEvent,
@@ -483,12 +482,15 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
       },
     });
   }
-  const start = applyFrame(emptyChat(), {
-    type: "snapshot",
-    generation: "story",
-    from: 0,
-    state: ChatStateSchema.parse(baseState(agent)),
-  });
+  const start = applyFrame(
+    emptyChat(),
+    ChatFrameSchema.parse({
+      type: "snapshot",
+      generation: "story",
+      from: 0,
+      state: baseState(agent),
+    }),
+  );
   const model = withEvents(start, events);
   const phase: TransitionPhase | undefined =
     scenario === "switching"
@@ -519,43 +521,56 @@ export function chatFixture(scenario: Scenario, agent: Agent) {
   const view: SessionView = terminalScenarios.includes(scenario)
     ? "terminal"
     : "chat";
-  const state = ChatStateSchema.parse({
-    ...baseState(agent),
-    eligibility,
-    config,
-    turn: running
-      ? {
-          running: true,
-          startedAt: new Date(Date.now() - 65_000).toISOString(),
-        }
-      : scenario === "commands" || scenario === "cancelled"
+  const state = ChatFrameSchema.parse({
+    type: "state",
+    state: {
+      ...baseState(agent),
+      eligibility,
+      config,
+      turn: running
         ? {
-            running: false,
-            stopReason: scenario === "cancelled" ? "cancelled" : "end_turn",
-            startedAt: "2026-01-01T11:57:54Z",
-            endedAt: at,
+            running: true,
+            startedAt: new Date(Date.now() - 65_000).toISOString(),
           }
-        : { running: false },
-    requests: scenario === "permission" ? [permissionRequest] : [],
-    plan: plan(scenario === "commands"),
-    queue: {
-      paused: scenario === "cancelled",
-      items:
-        scenario === "conversation" || scenario === "cancelled" ? queued : [],
-    },
-    idChange:
-      scenario === "terminal" ? { from: ids.previous, to: ids.current } : null,
-    connectorMissing:
-      scenario === "connector-missing"
-        ? (agentMetadata[agent].connector ?? codexConnector)
-        : undefined,
-    switchError:
-      scenario === "recovery-failure"
-        ? "恢复会话失败：无法加载保存的 agent 会话"
-        : undefined,
-    recovery: scenario === "recovery-failure" ? { state: "interrupted" } : null,
-  } satisfies ChatState);
-  return { model, state, view, phase, agentSessionId: ids.current };
+        : scenario === "commands" || scenario === "cancelled"
+          ? {
+              running: false,
+              stopReason: scenario === "cancelled" ? "cancelled" : "end_turn",
+              startedAt: "2026-01-01T11:57:54Z",
+              endedAt: at,
+            }
+          : { running: false },
+      requests: scenario === "permission" ? [permissionRequest] : [],
+      plan: plan(scenario === "commands"),
+      queue: {
+        paused: scenario === "cancelled",
+        items:
+          scenario === "conversation" || scenario === "cancelled" ? queued : [],
+      },
+      idChange:
+        scenario === "terminal"
+          ? { from: ids.previous, to: ids.current }
+          : null,
+      connectorMissing:
+        scenario === "connector-missing"
+          ? (agentMetadata[agent].connector ?? codexConnector)
+          : undefined,
+      switchError:
+        scenario === "recovery-failure"
+          ? "恢复会话失败：无法加载保存的 agent 会话"
+          : undefined,
+      recovery:
+        scenario === "recovery-failure" ? { state: "interrupted" } : null,
+    } satisfies ChatState,
+  });
+  if (state.type !== "state") throw new Error("expected state frame");
+  return {
+    model,
+    state: state.state,
+    view,
+    phase,
+    agentSessionId: ids.current,
+  };
 }
 
 // The third-party connector Codex CLI's chat view runs through.

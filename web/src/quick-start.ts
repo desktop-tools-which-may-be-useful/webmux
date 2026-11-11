@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { api, APIError, store, stored } from "./api";
+import { remoteBranchBases, suggestWorktreeBranch } from "./branch-name";
 import type { ConfigValue } from "./chat-api";
 import { newRequestId } from "./ids";
+import { selectableWorktree } from "./new-session-defaults";
 import {
+  BranchesSchema,
   ChatAttachmentSchema,
   ChatPermissionModeSchema,
   CreateSessionFailureSchema,
@@ -13,6 +16,9 @@ import {
   type ChatPermissionMode,
   type CreateSessionFailure,
   type CreateSessionRequest,
+  type Repository,
+  type SessionView,
+  type Worktree,
 } from "./schemas";
 
 // Quick start's memory on this device: the repository and agent of the last
@@ -170,7 +176,7 @@ export function pickDefault<T extends { id: string }>(
 }
 
 /** The values the page shows for each option, as the request sends them. */
-export function configValues(options: readonly ChatConfig[]) {
+function configValues(options: readonly ChatConfig[]) {
   return Object.fromEntries(
     options.flatMap((option) =>
       option.type === "boolean"
@@ -184,7 +190,7 @@ export function configValues(options: readonly ChatConfig[]) {
   );
 }
 
-export type QuickStartOutcome =
+type QuickStartOutcome =
   | { ok: true; sessionId: string }
   | { ok: false; failure: CreateSessionFailure };
 
@@ -193,7 +199,7 @@ export type QuickStartOutcome =
  * message. A dropped connection is retried once with the same request ID,
  * which the server answers with the first run's result.
  */
-export async function sendQuickStart(
+async function sendQuickStart(
   request: Omit<CreateSessionRequest, "clientRequestId">,
   clientRequestId = newRequestId(),
 ): Promise<QuickStartOutcome> {
@@ -233,3 +239,250 @@ export const failedStep: Record<CreateSessionFailure["step"], string> = {
   config: "应用配置失败",
   prompt: "发送首条消息失败",
 };
+
+export type QuickStartBranches = z.infer<typeof BranchesSchema>;
+
+export function saveQuickStartDraftFromPage(params: {
+  text: string;
+  attachments: ChatAttachment[];
+  repositoryChoice?: string;
+  agentChoice?: string;
+  targetModeChoice?: QuickStartTargetMode;
+  baseChoice?: { repositoryId: string; name: string };
+  worktreeChoice?: { repositoryId: string; worktreeId: string };
+  permissionMode: ChatPermissionMode;
+  edits: Record<string, Record<string, ConfigValue>>;
+  instructionChoice?: { repositoryId: string; use: boolean };
+  remembered?: QuickStartChoice;
+}) {
+  const {
+    text,
+    attachments,
+    repositoryChoice,
+    agentChoice,
+    targetModeChoice,
+    baseChoice,
+    worktreeChoice,
+    permissionMode,
+    edits,
+    instructionChoice,
+    remembered,
+  } = params;
+  const edited = Object.keys(edits).length ? edits : undefined;
+  const rememberedMode = remembered?.targetMode ?? "new";
+  quickStartMemory.saveDraftState({
+    text,
+    ...(attachments.length ? { attachments } : {}),
+    ...(repositoryChoice && repositoryChoice !== remembered?.repositoryId
+      ? { repositoryId: repositoryChoice }
+      : {}),
+    ...(agentChoice && agentChoice !== remembered?.configId
+      ? { configId: agentChoice }
+      : {}),
+    ...(targetModeChoice && targetModeChoice !== rememberedMode
+      ? { targetMode: targetModeChoice }
+      : {}),
+    ...(baseChoice ? { baseChoice } : {}),
+    ...(worktreeChoice &&
+    (worktreeChoice.repositoryId !== remembered?.worktreeChoice?.repositoryId ||
+      worktreeChoice.worktreeId !== remembered?.worktreeChoice?.worktreeId)
+      ? { worktreeChoice }
+      : {}),
+    ...(permissionMode !== "auto" ? { permissionMode } : {}),
+    ...(edited ? { edits: edited } : {}),
+    ...(instructionChoice ? { instructionChoice } : {}),
+  });
+}
+
+export function resolveQuickStartBranches(
+  branchData: QuickStartBranches | undefined,
+  repositoryId: string | undefined,
+  baseChoice: { repositoryId: string; name: string } | undefined,
+) {
+  if (!branchData) {
+    return {
+      localBranches: [] as { name: string; head: string }[],
+      remoteBranches: [] as { name: string; head: string }[],
+      baseName: "",
+      base: "",
+    };
+  }
+  const localBranches = branchData.branches.map(({ name, head }) => ({
+    name,
+    head,
+  }));
+  const main = branchData.defaultBranch ?? "HEAD";
+  if (
+    branchData.defaultBase &&
+    !localBranches.some((branch) => branch.name === main)
+  )
+    localBranches.unshift({ name: main, head: branchData.defaultBase });
+  const remoteBranches = remoteBranchBases(
+    branchData.bases,
+    localBranches.map((branch) => branch.name),
+  ).map(({ name, head }) => ({ name, head }));
+  const baseBranches = [...localBranches, ...remoteBranches];
+  const baseName =
+    baseChoice?.repositoryId === repositoryId &&
+    baseBranches.some((branch) => branch.name === baseChoice?.name)
+      ? (baseChoice?.name ?? "")
+      : branchData.defaultBase
+        ? (branchData.defaultBranch ?? "HEAD")
+        : "";
+  const base =
+    baseBranches.find((branch) => branch.name === baseName)?.head ?? "";
+  return { localBranches, remoteBranches, baseName, base };
+}
+
+export function resolveQuickStartWorktree(
+  repository: Repository | undefined,
+  worktreeChoice: { repositoryId: string; worktreeId: string } | undefined,
+) {
+  const worktrees = repository?.worktrees ?? [];
+  const defaultWorktree =
+    worktrees.find(
+      (item) => item.kind === "main" && selectableWorktree(item),
+    ) ?? worktrees.find(selectableWorktree);
+  let selectedWorktree = defaultWorktree;
+  if (worktreeChoice?.repositoryId === repository?.id) {
+    const kept = worktrees.find(
+      (item) =>
+        item.id === worktreeChoice?.worktreeId && selectableWorktree(item),
+    );
+    if (kept) selectedWorktree = kept;
+  }
+  return { worktrees, defaultWorktree, selectedWorktree };
+}
+
+export async function executeQuickStart(params: {
+  repository: Repository;
+  agentId: string;
+  startSide: SessionView;
+  text: string;
+  useInstruction: boolean;
+  attachments: ChatAttachment[];
+  options: readonly ChatConfig[];
+  permissionMode: ChatPermissionMode;
+  targetMode: QuickStartTargetMode;
+  selectedWorktree: Worktree | undefined;
+  branchData: QuickStartBranches | undefined;
+  base: string;
+  commitAttachments: (items: ChatAttachment[]) => void;
+  restoreAttachments: (items: ChatAttachment[]) => void;
+  onSuccess: (sessionId: string) => void;
+}): Promise<CreateSessionFailure | undefined> {
+  const {
+    repository,
+    agentId,
+    startSide,
+    text,
+    useInstruction,
+    attachments,
+    options,
+    permissionMode,
+    targetMode,
+    selectedWorktree,
+    branchData,
+    base,
+    commitAttachments,
+    restoreAttachments,
+    onSuccess,
+  } = params;
+  const chat = startSide === "chat";
+  const sharedRequest = {
+    configId: agentId,
+    view: startSide,
+    prompt: text,
+    useInitInstruction: !!repository.initInstruction && useInstruction,
+    // The server fills {{dir}} and {{webmux}} in the message once the
+    // session exists, as the quick command menu inserts them.
+    expandPrompt: true,
+    ...(attachments.length ? { attachments } : {}),
+    // A terminal start takes no agent options or permission mode.
+    ...(chat
+      ? {
+          agentConfig: configValues(options),
+          permissionMode,
+        }
+      : {}),
+  };
+
+  if (targetMode === "existing" && selectedWorktree) {
+    const outcome = await sendQuickStart({
+      workspace: {
+        repositoryId: repository.id,
+        worktreeId: selectedWorktree.id,
+      },
+      ...sharedRequest,
+    });
+    if (outcome.ok) {
+      commitAttachments(attachments);
+      store("quickStartSide", startSide);
+      quickStartMemory.rememberChoice({
+        repositoryId: repository.id,
+        configId: agentId,
+        targetMode: "existing",
+        worktreeChoice: {
+          repositoryId: repository.id,
+          worktreeId: selectedWorktree.id,
+        },
+      });
+      quickStartMemory.clearDraft();
+      onSuccess(outcome.sessionId);
+      return undefined;
+    }
+    if (outcome.failure.step === "prompt") commitAttachments(attachments);
+    else restoreAttachments(attachments);
+    return outcome.failure;
+  }
+
+  const data = branchData!;
+  const taken = data.branches.map((branch) => branch.name);
+  const paths = repository.worktrees.map((tree) => tree.path);
+  let avoid: string | undefined;
+  // A branch or directory that appeared since the list was read is a
+  // conflict; draw another name and send again under a new request ID.
+  let lastFailure: CreateSessionFailure | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const branch = suggestWorktreeBranch({
+      branchNames: taken,
+      worktreePaths: paths,
+      avoid,
+    });
+    const outcome = await sendQuickStart({
+      newWorktree: {
+        repositoryId: repository.id,
+        mode: "new",
+        base,
+        branch,
+      },
+      ...sharedRequest,
+    });
+    if (outcome.ok) {
+      commitAttachments(attachments);
+      store("quickStartSide", startSide);
+      quickStartMemory.rememberChoice({
+        repositoryId: repository.id,
+        configId: agentId,
+      });
+      quickStartMemory.clearDraft();
+      onSuccess(outcome.sessionId);
+      return undefined;
+    }
+    if (
+      outcome.failure.step !== "worktree" ||
+      outcome.failure.reason !== "conflict"
+    ) {
+      // Before the first prompt the files are still staged and can go
+      // again; from then on they belong to the created session.
+      if (outcome.failure.step === "prompt") commitAttachments(attachments);
+      else restoreAttachments(attachments);
+      return outcome.failure;
+    }
+    taken.push(branch);
+    avoid = branch;
+    lastFailure = outcome.failure;
+  }
+  restoreAttachments(attachments);
+  return lastFailure;
+}

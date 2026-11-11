@@ -113,3 +113,31 @@ export function clientIdentity() {
     label: deviceLabel(navigator.userAgent, navigator.maxTouchPoints),
   };
 }
+
+export function encodeIdsQuery(ids: Iterable<string>) {
+  return encoder.encode(JSON.stringify({ ids: [...ids] }));
+}
+
+export function encodeTerminalSize(cols: number, rows: number) {
+  return encoder.encode(JSON.stringify({ cols, rows }));
+}
+
+export function formatTerminalSocketPath(
+  id: string,
+  client: { id: string; label: string },
+  synced: boolean,
+  generation: string | undefined,
+  offset: number,
+  compressed: boolean,
+) {
+  const params = new URLSearchParams({
+    client: client.id,
+    label: client.label,
+  });
+  if (synced && generation) {
+    params.set("generation", generation);
+    params.set("offset", String(offset));
+  }
+  if (!compressed) params.set("zreplay", "1");
+  return `/ws/s/${id}?${params}`;
+}
