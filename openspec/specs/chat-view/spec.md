@@ -203,7 +203,7 @@ agent 提供的配置项 SHALL 在桌面输入框下方显示，在手机收进�
 #### Scenario: Kimi 的后台启动调用已经完成
 
 - **WHEN** Kimi 的 Bash 工具输入包含 `run_in_background: true`，启动调用已标为 `completed`，回合以 `end_turn` 返回且后台进程仍在运行
-- **THEN** 回合仍显示有任务未完成，不产生 `done` 关注；后台进程退出后自动检查状态，检查回合结束后才按提醒策略产生 `done`
+- **THEN** 回合仍显示有任务未完成，不产生 `done` 关注；后台进程退出且连续两次静默轮询后，直接按提醒策略产生 `done`，不自动发起状态检查回合
 
 ### Requirement: 聊天端的推送与卡片预览
 
