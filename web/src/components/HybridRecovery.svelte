@@ -7,7 +7,7 @@
   import HybridResumeActions from "./HybridResumeActions.svelte";
 
   // The session page of a closed or interrupted hybrid session: the agent
-  // still has the conversation, so it can come back on either side.
+  // still has the conversation, so it can resume on the recorded view.
   let {
     record,
     onresumed,
@@ -39,7 +39,10 @@
   <p>
     {record.state === "closed"
       ? "该混合会话已关闭"
-      : "该混合会话已中断"}，对话仍保存在 {record.agent.name} 中，可以恢复到聊天或终端。
+      : "该混合会话已中断"}，对话仍保存在 {record.agent.name} 中，恢复后将回到归档前的{record.view ===
+    "chat"
+      ? "聊天"
+      : "终端"}模式。
   </p>
   <HybridRecordHints {record} />
   {#if error}<p class="text-destructive" role="alert">{error}</p>{/if}

@@ -100,7 +100,7 @@ OpenCode、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder、QoderCN 与
   - 圆环显示上下文用量，点击查看 Token 详情。
 - **多设备协作**：回合进行中的消息进入所有设备共享的队列，omp 与 Codex 还支持插话；权限请求与表单在所有设备同步。
   - 上传的图片与文件按 agent 能力以 ACP 内容块直接发送。
-- **持久运行、可恢复**：聊天端保持 agent 进程运行直到切换或显式归档；服务重启后自动恢复仍在运行的会话，已归档的可从首页所属工作树的“已归档”中恢复到聊天或终端。
+- **持久运行、可恢复**：聊天端保持 agent 进程运行直到切换或显式归档；服务重启后自动恢复仍在运行的会话，已归档的可从首页所属工作树的“已归档”中按归档前的聊天或终端模式恢复。
 
 新安装预置的 Open Code、omp、Codex CLI、Claude Code、Antigravity CLI、Qoder、QoderCN 与 Kimi 启动配置已开启混合模式：
 

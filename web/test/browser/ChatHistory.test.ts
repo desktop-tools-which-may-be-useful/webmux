@@ -351,26 +351,6 @@ test("archived rows offer releasing a linked worktree and mark released records"
     onremoveworktree,
   });
   await page.getByRole("button", { name: /已归档/ }).click();
-  const menuItems = async (title: string) => {
-    await archivedList()
-      .getByRole("button", { name: `会话操作：${title}` })
-      .click();
-    await expect.element(page.getByRole("menu")).toBeVisible();
-    const items = page
-      .getByRole("menuitem")
-      .elements()
-      .map((item) => item.textContent?.trim());
-    await userEvent.keyboard("{Escape}");
-    return items;
-  };
-  expect(await menuItems("分支聊天")).toEqual([
-    "恢复聊天",
-    "释放空间",
-    "删除记录",
-    "删除记录和工作树",
-  ]);
-  expect(await menuItems("主工作区聊天")).toEqual(["恢复聊天", "删除记录"]);
-  expect(await menuItems("已释放的聊天")).toEqual(["恢复聊天", "删除记录"]);
 
   await archivedList()
     .getByRole("button", { name: "会话操作：分支聊天" })

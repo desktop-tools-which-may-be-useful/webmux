@@ -1040,12 +1040,96 @@ test.describe("hybrid sessions with the fake agent", () => {
     await archived.getByRole("button", { name: /已归档/ }).click();
     await expect(row).toBeVisible();
 
-    await row.getByRole("button", { name: "恢复到终端", exact: true }).click();
+    await row.getByRole("button", { name: "恢复", exact: true }).click();
     await expect(row).toHaveCount(0);
     const resumed = await openSessionLink(page, "E2E archive");
-    await expectSide(resumed, "terminal");
-    await expectTerminalLine(resumed, "> keep-this");
+    await expectSide(resumed, "chat");
+    await expect(conversation(resumed)).toContainText("echo: keep-this");
   });
+
+  for (const view of ["chat", "terminal"] as const) {
+    for (const mode of ["chat", "workbench"] as const) {
+      test(`archived ${view} resumes its remembered view with the ${mode} sidebar`, async ({
+        page,
+        request,
+        workDir,
+      }) => {
+        for (const args of [
+          ["init", "-b", "main"],
+          [
+            "-c",
+            "user.name=WebMux QA",
+            "-c",
+            "user.email=qa@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "initial",
+          ],
+        ])
+          expect(spawnSync("git", ["-C", workDir, ...args]).status).toBe(0);
+        const registered = await request.post("/api/repositories", {
+          data: { path: workDir },
+        });
+        expect(registered.status(), await registered.text()).toBe(201);
+        const name = `Remember ${view}`;
+        const initial = view === "chat" ? "terminal" : "chat";
+        const id = await createHybrid(request, workDir, initial, { name });
+        await openHybrid(page, id, initial);
+        if (initial === "chat") await chatTurn(page, "remember-me");
+        else await tuiTurn(page, "remember-me");
+        await switchTo(page, view);
+        const archived = await request.delete(`/api/sessions/${id}`);
+        expect(archived.status(), await archived.text()).toBe(204);
+        await page.goto("/");
+        const showSidebar = page
+          .getByRole("button", { name: "打开侧栏" })
+          .first();
+        if (await showSidebar.isVisible()) await showSidebar.click();
+        await page
+          .getByRole("button", {
+            name: mode === "chat" ? "聊天模式" : "工作台模式",
+            exact: true,
+          })
+          .click();
+        if (mode === "chat") {
+          await page
+            .getByRole("button", { name: /已归档/ })
+            .first()
+            .click();
+          await page
+            .getByRole("list", { name: "已归档聊天" })
+            .getByRole("button", { name: `${name}（已结束）`, exact: true })
+            .click();
+        } else {
+          if (test.info().project.use.isMobile)
+            await page.keyboard.press("Escape");
+          const archived = page.getByRole("region", {
+            name: "main 的已归档会话",
+          });
+          await archived.getByRole("button", { name: /已归档/ }).click();
+          await archived
+            .getByRole("button", { name: "恢复", exact: true })
+            .click();
+          await openSessionLink(page, name);
+        }
+        await expect(page).toHaveURL(new RegExp(`/s/${id}$`));
+        await expectSide(page, view);
+        if (view === "chat")
+          await expect(conversation(page)).toContainText("remember-me");
+        else await expectTerminalLine(page, "> remember-me");
+        if (test.info().project.use.isMobile) {
+          await page.getByRole("button", { name: "打开侧栏" }).first().click();
+        }
+        await expect(
+          page.getByRole("button", {
+            name: mode === "chat" ? "聊天模式" : "工作台模式",
+            exact: true,
+          }),
+        ).toHaveAttribute("aria-pressed", "true");
+      });
+    }
+  }
 
   test("stopping the open session from the sidebar leaves its page instead of offering to resume", async ({
     page,
@@ -1143,7 +1227,7 @@ test.describe("hybrid sessions with the fake agent", () => {
     const row = gone.locator(`[data-archived-id="${id}"]`);
     await expect(row.getByText("已释放空间")).toBeVisible();
 
-    await row.getByRole("button", { name: "恢复到聊天", exact: true }).click();
+    await row.getByRole("button", { name: "恢复", exact: true }).click();
     const rebuild = page.getByRole("dialog", { name: "重建工作树后恢复" });
     await expect(rebuild).toContainText("将在原路径检出分支 feature-x");
     await rebuild
@@ -1156,80 +1240,87 @@ test.describe("hybrid sessions with the fake agent", () => {
     await expect(conversation(resumed)).toContainText("echo: before-release");
   });
 
-  test("deleting a worktree keeps its archived chat released, and the sidebar tree resumes it", async ({
-    page,
-    request,
-    workDir,
-  }, testInfo) => {
-    test.skip(!!testInfo.project.use.isMobile, "the desktop sidebar tree");
-    const root = join(workDir, "delete-repo");
-    const tree = join(workDir, "delete-repo-feature");
-    await mkdir(root);
-    await writeFile(join(root, ".gitignore"), "node_modules/\n");
-    const git = (...args: string[]) =>
-      expect(spawnSync("git", ["-C", root, ...args]).status).toBe(0);
-    git("init", "-b", "main");
-    git("add", ".gitignore");
-    git(
-      "-c",
-      "user.name=WebMux QA",
-      "-c",
-      "user.email=qa@example.invalid",
-      "commit",
-      "-m",
-      "initial",
-    );
-    git("worktree", "add", "-b", "feature-y", tree);
-    const registered = await request.post("/api/repositories", {
-      data: { path: root },
-    });
-    expect(registered.status(), await registered.text()).toBe(201);
-    const id = await createHybrid(request, tree, "chat", {
-      name: "E2E delete",
-    });
-    await openHybrid(page, id, "chat");
-    await chatTurn(page, "before-delete");
-    const archived = await request.delete(`/api/sessions/${id}`);
-    expect(archived.status(), await archived.text()).toBe(204);
+  for (const view of ["chat", "terminal"] as const) {
+    test(`deleting a worktree keeps its archived ${view} released, and the sidebar tree resumes it`, async ({
+      page,
+      request,
+      workDir,
+    }, testInfo) => {
+      test.skip(!!testInfo.project.use.isMobile, "the desktop sidebar tree");
+      const root = join(workDir, "delete-repo");
+      const tree = join(workDir, "delete-repo-feature");
+      await mkdir(root);
+      await writeFile(join(root, ".gitignore"), "node_modules/\n");
+      const git = (...args: string[]) =>
+        expect(spawnSync("git", ["-C", root, ...args]).status).toBe(0);
+      git("init", "-b", "main");
+      git("add", ".gitignore");
+      git(
+        "-c",
+        "user.name=WebMux QA",
+        "-c",
+        "user.email=qa@example.invalid",
+        "commit",
+        "-m",
+        "initial",
+      );
+      git("worktree", "add", "-b", "feature-y", tree);
+      const registered = await request.post("/api/repositories", {
+        data: { path: root },
+      });
+      expect(registered.status(), await registered.text()).toBe(201);
+      const id = await createHybrid(request, tree, "chat", {
+        name: "E2E delete",
+      });
+      await openHybrid(page, id, "chat");
+      await chatTurn(page, "before-delete");
+      await switchTo(page, view);
+      const archived = await request.delete(`/api/sessions/${id}`);
+      expect(archived.status(), await archived.text()).toBe(204);
 
-    await page.goto("/");
-    await page
-      .getByRole("button", { name: "工作树菜单 feature-y", exact: true })
-      .click();
-    await page
-      .getByRole("menuitem", { name: "删除 worktree…", exact: true })
-      .click();
-    const removal = page.getByRole("dialog", { name: "删除 worktree" });
-    await expect(removal).toContainText("保留的已归档会话（之后可重建并恢复）");
-    await expect(removal).toContainText("E2E delete");
-    await removal.getByRole("button", { name: "确认安全删除" }).click();
-    await expect(removal).toHaveCount(0);
-    await expect(access(tree)).rejects.toThrow();
-    git("rev-parse", "--verify", "refs/heads/feature-y");
+      await page.goto("/");
+      await page
+        .getByRole("button", { name: "工作树菜单 feature-y", exact: true })
+        .click();
+      await page
+        .getByRole("menuitem", { name: "删除 worktree…", exact: true })
+        .click();
+      const removal = page.getByRole("dialog", { name: "删除 worktree" });
+      await expect(removal).toContainText(
+        "保留的已归档会话（之后可重建并恢复）",
+      );
+      await expect(removal).toContainText("E2E delete");
+      await removal.getByRole("button", { name: "确认安全删除" }).click();
+      await expect(removal).toHaveCount(0);
+      await expect(access(tree)).rejects.toThrow();
+      git("rev-parse", "--verify", "refs/heads/feature-y");
 
-    // The record stays, released, under the repository's unavailable
-    // workspaces in the sidebar tree; neither the repository nor the
-    // unavailable workspace auto-expands when the only session is archived.
-    const sidebarTree = page.getByRole("tree", { name: "仓库与会话" });
-    await sidebarTree
-      .getByRole("button", { name: "展开delete-repo", exact: true })
-      .click();
-    await sidebarTree
-      .getByRole("button", { name: "展开已不可用工作区", exact: true })
-      .click();
-    const row = sidebarTree.getByRole("treeitem", {
-      name: "E2E delete（已释放空间，已结束）",
+      // The record stays, released, under the repository's unavailable
+      // workspaces in the sidebar tree; neither the repository nor the
+      // unavailable workspace auto-expands when the only session is archived.
+      const sidebarTree = page.getByRole("tree", { name: "仓库与会话" });
+      await sidebarTree
+        .getByRole("button", { name: "展开delete-repo", exact: true })
+        .click();
+      await sidebarTree
+        .getByRole("button", { name: "展开已不可用工作区", exact: true })
+        .click();
+      const row = sidebarTree.getByRole("treeitem", {
+        name: "E2E delete（已释放空间，已结束）",
+      });
+      await row.click();
+      const rebuild = page.getByRole("dialog", { name: "重建工作树后恢复" });
+      await expect(rebuild).toContainText("将在原路径检出分支 feature-y");
+      await rebuild
+        .getByRole("button", { name: "重建并恢复", exact: true })
+        .click();
+      await expectSide(page, view);
+      if (view === "chat")
+        await expect(conversation(page)).toContainText("echo: before-delete");
+      else await expectTerminalLine(page, "> before-delete");
+      await access(join(tree, ".gitignore"));
     });
-    await row.click();
-    const rebuild = page.getByRole("dialog", { name: "重建工作树后恢复" });
-    await expect(rebuild).toContainText("将在原路径检出分支 feature-y");
-    await rebuild
-      .getByRole("button", { name: "重建并恢复", exact: true })
-      .click();
-    await expectSide(page, "chat");
-    await expect(conversation(page)).toContainText("echo: before-delete");
-    await access(join(tree, ".gitignore"));
-  });
+  }
 
   test("after a backend restart both sides resume the recorded conversation", async ({
     page,

@@ -116,10 +116,9 @@
       resumeError = `无法删除“${recordTitle(record)}”的记录：${errorMessage(err)}`;
     }
   }
-  // An archived chat resumes on its chat view through the existing flow;
-  // choices that need the user (another agent session, a deleted launch
-  // config) are made on the record's own page. A released record's worktree
-  // is rebuilt first, once the user confirms how.
+  // Resume on the recorded view, independent of the sidebar's mode. Choices
+  // that need the user are made on the record's own page. A released record's
+  // worktree is rebuilt first, once the user confirms how.
   let rebuilding = $state<{
     record: ArchivedSession;
     released: HybridRelease;
@@ -141,7 +140,7 @@
     resuming = record.id;
     resumeError = "";
     try {
-      const outcome = await resumeSession(record.id, "chat");
+      const outcome = await resumeSession(record.id, record.view);
       if (outcome.status === "resumed") {
         void shell.archived.refresh();
         openSession(outcome.session);

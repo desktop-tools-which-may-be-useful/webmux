@@ -87,7 +87,7 @@
       onSelect={() => onclose(session)}>{closeLabel}</DropdownMenu.Item
     >
   {:else}
-    <DropdownMenu.Item onSelect={target.onresume}>恢复聊天</DropdownMenu.Item>
+    <DropdownMenu.Item onSelect={target.onresume}>恢复会话</DropdownMenu.Item>
     {#if target.onrelease}<DropdownMenu.Item onSelect={target.onrelease}
         >释放空间</DropdownMenu.Item
       >{/if}

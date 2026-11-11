@@ -16,10 +16,8 @@
     SessionView,
   } from "../schemas";
 
-  // "恢复到聊天 / 恢复到终端" for one closed or interrupted hybrid session,
-  // with the questions a resume may need answered first: rebuilding a
-  // released worktree, another agent session when the recorded one is gone,
-  // or resuming without a deleted launch config's environment.
+  // Resume on the recorded view, after any required worktree, agent session,
+  // or launch environment confirmation.
   let {
     record,
     resume,
@@ -162,23 +160,12 @@
 <Button
   size="sm"
   {disabled}
-  aria-busy={resumingView === "chat"}
-  onclick={() => start("chat")}
-  >{#if resumingView === "chat"}<IconLoader2
+  aria-busy={!!resumingView}
+  onclick={() => start(record.view)}
+  >{#if resumingView}<IconLoader2
       class="animate-spin motion-reduce:animate-none"
       aria-hidden="true"
-    />{/if}恢复到聊天</Button
->
-<Button
-  size="sm"
-  variant="outline"
-  {disabled}
-  aria-busy={resumingView === "terminal"}
-  onclick={() => start("terminal")}
-  >{#if resumingView === "terminal"}<IconLoader2
-      class="animate-spin motion-reduce:animate-none"
-      aria-hidden="true"
-    />{/if}恢复到终端</Button
+    />{/if}恢复</Button
 >
 
 {#if rebuildView && record.released}<RebuildWorktreeDialog
