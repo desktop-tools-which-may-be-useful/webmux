@@ -130,6 +130,29 @@ func (s *Service) claim(id string) (func(), error) {
 // is left of its session, an exited shell kept for its last output. The
 // agent's own session store is left alone.
 func (s *Service) RemoveRecord(ctx context.Context, id string) error {
+	if _, err := s.Record(id); err != nil {
+		return err
+	}
+	release, err := s.claimRecordConversation(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return s.removeRecord(ctx, id)
+}
+
+func (s *Service) claimRecordConversation(ctx context.Context, id string) (func(), error) {
+	if s.conversations == nil {
+		return func() {}, nil
+	}
+	b, err := s.conversations.Binding(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: conversation identity unavailable", ErrUnavailable)
+	}
+	return s.ClaimConversation(b.ConversationID, "")
+}
+
+func (s *Service) removeRecord(ctx context.Context, id string) error {
 	release, err := s.claim(id)
 	if err != nil {
 		return err
@@ -140,6 +163,11 @@ func (s *Service) RemoveRecord(ctx context.Context, id string) error {
 	}
 	if err := s.clear(ctx, id); err != nil {
 		return err
+	}
+	if s.conversations != nil {
+		if err := s.conversations.MarkRuntimeForgetting(ctx, id); err != nil {
+			return fmt.Errorf("%w: conversation cleanup unavailable", ErrUnavailable)
+		}
 	}
 	if err := s.records.remove(id); err != nil {
 		return err
@@ -162,6 +190,11 @@ func (s *Service) Forget(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	release, err := s.claimRecordConversation(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if a, err := s.actor(id); err == nil && rec.State == StateActive {
 		if err := a.Close(); err != nil {
 			return err
@@ -183,7 +216,7 @@ func (s *Service) Forget(ctx context.Context, id string) error {
 			}
 		}
 	}
-	return s.RemoveRecord(ctx, id)
+	return s.removeRecord(ctx, id)
 }
 
 // clear ends what is left of an interrupted session before its record is
