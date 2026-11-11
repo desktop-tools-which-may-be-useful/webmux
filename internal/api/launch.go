@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 
-	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/wire"
@@ -28,7 +27,7 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 	// Read-only: the settings page asks whether an edited command can have
 	// the chat view, so the browser never mirrors the profile rules.
 	serveIn(mux, "POST "+base+"/chat-support", http.StatusOK, launchFailure, func(_ *http.Request, req contract.ChatSupportRequest) (contract.ChatSupport, error) {
-		return wire.ChatSupport(agents.Default().Check(req.Cmd)), nil
+		return wire.ChatSupport(s.Agents.Check(req.Cmd)), nil
 	})
 	// options asks the config's agent which options it offers, before any
 	// chat of it exists.

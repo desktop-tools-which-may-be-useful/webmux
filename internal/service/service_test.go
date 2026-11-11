@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -355,13 +356,71 @@ func TestRenderedDefinitionsEscapePathsAndKeepCleanup(t *testing.T) {
 func TestEnvironmentCapturesOnlySupportedVariables(t *testing.T) {
 	t.Setenv("PATH", ".:relative:/custom/bin:/custom/bin")
 	t.Setenv("WEBMUX_TOKEN", "private-test-secret")
+	t.Setenv("WEBMUX_ACP_AGENTS", `{"acme":{"commands":[]}}%\n`)
 	t.Setenv("XDG_STATE_HOME", "/custom/state")
 	env := serviceEnvironment("/home/test")
 	if !strings.HasPrefix(env["PATH"], "/custom/bin:") || strings.Contains(env["PATH"], "relative") || strings.Contains(env["PATH"], "/custom/bin:/custom/bin") {
 		t.Fatalf("unstable PATH: %s", env["PATH"])
 	}
-	if _, ok := env["WEBMUX_TOKEN"]; ok || env["XDG_STATE_HOME"] != "/custom/state" {
-		t.Fatal("service environment included secrets or lost state location")
+	if _, ok := env["WEBMUX_TOKEN"]; ok || env["XDG_STATE_HOME"] != "/custom/state" || env["WEBMUX_ACP_AGENTS"] != `{"acme":{"commands":[]}}%\n` {
+		t.Fatal("service environment included secrets or lost approved configuration")
+	}
+}
+
+func TestExternalAgentsEnvironmentRoundTripsServiceDefinitions(t *testing.T) {
+	want := "{\n\t\"acme\": {\"title\":\"A & 中文\",\"commands\":[{\"match\":[\"acme\",\"quote=\\\"\",\"slash=\\\\\",\"percent=%\",\"line\\nnext\",\"tab\\tvalue\"],\"acp\":[\"acme\",\"--acp\"],\"resume\":[\"acme\",\"--resume\"]}]}\n}\n"
+	for _, platform := range []string{"linux", "darwin"} {
+		t.Run(platform, func(t *testing.T) {
+			f := newFixture(t, platform)
+			f.m.environment["WEBMUX_ACP_AGENTS"] = want
+			body, err := f.m.render(filepath.Join(f.m.home, "config.toml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got string
+			if platform == "linux" {
+				const prefix = "Environment=\"WEBMUX_ACP_AGENTS="
+				for _, line := range strings.Split(string(body), "\n") {
+					if !strings.HasPrefix(line, prefix) {
+						continue
+					}
+					decoded, err := strconv.Unquote(strings.TrimPrefix(line, "Environment="))
+					if err != nil {
+						t.Fatal(err)
+					}
+					got = strings.ReplaceAll(strings.TrimPrefix(decoded, "WEBMUX_ACP_AGENTS="), "%%", "%")
+				}
+			} else {
+				// encoding/xml cannot map plist's alternating key/value nodes to a
+				// map, so inspect decoded string nodes in order instead.
+				decoder := xml.NewDecoder(bytes.NewReader(body))
+				var previous string
+				for {
+					token, err := decoder.Token()
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					start, ok := token.(xml.StartElement)
+					if !ok || (start.Name.Local != "key" && start.Name.Local != "string") {
+						continue
+					}
+					var value string
+					if err := decoder.DecodeElement(&value, &start); err != nil {
+						t.Fatal(err)
+					}
+					if start.Name.Local == "string" && previous == "WEBMUX_ACP_AGENTS" {
+						got = value
+					}
+					previous = value
+				}
+			}
+			if got != want {
+				t.Fatalf("WEBMUX_ACP_AGENTS round trip = %q, want %q\n%s", got, want, body)
+			}
+		})
 	}
 }
 

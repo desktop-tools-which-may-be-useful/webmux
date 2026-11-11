@@ -161,13 +161,13 @@ func ReapplyOnLoad(a Agent) []string {
 // it checks that it can be found before every ACP start.
 type Connector struct {
 	// Executable is looked up through PATH like the agent itself.
-	Executable     string
-	Title          string
-	InstallCommand string
-	DocsURL        string
+	Executable     string `json:"executable"`
+	Title          string `json:"title"`
+	InstallCommand string `json:"installCommand,omitempty"`
+	DocsURL        string `json:"docsUrl,omitempty"`
 	// VerifiedVersion is the newest release measured; the ACP side reports
 	// the connector's version, so an older one only produces a notice.
-	VerifiedVersion string
+	VerifiedVersion string `json:"verifiedVersion,omitempty"`
 }
 
 // ArgClass says what happens to a recognised option when webmux builds a

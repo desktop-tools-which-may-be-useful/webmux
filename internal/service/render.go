@@ -31,7 +31,7 @@ func serviceEnvironment(home string) map[string]string {
 		}
 	}
 	env := map[string]string{"PATH": strings.Join(paths, ":"), "LANG": "en_US.UTF-8"}
-	for _, key := range []string{"SHELL", "LANG", "LC_CTYPE", "LC_ALL", "XDG_STATE_HOME"} {
+	for _, key := range []string{"SHELL", "LANG", "LC_CTYPE", "LC_ALL", "XDG_STATE_HOME", "WEBMUX_ACP_AGENTS"} {
 		if value := os.Getenv(key); value != "" {
 			env[key] = value
 		}

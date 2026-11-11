@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
@@ -57,6 +59,9 @@ type Deps struct {
 	// Launch is nil when the launch config store was not opened; its
 	// endpoints then answer 503.
 	Launch *launch.Service
+	// Agents is the immutable process-wide registry assembled by cmd. Nil uses
+	// the built-ins for backwards-compatible embedders and package tests.
+	Agents *agentprofile.Registry
 	// Tunnel reports the runtime tunnel state; nil leaves GET /api/config
 	// describing only the configured mode.
 	Tunnel         func() contract.TunnelStatus
@@ -122,6 +127,9 @@ func New(d Deps) http.Handler {
 func newServer(d Deps) *Server {
 	if d.Manager == nil || d.Workspace == nil || d.Code == nil || d.Files == nil {
 		panic("api: Deps requires Manager, Workspace, Code and Files")
+	}
+	if d.Agents == nil {
+		d.Agents = agents.Default()
 	}
 	s := &Server{Deps: d}
 	if d.Forward != nil {

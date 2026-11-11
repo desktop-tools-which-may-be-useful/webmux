@@ -12,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rainchan/webmux/internal/agentprofile"
 	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/hybrid"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -28,6 +30,10 @@ type launchHarness struct {
 }
 
 func newLaunchHarness(t *testing.T, store *launch.Service) *launchHarness {
+	return newLaunchHarnessWithAgents(t, store, nil)
+}
+
+func newLaunchHarnessWithAgents(t *testing.T, store *launch.Service, registry *agentprofile.Registry) *launchHarness {
 	t.Helper()
 
 	cwd := t.TempDir()
@@ -38,7 +44,7 @@ func newLaunchHarness(t *testing.T, store *launch.Service) *launchHarness {
 		m.Shutdown(ctx)
 	})
 	c := config.Config{Token: "secret", DefaultCwd: cwd}
-	return &launchHarness{t: t, handler: New(testDeps(t, Deps{Config: c, Manager: m, Launch: store})), manager: m, store: store, cwd: cwd}
+	return &launchHarness{t: t, handler: New(testDeps(t, Deps{Config: c, Manager: m, Launch: store, Agents: registry})), manager: m, store: store, cwd: cwd}
 }
 
 func openLaunchStore(t *testing.T) *launch.Service {
@@ -216,6 +222,34 @@ func TestLaunchConfigPresets(t *testing.T) {
 	}
 	if len(afterAll) != 13 || afterAll[0].ID != current[0].ID {
 		t.Fatalf("after restore all = %+v", afterAll)
+	}
+}
+
+func TestOneInjectedRegistryServesLaunchAPIAndHybrid(t *testing.T) {
+	registry := agentprofile.NewRegistry(agentprofile.Spec{
+		Title: "Acme Agent", Icon: "terminal", ProcessExecutables: []string{"acme-native"},
+		Commands: []agentprofile.CommandSpec{{Match: []string{"acme", "work"}, ACP: []string{"acme", "serve"}, Resume: []string{"acme", "resume"}}},
+	}.Agent("acme-agent"))
+	store := launch.Open(t.TempDir(), registry)
+	t.Cleanup(store.Close)
+	h := newLaunchHarnessWithAgents(t, store, registry)
+
+	var support contract.ChatSupport
+	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs/chat-support", `{"cmd":["/opt/acme","work"]}`, 200), &support); err != nil {
+		t.Fatal(err)
+	}
+	if !support.Supported || support.Agent != "acme-agent" || !reflect.DeepEqual(support.SupportedAgents, registry.Titles()) {
+		t.Fatalf("API support = %+v", support)
+	}
+	created := h.create(`{"name":"Acme","cmd":["/opt/acme","work"],"chat":true}`)
+	if !created.Chat || !reflect.DeepEqual(created.ChatSupport, support) {
+		t.Fatalf("launch support = %+v, want %+v", created.ChatSupport, support)
+	}
+
+	hybrids := hybrid.New(hybrid.Options{StateDir: t.TempDir(), Manager: h.manager, Agents: registry})
+	t.Cleanup(hybrids.Close)
+	if title, icon := hybrids.AgentLabel("acme-agent"); title != "Acme Agent" || icon != "terminal" {
+		t.Fatalf("hybrid AgentLabel = %q, %q", title, icon)
 	}
 }
 

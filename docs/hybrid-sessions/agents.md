@@ -20,6 +20,50 @@
 - 更高版本不自动视为已验证。
 - 连接器未安装时，“聊天 | 终端”控件的聊天端禁用并显示原因，终端端照常使用。
 
+## 外部 ACP agent
+
+没有内置适配器的 ACP agent 可以通过 `WEBMUX_ACP_AGENTS` 声明。WebMux 把每条声明当作不透明的完整 argv：它不会拆解包装器语义，也不会在其它参数中扫描 agent 名。
+
+- JSON 顶层键是稳定的 agent ID，与启动命令、ACP 命令和进程名相互独立。
+- `processExecutables` 必须明确列出 TUI 实际运行的原生进程 basename；稳定 ID 不会隐式成为进程名或可执行文件名。
+- `commands` 中每项同时声明：
+  - `match`：允许开启混合模式的完整内层启动 argv；第一个 token 按 basename 匹配，因此 `/opt/bin/acme-run` 可匹配 `acme-run`，其余 token 与数组长度必须完全相同；
+  - `acp`：启动 stdio ACP server 的完整 argv；
+  - `resume`：恢复 TUI 的完整 argv 前缀，WebMux 在末尾追加 session ID；
+  - `launcher`：可选；仅当包装器保持为 PTY 根进程、原生 agent 是它唯一匹配的直接子进程时填写；
+  - `connector`：可选；仅用于单独安装的 ACP 程序之存在性检查、安装提示与版本提示，不改写 `acp` argv。
+- argv 以结构化数组执行，不拼接 shell 字符串；普通参数可以是空字符串、含空格或以 `-` 开头。
+- “加载 shell 启动文件”的 Bash/Zsh 外层不写入 `match`。WebMux 精确匹配其内层 argv，并在 TUI、ACP 与 resume 之间保留原来的外层形式；ACP 仍通过 fd 3 隔离启动文件输出。
+- 额外参数、不同的包装器参数或不同的实例值都不会前缀匹配；需要另加一条完整 binding。
+
+例如：
+
+```json
+{
+  "acme": {
+    "title": "Acme Agent",
+    "icon": "terminal",
+    "processExecutables": ["acme-native"],
+    "commands": [
+      {
+        "match": ["acme-run", "--profile", "work"],
+        "acp": ["acme-bridge", "serve", "--stdio"],
+        "resume": ["acme-run", "--profile", "work", "--resume"],
+        "connector": {
+          "executable": "acme-bridge",
+          "title": "Acme ACP bridge",
+          "installCommand": "npm install -g acme-bridge",
+          "docsUrl": "https://example.com/acme-bridge",
+          "verifiedVersion": "1.2.0"
+        }
+      }
+    ]
+  }
+}
+```
+
+`connector` 为 `null` 或省略表示 `acp` 命令不需要 WebMux 检测另装程序。完整配置、加载规则和服务安装注意事项见[配置](../deployment/configuration.md#外部-acp-agent)。
+
 ## 启动命令兼容要求
 
 能开启混合模式的命令需满足以下全部条件：

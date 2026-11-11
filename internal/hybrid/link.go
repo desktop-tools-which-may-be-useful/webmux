@@ -362,7 +362,7 @@ func (a *actor) outdated(reported, agentVersion string) []Outdated {
 	p := a.cmd.Profile
 	out := []Outdated{}
 	agent := reported
-	if c := p.Connector; c != nil {
+	if c := a.cmd.Connector(); c != nil {
 		agent = agentVersion
 		if order, ok := agentprofile.CompareVersions(reported, c.VerifiedVersion); ok && order < 0 {
 			out = append(out, Outdated{Name: c.Title, Version: reported, Verified: c.VerifiedVersion})

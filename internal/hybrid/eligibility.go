@@ -230,7 +230,10 @@ func (a *actor) registeredSession(id session.Identity) string {
 // agentProcess selects the native agent root, or exactly one native direct
 // child of an allowed launcher. Process facts never leave the service.
 func (a *actor) agentProcess() (agentprofile.ProcessFacts, bool) {
-	processes := a.shell.RunProcesses()
+	return selectAgentProcess(a.cmd, a.shell.RunProcesses())
+}
+
+func selectAgentProcess(cmd agentprofile.Command, processes []session.ProcessFacts) (agentprofile.ProcessFacts, bool) {
 	if len(processes) == 0 {
 		return agentprofile.ProcessFacts{}, false
 	}
@@ -238,16 +241,17 @@ func (a *actor) agentProcess() (agentprofile.ProcessFacts, bool) {
 		return agentprofile.ProcessFacts{PID: p.PID, Executable: p.Executable, Cwd: p.Cwd, Start: p.Start, Domain: p.Domain}
 	}
 	root := convert(processes[0])
-	if a.cmd.Profile.RunsProcess(root.Executable) {
+	if cmd.RunsProcess(root.Executable) {
 		return root, true
 	}
-	if a.cmd.Profile.Launcher == "" || root.Executable != a.cmd.Profile.Launcher {
+	launcher := cmd.Launcher()
+	if launcher == "" || root.Executable != launcher {
 		return agentprofile.ProcessFacts{}, false
 	}
 	var selected agentprofile.ProcessFacts
 	for _, process := range processes[1:] {
 		candidate := convert(process)
-		if !a.cmd.Profile.RunsProcess(candidate.Executable) {
+		if !cmd.RunsProcess(candidate.Executable) {
 			continue
 		}
 		if selected.PID != 0 {
@@ -334,11 +338,14 @@ func (a *actor) agentIsRoot(id session.Identity) bool {
 	if id.PID == 0 {
 		return false
 	}
-	p := a.cmd.Profile
-	if p.RunsProcess(id.Executable) {
+	if a.cmd.RunsProcess(id.Executable) {
 		return true
 	}
-	return p.Launcher != "" && id.Executable == p.Launcher && slices.ContainsFunc(a.shell.RunChildren(), p.RunsProcess)
+	if launcher := a.cmd.Launcher(); launcher == "" || id.Executable != launcher {
+		return false
+	}
+	_, ok := a.agentProcess()
+	return ok
 }
 
 // tracksLocks reports that the agent's session IDs come from its writer
@@ -416,13 +423,12 @@ func (a *actor) identify() (session.Identity, agentprofile.Identity, bool) {
 		}
 		return id, ident, known
 	}
-	// Fallback: identify from the PTY root process executable.
+	// Fallback: identify from the native agent root, or exactly one native
+	// direct child of this command's launcher.
 	if !known && id.PID != 0 && id.Executable != "" {
-		p := a.cmd.Profile
-		if p.RunsProcess(id.Executable) ||
-			(p.Launcher != "" && id.Executable == p.Launcher &&
-				slices.ContainsFunc(a.shell.RunChildren(), p.RunsProcess)) {
-			fallback := agentprofile.Identity{Agent: p.Name, Cwd: id.Cwd}
+		process, ok := a.agentProcess()
+		if ok {
+			fallback := agentprofile.Identity{Agent: a.cmd.Profile.Name, Cwd: process.Cwd}
 			switch {
 			case a.tracksLocks():
 				fallback.AgentSessionID = a.lockedSession(id)
@@ -509,7 +515,7 @@ func (a *actor) listedReason(t target) string {
 func (a *actor) setEligibility(reason string) {
 	e := Eligibility{Available: reason == "", Reason: reason}
 	if reason == ReasonConnectorMissing {
-		e.Connector = a.cmd.Profile.Connector
+		e.Connector = a.cmd.Connector()
 	}
 	if a.chat.Eligibility != e {
 		a.chat.Eligibility = e

@@ -20,6 +20,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/cmd/internal/assemble"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/artifacts"
 	"github.com/rainchan/webmux/internal/codeview"
@@ -62,13 +63,14 @@ func newFixture() *fixture {
 	c.ScrollbackBytes = capacity
 
 	must(c.Validate())
-	f.manager = session.NewManager(assemble.SessionOptions(c))
+	registry := agents.Default()
+	f.manager = session.NewManager(assemble.SessionOptions(c, registry))
 	f.workspace = workspace.New(c.StateDir, f.manager, nil, root)
 	f.folders = artifacts.New(artifacts.Options{TempDir: root, StateDir: c.StateDir, Manager: f.manager})
 	f.folders.Start(func(string) bool { return false })
 	f.code = codeview.New(f.manager, f.folders)
 	f.preferences = settings.Open(c.StateDir)
-	f.server = httptest.NewServer(api.New(api.Deps{Settings: f.preferences, Config: c, Manager: f.manager, Workspace: f.workspace, Code: f.code, Files: files.New(c.DefaultCwd), Artifacts: f.folders}))
+	f.server = httptest.NewServer(api.New(api.Deps{Settings: f.preferences, Config: c, Manager: f.manager, Workspace: f.workspace, Code: f.code, Files: files.New(c.DefaultCwd), Artifacts: f.folders, Agents: registry}))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	f.stopSignals = stop
 	go func() { <-ctx.Done(); f.close() }()

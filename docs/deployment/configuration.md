@@ -51,6 +51,37 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 - 命令行 `--listen`、`--token` 优先于配置文件；显式传入空 token 也会覆盖配置。
 - 命令行覆盖只影响本次进程，不写入新生成的默认配置。
 
+## 外部 ACP agent
+
+`WEBMUX_ACP_AGENTS` 接受一个 JSON 对象，为没有内置适配器的 ACP agent 增加精确命令 binding。
+
+该变量按以下规则加载和保存：
+
+- WebMux 只在启动时读取它；修改后需要重启。
+- `webmux service install` 把当时的值写入用户服务定义。声明改变后，需重新执行 `webmux service install --force`。
+- 手写 systemd、launchd 或其它服务定义时，需自行设置该变量。
+
+每个顶层键是稳定 agent ID，对应对象支持：
+
+| 字段                 | 必需 | 作用                                                                 |
+| -------------------- | ---- | -------------------------------------------------------------------- |
+| `kind`               | 否   | 目前只能省略或写 `"acp"`                                           |
+| `title`              | 否   | UI 显示名；默认使用稳定 ID                                           |
+| `icon`               | 否   | 启动配置图标 key；默认 `terminal`                                    |
+| `processExecutables` | 是   | TUI 的实际原生进程 basename，非空数组                                |
+| `commands`           | 是   | 至少一条完整 argv binding                                            |
+
+每条 `commands` binding 按以下规则声明：
+
+- `match`、`acp`、`resume` 都是非空 argv 数组。第一个 token 必须是可执行文件，后续参数可以是空字符串。
+- WebMux 在 `resume` 末尾追加 session ID。
+- 可选 `launcher` 是保持为 PTY 根进程的 wrapper basename。
+- 可选 `connector` 包含 `executable`、`title`、`installCommand`、`docsUrl` 以及可选 `verifiedVersion`。它只提供另装程序检测与 UI 指引，不改变完整 `acp` argv。
+
+解析是严格且有界的：未知字段、重复 JSON key、无效 UTF-8/NUL、重复或冲突 binding、覆盖内置 agent 可执行文件的 binding，以及过大的声明都会被拒绝或逐项跳过并记录警告；错误正文不会把整个环境值写入日志。一个无效 agent 不会阻止其它有效声明或服务启动。
+
+完整示例和精确匹配语义见[混合会话支持的 agent 与连接器](../hybrid-sessions/agents.md#外部-acp-agent)。
+
 ## 命令行
 
 - 无子命令或使用 `--listen` 等服务参数时启动服务，与 `serve` 相同；未知子命令退出码 2。

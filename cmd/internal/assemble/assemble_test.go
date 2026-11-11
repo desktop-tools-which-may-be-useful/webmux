@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/agents"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
@@ -39,7 +41,7 @@ func TestAttentionSignalOptions(t *testing.T) {
 			if err := c.Validate(); err != nil {
 				t.Fatal(err)
 			}
-			o := SessionOptions(c)
+			o := SessionOptions(c, agents.Default())
 			if o.DisableAgentProtocol != row.disableProtocol || o.DisableBellAttention != row.disableBel || o.DisableProgramStatus != row.disableStatus {
 				t.Fatalf("options = %+v", o)
 			}
@@ -58,7 +60,7 @@ func TestSessionOptionsExcludeListenPort(t *testing.T) {
 		{"127.0.0.1:0", nil},
 		{"no-port", nil},
 	} {
-		if got := SessionOptions(config.Config{Listen: row.listen}).ExcludePorts; !slices.Equal(got, row.want) {
+		if got := SessionOptions(config.Config{Listen: row.listen}, agents.Default()).ExcludePorts; !slices.Equal(got, row.want) {
 			t.Errorf("listen %q: ExcludePorts = %v, want %v", row.listen, got, row.want)
 		}
 	}
@@ -80,7 +82,7 @@ func TestSavedLaunchConfigLoadsBashrcAndForwardsArguments(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	m := session.NewManager(SessionOptions(c))
+	m := session.NewManager(SessionOptions(c, agents.Default()))
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
@@ -119,7 +121,7 @@ func TestSavedLaunchConfigLoadsBashrcAndForwardsArguments(t *testing.T) {
 }
 
 func TestSessionOptionsSubmitDelay(t *testing.T) {
-	delay := SessionOptions(config.Config{}).SubmitDelay
+	delay := SessionOptions(config.Config{}, agents.Default()).SubmitDelay
 	for _, tc := range []struct {
 		argv []string
 		want time.Duration
@@ -133,6 +135,13 @@ func TestSessionOptionsSubmitDelay(t *testing.T) {
 		if got := delay(tc.argv); got != tc.want {
 			t.Errorf("SubmitDelay(%q) = %v, want %v", tc.argv, got, tc.want)
 		}
+	}
+}
+
+func TestSessionOptionsUsesInjectedRegistry(t *testing.T) {
+	registry := agentprofile.NewRegistry()
+	if got := SessionOptions(config.Config{}, registry).SubmitDelay([]string{"kimi"}); got != 0 {
+		t.Fatalf("injected empty registry SubmitDelay(kimi) = %v, want zero", got)
 	}
 }
 
@@ -150,7 +159,7 @@ func TestAgentPretrustOption(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := SessionOptions(c).PreLaunch != nil; got != row.want {
+		if got := SessionOptions(c, agents.Default()).PreLaunch != nil; got != row.want {
 			t.Fatalf("%q: PreLaunch set = %v, want %v", row.body, got, row.want)
 		}
 	}

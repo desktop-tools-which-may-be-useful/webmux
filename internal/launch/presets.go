@@ -64,10 +64,10 @@ func Presets(shell string) []Input {
 	}
 }
 
-func normalizePresets(ins []Input) ([]Input, error) {
+func normalizePresets(ins []Input, registry *agentprofile.Registry) ([]Input, error) {
 	out := make([]Input, 0, len(ins))
 	for _, in := range ins {
-		in, err := normalize(in)
+		in, err := normalize(in, registry)
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +85,7 @@ func (s *Service) presetsLocked() ([]Input, error) {
 	}
 	// Do not cache this fallback: Seed must always win so the shell-aware list
 	// is used whenever it is available, regardless of call order.
-	return normalizePresets(Presets(""))
+	return normalizePresets(Presets(""), s.agents)
 }
 
 // Presets returns the system launch presets configured on the service.

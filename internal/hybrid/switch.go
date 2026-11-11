@@ -145,7 +145,7 @@ func (a *actor) beginSwitch(to Side, pick string) (<-chan switchOutcome, error) 
 		case "":
 		case ReasonConnectorMissing:
 			a.setEligibility(reason)
-			return nil, &ConnectorMissingError{Connector: a.cmd.Profile.Connector}
+			return nil, &ConnectorMissingError{Connector: a.cmd.Connector()}
 		default:
 			a.setEligibility(reason)
 			return nil, &IneligibleError{Reason: reason}

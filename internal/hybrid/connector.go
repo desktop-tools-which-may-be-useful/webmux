@@ -68,11 +68,12 @@ func (a *actor) prepareACP(ctx context.Context) (acpTools, error) {
 // which may be a probe shell (session.Manager.ProbeShell).
 func prepareACP(ctx context.Context, cmd agentprofile.Command, shell *session.Session) (acpTools, error) {
 	p := cmd.Profile
+	connector := cmd.Connector()
 	tools := acpTools{env: maps.Clone(p.ACPEnv)}
 	if tools.env == nil {
 		tools.env = make(map[string]string)
 	}
-	if p.Connector == nil {
+	if connector == nil {
 		return tools, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, lookupTimeout)
@@ -85,7 +86,7 @@ func prepareACP(ctx context.Context, cmd agentprofile.Command, shell *session.Se
 	}
 	var connectorPath string
 	if cmd.Form == agentprofile.FormStartup {
-		names := []string{p.Connector.Executable}
+		names := []string{connector.Executable}
 		if resolveAgent {
 			names = append(names, cmd.Executable)
 		}
@@ -95,7 +96,7 @@ func prepareACP(ctx context.Context, cmd agentprofile.Command, shell *session.Se
 			if err == nil {
 				err = errors.New("shell 启动文件未正常结束")
 			}
-			return tools, fmt.Errorf("%w: 检查 %s 失败: %w", ErrAgent, p.Connector.Executable, err)
+			return tools, fmt.Errorf("%w: 检查 %s 失败: %w", ErrAgent, connector.Executable, err)
 		}
 		connectorPath = paths[0]
 		if resolveAgent {
@@ -103,16 +104,16 @@ func prepareACP(ctx context.Context, cmd agentprofile.Command, shell *session.Se
 		}
 	} else {
 		var err error
-		connectorPath, err = shell.LookPath(p.Connector.Executable)
+		connectorPath, err = shell.LookPath(connector.Executable)
 		if err != nil && !errors.Is(err, session.ErrNoExecutable) {
-			return tools, fmt.Errorf("%w: 检查 %s 失败: %w", ErrAgent, p.Connector.Executable, err)
+			return tools, fmt.Errorf("%w: 检查 %s 失败: %w", ErrAgent, connector.Executable, err)
 		}
 		if resolveAgent {
 			agentPath, _ = shell.LookPath(cmd.Executable)
 		}
 	}
 	if !strings.HasPrefix(connectorPath, "/") {
-		return tools, &ConnectorMissingError{Connector: p.Connector}
+		return tools, &ConnectorMissingError{Connector: connector}
 	}
 	if resolveAgent {
 		if strings.HasPrefix(agentPath, "/") {
@@ -170,7 +171,7 @@ func versionField(out string) string {
 // startFailure classifies a failed ACP process start of cmd: an executable
 // that cannot be found is a missing connector when the profile has one.
 func startFailure(cmd agentprofile.Command, err error) *failure {
-	if c := cmd.Profile.Connector; c != nil && errors.Is(err, session.ErrNoExecutable) {
+	if c := cmd.Connector(); c != nil && errors.Is(err, session.ErrNoExecutable) {
 		return &failure{err: &ConnectorMissingError{Connector: c}, public: connectorText(c)}
 	}
 	return &failure{err: fmt.Errorf("%w: %w", ErrAgent, err), public: "启动 agent 失败"}
@@ -180,7 +181,7 @@ func startFailure(cmd agentprofile.Command, err error) *failure {
 // that ended with the shell's command-not-found status before answering:
 // it was removed after the check.
 func exitedNotFound(cmd agentprofile.Command, sidecar *session.Sidecar) *failure {
-	c := cmd.Profile.Connector
+	c := cmd.Connector()
 	if c == nil || cmd.Form != agentprofile.FormStartup || sidecar.ExitCode() != exitNotFound {
 		return nil
 	}
@@ -220,7 +221,7 @@ const (
 // known; meanwhile the later conditions apply, and the session/list probe
 // checks the connector again before it starts anything.
 func (a *actor) connectorReason() string {
-	if a.cmd.Profile.Connector == nil {
+	if a.cmd.Connector() == nil {
 		return ""
 	}
 	switch a.connector.result {
@@ -261,7 +262,7 @@ func (a *actor) connectorChecked(err error) {
 // setConnector applies what an ACP start or check found out about the
 // connector.
 func (a *actor) setConnector(err error) {
-	if a.cmd.Profile.Connector == nil {
+	if a.cmd.Connector() == nil {
 		return
 	}
 	if !errors.Is(err, ErrConnectorMissing) {
