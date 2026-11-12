@@ -6,6 +6,13 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 )
 
+func TestViewChangePaths(t *testing.T) {
+	start, answer := viewChangePaths("a/b")
+	if start != "/api/sessions/a%2Fb/view?turnChoice=1" || answer != "/api/sessions/a%2Fb/view" {
+		t.Fatalf("view change paths = %q, %q", start, answer)
+	}
+}
+
 func TestViewChoicePending(t *testing.T) {
 	id := "session1"
 	for _, tt := range []struct {

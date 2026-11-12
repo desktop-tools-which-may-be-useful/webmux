@@ -92,7 +92,12 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 
 ### Requirement: 终端回合状态无法判定
 
-终端信号只表明 TUI 正在等待输入、没有结构化 attention 时，系统 SHALL NOT 把该状态断定为空闲或忙碌。切到聊天的请求 SHALL 进入 `awaiting_turn_choice`，并且在用户选择前 SHALL NOT 写入中断键。
+终端信号只表明 TUI 正在等待输入、没有结构化 attention 时，系统 SHALL NOT 把该状态断定为空闲或忙碌。
+
+- 客户端在初始切换请求中以查询参数 `turnChoice=1` 声明能处理新选择阶段。此类请求 SHALL 进入 `awaiting_turn_choice`，并且在用户选择前 SHALL NOT 写入中断键。
+- 未声明该能力的请求 SHALL 沿用旧客户端行为，把未知状态按可能仍在回合内处理并进入既有中断流程。系统 SHALL NOT 向此类请求发布 `awaiting_turn_choice`。
+
+能力 SHALL 只通过初始请求的查询参数传递，SHALL NOT 加入严格校验的 JSON 请求体；选择回答 SHALL 使用不带该参数的 `/view` 路径。旧服务端忽略未知查询参数，因此当前客户端仍 SHALL 能与旧服务端切换。
 
 - 选择“中断后切换”：SHALL 写入档案定义的中断键，并进入既有中断等待流程。
 - 选择“直接切换”：SHALL 不写入中断键，直接结束 TUI 并继续切换。
@@ -104,6 +109,11 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 
 - **WHEN** 无结构化 TUI 停在基础输入框，终端状态为 waiting 且没有 attention，用户请求切到聊天
 - **THEN** 会话进入 `awaiting_turn_choice`，终端尚未收到中断键；用户可以直接切换、中断后切换或取消
+
+#### Scenario: 旧客户端沿用中断流程
+
+- **WHEN** 同一未知终端状态收到不带 `turnChoice=1` 的切到聊天请求
+- **THEN** 系统不发布 `awaiting_turn_choice`，先发送中断键，并且仅在中断等待超时后进入既有的 `awaiting_choice`
 
 #### Scenario: 取消未知状态切换
 

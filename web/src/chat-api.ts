@@ -104,7 +104,7 @@ export function changeView(
   agentSessionId?: string,
 ) {
   return api(
-    `/sessions/${id}/view`,
+    `/sessions/${id}/view?turnChoice=1`,
     ViewChangeResultSchema,
     "POST",
     { clientRequestId: newRequestId(), to, agentSessionId },

@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { api } from "../src/api";
+import { answerSwitch, changeView } from "../src/chat-api";
 import { CreateSessionRequestSchema } from "../src/schemas";
 
 vi.stubGlobal("localStorage", { getItem: () => null });
@@ -22,6 +23,31 @@ test("an invalid request body is rejected before any network request", async () 
     ),
   ).rejects.toThrow();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("view changes advertise turn-choice support outside the strict body", async () => {
+  vi.stubGlobal("localStorage", { getItem: () => null });
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ view: "terminal", dropped: [], unsupported: [] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+  vi.stubGlobal("fetch", fetchMock);
+
+  await changeView("session1", "chat");
+  await answerSwitch("session1", "cancel");
+
+  expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+    "/api/sessions/session1/view?turnChoice=1",
+    "/api/sessions/session1/view",
+  ]);
+  const initial = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+  expect(initial).toMatchObject({ to: "chat" });
+  expect(initial).not.toHaveProperty("turnChoice");
 });
 
 test.each([{ cmd: [] }, { env: {} }])(

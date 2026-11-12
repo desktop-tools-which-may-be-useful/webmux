@@ -268,12 +268,14 @@
 - 范围：
   - 终端状态改为 `idle` / `busy` / `unknown` 三态；未结构化的 `waiting` 且无 attention 只在首次切到聊天时进入 `awaiting_turn_choice`；此时尚未发送中断键，使用者可取消、直接切换或中断后切换；
   - 已确认 busy 仍先中断；OSC 7501 `blocked` 即使 `attention.mode = "off"` 也保留为内部权威 busy；
-  - 中断超时继续使用独立的 `awaiting_choice`；两个阶段只接受各自的选择，多个设备同时回答时只有第一个生效。
+  - 中断超时继续使用独立的 `awaiting_choice`；两个阶段只接受各自的选择，多个设备同时回答时只有第一个生效；
+  - 混合版本兼容：当前客户端仅在初始 `/view` 请求以 `?turnChoice=1` 声明新选择阶段，回答请求保持原路径与严格 JSON；未声明能力的旧客户端按旧语义先中断，永远不收到 `awaiting_turn_choice`。
 - 依据：
   - 新增真实未结构化 TUI 回归，覆盖选择前不修改终端、取消保留 PID 与会话身份、直接切换不写中断、选择中断后进入超时对话框；
   - 新增 `attention.mode = "off"` 下的结构化 blocked 回归，以及两个选择阶段的并发 first-answer-wins race 回归；
   - CLI 回归覆盖无 `--force` 自动取消、有 `--force` 自动强制；
-  - 前端单元与 Chromium 组件回归覆盖 `choice: "interrupt"` 请求、风险文案、四步进度和 unknown → timeout 对话框重新打开。
+  - 前端单元与 Chromium 组件回归覆盖 `choice: "interrupt"` 请求、风险文案、四步进度和 unknown → timeout 对话框重新打开；
+  - 混合版本回归覆盖无 capability 的 actor 仍进入既有中断超时选择、真实 HTTP query 进入新选择阶段、CLI 初始/回答路径、浏览器严格请求体，以及 P2P RPC 对查询参数的原样转发。
 - 已运行：
   - `go test -race ./internal/session -run '^TestAttentionPolicyModesAndSources$' -count=1`；
   - 完整 `internal/hybrid` race（仅排除下面三项既有非 FHS 路径用例）与 `internal/clicmd` race；

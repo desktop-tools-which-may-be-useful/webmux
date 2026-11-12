@@ -72,6 +72,9 @@
         "docs/protocol/http-sessions.md",
         "docs/user-stories/hybrid-sessions.md",
         "docs/user-stories/verification-log-2026-11-06.md",
+        "internal/api/chat_test.go",
+        "internal/api/hybrid_test.go",
+        "internal/api/sessions.go",
         "internal/clicmd/session_view.go",
         "internal/contract/views.go",
         "internal/hybrid/chat.go",
@@ -94,8 +97,10 @@
         "web/src/hooks/hybrid.svelte.ts",
         "web/src/hooks/session-terminal-chrome.svelte.ts",
         "web/src/hybrid.ts",
+        "web/test/api.test.ts",
         "web/test/browser/TerminalHybrid.test.ts",
-        "web/test/hybrid.test.ts"
+        "web/test/hybrid.test.ts",
+        "web/test/p2p.test.ts"
       ],
       "bridges": []
     },

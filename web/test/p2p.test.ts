@@ -218,15 +218,18 @@ describe("P2P ClientTransport streams, RPC fetch, and multipart upload", () => {
     expect(fallbackFetch).toHaveBeenCalledOnce();
     expect(mockPC.channels).toHaveLength(0);
 
-    // /sessions goes over rpc:1 DataChannel
-    const fetchPromise = transport.fetch("/sessions", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer tok",
-        "Content-Type": "application/json",
+    // A compatibility capability query is preserved over the rpc DataChannel.
+    const fetchPromise = transport.fetch(
+      "/sessions/session1/view?turnChoice=1",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer tok",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "dev" }),
       },
-      body: JSON.stringify({ name: "dev" }),
-    });
+    );
 
     await vi.waitFor(() => expect(mockPC.channels).toHaveLength(1));
     const rpcCh = mockPC.channels[0]!;
@@ -236,7 +239,7 @@ describe("P2P ClientTransport streams, RPC fetch, and multipart upload", () => {
     await vi.waitFor(() => expect(rpcCh.sent.length).toBeGreaterThanOrEqual(3));
     const reqHdr = JSON.parse(rpcCh.sent[0] as string);
     expect(reqHdr.method).toBe("POST");
-    expect(reqHdr.path).toBe("/api/sessions");
+    expect(reqHdr.path).toBe("/api/sessions/session1/view?turnChoice=1");
     expect(reqHdr.headers.authorization).toBe("Bearer tok");
 
     rpcCh.receive(

@@ -75,6 +75,7 @@ SHALL 调用 `POST /api/sessions/{id}/chat/prompts`。
 - `webmux chat switch SESSION --to chat|terminal [--force]` SHALL 调用切换接口，并等待切换结束。
   需要用户选择时（终端回合状态无法判定，或已发送中断键但 TUI 在超时内没有空闲），带 `--force` 时 SHALL 选择直接/强制切换；
   不带 `--force` SHALL 选择取消切换，并以 1 结束、提示可用 `--force` 重试，不让切换停在等待选择的状态。
+  CLI 在发起切换的初始 `/view` 请求上 SHALL 带查询参数 `turnChoice=1`，选择回答的 `/view` 请求 SHALL 不带该参数；JSON 请求体 SHALL 保持原有严格结构。
   CLI 在 `awaiting_turn_choice` 与 `awaiting_choice` 都 SHALL 作出上述自动选择；前者的 `--force` SHALL 直接切换，不先发送中断键。
   服务端返回会话歧义时 SHALL 列出候选会话，并接受 `--agent-session ID` 重试。
 

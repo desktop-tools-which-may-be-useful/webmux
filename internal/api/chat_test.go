@@ -474,6 +474,72 @@ func TestChatCommandConflicts(t *testing.T) {
 	}
 }
 
+func TestViewTurnChoiceCapability(t *testing.T) {
+	h := newHybridAPIWithSessionOptions(t, nil, func(o *session.Options) {
+		o.DisableAgentProtocol = true
+		o.DisableProgramStatus = true
+		o.PromptPatterns = []string{`prompt>\s*$`}
+	})
+	exe := fakeAgentPath(t, codex.Name)
+	store := t.TempDir()
+	item, err := h.hybrids.Create(context.Background(), hybrid.CreateInput{
+		Cwd: h.cwd, Name: "turn-choice", ConfigID: "cfgtest01", Cmd: []string{exe},
+		Env: map[string]string{
+			"FAKEAGENT_STORE": store, "FAKEAGENT_PROFILE": codex.Name,
+			"FAKEAGENT_IGNORE_INTERRUPT": "1", "CODEX_HOME": t.TempDir(),
+			"PATH": filepath.Dir(exe),
+		}, StartSide: hybrid.SideTUI,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := item.Info().ID
+	deadline := time.Now().Add(chatTimeout)
+	wait := func(what string, ready func(session.Info) bool) {
+		t.Helper()
+		for !ready(item.Info()) {
+			if time.Now().After(deadline) {
+				t.Fatalf("timed out waiting for %s: %+v", what, item.Info())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	wait("terminal prompt and identity", func(info session.Info) bool {
+		return strings.Contains(string(item.Buffer()), "prompt> ") && info.Hybrid.AgentSessionID != nil
+	})
+	if err := item.WriteContext(context.Background(), []byte("first\r")); err != nil {
+		t.Fatal(err)
+	}
+	wait("saved terminal turn", func(info session.Info) bool {
+		return strings.Contains(string(item.Buffer()), "echo: first")
+	})
+	wait("eligible heuristic wait", func(info session.Info) bool {
+		sub, err := h.hybrids.Subscribe(id, nil)
+		if err != nil {
+			return false
+		}
+		defer sub.Close()
+		return info.Status == session.StatusWaiting && info.Attention == nil && sub.Snapshot.State.Eligibility.Available
+	})
+
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		done <- h.command("POST", "/api/sessions/"+id+"/view?turnChoice=1", contract.ViewChangeRequest{ClientRequestID: chatRID(), To: contract.ViewChat})
+	}()
+	wait("turn choice phase", func(info session.Info) bool {
+		return info.Hybrid != nil && info.Hybrid.Phase == string(hybrid.PhaseAwaitingTurnChoice)
+	})
+	h.expectCommand("POST", "/api/sessions/"+id+"/view", contract.ViewChangeRequest{ClientRequestID: chatRID(), Choice: contract.ViewChoiceCancel}, 200)
+	select {
+	case response := <-done:
+		if response.Code != http.StatusOK {
+			t.Fatalf("initial switch status %d: %s", response.Code, response.Body.String())
+		}
+	case <-time.After(chatTimeout):
+		t.Fatal("initial switch request stayed blocked after cancel")
+	}
+}
+
 // TestHybridSwitch covers POST /api/sessions/{id}/switch: a refused switch
 // names its eligibility reason, a switch to the terminal returns the
 // queued prompts as the requester's draft, and bad bodies are 400.

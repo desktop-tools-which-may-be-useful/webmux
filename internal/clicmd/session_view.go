@@ -155,6 +155,11 @@ func automaticViewChoice(force bool) string {
 	return contract.ViewChoiceCancel
 }
 
+func viewChangePaths(id string) (start, answer string) {
+	answer = "/api/sessions/" + url.PathEscape(id) + "/view"
+	return answer + "?turnChoice=1", answer
+}
+
 // changeView runs a view change and answers its choice, when it pauses for
 // one, with force or cancel. It reports the choice it made.
 func (e Env) changeView(ctx context.Context, client *localclient.Client, id string, request contract.ViewChangeRequest, force bool) (contract.ViewChangeResult, string, error) {
@@ -163,7 +168,7 @@ func (e Env) changeView(ctx context.Context, client *localclient.Client, id stri
 		return contract.ViewChangeResult{}, "", err
 	}
 	defer watch.close()
-	path := "/api/sessions/" + url.PathEscape(id) + "/view"
+	startPath, path := viewChangePaths(id)
 	type outcome struct {
 		result contract.ViewChangeResult
 		err    error
@@ -171,7 +176,7 @@ func (e Env) changeView(ctx context.Context, client *localclient.Client, id stri
 	done := make(chan outcome, 1)
 	go func() {
 		var result contract.ViewChangeResult
-		err := client.Do(ctx, http.MethodPost, path, request, &result)
+		err := client.Do(ctx, http.MethodPost, startPath, request, &result)
 		done <- outcome{result, err}
 	}()
 	choiceCtx, stop := context.WithCancel(ctx)

@@ -20,7 +20,7 @@ The committed overlay adds strict, bounded `WEBMUX_ACP_AGENTS` declarations for 
 
 **Tri-state terminal→chat switching.**
 
-The committed fix distinguishes a busy terminal turn, an idle turn, and an unknown heuristic wait. It preserves structured blocked/question/permission interventions during startup quiet, serializes switch answers through the actor so the first answer wins, and keeps CLI and frontend choice phases aligned. Its `pending-upstream` status means the behavior is active downstream while an equivalent upstream implementation is still absent.
+The committed fix distinguishes a busy terminal turn, an idle turn, and an unknown heuristic wait. It preserves structured blocked/question/permission interventions during startup quiet, serializes switch answers through the actor so the first answer wins, and keeps CLI and frontend choice phases aligned. Current clients opt in to the new unknown-state choice phase on the initial switch request; clients without that capability retain the interrupt-first flow and never receive an unknown phase. Its `pending-upstream` status means the behavior is active downstream while an equivalent upstream implementation is still absent.
 
 Its two fork-owned regression/implementation files and every upstream-owned integration path are classified under `WM-DS-02` in `ownership.json`. A mixed path may be listed by several features when the classification agrees.
 

@@ -32,8 +32,10 @@
 ## 视图切换与恢复
 
 - POST `/api/sessions/{id}/view`：`{clientRequestId, to, agentSessionId?}` 切到另一视图，完成后 200 `{view, draft?, dropped, unsupported}`。
+  - 当前客户端只在发起切换的首个请求上使用 `POST /api/sessions/{id}/view?turnChoice=1`，表示能处理 `awaiting_turn_choice`；作答请求仍使用不带该查询参数的 `/view`。能力不进入严格校验的 JSON 请求体，因此旧服务端会忽略查询参数而照常处理。
   - `agentSessionId` 只用于切到 `chat`，从 409 `session_ambiguous` 的候选中选定会话。
-  - 终端只报告正在等待输入、无法确定是否仍在回合内时进入 `awaiting_turn_choice`，且尚未发送中断键；另一请求以 `{clientRequestId, choice: "interrupt" | "force" | "cancel"}` 作答：中断后切换、直接切换或取消。
+  - 带 `turnChoice=1` 时，终端只报告正在等待输入、无法确定是否仍在回合内会进入 `awaiting_turn_choice`，且尚未发送中断键；另一请求以 `{clientRequestId, choice: "interrupt" | "force" | "cancel"}` 作答：中断后切换、直接切换或取消。
+  - 未带 `turnChoice=1` 的客户端沿用兼容行为：上述未知状态按仍在回合内处理，先发送中断键；服务端不会向它发布 `awaiting_turn_choice`，等待超时后只进入既有的 `awaiting_choice`。
   - 已发送中断键、等待超时后进入 `awaiting_choice`；另一请求以 `{clientRequestId, choice: "wait" | "force" | "cancel"}` 作答：继续等待、强制切换或取消。
   - 普通会话 409 `no_chat_view`。
 - POST `/api/sessions/{id}/resume`：`{clientRequestId, view?, agentSessionId?, confirmWithoutEnv?}` 把已关闭或已中断的会话恢复到指定视图（缺省为归档时的视图），沿用原 ID，200 返回 `state` 为 `active` 的 `SessionInfo`。

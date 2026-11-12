@@ -37,12 +37,20 @@ type hybridAPI struct {
 // prepare may fill first. Artifacts folders are wired as cmd/webmux does:
 // a recorded hybrid session keeps its folder.
 func newHybridAPI(t *testing.T, prepare func(state string)) *hybridAPI {
+	return newHybridAPIWithSessionOptions(t, prepare, nil)
+}
+
+func newHybridAPIWithSessionOptions(t *testing.T, prepare func(state string), configure func(*session.Options)) *hybridAPI {
 	t.Helper()
 	h := &hybridAPI{t: t, state: t.TempDir(), cwd: t.TempDir()}
 	if prepare != nil {
 		prepare(h.state)
 	}
-	h.manager = session.NewManager(session.Options{DefaultCwd: h.cwd})
+	options := session.Options{DefaultCwd: h.cwd}
+	if configure != nil {
+		configure(&options)
+	}
+	h.manager = session.NewManager(options)
 	h.store = openLaunchStore(t)
 	h.folders = artifacts.New(artifacts.Options{TempDir: t.TempDir(), StateDir: h.state, Manager: h.manager})
 	hybrids := hybrid.New(hybrid.Options{StateDir: h.state, Manager: h.manager, Uploads: h.folders.UploadPath})

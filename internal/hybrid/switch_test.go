@@ -41,7 +41,7 @@ func (h *harness) switchTo(id string, side Side) (SwitchResult, error) {
 	h.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
-	return h.svc.Switch(ctx, id, SwitchInput{ClientRequestID: rid(), To: side})
+	return h.svc.Switch(ctx, id, SwitchInput{ClientRequestID: rid(), To: side, CanChooseTurn: true})
 }
 
 func (h *harness) mustSwitch(id string, side Side) SwitchResult {
@@ -330,13 +330,17 @@ func TestSwitchMidTurnInterrupts(t *testing.T) {
 	}
 }
 
-// startSwitch runs a switch in the background.
+// startSwitch runs a current client's switch in the background.
 func startSwitch(h *harness, id string, side Side) <-chan switchOutcome {
+	return startSwitchWithTurnChoice(h, id, side, true)
+}
+
+func startSwitchWithTurnChoice(h *harness, id string, side Side, canChooseTurn bool) <-chan switchOutcome {
 	out := make(chan switchOutcome, 1)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*testTimeout)
 		defer cancel()
-		r, err := h.svc.Switch(ctx, id, SwitchInput{ClientRequestID: rid(), To: side})
+		r, err := h.svc.Switch(ctx, id, SwitchInput{ClientRequestID: rid(), To: side, CanChooseTurn: canChooseTurn})
 		out <- switchOutcome{r, err}
 	}()
 	return out
@@ -447,6 +451,20 @@ func TestTUITurnState(t *testing.T) {
 				t.Fatalf("initialTUITurnState() = %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSwitchUnknownTurnStateLegacyClient(t *testing.T) {
+	h, _, id := unknownTurnSession(t)
+	done := startSwitchWithTurnChoice(h, id, SideACP, false)
+	h.waitPhase(id, PhaseAwaitingChoice)
+	waitFor(t, "legacy interrupt input", func() bool {
+		return slices.Contains(storedAgentUsers(t, h.store), "interrupt")
+	})
+	h.choose(id, ChoiceCancel)
+	out := <-done
+	if out.err != nil || out.result.Side != SideTUI {
+		t.Fatalf("cancelled legacy switch %+v %v", out.result, out.err)
 	}
 }
 

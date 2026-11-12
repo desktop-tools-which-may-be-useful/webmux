@@ -20,6 +20,8 @@ const (
 
 // SwitchInput asks to move a session to side To, or answers a switch
 // waiting in PhaseAwaitingTurnChoice or PhaseAwaitingChoice with Choice.
+// CanChooseTurn opts the initiating client into PhaseAwaitingTurnChoice;
+// clients that omit it keep the legacy interrupt-first flow.
 // AgentSessionID picks one of the candidates a SessionAmbiguousError offered,
 // moving to the chat only.
 type SwitchInput struct {
@@ -27,6 +29,7 @@ type SwitchInput struct {
 	To              Side
 	Choice          string
 	AgentSessionID  string
+	CanChooseTurn   bool
 }
 
 // SwitchResult is a finished switch request: the side the session is on.
@@ -50,6 +53,9 @@ type switchOp struct {
 	// queued is what the queue held when it became the draft, restored if
 	// the switch rolls back to the chat.
 	queued []QueueItem
+	// canChooseTurn lets clients that understand PhaseAwaitingTurnChoice opt
+	// into it; older clients keep the legacy interrupt-first flow.
+	canChooseTurn bool
 	// pick is the user's choice among ambiguous candidates.
 	pick string
 }
@@ -89,7 +95,9 @@ func (s *Service) Switch(ctx context.Context, id string, in SwitchInput) (Switch
 		return SwitchResult{}, fmt.Errorf("%w: agentSessionId 只能用于切到聊天", ErrInvalid)
 	}
 	return once(ctx, &a.recent, in.ClientRequestID, "switch", func(ctx context.Context) (SwitchResult, error) {
-		done, err := call(ctx, a, func() (<-chan switchOutcome, error) { return a.beginSwitch(in.To, in.AgentSessionID) })
+		done, err := call(ctx, a, func() (<-chan switchOutcome, error) {
+			return a.beginSwitch(in.To, in.AgentSessionID, in.CanChooseTurn)
+		})
 		if err != nil {
 			return SwitchResult{}, err
 		}
@@ -112,7 +120,7 @@ func (s *Service) Switch(ctx context.Context, id string, in SwitchInput) (Switch
 // beginSwitch starts a switch to side to and returns where its outcome
 // arrives. Switching to the side the session is on succeeds at once. pick
 // chooses among the candidates a SessionAmbiguousError offered.
-func (a *actor) beginSwitch(to Side, pick string) (<-chan switchOutcome, error) {
+func (a *actor) beginSwitch(to Side, pick string, canChooseTurn bool) (<-chan switchOutcome, error) {
 	switch {
 	case a.state != StateActive || a.closing:
 		return nil, fmt.Errorf("%w: 会话已结束", ErrConflict)
@@ -126,7 +134,7 @@ func (a *actor) beginSwitch(to Side, pick string) (<-chan switchOutcome, error) 
 		done <- switchOutcome{result: a.resultOn(to)}
 		return done, nil
 	}
-	op := &switchOp{from: a.side, to: to, done: done, pick: pick}
+	op := &switchOp{from: a.side, to: to, done: done, pick: pick, canChooseTurn: canChooseTurn}
 	if to == SideACP {
 		// Conditions 1-4 now, 5 (session/list, with the connector checked
 		// again) in a fresh probe, 6 after it.
@@ -240,8 +248,12 @@ func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
 	case tuiTurnBusy:
 		a.setPhase(PhaseInterrupting)
 	case tuiTurnUnknown:
-		op.choice = make(chan string, 1)
-		a.setPhase(PhaseAwaitingTurnChoice)
+		if op.canChooseTurn {
+			op.choice = make(chan string, 1)
+			a.setPhase(PhaseAwaitingTurnChoice)
+		} else {
+			a.setPhase(PhaseInterrupting)
+		}
 	default:
 		a.setPhase(PhaseStopping)
 	}
@@ -250,11 +262,11 @@ func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
 	// cancels.
 	a.shell.MoveClients()
 	a.svc.log.Info("hybrid switch started", "id", a.id, "to", string(SideACP), "turn", turn.String())
-	if turn == tuiTurnUnknown {
+	if turn == tuiTurnUnknown && op.canChooseTurn {
 		go a.runUnknownToACP(op, t, op.choice)
 		return
 	}
-	go a.runToACP(op, t, turn == tuiTurnBusy)
+	go a.runToACP(op, t, turn != tuiTurnIdle)
 }
 
 // pickCandidate is the one candidate, else the user's pick among them, else

@@ -45,7 +45,9 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		if err := s.chatTarget(id); err != nil {
 			return contract.ViewChangeResult{Dropped: []string{}, Unsupported: []string{}}, err
 		}
-		result, err := s.Hybrid.Switch(r.Context(), id, wire.ViewChangeInput(req))
+		input := wire.ViewChangeInput(req)
+		input.CanChooseTurn = r.URL.Query().Get("turnChoice") == "1"
+		result, err := s.Hybrid.Switch(r.Context(), id, input)
 		return wire.ViewChangeResult(result), err
 	})
 	// resume resumes a closed or interrupted session under its ID and
