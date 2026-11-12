@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "mode": "overlay",
+  "upstreamBase": "4c9589b85aad3987953cd3037eee7c90bd9f43fe",
+  "featureDocument": "downstream/README.md",
+  "features": [
+    {
+      "id": "WM-DS-01",
+      "status": "active",
+      "factSource": "downstream/README.md#wm-ds-01",
+      "ownedFiles": [
+        "internal/agentprofile/agents/external.go",
+        "internal/agentprofile/agents/external_test.go",
+        "internal/agentprofile/external_test.go",
+        "internal/agentprofile/spec.go",
+        "internal/hybrid/external_process_test.go",
+        "internal/launchicon/catalog.go"
+      ],
+      "ownedPrefixes": [],
+      "mixedFiles": [
+        "cmd/baseline/fixture.go",
+        "cmd/internal/assemble/assemble.go",
+        "cmd/internal/assemble/assemble_test.go",
+        "cmd/webmux/main.go",
+        "cmd/webmux/server_config.go",
+        "docs/architecture.md",
+        "docs/deployment/configuration.md",
+        "docs/deployment/services.md",
+        "docs/hybrid-sessions/agents.md",
+        "docs/user-stories/hybrid-sessions.md",
+        "docs/user-stories/verification-log-2026-11-archived-history.md",
+        "internal/agentprofile/command.go",
+        "internal/agentprofile/profile.go",
+        "internal/agentprofile/registry.go",
+        "internal/api/launch.go",
+        "internal/api/launch_test.go",
+        "internal/api/p2p_test.go",
+        "internal/api/router.go",
+        "internal/archtest/layers_test.go",
+        "internal/hybrid/connector.go",
+        "internal/hybrid/create.go",
+        "internal/hybrid/eligibility.go",
+        "internal/hybrid/identity_trackers.go",
+        "internal/hybrid/link.go",
+        "internal/hybrid/service.go",
+        "internal/hybrid/service_test.go",
+        "internal/hybrid/switch.go",
+        "internal/hybrid/work_test.go",
+        "internal/launch/inspect.go",
+        "internal/launch/presets.go",
+        "internal/launch/presets_test.go",
+        "internal/launch/store.go",
+        "internal/launch/store_test.go",
+        "internal/launch/types.go",
+        "internal/service/render.go",
+        "internal/service/service_test.go"
+      ],
+      "bridges": []
+    },
+    {
+      "id": "WM-DS-02",
+      "status": "pending-upstream",
+      "factSource": "downstream/README.md#wm-ds-02",
+      "ownedFiles": [
+        "internal/clicmd/session_view_test.go",
+        "internal/hybrid/switch_choice.go"
+      ],
+      "ownedPrefixes": [],
+      "mixedFiles": [
+        "docs/hybrid-sessions.md",
+        "docs/protocol/http-hybrid.md",
+        "docs/protocol/http-sessions.md",
+        "docs/user-stories/hybrid-sessions.md",
+        "docs/user-stories/verification-log-2026-11-06.md",
+        "internal/clicmd/session_view.go",
+        "internal/contract/views.go",
+        "internal/hybrid/chat.go",
+        "internal/hybrid/claude_test.go",
+        "internal/hybrid/codex_test.go",
+        "internal/hybrid/recovery_test.go",
+        "internal/hybrid/switch.go",
+        "internal/hybrid/switch_test.go",
+        "internal/session/attention_test.go",
+        "internal/session/session.go",
+        "openspec/specs/hybrid-sessions/spec.md",
+        "openspec/specs/shell-chat-control/spec.md",
+        "web/src/chat-api.ts",
+        "web/src/chat-schemas.ts",
+        "web/src/components/SessionTerminalDialogs.svelte",
+        "web/src/components/SessionTerminalStage.svelte",
+        "web/src/components/chat/SwitchChoiceDialog.svelte",
+        "web/src/components/chat/SwitchProgress.svelte",
+        "web/src/hooks/hybrid-types.ts",
+        "web/src/hooks/hybrid.svelte.ts",
+        "web/src/hooks/session-terminal-chrome.svelte.ts",
+        "web/src/hybrid.ts",
+        "web/test/browser/TerminalHybrid.test.ts",
+        "web/test/hybrid.test.ts"
+      ],
+      "bridges": []
+    },
+    {
+      "id": "WM-DS-03",
+      "status": "active",
+      "factSource": "downstream/README.md#wm-ds-03",
+      "ownedFiles": [
+        ".github/workflows/downstream-ownership.yml"
+      ],
+      "ownedPrefixes": [
+        "downstream/"
+      ],
+      "mixedFiles": [
+        "AGENTS.md"
+      ],
+      "bridges": [
+        {
+          "path": "AGENTS.md",
+          "marker": "[downstream/AGENTS.md](downstream/AGENTS.md)"
+        }
+      ]
+    }
+  ]
+}

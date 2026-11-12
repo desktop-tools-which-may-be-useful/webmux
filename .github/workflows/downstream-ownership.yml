@@ -1,0 +1,27 @@
+name: Downstream ownership
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Committed overlay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Fetch trusted upstream history
+        run: git fetch --no-tags https://github.com/mzdluo123/webmux.git main:refs/remotes/upstream/main
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Test ownership guard
+        run: go test ./downstream
+      - name: Check committed overlay
+        run: go run ./downstream

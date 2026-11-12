@@ -4,6 +4,8 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 
 **This file has a hard 10 KiB budget**, enforced by `internal/archtest` (`TestAgentsGuideSize`). Keep only rules needed on almost every change here; put the rest in `docs/agent-rules/` and link it. Index: [docs/agent-rules.md](docs/agent-rules.md).
 
+- Before changing downstream-owned or mixed files, or rebasing, read [downstream/AGENTS.md](downstream/AGENTS.md).
+
 ## Architecture
 
 - `cmd/webmux` loads TOML, converts it to `session.Options` (via `cmd/internal/assemble`), constructs every service (`session.Manager`, launch, workspace, codeview, files, push) and injects them into `api.New` as `api.Deps`. Only `cmd/` constructs services or converts configuration into service options. Keep explicit constructor-based wiring.
