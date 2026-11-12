@@ -19,13 +19,14 @@ const SideSwitching Side = "switching"
 type Phase string
 
 const (
-	PhaseInterrupting   Phase = "interrupting"
-	PhaseAwaitingChoice Phase = "awaiting_choice"
-	PhaseCancelling     Phase = "cancelling"
-	PhaseStopping       Phase = "stopping"
-	PhaseStarting       Phase = "starting"
-	PhaseLoading        Phase = "loading"
-	PhaseRollingBack    Phase = "rolling_back"
+	PhaseInterrupting       Phase = "interrupting"
+	PhaseAwaitingTurnChoice Phase = "awaiting_turn_choice"
+	PhaseAwaitingChoice     Phase = "awaiting_choice"
+	PhaseCancelling         Phase = "cancelling"
+	PhaseStopping           Phase = "stopping"
+	PhaseStarting           Phase = "starting"
+	PhaseLoading            Phase = "loading"
+	PhaseRollingBack        Phase = "rolling_back"
 )
 
 // Event kinds, identical to the contract's.

@@ -7,7 +7,12 @@ import type {
   SwitchStep,
   SwitchTarget,
 } from "../hybrid";
-import type { AgentConnector, ArchivedSession, SessionInfo } from "../schemas";
+import type {
+  AgentConnector,
+  ArchivedSession,
+  SessionInfo,
+  ViewChangeChoice,
+} from "../schemas";
 import type { TerminalDraft, TerminalDrafts } from "../terminal-draft.svelte";
 import type { Connection } from "../ws";
 import type { ChatSocket } from "./chat-socket.svelte";
@@ -38,6 +43,8 @@ export interface HybridSession {
   /** Why switching to chat is unavailable now; "" when it is available. */
   readonly chatUnavailable: string;
   readonly confirming: HybridConfirm | null;
+  /** WebMux cannot tell whether the TUI is idle or waiting inside a turn. */
+  readonly awaitingTurnChoice: boolean;
   /** The interrupt timed out and the switch waits for a choice (D21). */
   readonly awaitingChoice: boolean;
   readonly answering: boolean;
@@ -53,7 +60,7 @@ export interface HybridSession {
   request(to: SwitchTarget): void;
   confirm(): void;
   cancelConfirm(): void;
-  choose(choice: "wait" | "force" | "cancel"): Promise<void>;
+  choose(choice: ViewChangeChoice): Promise<void>;
   /** Switches to chat continuing the picked agent session. */
   pick(agentSessionId: string): void;
   cancelPick(): void;

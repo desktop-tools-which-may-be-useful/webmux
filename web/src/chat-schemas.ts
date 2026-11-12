@@ -15,6 +15,7 @@ export type SessionView = z.infer<typeof SessionViewSchema>;
 export const SessionStateSchema = z.enum(["active", "closed", "interrupted"]);
 const TransitionPhaseSchema = z.enum([
   "interrupting",
+  "awaiting_turn_choice",
   "awaiting_choice",
   "cancelling",
   "stopping",
@@ -103,11 +104,14 @@ export const SessionConflictSchema = z.object({
 });
 export type SessionConflict = z.infer<typeof SessionConflictSchema>;
 
+const ViewChangeChoiceSchema = z.enum(["wait", "force", "cancel", "interrupt"]);
+export type ViewChangeChoice = z.infer<typeof ViewChangeChoiceSchema>;
+
 export const ViewChangeRequestSchema = z
   .object({
     clientRequestId: z.string(),
     to: SessionViewSchema.optional(),
-    choice: z.enum(["wait", "force", "cancel"]).optional(),
+    choice: ViewChangeChoiceSchema.optional(),
     agentSessionId: z.string().optional(),
   })
   .strict();

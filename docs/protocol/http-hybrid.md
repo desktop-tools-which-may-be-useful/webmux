@@ -10,14 +10,14 @@
 
 带聊天视图的会话与普通会话使用同一个 `SessionInfo`（完整定义见 [会话](http-sessions.md)），不含 `hybrid` 对象：
 
-| 字段         | 说明                                                                                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `state`      | `active`、`closed` 或 `interrupted`；运行中列表与 `/ws/sessions` 只含 `active`                                                                         |
-| `views`      | `["terminal","chat"]`                                                                                                                                  |
-| `view`       | 最近一次落定的视图，`terminal` 或 `chat`；切换进行中仍为来源视图                                                                                       |
-| `transition` | 切换进行中为 `{to, phase}`，`phase` 取 `interrupting`、`awaiting_choice`、`cancelling`、`stopping`、`starting`、`loading`、`rolling_back`；否则 `null` |
-| `agent`      | `{name, title, icon, sessionId, work?}`，见下文                                                                                                        |
-| `archive`    | 只在 `closed` 或 `interrupted` 时出现，见下文“已归档会话”                                                                                              |
+| 字段         | 说明                                                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `state`      | `active`、`closed` 或 `interrupted`；运行中列表与 `/ws/sessions` 只含 `active`                                                                                                 |
+| `views`      | `["terminal","chat"]`                                                                                                                                                          |
+| `view`       | 最近一次落定的视图，`terminal` 或 `chat`；切换进行中仍为来源视图                                                                                                               |
+| `transition` | 切换进行中为 `{to, phase}`，`phase` 取 `awaiting_turn_choice`、`interrupting`、`awaiting_choice`、`cancelling`、`stopping`、`starting`、`loading`、`rolling_back`；否则 `null` |
+| `agent`      | `{name, title, icon, sessionId, work?}`，见下文                                                                                                                                |
+| `archive`    | 只在 `closed` 或 `interrupted` 时出现，见下文“已归档会话”                                                                                                                      |
 
 `agent` 的字段：
 
@@ -33,7 +33,8 @@
 
 - POST `/api/sessions/{id}/view`：`{clientRequestId, to, agentSessionId?}` 切到另一视图，完成后 200 `{view, draft?, dropped, unsupported}`。
   - `agentSessionId` 只用于切到 `chat`，从 409 `session_ambiguous` 的候选中选定会话。
-  - 中断超时进入 `awaiting_choice` 后，另一请求以 `{clientRequestId, choice: "wait" | "force" | "cancel"}` 作答。
+  - 终端只报告正在等待输入、无法确定是否仍在回合内时进入 `awaiting_turn_choice`，且尚未发送中断键；另一请求以 `{clientRequestId, choice: "interrupt" | "force" | "cancel"}` 作答：中断后切换、直接切换或取消。
+  - 已发送中断键、等待超时后进入 `awaiting_choice`；另一请求以 `{clientRequestId, choice: "wait" | "force" | "cancel"}` 作答：继续等待、强制切换或取消。
   - 普通会话 409 `no_chat_view`。
 - POST `/api/sessions/{id}/resume`：`{clientRequestId, view?, agentSessionId?, confirmWithoutEnv?}` 把已关闭或已中断的会话恢复到指定视图（缺省为归档时的视图），沿用原 ID，200 返回 `state` 为 `active` 的 `SessionInfo`。
   - 会话仍为 `active`（含所有普通会话）时 409 `not_archived`；切换中或同一会话正在恢复、删除记录时 409 `switching`。

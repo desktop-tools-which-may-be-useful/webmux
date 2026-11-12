@@ -1,6 +1,7 @@
 # hybrid-sessions Specification
 
 ## Purpose
+
 混合会话让同一段 agent 对话在 ACP 聊天视图与原生 TUI 之间按需切换：webmux 会话 ID 不变，服务端保证同一时刻只有一端打开该 agent 会话，并在中断、失败、崩溃与空闲时给出确定的行为。
 
 ## Requirements
@@ -88,6 +89,26 @@ Web 端新建会话弹层 SHALL 在选中混合配置时显示“从终端开始
 
 - **WHEN** argv 为 `["codex","-m","gpt-5.6-luna","-s","read-only"]` 的 Codex 混合会话在 TUI 中发出首条消息后切到聊天
 - **THEN** 聊天端的 `model` 为 `gpt-5.6-luna`、`mode` 为 `read-only`，并写入混合会话记录；之后每次加载都重新应用记录中的取值
+
+### Requirement: 终端回合状态无法判定
+
+终端信号只表明 TUI 正在等待输入、没有结构化 attention 时，系统 SHALL NOT 把该状态断定为空闲或忙碌。切到聊天的请求 SHALL 进入 `awaiting_turn_choice`，并且在用户选择前 SHALL NOT 写入中断键。
+
+- 选择“中断后切换”：SHALL 写入档案定义的中断键，并进入既有中断等待流程。
+- 选择“直接切换”：SHALL 不写入中断键，直接结束 TUI 并继续切换。
+- 选择“取消”：SHALL 保持在 `tui` 端，TUI 进程和 agent 会话 ID 不变。
+- 多台设备同时作答时，SHALL 只接受第一个有效回答；后续回答 SHALL 返回冲突。
+- `wait` SHALL 只在 `awaiting_choice` 有效；`interrupt` SHALL 只在 `awaiting_turn_choice` 有效。
+
+#### Scenario: 无结构化基础输入框先请求确认
+
+- **WHEN** 无结构化 TUI 停在基础输入框，终端状态为 waiting 且没有 attention，用户请求切到聊天
+- **THEN** 会话进入 `awaiting_turn_choice`，终端尚未收到中断键；用户可以直接切换、中断后切换或取消
+
+#### Scenario: 取消未知状态切换
+
+- **WHEN** 会话在 `awaiting_turn_choice`，用户选择“取消”
+- **THEN** 会话回到 `tui` 端，原 TUI PID 与 agent 会话 ID 保持不变
 
 ### Requirement: 中断等待超时
 

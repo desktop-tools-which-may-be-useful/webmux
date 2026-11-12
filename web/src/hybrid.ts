@@ -105,6 +105,7 @@ type StepPhase = Exclude<SwitchProgressPhase, "requested">;
 
 const phaseLabels: Record<StepPhase, string> = {
   interrupting: "中断中",
+  awaiting_turn_choice: "等待确认",
   awaiting_choice: "中断中",
   cancelling: "中断中",
   stopping: "退出中",
@@ -126,7 +127,12 @@ export function switchTarget(
   phase: TransitionPhase | undefined,
   from: SwitchTarget | undefined,
 ): SwitchTarget | null {
-  if (phase === "interrupting" || phase === "awaiting_choice") return "chat";
+  if (
+    phase === "interrupting" ||
+    phase === "awaiting_turn_choice" ||
+    phase === "awaiting_choice"
+  )
+    return "chat";
   if (phase === "loading") return "chat";
   if (phase === "cancelling") return "terminal";
   if (from === "terminal") return "chat";
@@ -156,11 +162,16 @@ export function switchSteps(
       state: i === 0 ? "current" : "pending",
     }));
   const at = order.indexOf(
-    phase === "awaiting_choice" ? "interrupting" : phase,
+    phase === "awaiting_turn_choice" || phase === "awaiting_choice"
+      ? "interrupting"
+      : phase,
   );
   if (at < 0) return [{ label: phaseLabels[phase], state: "current" }];
   return order.map((step, i) => ({
-    label: phaseLabels[step],
+    label:
+      phase === "awaiting_turn_choice" && i === at
+        ? phaseLabels[phase]
+        : phaseLabels[step],
     state: i < at ? "done" : i === at ? "current" : "pending",
   }));
 }

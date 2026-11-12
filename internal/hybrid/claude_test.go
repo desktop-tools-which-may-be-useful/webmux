@@ -221,9 +221,11 @@ func TestClaudeConnectorMissing(t *testing.T) {
 	}
 	s := h.create(h.claudeInput(SideTUI, dir))
 	id := s.Info().ID
-	// The fake Claude drops keystrokes typed before WebMux answers its OSC
-	// 7501 query, and only then reports idle.
-	waitFor(t, "idle terminal", func() bool { return !tuiBusy(s.Info()) })
+	// The OSC query precedes the base prompt. Once the prompt is visible,
+	// WriteContext flushes WebMux's queued capability reply before user input.
+	waitFor(t, "Claude base prompt", func() bool {
+		return strings.Contains(string(s.Buffer()), "prompt> ")
+	})
 	h.waitReason(id, ReasonConnectorMissing)
 	if err := os.Symlink(agentPath(t, "claude-agent-acp"), filepath.Join(dir, "claude-agent-acp")); err != nil {
 		t.Fatal(err)

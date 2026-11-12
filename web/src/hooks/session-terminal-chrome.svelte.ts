@@ -72,6 +72,7 @@ export function useSessionTerminalChrome(options: {
   let codeTarget = $state<CodeReveal>();
   let chatEditing = $state(false);
   let choiceClosed = $state(false);
+  let choiceKind = $state<"ambiguous" | "timeout" | null>(null);
 
   const hold = createKeyboardSizeHold({
     canHold: () => keyboardSizeHold.enabled && hasTouchInput(),
@@ -166,6 +167,7 @@ export function useSessionTerminalChrome(options: {
     hybrid: SessionHybridView & {
       info?: SessionInfo | null;
       missing: boolean;
+      awaitingTurnChoice: boolean;
       awaitingChoice: boolean;
     },
     terminalConnection: () => string,
@@ -199,7 +201,14 @@ export function useSessionTerminalChrome(options: {
       if (hybrid.missing) options.drafts.remove(options.id());
     });
     $effect(() => {
-      if (!hybrid.awaitingChoice) choiceClosed = false;
+      const nextKind = hybrid.awaitingTurnChoice
+        ? "ambiguous"
+        : hybrid.awaitingChoice
+          ? "timeout"
+          : null;
+      if (nextKind === choiceKind) return;
+      choiceKind = nextKind;
+      choiceClosed = false;
     });
     $effect(() => {
       const generation = terminalGeneration();

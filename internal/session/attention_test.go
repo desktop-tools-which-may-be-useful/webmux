@@ -612,8 +612,16 @@ func TestAttentionPolicyModesAndSources(t *testing.T) {
 	}
 	off.signals = off.signalHandler()
 	feedSignals(off, programOutput("state=blocked:kind=permission")+agentEventOutput("question_asked")+"\x1b]9;Done\a\a")
-	if off.info.Attention != nil {
-		t.Fatalf("off mode allowed terminal attention: %+v", off.info.Attention)
+	info := off.Info()
+	if info.Attention != nil {
+		t.Fatalf("off mode allowed terminal attention: %+v", info.Attention)
+	}
+	if !info.ProgramTurnBlocked {
+		t.Fatal("off mode hid authoritative blocked program state")
+	}
+	feedSignals(off, programOutput("state=idle"))
+	if off.Info().ProgramTurnBlocked {
+		t.Fatal("idle program remained blocked")
 	}
 
 	noNotifyOrAgent := &Session{

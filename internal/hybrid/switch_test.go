@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/acp"
+	"github.com/rainchan/webmux/internal/agentprofile"
+	"github.com/rainchan/webmux/internal/agentprofile/codex"
 	"github.com/rainchan/webmux/internal/agentprofile/omp"
 	"github.com/rainchan/webmux/internal/agentprofile/opencode"
 	"github.com/rainchan/webmux/internal/session"
@@ -353,6 +356,162 @@ func (h *harness) choose(id, choice string) SwitchResult {
 	return r
 }
 
+type newlineInterruptAgent struct{ agentprofile.Agent }
+
+func (newlineInterruptAgent) InterruptKeys() [][]byte { return [][]byte{[]byte("interrupt\r")} }
+
+func (a newlineInterruptAgent) LockedSessions(paths []string, getenv func(string) string, userHome string) []string {
+	return a.Agent.(agentprofile.LockTracker).LockedSessions(paths, getenv, userHome)
+}
+
+// unknownTurnSession starts an unstructured TUI whose base prompt is classified
+// as waiting with no attention: switch logic cannot know whether that is idle
+// or an in-turn terminal read.
+func unknownTurnSession(t *testing.T) (*harness, *session.Session, string) {
+	t.Helper()
+	registry := agentprofile.NewRegistry(newlineInterruptAgent{Agent: codex.Agent})
+	h := newHarnessWithAgents(t, 0, registry, func(o *session.Options) {
+		o.DisableAgentProtocol = true
+		o.DisableProgramStatus = true
+		o.PromptPatterns = []string{`prompt>\s*$`}
+	})
+	h.fast()
+	exe := agentPath(t, codex.Name)
+	in := h.input(codex.Name, SideTUI, "FAKEAGENT_PROFILE=", "FAKEAGENT_IGNORE_INTERRUPT=1", "CODEX_HOME="+t.TempDir(), "PATH="+filepath.Dir(exe)+":/usr/bin:/bin")
+	in.Cmd = []string{exe}
+	s := h.create(in)
+	id := s.Info().ID
+	waitFor(t, "terminal base prompt", func() bool { return strings.Contains(string(s.Buffer()), "prompt> ") })
+	waitFor(t, "session from the writer lock", func() bool { return s.Info().Hybrid.AgentSessionID != nil })
+	typeLine(t, s, "first")
+	waitFor(t, "first terminal reply", func() bool { return strings.Contains(string(s.Buffer()), "echo: first") })
+	h.waitEligible(id)
+	waitFor(t, "unknown terminal turn state", func() bool {
+		info := s.Info()
+		return info.Status == session.StatusWaiting && info.Attention == nil
+	})
+	return h, s, id
+}
+
+// storedAgentUsers reads the fake agent's durable TUI/ACP session messages.
+func storedAgentUsers(t *testing.T, store string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(store, "sessions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(store, "sessions", entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored struct {
+			Messages []struct {
+				Role string `json:"role"`
+				Text string `json:"text"`
+			} `json:"messages"`
+		}
+		if err := json.Unmarshal(data, &stored); err != nil {
+			t.Fatal(err)
+		}
+		for _, message := range stored.Messages {
+			if message.Role == "user" {
+				out = append(out, message.Text)
+			}
+		}
+	}
+	return out
+}
+
+func TestTUITurnState(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		info         session.Info
+		startupQuiet bool
+		want         terminalTurnState
+	}{
+		{name: "running", info: session.Info{Status: session.StatusRunning}, want: tuiTurnBusy},
+		{name: "startup running", info: session.Info{Status: session.StatusRunning}, startupQuiet: true, want: tuiTurnIdle},
+		{name: "heuristic wait", info: session.Info{Status: session.StatusWaiting}, want: tuiTurnUnknown},
+		{name: "structured blocked without attention", info: session.Info{Status: session.StatusWaiting, ProgramTurnBlocked: true}, want: tuiTurnBusy},
+		{name: "structured blocked during startup", info: session.Info{Status: session.StatusWaiting, ProgramTurnBlocked: true}, startupQuiet: true, want: tuiTurnBusy},
+		{name: "question during startup", info: session.Info{Status: session.StatusWaiting, Attention: &session.Attention{}}, startupQuiet: true, want: tuiTurnBusy},
+		{name: "idle", info: session.Info{Status: session.StatusIdle}, want: tuiTurnIdle},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := initialTUITurnState(tt.info, tt.startupQuiet); got != tt.want {
+				t.Fatalf("initialTUITurnState() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSwitchUnknownTurnState requires an explicit answer before touching an
+// unstructured waiting TUI. Cancel preserves it, force stops it directly, and
+// only interrupt writes the key and enters the existing timeout choice.
+func TestSwitchUnknownTurnState(t *testing.T) {
+	t.Run("cancel", func(t *testing.T) {
+		h, s, id := unknownTurnSession(t)
+		pid, sid := s.Identity().PID, *s.Info().Hybrid.AgentSessionID
+		before := string(s.Buffer())
+		done := startSwitch(h, id, SideACP)
+		h.waitPhase(id, PhaseAwaitingTurnChoice)
+		time.Sleep(2 * idlePoll)
+		if got := string(s.Buffer()); got != before {
+			t.Fatalf("interrupt affected terminal before choice: %q", got[len(before):])
+		}
+		if _, err := h.svc.Switch(ctxT(t), id, SwitchInput{ClientRequestID: rid(), Choice: ChoiceWait}); !errors.Is(err, ErrConflict) {
+			t.Fatalf("wait during turn choice: %v", err)
+		}
+		if r := h.choose(id, ChoiceCancel); r.Side != SideTUI {
+			t.Fatalf("cancel %+v", r)
+		}
+		out := <-done
+		if out.err != nil || out.result.Side != SideTUI {
+			t.Fatalf("cancelled switch %+v %v", out.result, out.err)
+		}
+		info := s.Info()
+		if s.Identity().PID != pid || info.Hybrid.AgentSessionID == nil || *info.Hybrid.AgentSessionID != sid {
+			t.Fatalf("cancel changed terminal identity: pid %d, hybrid %+v", s.Identity().PID, info.Hybrid)
+		}
+	})
+
+	t.Run("force", func(t *testing.T) {
+		h, _, id := unknownTurnSession(t)
+		done := startSwitch(h, id, SideACP)
+		h.waitPhase(id, PhaseAwaitingTurnChoice)
+		h.choose(id, ChoiceForce)
+		out := <-done
+		if out.err != nil || out.result.Side != SideACP {
+			t.Fatalf("forced switch %+v %v", out.result, out.err)
+		}
+		if got := storedAgentUsers(t, h.store); slices.Contains(got, "interrupt") {
+			t.Fatalf("force wrote interrupt input: %q", got)
+		}
+	})
+
+	t.Run("interrupt", func(t *testing.T) {
+		h, _, id := unknownTurnSession(t)
+		done := startSwitch(h, id, SideACP)
+		h.waitPhase(id, PhaseAwaitingTurnChoice)
+		h.choose(id, ChoiceInterrupt)
+		h.waitPhase(id, PhaseAwaitingChoice)
+		waitFor(t, "interrupt input", func() bool { return slices.Contains(storedAgentUsers(t, h.store), "interrupt") })
+		if _, err := h.svc.Switch(ctxT(t), id, SwitchInput{ClientRequestID: rid(), Choice: ChoiceInterrupt}); !errors.Is(err, ErrConflict) {
+			t.Fatalf("interrupt during timeout choice: %v", err)
+		}
+		h.choose(id, ChoiceCancel)
+		out := <-done
+		if out.err != nil || out.result.Side != SideTUI {
+			t.Fatalf("cancel after interrupt %+v %v", out.result, out.err)
+		}
+	})
+}
+
 // TestSwitchAwaitingChoice: a terminal that ignores the interrupt key
 // pauses the switch for the user (D21): wait asks again after another
 // period, cancel stays in the terminal with the TUI running, force ends it.
@@ -405,6 +564,64 @@ func TestSwitchAwaitingChoice(t *testing.T) {
 	}
 	chatTurn(t, h, id, "after")
 	assertSingleWriter(t, h.store)
+}
+
+func TestSwitchChoiceFirstAnswerWins(t *testing.T) {
+	t.Run("unknown turn", func(t *testing.T) {
+		h, _, id := unknownTurnSession(t)
+		done := startSwitch(h, id, SideACP)
+		h.waitPhase(id, PhaseAwaitingTurnChoice)
+		assertFirstSwitchChoiceWins(t, h, id, done)
+	})
+
+	t.Run("interrupt timeout", func(t *testing.T) {
+		h := newHarness(t, 0)
+		h.fast()
+		s := h.create(h.input(omp.Name, SideTUI, "FAKEAGENT_IGNORE_INTERRUPT=1", "FAKEAGENT_TURN_DELAY=200ms"))
+		id := s.Info().ID
+		tuiTurn(t, s, "first")
+		h.waitEligible(id)
+		typeLine(t, s, strings.Repeat("slow ", 200))
+		waitFor(t, "terminal turn", func() bool { return tuiBusy(s.Info()) })
+		done := startSwitch(h, id, SideACP)
+		h.waitPhase(id, PhaseAwaitingChoice)
+		assertFirstSwitchChoiceWins(t, h, id, done)
+	})
+}
+
+func assertFirstSwitchChoiceWins(t *testing.T, h *harness, id string, done <-chan switchOutcome) {
+	t.Helper()
+	type answer struct {
+		result SwitchResult
+		err    error
+	}
+	start := make(chan struct{})
+	answers := make(chan answer, 2)
+	for _, choice := range []string{ChoiceCancel, ChoiceForce} {
+		choice := choice
+		go func() {
+			<-start
+			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			defer cancel()
+			result, err := h.svc.Switch(ctx, id, SwitchInput{ClientRequestID: rid(), Choice: choice})
+			answers <- answer{result: result, err: err}
+		}()
+	}
+	close(start)
+	first, second := <-answers, <-answers
+	var winner answer
+	switch {
+	case first.err == nil && errors.Is(second.err, ErrConflict):
+		winner = first
+	case second.err == nil && errors.Is(first.err, ErrConflict):
+		winner = second
+	default:
+		t.Fatalf("answers = (%+v, %v), (%+v, %v); want one success and one conflict", first.result, first.err, second.result, second.err)
+	}
+	out := <-done
+	if out.err != nil || out.result.Side != winner.result.Side {
+		t.Fatalf("switch followed %+v, want winning answer %+v: %v", out.result, winner.result, out.err)
+	}
 }
 
 // TestSwitchChoiceRacesIdle: a choice that reaches the actor while the

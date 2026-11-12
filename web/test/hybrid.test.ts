@@ -122,6 +122,7 @@ describe("hybrid labels", () => {
 
 describe("switch progress", () => {
   test("the direction comes from one-way phases, else the view left", () => {
+    expect(switchTarget("awaiting_turn_choice", undefined)).toBe("chat");
     expect(switchTarget("awaiting_choice", undefined)).toBe("chat");
     expect(switchTarget("cancelling", undefined)).toBe("terminal");
     expect(switchTarget("stopping", "chat")).toBe("terminal");
@@ -136,10 +137,18 @@ describe("switch progress", () => {
       { label: "启动中", state: "pending" },
       { label: "加载历史中", state: "pending" },
     ]);
-    expect(switchSteps("chat", "awaiting_choice")[0]).toEqual({
-      label: "中断中",
-      state: "current",
-    });
+    expect(switchSteps("chat", "awaiting_turn_choice")).toEqual([
+      { label: "等待确认", state: "current" },
+      { label: "退出中", state: "pending" },
+      { label: "启动中", state: "pending" },
+      { label: "加载历史中", state: "pending" },
+    ]);
+    expect(switchSteps("chat", "awaiting_choice")).toEqual([
+      { label: "中断中", state: "current" },
+      { label: "退出中", state: "pending" },
+      { label: "启动中", state: "pending" },
+      { label: "加载历史中", state: "pending" },
+    ]);
     expect(switchSteps("terminal", "starting").map((s) => s.state)).toEqual([
       "done",
       "done",

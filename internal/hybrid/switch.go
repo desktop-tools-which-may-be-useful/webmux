@@ -7,28 +7,21 @@ import (
 	"slices"
 	"time"
 
-	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
 
-// Answers to an interrupt timeout (D21).
+// Answers to a terminal turn-state question or interrupt timeout (D21).
 const (
-	ChoiceWait   = "wait"
-	ChoiceForce  = "force"
-	ChoiceCancel = "cancel"
-)
-
-const (
-	// idlePoll is how often a switch looks at the terminal UI's status
-	// while waiting for it to go idle.
-	idlePoll = 50 * time.Millisecond
-	// keyTimeout bounds writing the interrupt key.
-	keyTimeout = 5 * time.Second
+	ChoiceInterrupt = "interrupt"
+	ChoiceWait      = "wait"
+	ChoiceForce     = "force"
+	ChoiceCancel    = "cancel"
 )
 
 // SwitchInput asks to move a session to side To, or answers a switch
-// waiting in PhaseAwaitingChoice with Choice. AgentSessionID picks one of
-// the candidates a SessionAmbiguousError offered, moving to the chat only.
+// waiting in PhaseAwaitingTurnChoice or PhaseAwaitingChoice with Choice.
+// AgentSessionID picks one of the candidates a SessionAmbiguousError offered,
+// moving to the chat only.
 type SwitchInput struct {
 	ClientRequestID string
 	To              Side
@@ -69,9 +62,9 @@ type switchOutcome struct {
 // Switch moves session id to in.To and returns once it got there, rolled
 // back, or was cancelled; a retry with the same client request ID gets the
 // same outcome. Moving to the chat requires eligibility (an
-// *IneligibleError otherwise) and may pause in PhaseAwaitingChoice, which
-// another Switch with Choice answers. During a switch every other switch,
-// command and close fails with ErrSwitching. A failed switch returns to
+// *IneligibleError otherwise) and may pause in PhaseAwaitingTurnChoice before
+// interruption or PhaseAwaitingChoice after an interrupt timeout; another
+// Switch with Choice answers it. During a switch every other switch, command and close fails with ErrSwitching. A failed switch returns to
 // the original side and fails with the reason; a failed rollback leaves
 // the session interrupted.
 func (s *Service) Switch(ctx context.Context, id string, in SwitchInput) (SwitchResult, error) {
@@ -81,9 +74,9 @@ func (s *Service) Switch(ctx context.Context, id string, in SwitchInput) (Switch
 	}
 	if in.Choice != "" {
 		switch in.Choice {
-		case ChoiceWait, ChoiceForce, ChoiceCancel:
+		case ChoiceInterrupt, ChoiceWait, ChoiceForce, ChoiceCancel:
 		default:
-			return SwitchResult{}, fmt.Errorf("%w: choice 只能是 wait、force 或 cancel", ErrInvalid)
+			return SwitchResult{}, fmt.Errorf("%w: choice 只能是 interrupt、wait、force 或 cancel", ErrInvalid)
 		}
 		return once(ctx, &a.recent, in.ClientRequestID, "switch.choice", func(ctx context.Context) (SwitchResult, error) {
 			return call(ctx, a, func() (SwitchResult, error) { return a.choose(in.Choice) })
@@ -240,18 +233,28 @@ func (a *actor) checked(op *switchOp, t target, ans probeAnswer) {
 		a.finish(op, SwitchResult{}, &IneligibleError{Reason: reason})
 		return
 	}
-	busy := tuiBusy(a.shell.Info()) && time.Since(a.runStart) >= a.cmd.Profile.StartupQuiet
+	info := a.shell.Info()
+	turn := initialTUITurnState(info, time.Since(a.runStart) < a.cmd.Profile.StartupQuiet)
 	a.side = SideSwitching
-	a.setPhase(PhaseStopping)
-	if busy {
+	switch turn {
+	case tuiTurnBusy:
 		a.setPhase(PhaseInterrupting)
+	case tuiTurnUnknown:
+		op.choice = make(chan string, 1)
+		a.setPhase(PhaseAwaitingTurnChoice)
+	default:
+		a.setPhase(PhaseStopping)
 	}
 	a.flush()
 	// Terminal clients leave now; they may attach again if the user
 	// cancels.
 	a.shell.MoveClients()
-	a.svc.log.Info("hybrid switch started", "id", a.id, "to", string(SideACP), "interrupt", busy)
-	go a.runToACP(op, t, busy)
+	a.svc.log.Info("hybrid switch started", "id", a.id, "to", string(SideACP), "turn", turn.String())
+	if turn == tuiTurnUnknown {
+		go a.runUnknownToACP(op, t, op.choice)
+		return
+	}
+	go a.runToACP(op, t, turn == tuiTurnBusy)
 }
 
 // pickCandidate is the one candidate, else the user's pick among them, else
@@ -264,156 +267,6 @@ func pickCandidate(candidates []Candidate, pick string) (string, error) {
 		return pick, nil
 	}
 	return "", &SessionAmbiguousError{Candidates: candidates}
-}
-
-// tuiBusy reports whether the terminal UI is in a turn by its signals:
-// running, or waiting on the user inside a turn (not a latched done or
-// error).
-func tuiBusy(info session.Info) bool {
-	switch info.Status {
-	case session.StatusRunning:
-		return true
-	case session.StatusWaiting:
-		return info.Attention == nil || (info.Attention.Kind != attentionkind.Done && info.Attention.Kind != attentionkind.Error)
-	}
-	return false
-}
-
-// interruptKeyGap separates key presses so the terminal UI reads each one
-// separately; the M0 baseline stopped OpenCode with Esc, 150 ms, Esc.
-const interruptKeyGap = 150 * time.Millisecond
-
-// interruptKey writes the profile's interrupt key presses to the terminal UI.
-func (a *actor) interruptKey() {
-	for i, key := range a.cmd.Agent.InterruptKeys() {
-		if i > 0 {
-			time.Sleep(interruptKeyGap)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), keyTimeout)
-		err := a.shell.WriteContext(ctx, key)
-		cancel()
-		if err != nil {
-			a.svc.log.Info("hybrid interrupt key not written", "id", a.id, "error", err)
-			return
-		}
-	}
-}
-
-// waitIdle waits up to d for the terminal UI to leave its turn.
-func (a *actor) waitIdle(d time.Duration) bool {
-	deadline := time.NewTimer(d)
-	defer deadline.Stop()
-	tick := time.NewTicker(idlePoll)
-	defer tick.Stop()
-	for {
-		if !tuiBusy(a.shell.Info()) {
-			return true
-		}
-		select {
-		case <-tick.C:
-		case <-deadline.C:
-			return !tuiBusy(a.shell.Info())
-		case <-a.quit:
-			return false
-		}
-	}
-}
-
-// interruptOutcome is how interrupting the terminal UI ended.
-type interruptOutcome int
-
-const (
-	interruptIdle interruptOutcome = iota
-	interruptCancelled
-	interruptGone
-)
-
-// interruptTUI sends the interrupt key and waits for the terminal UI to go
-// idle. After timing.interrupt it asks the user (D21): wait another
-// period, force the switch, or cancel it. The terminal going idle while
-// the question is open continues the switch.
-func (a *actor) interruptTUI(op *switchOp) interruptOutcome {
-	a.interruptKey()
-	for {
-		if a.waitIdle(a.svc.timing.interrupt) {
-			return interruptIdle
-		}
-		choice := make(chan string, 1)
-		if !a.sync(func() { op.choice = choice; a.setPhase(PhaseAwaitingChoice) }) {
-			return interruptGone
-		}
-		c := a.awaitChoice(op, choice)
-		if !a.sync(func() {
-			op.choice = nil
-			if c == ChoiceWait {
-				a.setPhase(PhaseInterrupting)
-			}
-		}) {
-			return interruptGone
-		}
-		switch c {
-		case ChoiceWait:
-			continue
-		case ChoiceCancel:
-			return interruptCancelled
-		case "":
-			return interruptGone
-		}
-		return interruptIdle
-	}
-}
-
-// awaitChoice waits for the user's choice; "idle" when the terminal UI
-// went idle first, "" when the actor ended. The terminal going idle wins
-// only while the question is still open: deciding so closes it on the
-// actor, so a choice is either acted on or refused, never lost.
-func (a *actor) awaitChoice(op *switchOp, choice chan string) string {
-	tick := time.NewTicker(idlePoll)
-	defer tick.Stop()
-	for {
-		select {
-		case c := <-choice:
-			return c
-		case <-tick.C:
-			if tuiBusy(a.shell.Info()) {
-				continue
-			}
-			idle := false
-			if !a.sync(func() {
-				if op.choice == choice {
-					op.choice, idle = nil, true
-				}
-			}) {
-				return ""
-			}
-			if idle {
-				return "idle"
-			}
-			// choose answered first and closed the question.
-			return <-choice
-		case <-a.quit:
-			return ""
-		}
-	}
-}
-
-// choose answers a switch waiting in PhaseAwaitingChoice.
-func (a *actor) choose(choice string) (SwitchResult, error) {
-	op := a.switching
-	if op == nil || op.choice == nil {
-		return SwitchResult{}, fmt.Errorf("%w: 没有等待选择的切换", ErrConflict)
-	}
-	op.choice <- choice
-	op.choice = nil
-	if choice == ChoiceWait {
-		// The question is closed now; no device may answer it again.
-		a.setPhase(PhaseInterrupting)
-	}
-	if choice == ChoiceCancel {
-		return a.resultOn(SideTUI), nil
-	}
-	// The switch goes on; the result names where it is heading.
-	return SwitchResult{Side: op.to, Dropped: []string{}, Unsupported: []string{}}, nil
 }
 
 // runToACP is the subtask of a switch to the chat: interrupt the turn if

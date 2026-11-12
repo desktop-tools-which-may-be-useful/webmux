@@ -1,6 +1,7 @@
 # shell-chat-control Specification
 
 ## Purpose
+
 让脚本和 agent 不打开浏览器也能驱动混合会话的聊天端：发送提示并取回回复、处理授权与提问、切换端、管理队列与运行时设置，以及恢复或清理历史会话。
 
 ## Requirements
@@ -72,8 +73,9 @@ SHALL 调用 `POST /api/sessions/{id}/chat/prompts`。
   选项与请求类型不符时 SHALL 以 2 结束；请求已被回答或不存在时 SHALL 以 1 结束。
   （`--json` 在所有命令中都是输出开关，因此结构化内容用 `--content`。）
 - `webmux chat switch SESSION --to chat|terminal [--force]` SHALL 调用切换接口，并等待切换结束。
-  需要用户选择时（终端 TUI 在中断超时内没有空闲），带 `--force` 时 SHALL 选择强制切换；
+  需要用户选择时（终端回合状态无法判定，或已发送中断键但 TUI 在超时内没有空闲），带 `--force` 时 SHALL 选择直接/强制切换；
   不带 `--force` SHALL 选择取消切换，并以 1 结束、提示可用 `--force` 重试，不让切换停在等待选择的状态。
+  CLI 在 `awaiting_turn_choice` 与 `awaiting_choice` 都 SHALL 作出上述自动选择；前者的 `--force` SHALL 直接切换，不先发送中断键。
   服务端返回会话歧义时 SHALL 列出候选会话，并接受 `--agent-session ID` 重试。
 
 #### Scenario: 代为批准一次

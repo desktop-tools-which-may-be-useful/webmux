@@ -170,7 +170,26 @@ func TestResumeAfterRestart(t *testing.T) {
 							t.Fatalf("terminal side: status %s pid %d", info.Status, s.Identity().PID)
 						}
 						h.waitEligible(id)
-						h.mustSwitch(id, SideACP)
+						done := startSwitch(h, id, SideACP)
+						var out switchOutcome
+						finished := false
+						waitFor(t, "switch completion or turn choice", func() bool {
+							select {
+							case out = <-done:
+								finished = true
+								return true
+							default:
+								phase := h.chatState(id).Phase
+								return phase == PhaseAwaitingTurnChoice || phase == PhaseAwaitingChoice
+							}
+						})
+						if !finished {
+							h.choose(id, ChoiceForce)
+							out = <-done
+						}
+						if out.err != nil || out.result.Side != SideACP {
+							t.Fatalf("switch after resume %+v %v", out.result, out.err)
+						}
 					case SideACP:
 						if users := h.replayedUsers(id); !slices.Contains(users, "remember the lighthouse") {
 							t.Fatalf("replayed users %q", users)

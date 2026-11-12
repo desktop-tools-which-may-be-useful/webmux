@@ -1,6 +1,6 @@
 import "../../src/styles.css";
 import { expect, test } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte/pure";
 import Terminal from "../../src/pages/Terminal.svelte";
 import type {
@@ -261,6 +261,77 @@ test("an ambiguous switch lets the user pick the agent session and resends it", 
         agentSessionId: claudeSessionIds.alternative,
       },
     ]);
+});
+
+test("an ambiguous terminal turn asks before interrupting and advances after the safe action", async () => {
+  pendingSwitch();
+  const streams = await onTerminalSide(tuiState());
+  await chatTab("聊天").click();
+
+  move(
+    streams,
+    { transition: { to: "chat", phase: "awaiting_turn_choice" } },
+    tuiState({ forceSwitchNote: "omp 已输出的部分可能丢失" }),
+  );
+  const dialog = page.getByRole("alertdialog", {
+    name: "无法确定 TUI 是否正在执行回合",
+  });
+  await expect.element(dialog).toBeVisible();
+  await expect
+    .element(dialog)
+    .toMatchTextContent(
+      /基础输入界面.*回合内等待.*尚未发送中断键.*未完成的回合可能丢失.*omp 已输出的部分可能丢失/s,
+    );
+  await expect.poll(steps).toEqual([
+    ["等待确认", "进行中"],
+    ["退出中", "等待"],
+    ["启动中", "等待"],
+    ["加载历史中", "等待"],
+  ]);
+
+  await dialog.getByRole("button", { name: "中断后切换" }).click();
+  await expect
+    .poll(() => commands().at(-1))
+    .toEqual({
+      method: "POST",
+      path: viewPath,
+      body: { clientRequestId: expect.any(String), choice: "interrupt" },
+    });
+
+  move(streams, { transition: { to: "chat", phase: "interrupting" } });
+  await expect.element(dialog).not.toBeInTheDocument();
+  await expect.poll(steps).toEqual([
+    ["中断中", "进行中"],
+    ["退出中", "等待"],
+    ["启动中", "等待"],
+    ["加载历史中", "等待"],
+  ]);
+});
+
+test("a timeout choice opens after the ambiguous choice was dismissed locally", async () => {
+  pendingSwitch();
+  const streams = await onTerminalSide(tuiState());
+  await chatTab("聊天").click();
+  move(streams, {
+    transition: { to: "chat", phase: "awaiting_turn_choice" },
+  });
+
+  const ambiguous = page.getByRole("alertdialog", {
+    name: "无法确定 TUI 是否正在执行回合",
+  });
+  await expect.element(ambiguous).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(ambiguous).not.toBeInTheDocument();
+  await expect
+    .element(page.getByRole("button", { name: "选择…" }))
+    .toBeVisible();
+
+  move(streams, { transition: { to: "chat", phase: "awaiting_choice" } });
+  const timeout = page.getByRole("alertdialog", { name: "TUI 仍在执行回合" });
+  await expect.element(timeout).toBeVisible();
+  await expect
+    .element(timeout)
+    .toMatchTextContent(/已发送中断键，10 秒内 TUI 仍未停下。/);
 });
 
 test("switching to chat shows its steps, asks after a stuck interrupt and lands on the chat view", async () => {

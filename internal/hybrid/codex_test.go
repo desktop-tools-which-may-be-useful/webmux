@@ -357,7 +357,7 @@ func TestCodexStartupIsNotATurn(t *testing.T) {
 			last = line
 		}
 	}
-	if !strings.Contains(last, "interrupt=false") {
+	if !strings.Contains(last, "turn=idle") {
 		t.Fatalf("switch during startup: %s", last)
 	}
 }

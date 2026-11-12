@@ -31,6 +31,10 @@ type TransitionPhase string
 
 const (
 	PhaseInterrupting TransitionPhase = "interrupting"
+	// PhaseAwaitingTurnChoice: terminal signals cannot distinguish an idle
+	// base prompt from an in-turn wait; the user chooses interrupt, force or
+	// cancel before WebMux writes an interrupt key.
+	PhaseAwaitingTurnChoice TransitionPhase = "awaiting_turn_choice"
 	// PhaseAwaitingChoice: the terminal UI did not return to idle within the
 	// interrupt timeout; the user chooses wait, force or cancel.
 	PhaseAwaitingChoice TransitionPhase = "awaiting_choice"
@@ -81,15 +85,18 @@ type SessionArchive struct {
 // other view". It is terminal: clients do not reconnect.
 const CloseMoved = 4409
 
-// Choices that answer a view change paused in PhaseAwaitingChoice.
+// Choices that answer a paused view change. Interrupt is valid only while
+// PhaseAwaitingTurnChoice; wait only while PhaseAwaitingChoice; force and
+// cancel are valid in either phase.
 const (
-	ViewChoiceWait   = "wait"
-	ViewChoiceForce  = "force"
-	ViewChoiceCancel = "cancel"
+	ViewChoiceInterrupt = "interrupt"
+	ViewChoiceWait      = "wait"
+	ViewChoiceForce     = "force"
+	ViewChoiceCancel    = "cancel"
 )
 
 // ViewChangeRequest is the body of POST /api/sessions/{id}/view. Choice
-// answers an interrupt timeout ("wait", "force" or "cancel") instead of
+// answers an unknown terminal turn state or an interrupt timeout instead of
 // starting a change.
 type ViewChangeRequest struct {
 	ClientRequestID string      `json:"clientRequestId"`

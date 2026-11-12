@@ -124,9 +124,10 @@
 >
 <SwitchChoiceDialog
   bind:open={
-    () => hybrid.awaitingChoice && !choiceClosed,
+    () => (hybrid.awaitingTurnChoice || hybrid.awaitingChoice) && !choiceClosed,
     (open) => (choiceClosed = !open)
   }
+  kind={hybrid.awaitingTurnChoice ? "ambiguous" : "timeout"}
   note={hybrid.chat.state?.forceSwitchNote ?? ""}
   busy={hybrid.answering}
   onchoose={(choice) => void hybrid.choose(choice)}

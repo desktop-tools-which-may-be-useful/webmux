@@ -361,6 +361,9 @@ export function useHybrid(
     get confirming() {
       return confirming;
     },
+    get awaitingTurnChoice() {
+      return phase === "awaiting_turn_choice";
+    },
     get awaitingChoice() {
       return phase === "awaiting_choice";
     },

@@ -67,10 +67,10 @@ var viewCommand = &Command{
 	Name: "view", Group: GroupSessions, Args: "SESSION terminal|chat",
 	Summary: "Move a session with a chat view to its terminal or chat view and wait until the change is over.",
 	Description: "The same agent session continues on the other view. Terminal clients (webmux attach, browsers) are detached " +
-		"when the session moves to chat, and chat views close when it moves to the terminal. When the terminal UI does not " +
-		"become idle within its interrupt timeout, the change needs a choice: --force interrupts it; without --force the " +
-		"change is cancelled and the command exits 1. When the agent's session cannot be identified, the candidates are " +
-		"listed; repeat with --agent-session. A session already on the view is left as it is.",
+		"when the session moves to chat, and chat views close when it moves to the terminal. When the terminal turn state is " +
+		"uncertain, or the TUI does not become idle within its interrupt timeout, the change needs a choice: --force switches " +
+		"directly; without --force the change is cancelled and the command exits 1. When the agent's session cannot be identified, " +
+		"the candidates are listed; repeat with --agent-session. A session already on the view is left as it is.",
 	Arguments: []Item{sessionArgument, {Name: "VIEW", Text: "terminal or chat."}},
 	Env:       []Item{sessionIDEnv},
 	Output:    "Nothing; with --json, the ViewChangeResult (view, draft of queued prompts returned to the terminal, dropped and unsupported arguments).",
@@ -82,7 +82,7 @@ var viewCommand = &Command{
 	},
 	SeeAlso: []string{"webmux chat status", "webmux attach", "webmux guide chat"},
 	Bind: func(fs *flag.FlagSet) Action {
-		force := fs.Bool("force", false, "interrupt a busy terminal UI instead of cancelling the change")
+		force := fs.Bool("force", false, "switch directly when the terminal turn state needs a choice")
 		agentSession := fs.String("agent-session", "", "moving to chat, resume this agent session `ID` when the server lists candidates")
 		asJSON := fs.Bool("json", false, "print the ViewChangeResult")
 		return func(ctx context.Context, e Env, args []string) int {
@@ -126,7 +126,7 @@ var viewCommand = &Command{
 				return e.sessionFail(err)
 			}
 			if chose == contract.ViewChoiceCancel {
-				_, _ = fmt.Fprintln(e.Stderr, "webmux: the terminal UI stayed busy, so the change was cancelled; repeat with --force to interrupt it")
+				_, _ = fmt.Fprintln(e.Stderr, "webmux: the terminal turn state needed a choice, so the change was cancelled; repeat with --force to switch directly")
 				return contract.ExitError
 			}
 			if result.Draft != "" && !*asJSON {
@@ -138,6 +138,21 @@ var viewCommand = &Command{
 			return contract.ExitOK
 		}
 	},
+}
+
+// viewChoicePending reports whether the CLI must answer a paused view change.
+func viewChoicePending(s contract.SessionInfo, id string) bool {
+	if s.ID != id || s.Transition == nil {
+		return false
+	}
+	return s.Transition.Phase == contract.PhaseAwaitingTurnChoice || s.Transition.Phase == contract.PhaseAwaitingChoice
+}
+
+func automaticViewChoice(force bool) string {
+	if force {
+		return contract.ViewChoiceForce
+	}
+	return contract.ViewChoiceCancel
 }
 
 // changeView runs a view change and answers its choice, when it pauses for
@@ -163,20 +178,14 @@ func (e Env) changeView(ctx context.Context, client *localclient.Client, id stri
 	defer stop()
 	choices := make(chan string, 1)
 	go func() {
-		awaiting := func(s contract.SessionInfo) bool {
-			return s.ID == id && s.Transition != nil && s.Transition.Phase == contract.PhaseAwaitingChoice
-		}
+		awaiting := func(s contract.SessionInfo) bool { return viewChoicePending(s, id) }
 		for {
 			event, err := watch.next(choiceCtx)
 			if err != nil {
 				return
 			}
 			if (event.Session != nil && awaiting(*event.Session)) || slices.ContainsFunc(event.Sessions, awaiting) {
-				choice := contract.ViewChoiceCancel
-				if force {
-					choice = contract.ViewChoiceForce
-				}
-				choices <- choice
+				choices <- automaticViewChoice(force)
 				return
 			}
 		}

@@ -262,3 +262,26 @@
 - 限制：当前提供服务层读取，REST 与浏览器历史查询在下一层接入；未在原生 macOS 执行本层测试，未验证真实 provider 的完整回放能力。
 - 评审补充：工具标题、命令输入与退出码独立分块保存，metadata-only patch 不改写累计输出；省略初始工具状态按 pending 处理，跨回合完成保持原 Run。新增回归覆盖这两种情况和输出零改写。
 - 插话补充：接受插话后切断无 native ID 的消息连续段，显式 failed 丢弃未消费草稿；实际 ACP 调用、关闭和重开数据库的回归测试验证顺序正确且不产生伪崩溃缺口。
+
+## 2026-11-12：终端切聊天的未知回合状态（US-Q03）
+
+- 范围：
+  - 终端状态改为 `idle` / `busy` / `unknown` 三态；未结构化的 `waiting` 且无 attention 只在首次切到聊天时进入 `awaiting_turn_choice`；此时尚未发送中断键，使用者可取消、直接切换或中断后切换；
+  - 已确认 busy 仍先中断；OSC 7501 `blocked` 即使 `attention.mode = "off"` 也保留为内部权威 busy；
+  - 中断超时继续使用独立的 `awaiting_choice`；两个阶段只接受各自的选择，多个设备同时回答时只有第一个生效。
+- 依据：
+  - 新增真实未结构化 TUI 回归，覆盖选择前不修改终端、取消保留 PID 与会话身份、直接切换不写中断、选择中断后进入超时对话框；
+  - 新增 `attention.mode = "off"` 下的结构化 blocked 回归，以及两个选择阶段的并发 first-answer-wins race 回归；
+  - CLI 回归覆盖无 `--force` 自动取消、有 `--force` 自动强制；
+  - 前端单元与 Chromium 组件回归覆盖 `choice: "interrupt"` 请求、风险文案、四步进度和 unknown → timeout 对话框重新打开。
+- 已运行：
+  - `go test -race ./internal/session -run '^TestAttentionPolicyModesAndSources$' -count=1`；
+  - 完整 `internal/hybrid` race（仅排除下面三项既有非 FHS 路径用例）与 `internal/clicmd` race；
+  - `internal/archtest`、`internal/docguard`、`make docs-check`、受影响文件 Oxfmt 与 `git diff --check`；
+  - 前端聚焦回归 9 项单元、11 项 Chromium 组件；全量 Chromium 82 个文件 720 项；Node 单元排除下面的环境用例后 62 个文件 800 项；
+  - Vite production build、两套 Svelte diagnostics（0 error / 0 warning）、Oxlint、ESLint、Dependency Cruiser、Knip 与 9 项前端架构测试。
+- 限制：
+  - 本机 Node 24.21.0 低于仓库要求的 26.13.0；完整 Node 单元仅有 `base64url.test.ts` 因缺少目标 typed-array Base64 API 失败；`svelte-check --tsgo` 也因当前依赖树未安装 `@typescript/native` 而不可用，改用已安装的 TypeScript 检查通过；
+  - NixOS 非 FHS 环境中 `TestCodexStartupConnectorCheck/bash`、`TestTerminalInput`、`TestTerminalInputUsesSessionSubmitDelay` 的既有 `/bin/bash` 或 `/bin/cat` 假设失败，因此相关完整 hybrid race 明确排除这三项；仓库级 Go race 还受其他同类路径假设及 Vite 产物与已提交 embed archive 差异影响；
+  - `make format-check` 发现 11 个本次未修改文件的既有格式差异，受影响文件单独格式检查通过；
+  - 未连接真实 CodeBuddy TUI 或做真机浏览器核对，未激活、重启或替换当前 WebMux 服务。

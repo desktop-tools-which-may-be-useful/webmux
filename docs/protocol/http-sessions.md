@@ -221,6 +221,7 @@ interface SessionInfo {
   transition: {
     to: "terminal" | "chat";
     phase:
+      | "awaiting_turn_choice"
       | "interrupting"
       | "awaiting_choice"
       | "cancelling"

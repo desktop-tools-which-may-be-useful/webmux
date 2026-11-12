@@ -42,7 +42,10 @@
     - 会话列表能查到；
     - 未被其他会话占用；
   - “聊天 | 终端”的下划线平滑移向当前选择，切换中仍显示真实进度；目标内容准备好后短暂淡入，减少动态效果时直接显示，不以动画结束代替连接就绪；
-  - TUI 在回合中时先发中断键并等待空闲（Claude Code、Antigravity CLI 与 Kimi 为一次 Esc；Codex 启动阶段的“工作中”不算回合，Claude 无启动静默期），10 秒后可选继续等待、强制切换或取消（强制切换的损失说明取自服务端 `forceSwitchNote`，由各 agent 适配器提供）；
+  - TUI 回合状态的处理：
+    - 明确在回合中时，先发送中断键并等待空闲；Claude Code、Antigravity CLI 与 Kimi 为一次 Esc，Codex 启动阶段的“工作中”不算回合，Claude 无启动静默期；10 秒后可选继续等待、强制切换或取消；
+    - 只知道 TUI 正在等待终端输入、却无法判断它停在基础输入框还是回合内等待回答时，不先发送中断键，改为让用户选择直接切换、中断后切换或取消；
+    - 两种对话框的强制/直接切换损失说明都取自服务端 `forceSwitchNote`，由各 agent 适配器提供；
   - 进入目标端前确认 TUI 进程组已退出；
   - 聊天视图回放完整历史，模型等配置与切换前一致：
     - 按档案补齐 omp 的 mode、Antigravity CLI 的 model 与 thought_level，以及 Codex 的模式、模型、推理强度；Antigravity CLI 与 Codex 首次切换按启动参数推导配置；

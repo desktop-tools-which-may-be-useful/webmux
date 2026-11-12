@@ -9,6 +9,7 @@ import {
   type ChatAttachment,
   type ChatPermissionMode,
   type SessionView,
+  type ViewChangeChoice,
 } from "./schemas";
 
 // Commands of a session's chat view (docs/protocol). Every request
@@ -112,8 +113,8 @@ export function changeView(
   );
 }
 
-/** Answers a view change waiting for the user after the interrupt timed out. */
-export function answerSwitch(id: string, choice: "wait" | "force" | "cancel") {
+/** Answers a view change waiting for the user's switch policy choice. */
+export function answerSwitch(id: string, choice: ViewChangeChoice) {
   return api(
     `/sessions/${id}/view`,
     ViewChangeResultSchema,

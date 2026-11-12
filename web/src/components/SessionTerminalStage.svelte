@@ -410,7 +410,11 @@
         <SwitchProgress
           target={hybrid.target}
           steps={hybrid.steps}
-          awaitingChoice={hybrid.awaitingChoice}
+          choiceKind={hybrid.awaitingTurnChoice
+            ? "ambiguous"
+            : hybrid.awaitingChoice
+              ? "timeout"
+              : null}
           onchoose={onChooseSwitch}
         />
       {/if}

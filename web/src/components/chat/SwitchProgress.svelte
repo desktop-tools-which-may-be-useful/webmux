@@ -10,13 +10,13 @@
   let {
     target,
     steps,
-    awaitingChoice,
+    choiceKind,
     onchoose,
   }: {
     target: SwitchTarget | null;
     steps: SwitchStep[];
-    /** The interrupt timed out: the user picks how to go on (D21). */
-    awaitingChoice: boolean;
+    /** The switch is waiting for a pre-interrupt or timeout policy choice. */
+    choiceKind: "ambiguous" | "timeout" | null;
     /** Reopens the choice after its dialog was closed. */
     onchoose: () => void;
   } = $props();
@@ -62,9 +62,11 @@
       </li>
     {/each}
   </ol>
-  {#if awaitingChoice}
+  {#if choiceKind}
     <p class="max-w-xs text-center text-sm text-warning">
-      TUI 仍未停下，需要你决定如何继续。
+      {choiceKind === "ambiguous"
+        ? "需要你确认是否先中断 TUI。"
+        : "TUI 仍未停下，需要你决定如何继续。"}
     </p>
     <Button variant="outline" size="sm" onclick={onchoose}>选择…</Button>
   {/if}

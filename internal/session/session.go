@@ -61,6 +61,10 @@ type Info struct {
 	Workspace        *Workspace
 	Attention        *Attention
 	ReportedCwd      *ReportedCwd
+	// ProgramTurnBlocked is an internal snapshot of an authoritative OSC 7501
+	// blocked root record. It is independent of attention policy and is not
+	// part of the HTTP contract.
+	ProgramTurnBlocked bool
 	// ConfigID is the saved launch config used at creation, if any.
 	ConfigID string
 	// Hybrid is set only on a shell whose driver published an overlay.
@@ -274,6 +278,7 @@ func (s *Session) Info() Info {
 
 func (s *Session) infoLocked() Info {
 	i := s.info
+	i.ProgramTurnBlocked = s.program != nil && s.program.state == "blocked"
 	i.Clients = len(s.subs)
 	i.Cmd = append([]string(nil), i.Cmd...)
 	i.ListeningPorts = slices.Clone(i.ListeningPorts)
